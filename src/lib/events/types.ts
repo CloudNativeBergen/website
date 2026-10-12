@@ -89,6 +89,27 @@ export interface SponsorStatusChangeEvent {
 }
 
 /**
+ * Fired when ticket types with no workshop decision are met (workshop tickets
+ * spec §8): tickets of them were sold, or their holder was refused at the
+ * portal. Raised through `reportNotSetTicketTypes`
+ * (`@/lib/workshop/not-set-notice`), which decides "not set" by the rule,
+ * skips a type this process has already raised and bounds how many one call
+ * may carry. ONE event per call, so the handler reads the organizers once and
+ * writes once however many types it names. Ids and type names only.
+ */
+export interface WorkshopTicketTypeNotSetEvent {
+  eventType: 'workshop.ticket-type.not-set'
+  timestamp: Date
+  conferenceId: string
+  /** The provider's own names for the types, as they appeared on the tickets. */
+  typeNames: string[]
+  metadata: {
+    /** Which call site met it, for logs. */
+    source: 'ticket-sold' | 'portal-refusal'
+  }
+}
+
+/**
  * Map of event types to their corresponding event interfaces
  * This provides type-safe event handling throughout the application
  */
@@ -96,6 +117,7 @@ export interface EventTypeMap {
   'proposal.status.changed': ProposalStatusChangeEvent
   'gallery.speaker.tagged': GallerySpeakerTaggedEvent
   'sponsor.status.changed': SponsorStatusChangeEvent
+  'workshop.ticket-type.not-set': WorkshopTicketTypeNotSetEvent
 }
 
 /**

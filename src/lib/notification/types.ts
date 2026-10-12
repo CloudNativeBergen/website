@@ -46,6 +46,13 @@ export type NotificationType =
   // name (tagging spec §4.4, Publish). Emitted by the social publish cron to
   // every organizer; links to the Task. Rendered generically by the hub.
   | 'marketing_task_tag_withheld'
+  // A ticket type has no workshop decision (workshop tickets spec §8): one was
+  // sold, or its holder was refused at the portal. Emitted once per type per
+  // conference by the `workshop.ticket-type.not-set` bus handler to the
+  // conference's organizers; links to the workshop-tickets section of
+  // `/admin/workshops`. Bell only: no web push. Rendered generically by the
+  // hub.
+  | 'workshop_ticket_type_not_set'
   | 'system'
 
 /**
@@ -74,6 +81,16 @@ export interface NotificationInput {
    * (they intentionally stack).
    */
   tag?: string
+}
+
+/**
+ * A notification that may be written AT MOST ONCE: `id` is the document id, and
+ * `createNotificationsOnce` writes it with `createIfNotExists`, so a second
+ * write of the same id changes nothing. The id must be derived from what makes
+ * the notification the same one (never from a timestamp).
+ */
+export interface OnceNotificationInput extends NotificationInput {
+  id: string
 }
 
 /**

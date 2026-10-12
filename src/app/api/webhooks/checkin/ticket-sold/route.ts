@@ -6,6 +6,7 @@ import {
 } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopAccessOf } from '@/lib/workshop/eligibility'
+import { reportNotSetTicketTypes } from '@/lib/workshop/not-set-notice'
 import { workshopPortalUrl } from '@/lib/workshop/sign-in'
 import {
   conferenceProviderType,
@@ -303,6 +304,18 @@ export async function POST(request: NextRequest) {
         workshopAccessOf(user.ticket.name, conference.ticketTypeRoles) ===
         'granted',
     )
+
+    // A TYPE NOBODY HAS DECIDED (spec §8): tell the organizers, once per type.
+    // Decided by the same rule and the same roles as the line above, after the
+    // feature gate (the notification links to a page a conference without
+    // workshops does not have). It runs after the response and cannot change
+    // the answer to Checkin.
+    reportNotSetTicketTypes({
+      conferenceId: conference._id,
+      typeNames: orderData.users.map((user) => user.ticket.name),
+      ticketTypeRoles: conference.ticketTypeRoles,
+      source: 'ticket-sold',
+    })
 
     // ONE DECISION PER DELIVERY (#1298): whether the main host can sign in is
     // a live read, the same answer for every attendee in the order, and not

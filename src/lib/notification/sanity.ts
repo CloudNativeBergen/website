@@ -25,7 +25,45 @@ import type {
   MessageNotificationInput,
   NotificationInput,
   NotificationItem,
+  OnceNotificationInput,
 } from './types'
+
+/** The stored `notification` document for one input. */
+function notificationDocument(
+  item: NotificationInput,
+  createdAt: string,
+): { _type: 'notification'; [key: string]: unknown } {
+  const doc: { _type: 'notification'; [key: string]: unknown } = {
+    _type: 'notification',
+    // WEAK (#851): a strong ref here blocks GDPR erasure of the speaker.
+    // `weak: true` in the schema governs Studio writes only — an API write
+    // is strong unless the stored ref object itself carries `_weak`.
+    recipient: { ...createReference(item.recipientId), _weak: true },
+    conference: createReference(item.conferenceId),
+    notificationType: item.notificationType,
+    title: item.title,
+    createdAt,
+  }
+  if (item.message) {
+    doc.message = item.message
+  }
+  if (item.link) {
+    doc.link = item.link
+  }
+  if (item.actorId) {
+    // WEAK (#851): see `recipient` above — speaker erasure must not be
+    // blocked by a notification the speaker happened to trigger.
+    doc.actor = { ...createReference(item.actorId), _weak: true }
+  }
+  if (item.relatedProposalId) {
+    // Weak reference so a later proposal deletion doesn't orphan-block.
+    doc.relatedProposal = {
+      ...createReference(item.relatedProposalId),
+      _weak: true,
+    }
+  }
+  return doc
+}
 
 /**
  * Persist one `notification` document per input, all in a SINGLE
@@ -67,36 +105,7 @@ export async function createNotifications(
     const tx = clientWrite.transaction()
 
     for (const item of items) {
-      const doc: { _type: string; [key: string]: unknown } = {
-        _type: 'notification',
-        // WEAK (#851): a strong ref here blocks GDPR erasure of the speaker.
-        // `weak: true` in the schema governs Studio writes only — an API write
-        // is strong unless the stored ref object itself carries `_weak`.
-        recipient: { ...createReference(item.recipientId), _weak: true },
-        conference: createReference(item.conferenceId),
-        notificationType: item.notificationType,
-        title: item.title,
-        createdAt,
-      }
-      if (item.message) {
-        doc.message = item.message
-      }
-      if (item.link) {
-        doc.link = item.link
-      }
-      if (item.actorId) {
-        // WEAK (#851): see `recipient` above — speaker erasure must not be
-        // blocked by a notification the speaker happened to trigger.
-        doc.actor = { ...createReference(item.actorId), _weak: true }
-      }
-      if (item.relatedProposalId) {
-        // Weak reference so a later proposal deletion doesn't orphan-block.
-        doc.relatedProposal = {
-          ...createReference(item.relatedProposalId),
-          _weak: true,
-        }
-      }
-      tx.create(doc)
+      tx.create(notificationDocument(item, createdAt))
     }
 
     await tx.commit()
@@ -129,6 +138,49 @@ export async function createNotifications(
 }
 
 /**
+ * {@link createNotifications} for notifications that may exist AT MOST ONCE:
+ * each item carries its own document id and is written with
+ * `createIfNotExists`, all in ONE transaction. Writing an id that already
+ * exists changes nothing, including its read state, so a caller may repeat the
+ * write from any server instance without a prior read.
+ *
+ * CONTRACT: NEVER throws into the caller's flow, like `createNotifications`.
+ * A failure is logged, with `logContext` when the caller gave one: this
+ * function knows the documents, the caller knows what they were for.
+ *
+ * NO WEB PUSH. A repeat must not push again, and telling a document this call
+ * created from one that was already there would rest on what the commit answer
+ * reports for an ignored write. Nothing that uses this needs a push, so none is
+ * sent.
+ */
+export async function createNotificationsOnce(
+  items: OnceNotificationInput[],
+  logContext: Record<string, unknown> = {},
+): Promise<void> {
+  if (items.length === 0) {
+    return
+  }
+
+  try {
+    const createdAt = new Date().toISOString()
+    const tx = clientWrite.transaction()
+    for (const item of items) {
+      tx.createIfNotExists({
+        _id: item.id,
+        ...notificationDocument(item, createdAt),
+      })
+    }
+    await tx.commit()
+  } catch (error) {
+    console.error(
+      'Failed to create once-only notifications:',
+      logContext,
+      error,
+    )
+  }
+}
+
+/**
  * Deterministic id for the SINGLE collapsed message notification a recipient
  * holds per conversation (M5 collapse model — see `sanity/schemaTypes/notification.ts`).
  */
@@ -140,7 +192,7 @@ export function messageNotificationId(
 }
 
 /** Schema cap on `notification.title` (Rule.max(200)). */
-const NOTIFICATION_TITLE_MAX = 200
+export const NOTIFICATION_TITLE_MAX = 200
 
 /**
  * Title copy for a collapsed message notification: a single unread message

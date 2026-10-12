@@ -432,6 +432,59 @@ describe('mergeSpeakers — deterministic-doc reconciliation (M4)', () => {
   })
 })
 
+describe('mergeSpeakers — a not-set notice and a survivor whose id is too long for one (#1335)', () => {
+  /** 66 characters: one more than fits after the notice id's 63. */
+  const LONG_SURVIVOR = 'speaker-' + 'x'.repeat(58)
+  const NOTICE_LOSER = `notification.workshop-not-set.${'a'.repeat(32)}.${LOSER}`
+  const OVERSIZED = `notification.workshop-not-set.${'a'.repeat(32)}.${LONG_SURVIVOR}`
+
+  beforeEach(() => {
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id')) {
+          if (params.id === LONG_SURVIVOR) {
+            return Promise.resolve({ ...survivorDoc, _id: LONG_SURVIVOR })
+          }
+          if (params.id === LOSER) return Promise.resolve(loserDoc)
+          return Promise.resolve(null)
+        }
+        if (query.includes('references($loserId)')) {
+          return Promise.resolve([
+            {
+              _id: NOTICE_LOSER,
+              _type: 'notification',
+              _rev: 'rev-notice-loser',
+              recipient: { ...ref(LOSER), _weak: true },
+              conference: ref('conf-1'),
+              notificationType: 'workshop_ticket_type_not_set',
+              title: '“Early Bird” needs a workshop decision',
+            },
+          ])
+        }
+        // Sanity holds no document under an id it refuses.
+        if (query.includes('_id in $ids')) return Promise.resolve([])
+        return Promise.resolve(null)
+      },
+    )
+  })
+
+  it('completes: the loser’s notice is deleted and nothing is created under the oversized id', async () => {
+    expect(OVERSIZED).toHaveLength(129)
+
+    const { committed, err } = await mergeSpeakers({
+      survivorId: LONG_SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    expect(err).toBeNull()
+    expect(committed).toBe(true)
+    expect(createdDocs).toEqual([])
+    expect(patchOps.some((op) => op.id === OVERSIZED)).toBe(false)
+    expect(deletedIds).toEqual([NOTICE_LOSER, LOSER])
+  })
+})
+
 // --- Issue #1027 items 1-3, in the ONE transaction -------------------------
 
 describe('mergeSpeakers — unreconciled reference sites (#1027 items 1-3)', () => {

@@ -37,7 +37,7 @@ import {
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
-import { ensureUniqueArrayKeys } from '@/lib/sanity/helpers'
+import { ensureUniqueArrayKeys, fitsDocumentId } from '@/lib/sanity/helpers'
 import type { TicketEmailGrant } from './types'
 
 /** The raw `ticketEmailGrants` of an unprojected speaker document. */
@@ -1057,6 +1057,8 @@ export function assertMergeable(
 //   - day-of reminder marker → `reminder.day-of.<conferenceId>.<speakerId>.<date>`
 //     (the ONE id whose speaker segment is not the last one — see
 //     `reminderLogId` / `dayOfLogId` in `src/lib/reminders/marker.ts`)
+//   - once-only not-set notice → `notification.workshop-not-set.<hash>.<recipientId>`
+//     (`@/lib/events/handlers/ticketTypeNotSetNotification`)
 // A plain reference repoint (the generic path) rewrites the inner ref to the
 // survivor but LEAVES the doc keyed by the loser id. If the survivor already
 // holds the canonical-id sibling for the same conversation, BOTH docs then point
@@ -1068,6 +1070,8 @@ export function assertMergeable(
 //   - the reminder cron's `createIfNotExists` against the SURVIVOR-keyed marker
 //     finds nothing → every recurring reminder the loser already received is
 //     RE-SENT, and a day-of ping goes out twice.
+//   - the not-set notice's `createIfNotExists` against the SURVIVOR-keyed id
+//     finds nothing either → the merged organizer is notified a second time.
 // So these docs must be RECONCILED onto the survivor's canonical id (merged when
 // it exists, recreated otherwise) and the loser-suffixed doc deleted — never left
 // repointed-but-loser-keyed.
@@ -1076,6 +1080,7 @@ export function assertMergeable(
 const DETERMINISTIC_ID_PREFIXES = [
   'convpref.',
   'notification.message.',
+  'notification.workshop-not-set.',
   'reminder.',
 ] as const
 
@@ -1156,7 +1161,8 @@ function stripSystemMeta(
  * The reconciliation of ONE loser-suffixed deterministic doc onto the survivor's
  * canonical id. The loser doc is ALWAYS deleted (`deleteId`); the canonical doc
  * is either MERGED (`mergeSet`/`mergeUnset` patched onto an existing survivor
- * doc) or RECREATED (`createDoc`).
+ * doc), RECREATED (`createDoc`), or, with none of the three set, LEFT ALONE:
+ * the loser's doc is dropped and nothing is written under the canonical id.
  */
 export interface DeterministicReconciliation {
   /** The loser-suffixed doc id to delete. */
@@ -1181,6 +1187,8 @@ export interface DeterministicReconciliation {
  *    override is kept.
  *  - message notification: UNREAD if EITHER side is unread; the two unread piles
  *    are SUMMED (clamped) so the survivor's badge reflects both, never doubles.
+ *  - once-only not-set notice: READ if EITHER side is read; the loser's document
+ *    is dropped.
  *  - scheduledReminderLog: the send counts are SUMMED and the LATEST `lastSentAt`
  *    wins — both sides of the gate move in the "do not send again" direction.
  *    The two markers record mails delivered to the SAME person (once per
@@ -1211,6 +1219,20 @@ export function reconcileDeterministicDoc(
   const canonicalId =
     canonicalDeterministicId(deleteId, loserId, survivorId) ?? deleteId
 
+  // DELETE ONLY: a not-set notice whose canonical id would be longer than a
+  // document id may be. The survivor's own id is too long for one, so the
+  // writer never gives them a notice (it asks the same `fitsDocumentId`), and
+  // creating one here would be refused by Sanity and take the whole merge down
+  // with it. Dropping the loser's leaves the survivor exactly as the writer
+  // would: without a notice for that type. Only this family is treated so; the
+  // others keep their behaviour.
+  if (
+    deleteId.startsWith('notification.workshop-not-set.') &&
+    !fitsDocumentId(canonicalId)
+  ) {
+    return { deleteId, canonicalId }
+  }
+
   // RECREATE: no canonical sibling — carry the loser doc over under the canonical
   // id with every loser ref repointed to the survivor.
   if (!survivorDoc) {
@@ -1235,6 +1257,17 @@ export function reconcileDeterministicDoc(
     }
     // Both already read → leave the survivor doc's readAt/count untouched.
     return { deleteId, canonicalId, mergeSet, mergeUnset }
+  }
+
+  // Once-only not-set notice: the two documents say the same thing to what is
+  // now one person, so having read either is having read it. Nothing else on
+  // the survivor's document changes.
+  if (deleteId.startsWith('notification.workshop-not-set.')) {
+    const mergeSet: Record<string, unknown> = {}
+    if (!survivorDoc.readAt && typeof loserDoc.readAt === 'string') {
+      mergeSet.readAt = loserDoc.readAt
+    }
+    return { deleteId, canonicalId, mergeSet }
   }
 
   // scheduledReminderLog — the gate is (count < maxSends) AND (spacing elapsed),

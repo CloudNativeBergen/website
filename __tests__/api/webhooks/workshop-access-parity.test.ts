@@ -55,6 +55,13 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: h.fetch },
 }))
 
+// The not-set notice (#1335) has its own tests. Raised from here it would run
+// in the background, past the end of the test that raised it, against this
+// file's Sanity mock.
+vi.mock('@/lib/workshop/not-set-notice', () => ({
+  reportNotSetTicketTypes: vi.fn(),
+}))
+
 import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 import type { EventTicket } from '@/lib/tickets/types'

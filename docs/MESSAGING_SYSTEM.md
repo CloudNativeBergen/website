@@ -111,6 +111,35 @@ per-user. Messaging uses two of its types:
 - **`message_stale`** — emitted by the stale-nudge cron: at most twice per
   trailing message (the first nudge, then one ESCALATION for an assigned thread).
 
+The hub's types are the `NotificationType` union in
+`src/lib/notification/types.ts`. One of them outside messaging is written
+differently from the rest and is described here because it shares the
+deterministic-id technique:
+
+- **`workshop_ticket_type_not_set`** — tells a conference's organizers that a
+  ticket type has no workshop decision (`docs/WORKSHOP_TICKETS_SPEC.md` §8),
+  linking to `/admin/workshops#workshop-tickets`. Raised by the Checkin
+  ticket-sold webhook and by the portal refusal through
+  `reportNotSetTicketTypes` (`src/lib/workshop/not-set-notice.ts`), and written
+  by the `workshop.ticket-type.not-set` bus handler. It is **once-only**: one
+  document per `(conference, ticket type, organizer)` with a deterministic id,
+  written with `createIfNotExists` through `createNotificationsOnce` and
+  **never patched**, so a repeat write changes nothing, read state included. A
+  memo in front of it, one per process, keeps a type the process has raised in
+  the last day from costing a read or a write; after a day the process raises
+  it again, which is what lets a type still not set be notified again once the
+  purge has removed its notification. One call raises one event however many
+  types it names (one organizers read, one transaction), at most 10 types per
+  call and 100 live claims per conference per process. Recipients are the
+  conference's own `organizers[]`. It is **bell only**: no web push is sent. It
+  stores the ticket type's name, cleaned for display, and no personal data. The
+  90-day purge removes it like any other type, after which a type that is
+  still not set is notified again, within a day of the next time it is met.
+  The organizer is the id's last segment so that a speaker merge carries the
+  document to the surviving account (`DETERMINISTIC_ID_PREFIXES` in
+  `src/lib/speaker/merge.ts`); a survivor whose id is too long for a notice of
+  their own gets none, and the merged account's is dropped.
+
 ### Deterministic-id schemes
 
 | Id                                                    | Purpose                         | Race safety                                        |
@@ -119,6 +148,7 @@ per-user. Messaging uses two of its types:
 | `conversation.sponsor.<sfcId>`                        | The single sponsor thread (G2b) | `createIfNotExists` — portal + organizer converge  |
 | `convpref.<conversationId>.<speakerId>`               | One preference per participant  | doc-per-pair, no array RMW                         |
 | `notification.message.<conversationId>.<recipientId>` | The one collapsed hub item      | `createIfNotExists` + patch                        |
+| `notification.workshop-not-set.<hash>.<recipientId>`  | Not-set notice, per organizer   | `createIfNotExists`, no patch — repeats are no-ops |
 
 `conversation.<nanoid>` (ordinary general threads) and `message.<nanoid>` are
 random. Marketing outreach uses `conversation.marketing.<hash>` instead: the
