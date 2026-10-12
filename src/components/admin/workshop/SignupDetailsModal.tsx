@@ -168,7 +168,7 @@ export function SignupDetailsModal({
         title="Move to waitlist"
         message={
           moveTarget
-            ? `Move ${moveTarget.userName} to the waitlist for ${workshopTitle}? They lose their seat and get no email about it. The seat is open to whoever signs up next. They stay in line by sign-up date, so a capacity increase can seat them again.`
+            ? `Move ${moveTarget.userName} to the waitlist for ${workshopTitle}? They lose their seat and get no email about it. They stay in line by sign-up date, so a capacity increase can seat them again. The seat is open to whoever signs up next.`
             : ''
         }
         confirmButtonText="Move to waitlist"

@@ -120,11 +120,11 @@ describe('SignupDetailsModal "Move to waitlist" (#1331)', () => {
     expect(dialog).toHaveTextContent(
       'Move Ada Lovelace to the waitlist for Kubernetes 101?',
     )
-    expect(dialog).toHaveTextContent('get no email')
-    // They are not out of the running: the promotion orders the waitlist by
-    // sign-up date (proven in `workshop.cancel.test.ts`).
+    // The whole of it, in this order. Both "They" sentences come straight
+    // after the name, so neither can be read as "whoever signs up next". That
+    // the person stays in line is proven in `workshop.cancel.test.ts`.
     expect(dialog).toHaveTextContent(
-      'They stay in line by sign-up date, so a capacity increase can seat them again.',
+      'Move Ada Lovelace to the waitlist for Kubernetes 101? They lose their seat and get no email about it. They stay in line by sign-up date, so a capacity increase can seat them again. The seat is open to whoever signs up next.',
     )
   })
 

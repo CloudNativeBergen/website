@@ -432,6 +432,15 @@ describe('an organizer moves a confirmed sign-up to the waitlist', () => {
     await createAdminCaller().workshop.admin.batchCancelSignups({
       signupIds: [ada],
     })
+    // Newest first in the dataset, so the waitlist comes back as [Cy, Ada]
+    // (the read orders by `signedUpAt`, which neither has). Only the
+    // promotion's own sort by `_createdAt` can now put Ada ahead of Cy; left in
+    // the order they were written, Ada would be first with no sort at all.
+    h.dataset.reverse()
+    const waitlistAsRead = h.dataset.filter(
+      (d) => d._type === 'workshopSignup' && d.status === 'waitlist',
+    )
+    expect(waitlistAsRead.map((d) => d._id)).toEqual([cy, ada])
     email.sendBasicWorkshopConfirmation.mockClear()
 
     const result = await createAdminCaller().workshop.admin.updateCapacity({

@@ -34,6 +34,12 @@ export default function WorkshopList({
 }: WorkshopListProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // Sign-ups whose cancel the server has answered. The cancel DELETED the
+  // sign-up, so a second one is refused with "Signup not found"; while such a
+  // sign-up is still on the page (the list has not been read again yet, or the
+  // read failed) its card offers no cancel. Keyed on what is shown, not on a
+  // pending flag: a flag clears a moment before the new list is drawn.
+  const [cancelledSignupIds, setCancelledSignupIds] = useState<string[]>([])
 
   const {
     data: workshopsData,
@@ -74,15 +80,13 @@ export default function WorkshopList({
   })
 
   const cancelMutation = api.workshop.cancelSignup.useMutation({
-    onSuccess: async () => {
+    onSuccess: (_data, { signupId }) => {
+      setCancelledSignupIds((ids) => [...ids, signupId])
       setSuccessMessage('Successfully cancelled workshop signup')
       setErrorMessage(null)
       setTimeout(() => setSuccessMessage(null), 5000)
-      // AWAITED, so the mutation (and with it the card's cancel button) stays
-      // busy until the lists are in. The cancel deleted the sign-up; while the
-      // card still shows it, a second click would be refused with "Signup not
-      // found" over a cancel that worked.
-      await Promise.all([refetchWorkshops(), refetchSignups()])
+      refetchWorkshops()
+      refetchSignups()
     },
     onError: (error) => {
       setErrorMessage(error.message)
@@ -319,6 +323,9 @@ export default function WorkshopList({
                     userSignup ? () => handleCancel(userSignup._id) : undefined
                   }
                   isSignedUp={true}
+                  isLoading={
+                    !!userSignup && cancelledSignupIds.includes(userSignup._id)
+                  }
                   announcements={
                     <WorkshopAnnouncementsSection workshopId={workshop._id} />
                   }
