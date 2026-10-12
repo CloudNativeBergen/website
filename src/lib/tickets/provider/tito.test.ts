@@ -50,13 +50,27 @@ function err(status: number, body = ''): JsonResponse {
 function stubTitoFetch(handlers: {
   event?: unknown
   releases?: unknown[]
+  /** Releases as Tito pages them: each request answers the next entry. */
+  releasePages?: Array<{ releases: unknown[]; nextPage: number | null }>
   ticketPages?: Array<{ tickets: unknown[]; nextPage: number | null }>
   authStatus?: number
 }) {
   let ticketCall = 0
+  let releaseCall = 0
   return vi.fn(async (url: string) => {
     if (handlers.authStatus) return err(handlers.authStatus, 'denied')
     if (url.includes('/releases')) {
+      if (handlers.releasePages) {
+        const page = handlers.releasePages[releaseCall] ?? {
+          releases: [],
+          nextPage: null,
+        }
+        releaseCall++
+        return ok({
+          releases: page.releases,
+          meta: { next_page: page.nextPage },
+        })
+      }
       return ok({ releases: handlers.releases ?? [] })
     }
     if (url.includes('/tickets')) {
@@ -200,6 +214,121 @@ describe('TitoProvider — fetchPublicTicketTypes', () => {
     await expect(
       getTicketingProvider('tito', CREDS).fetchPublicTicketTypes(7),
     ).rejects.toBeInstanceOf(ProviderUnsupportedError)
+  })
+})
+
+/**
+ * RELEASES ARE PAGED TOO. Tito's Admin API 3.0: "Endpoints which enumerate
+ * objects are paginated", 100 to a page by default, with the next page number
+ * in `meta.next_page`. The ticket types of an event are its releases, and the
+ * workshop-ticket list calls a stored answer ORPHANED when no listed type
+ * carries its name, and offers to remove it. Reading only the first page made
+ * every valid answer for a type on a later page look orphaned. So the list is
+ * read whole, or not at all.
+ */
+describe('TitoProvider — fetchPublicTicketTypes, every page of releases', () => {
+  const releaseRequests = (fetchSpy: ReturnType<typeof stubTitoFetch>) =>
+    fetchSpy.mock.calls
+      .map(([url]) => url)
+      .filter((url) => url.includes('/releases'))
+
+  it('returns two pages as one list, in order', async () => {
+    const fetchSpy = stubTitoFetch({
+      releasePages: [
+        {
+          releases: [
+            { id: 1, title: 'Early Bird' },
+            { id: 2, title: 'Conference' },
+          ],
+          nextPage: 2,
+        },
+        { releases: [{ id: 3, title: 'Workshop day' }], nextPage: null },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { tickets } = await getTicketingProvider(
+      'tito',
+      CREDS,
+    ).fetchPublicTicketTypes(TITO_REF)
+
+    expect(tickets.map((t) => t.name)).toEqual([
+      'Early Bird',
+      'Conference',
+      'Workshop day',
+    ])
+    // A release with no position of its own takes its place in the WHOLE
+    // list: the count does not start again on the second page.
+    expect(tickets.map((t) => t.position)).toEqual([0, 1, 2])
+    expect(releaseRequests(fetchSpy)).toEqual([
+      `${TITO_API_URL}/acme/2026/releases?page[number]=1`,
+      `${TITO_API_URL}/acme/2026/releases?page[number]=2`,
+    ])
+  })
+
+  it('makes one releases request when there is no next page', async () => {
+    const fetchSpy = stubTitoFetch({
+      releasePages: [{ releases: [{ id: 1, title: 'Only' }], nextPage: null }],
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { tickets } = await getTicketingProvider(
+      'tito',
+      CREDS,
+    ).fetchPublicTicketTypes(TITO_REF)
+
+    expect(tickets.map((t) => t.name)).toEqual(['Only'])
+    expect(releaseRequests(fetchSpy)).toHaveLength(1)
+  })
+
+  it('makes one releases request when the answer carries no `meta` at all', async () => {
+    const fetchSpy = stubTitoFetch({ releases: [{ id: 1, title: 'Only' }] })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await getTicketingProvider('tito', CREDS).fetchPublicTicketTypes(TITO_REF)
+
+    expect(releaseRequests(fetchSpy)).toHaveLength(1)
+  })
+
+  it('throws instead of returning a partial list when the pages never end', async () => {
+    // Every page names another: a looping cursor. A partial list would make
+    // the types that were not read look like they do not exist.
+    const fetchSpy = vi.fn(async (url: string) =>
+      ok(
+        url.includes('/releases')
+          ? { releases: [{ id: 1, title: 'Again' }], meta: { next_page: 2 } }
+          : { event: {} },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await expect(
+      getTicketingProvider('tito', CREDS).fetchPublicTicketTypes(TITO_REF),
+    ).rejects.toThrow(
+      /Tito release pagination exceeded 100 pages for acme\/2026 — refusing to return partial data/,
+    )
+    // Bounded: it stopped at the cap.
+    expect(
+      fetchSpy.mock.calls.filter(([url]) => url.includes('/releases')),
+    ).toHaveLength(100)
+  })
+
+  it('throws when a later page cannot be read, rather than returning the first', async () => {
+    const fetchSpy = vi.fn(async (url: string) =>
+      !url.includes('/releases')
+        ? ok({ event: {} })
+        : url.endsWith('page[number]=1')
+          ? ok({
+              releases: [{ id: 1, title: 'Early Bird' }],
+              meta: { next_page: 2 },
+            })
+          : err(500, 'boom'),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await expect(
+      getTicketingProvider('tito', CREDS).fetchPublicTicketTypes(TITO_REF),
+    ).rejects.toThrow(/Tito API request failed: 500/)
   })
 })
 
