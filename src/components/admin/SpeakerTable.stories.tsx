@@ -56,11 +56,7 @@ const mockSpeakers: SpeakerWithProposals[] = [
     flags: [],
     links: [],
     proposals: [
-      mockProposal(
-        'talk-1',
-        'OpenTelemetry in Practice',
-        Status.confirmed,
-      ),
+      mockProposal('talk-1', 'OpenTelemetry in Practice', Status.confirmed),
     ],
   },
   {
@@ -75,7 +71,11 @@ const mockSpeakers: SpeakerWithProposals[] = [
     flags: [Flags.localSpeaker],
     links: [],
     proposals: [
-      mockProposal('talk-2', 'Building Scalable Microservices', Status.confirmed),
+      mockProposal(
+        'talk-2',
+        'Building Scalable Microservices',
+        Status.confirmed,
+      ),
     ],
   },
   {
@@ -109,11 +109,7 @@ const mockSpeakers: SpeakerWithProposals[] = [
     flags: [Flags.diverseSpeaker],
     links: [],
     proposals: [
-      mockProposal(
-        'talk-4',
-        'Observability Pipelines',
-        Status.confirmed,
-      ),
+      mockProposal('talk-4', 'Observability Pipelines', Status.confirmed),
     ],
   },
   {
@@ -128,11 +124,7 @@ const mockSpeakers: SpeakerWithProposals[] = [
     flags: [],
     links: [],
     proposals: [
-      mockProposal(
-        'talk-5',
-        'Cloud Native Networking',
-        Status.accepted,
-      ),
+      mockProposal('talk-5', 'Cloud Native Networking', Status.accepted),
     ],
   },
 ]
@@ -414,7 +406,9 @@ export const TicketQuestionsUnrolled: Story = {
     // Open Columns dropdown and toggle Monday workshops and Speaker dinner
     const columnsBtn = await canvas.findByRole('button', { name: /columns/i })
     await userEvent.click(columnsBtn)
-    const workshopCol = await within(document.body).findByText('Monday workshops')
+    const workshopCol = await within(document.body).findByText(
+      'Monday workshops',
+    )
     await userEvent.click(workshopCol)
     const dinnerCol = await within(document.body).findByText('Speaker dinner')
     await userEvent.click(dinnerCol)
@@ -433,5 +427,3 @@ export const TicketFiltersOpen: Story = {
     await userEvent.click(filtersBtn)
   },
 }
-
-

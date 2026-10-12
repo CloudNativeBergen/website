@@ -22,7 +22,10 @@ export const MAX_ATTEMPTS = 3
  * reports each one as a module it cannot resolve under this internal path.
  */
 export function isFontFetchFailure(output: string): boolean {
-  return output.includes('@vercel/turbopack-next/internal/font/google/font')
+  return (
+    output.includes('@vercel/turbopack-next/internal/font/google/font') ||
+    output.includes('[next]/internal/font/google/')
+  )
 }
 
 /**

@@ -57,9 +57,10 @@ export function cleanQuestionLabel(raw: string): string {
  * Splits an additional name like "Question - Option" into [question, option].
  * Handles cases where the option is separated by " - ".
  */
-export function splitQuestionAndOption(
-  rawName: string,
-): { questionPrompt: string; optionText?: string } {
+export function splitQuestionAndOption(rawName: string): {
+  questionPrompt: string
+  optionText?: string
+} {
   const delimiterIndex = rawName.indexOf(' - ')
   if (delimiterIndex !== -1) {
     const questionPrompt = rawName.slice(0, delimiterIndex).trim()
@@ -140,16 +141,19 @@ export function discoverTicketQuestions(
         const existing = discoveredMap.get(id)
         if (existing) {
           if (optionText && existing.type === 'choice') {
-            const normalizedOpt = normalizeChoiceValue(optionText, '1') || optionText
+            const normalizedOpt =
+              normalizeChoiceValue(optionText, '1') || optionText
             if (existing.options && !existing.options.includes(normalizedOpt)) {
               existing.options.push(normalizedOpt)
             }
           }
         } else {
-          const isChoice = Boolean(optionText) || a.value === '1' || a.value === '0'
+          const isChoice =
+            Boolean(optionText) || a.value === '1' || a.value === '0'
           const options: string[] = []
           if (optionText) {
-            const normalizedOpt = normalizeChoiceValue(optionText, '1') || optionText
+            const normalizedOpt =
+              normalizeChoiceValue(optionText, '1') || optionText
             options.push(normalizedOpt)
           } else if (isChoice) {
             options.push('Yes', 'No')

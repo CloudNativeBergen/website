@@ -359,18 +359,18 @@ export function SpeakerTable({
         ticketState === filters.ticketClaimState
 
       // Check dynamic question answers
-      const matchesQuestionAnswers = Object.entries(filters.questionAnswers).every(
-        ([qId, expectedVal]) => {
-          if (!expectedVal || expectedVal === 'all') return true
-          const q = discoveredQuestions.find((dq) => dq.id === qId)
-          if (!q) return true
-          const answer = resolveSpeakerAnswer(ticketStatus, q)
-          if (expectedVal === '__unanswered__') {
-            return !answer
-          }
-          return answer?.toLowerCase() === expectedVal.toLowerCase()
-        },
-      )
+      const matchesQuestionAnswers = Object.entries(
+        filters.questionAnswers,
+      ).every(([qId, expectedVal]) => {
+        if (!expectedVal || expectedVal === 'all') return true
+        const q = discoveredQuestions.find((dq) => dq.id === qId)
+        if (!q) return true
+        const answer = resolveSpeakerAnswer(ticketStatus, q)
+        if (expectedVal === '__unanswered__') {
+          return !answer
+        }
+        return answer?.toLowerCase() === expectedVal.toLowerCase()
+      })
 
       return (
         matchesSearch &&
@@ -540,7 +540,11 @@ export function SpeakerTable({
         >
           <span
             className={`h-1.5 w-1.5 rounded-full ${
-              isYes ? 'bg-green-600 dark:bg-green-400' : isNo ? 'bg-gray-400' : 'bg-blue-600 dark:bg-blue-400'
+              isYes
+                ? 'bg-green-600 dark:bg-green-400'
+                : isNo
+                  ? 'bg-gray-400'
+                  : 'bg-blue-600 dark:bg-blue-400'
             }`}
           />
           {answer}
@@ -822,84 +826,86 @@ export function SpeakerTable({
               </div>
             </div>
 
-            {discoveredQuestions.filter((q) => q.type === 'choice').map((q) => (
-              <div
-                key={q.id}
-                className="border-t border-gray-200 pt-2 dark:border-gray-600"
-              >
-                <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                  {q.label}
-                </label>
-                <div className="space-y-0.5">
-                  <FilterOption
-                    type="radio"
-                    checked={
-                      !filters.questionAnswers[q.id] ||
-                      filters.questionAnswers[q.id] === 'all'
-                    }
-                    onClick={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        questionAnswers: {
-                          ...prev.questionAnswers,
-                          [q.id]: 'all',
-                        },
-                      }))
-                    }
-                    keepOpen
-                  >
-                    All
-                  </FilterOption>
-                  {q.options?.map((opt) => (
+            {discoveredQuestions
+              .filter((q) => q.type === 'choice')
+              .map((q) => (
+                <div
+                  key={q.id}
+                  className="border-t border-gray-200 pt-2 dark:border-gray-600"
+                >
+                  <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                    {q.label}
+                  </label>
+                  <div className="space-y-0.5">
                     <FilterOption
-                      key={opt}
                       type="radio"
-                      checked={filters.questionAnswers[q.id] === opt}
+                      checked={
+                        !filters.questionAnswers[q.id] ||
+                        filters.questionAnswers[q.id] === 'all'
+                      }
                       onClick={() =>
                         setFilters((prev) => ({
                           ...prev,
                           questionAnswers: {
                             ...prev.questionAnswers,
-                            [q.id]: opt,
+                            [q.id]: 'all',
                           },
                         }))
                       }
                       keepOpen
                     >
-                      {opt === 'Yes'
-                        ? `${q.label}: Yes`
-                        : opt === 'No'
-                          ? `${q.label}: No`
-                          : opt}
+                      All
                     </FilterOption>
-                  ))}
-                  <FilterOption
-                    type="radio"
-                    checked={filters.questionAnswers[q.id] === '__unanswered__'}
-                    onClick={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        questionAnswers: {
-                          ...prev.questionAnswers,
-                          [q.id]: '__unanswered__',
-                        },
-                      }))
-                    }
-                    keepOpen
-                  >
-                    Unanswered / Unclaimed
-                  </FilterOption>
+                    {q.options?.map((opt) => (
+                      <FilterOption
+                        key={opt}
+                        type="radio"
+                        checked={filters.questionAnswers[q.id] === opt}
+                        onClick={() =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            questionAnswers: {
+                              ...prev.questionAnswers,
+                              [q.id]: opt,
+                            },
+                          }))
+                        }
+                        keepOpen
+                      >
+                        {opt === 'Yes'
+                          ? `${q.label}: Yes`
+                          : opt === 'No'
+                            ? `${q.label}: No`
+                            : opt}
+                      </FilterOption>
+                    ))}
+                    <FilterOption
+                      type="radio"
+                      checked={
+                        filters.questionAnswers[q.id] === '__unanswered__'
+                      }
+                      onClick={() =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          questionAnswers: {
+                            ...prev.questionAnswers,
+                            [q.id]: '__unanswered__',
+                          },
+                        }))
+                      }
+                      keepOpen
+                    >
+                      Unanswered / Unclaimed
+                    </FilterOption>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         </FilterDropdown>
 
         <FilterDropdown
           label="Columns"
-          activeCount={
-            Object.values(columnVisibility).filter(Boolean).length
-          }
+          activeCount={Object.values(columnVisibility).filter(Boolean).length}
           position="right"
           width="wider"
         >
@@ -1090,7 +1096,10 @@ export function SpeakerTable({
                 const colKey = `q_${q.id}` as `q_${string}`
                 if (!columnVisibility[colKey]) return null
                 return (
-                  <div key={q.id} className="mt-3 flex items-center justify-between text-xs">
+                  <div
+                    key={q.id}
+                    className="mt-3 flex items-center justify-between text-xs"
+                  >
                     <span className="font-medium text-gray-500 dark:text-gray-400">
                       {q.label}:
                     </span>
@@ -1267,11 +1276,7 @@ export function SpeakerTable({
                   {discoveredQuestions.map((q) => {
                     const colKey = `q_${q.id}` as `q_${string}`
                     if (!columnVisibility[colKey]) return null
-                    return (
-                      <Td key={q.id}>
-                        {renderQuestionCell(speaker, q)}
-                      </Td>
-                    )
+                    return <Td key={q.id}>{renderQuestionCell(speaker, q)}</Td>
                   })}
                   {columnVisibility.questions && (
                     <Td>{renderTicketQuestions(speaker)}</Td>
