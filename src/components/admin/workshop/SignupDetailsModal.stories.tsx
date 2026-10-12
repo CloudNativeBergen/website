@@ -194,6 +194,11 @@ export const WaitlistMobile: Story = {
     await expect(buttons).toHaveLength(2)
     for (const button of buttons) {
       await waitFor(() => expect(button).toBeVisible())
+      // It emails the attendee at once, with no question, 8px from delete: a
+      // finger-sized target matters more here than anywhere in the list.
+      await expect(
+        button.getBoundingClientRect().height,
+      ).toBeGreaterThanOrEqual(44)
     }
     await expect(actions(canvasElement, 'Move to waitlist')).toHaveLength(0)
     await expectCards(canvasElement)

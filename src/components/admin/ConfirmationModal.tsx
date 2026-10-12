@@ -5,6 +5,10 @@ import { DialogTitle } from '@headlessui/react'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/Button'
 import { ModalShell } from '@/components/ModalShell'
+import { useOpenedLongEnough } from '@/hooks/useOpenedLongEnough'
+
+/** How long a question with `guardSecondTap` ignores its confirm button. */
+export const TAP_GUARD_MS = 400
 
 interface ConfirmationModalProps {
   isOpen: boolean
@@ -22,6 +26,14 @@ interface ConfirmationModalProps {
   children?: ReactNode
   /** When true, the confirm button is disabled (e.g. a required input is empty). */
   confirmDisabled?: boolean
+  /**
+   * Opt-in. Ignore the confirm button for {@link TAP_GUARD_MS} after the
+   * question opens. For a question opened by a control that sits where the
+   * confirm button will appear (on a phone, a row's button under the sheet's):
+   * the second tap of a double tap would otherwise answer it unread. The button
+   * looks the same and says `aria-disabled` for that moment.
+   */
+  guardSecondTap?: boolean
 }
 
 export function ConfirmationModal({
@@ -37,7 +49,13 @@ export function ConfirmationModal({
   isLoading = false,
   children,
   confirmDisabled = false,
+  guardSecondTap = false,
 }: ConfirmationModalProps) {
+  const openedLongEnough = useOpenedLongEnough(
+    isOpen && guardSecondTap,
+    TAP_GUARD_MS,
+  )
+  const ignoreConfirm = guardSecondTap && !openedLongEnough
   const getVariantStyles = () => {
     switch (variant) {
       case 'danger':
@@ -115,7 +133,8 @@ export function ConfirmationModal({
             silently rendered blue. A plain button owns its background. */}
         <button
           type="button"
-          onClick={onConfirm}
+          onClick={ignoreConfirm ? undefined : onConfirm}
+          aria-disabled={ignoreConfirm || undefined}
           disabled={isLoading || confirmDisabled}
           className={`font-space-grotesk inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-200 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-95 motion-reduce:transition-none ${styles.confirmButton} disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto`}
         >

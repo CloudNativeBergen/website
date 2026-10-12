@@ -1,8 +1,9 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
+  act,
   render,
   screen,
   fireEvent,
@@ -10,6 +11,7 @@ import {
   within,
 } from '@testing-library/react'
 import { SignupDetailsModal } from '@/components/admin/workshop/SignupDetailsModal'
+import { TAP_GUARD_MS } from '@/components/admin/ConfirmationModal'
 import {
   WorkshopSignupStatus,
   type WorkshopSignupExisting,
@@ -53,12 +55,29 @@ const waitlisted = [
   { ...signups[0], _id: 'signup-2', status: WorkshopSignupStatus.WAITLIST },
 ] as unknown as WorkshopSignupExisting[]
 
+/**
+ * Both questions in this list ignore their confirm button for a moment after
+ * they open (see "a second tap" below). The clock is the test's, so "a moment
+ * later" is exact.
+ */
+const aMomentLater = (ms = TAP_GUARD_MS) =>
+  act(() => {
+    vi.advanceTimersByTime(ms)
+  })
+
 // The list renders every row twice (a card below `md`, a table row above), so
 // each action is in the document twice.
 const moveToWaitlist = () =>
   screen.queryAllByRole('button', { name: 'Move to waitlist' })
 
-afterEach(() => cleanup())
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('SignupDetailsModal delete confirmation (C6)', () => {
   it('does not delete immediately — it opens a confirmation naming the participant', () => {
@@ -76,6 +95,7 @@ describe('SignupDetailsModal delete confirmation (C6)', () => {
     const { onDeleteSignup } = renderModal()
 
     fireEvent.click(screen.getAllByTitle('Delete participant')[0])
+    aMomentLater()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     expect(onDeleteSignup).toHaveBeenCalledWith('signup-1', 'Ada Lovelace')
@@ -132,6 +152,7 @@ describe('SignupDetailsModal "Move to waitlist" (#1331)', () => {
     const { onMoveToWaitlist, onDeleteSignup } = renderModal()
 
     fireEvent.click(moveToWaitlist()[0])
+    aMomentLater()
     fireEvent.click(
       within(
         screen.getByRole('dialog', { name: 'Move to waitlist' }),
@@ -164,5 +185,73 @@ describe('SignupDetailsModal "Move to waitlist" (#1331)', () => {
     )
     expect(within(question).getAllByRole('button')).toHaveLength(2)
     expect(document.body).not.toHaveTextContent(/cancel/i)
+  })
+})
+
+/**
+ * On a phone the question's confirm button can appear exactly where the row's
+ * button was, with the same label ("Move to waitlist") or under the same thumb
+ * (the trash icon, then "Delete"). A double tap then answered the question
+ * before it was read. Each question ignores its confirm button for
+ * `TAP_GUARD_MS` after it opens.
+ */
+describe('SignupDetailsModal: a second tap does not answer the question', () => {
+  const confirmButton = (question: string, label: string) =>
+    within(screen.getByRole('dialog', { name: question })).getByRole('button', {
+      name: label,
+    })
+
+  it('"Move to waitlist": ignored inside the moment, obeyed after it', () => {
+    const { onMoveToWaitlist } = renderModal()
+    fireEvent.click(moveToWaitlist()[0])
+
+    // The second tap of a double tap, and one just before the moment is over.
+    fireEvent.click(confirmButton('Move to waitlist', 'Move to waitlist'))
+    aMomentLater(TAP_GUARD_MS - 1)
+    fireEvent.click(confirmButton('Move to waitlist', 'Move to waitlist'))
+
+    expect(onMoveToWaitlist).not.toHaveBeenCalled()
+    // Still asking: the taps did not dismiss it either.
+    expect(
+      screen.getByRole('dialog', { name: 'Move to waitlist' }),
+    ).toHaveTextContent('Move Ada Lovelace to the waitlist')
+
+    aMomentLater(1)
+    fireEvent.click(confirmButton('Move to waitlist', 'Move to waitlist'))
+
+    expect(onMoveToWaitlist).toHaveBeenCalledTimes(1)
+    expect(onMoveToWaitlist).toHaveBeenCalledWith('signup-1', 'Ada Lovelace')
+  })
+
+  it('delete: ignored inside the moment, obeyed after it', () => {
+    const { onDeleteSignup } = renderModal()
+    fireEvent.click(screen.getAllByTitle('Delete participant')[0])
+
+    fireEvent.click(confirmButton('Delete signup', 'Delete'))
+    aMomentLater(TAP_GUARD_MS - 1)
+    fireEvent.click(confirmButton('Delete signup', 'Delete'))
+
+    expect(onDeleteSignup).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('dialog', { name: 'Delete signup' }),
+    ).toHaveTextContent("permanently delete Ada Lovelace's signup")
+
+    aMomentLater(1)
+    fireEvent.click(confirmButton('Delete signup', 'Delete'))
+
+    expect(onDeleteSignup).toHaveBeenCalledTimes(1)
+    expect(onDeleteSignup).toHaveBeenCalledWith('signup-1', 'Ada Lovelace')
+  })
+
+  it('opening the question again starts the moment again', () => {
+    const { onMoveToWaitlist } = renderModal()
+    fireEvent.click(moveToWaitlist()[0])
+    aMomentLater()
+    fireEvent.click(screen.getByRole('button', { name: 'Keep confirmed' }))
+
+    fireEvent.click(moveToWaitlist()[0])
+    fireEvent.click(confirmButton('Move to waitlist', 'Move to waitlist'))
+
+    expect(onMoveToWaitlist).not.toHaveBeenCalled()
   })
 })

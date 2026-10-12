@@ -99,7 +99,7 @@ export function SignupDetailsModal({
             <button
               onClick={() => onConfirmSignup(signup._id, signup.userName)}
               disabled={isBusy}
-              className="text-green-600 hover:text-green-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-400 dark:hover:text-green-300"
+              className="min-h-11 text-green-600 hover:text-green-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-400 dark:hover:text-green-300"
             >
               Move to Confirmed
             </button>
@@ -175,6 +175,7 @@ export function SignupDetailsModal({
         cancelButtonText="Keep confirmed"
         variant="warning"
         isLoading={isMoving}
+        guardSecondTap
       />
 
       <ConfirmationModal
@@ -195,6 +196,7 @@ export function SignupDetailsModal({
         confirmButtonText="Delete"
         variant="danger"
         isLoading={isDeleting}
+        guardSecondTap
       />
     </ModalShell>
   )
