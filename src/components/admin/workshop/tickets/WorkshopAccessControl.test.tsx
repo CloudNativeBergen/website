@@ -835,6 +835,40 @@ describe('while a save is on its way', () => {
   })
 
   /**
+   * ON A TICKET-TYPE CARD the control is built from the CACHED conference
+   * (it gets no `basedOn`). The server busts that cache after an unconfirmed
+   * save, but the request that follows can still be served the old copy, so
+   * what the refresh shows is not known to be what is stored. "Check the
+   * list" would vouch for it; the card says to reload the page.
+   */
+  it('says to reload the page after an unconfirmed save on a ticket-type card', () => {
+    render(<WorkshopAccessControl {...row} row={false} />)
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grants workshop access/ }),
+    )
+    act(() =>
+      h.options.onError!(
+        Object.assign(new Error('The save could not be confirmed.'), {
+          data: { code: 'BAD_GATEWAY' },
+        }),
+      ),
+    )
+
+    expect(h.notify.mock.calls).toEqual([
+      [
+        {
+          type: 'warning',
+          title: 'This change may or may not have been saved',
+          message:
+            'The save could not be confirmed. Reload the page and check the list before trying again.',
+        },
+      ],
+    ])
+    // The server answered, so the page data is still refreshed.
+    expect(h.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  /**
    * NO ANSWER AT ALL: the connection is likely down. A refresh would fail the
    * same way, and in Next 16 a failed refresh falls back to a browser
    * navigation, which the service worker answers with the offline page: the

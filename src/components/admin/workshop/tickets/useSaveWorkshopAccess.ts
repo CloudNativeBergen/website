@@ -84,8 +84,14 @@ export function useSaveWorkshopAccess({
         showNotification({
           type: 'warning',
           title: 'This change may or may not have been saved',
+          // "Check the list" vouches for what the refresh shows, so it is
+          // said only where that is the stored list: the section, which reads
+          // the answers live (and is the caller that sends `basedOn`). A
+          // ticket-type card is built from the cached conference, and the
+          // request after the cache is busted can still be served the old
+          // copy: there, as with no answer at all, the organizer reloads.
           message:
-            unknown === 'unconfirmed'
+            unknown === 'unconfirmed' && basedOn !== undefined
               ? 'The save could not be confirmed. Check the list before trying again.'
               : 'The save could not be confirmed. Reload the page and check the list before trying again.',
         })
