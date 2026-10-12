@@ -294,7 +294,10 @@ beforeEach(() => {
     )
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // A case that fails mid-way can leave a save in flight. Let it land in ITS
+  // dataset, so it cannot write into the next case's.
+  await Promise.allSettled(h.saves)
   cleanup()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
