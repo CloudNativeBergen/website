@@ -361,10 +361,9 @@ export function DiscountCodeManager({
   // Codes linked in THIS session (a sponsor-row create, #1262), merged over
   // the page's server props until the next render of the page brings them.
   const [sessionLinks, setSessionLinks] = useState<Record<string, string[]>>({})
-  // The `withLinkedCodes` set: sponsor rows, then the other code holders.
-  const claimants = useMemo(
-    () => [
-      ...sponsors.map((s) =>
+  const sponsorsWithSession = useMemo(
+    () =>
+      sponsors.map((s) =>
         sessionLinks[s.id]
           ? {
               ...s,
@@ -372,9 +371,12 @@ export function DiscountCodeManager({
             }
           : s,
       ),
-      ...otherCodeHolders,
-    ],
-    [sponsors, sessionLinks, otherCodeHolders],
+    [sponsors, sessionLinks],
+  )
+  // The `withLinkedCodes` set: sponsor rows, then the other code holders.
+  const claimants = useMemo(
+    () => [...sponsorsWithSession, ...otherCodeHolders],
+    [sponsorsWithSession, otherCodeHolders],
   )
   /** The CRM record outside the sponsor rows that stores this code, if any. */
   const otherHolderOf = useCallback(
@@ -1499,7 +1501,7 @@ export function DiscountCodeManager({
           isOpen
           onClose={() => setShowBulkSendModal(false)}
           conference={conference}
-          sponsors={sponsors}
+          sponsors={sponsorsWithSession}
           existingDiscounts={existingDiscounts}
           otherCodeHolders={otherCodeHolders}
           onSent={() => {

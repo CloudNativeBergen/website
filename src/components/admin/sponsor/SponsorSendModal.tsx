@@ -1322,20 +1322,11 @@ export function SponsorSendModal({
       />
     ) : null
   const noCodeHint =
-    isDiscount &&
-    (sponsorCodeOptions.length === 0 ? (
-      <p
-        role="alert"
-        className="font-inter text-sm text-amber-700 dark:text-amber-300"
-      >
-        No discount code is linked to {sponsorForConference.sponsor.name} yet.
-        Create or assign a code first.
-      </p>
-    ) : chosenCodes.length === 0 ? (
+    isDiscount && sponsorCodeOptions.length > 0 && chosenCodes.length === 0 ? (
       <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
         Choose at least one discount code before sending.
       </p>
-    ) : null)
+    ) : null
   // Registration already complete (#1263): a warning, not a refusal — the
   // organizer may still want a contact to have the link.
   const registrationCompleteNotice =

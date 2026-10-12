@@ -30,7 +30,16 @@ export function SponsorDashboardBroadcastAction({
     { staleTime: 30000 },
   )
 
-  const recipientCount = sponsorsQuery.data?.length ?? 0
+  const recipientCount = React.useMemo(() => {
+    if (!sponsorsQuery.data) return 0
+    const emails = new Set<string>()
+    for (const s of sponsorsQuery.data) {
+      for (const c of s.contactPersons ?? []) {
+        if (c.email) emails.add(c.email.trim().toLowerCase())
+      }
+    }
+    return emails.size
+  }, [sponsorsQuery.data])
 
   return (
     <>

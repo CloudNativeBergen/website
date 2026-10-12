@@ -130,7 +130,13 @@ export function BulkDiscountSendModal({
           sfc.sponsor._id === sponsor.id,
       )
 
-      // Codes owned or attributed
+      // Codes owned or attributed that exist in the ticketing provider
+      const existingCodeSet = new Set(
+        existingDiscounts
+          .map((d) => d.triggerValue?.trim().toUpperCase())
+          .filter(Boolean),
+      )
+
       const ownedCodes = existingDiscounts
         .filter(
           (d) =>
@@ -139,9 +145,16 @@ export function BulkDiscountSendModal({
         .map((d) => d.triggerValue)
         .filter((c): c is string => Boolean(c))
 
-      const allCodes = Array.from(
-        new Set([...ownedCodes, ...(sponsor.linkedCodes ?? [])]),
-      )
+      // Only include codes that exist upstream in the event's discounts when existingDiscounts is populated;
+      // deleted codes that remain in Sanity's linkedCodes array must not be submitted
+      const validLinkedCodes =
+        existingDiscounts.length > 0
+          ? (sponsor.linkedCodes ?? []).filter((c) =>
+              existingCodeSet.has(c.trim().toUpperCase()),
+            )
+          : (sponsor.linkedCodes ?? [])
+
+      const allCodes = Array.from(new Set([...ownedCodes, ...validLinkedCodes]))
 
       const sfcId = sponsor.sponsorForConferenceId || crmRecord?._id
 
@@ -379,6 +392,26 @@ export function BulkDiscountSendModal({
           </div>
         )}
 
+        {crmListQuery.isError && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-md border border-red-300 bg-red-50 p-3 text-red-900 dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-200"
+          >
+            <ExclamationTriangleIcon className="mt-0.5 size-5 shrink-0 text-red-600 dark:text-red-400" />
+            <div className="text-xs leading-relaxed">
+              <span className="font-semibold">Error:</span> Failed to load
+              sponsor CRM contacts: {crmListQuery.error?.message}. Please try
+              again.
+            </div>
+          </div>
+        )}
+
+        {crmListQuery.isLoading && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-4 text-center text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
+            Loading sponsor CRM contacts…
+          </div>
+        )}
+
         {/* Recipients Summary */}
         <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -452,11 +485,7 @@ export function BulkDiscountSendModal({
             {/* Progress Bar */}
             <div
               role="progressbar"
-              aria-valuenow={
-                Object.keys(results).filter(
-                  (k) => results[k].status !== 'pending',
-                ).length
-              }
+              aria-valuenow={successCount + errorCount}
               aria-valuemin={0}
               aria-valuemax={eligibleSponsors.length}
               aria-label="Email sending progress"
@@ -465,7 +494,7 @@ export function BulkDiscountSendModal({
               <div
                 className="h-full bg-indigo-600 transition-all duration-300 dark:bg-indigo-500"
                 style={{
-                  width: `${(Object.keys(results).filter((k) => results[k].status !== 'pending').length / eligibleSponsors.length) * 100}%`,
+                  width: `${eligibleSponsors.length > 0 ? ((successCount + errorCount) / eligibleSponsors.length) * 100 : 0}%`,
                 }}
               />
             </div>

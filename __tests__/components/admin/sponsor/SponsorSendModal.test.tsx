@@ -649,12 +649,21 @@ describe('discount kind', () => {
     )
   })
 
-  it('does not show codes stored on or attributed to another sponsor', () => {
+  it('does not show codes stored on or attributed to another sponsor', async () => {
     h.codeOptions = options
     renderModal({}, 'discount')
+    // Positive presence assertion: ACME_LINKED exists and is rendered
+    expect(
+      screen.getByRole('checkbox', { name: ACME_LINKED }),
+    ).toBeInTheDocument()
+    // Negative assertion: foreign code is excluded
     expect(
       screen.queryByRole('checkbox', { name: /GLOBEX-VIP/ }),
     ).not.toBeInTheDocument()
+    // Action value proof: submitting dispatches with only the sponsor's valid codes
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0].discountCodes).toEqual(['ACME-2026'])
   })
 
   it('refuses to post with no code ticked', async () => {

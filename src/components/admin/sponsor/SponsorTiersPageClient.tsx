@@ -1,5 +1,7 @@
 'use client'
 
+import React from 'react'
+import { api } from '@/lib/trpc/client'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { AdminPageHeader } from '@/components/admin'
 import { GeneralBroadcastModal } from '@/components/admin'
@@ -48,7 +50,21 @@ export function SponsorTiersPageClient({
     handleSyncContacts,
   } = useSponsorBroadcast()
 
-  const recipientCount = sponsors.length
+  const sponsorsQuery = api.sponsor.crm.list.useQuery(
+    { status: ['closed-won'] },
+    { staleTime: 30000 },
+  )
+
+  const recipientCount = React.useMemo(() => {
+    if (!sponsorsQuery.data) return 0
+    const emails = new Set<string>()
+    for (const s of sponsorsQuery.data) {
+      for (const c of s.contactPersons ?? []) {
+        if (c.email) emails.add(c.email.trim().toLowerCase())
+      }
+    }
+    return emails.size
+  }, [sponsorsQuery.data])
 
   return (
     <>
