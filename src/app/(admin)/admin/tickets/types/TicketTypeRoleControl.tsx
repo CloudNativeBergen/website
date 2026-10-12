@@ -60,14 +60,17 @@ export function TicketTypeRoleControl({
       setDeclared(declaredAdmits)
       // The server could not confirm its write, or never answered: the role
       // may have been stored. Say so, not "Could not save", and reload the
-      // page's data so the card shows what is stored.
+      // page's data. The card adopts a stored answer that comes back changed
+      // (below). This page reads the conference through a cache, which the
+      // server busts for an unconfirmed save too, but the first reload can
+      // still be served the old copy: hence "reload the page" in the message.
       if (isUnconfirmedSave(error)) {
         router.refresh()
         showNotification({
           type: 'warning',
           title: 'This change may or may not have been saved',
           message:
-            'The save could not be confirmed. Check this ticket type before trying again.',
+            'The save could not be confirmed. Reload the page and check this ticket type before trying again.',
         })
         return
       }
@@ -78,6 +81,22 @@ export function TicketTypeRoleControl({
       })
     },
   })
+
+  /**
+   * ADOPT A STORED ANSWER THAT CHANGED UNDER THE CARD. The state above is read
+   * from the prop once, at mount. After an error the card puts the old answer
+   * back; if the write had landed after all (a save nobody could confirm), the
+   * reload brings the new answer in the prop, and the card must show it, or
+   * the organizer who was told to check sees the old one and concludes nothing
+   * was saved. Keyed on the prop CHANGING, and skipped while a save of this
+   * card is outstanding, so a reload cannot overwrite the answer just clicked.
+   * The same pattern as `WorkshopAccessControl`.
+   */
+  const [synced, setSynced] = useState(declaredAdmits)
+  if (synced !== declaredAdmits && !mutation.isPending) {
+    setSynced(declaredAdmits)
+    setDeclared(declaredAdmits)
+  }
 
   const save = (admits: boolean) => {
     if (mutation.isPending) return

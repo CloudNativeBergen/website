@@ -631,6 +631,38 @@ function retryableOrThrow(error: unknown): unknown {
   })
 }
 
+/**
+ * A roles save, and the cache that has to follow it.
+ *
+ * `ticketTypeRoles` lives on the CONFERENCE document, which the cached
+ * conference read serves through its `...` spread — so the counts that depend
+ * on it, and the cards of `/admin/tickets/types`, keep serving the old roles
+ * until this tag is busted. (The /workshop gate and the workshop-ticket list
+ * re-read the field live.)
+ *
+ * BUSTED WHEN THE WRITE LANDED, AND WHEN IT MAY HAVE. After a save that could
+ * not be confirmed the organizer is told to check, and the page reloads: it
+ * must not reload the answer from before a write that did land. A save that
+ * was refused wrote nothing, and busts nothing.
+ */
+async function saveTicketTypeRoles(
+  conferenceId: string,
+  write: Parameters<typeof setTicketTypeRoles>[1],
+) {
+  const bust = () => {
+    revalidateTag('admin:tickets', 'default')
+    revalidateTag(conferenceTag(conferenceId), 'default')
+  }
+  try {
+    const result = await setTicketTypeRoles(conferenceId, write)
+    bust()
+    return result
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === UNCONFIRMED_SAVE) bust()
+    throw error
+  }
+}
+
 async function getTicketSettings(conferenceId: string) {
   try {
     const query = `*[_type == "conference" && _id == $conferenceId][0]{
@@ -965,17 +997,9 @@ export const ticketsRouter = router({
       .input(SetTicketTypeRoleSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
-        const result = await setTicketTypeRoles(conferenceId, {
+        return saveTicketTypeRoles(conferenceId, {
           seating: { typeName: input.typeName, admits: input.admits },
         })
-
-        revalidateTag('admin:tickets', 'default')
-        // `ticketTypeRoles` lives on the CONFERENCE document, which the cached
-        // conference read serves through its `...` spread — so the counts that
-        // depend on it keep serving the old role until this tag is busted.
-        revalidateTag(conferenceTag(conferenceId), 'default')
-
-        return result
       }),
 
     /**
@@ -1004,19 +1028,11 @@ export const ticketsRouter = router({
       .input(SetWorkshopAccessSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
-        const result = await setTicketTypeRoles(conferenceId, {
+        return saveTicketTypeRoles(conferenceId, {
           workshop: input.updates,
           allowBuiltInList: input.allowBuiltInList === true,
           basedOn: input.basedOn,
         })
-
-        revalidateTag('admin:tickets', 'default')
-        // The /workshop gate re-reads this field live, but the cached
-        // conference read (and the counts hanging off it) still serves the old
-        // roles until this tag is busted.
-        revalidateTag(conferenceTag(conferenceId), 'default')
-
-        return result
       }),
 
     getTicketTypes: ticketingAdminProcedure.query(async () => {

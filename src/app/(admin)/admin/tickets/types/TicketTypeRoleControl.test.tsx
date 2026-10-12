@@ -235,7 +235,7 @@ describe('a save whose outcome is unknown', () => {
     type: 'warning',
     title: 'This change may or may not have been saved',
     message:
-      'The save could not be confirmed. Check this ticket type before trying again.',
+      'The save could not be confirmed. Reload the page and check this ticket type before trying again.',
   }
 
   it.each([
@@ -254,6 +254,45 @@ describe('a save whose outcome is unknown', () => {
 
     expect(h.notify.mock.calls).toEqual([[UNKNOWN]])
     expect(h.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * "CHECK THIS TICKET TYPE" HAS TO SHOW WHAT IS STORED. On an error the card
+   * puts back the answer it had, and it used to keep that for good: its state
+   * was only ever read from the prop at mount. So after a save that DID land,
+   * the reload brought the new answer and the card went on showing the old
+   * one, and the organizer who was told to check concluded nothing was saved.
+   */
+  it('shows the stored answer the reload brings back', () => {
+    const { rerender } = render(<TicketTypeRoleControl typeName={UPGRADE} />)
+    const addOn = () => screen.getByRole('button', { name: /^Add-on/ })
+    fireEvent.click(addOn())
+    act(() => h.options.onError!({ message: 'Failed to fetch' }))
+    // Back to what the card knew: nothing declared.
+    expect(addOn()).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('Not set')).toBeInTheDocument()
+
+    // The write had landed, and the reloaded page says so.
+    rerender(
+      <TicketTypeRoleControl typeName={UPGRADE} declaredAdmits={false} />,
+    )
+
+    expect(addOn()).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Declared')).toBeInTheDocument()
+  })
+
+  it('shows the old answer still, when the reload says the write did not land', () => {
+    const { rerender } = render(
+      <TicketTypeRoleControl typeName={UPGRADE} declaredAdmits />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Add-on/ }))
+    act(() => h.options.onError!({ message: 'Failed to fetch' }))
+
+    rerender(<TicketTypeRoleControl typeName={UPGRADE} declaredAdmits />)
+
+    expect(
+      screen.getByRole('button', { name: /^Seats an attendee/ }),
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('still says the save failed when the server refused it', () => {

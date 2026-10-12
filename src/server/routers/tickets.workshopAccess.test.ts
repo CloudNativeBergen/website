@@ -125,6 +125,7 @@ vi.mock('@/lib/tickets/provider', () => ({
 }))
 
 import { initTRPC } from '@trpc/server'
+import { revalidateTag } from 'next/cache'
 import type { Context } from '@/server/trpc'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 import {
@@ -462,6 +463,58 @@ describe('a commit that fails', () => {
       { typeName: 'Two-day pass', grantsWorkshop: true },
       { typeName: 'Day pass', admits: true },
     ])
+  })
+
+  /**
+   * THE WRITE MAY HAVE LANDED, SO THE CACHED CONFERENCE MAY BE OLD. The page
+   * that shows the seating control reads the conference through a cache, and
+   * the save used to bust that cache only after a commit it knew had worked.
+   * After an unconfirmed save the page would then reload the old answer for
+   * as long as the cache lived, right after telling the organizer to check.
+   */
+  it.each([
+    [
+      'the workshop save',
+      () =>
+        tickets().admin.setWorkshopAccess({
+          updates: [{ typeName: 'Day pass', grantsWorkshop: true }],
+        }),
+    ],
+    [
+      'the seating save',
+      () =>
+        tickets().admin.setTicketTypeRole({
+          typeName: 'Day pass',
+          admits: false,
+        }),
+    ],
+  ])(
+    'busts the cached conference after %s could not be confirmed',
+    async (_which, save) => {
+      seed(ROLES)
+      vi.mocked(revalidateTag).mockClear()
+      h.failAfterApplying = new Error('socket hang up')
+
+      await expect(save()).rejects.toMatchObject(UNCONFIRMED)
+
+      expect(vi.mocked(revalidateTag).mock.calls).toEqual([
+        ['admin:tickets', 'default'],
+        ['sanity:conference-conf-A', 'default'],
+      ])
+    },
+  )
+
+  it('busts nothing when the save was refused before any write', async () => {
+    seed(ROLES)
+    vi.mocked(revalidateTag).mockClear()
+
+    await expect(
+      tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: 'Two-day pass', grantsWorkshop: false }],
+      }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+
+    expect(revalidateTag).not.toHaveBeenCalled()
   })
 
   it('is not retried for the seating answer either', async () => {
