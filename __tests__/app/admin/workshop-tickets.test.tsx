@@ -484,7 +484,7 @@ describe('a No saved before any type grants access', () => {
       }),
     )
     expect(screen.getByRole('alert')).toHaveTextContent(
-      `Holders of “${TWO_DAY}” sign up through that list today, and are blocked unless that type is set to grant access in the same save. “${SPEAKER}” is already set to No: its holders are blocked too when the built-in list goes off.`,
+      `Holders of “${TWO_DAY}” sign up through that list today, and are blocked unless that type is set to grant access in the same save. “${SPEAKER}” is already set to No, so its holders are blocked when the built-in list goes off.`,
     )
     fireEvent.click(
       screen.getByRole('button', {
@@ -501,6 +501,101 @@ describe('a No saved before any type grants access', () => {
     expect((await gate(SPEAKER)).isEligible).toBe(false)
     expect((await gate(TWO_DAY)).isEligible).toBe(true)
     expect((await gate('Early Bird')).isEligible).toBe(true)
+  })
+})
+
+/**
+ * THE FIRST GRANT SWITCHES THE BUILT-IN LIST OFF, AND THAT IS ALWAYS ASKED
+ * ABOUT. Here every other type the list lets in already holds a No, so there
+ * is nothing to keep: their holders sign up today and cannot after the save.
+ */
+describe('a first grant when the other built-in types hold a No', () => {
+  const NOES = [
+    { typeName: SPEAKER, grantsWorkshop: false },
+    { typeName: TWO_DAY, grantsWorkshop: false },
+  ]
+  const lets = async () => ({
+    [SPEAKER]: (await gate(SPEAKER)).isEligible,
+    [TWO_DAY]: (await gate(TWO_DAY)).isEligible,
+    'Early Bird': (await gate('Early Bird')).isEligible,
+  })
+
+  it('asks, writes nothing on cancel, and blocks them on confirm without touching their No', async () => {
+    seed(NOES, ['Early Bird', SPEAKER, TWO_DAY])
+    // The built-in list overrules the stored Noes today.
+    expect(await lets()).toEqual({
+      [SPEAKER]: true,
+      [TWO_DAY]: true,
+      'Early Bird': false,
+    })
+
+    await openSection()
+    const grant = () =>
+      fireEvent.click(
+        row('Early Bird').getByRole('button', {
+          name: /^Grants workshop access/,
+        }),
+      )
+    grant()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `Saving it switches the built-in list off. “${SPEAKER}” and “${TWO_DAY}” are already set to No, so their holders are blocked when the built-in list goes off.`,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await saved()
+    expect(h.commits).toBe(0)
+    expect(stored()).toEqual(NOES)
+
+    grant()
+    fireEvent.click(screen.getByRole('button', { name: 'Grant “Early Bird”' }))
+    await saved()
+
+    expect(stored()).toEqual([
+      ...NOES,
+      { typeName: 'Early Bird', grantsWorkshop: true },
+    ])
+    expect(await lets()).toEqual({
+      [SPEAKER]: false,
+      [TWO_DAY]: false,
+      'Early Bird': true,
+    })
+  })
+})
+
+/**
+ * AN ORPHANED GRANT BEHIND ANOTHER SPELLING is listed, and its removal reaches
+ * the spelling that holds it.
+ */
+describe('an orphaned grant held by a later spelling of a renamed type', () => {
+  it('is listed and removed, and the built-in list then decides', async () => {
+    seed(
+      [
+        { typeName: 'Workshop 2025', admits: true },
+        { typeName: 'workshop 2025 ', grantsWorkshop: true },
+      ],
+      ['Workshop 2026', SPEAKER],
+    )
+    expect((await gate(SPEAKER)).isEligible).toBe(false)
+
+    await openSection()
+    expect(
+      screen.getByRole('status', { name: 'Needs a decision' }),
+    ).toHaveTextContent(
+      '“Workshop 2025” is saved as granting workshop access, but Checkin.no lists no ticket type with that name.',
+    )
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove the entry for "Workshop 2025"',
+      }),
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove and use the built-in list' }),
+    )
+    await saved()
+
+    expect(stored()).toEqual([{ typeName: 'Workshop 2025', admits: true }])
+    expect((await gate(SPEAKER)).isEligible).toBe(true)
+    await openSection()
+    expect(screen.getByText('This list is not configured yet.')).toBeVisible()
   })
 })
 

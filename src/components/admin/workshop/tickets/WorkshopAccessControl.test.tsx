@@ -520,7 +520,7 @@ describe('a no while nothing is marked', () => {
     act(() => h.options.onSuccess!())
 
     expect(h.notify.mock.calls[0][0].message).toBe(
-      `“${SPEAKER}” no longer grants workshop access. 1 other ticket type keeps it.`,
+      `“${SPEAKER}” does not grant workshop access. 1 other ticket type keeps it.`,
     )
   })
 
@@ -605,6 +605,22 @@ describe('a no while nothing is marked', () => {
       'Save the No, block nothing yet',
       'Cancel',
     ])
+  })
+
+  it('says a No for a type that never granted does not grant', () => {
+    render(
+      <WorkshopAccessControl
+        {...props({ typeName: 'Mystery pass', configured: true })}
+      />,
+    )
+
+    no()
+    act(() => h.options.onSuccess!())
+
+    // Not "no longer": it was not set, and its holders were refused already.
+    expect(h.notify.mock.calls[0][0].message).toBe(
+      '“Mystery pass” does not grant workshop access.',
+    )
   })
 
   it('says a marked type grants', () => {
@@ -781,7 +797,7 @@ describe('another type that holds a stored No', () => {
     )
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      `This is the first ticket type set to grant access.Saving it switches the built-in list off. Holders of “${TWO_DAY}” sign up through that list today, and are blocked unless that type is set to grant access in the same save. “${SPEAKER}” is already set to No: its holders are blocked too when the built-in list goes off.`,
+      `This is the first ticket type set to grant access.Saving it switches the built-in list off. Holders of “${TWO_DAY}” sign up through that list today, and are blocked unless that type is set to grant access in the same save. “${SPEAKER}” is already set to No, so its holders are blocked when the built-in list goes off.`,
     )
     fireEvent.click(
       screen.getByRole('button', {
@@ -802,6 +818,46 @@ describe('another type that holds a stored No', () => {
     ])
   })
 
+  /**
+   * THE FIRST GRANT IS ALWAYS ASKED ABOUT when the built-in list lets another
+   * type in, even when there is nothing to keep: every other such type holds a
+   * No, and that No starts blocking its holders with this save.
+   */
+  it('is asked about on a first grant even with nothing to keep', () => {
+    render(
+      <WorkshopAccessControl
+        {...props({
+          typeName: 'Early Bird',
+          configured: false,
+          setToNo: [SPEAKER, TWO_DAY],
+        })}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grants workshop access/ }),
+    )
+
+    expect(h.mutate).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `This is the first ticket type set to grant access.Saving it switches the built-in list off. “${SPEAKER}” and “${TWO_DAY}” are already set to No, so their holders are blocked when the built-in list goes off.`,
+    )
+    // No button keeps a type that holds a No: that would overwrite it.
+    expect(
+      screen.getAllByRole('button').map((button) => button.textContent),
+    ).toEqual([
+      'Grants workshop access',
+      'No workshop access',
+      'Grant “Early Bird”',
+      'Cancel',
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Grant “Early Bird”' }))
+    expect(h.mutate.mock.calls).toEqual([
+      [{ updates: [{ typeName: 'Early Bird', grantsWorkshop: true }] }],
+    ])
+  })
+
   it('is named in the question for a No as well', () => {
     render(
       <WorkshopAccessControl
@@ -818,7 +874,7 @@ describe('another type that holds a stored No', () => {
     fireEvent.click(screen.getByRole('button', { name: /^No workshop access/ }))
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      `Set “${UPGRADE}” to grant access in the same save and the No takes effect. “${SPEAKER}” and “Early Bird” are already set to No: their holders are blocked too when the built-in list goes off.`,
+      `Set “${UPGRADE}” to grant access in the same save and the No takes effect. “${SPEAKER}” and “Early Bird” are already set to No, so their holders are blocked when the built-in list goes off.`,
     )
   })
 })

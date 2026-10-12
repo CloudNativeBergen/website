@@ -181,12 +181,39 @@ export const FirstGrantWithStoredNo: Story = {
       }),
     )
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      '“Speaker ticket” is already set to No: its holders are blocked too when the built-in list goes off.',
+      '“Speaker ticket” is already set to No, so its holders are blocked when the built-in list goes off.',
     )
     await expect(
       canvas.getByRole('button', {
         name: 'Grant “Early Bird”, keep “Workshop + Conference (2 days)”',
       }),
+    ).toBeVisible()
+  },
+}
+/**
+ * NOTHING TO KEEP, STILL ASKED. Every other type the built-in list lets in
+ * holds a No. The first grant switches that list off and those holders are
+ * blocked, so it is confirmed, with no button that would overwrite a No.
+ */
+export const FirstGrantOnlyStoredNoes: Story = {
+  args: {
+    list: buildWorkshopTicketList(TYPES, [
+      { typeName: SPEAKER, grantsWorkshop: false },
+      { typeName: TWO_DAY, grantsWorkshop: false },
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Grants workshop access — "Early Bird"',
+      }),
+    )
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      'Saving it switches the built-in list off. “Workshop + Conference (2 days)” and “Speaker ticket” are already set to No, so their holders are blocked when the built-in list goes off.',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Grant “Early Bird”' }),
     ).toBeVisible()
   },
 }

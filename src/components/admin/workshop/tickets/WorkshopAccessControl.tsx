@@ -88,7 +88,7 @@ export function WorkshopAccessControl({
    */
   const alsoBlocked =
     setToNo.length > 0
-      ? ` ${quoteNames(setToNo)} ${setToNo.length === 1 ? 'is' : 'are'} already set to No: ${setToNo.length === 1 ? 'its' : 'their'} holders are blocked too when the built-in list goes off.`
+      ? ` ${quoteNames(setToNo)} ${setToNo.length === 1 ? 'is' : 'are'} already set to No, so ${setToNo.length === 1 ? 'its' : 'their'} holders are blocked when the built-in list goes off.`
       : ''
 
   const [answer, setAnswer] = useState(type.stored)
@@ -138,7 +138,10 @@ export function WorkshopAccessControl({
    */
   const needsConfirm = (grants: boolean) => {
     if (configured) return leavesNothingMarked(grants)
-    return grants ? others.length > 0 : builtInGrantsThis
+    // The first grant switches the built-in list off. That is asked about
+    // whenever the list lets ANY other type in: one that can be kept, or one
+    // that holds a stored No and is blocked by it from then on.
+    return grants ? others.length + setToNo.length > 0 : builtInGrantsThis
   }
 
   const write = (grants: boolean, carryOthers: boolean) => {
@@ -172,7 +175,7 @@ export function WorkshopAccessControl({
       {
         title: 'Workshop access saved',
         message: !builtInListDecides
-          ? `“${typeName}” ${grants ? 'now grants' : 'no longer grants'} workshop access.${keeps}`
+          ? `“${typeName}” ${grants ? 'now grants' : 'does not grant'} workshop access.${keeps}`
           : type.builtInGrants
             ? `Saved, but “${typeName}” holders can still sign up until a ticket type is set to grant access.`
             : 'Saved. No ticket type is set to grant access, so the built-in list decides who can sign up.',
@@ -236,7 +239,11 @@ export function WorkshopAccessControl({
         </p>
         <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
           {confirming
-            ? `Saving it switches the built-in list off. Holders of ${quoteNames(others)} sign up through that list today, and are blocked unless ${others.length === 1 ? 'that type is' : 'those types are'} set to grant access in the same save.`
+            ? `Saving it switches the built-in list off.${
+                others.length > 0
+                  ? ` Holders of ${quoteNames(others)} sign up through that list today, and are blocked unless ${others.length === 1 ? 'that type is' : 'those types are'} set to grant access in the same save.`
+                  : ''
+              }`
             : `Until a ticket type is set to grant access, the built-in list decides, and it lets “${typeName}” holders sign up. ${
                 others.length > 0
                   ? `Set ${quoteNames(others)} to grant access in the same save and the No takes effect.`
@@ -262,9 +269,12 @@ export function WorkshopAccessControl({
             onClick={() => write(confirming, false)}
             className="min-h-11 flex-1 basis-40 rounded-md bg-white px-3 py-2 text-left text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 sm:max-w-80 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
           >
-            {confirming
-              ? `Grant “${typeName}” only, block ${quoteNames(others)}`
-              : 'Save the No, block nothing yet'}
+            {!confirming
+              ? 'Save the No, block nothing yet'
+              : others.length > 0
+                ? `Grant “${typeName}” only, block ${quoteNames(others)}`
+                : // Nothing to keep: the other types hold a No, which stands.
+                  `Grant “${typeName}”`}
           </button>
           <button
             type="button"
