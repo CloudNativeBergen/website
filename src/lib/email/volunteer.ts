@@ -35,6 +35,8 @@ interface ConferenceForEmail {
    * the colour had no way to reach the template.
    */
   theme?: ConferenceTheme | null
+  volunteerRegistrationLink?: string
+  volunteerSlackInviteUrl?: string
 }
 
 export async function sendVolunteerApprovalEmail(
@@ -42,6 +44,10 @@ export async function sendVolunteerApprovalEmail(
   conference: ConferenceForEmail,
   subject: string,
   message: string,
+  options?: {
+    registrationUrl?: string
+    slackInviteUrl?: string
+  },
 ): Promise<EmailResult<{ emailId: string }>> {
   try {
     if (!volunteer.email) {
@@ -73,6 +79,15 @@ export async function sendVolunteerApprovalEmail(
 
     const { client } = await resolveEmailSender(conference.organization?._ref)
 
+    const registrationUrl =
+      options?.registrationUrl !== undefined
+        ? options.registrationUrl
+        : conference.volunteerRegistrationLink
+    const slackInviteUrl =
+      options?.slackInviteUrl !== undefined
+        ? options.slackInviteUrl
+        : conference.volunteerSlackInviteUrl
+
     const result = await retryWithBackoff(async () => {
       const response = await client.emails.send({
         from: `${conference.organizer || conference.title} <${fromEmail}>`,
@@ -87,6 +102,8 @@ export async function sendVolunteerApprovalEmail(
           message,
           socialLinks,
           brandColor: emailBrandColor(conference.theme),
+          registrationUrl,
+          slackInviteUrl,
         }) as React.ReactElement,
       })
 

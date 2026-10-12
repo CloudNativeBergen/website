@@ -119,6 +119,7 @@ export async function getConferenceForCurrentDomain({
   gallery = false,
   includeSponsorRegistrationLink = false,
   includeSpeakerRegistrationLink = false,
+  includeVolunteerRegistrationLink = false,
   uncached = false,
 }: {
   organizers?: boolean
@@ -140,6 +141,8 @@ export async function getConferenceForCurrentDomain({
   includeSponsorRegistrationLink?: boolean
   /** See {@link getConferenceForDomain}. Admin/server surfaces only. */
   includeSpeakerRegistrationLink?: boolean
+  /** See {@link getConferenceForDomain}. Admin/server surfaces only. */
+  includeVolunteerRegistrationLink?: boolean
   /** Fetch directly from the origin API instead of the CDN. Admin surfaces only. */
   uncached?: boolean
 } = {}): Promise<{
@@ -163,6 +166,7 @@ export async function getConferenceForCurrentDomain({
       gallery,
       includeSponsorRegistrationLink,
       includeSpeakerRegistrationLink,
+      includeVolunteerRegistrationLink,
       uncached,
     })
   } catch (err) {
@@ -189,6 +193,7 @@ export async function getConferenceForDomain(
     uncached = false,
     includeSponsorRegistrationLink = false,
     includeSpeakerRegistrationLink = false,
+    includeVolunteerRegistrationLink = false,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -243,6 +248,11 @@ export async function getConferenceForDomain(
      * the link). Nothing that renders a public page may pass it.
      */
     includeSpeakerRegistrationLink?: boolean
+    /**
+     * Include `volunteerRegistrationLink` and `volunteerSlackInviteUrl` in the result.
+     * OFF by default. Private volunteer onboarding links; admin/email surfaces only.
+     */
+    includeVolunteerRegistrationLink?: boolean
   } = {},
 ): Promise<{
   conference: Conference
@@ -415,6 +425,12 @@ export async function getConferenceForDomain(
   }
   if (!includeSpeakerRegistrationLink && conference?.speakerRegistrationLink) {
     delete conference.speakerRegistrationLink
+  }
+  if (!includeVolunteerRegistrationLink && conference?.volunteerRegistrationLink) {
+    delete conference.volunteerRegistrationLink
+  }
+  if (!includeVolunteerRegistrationLink && conference?.volunteerSlackInviteUrl) {
+    delete conference.volunteerSlackInviteUrl
   }
 
   return { conference: normalizeConference(conference), domain, error, status }

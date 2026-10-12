@@ -125,6 +125,7 @@ const vol = vi.hoisted(() => ({
   updateVolunteerDetails: vi.fn(),
   deleteVolunteer: vi.fn(),
   sendVolunteerApprovalEmail: vi.fn(),
+  recordVolunteerApprovalEmailSent: vi.fn().mockResolvedValue({ success: true, error: null }),
 }))
 vi.mock('@/lib/email/volunteer', () => ({
   sendVolunteerApprovalEmail: vol.sendVolunteerApprovalEmail,
@@ -136,6 +137,7 @@ vi.mock('@/lib/volunteer/sanity', () => ({
   updateVolunteerDetails: vol.updateVolunteerDetails,
   deleteVolunteer: vol.deleteVolunteer,
   createVolunteer: vi.fn(),
+  recordVolunteerApprovalEmailSent: vol.recordVolunteerApprovalEmailSent,
 }))
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: vi.fn(),

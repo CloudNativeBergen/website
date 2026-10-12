@@ -38,7 +38,10 @@ export async function getVolunteersByConference(
         domains,
         organizer,
         socialLinks,
-        organization
+        organization,
+        theme,
+        volunteerRegistrationLink,
+        volunteerSlackInviteUrl
       },
       consent,
       status,
@@ -48,7 +51,12 @@ export async function getVolunteersByConference(
         _id,
         name
       },
-      reviewNotes
+      reviewNotes,
+      approvalEmailSentAt,
+      approvalEmailSentBy->{
+        _id,
+        name
+      }
     }`
 
     const volunteers = await clientRead.fetch<VolunteerWithConference[]>(
@@ -95,7 +103,10 @@ export async function getVolunteerById(
         domains,
         organizer,
         socialLinks,
-        organization
+        organization,
+        theme,
+        volunteerRegistrationLink,
+        volunteerSlackInviteUrl
       },
       consent,
       status,
@@ -105,7 +116,12 @@ export async function getVolunteerById(
         _id,
         name
       },
-      reviewNotes
+      reviewNotes,
+      approvalEmailSentAt,
+      approvalEmailSentBy->{
+        _id,
+        name
+      }
     }`
 
     const volunteer = await clientRead.fetch<VolunteerWithConference | null>(
@@ -116,6 +132,30 @@ export async function getVolunteerById(
   } catch (error) {
     return {
       volunteer: null,
+      error: error instanceof Error ? error : new Error('Unknown error'),
+    }
+  }
+}
+
+export async function recordVolunteerApprovalEmailSent(
+  volunteerId: string,
+  sentBy: string,
+): Promise<{ success: boolean; error: Error | null }> {
+  try {
+    await clientWrite
+      .patch(volunteerId)
+      .set({
+        approvalEmailSentAt: new Date().toISOString(),
+        approvalEmailSentBy: {
+          _type: 'reference',
+          _ref: sentBy,
+        },
+      })
+      .commit()
+    return { success: true, error: null }
+  } catch (error) {
+    return {
+      success: false,
       error: error instanceof Error ? error : new Error('Unknown error'),
     }
   }

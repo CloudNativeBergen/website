@@ -196,6 +196,12 @@ export const UpdateRegistrationSchema = z.object({
     .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
     .nullable()
     .optional(),
+  volunteerRegistrationLink: z
+    .string()
+    .trim()
+    .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
+    .nullable()
+    .optional(),
   registrationEnabled: z.boolean(),
 })
 
@@ -221,6 +227,12 @@ export const UpdateCommunicationSchema = z.object({
     .email('Enter a valid email address'),
   salesNotificationChannel: z.string().trim().nullable().optional(),
   cfpNotificationChannel: z.string().trim().nullable().optional(),
+  volunteerSlackInviteUrl: z
+    .string()
+    .trim()
+    .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
+    .nullable()
+    .optional(),
 })
 
 // === Ticketing IDs ===

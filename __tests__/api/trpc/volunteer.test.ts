@@ -31,6 +31,7 @@ vi.mock('@/lib/volunteer/sanity', () => ({
   getVolunteerById: vi.fn(),
   updateVolunteerStatus: vi.fn(),
   deleteVolunteer: vi.fn(),
+  recordVolunteerApprovalEmailSent: vi.fn().mockResolvedValue({ success: true, error: null }),
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({

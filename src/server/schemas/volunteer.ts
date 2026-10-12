@@ -15,6 +15,20 @@ export const SendVolunteerEmailSchema = z.object({
   volunteerId: z.string(),
   subject: z.string().min(1),
   message: z.string().min(1),
+  ticketUrl: z
+    .string()
+    .url()
+    .refine((val) => val.startsWith('https://'), {
+      message: 'Ticket URL must be an HTTPS URL',
+    })
+    .optional(),
+  slackInviteUrl: z
+    .string()
+    .url()
+    .refine((val) => val.startsWith('https://'), {
+      message: 'Slack invite URL must be an HTTPS URL',
+    })
+    .optional(),
 })
 
 export const DeleteVolunteerSchema = z.object({

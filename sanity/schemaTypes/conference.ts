@@ -590,6 +590,14 @@ export default defineType({
         'Checkin invite link for the speaker ticket category — the one from "Send invitations" containing action=invite, category= and pass=. It is ONE SHARED URL, not per-person: anyone holding it can claim a free speaker ticket, so it belongs only in speaker email, never on the public site. Leave blank and speakers get only Checkin\'s own per-person invitation email.',
     }),
     defineField({
+      name: 'volunteerRegistrationLink',
+      title: 'Volunteer Registration Link',
+      type: 'string',
+      fieldset: 'registration',
+      description:
+        'Checkin or ticketing invite link for the complimentary volunteer ticket category. Belongs only in volunteer email, never on the public site.',
+    }),
+    defineField({
       name: 'registrationEnabled',
       title: 'Registration Enabled',
       type: 'boolean',
@@ -1031,6 +1039,14 @@ export default defineType({
       fieldset: 'communication',
       description:
         'Slack channel name where CFP notifications are posted (e.g. #conference-cfp)',
+    }),
+    defineField({
+      name: 'volunteerSlackInviteUrl',
+      title: 'Volunteer Slack Invite Link',
+      type: 'string',
+      fieldset: 'communication',
+      description:
+        'Private invitation link for volunteers to join the conference Slack workspace or channel.',
     }),
     defineField({
       name: 'socialLinks',

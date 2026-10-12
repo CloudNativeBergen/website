@@ -29,6 +29,7 @@ vi.mock('@/lib/volunteer/sanity', () => ({
   updateVolunteerDetails: (...a: unknown[]) => updateVolunteerDetailsMock(...a),
   deleteVolunteer: vi.fn(),
   createVolunteer: vi.fn(),
+  recordVolunteerApprovalEmailSent: vi.fn().mockResolvedValue({ success: true, error: null }),
 }))
 
 // OWNERSHIP PROBE (#730): the volunteer mutations now resolve the target's
