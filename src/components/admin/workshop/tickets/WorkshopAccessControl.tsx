@@ -126,7 +126,6 @@ export function WorkshopAccessControl({
   }
 
   const write = (grants: boolean, carryOthers: boolean) => {
-    if (busy) return
     // The question (if one was open) closes: back to the button that asked.
     if (confirming !== null) opener.current?.focus()
     setConfirming(null)
