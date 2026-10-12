@@ -145,7 +145,8 @@ export const Editing: Story = {
 }
 
 export const EditingDark: Story = {
-  ...Editing,
+  args: Editing.args,
+  play: Editing.play,
   parameters: { theme: 'dark' },
 }
 
