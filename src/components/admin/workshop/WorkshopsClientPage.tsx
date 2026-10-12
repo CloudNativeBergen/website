@@ -24,7 +24,7 @@ import type {
 } from '@/lib/workshop/types'
 import type { WorkshopAnnouncementView } from '@/lib/workshop/announcements'
 import { useRefreshAnnouncements } from './useRefreshAnnouncements'
-import { useMoveToWaitlist } from './useMoveToWaitlist'
+import { useSignupActions } from './useSignupActions'
 import { useQueryClient } from '@tanstack/react-query'
 import { EmptyState } from '@/components/EmptyState'
 
@@ -128,23 +128,9 @@ export function WorkshopsClientPage({
       enabled: !!conferenceId,
     })
 
-  const confirmMutation = api.workshop.admin.batchConfirmSignups.useMutation({
-    onSuccess: () => {
-      refetchSignups()
-      refetchWorkshopSignups()
-      refetchStats()
-    },
-  })
-
-  const deleteMutation = api.workshop.admin.deleteSignup.useMutation({
-    onSuccess: () => {
-      refetchSignups()
-      refetchWorkshopSignups()
-      refetchStats()
-    },
-  })
-
-  const { moveToWaitlist, isMoving } = useMoveToWaitlist(() => {
+  // Confirm, move to waitlist, delete. The lists are read again after every
+  // attempt, also a refused one: the sign-up may be gone (see the hook).
+  const signupActions = useSignupActions(() => {
     refetchSignups()
     refetchWorkshopSignups()
     refetchStats()
@@ -265,26 +251,6 @@ export function WorkshopsClientPage({
     })
     return grouped
   }, [signups])
-
-  const handleConfirmSignup = (signupId: string, userName: string) => {
-    confirmMutation.mutate(
-      {
-        signupIds: [signupId],
-        sendEmails: true,
-      },
-      {
-        onSuccess: () => {
-          alert(`✅ ${userName} confirmed! Confirmation email sent.`)
-        },
-      },
-    )
-  }
-
-  // Confirmation is handled inside SignupDetailsModal (its own ConfirmationModal
-  // gates this destructive action), so this runs only after the admin confirms.
-  const handleDeleteSignup = (signupId: string) => {
-    deleteMutation.mutate({ signupId })
-  }
 
   const handleAddParticipant = (participant: ParticipantFormData) => {
     manualSignupMutation.mutate({
@@ -456,12 +422,12 @@ export function WorkshopsClientPage({
         workshopTitle={signupModal.workshopTitle}
         status={signupModal.status}
         signups={filteredSignups}
-        onConfirmSignup={handleConfirmSignup}
-        onMoveToWaitlist={moveToWaitlist}
-        onDeleteSignup={handleDeleteSignup}
-        isConfirming={confirmMutation.isPending}
-        isMoving={isMoving}
-        isDeleting={deleteMutation.isPending}
+        onConfirmSignup={signupActions.confirm}
+        onMoveToWaitlist={signupActions.moveToWaitlist}
+        onDeleteSignup={signupActions.remove}
+        isConfirming={signupActions.isConfirming}
+        isMoving={signupActions.isMoving}
+        isDeleting={signupActions.isDeleting}
       />
 
       <AddParticipantModal

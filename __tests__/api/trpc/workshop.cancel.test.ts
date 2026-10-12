@@ -4,12 +4,23 @@
  * An attendee's cancel REMOVES the sign-up; an organizer's "Move to waitlist"
  * keeps it and frees the seat (#1331, `docs/WORKSHOP_TICKETS_SPEC.md` §6).
  *
- * NOTHING IS MOCKED BETWEEN THE CALLER AND THE STORED DOCUMENT. The real router
- * calls the real `@/lib/workshop/sanity`; its reads run `groq-js` over a
- * dataset and its writes change that dataset (patches through Sanity's own
- * `@sanity/mutator`). So the assertions are on what Sanity would hold
- * afterwards: whether the document exists, its stored `status`, and the
- * workshop's confirmed count as `checkWorkshopCapacity` reads it.
+ * The real router calls the real `@/lib/workshop/sanity`, over a dataset held
+ * in this file. What stands in for Sanity, and how faithfully:
+ *
+ *  - READS are real GROQ: every query the data layer issues is evaluated by
+ *    `groq-js` over the dataset.
+ *  - PATCHES are real: a real `@sanity/client` patch, serialised and applied
+ *    by Sanity's own `@sanity/mutator`.
+ *  - `delete` and `transaction().create()` are HAND-WRITTEN: they remove a
+ *    document from, and append one to, the dataset, and log the write. They
+ *    say which call the data layer made and with which id; they are no
+ *    evidence about how Sanity itself deletes or creates.
+ *  - The conference, the organization, the ticket list and the email sender
+ *    are mocked at their own boundaries.
+ *
+ * So the assertions are on the dataset after the call (whether the document is
+ * there, its stored `status`, the workshop's confirmed count as
+ * `checkWorkshopCapacity` reads it) and on the log of writes.
  *
  * The guards (who may cancel what) are covered with mocks in
  * `workshop.test.ts` and `tenancy.writes.more.test.ts`. They are repeated here
@@ -304,12 +315,38 @@ describe('an attendee cancels a workshop seat: what is refused', () => {
 describe('after an attendee’s cancel', () => {
   it('the attendee has no sign-up for the workshop: not confirmed, not waitlisted', async () => {
     const id = await signUp(ADA)
+    // What the portal draws "Your Workshops" from. It finds the sign-up first:
+    // an empty answer below is the cancel's doing, not a query that the
+    // harness cannot evaluate.
+    const before = await createWorkshopCaller(ADA).workshop.getMySignups()
+    expect(before.data).toMatchObject([
+      { _id: id, status: 'confirmed', workshopId: WORKSHOP },
+    ])
+
     await createWorkshopCaller(ADA).workshop.cancelSignup({ signupId: id })
 
-    // What the portal draws "Your Workshops" from.
     const mine = await createWorkshopCaller(ADA).workshop.getMySignups()
-
     expect(mine.data).toEqual([])
+  })
+
+  it('leaving the waitlist removes the sign-up too: the same cancel, on a waitlisted sign-up', async () => {
+    seed(1)
+    const ada = await signUp(ADA)
+    const bob = await signUp(BOB)
+    expect(stored(bob)).toMatchObject({ status: 'waitlist' })
+    const before = await createWorkshopCaller(BOB).workshop.getMySignups()
+    expect(before.data).toMatchObject([{ _id: bob, status: 'waitlist' }])
+    h.writes.length = 0
+
+    await createWorkshopCaller(BOB).workshop.cancelSignup({ signupId: bob })
+
+    // Before #1331 this set `waitlist` on a waitlisted sign-up: nothing
+    // happened, and nobody could leave a waitlist.
+    expect(h.writes).toEqual([`delete:${bob}`])
+    expect(stored(bob)).toBeUndefined()
+    const mine = await createWorkshopCaller(BOB).workshop.getMySignups()
+    expect(mine.data).toEqual([])
+    expect(stored(ada)).toMatchObject({ status: 'confirmed' })
   })
 
   it('the attendee can sign up again and gets the free seat', async () => {
@@ -381,6 +418,35 @@ describe('an organizer moves a confirmed sign-up to the waitlist', () => {
       confirmedSignups: 1,
       availableSpots: 1,
     })
+  })
+
+  it('leaves the person in line by when they signed up: a capacity increase seats and emails them first', async () => {
+    // What the question in the sign-up list tells the organizer. The promotion
+    // orders by `signedUpAt || _createdAt`, and a sign-up made through the
+    // portal carries no `signedUpAt`, so a person moved off a seat is ahead of
+    // everyone who joined the waitlist after the workshop filled.
+    const ada = await signUp(ADA)
+    await signUp(BOB)
+    const cy = await signUp(CY)
+    expect(stored(ada)).not.toHaveProperty('signedUpAt')
+    await createAdminCaller().workshop.admin.batchCancelSignups({
+      signupIds: [ada],
+    })
+    email.sendBasicWorkshopConfirmation.mockClear()
+
+    const result = await createAdminCaller().workshop.admin.updateCapacity({
+      workshopId: WORKSHOP,
+      capacity: 3,
+    })
+
+    expect(result.promotedCount).toBe(1)
+    expect(
+      email.sendBasicWorkshopConfirmation.mock.calls.map(
+        ([to]) => to.userEmail,
+      ),
+    ).toEqual([ADA.email])
+    expect(stored(ada)).toMatchObject({ status: 'confirmed' })
+    expect(stored(cy)).toMatchObject({ status: 'waitlist' })
   })
 
   it('refuses a sign-up of another conference, which stays confirmed', async () => {

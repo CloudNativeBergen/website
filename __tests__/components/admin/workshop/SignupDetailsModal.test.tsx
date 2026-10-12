@@ -121,6 +121,11 @@ describe('SignupDetailsModal "Move to waitlist" (#1331)', () => {
       'Move Ada Lovelace to the waitlist for Kubernetes 101?',
     )
     expect(dialog).toHaveTextContent('get no email')
+    // They are not out of the running: the promotion orders the waitlist by
+    // sign-up date (proven in `workshop.cancel.test.ts`).
+    expect(dialog).toHaveTextContent(
+      'They stay in line by sign-up date, so a capacity increase can seat them again.',
+    )
   })
 
   it('moves that sign-up once the organizer confirms', () => {
@@ -151,6 +156,13 @@ describe('SignupDetailsModal "Move to waitlist" (#1331)', () => {
     renderModal()
     fireEvent.click(moveToWaitlist()[0])
 
+    // The question is open and showing its own text, with both its buttons:
+    // only then does "no cancel anywhere" say anything about it.
+    const question = screen.getByRole('dialog', { name: 'Move to waitlist' })
+    expect(question).toHaveTextContent(
+      'Move Ada Lovelace to the waitlist for Kubernetes 101?',
+    )
+    expect(within(question).getAllByRole('button')).toHaveLength(2)
     expect(document.body).not.toHaveTextContent(/cancel/i)
   })
 })

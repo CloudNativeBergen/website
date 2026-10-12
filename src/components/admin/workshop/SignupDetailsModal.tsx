@@ -152,8 +152,10 @@ export function SignupDetailsModal({
         }}
       />
 
-      {/* The attendee is told nothing and the waitlist is not moved up, so the
-          organizer is told both before the seat is taken away. */}
+      {/* What the organizer cannot see from the list, said before the seat is
+          taken away: the attendee is told nothing, nobody on the waitlist is
+          moved up, and the person is not out of the running (a capacity
+          increase seats the earliest sign-ups first, which they usually are). */}
       <ConfirmationModal
         isOpen={moveTarget !== null}
         onClose={() => setMoveTarget(null)}
@@ -166,7 +168,7 @@ export function SignupDetailsModal({
         title="Move to waitlist"
         message={
           moveTarget
-            ? `Move ${moveTarget.userName} to the waitlist for ${workshopTitle}? They lose their seat and get no email about it. The seat is then open to whoever signs up next.`
+            ? `Move ${moveTarget.userName} to the waitlist for ${workshopTitle}? They lose their seat and get no email about it. The seat is open to whoever signs up next. They stay in line by sign-up date, so a capacity increase can seat them again.`
             : ''
         }
         confirmButtonText="Move to waitlist"

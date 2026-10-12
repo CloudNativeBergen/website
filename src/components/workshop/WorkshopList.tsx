@@ -74,12 +74,15 @@ export default function WorkshopList({
   })
 
   const cancelMutation = api.workshop.cancelSignup.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       setSuccessMessage('Successfully cancelled workshop signup')
       setErrorMessage(null)
       setTimeout(() => setSuccessMessage(null), 5000)
-      refetchWorkshops()
-      refetchSignups()
+      // AWAITED, so the mutation (and with it the card's cancel button) stays
+      // busy until the lists are in. The cancel deleted the sign-up; while the
+      // card still shows it, a second click would be refused with "Signup not
+      // found" over a cancel that worked.
+      await Promise.all([refetchWorkshops(), refetchSignups()])
     },
     onError: (error) => {
       setErrorMessage(error.message)

@@ -192,6 +192,9 @@ export const MoveToWaitlistQuestion: Story = {
       'Move Alice Johnson to the waitlist for Getting Started with Kubernetes?',
     )
     await expect(question).toHaveTextContent('get no email')
+    await expect(question).toHaveTextContent(
+      'a capacity increase can seat them again',
+    )
     const keep = within(question).getByRole('button', {
       name: 'Keep confirmed',
     })
