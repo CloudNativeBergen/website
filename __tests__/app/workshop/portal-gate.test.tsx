@@ -1006,6 +1006,13 @@ describe('workshop portal: the registration window', () => {
       banners: elements.filter((el) => el.type === 'h3').map(textOf),
       text: textOf(page).replace(/\s+/g, ' '),
       list: elements.find((el) => 'userWorkOSId' in el.props)?.props,
+      /** Every ISO instant among the props of every element, in order. */
+      timesSent: elements
+        .flatMap((el) => Object.values(el.props))
+        .filter(
+          (value): value is string =>
+            typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value),
+        ),
     }
   }
 
@@ -1089,17 +1096,19 @@ describe('workshop portal: the registration window', () => {
     })
   })
 
-  it('hands the list the sponsor start time with the other two (#1345)', async () => {
+  it('sends the browser the official opening and the end, and not the sponsor start time (#1345)', async () => {
+    // The list is a client component: every prop the page hands it is sent to
+    // the attendee's browser. Nobody has early access in this slice, so the
+    // sponsor start time is nobody's to see.
+    const SPONSOR_START = '2026-04-20T07:00:00.000Z'
     const portal = await portalWith({
-      workshopRegistrationSponsorStart: '2026-04-20T07:00:00.000Z',
+      workshopRegistrationSponsorStart: SPONSOR_START,
       workshopRegistrationStart: LONG_BEFORE,
       workshopRegistrationEnd: LONG_AFTER,
     })
-    expect(portal.list).toMatchObject({
-      workshopRegistrationSponsorStart: '2026-04-20T07:00:00.000Z',
-      workshopRegistrationStart: LONG_BEFORE,
-      workshopRegistrationEnd: LONG_AFTER,
-    })
+    expect(portal.heading).toBe('Workshop Signup')
+    // Every registration time anywhere in what the page returned.
+    expect(portal.timesSent).toEqual([LONG_BEFORE, LONG_AFTER])
   })
 
   it('names the official opening inside the early-access window: nobody has early access yet (#1345)', async () => {

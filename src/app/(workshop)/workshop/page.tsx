@@ -290,9 +290,9 @@ export default async function WorkshopPage({
               userWorkOSId={user.userId}
               userEmail={user.email}
               userName={userName}
-              workshopRegistrationSponsorStart={
-                conference.workshopRegistrationSponsorStart
-              }
+              // NOT the sponsor start time: the list is a client component,
+              // so every prop is sent to the attendee's browser, and nobody
+              // has early access yet (#1346).
               workshopRegistrationStart={conference.workshopRegistrationStart}
               workshopRegistrationEnd={conference.workshopRegistrationEnd}
             />
