@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useEffect } from 'react'
 import { http, HttpResponse, delay } from 'msw'
 import type { Decorator } from '@storybook/nextjs-vite'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import WorkshopList from './WorkshopList'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { mockDateBeforeEach } from '@/lib/storybook'
@@ -241,6 +241,189 @@ export const RegistrationClosed: Story = {
         [signup('su-1', 'ws-1', 'confirmed')],
       ),
     },
+  },
+}
+
+/**
+ * The server after #1331: a cancel REMOVES the sign-up, so the attendee's next
+ * read of their sign-ups comes back without it. (Before, the sign-up came back
+ * as `waitlist`.) Reset per story in `beforeEach`.
+ */
+const cancelled = { done: false }
+const cancelHandlersFor = (workshops: unknown[], before: unknown[]) => [
+  http.get('/api/trpc/workshop.list', () => listResponse(workshops)),
+  http.get('/api/trpc/workshop.getMySignups', () =>
+    signupsResponse(cancelled.done ? [] : before),
+  ),
+  announcementsHandler,
+  http.post('/api/trpc/workshop.cancelSignup', () => {
+    cancelled.done = true
+    return trpc({
+      success: true,
+      message: 'Workshop signup cancelled successfully',
+    })
+  }),
+]
+
+/**
+ * The attendee's cancel asks first. Press the card's button, then answer the
+ * question once it accepts an answer (it ignores its confirm button for a
+ * moment after it opens, against a second tap).
+ */
+const cancelThroughTheQuestion = async (
+  canvasElement: HTMLElement,
+  button: string,
+  question: string,
+) => {
+  await userEvent.click(
+    await within(canvasElement).findByRole('button', { name: button }),
+  )
+  const confirm = within(
+    await within(canvasElement.ownerDocument.body).findByRole('dialog', {
+      name: question,
+    }),
+  ).getByRole('button', { name: button })
+  await waitFor(() => expect(confirm).not.toHaveAttribute('aria-disabled'))
+  await userEvent.click(confirm)
+}
+
+/**
+ * The story ran at PHONE width, and nothing is wider than the page. The test
+ * runner resizes the page from `defaultViewport`; at its default 1280 this
+ * fails.
+ */
+const expectPhone = async (canvasElement: HTMLElement) => {
+  const document = canvasElement.ownerDocument
+  await expect(document.defaultView!.innerWidth).toBeLessThan(640)
+  const root = document.documentElement
+  await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth)
+}
+
+/**
+ * After "Cancel Registration" the workshop is one the attendee has NOT signed
+ * up for: it is back under "Available Workshops" with its register button, and
+ * nothing says waitlist.
+ */
+export const AfterCancel: Story = {
+  args: signedInArgs,
+  beforeEach: () => {
+    cancelled.done = false
+  },
+  parameters: {
+    msw: {
+      handlers: cancelHandlersFor(
+        [wsAvailableA, wsAvailableB],
+        [signup('su-1', 'ws-1', 'confirmed')],
+      ),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByRole('heading', { name: 'Your Workshops' }),
+    ).toBeVisible()
+
+    await cancelThroughTheQuestion(
+      canvasElement,
+      'Cancel Registration',
+      'Cancel your registration?',
+    )
+
+    await canvas.findByText('Successfully cancelled workshop signup')
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole('heading', { name: 'Your Workshops' }),
+      ).not.toBeInTheDocument(),
+    )
+    await expect(
+      canvas.getAllByRole('button', { name: 'Register for Workshop' }),
+    ).toHaveLength(2)
+    await expect(
+      canvas.queryByText(/on the waitlist for this workshop/i),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('button', { name: 'Leave Waitlist' }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const AfterCancelDark: Story = {
+  ...AfterCancel,
+  parameters: { ...AfterCancel.parameters, dark: true },
+}
+
+export const AfterCancelMobile: Story = {
+  ...AfterCancel,
+  parameters: {
+    ...AfterCancel.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
+  play: async (context) => {
+    await AfterCancel.play!(context)
+    await expectPhone(context.canvasElement)
+  },
+}
+
+/**
+ * "Leave Waitlist" is the same cancel on a waitlisted sign-up, and it removes
+ * the sign-up too. The full workshop is then one the attendee has NOT signed up
+ * for: back under "Full Workshops", offering "Join Waitlist". (Before #1331 the
+ * button set `waitlist` on a waitlisted sign-up, and nothing changed.)
+ */
+export const AfterLeavingWaitlist: Story = {
+  args: signedInArgs,
+  beforeEach: () => {
+    cancelled.done = false
+  },
+  parameters: {
+    msw: {
+      handlers: cancelHandlersFor(
+        [wsAvailableA, wsFull],
+        [signup('su-2', 'ws-3', 'waitlist')],
+      ),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(/on the waitlist for this workshop/i),
+    ).toBeVisible()
+
+    await cancelThroughTheQuestion(
+      canvasElement,
+      'Leave Waitlist',
+      'Leave the waitlist?',
+    )
+
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole('heading', { name: 'Your Workshops' }),
+      ).not.toBeInTheDocument(),
+    )
+    await expect(
+      canvas.getByRole('heading', { name: 'Full Workshops' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getAllByRole('button', { name: 'Join Waitlist' }),
+    ).toHaveLength(1)
+    await expect(
+      canvas.queryByText(/on the waitlist for this workshop/i),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('button', { name: 'Leave Waitlist' }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const AfterLeavingWaitlistMobile: Story = {
+  ...AfterLeavingWaitlist,
+  parameters: {
+    ...AfterLeavingWaitlist.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
+  play: async (context) => {
+    await AfterLeavingWaitlist.play!(context)
+    await expectPhone(context.canvasElement)
   },
 }
 

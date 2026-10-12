@@ -195,7 +195,12 @@ export async function verifyWorkshopBelongsToConference(
   return !!result
 }
 
-export async function cancelWorkshopSignup(
+/**
+ * An organizer's "Move to waitlist" (#1331): the sign-up stays, and the seat it
+ * held is free. An attendee's own cancel does not come here; it deletes the
+ * sign-up (`deleteWorkshopSignup`), so a waitlist holds only people waiting.
+ */
+export async function moveWorkshopSignupToWaitlist(
   signupId: string,
 ): Promise<WorkshopSignupExisting> {
   return clientWrite
@@ -206,6 +211,10 @@ export async function cancelWorkshopSignup(
     .commit()
 }
 
+/**
+ * Removes a sign-up: an attendee's cancel, and an organizer's delete. The
+ * caller has already established that the sign-up is the request's to remove.
+ */
 export async function deleteWorkshopSignup(signupId: string): Promise<void> {
   await clientWrite.delete(signupId)
 }
@@ -567,9 +576,7 @@ export async function getWorkshopStatistics(
       capacity: workshop.capacity,
       totalSignups: confirmedSignups + waitlistSignups,
       confirmedSignups,
-      pendingSignups: 0,
       waitlistSignups,
-      cancelledSignups: 0,
       utilization:
         workshop.capacity > 0
           ? (confirmedSignups / workshop.capacity) * 100
@@ -598,12 +605,10 @@ export async function getWorkshopStatistics(
       (sum: number, s) => sum + s.confirmedSignups,
       0,
     ),
-    totalPending: 0,
     totalWaitlist: workshopStats.reduce(
       (sum: number, s) => sum + s.waitlistSignups,
       0,
     ),
-    totalCancelled: 0,
     averageUtilization:
       workshopStats.length > 0
         ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) /

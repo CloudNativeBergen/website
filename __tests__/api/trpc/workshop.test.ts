@@ -125,7 +125,8 @@ vi.mock('@/lib/workshop/sanity', async (importActual) => {
       conference: { _ref: data.conference._ref },
     })),
     getAllWorkshopSignups: vi.fn(async () => []),
-    cancelWorkshopSignup: vi.fn(async () => {}),
+    deleteWorkshopSignup: vi.fn(async () => {}),
+    moveWorkshopSignupToWaitlist: vi.fn(async () => {}),
     getWorkshopStatistics: vi.fn(async () => ({
       workshops: [],
       totals: {
@@ -134,9 +135,7 @@ vi.mock('@/lib/workshop/sanity', async (importActual) => {
         totalSignups: 0,
         uniqueParticipants: 0,
         totalConfirmed: 0,
-        totalPending: 0,
         totalWaitlist: 0,
-        totalCancelled: 0,
         averageUtilization: 0,
       },
     })),
@@ -147,7 +146,8 @@ import {
   getWorkshopSignups,
   createWorkshopSignup,
   getAllWorkshopSignups,
-  cancelWorkshopSignup,
+  deleteWorkshopSignup,
+  moveWorkshopSignupToWaitlist,
   checkWorkshopCapacity,
   verifyWorkshopBelongsToConference,
 } from '@/lib/workshop/sanity'
@@ -160,7 +160,8 @@ type LooseMock = ReturnType<typeof vi.fn>
 const getSignupsMock = getWorkshopSignups as unknown as LooseMock
 const createSignupMock = createWorkshopSignup as unknown as LooseMock
 const getAllMock = getAllWorkshopSignups as unknown as LooseMock
-const cancelMock = cancelWorkshopSignup as unknown as LooseMock
+const deleteMock = deleteWorkshopSignup as unknown as LooseMock
+const waitlistMock = moveWorkshopSignupToWaitlist as unknown as LooseMock
 const capacityMock = checkWorkshopCapacity as unknown as LooseMock
 const belongsMock = verifyWorkshopBelongsToConference as unknown as LooseMock
 
@@ -179,7 +180,8 @@ function expectNoSignupIO() {
   expect(belongsMock).not.toHaveBeenCalled()
   expect(capacityMock).not.toHaveBeenCalled()
   expect(createSignupMock).not.toHaveBeenCalled()
-  expect(cancelMock).not.toHaveBeenCalled()
+  expect(deleteMock).not.toHaveBeenCalled()
+  expect(waitlistMock).not.toHaveBeenCalled()
 }
 
 const workshopRef = { _type: 'reference' as const, _ref: 'workshop-1' }
@@ -361,7 +363,7 @@ describe('workshop.cancelSignup ownership', () => {
     await expect(
       caller.workshop.cancelSignup({ signupId: 'signup-1' }),
     ).rejects.toThrow(/UNAUTHORIZED|signed in/)
-    expect(cancelMock).not.toHaveBeenCalled()
+    expect(deleteMock).not.toHaveBeenCalled()
   })
 
   it('returns NOT_FOUND when the signup does not exist', async () => {
@@ -373,7 +375,7 @@ describe('workshop.cancelSignup ownership', () => {
       caller.workshop.cancelSignup({ signupId: 'missing' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Signup not found' })
     expect(getAllMock).toHaveBeenCalledTimes(1)
-    expect(cancelMock).not.toHaveBeenCalled()
+    expect(deleteMock).not.toHaveBeenCalled()
   })
 
   it('forbids cancelling another attendee’s signup', async () => {
@@ -390,17 +392,21 @@ describe('workshop.cancelSignup ownership', () => {
       message: 'You can only cancel your own workshop signup',
     })
     expect(getAllMock).toHaveBeenCalledTimes(1)
-    expect(cancelMock).not.toHaveBeenCalled()
+    expect(deleteMock).not.toHaveBeenCalled()
   })
 
-  it('cancels the caller’s own signup', async () => {
+  it('removes the caller’s own signup', async () => {
     getAllMock.mockResolvedValueOnce([
       { _id: 'signup-1', userWorkOSId: 'workos-real' },
     ])
     const caller = createWorkshopCaller({ id: 'workos-real' })
     const result = await caller.workshop.cancelSignup({ signupId: 'signup-1' })
     expect(result.success).toBe(true)
-    expect(cancelMock).toHaveBeenCalledWith('signup-1')
+    // #1331: the cancel REMOVES the sign-up. It is not moved to the waitlist,
+    // which is the organizer's action (`admin.batchCancelSignups`).
+    expect(deleteMock).toHaveBeenCalledTimes(1)
+    expect(deleteMock).toHaveBeenCalledWith('signup-1')
+    expect(waitlistMock).not.toHaveBeenCalled()
   })
 })
 

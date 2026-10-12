@@ -24,6 +24,7 @@ import type {
 } from '@/lib/workshop/types'
 import type { WorkshopAnnouncementView } from '@/lib/workshop/announcements'
 import { useRefreshAnnouncements } from './useRefreshAnnouncements'
+import { useSignupActions } from './useSignupActions'
 import { useQueryClient } from '@tanstack/react-query'
 import { EmptyState } from '@/components/EmptyState'
 
@@ -114,43 +115,44 @@ export function WorkshopsClientPage({
       },
     )
 
-  const { data: workshopSignupsData, refetch: refetchWorkshopSignups } =
-    api.workshop.admin.listSignups.useQuery(
-      {
-        workshopId: signupModal.workshopId,
-        status: signupModal.status || undefined,
-      },
-      {
-        enabled: !!signupModal.workshopId && !!signupModal.status,
-      },
-    )
+  const { data: workshopSignupsData } = api.workshop.admin.listSignups.useQuery(
+    {
+      workshopId: signupModal.workshopId,
+      status: signupModal.status || undefined,
+    },
+    {
+      enabled: !!signupModal.workshopId && !!signupModal.status,
+    },
+  )
 
   const { data: statsData, refetch: refetchStats } =
     api.workshop.admin.getSummary.useQuery(undefined, {
       enabled: !!conferenceId,
     })
 
-  const confirmMutation = api.workshop.admin.batchConfirmSignups.useMutation({
-    onSuccess: () => {
-      refetchSignups()
-      refetchWorkshopSignups()
-      refetchStats()
-    },
-  })
+  const utils = api.useUtils()
 
-  const deleteMutation = api.workshop.admin.deleteSignup.useMutation({
-    onSuccess: () => {
-      refetchSignups()
-      refetchWorkshopSignups()
-      refetchStats()
-    },
-  })
+  // Everything this page shows about sign-ups, read again. One function for
+  // every action that changes them.
+  const readSignupsAgain = () => {
+    refetchSignups()
+    // EVERY list of a workshop, not only the open one: a move changes two of
+    // them, and one read a moment ago is otherwise shown again as it was.
+    void utils.workshop.admin.listSignups.invalidate()
+    // The summary carries each workshop's own counts and capacity, which is
+    // what the cards show (see `live` below). The server render is NOT asked
+    // for again: `router.refresh()` re-runs the whole page for three numbers,
+    // and one that cannot reach the server turns into a hard navigation.
+    refetchStats()
+  }
+
+  // Confirm, move to waitlist, delete. Everything is read again after every
+  // attempt, also a refused one: the sign-up may be gone (see the hook).
+  const signupActions = useSignupActions(readSignupsAgain)
 
   const manualSignupMutation = api.workshop.admin.manualSignup.useMutation({
     onSuccess: () => {
-      refetchSignups()
-      refetchWorkshopSignups()
-      refetchStats()
+      readSignupsAgain()
       setAddParticipantModal({
         isOpen: false,
         workshopId: '',
@@ -164,8 +166,7 @@ export function WorkshopsClientPage({
       queryClient.invalidateQueries({
         queryKey: [['workshop', 'list']],
       })
-      refetchSignups()
-      refetchStats()
+      readSignupsAgain()
 
       if (result.promotedCount && result.promotedCount > 0) {
         alert(`✅ ${result.message}`)
@@ -261,26 +262,6 @@ export function WorkshopsClientPage({
     })
     return grouped
   }, [signups])
-
-  const handleConfirmSignup = (signupId: string, userName: string) => {
-    confirmMutation.mutate(
-      {
-        signupIds: [signupId],
-        sendEmails: true,
-      },
-      {
-        onSuccess: () => {
-          alert(`✅ ${userName} confirmed! Confirmation email sent.`)
-        },
-      },
-    )
-  }
-
-  // Confirmation is handled inside SignupDetailsModal (its own ConfirmationModal
-  // gates this destructive action), so this runs only after the admin confirms.
-  const handleDeleteSignup = (signupId: string) => {
-    deleteMutation.mutate({ signupId })
-  }
 
   const handleAddParticipant = (participant: ParticipantFormData) => {
     manualSignupMutation.mutate({
@@ -388,17 +369,27 @@ export function WorkshopsClientPage({
         ) : (
           initialWorkshops.map((workshop) => {
             const workshopSignups = signupsByWorkshop.get(workshop._id) || []
+            // The summary is read again after every action; the server render
+            // (`workshop`) never is. Once the summary is in, its numbers are
+            // the card's: the workshop's own counts from the same server read,
+            // not a count of the 100 sign-ups this page lists.
+            const live = statsData?.data.workshops.find(
+              (stats) => stats.workshopId === workshop._id,
+            )
             const confirmedCount =
-              workshop.signups ||
-              workshopSignups.filter((s) => s.status === 'confirmed').length
+              live?.confirmedSignups ??
+              (workshop.signups ||
+                workshopSignups.filter((s) => s.status === 'confirmed').length)
             const waitlistCount =
-              workshop.waitlistCount ||
-              workshopSignups.filter((s) => s.status === 'waitlist').length
+              live?.waitlistSignups ??
+              (workshop.waitlistCount ||
+                workshopSignups.filter((s) => s.status === 'waitlist').length)
+            const capacity = live?.capacity ?? workshop.capacity
 
             return (
               <WorkshopCard
                 key={workshop._id}
-                workshop={workshop}
+                workshop={{ ...workshop, capacity }}
                 confirmedCount={confirmedCount}
                 waitlistCount={waitlistCount}
                 onViewConfirmed={() =>
@@ -425,12 +416,11 @@ export function WorkshopsClientPage({
                   })
                 }
                 onEditCapacity={() => {
-                  const capacity = workshop.capacity || 30
                   setEditCapacityModal({
                     isOpen: true,
                     workshopId: workshop._id,
                     workshopTitle: workshop.title,
-                    currentCapacity: capacity,
+                    currentCapacity: capacity || 30,
                     currentSignups: confirmedCount,
                   })
                 }}
@@ -454,10 +444,12 @@ export function WorkshopsClientPage({
         workshopTitle={signupModal.workshopTitle}
         status={signupModal.status}
         signups={filteredSignups}
-        onConfirmSignup={handleConfirmSignup}
-        onDeleteSignup={handleDeleteSignup}
-        isConfirming={confirmMutation.isPending}
-        isDeleting={deleteMutation.isPending}
+        onConfirmSignup={signupActions.confirm}
+        onMoveToWaitlist={signupActions.moveToWaitlist}
+        onDeleteSignup={signupActions.remove}
+        isConfirming={signupActions.isConfirming}
+        isMoving={signupActions.isMoving}
+        isDeleting={signupActions.isDeleting}
       />
 
       <AddParticipantModal

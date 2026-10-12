@@ -123,7 +123,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 11, 2026'
+  const lastUpdated = 'October 12, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -2044,9 +2044,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               Not deleted automatically
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Cancelling moves you to the waitlist; the record
-                                is deleted when a workshop organizer removes it
-                                or you ask us to
+                                Cancelling deletes your signup. Earlier,
+                                cancelling moved you to the waitlist instead; a
+                                signup cancelled that way is still kept. Any
+                                signup is deleted when a workshop organizer
+                                removes it or you ask us to
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
