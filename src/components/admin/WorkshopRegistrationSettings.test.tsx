@@ -62,6 +62,10 @@ function statusAt(times: Times, now: string) {
   return row('Status')
 }
 
+/** The line under the status, which says what a half-set window means. */
+const note = () =>
+  screen.getByText('Status').parentElement?.nextElementSibling?.textContent
+
 beforeEach(() => mutate.mockReset())
 
 afterEach(() => {
@@ -132,29 +136,23 @@ describe('the status note when no close date is set', () => {
 
   it('inside the early-access window, says early access is open and when everyone can sign up', () => {
     expect(statusAt(NO_END, IN_EARLY_ACCESS)).toBe('Partially configured')
-    expect(
-      screen.getByText(
-        'Early access is open. Signups open for everyone 15. juni 2026 kl. 08:30. No close date is set, so once open they never close.',
-      ),
-    ).toBeInTheDocument()
+    expect(note()).toBe(
+      'Early access is open. Signups open for everyone 15. juni 2026 kl. 08:30. No close date is set, so once open they never close.',
+    )
   })
 
   it('before the sponsor start time, says when signups open, as before', () => {
     expect(statusAt(NO_END, BEFORE_SPONSOR)).toBe('Partially configured')
-    expect(
-      screen.getByText(
-        'Signups open 15. juni 2026 kl. 08:30. No close date is set, so once open they never close.',
-      ),
-    ).toBeInTheDocument()
+    expect(note()).toBe(
+      'Signups open 15. juni 2026 kl. 08:30. No close date is set, so once open they never close.',
+    )
   })
 
   it('after the official opening, says signups are open, as before', () => {
     expect(statusAt(NO_END, AFTER_OFFICIAL)).toBe('Partially configured')
-    expect(
-      screen.getByText(
-        'Signups are open. No close date is set, so they never close.',
-      ),
-    ).toBeInTheDocument()
+    expect(note()).toBe(
+      'Signups are open. No close date is set, so they never close.',
+    )
   })
 })
 
