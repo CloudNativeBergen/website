@@ -10,11 +10,6 @@
  *    or `name: "Will you attend the speaker dinner? - Yes, I will attend"`, `value: "1"`.
  */
 
-export interface TicketQuestionOption {
-  value: string
-  label: string
-}
-
 export interface DiscoveredTicketQuestion {
   /** Unique stable identifier, e.g. "field:company" or "additional:monday-workshops" */
   id: string
