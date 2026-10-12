@@ -562,8 +562,8 @@ export function SponsorDiscountCodePicker({
         role="alert"
         className="font-inter text-sm text-amber-600 dark:text-amber-400"
       >
-        No discount code is linked to {sponsorName || 'this sponsor'} yet. Create
-        or assign a code first.
+        No discount code is linked to {sponsorName || 'this sponsor'} yet.
+        Create or assign a code first.
       </span>
     )
   }
@@ -600,7 +600,7 @@ export function SponsorDiscountCodePicker({
                 'flex size-4 shrink-0 items-center justify-center rounded-full border',
                 selected
                   ? 'border-brand-cloud-blue bg-brand-cloud-blue text-white dark:border-indigo-400 dark:bg-indigo-500'
-                : 'border-gray-300 dark:border-gray-500',
+                  : 'border-gray-300 dark:border-gray-500',
               )}
             >
               {selected && <CheckIcon className="size-3" />}
@@ -1055,11 +1055,7 @@ export function SponsorSendModal({
       return
     setCodesSeededFor(sponsorForConference._id)
     setSelectedCodes(
-      new Set(
-        sponsorCodeOptions
-          .filter((c) => c.selected)
-          .map((c) => c.code),
-      ),
+      new Set(sponsorCodeOptions.filter((c) => c.selected).map((c) => c.code)),
     )
   }, [
     isOpen,

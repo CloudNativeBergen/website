@@ -2,7 +2,13 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from '@testing-library/react'
 import React from 'react'
 
 const h = vi.hoisted(() => ({
@@ -99,7 +105,12 @@ const CRM_SPONSORS = [
     _id: 'sfc-acme',
     sponsor: { _id: 'sp-acme', name: 'Acme Corp' },
     contactPersons: [
-      { _key: 'c1', name: 'Alice', email: 'alice@acme.example', isPrimary: true },
+      {
+        _key: 'c1',
+        name: 'Alice',
+        email: 'alice@acme.example',
+        isPrimary: true,
+      },
     ],
     linkedCodes: ['ACME-2026'],
   },
@@ -201,7 +212,9 @@ describe('BulkDiscountSendModal', () => {
         kind: 'discount',
         recipientKeys: ['c1'],
         discountCodes: ['ACME-2026'],
-        subject: expect.stringContaining('Discount codes: Cloud Native Days 2026'),
+        subject: expect.stringContaining(
+          'Discount codes: Cloud Native Days 2026',
+        ),
       }),
     )
 
@@ -238,7 +251,12 @@ describe('BulkDiscountSendModal', () => {
           _id: 'sfc-hooli',
           sponsor: { _id: 'sp-hooli', name: 'Hooli' },
           contactPersons: [
-            { _key: 'c4', name: 'Gavin', email: 'gavin@hooli.example', isPrimary: true },
+            {
+              _key: 'c4',
+              name: 'Gavin',
+              email: 'gavin@hooli.example',
+              isPrimary: true,
+            },
           ],
           linkedCodes: ['HOOLI-100'],
         },

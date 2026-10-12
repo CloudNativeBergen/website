@@ -1453,8 +1453,8 @@ export function DiscountCodeManager({
               Sponsor Discount Codes
             </h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              One row per sponsor: what the tier entitles them to, how much of it
-              has been redeemed, and the code that carries it. The codes
+              One row per sponsor: what the tier entitles them to, how much of
+              it has been redeemed, and the code that carries it. The codes
               themselves are also listed above.
             </p>
           </div>
@@ -1463,7 +1463,10 @@ export function DiscountCodeManager({
             onClick={() => setShowBulkSendModal(true)}
             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium whitespace-nowrap text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 sm:w-auto dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
           >
-            <EnvelopeIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" aria-hidden="true" />
+            <EnvelopeIcon
+              className="h-5 w-5 text-gray-500 dark:text-gray-400"
+              aria-hidden="true"
+            />
             Send codes to sponsors
           </button>
         </div>

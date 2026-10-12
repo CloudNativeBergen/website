@@ -140,10 +140,7 @@ export function BulkDiscountSendModal({
         .filter((c): c is string => Boolean(c))
 
       const allCodes = Array.from(
-        new Set([
-          ...ownedCodes,
-          ...(sponsor.linkedCodes ?? []),
-        ]),
+        new Set([...ownedCodes, ...(sponsor.linkedCodes ?? [])]),
       )
 
       const sfcId = sponsor.sponsorForConferenceId || crmRecord?._id
@@ -166,8 +163,8 @@ export function BulkDiscountSendModal({
         continue
       }
 
-      const validContacts = (crmRecord?.contactPersons ?? []).filter(
-        (c) => Boolean(c.email),
+      const validContacts = (crmRecord?.contactPersons ?? []).filter((c) =>
+        Boolean(c.email),
       )
 
       if (validContacts.length === 0) {
@@ -197,9 +194,7 @@ export function BulkDiscountSendModal({
     return { eligibleSponsors: eligible, skippedSponsors: skipped }
   }, [sponsors, crmListQuery.data, existingDiscounts, claimants])
 
-  const [subject, setSubject] = useState(
-    `Discount codes: ${conference.title}`,
-  )
+  const [subject, setSubject] = useState(`Discount codes: ${conference.title}`)
   const [messageText, setMessageText] = useState(
     `Hi {{{SPONSOR_NAME}}},\n\nHere are your complimentary ticket discount codes for {{{CONFERENCE_TITLE}}}.\n\nPlease find your codes and registration link below:`,
   )
@@ -218,118 +213,120 @@ export function BulkDiscountSendModal({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [sendingState])
 
-  const handleSend = useCallback(async (targetsOverride?: SponsorSendTarget[]) => {
-    const targets = Array.isArray(targetsOverride)
-      ? targetsOverride
-      : eligibleSponsors
-    if (targets.length === 0) return
+  const handleSend = useCallback(
+    async (targetsOverride?: SponsorSendTarget[]) => {
+      const targets = Array.isArray(targetsOverride)
+        ? targetsOverride
+        : eligibleSponsors
+      if (targets.length === 0) return
 
-    setSendingState('sending')
-    setCurrentSendingIndex(0)
+      setSendingState('sending')
+      setCurrentSendingIndex(0)
 
-    setResults((prev) => {
-      const next = { ...prev }
-      targets.forEach((s) => {
-        next[s.id] = { status: 'pending' }
+      setResults((prev) => {
+        const next = { ...prev }
+        targets.forEach((s) => {
+          next[s.id] = { status: 'pending' }
+        })
+        return next
       })
-      return next
-    })
 
-    let successCount = 0
-    let failCount = 0
+      let successCount = 0
+      let failCount = 0
 
-    for (let i = 0; i < targets.length; i++) {
-      const target = targets[i]
-      setCurrentSendingIndex(i)
-
-      setResults((prev) => ({
-        ...prev,
-        [target.id]: { status: 'sending' },
-      }))
-
-      try {
-        const vars = buildTemplateVariables({
-          sponsorName: target.name,
-          contactNames: target.recipientName || target.name,
-          tierName: target.tierTitle,
-          conference: {
-            title: conference.title,
-            startDate: conference.startDate,
-            city: conference.city,
-            organizer: conference.organizer,
-            domains: conference.domains,
-            sponsorRegistrationLink:
-              conference.sponsorRegistrationLink ?? undefined,
-          },
-        })
-
-        const personalizedSubject = processTemplateVariables(subject, vars)
-        const personalizedBodyText = processTemplateVariables(
-          messageText,
-          vars,
-        )
-        const portableBlocks =
-          convertStringToPortableTextBlocks(personalizedBodyText)
-
-        await sendMutation.mutateAsync({
-          sponsorForConferenceId: target.sponsorForConferenceId,
-          kind: 'discount',
-          recipientKeys: [target.recipientKey],
-          subject: personalizedSubject,
-          message: JSON.stringify(portableBlocks),
-          discountCodes: target.codes,
-        })
+      for (let i = 0; i < targets.length; i++) {
+        const target = targets[i]
+        setCurrentSendingIndex(i)
 
         setResults((prev) => ({
           ...prev,
-          [target.id]: { status: 'success' },
+          [target.id]: { status: 'sending' },
         }))
-        successCount++
-      } catch (err) {
-        const errorMsg =
-          err instanceof Error ? err.message : 'Failed to send'
-        setResults((prev) => ({
-          ...prev,
-          [target.id]: { status: 'error', error: errorMsg },
-        }))
-        failCount++
+
+        try {
+          const vars = buildTemplateVariables({
+            sponsorName: target.name,
+            contactNames: target.recipientName || target.name,
+            tierName: target.tierTitle,
+            conference: {
+              title: conference.title,
+              startDate: conference.startDate,
+              city: conference.city,
+              organizer: conference.organizer,
+              domains: conference.domains,
+              sponsorRegistrationLink:
+                conference.sponsorRegistrationLink ?? undefined,
+            },
+          })
+
+          const personalizedSubject = processTemplateVariables(subject, vars)
+          const personalizedBodyText = processTemplateVariables(
+            messageText,
+            vars,
+          )
+          const portableBlocks =
+            convertStringToPortableTextBlocks(personalizedBodyText)
+
+          await sendMutation.mutateAsync({
+            sponsorForConferenceId: target.sponsorForConferenceId,
+            kind: 'discount',
+            recipientKeys: [target.recipientKey],
+            subject: personalizedSubject,
+            message: JSON.stringify(portableBlocks),
+            discountCodes: target.codes,
+          })
+
+          setResults((prev) => ({
+            ...prev,
+            [target.id]: { status: 'success' },
+          }))
+          successCount++
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : 'Failed to send'
+          setResults((prev) => ({
+            ...prev,
+            [target.id]: { status: 'error', error: errorMsg },
+          }))
+          failCount++
+        }
+
+        // Small pacing delay to prevent hitting Resend burst rate limits
+        if (i < targets.length - 1) {
+          await new Promise((r) => setTimeout(r, 200))
+        }
       }
 
-      // Small pacing delay to prevent hitting Resend burst rate limits
-      if (i < targets.length - 1) {
-        await new Promise((r) => setTimeout(r, 200))
+      setSendingState('completed')
+
+      // Invalidate activity, communications, and discount usage
+      utils.sponsor.crm.activities.list.invalidate()
+      utils.sponsor.crm.activities.listCommunications.invalidate()
+      utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
+
+      if (failCount === 0) {
+        showNotification({
+          type: 'success',
+          title: 'Discount codes sent',
+          message: `Successfully sent discount codes to ${successCount} sponsors.`,
+        })
+      } else {
+        showNotification({
+          type: 'warning',
+          title: 'Sending complete with errors',
+          message: `Sent to ${successCount} sponsors. ${failCount} failed.`,
+        })
       }
-    }
-
-    setSendingState('completed')
-
-    // Invalidate activity, communications, and discount usage
-    utils.sponsor.crm.activities.list.invalidate()
-    utils.sponsor.crm.activities.listCommunications.invalidate()
-    utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
-
-    if (failCount === 0) {
-      showNotification({
-        type: 'success',
-        title: 'Discount codes sent',
-        message: `Successfully sent discount codes to ${successCount} sponsors.`,
-      })
-    } else {
-      showNotification({
-        type: 'warning',
-        title: 'Sending complete with errors',
-        message: `Sent to ${successCount} sponsors. ${failCount} failed.`,
-      })
-    }
-  }, [
-    eligibleSponsors,
-    conference,
-    subject,
-    messageText,
-    sendMutation,
-    utils,
-    showNotification,
-  ])
+    },
+    [
+      eligibleSponsors,
+      conference,
+      subject,
+      messageText,
+      sendMutation,
+      utils,
+      showNotification,
+    ],
+  )
 
   const handleRetryFailed = useCallback(() => {
     const failedTargets = eligibleSponsors.filter(
@@ -436,7 +433,11 @@ export function BulkDiscountSendModal({
         {/* Sending / Complete View */}
         {sendingState !== 'idle' ? (
           <div className="space-y-4 py-2">
-            <div className="flex items-center justify-between" role="status" aria-live="polite">
+            <div
+              className="flex items-center justify-between"
+              role="status"
+              aria-live="polite"
+            >
               <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
                 {sendingState === 'sending'
                   ? `Sending ${currentSendingIndex + 1} of ${eligibleSponsors.length}…`
@@ -451,7 +452,11 @@ export function BulkDiscountSendModal({
             {/* Progress Bar */}
             <div
               role="progressbar"
-              aria-valuenow={Object.keys(results).filter((k) => results[k].status !== 'pending').length}
+              aria-valuenow={
+                Object.keys(results).filter(
+                  (k) => results[k].status !== 'pending',
+                ).length
+              }
               aria-valuemin={0}
               aria-valuemax={eligibleSponsors.length}
               aria-label="Email sending progress"
@@ -479,8 +484,8 @@ export function BulkDiscountSendModal({
                         {sponsor.name}
                       </div>
                       <div className="text-gray-500 dark:text-gray-400">
-                        {sponsor.recipientName} ({sponsor.recipientEmail}) · Codes:{' '}
-                        {sponsor.codes.join(', ')}
+                        {sponsor.recipientName} ({sponsor.recipientEmail}) ·
+                        Codes: {sponsor.codes.join(', ')}
                       </div>
                     </div>
 
@@ -518,7 +523,7 @@ export function BulkDiscountSendModal({
             </div>
 
             {sendingState === 'completed' && (
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between border-t border-gray-200 pt-2 dark:border-gray-700">
                 {errorCount > 0 ? (
                   <button
                     type="button"
@@ -528,7 +533,9 @@ export function BulkDiscountSendModal({
                     <ArrowPathIcon className="size-4" />
                     Retry failed ({errorCount})
                   </button>
-                ) : <div />}
+                ) : (
+                  <div />
+                )}
                 <AdminButton variant="primary" onClick={handleDone}>
                   Done
                 </AdminButton>
@@ -569,19 +576,25 @@ export function BulkDiscountSendModal({
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Variables like <code className="font-mono">{'{{{SPONSOR_NAME}}}'}</code> and <code className="font-mono">{'{{{CONFERENCE_TITLE}}}'}</code> are supported. Each email will automatically include a formatted discount code card with the sponsor&apos;s assigned codes and ticket registration link.
+                Variables like{' '}
+                <code className="font-mono">{'{{{SPONSOR_NAME}}}'}</code> and{' '}
+                <code className="font-mono">{'{{{CONFERENCE_TITLE}}}'}</code>{' '}
+                are supported. Each email will automatically include a formatted
+                discount code card with the sponsor&apos;s assigned codes and
+                ticket registration link.
               </p>
             </div>
 
             {/* Target Sponsors Preview */}
             <div>
-              <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider dark:text-gray-300">
+              <h4 className="text-xs font-semibold tracking-wider text-gray-700 uppercase dark:text-gray-300">
                 Sponsors to receive codes ({eligibleSponsors.length})
               </h4>
               <div className="mt-2 max-h-40 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200 p-2 text-xs dark:divide-gray-700 dark:border-gray-700">
                 {eligibleSponsors.length === 0 ? (
                   <p className="py-2 text-center text-gray-500 dark:text-gray-400">
-                    No eligible sponsors. Make sure discount codes are created for sponsors and contacts have valid emails.
+                    No eligible sponsors. Make sure discount codes are created
+                    for sponsors and contacts have valid emails.
                   </p>
                 ) : (
                   eligibleSponsors.map((s) => (
@@ -607,7 +620,7 @@ export function BulkDiscountSendModal({
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-end gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">
               <button
                 type="button"
                 onClick={onClose}
