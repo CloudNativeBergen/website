@@ -6,7 +6,6 @@ import {
   isCfpOpen,
   isProgramPublished,
   isRegistrationAvailable,
-  isWorkshopRegistrationOpen,
   isSeekingSponsors,
   isWithdrawalCutoffActive,
   WITHDRAWAL_CUTOFF_DAYS,
@@ -160,33 +159,6 @@ describe('Conference State Helpers', () => {
     it('returns true on conference end date', () => {
       vi.setSystemTime(new Date('2025-06-02T23:59:59Z'))
       expect(isRegistrationAvailable(baseConference)).toBe(true)
-    })
-  })
-
-  describe('isWorkshopRegistrationOpen', () => {
-    const workshopConference = {
-      ...baseConference,
-      workshopRegistrationStart: '2025-05-01',
-      workshopRegistrationEnd: '2025-05-15',
-    }
-
-    it('returns true during registration period', () => {
-      vi.setSystemTime(new Date('2025-05-10T12:00:00Z'))
-      expect(isWorkshopRegistrationOpen(workshopConference)).toBe(true)
-    })
-
-    it('returns false before registration starts', () => {
-      vi.setSystemTime(new Date('2025-04-30T23:59:59Z'))
-      expect(isWorkshopRegistrationOpen(workshopConference)).toBe(false)
-    })
-
-    it('returns false after registration ends', () => {
-      vi.setSystemTime(new Date('2025-05-16T00:00:00Z'))
-      expect(isWorkshopRegistrationOpen(workshopConference)).toBe(false)
-    })
-
-    it('returns false when dates are missing', () => {
-      expect(isWorkshopRegistrationOpen(baseConference)).toBe(false)
     })
   })
 

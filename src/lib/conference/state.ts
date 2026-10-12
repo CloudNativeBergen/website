@@ -176,26 +176,6 @@ export function isRegistrationAvailable(
 }
 
 /**
- * Check if workshop registration is currently open
- */
-export function isWorkshopRegistrationOpen(conference: Conference): boolean {
-  if (
-    !conference.workshopRegistrationStart ||
-    !conference.workshopRegistrationEnd
-  ) {
-    return false
-  }
-  const now = new Date()
-  const startDate = new Date(
-    conference.workshopRegistrationStart + 'T00:00:00Z',
-  )
-  const endDate = new Date(
-    conference.workshopRegistrationEnd + 'T23:59:59.999Z',
-  )
-  return now >= startDate && now <= endDate
-}
-
-/**
  * Check if we should be seeking sponsors (more than 4 weeks before conference)
  */
 export function isSeekingSponsors(conference: Conference): boolean {
