@@ -93,7 +93,14 @@ const ProposalInputBaseSchema = z.object({
     message: 'Terms of Service must be accepted',
   }),
   video: z.string().nullable().optional().transform(nullToUndefined),
-  capacity: z.number().nullable().optional().transform(nullToUndefined),
+  capacity: z
+    .number()
+    .int('Capacity must be a whole number')
+    .min(1, 'Capacity must be at least 1')
+    .max(200, 'Capacity cannot exceed 200 participants')
+    .nullable()
+    .optional()
+    .transform(nullToUndefined),
   prerequisites: z
     .string()
     .nullable()
