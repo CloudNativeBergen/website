@@ -73,7 +73,7 @@ export function processTemplateVariables(
   let result = text
   for (const [key, value] of Object.entries(variables)) {
     const pattern = new RegExp(`\\{\\{\\{${key}\\}\\}\\}`, 'g')
-    result = result.replace(pattern, value)
+    result = result.replace(pattern, () => value)
   }
   return result
 }

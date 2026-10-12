@@ -208,23 +208,38 @@ export function BulkDiscountSendModal({
   const [results, setResults] = useState<Record<string, SponsorSendResult>>({})
   const [currentSendingIndex, setCurrentSendingIndex] = useState(0)
 
-  const handleSend = useCallback(async () => {
-    if (eligibleSponsors.length === 0) return
+  // Guard against navigating or closing tab while sending is actively in-flight
+  React.useEffect(() => {
+    if (sendingState !== 'sending') return
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [sendingState])
+
+  const handleSend = useCallback(async (targetsOverride?: SponsorSendTarget[]) => {
+    const targets = Array.isArray(targetsOverride)
+      ? targetsOverride
+      : eligibleSponsors
+    if (targets.length === 0) return
 
     setSendingState('sending')
     setCurrentSendingIndex(0)
 
-    const initialResults: Record<string, SponsorSendResult> = {}
-    eligibleSponsors.forEach((s) => {
-      initialResults[s.id] = { status: 'pending' }
+    setResults((prev) => {
+      const next = { ...prev }
+      targets.forEach((s) => {
+        next[s.id] = { status: 'pending' }
+      })
+      return next
     })
-    setResults(initialResults)
 
     let successCount = 0
     let failCount = 0
 
-    for (let i = 0; i < eligibleSponsors.length; i++) {
-      const target = eligibleSponsors[i]
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i]
       setCurrentSendingIndex(i)
 
       setResults((prev) => ({
@@ -235,7 +250,7 @@ export function BulkDiscountSendModal({
       try {
         const vars = buildTemplateVariables({
           sponsorName: target.name,
-          contactNames: target.recipientName,
+          contactNames: target.recipientName || target.name,
           tierName: target.tierTitle,
           conference: {
             title: conference.title,
@@ -279,6 +294,11 @@ export function BulkDiscountSendModal({
         }))
         failCount++
       }
+
+      // Small pacing delay to prevent hitting Resend burst rate limits
+      if (i < targets.length - 1) {
+        await new Promise((r) => setTimeout(r, 200))
+      }
     }
 
     setSendingState('completed')
@@ -310,6 +330,15 @@ export function BulkDiscountSendModal({
     utils,
     showNotification,
   ])
+
+  const handleRetryFailed = useCallback(() => {
+    const failedTargets = eligibleSponsors.filter(
+      (s) => results[s.id]?.status === 'error',
+    )
+    if (failedTargets.length > 0) {
+      handleSend(failedTargets)
+    }
+  }, [eligibleSponsors, results, handleSend])
 
   const handleDone = () => {
     onSent?.()
@@ -407,7 +436,7 @@ export function BulkDiscountSendModal({
         {/* Sending / Complete View */}
         {sendingState !== 'idle' ? (
           <div className="space-y-4 py-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between" role="status" aria-live="polite">
               <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
                 {sendingState === 'sending'
                   ? `Sending ${currentSendingIndex + 1} of ${eligibleSponsors.length}…`
@@ -420,7 +449,14 @@ export function BulkDiscountSendModal({
             </div>
 
             {/* Progress Bar */}
-            <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+            <div
+              role="progressbar"
+              aria-valuenow={Object.keys(results).filter((k) => results[k].status !== 'pending').length}
+              aria-valuemin={0}
+              aria-valuemax={eligibleSponsors.length}
+              aria-label="Email sending progress"
+              className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
+            >
               <div
                 className="h-full bg-indigo-600 transition-all duration-300 dark:bg-indigo-500"
                 style={{
@@ -482,7 +518,17 @@ export function BulkDiscountSendModal({
             </div>
 
             {sendingState === 'completed' && (
-              <div className="flex justify-end pt-2">
+              <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+                {errorCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleRetryFailed}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/50"
+                  >
+                    <ArrowPathIcon className="size-4" />
+                    Retry failed ({errorCount})
+                  </button>
+                ) : <div />}
                 <AdminButton variant="primary" onClick={handleDone}>
                   Done
                 </AdminButton>
@@ -571,7 +617,7 @@ export function BulkDiscountSendModal({
               </button>
               <AdminButton
                 variant="primary"
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={eligibleSponsors.length === 0 || !subject.trim()}
               >
                 <EnvelopeIcon className="mr-1.5 size-4" />

@@ -37,7 +37,8 @@ export function SponsorDashboardBroadcastAction({
       <button
         type="button"
         onClick={() => setIsBroadcastModalOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+        disabled={recipientCount === 0}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
       >
         <EnvelopeIcon className="size-4" aria-hidden="true" />
         <span>Send Broadcast</span>
