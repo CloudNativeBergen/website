@@ -18,6 +18,12 @@
  *     runs on every request of a refused attendee, and a type this process has
  *     already raised costs no Sanity read and no write. On its own it
  *     guarantees nothing across instances or restarts.
+ *
+ * WHAT ONE CALLER CAN MAKE IT COST. A webhook delivery carries as many ticket
+ * names as its sender likes, and anyone holding an organization's Checkin
+ * secret can sign one. So one call raises at most {@link MAX_TYPES_PER_CALL}
+ * types in ONE event (one organizers read, one transaction), and one process
+ * raises at most {@link MAX_TYPES_PER_CONFERENCE} types for one conference.
  */
 import { eventBus } from '@/lib/events/bus'
 import type { WorkshopTicketTypeNotSetEvent } from '@/lib/events/types'
@@ -50,29 +56,51 @@ export function notSetTicketTypes(
 }
 
 /**
- * THE MEMO: the (conference, type) pairs this process has raised. In module
- * scope, so per warm instance; a cold start begins empty and its first raise is
- * absorbed by the document id. A type whose write failed stays in it: the next
- * process that meets the type writes it.
- *
- * Its size is bounded by the ticket types the providers name: a key is only
- * added for a type on a ticket the provider returned, or on a webhook delivery
- * whose signature verified.
+ * How many types one call may raise. One order, or one attendee's tickets,
+ * does not hold ten different types nobody has decided. The rest are not
+ * claimed, so they are not lost: the next sale or refusal that names them
+ * raises them.
  */
-const raised = new Set<string>()
+export const MAX_TYPES_PER_CALL = 10
+
+/**
+ * How many types one process raises for one conference; no conference has a
+ * hundred ticket types. When it is reached the process raises nothing more for
+ * that conference, and says so once in the log. Another process starts again
+ * from none. It is per conference so that one tenant filling its own cannot
+ * silence another's.
+ */
+export const MAX_TYPES_PER_CONFERENCE = 100
+
+/**
+ * THE MEMO: per conference, the types this process has raised.
+ *
+ * ON `globalThis`, not in module scope. Next builds pages and route handlers
+ * into separate bundles, each with its own copy of this module, so a
+ * module-level set would be one per bundle and the portal page and the webhook
+ * would each raise the same type. A cold start begins empty and its first
+ * raise is absorbed by the document id. A type whose write failed stays in it:
+ * the next process that meets the type writes it.
+ */
+const MEMO = Symbol.for('workshop.not-set-notice.raised')
+
+function raisedTypes(): Map<string, Set<string>> {
+  const holder = globalThis as { [MEMO]?: Map<string, Set<string>> }
+  return (holder[MEMO] ??= new Map())
+}
 
 /** Forget everything, as a restarted process would. For tests. */
 export function __resetNotSetNoticeMemo(): void {
-  raised.clear()
+  raisedTypes().clear()
 }
 
 /**
- * Raise the not-set event for each not-set type among `typeNames` that this
- * process has not raised yet. The ONE entry point for both call sites.
+ * Raise ONE not-set event for the not-set types among `typeNames` that this
+ * process has not raised yet. The one entry point for both call sites.
  *
- * WHAT A CALL COSTS. Deciding is the rule plus a set lookup: no I/O. For a
- * type already raised here, that is all that happens. For a new one the event
- * is published AFTER the response, so neither the webhook's answer nor the
+ * WHAT A CALL COSTS. Deciding is the rule plus a set lookup: no I/O. For types
+ * already raised here, that is all that happens. Otherwise the event is
+ * published AFTER the response, so neither the webhook's answer nor the
  * attendee's refusal waits for Sanity or can be changed by it.
  *
  * NEVER THROWS. Both callers sit inside a `try` whose `catch` answers for the
@@ -88,20 +116,32 @@ export function reportNotSetTicketTypes(params: {
 }): void {
   try {
     const { conferenceId, source } = params
-    if (!conferenceId) return
+    // A conference that exists only as a draft (the webhook can resolve one)
+    // has no bell to show a notification in: the hub reads published ids.
+    // Nothing is raised and nothing is claimed, so the first sale after it is
+    // published raises it.
+    if (!conferenceId || conferenceId.startsWith('drafts.')) return
 
-    const due = notSetTicketTypes(
-      params.typeNames,
-      params.ticketTypeRoles,
-    ).filter((typeName) => {
-      const key = JSON.stringify([conferenceId, typeKey(typeName)])
-      if (raised.has(key)) return false
-      // Claimed here, before the work is even scheduled, so a burst of
-      // requests for one type raises it once and not once each.
-      raised.add(key)
-      return true
-    })
+    const memo = raisedTypes()
+    const raised = memo.get(conferenceId) ?? new Set<string>()
+    const room = MAX_TYPES_PER_CONFERENCE - raised.size
+    if (room <= 0) return
+
+    const due = notSetTicketTypes(params.typeNames, params.ticketTypeRoles)
+      .filter((typeName) => !raised.has(typeKey(typeName)))
+      .slice(0, Math.min(MAX_TYPES_PER_CALL, room))
     if (due.length === 0) return
+
+    // Claimed here, before the work is even scheduled, so a burst of requests
+    // for one type raises it once and not once each.
+    for (const typeName of due) raised.add(typeKey(typeName))
+    memo.set(conferenceId, raised)
+    if (raised.size >= MAX_TYPES_PER_CONFERENCE) {
+      console.warn(
+        `workshop.ticket-type.not-set: ${MAX_TYPES_PER_CONFERENCE} types raised for one conference; this process raises no more for it`,
+        { conferenceId },
+      )
+    }
 
     runAfterResponse(async () => {
       // The registry subscribes the handler. Loaded here and not at the top:
@@ -109,17 +149,18 @@ export function reportNotSetTicketTypes(params: {
       // by the attendee portal and the webhook, which would carry all of it
       // for a type that is rarely met.
       await import('@/lib/events/registry')
-      await Promise.all(
-        due.map((typeName) =>
-          eventBus.publish({
-            eventType: 'workshop.ticket-type.not-set',
-            timestamp: new Date(),
-            conferenceId,
-            typeName,
-            metadata: { source },
-          }),
-        ),
-      )
+      console.info('workshop.ticket-type.not-set: raised', {
+        conferenceId,
+        typeNames: due,
+        source,
+      })
+      await eventBus.publish({
+        eventType: 'workshop.ticket-type.not-set',
+        timestamp: new Date(),
+        conferenceId,
+        typeNames: due,
+        metadata: { source },
+      })
     })
   } catch (error) {
     console.error('workshop.ticket-type.not-set: could not be raised', error)

@@ -54,7 +54,7 @@ const ticketTypeNotSet = (
   title: `“${typeName}” needs a workshop decision`,
   message:
     'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
-  link: '/admin/workshops',
+  link: '/admin/workshops#workshop-tickets',
   readAt,
   createdAt,
   actor: null,
@@ -174,7 +174,7 @@ export const Unread12Dark: Story = {
 
 /**
  * The bell opened on the not-set notice (#1335): the row names the ticket type
- * and leads to `/admin/workshops`. The `play` opens the panel, so the story
+ * and leads to the workshop-tickets section of `/admin/workshops`. The `play` opens the panel, so the story
  * shows what the organizer sees after pressing the bell.
  */
 export const TicketTypeNotSet: Story = {
@@ -198,7 +198,10 @@ export const TicketTypeNotSet: Story = {
     const row = await canvas.findByRole('link', {
       name: /“Early Bird” needs a workshop decision/,
     })
-    await expect(row).toHaveAttribute('href', '/admin/workshops')
+    await expect(row).toHaveAttribute(
+      'href',
+      '/admin/workshops#workshop-tickets',
+    )
     await expect(row).toHaveTextContent(
       'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
     )

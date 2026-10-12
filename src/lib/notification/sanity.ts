@@ -145,6 +145,8 @@ export async function createNotifications(
  * write from any server instance without a prior read.
  *
  * CONTRACT: NEVER throws into the caller's flow, like `createNotifications`.
+ * A failure is logged, with `logContext` when the caller gave one: this
+ * function knows the documents, the caller knows what they were for.
  *
  * NO WEB PUSH. A repeat must not push again, and telling a document this call
  * created from one that was already there would rest on what the commit answer
@@ -153,6 +155,7 @@ export async function createNotifications(
  */
 export async function createNotificationsOnce(
   items: OnceNotificationInput[],
+  logContext: Record<string, unknown> = {},
 ): Promise<void> {
   if (items.length === 0) {
     return
@@ -169,7 +172,11 @@ export async function createNotificationsOnce(
     }
     await tx.commit()
   } catch (error) {
-    console.error('Failed to create once-only notifications:', error)
+    console.error(
+      'Failed to create once-only notifications:',
+      logContext,
+      error,
+    )
   }
 }
 

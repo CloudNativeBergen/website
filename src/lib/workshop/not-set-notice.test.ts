@@ -12,6 +12,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // re-deriving it.
 const h = vi.hoisted(() => ({
   rule: null as null | ((name: unknown, roles: unknown) => string),
+  /** How many times after-response work was scheduled. */
+  scheduled: 0,
+}))
+vi.mock('@/server/runAfterResponse', () => ({
+  runAfterResponse: () => {
+    h.scheduled += 1
+  },
 }))
 vi.mock('@/lib/tickets/classification', async (importOriginal) => {
   const actual =
@@ -23,12 +30,14 @@ vi.mock('@/lib/tickets/classification', async (importOriginal) => {
   }
 })
 
+import { workshopAccessOf } from '@/lib/tickets/classification'
 import { notSetTicketTypes, reportNotSetTicketTypes } from './not-set-notice'
 
 const MARKED = [{ typeName: 'Workshop day', grantsWorkshop: true }]
 
 beforeEach(() => {
   h.rule = null
+  h.scheduled = 0
 })
 
 describe('notSetTicketTypes', () => {
@@ -67,10 +76,15 @@ describe('notSetTicketTypes', () => {
   it('follows the rule for an entry that carries only the seating answer', () => {
     const roles = [...MARKED, { typeName: 'Crew', admits: true }]
 
-    // Today the rule answers `denied` for it, so it is not a not-set type.
-    expect(notSetTicketTypes(['Crew'], roles)).toEqual([])
+    // Whatever the rule answers for such an entry is what this follows:
+    // `denied` before #1332, `unclassified` once it has landed.
+    expect(notSetTicketTypes(['Crew'], roles)).toEqual(
+      workshopAccessOf('Crew', roles) === 'unclassified' ? ['Crew'] : [],
+    )
 
-    // After #1332 the rule answers `unclassified`, and this follows.
+    // And the dependency itself, with the rule's answer swapped each way.
+    h.rule = (name) => (name === 'Crew' ? 'denied' : 'granted')
+    expect(notSetTicketTypes(['Crew'], roles)).toEqual([])
     h.rule = (name) => (name === 'Crew' ? 'unclassified' : 'granted')
     expect(notSetTicketTypes(['Crew'], roles)).toEqual(['Crew'])
   })
@@ -95,5 +109,34 @@ describe('reportNotSetTicketTypes', () => {
       'workshop.ticket-type.not-set: could not be raised',
       expect.any(TypeError),
     )
+  })
+
+  it('keeps one memo for the process, whichever copy of the module raises', async () => {
+    // Next builds pages and route handlers into separate bundles, each with
+    // its own copy of this module. Two copies stand for the two bundles.
+    const raise = (
+      copy: { reportNotSetTicketTypes: typeof reportNotSetTicketTypes },
+      typeName: string,
+    ) =>
+      copy.reportNotSetTicketTypes({
+        conferenceId: 'conf-memo',
+        typeNames: [typeName],
+        ticketTypeRoles: MARKED,
+        source: 'portal-refusal',
+      })
+    const page = await import('./not-set-notice')
+    vi.resetModules()
+    const route = await import('./not-set-notice')
+    expect(route.reportNotSetTicketTypes).not.toBe(page.reportNotSetTicketTypes)
+
+    raise(page, 'Early Bird')
+    expect(h.scheduled).toBe(1)
+    raise(route, 'Early Bird')
+    expect(h.scheduled).toBe(1)
+
+    raise(route, 'Late Bird')
+    expect(h.scheduled).toBe(2)
+    raise(page, 'Late Bird')
+    expect(h.scheduled).toBe(2)
   })
 })

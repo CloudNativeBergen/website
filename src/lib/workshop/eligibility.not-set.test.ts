@@ -125,6 +125,7 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'info').mockImplementation(() => {})
   h.tasks.length = 0
   h.store.reset(DATASET)
   __resetNotSetNoticeMemo()
@@ -153,14 +154,14 @@ describe('a refusal for a not-set type', () => {
         conference: 'conf-a',
         type: 'workshop_ticket_type_not_set',
         title: '“Early Bird” needs a workshop decision',
-        link: '/admin/workshops',
+        link: '/admin/workshops#workshop-tickets',
       },
       {
         recipient: 'sp-arne',
         conference: 'conf-a',
         type: 'workshop_ticket_type_not_set',
         title: '“Early Bird” needs a workshop decision',
-        link: '/admin/workshops',
+        link: '/admin/workshops#workshop-tickets',
       },
     ])
     expect(h.store.commits).toHaveLength(1)
@@ -317,6 +318,11 @@ describe('when the notification cannot be written', () => {
     // The write was attempted, and it failed.
     expect(console.error).toHaveBeenCalledWith(
       'Failed to create once-only notifications:',
+      {
+        conferenceId: 'conf-a',
+        typeNames: ['Early Bird'],
+        source: 'portal-refusal',
+      },
       expect.any(Error),
     )
 

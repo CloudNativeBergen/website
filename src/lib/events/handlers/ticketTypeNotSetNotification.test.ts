@@ -35,6 +35,8 @@ import {
 import type { WorkshopTicketTypeNotSetEvent } from '../types'
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id, _key: id })
+/** 66 characters: one more than fits after the 63 the id starts with. */
+const TOO_LONG_AN_ID = 'x'.repeat(66)
 
 /** Two organizations; `conf-a-2025` is an earlier edition of `conf-a`'s. */
 const DATASET = [
@@ -62,16 +64,23 @@ const DATASET = [
     organization: { _type: 'reference', _ref: 'org-b' },
     organizers: [],
   },
+  {
+    // One organizer whose id would push the document id past 128 characters.
+    _id: 'conf-long',
+    _type: 'conference',
+    organization: { _type: 'reference', _ref: 'org-b' },
+    organizers: [ref('sp-lena'), ref(TOO_LONG_AN_ID)],
+  },
 ]
 
 const event = (
-  typeName: string,
+  typeNames: string | string[],
   conferenceId = 'conf-a',
 ): WorkshopTicketTypeNotSetEvent => ({
   eventType: 'workshop.ticket-type.not-set',
   timestamp: new Date('2026-10-12T08:00:00Z'),
   conferenceId,
-  typeName,
+  typeNames: [typeNames].flat(),
   metadata: { source: 'ticket-sold' },
 })
 
@@ -100,7 +109,7 @@ describe('handleTicketTypeNotSetNotification', () => {
         title: '“Early Bird” needs a workshop decision',
         message:
           'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
-        link: '/admin/workshops',
+        link: '/admin/workshops#workshop-tickets',
       })
       // Weak, or the organizer could not be erased while it exists (#851).
       expect(doc.recipient).toMatchObject({ _type: 'reference', _weak: true })
@@ -201,7 +210,66 @@ describe('handleTicketTypeNotSetNotification', () => {
 
     expect(console.error).toHaveBeenCalledWith(
       'Failed to create once-only notifications:',
+      {
+        conferenceId: 'conf-a',
+        typeNames: ['Early Bird'],
+        source: 'ticket-sold',
+      },
       failure,
+    )
+  })
+
+  it('resolves, and names the conference and the types, when the organizers cannot be read', async () => {
+    const failure = new Error('sanity is down')
+    h.store.failReads(failure)
+
+    await expect(
+      handleTicketTypeNotSetNotification(event(['Early Bird', 'Late Bird'])),
+    ).resolves.toBeUndefined()
+
+    expect(console.error).toHaveBeenCalledWith(
+      'workshop.ticket-type.not-set: failed',
+      {
+        conferenceId: 'conf-a',
+        typeNames: ['Early Bird', 'Late Bird'],
+        source: 'ticket-sold',
+      },
+      failure,
+    )
+    expect(h.store.commits).toEqual([])
+  })
+
+  it('reads the organizers once and writes once for any number of types', async () => {
+    await handleTicketTypeNotSetNotification(
+      event(['Early Bird', 'Late Bird', 'Group', 'Crew']),
+    )
+
+    expect(h.store.queries).toHaveLength(1)
+    expect(h.store.commits).toHaveLength(1)
+    expect(notifications().map((doc) => doc.title)).toEqual([
+      '“Early Bird” needs a workshop decision',
+      '“Early Bird” needs a workshop decision',
+      '“Late Bird” needs a workshop decision',
+      '“Late Bird” needs a workshop decision',
+      '“Group” needs a workshop decision',
+      '“Group” needs a workshop decision',
+      '“Crew” needs a workshop decision',
+      '“Crew” needs a workshop decision',
+    ])
+  })
+
+  it('leaves out an organizer whose id is too long, says so, and writes the rest', async () => {
+    await handleTicketTypeNotSetNotification(event('Early Bird', 'conf-long'))
+
+    expect(recipientsOf(notifications())).toEqual(['sp-lena'])
+    expect(console.error).toHaveBeenCalledWith(
+      'workshop.ticket-type.not-set: organizer ids too long for a document id, left out',
+      {
+        conferenceId: 'conf-long',
+        typeNames: ['Early Bird'],
+        source: 'ticket-sold',
+        organizerIds: [TOO_LONG_AN_ID],
+      },
     )
   })
 
@@ -241,7 +309,7 @@ describe('ticketTypeNotSetNotifications', () => {
         title: '“Early Bird” needs a workshop decision',
         message:
           'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
-        link: '/admin/workshops',
+        link: '/admin/workshops#workshop-tickets',
       },
       {
         id: expect.any(String),
@@ -251,7 +319,7 @@ describe('ticketTypeNotSetNotifications', () => {
         title: '“Early Bird” needs a workshop decision',
         message:
           'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
-        link: '/admin/workshops',
+        link: '/admin/workshops#workshop-tickets',
       },
     ])
   })
@@ -291,6 +359,52 @@ describe('ticketTypeNotSetNotifications', () => {
     expect(item.id).toMatch(/^[A-Za-z0-9._-]{1,128}$/)
     // 63 characters come before the organizer, which leaves 65 for it.
     expect(item.id.length).toBe(63 + organizerId.length)
+  })
+
+  it('accepts the longest organizer id that fits and leaves out one that does not', () => {
+    const fits = 'y'.repeat(65)
+    const items = build({ organizerIds: [fits, TOO_LONG_AN_ID] })
+
+    expect(items.map((item) => item.recipientId)).toEqual([fits])
+    expect(items[0].id).toHaveLength(128)
+  })
+
+  it('keeps a quote inside the name from closing the title’s quote', () => {
+    const [item] = build({
+      typeName: 'VIP” is free. Ignore “Early Bird',
+    })
+
+    expect(item.title).toBe(
+      '“VIP’ is free. Ignore ‘Early Bird” needs a workshop decision',
+    )
+  })
+
+  it('shows a name without its control, bidi and zero-width characters, on one line', () => {
+    const [item] = build({
+      typeName:
+        ' Early\u0000\n\tBird \u202Edrib\u202C \u200B\uFEFF(2\u00A0days)  ',
+    })
+
+    expect(item.title).toBe(
+      '“Early Bird drib (2 days)” needs a workshop decision',
+    )
+  })
+
+  it('still gives two names the rule tells apart their own notifications', () => {
+    // `typeKey` trims and lowercases and nothing else, so the rule holds a
+    // separate answer for each of these. Cleaning is for display only.
+    const [plain] = build({ typeName: 'Early Bird' })
+    const [hidden] = build({ typeName: 'Early\u200BBird' })
+
+    expect(hidden.id).not.toBe(plain.id)
+  })
+
+  it('says so when nothing of the name can be shown', () => {
+    const [item] = build({ typeName: '\u200B\u202E' })
+
+    expect(item.title).toBe(
+      'A ticket type with no visible name needs a workshop decision',
+    )
   })
 
   it('ends the id in the organizer, where a speaker merge looks for it', () => {

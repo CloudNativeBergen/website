@@ -50,7 +50,11 @@ vi.mock('@/server/runAfterResponse', () => ({
 }))
 
 import { POST } from '@/app/api/webhooks/checkin/ticket-sold/route'
-import { __resetNotSetNoticeMemo } from '@/lib/workshop/not-set-notice'
+import {
+  MAX_TYPES_PER_CALL,
+  MAX_TYPES_PER_CONFERENCE,
+  __resetNotSetNoticeMemo,
+} from '@/lib/workshop/not-set-notice'
 
 /** Run everything that was left for after the response. */
 async function afterResponse() {
@@ -83,6 +87,15 @@ const CONFERENCES: Record<number, Record<string, unknown> & { _id: string }> = {
     title: 'CNDN 2025',
     organization: { _type: 'reference', _ref: 'org-platform' },
     organizers: [ref('sp-anna'), ref('sp-former')],
+    ticketTypeRoles: MARKED,
+  },
+  // Exists only as a draft: the webhook still resolves it and acts on it.
+  44: {
+    _id: 'drafts.conf-d',
+    _type: 'conference',
+    title: 'Draft',
+    organization: { _type: 'reference', _ref: 'org-platform' },
+    organizers: [ref('sp-dora')],
     ticketTypeRoles: MARKED,
   },
   // Has marked nothing: the built-in list applies.
@@ -165,6 +178,7 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'info').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   h.tasks.length = 0
   h.store.reset(Object.values(CONFERENCES))
@@ -215,14 +229,14 @@ describe('a sale of a not-set ticket type', () => {
         conference: 'conf-a',
         type: 'workshop_ticket_type_not_set',
         title: '“Early Bird” needs a workshop decision',
-        link: '/admin/workshops',
+        link: '/admin/workshops#workshop-tickets',
       },
       {
         recipient: 'sp-arne',
         conference: 'conf-a',
         type: 'workshop_ticket_type_not_set',
         title: '“Early Bird” needs a workshop decision',
-        link: '/admin/workshops',
+        link: '/admin/workshops#workshop-tickets',
       },
     ])
     expect(h.store.commits).toHaveLength(1)
@@ -292,6 +306,20 @@ describe('a sale of a not-set ticket type', () => {
     expect(h.store.commits).toHaveLength(1)
   })
 
+  it('says in the log what it raised, for which conference and from where', async () => {
+    await sale(['Early Bird', 'Late Bird'])
+    await afterResponse()
+
+    expect(console.info).toHaveBeenCalledWith(
+      'workshop.ticket-type.not-set: raised',
+      {
+        conferenceId: 'conf-a',
+        typeNames: ['Early Bird', 'Late Bird'],
+        source: 'ticket-sold',
+      },
+    )
+  })
+
   it('sends nothing to organizers of another conference', async () => {
     await sale(['Early Bird'])
     await afterResponse()
@@ -313,7 +341,98 @@ describe('a sale of a not-set ticket type', () => {
   })
 })
 
+describe('how much one delivery can cost', () => {
+  const types = (count: number, from = 0) =>
+    Array.from({ length: count }, (_, index) => `Type ${from + index}`)
+  const typesWritten = () => [
+    ...new Set(
+      notifications().map((doc) =>
+        String(doc.title).replace(/^“(.*)” needs a workshop decision$/, '$1'),
+      ),
+    ),
+  ]
+
+  it('reads the organizers once and writes once for several types in one delivery', async () => {
+    await sale(types(4))
+    await afterResponse()
+
+    expect(h.store.queries).toHaveLength(1)
+    expect(h.store.commits).toHaveLength(1)
+    expect(typesWritten()).toEqual(types(4))
+    expect(notifications()).toHaveLength(4 * 2)
+  })
+
+  it('writes exactly the cap from a delivery that names more, and leaves the rest for a later one', async () => {
+    expect(MAX_TYPES_PER_CALL).toBe(10)
+
+    await sale(types(25))
+    await afterResponse()
+
+    expect(h.store.queries).toHaveLength(1)
+    expect(h.store.commits).toHaveLength(1)
+    expect(typesWritten()).toEqual(types(10))
+
+    // The same order again: the next ten, then the last five.
+    await sale(types(25))
+    await afterResponse()
+    expect(typesWritten()).toEqual(types(20))
+
+    await sale(types(25))
+    await afterResponse()
+    expect(typesWritten()).toEqual(types(25))
+    expect(h.store.commits).toHaveLength(3)
+  })
+
+  it('stops raising for a conference at its limit, says so once, and still raises for another', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(MAX_TYPES_PER_CONFERENCE).toBe(100)
+
+    // 2,000 distinct names, signed, in deliveries of 200.
+    for (let delivery = 0; delivery < 10; delivery++) {
+      await sale(types(200, delivery * 200))
+      await afterResponse()
+    }
+
+    // Ten deliveries raised ten types each, and that is all this process
+    // spends on the conference: ten reads, ten transactions, 100 types.
+    expect(h.store.queries).toHaveLength(10)
+    expect(h.store.commits).toHaveLength(10)
+    expect(typesWritten()).toHaveLength(100)
+
+    await sale(types(200, 5_000))
+    await afterResponse()
+    expect(h.store.commits).toHaveLength(10)
+    expect(
+      vi
+        .mocked(console.warn)
+        .mock.calls.filter(([line]) => String(line).includes('raises no more')),
+    ).toEqual([
+      [
+        'workshop.ticket-type.not-set: 100 types raised for one conference; this process raises no more for it',
+        { conferenceId: 'conf-a' },
+      ],
+    ])
+
+    // The earlier edition is another conference with its own room.
+    await sale(['Early Bird'], 41)
+    await afterResponse()
+    expect(h.store.commits).toHaveLength(11)
+  })
+})
+
 describe('a sale that raises nothing', () => {
+  it('raises nothing for a conference that exists only as a draft, and still sends the email', async () => {
+    const response = await sale(['Workshop day', 'Early Bird'], 44)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      success: true,
+      message: 'Processed 2 ticket(s), sent 1 email(s)',
+      results: [{ email: 'ada@example.com', success: true, emailId: 'em-1' }],
+    })
+    expect(h.tasks).toEqual([])
+  })
+
   it('writes none for a type that grants access or one that was answered no', async () => {
     await sale(['Workshop day', 'Student'])
     await afterResponse()
@@ -389,6 +508,11 @@ describe('the answer to Checkin', () => {
     // The write was attempted, and it failed.
     expect(console.error).toHaveBeenCalledWith(
       'Failed to create once-only notifications:',
+      {
+        conferenceId: 'conf-a',
+        typeNames: ['Early Bird'],
+        source: 'ticket-sold',
+      },
       expect.any(Error),
     )
 
@@ -407,9 +531,14 @@ describe('the answer to Checkin', () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(ANSWER)
-    // The read was attempted, it failed, and the bus kept it there.
+    // The read was attempted, it failed, and it went no further.
     expect(console.error).toHaveBeenCalledWith(
-      'Event handler failed for workshop.ticket-type.not-set:',
+      'workshop.ticket-type.not-set: failed',
+      {
+        conferenceId: 'conf-a',
+        typeNames: ['Early Bird'],
+        source: 'ticket-sold',
+      },
       failure,
     )
     expect(h.store.commits).toEqual([])
