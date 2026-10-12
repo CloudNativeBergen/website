@@ -751,17 +751,23 @@ describe('a stored name the patch cannot address', () => {
     seed(seeded)
     expect(workshopAccessOf('Speaker ticket', roles())).toBe('granted')
 
-    await expect(
-      tickets().admin.setWorkshopAccess({
+    const outcome = await tickets()
+      .admin.setWorkshopAccess({
         updates: [{ typeName: 'Speaker ticket', grantsWorkshop: false }],
-      }),
-    ).rejects.toMatchObject(REFUSED)
+      })
+      .then(
+        () => 'saved',
+        (error: unknown) => error,
+      )
 
-    // Nothing was tried, nothing is stored, and the rule answers as before:
-    // no second entry sits behind the first pretending to be the answer.
-    expect(h.attempts).toBe(0)
+    // FIRST what is stored and what the rule answers, whatever the procedure
+    // said: no second entry sits behind the first pretending to be the answer
+    // (it used to be `[the old grant, { Speaker ticket: false }]`).
     expect(roles()).toEqual(seeded)
     expect(workshopAccessOf('Speaker ticket', roles())).toBe('granted')
+    // Then that it said so, and tried nothing.
+    expect(outcome).toMatchObject(REFUSED)
+    expect(h.attempts).toBe(0)
   })
 
   it.each([
