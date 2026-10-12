@@ -250,14 +250,10 @@ export const RegistrationClosed: Story = {
  * as `waitlist`.) Reset per story in `beforeEach`.
  */
 const cancelled = { done: false }
-const cancelHandlers = [
-  http.get('/api/trpc/workshop.list', () =>
-    listResponse([wsAvailableA, wsAvailableB]),
-  ),
+const cancelHandlersFor = (workshops: unknown[], before: unknown[]) => [
+  http.get('/api/trpc/workshop.list', () => listResponse(workshops)),
   http.get('/api/trpc/workshop.getMySignups', () =>
-    signupsResponse(
-      cancelled.done ? [] : [signup('su-1', 'ws-1', 'confirmed')],
-    ),
+    signupsResponse(cancelled.done ? [] : before),
   ),
   announcementsHandler,
   http.post('/api/trpc/workshop.cancelSignup', () => {
@@ -270,6 +266,18 @@ const cancelHandlers = [
 ]
 
 /**
+ * The story ran at PHONE width, and nothing is wider than the page. The test
+ * runner resizes the page from `defaultViewport`; at its default 1280 this
+ * fails.
+ */
+const expectPhone = async (canvasElement: HTMLElement) => {
+  const document = canvasElement.ownerDocument
+  await expect(document.defaultView!.innerWidth).toBeLessThan(640)
+  const root = document.documentElement
+  await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth)
+}
+
+/**
  * After "Cancel Registration" the workshop is one the attendee has NOT signed
  * up for: it is back under "Available Workshops" with its register button, and
  * nothing says waitlist.
@@ -279,7 +287,14 @@ export const AfterCancel: Story = {
   beforeEach: () => {
     cancelled.done = false
   },
-  parameters: { msw: { handlers: cancelHandlers } },
+  parameters: {
+    msw: {
+      handlers: cancelHandlersFor(
+        [wsAvailableA, wsAvailableB],
+        [signup('su-1', 'ws-1', 'confirmed')],
+      ),
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
@@ -318,6 +333,71 @@ export const AfterCancelMobile: Story = {
   parameters: {
     ...AfterCancel.parameters,
     viewport: { defaultViewport: 'phone' },
+  },
+  play: async (context) => {
+    await AfterCancel.play!(context)
+    await expectPhone(context.canvasElement)
+  },
+}
+
+/**
+ * "Leave Waitlist" is the same cancel on a waitlisted sign-up, and it removes
+ * the sign-up too. The full workshop is then one the attendee has NOT signed up
+ * for: back under "Full Workshops", offering "Join Waitlist". (Before #1331 the
+ * button set `waitlist` on a waitlisted sign-up, and nothing changed.)
+ */
+export const AfterLeavingWaitlist: Story = {
+  args: signedInArgs,
+  beforeEach: () => {
+    cancelled.done = false
+  },
+  parameters: {
+    msw: {
+      handlers: cancelHandlersFor(
+        [wsAvailableA, wsFull],
+        [signup('su-2', 'ws-3', 'waitlist')],
+      ),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(/on the waitlist for this workshop/i),
+    ).toBeVisible()
+
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Leave Waitlist' }),
+    )
+
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole('heading', { name: 'Your Workshops' }),
+      ).not.toBeInTheDocument(),
+    )
+    await expect(
+      canvas.getByRole('heading', { name: 'Full Workshops' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getAllByRole('button', { name: 'Join Waitlist' }),
+    ).toHaveLength(1)
+    await expect(
+      canvas.queryByText(/on the waitlist for this workshop/i),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('button', { name: 'Leave Waitlist' }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const AfterLeavingWaitlistMobile: Story = {
+  ...AfterLeavingWaitlist,
+  parameters: {
+    ...AfterLeavingWaitlist.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
+  play: async (context) => {
+    await AfterLeavingWaitlist.play!(context)
+    await expectPhone(context.canvasElement)
   },
 }
 

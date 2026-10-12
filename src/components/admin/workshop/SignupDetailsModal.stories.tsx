@@ -78,6 +78,28 @@ const waitlistSignups = [
 const actions = (canvasElement: HTMLElement, name: string) =>
   within(canvasElement.ownerDocument.body).queryAllByRole('button', { name })
 
+/**
+ * The PHONE layout rendered: the `<table>` half of the list (`hidden md:block`)
+ * is in the document and not shown, so the rows on screen are the cards, and
+ * nothing is wider than the page. At desktop width the table is the half on
+ * screen and this fails.
+ *
+ * Call it AFTER something in the modal has been seen to be visible: while the
+ * modal fades in nothing in it is visible, and "the table is not visible"
+ * would pass at any width.
+ */
+const expectCards = async (canvasElement: HTMLElement) => {
+  const document = canvasElement.ownerDocument
+  const tables = [...document.querySelectorAll('table')]
+  // At least one: with none, "no table is visible" would say nothing.
+  await expect(tables.length).toBeGreaterThan(0)
+  for (const table of tables) {
+    await expect(table).not.toBeVisible()
+  }
+  const root = document.documentElement
+  await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth)
+}
+
 const meta = {
   title: 'Systems/Proposals/Admin/Workshop/SignupDetailsModal',
   component: SignupDetailsModal,
@@ -131,11 +153,6 @@ export const ConfirmedMobile: Story = {
   ...Confirmed,
   parameters: { viewport: { defaultViewport: 'phone' } },
   play: async ({ canvasElement }) => {
-    const document = canvasElement.ownerDocument
-    // Cards, not a table: the `<table>` is in the `hidden md:block` half.
-    for (const table of document.querySelectorAll('table')) {
-      await expect(table).not.toBeVisible()
-    }
     const buttons = actions(canvasElement, 'Move to waitlist')
     await expect(buttons).toHaveLength(3)
     for (const button of buttons) {
@@ -146,8 +163,7 @@ export const ConfirmedMobile: Story = {
         button.getBoundingClientRect().height,
       ).toBeGreaterThanOrEqual(44)
     }
-    const root = document.documentElement
-    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth)
+    await expectCards(canvasElement)
   },
 }
 
@@ -173,6 +189,15 @@ export const WaitlistDark: Story = {
 export const WaitlistMobile: Story = {
   ...Waitlist,
   parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async ({ canvasElement }) => {
+    const buttons = actions(canvasElement, 'Move to Confirmed')
+    await expect(buttons).toHaveLength(2)
+    for (const button of buttons) {
+      await waitFor(() => expect(button).toBeVisible())
+    }
+    await expect(actions(canvasElement, 'Move to waitlist')).toHaveLength(0)
+    await expectCards(canvasElement)
+  },
 }
 
 /**
@@ -183,7 +208,9 @@ export const MoveToWaitlistQuestion: Story = {
   ...Confirmed,
   play: async ({ canvasElement, args }) => {
     const page = within(canvasElement.ownerDocument.body)
-    await userEvent.click(actions(canvasElement, 'Move to waitlist')[0])
+    const first = actions(canvasElement, 'Move to waitlist')[0]
+    await waitFor(() => expect(first).toBeVisible())
+    await userEvent.click(first)
 
     const question = await page.findByRole('dialog', {
       name: 'Move to waitlist',
@@ -211,9 +238,27 @@ export const MoveToWaitlistQuestionDark: Story = {
   globals: { theme: 'dark' },
 }
 
+/** On a phone the question is a sheet: its two buttons are stacked, not side by side. */
 export const MoveToWaitlistQuestionMobile: Story = {
   ...MoveToWaitlistQuestion,
   parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async (context) => {
+    await MoveToWaitlistQuestion.play!(context)
+    const question = within(context.canvasElement.ownerDocument.body).getByRole(
+      'dialog',
+      { name: 'Move to waitlist' },
+    )
+    const move = within(question).getByRole('button', {
+      name: 'Move to waitlist',
+    })
+    const keep = within(question).getByRole('button', {
+      name: 'Keep confirmed',
+    })
+    await expect(keep.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      move.getBoundingClientRect().bottom,
+    )
+    await expectCards(context.canvasElement)
+  },
 }
 
 export const Empty: Story = {
