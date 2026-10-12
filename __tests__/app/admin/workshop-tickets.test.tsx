@@ -410,14 +410,16 @@ describe('marking the first type', () => {
     )
     // The confirmation, before anything is written.
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'This is the first ticket type marked at this conference.',
+      'This is the first ticket type set to grant access.',
     )
     expect(h.commits).toBe(0)
   }
 
   it('keeps every previously granted type granted when they are carried over', async () => {
     await markFirst()
-    fireEvent.click(screen.getByRole('button', { name: /^Mark this type/ }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grant “Early Bird”, keep/ }),
+    )
     await saved()
 
     expect(h.commits).toBe(1)
@@ -433,7 +435,9 @@ describe('marking the first type', () => {
 
   it('leaves them not set when the organizer declines the carry-over', async () => {
     await markFirst()
-    fireEvent.click(screen.getByRole('button', { name: /^Only this type/ }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grant “Early Bird” only/ }),
+    )
     await saved()
 
     await openSection()
@@ -445,6 +449,58 @@ describe('marking the first type', () => {
     const refused = await gate(TWO_DAY)
     expect(refused.isEligible).toBe(false)
     expect(refused.reason).toContain('has not been set up for workshop access')
+  })
+})
+
+/**
+ * A CARRY-OVER NEVER OVERWRITES A STORED NO. The sequence the page now leads
+ * to: a No for a type the built-in list lets in is saved on its own ("block
+ * nothing yet"), and later another type is the first set to grant access, with
+ * the carry-over. The earlier No must stand: it is what finally takes effect.
+ */
+describe('a No saved before any type grants access', () => {
+  it('is not overwritten by a later carry-over, and then blocks its holders', async () => {
+    seed(undefined, ['Early Bird', SPEAKER, TWO_DAY])
+
+    await openSection()
+    fireEvent.click(
+      row(SPEAKER).getByRole('button', { name: /^No workshop access/ }),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `This No won’t block “${SPEAKER}” yet.`,
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save the No, block nothing yet' }),
+    )
+    await saved()
+    expect(stored()).toEqual([{ typeName: SPEAKER, grantsWorkshop: false }])
+    // Exactly as the question said: nothing is blocked yet.
+    expect((await gate(SPEAKER)).isEligible).toBe(true)
+
+    await openSection()
+    fireEvent.click(
+      row('Early Bird').getByRole('button', {
+        name: /^Grants workshop access/,
+      }),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `Holders of “${TWO_DAY}” sign up through that list today, and are blocked unless that type is set to grant access in the same save. “${SPEAKER}” is already set to No: its holders are blocked too when the built-in list goes off.`,
+    )
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Grant “Early Bird”, keep “${TWO_DAY}”`,
+      }),
+    )
+    await saved()
+
+    expect(stored()).toEqual([
+      { typeName: SPEAKER, grantsWorkshop: false },
+      { typeName: 'Early Bird', grantsWorkshop: true },
+      { typeName: TWO_DAY, grantsWorkshop: true },
+    ])
+    expect((await gate(SPEAKER)).isEligible).toBe(false)
+    expect((await gate(TWO_DAY)).isEligible).toBe(true)
+    expect((await gate('Early Bird')).isEligible).toBe(true)
   })
 })
 
@@ -463,7 +519,7 @@ describe('losing the last granting type', () => {
       )
     no()
     expect(screen.getByRole('alert')).toHaveTextContent(
-      `It grants workshop access to “${SPEAKER}”, and to no other ticket type.`,
+      `Holders of “${SPEAKER}” will be able to sign up for workshops, and nobody else.`,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await saved()
@@ -506,7 +562,7 @@ describe('losing the last granting type', () => {
       )
     remove()
     expect(screen.getByRole('alert')).toHaveTextContent(
-      `It grants workshop access to “${SPEAKER}”, and to no other ticket type.`,
+      `Holders of “${SPEAKER}” will be able to sign up for workshops, and nobody else.`,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await saved()
@@ -591,7 +647,7 @@ describe('a provider that lists no ticket types', () => {
 
     expect(
       screen.getByText(
-        'Checkin.no lists no ticket types for this event, so there is nothing to mark here. The saved list still decides who can sign up.',
+        'Checkin.no lists no ticket types for this event, so there is nothing to set here. Who can sign up has not changed.',
       ),
     ).toBeVisible()
     expect(screen.queryAllByRole('button')).toHaveLength(0)
@@ -665,10 +721,27 @@ describe('a failure while the section loads', () => {
 
     await openSection()
 
+    // It does not blame the ticketing provider for what may be our own fault.
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The ticket types could not be read from Checkin.no.',
+      'This list could not be loaded.It cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
     )
     expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+
+  it('lets a signal of the framework through from the ticket-type read too', async () => {
+    // That read has a catch of its own (a failed read names the provider), so
+    // it needs its own way out for a signal.
+    let signal: unknown
+    try {
+      notFound()
+    } catch (error) {
+      signal = error
+    }
+    seed([], signal as Error)
+
+    await expect(
+      LoadedWorkshopTickets({ conference: CONFERENCE }),
+    ).rejects.toBe(signal)
   })
 
   it('lets a signal of the framework through', async () => {

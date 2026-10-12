@@ -25,19 +25,25 @@ describe('a conference that has marked nothing', () => {
         typeName: 'Early Bird',
         access: 'denied',
         lastGranting: false,
+        builtInGrants: false,
         builtInGrantedOthers: [SPEAKER, TWO_DAY],
+        builtInGrantedOthersSetToNo: [],
       },
       {
         typeName: SPEAKER,
         access: 'granted',
         lastGranting: false,
+        builtInGrants: true,
         builtInGrantedOthers: [TWO_DAY],
+        builtInGrantedOthersSetToNo: [],
       },
       {
         typeName: TWO_DAY,
         access: 'granted',
         lastGranting: false,
+        builtInGrants: true,
         builtInGrantedOthers: [SPEAKER],
+        builtInGrantedOthersSetToNo: [],
       },
     ])
     expect(list.orphaned).toEqual([])
@@ -78,8 +84,53 @@ describe('a conference that has marked nothing', () => {
         access: 'granted',
         stored: false,
         lastGranting: false,
+        builtInGrants: true,
         builtInGrantedOthers: [],
+        builtInGrantedOthersSetToNo: [],
       },
+    ])
+  })
+
+  /**
+   * A CARRY-OVER NEVER OVERWRITES A STORED NO. While nothing is set to grant,
+   * the built-in list overrules a stored no, so a type can be both "granted
+   * today" and "answered no". The carry-over writes `true` for the types it
+   * names: it names the granted types with no stored no, and the ones with a
+   * stored no are listed apart, so the question can say they are blocked.
+   */
+  it('keeps a type with a stored no out of the carry-over, and names it apart', () => {
+    const list = buildWorkshopTicketList(
+      ['Early Bird', SPEAKER, TWO_DAY, 'Sponsor discount (workshop upgrade)'],
+      [
+        { typeName: 'speaker ticket ', grantsWorkshop: false },
+        { typeName: 'Early Bird', grantsWorkshop: false },
+      ],
+    )
+
+    expect(list.configured).toBe(false)
+    expect(
+      list.types.map((t) => [
+        t.typeName,
+        t.access,
+        t.builtInGrantedOthers,
+        t.builtInGrantedOthersSetToNo,
+      ]),
+    ).toEqual([
+      [
+        'Early Bird',
+        'denied',
+        [TWO_DAY, 'Sponsor discount (workshop upgrade)'],
+        [SPEAKER],
+      ],
+      // Its own stored no is not "another type's".
+      [
+        SPEAKER,
+        'granted',
+        [TWO_DAY, 'Sponsor discount (workshop upgrade)'],
+        [],
+      ],
+      [TWO_DAY, 'granted', ['Sponsor discount (workshop upgrade)'], [SPEAKER]],
+      ['Sponsor discount (workshop upgrade)', 'granted', [TWO_DAY], [SPEAKER]],
     ])
   })
 
@@ -147,14 +198,18 @@ describe('a conference that has marked a type', () => {
         access: 'granted',
         stored: true,
         lastGranting: false,
+        builtInGrants: false,
         builtInGrantedOthers: [],
+        builtInGrantedOthersSetToNo: [],
       },
       {
         typeName: 'Conference only',
         access: 'denied',
         stored: false,
         lastGranting: false,
+        builtInGrants: false,
         builtInGrantedOthers: [],
+        builtInGrantedOthersSetToNo: [],
       },
       // An entry with only a seating answer, and a type with no entry at all:
       // both not set.
@@ -162,13 +217,17 @@ describe('a conference that has marked a type', () => {
         typeName: 'Seating only',
         access: 'unclassified',
         lastGranting: false,
+        builtInGrants: false,
         builtInGrantedOthers: [],
+        builtInGrantedOthersSetToNo: [],
       },
       {
         typeName: 'New type',
         access: 'unclassified',
         lastGranting: false,
+        builtInGrants: false,
         builtInGrantedOthers: [],
+        builtInGrantedOthersSetToNo: [],
       },
       // The built-in list is off: its name no longer grants, and there is
       // nothing left to carry over.
@@ -176,7 +235,9 @@ describe('a conference that has marked a type', () => {
         typeName: SPEAKER,
         access: 'unclassified',
         lastGranting: false,
+        builtInGrants: true,
         builtInGrantedOthers: [],
+        builtInGrantedOthersSetToNo: [],
       },
     ])
     // ...but it is still what comes back if the last marked type goes.

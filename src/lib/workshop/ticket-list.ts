@@ -28,12 +28,22 @@ export interface WorkshopTicketType {
    * no granting entry, which brings the built-in list back.
    */
   lastGranting: boolean
+  /** The built-in list grants this type, whatever is marked. */
+  builtInGrants: boolean
   /**
-   * While nothing is marked: the OTHER types the built-in list grants, which
-   * stop granting when this type is the first one marked. One spelling per
+   * While nothing is marked: the OTHER types the built-in list grants and
+   * nobody has answered no for. They stop granting when this type is the first
+   * one marked, and a carry-over marks them in the same save. One spelling per
    * type, and never this type's own. Empty once a type is marked.
    */
   builtInGrantedOthers: string[]
+  /**
+   * While nothing is marked: the OTHER types the built-in list grants although
+   * somebody answered no for them (the list overrules a no until a type is
+   * marked). The first mark makes that no take effect. Never carried over: a
+   * carry-over must not overwrite a stored answer.
+   */
+  builtInGrantedOthersSetToNo: string[]
 }
 
 /** A stored workshop answer whose `typeName` matches no provider type. */
@@ -88,6 +98,16 @@ export function buildWorkshopTicketList(
   for (const name of builtInGranted) {
     if (!builtInOnce.has(typeKey(name))) builtInOnce.set(typeKey(name), name)
   }
+  /** The other built-in-granted types, with or without a stored no. */
+  const builtInOthers = (key: string, setToNo: boolean) =>
+    configured
+      ? []
+      : [...builtInOnce].flatMap(([other, name]) =>
+          other !== key &&
+          (answers.get(other)?.grantsWorkshop === false) === setToNo
+            ? [name]
+            : [],
+        )
 
   return {
     configured,
@@ -99,11 +119,9 @@ export function buildWorkshopTicketList(
         access: workshopAccessOf(typeName, roles),
         ...(typeof stored === 'boolean' && { stored }),
         lastGranting: lastGranting(typeName),
-        builtInGrantedOthers: configured
-          ? []
-          : [...builtInOnce].flatMap(([other, name]) =>
-              other === key ? [] : [name],
-            ),
+        builtInGrants: builtInOnce.has(key),
+        builtInGrantedOthers: builtInOthers(key, false),
+        builtInGrantedOthersSetToNo: builtInOthers(key, true),
       }
     }),
     builtInGranted,

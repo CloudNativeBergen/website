@@ -245,13 +245,13 @@ export const WorkshopOnBridge: Story = {
       canvas.getByRole('button', { name: /^Grants workshop access/ }),
     )
     await expect(
-      canvas.getByText(/first ticket type marked at this conference/),
+      canvas.getByText(/first ticket type set to grant access/),
     ).toBeVisible()
     // The carry-over is the FIRST option offered, the lossy one is second.
     const options = canvas.getAllByRole('button', {
-      name: /Mark this type and keep|Only this type/,
+      name: /^Grant “Conference Pass”/,
     })
-    await expect(options[0]).toHaveTextContent('Mark this type and keep')
+    await expect(options[0]).toHaveTextContent('Grant “Conference Pass”, keep')
   },
 }
 

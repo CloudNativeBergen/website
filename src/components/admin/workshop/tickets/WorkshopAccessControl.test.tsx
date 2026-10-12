@@ -65,6 +65,7 @@ function props({
   stored,
   builtInGrantsThis = false,
   others = [],
+  setToNo = [],
   lastGranting = false,
   builtInGranted = [],
 }: {
@@ -73,6 +74,8 @@ function props({
   stored?: boolean
   builtInGrantsThis?: boolean
   others?: string[]
+  /** Other types the built-in list lets in although they hold a stored No. */
+  setToNo?: string[]
   lastGranting?: boolean
   builtInGranted?: string[]
 }): WorkshopAccessControlProps {
@@ -90,7 +93,9 @@ function props({
           : 'denied',
       ...(stored !== undefined && { stored }),
       lastGranting,
+      builtInGrants: builtInGrantsThis,
       builtInGrantedOthers: others,
+      builtInGrantedOthersSetToNo: setToNo,
     },
     configured,
     builtInGranted,
@@ -134,11 +139,9 @@ describe('a conference still on the built-in list', () => {
 
     expect(h.mutate).not.toHaveBeenCalled()
     expect(
-      screen.getByText(/first ticket type marked at this conference/),
+      screen.getByText(/first ticket type set to grant access/),
     ).toBeInTheDocument()
-    expect(screen.getByText(/will stop unless marked/)).toHaveTextContent(
-      TWO_DAY,
-    )
+    expect(screen.getByText(/are blocked unless/)).toHaveTextContent(TWO_DAY)
   })
 
   it('carries the currently-granting types over in ONE mutation', () => {
@@ -147,7 +150,9 @@ describe('a conference still on the built-in list', () => {
     fireEvent.click(
       screen.getByRole('button', { name: /^Grants workshop access/ }),
     )
-    fireEvent.click(screen.getByRole('button', { name: /^Mark this type/ }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grant “Speaker ticket”, keep/ }),
+    )
 
     expect(h.mutate).toHaveBeenCalledTimes(1)
     expect(h.mutate).toHaveBeenCalledWith({
@@ -166,7 +171,9 @@ describe('a conference still on the built-in list', () => {
     fireEvent.click(
       screen.getByRole('button', { name: /^Grants workshop access/ }),
     )
-    const only = screen.getByRole('button', { name: /^Only this type/ })
+    const only = screen.getByRole('button', {
+      name: /^Grant “Speaker ticket” only/,
+    })
     expect(only).toHaveTextContent(TWO_DAY)
     fireEvent.click(only)
 
@@ -185,7 +192,7 @@ describe('a conference still on the built-in list', () => {
 
     expect(h.mutate).not.toHaveBeenCalled()
     expect(
-      screen.queryByText(/first ticket type marked/),
+      screen.queryByText(/first ticket type set to grant access/),
     ).not.toBeInTheDocument()
   })
 
@@ -200,7 +207,9 @@ describe('a conference still on the built-in list', () => {
     fireEvent.click(screen.getByRole('button', { name: /^No workshop access/ }))
     expect(h.mutate).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: /^Deny this type/ }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Block “Speaker ticket”, keep/ }),
+    )
     expect(h.mutate).toHaveBeenCalledWith({
       updates: [
         { typeName: SPEAKER, grantsWorkshop: false },
@@ -345,10 +354,10 @@ describe('a conference that has declared workshop access', () => {
       expect(h.mutate).not.toHaveBeenCalled()
       const question = screen.getByRole('alert')
       expect(question).toHaveTextContent(
-        'This leaves no ticket type that grants workshop access.',
+        'This leaves no ticket type set to grant access.',
       )
       expect(question).toHaveTextContent(
-        `The built-in list will decide again. It grants workshop access to “${SPEAKER}” and “${TWO_DAY}”, and to no other ticket type.`,
+        `The built-in list will decide again. Holders of “${SPEAKER}” and “${TWO_DAY}” will be able to sign up for workshops, and nobody else.`,
       )
     })
 
@@ -463,7 +472,7 @@ describe('a no while nothing is marked', () => {
 
     expect(h.mutate).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toHaveTextContent(
-      `A no on its own changes nothing.No ticket type is marked, so the built-in list keeps deciding, and on it “${SPEAKER}” still grants access. To revoke it, mark “${TWO_DAY}” in the same save: that switches the built-in list off.`,
+      `This No won’t block “${SPEAKER}” yet.Until a ticket type is set to grant access, the built-in list decides, and it lets “${SPEAKER}” holders sign up. Set “${TWO_DAY}” to grant access in the same save and the No takes effect.`,
     )
     // Nothing on screen claims a type loses access or that the list goes off
     // by itself.
@@ -472,8 +481,8 @@ describe('a no while nothing is marked', () => {
     ).toEqual([
       'Grants workshop access',
       'No workshop access',
-      `Deny this type and keep “${TWO_DAY}”`,
-      'Save anyway: nothing changes yet',
+      `Block “${SPEAKER}”, keep “${TWO_DAY}”`,
+      'Save the No, block nothing yet',
       'Cancel',
     ])
   })
@@ -483,7 +492,7 @@ describe('a no while nothing is marked', () => {
 
     no()
     fireEvent.click(
-      screen.getByRole('button', { name: 'Save anyway: nothing changes yet' }),
+      screen.getByRole('button', { name: 'Save the No, block nothing yet' }),
     )
     expect(h.mutate.mock.calls).toEqual([
       [{ updates: [{ typeName: SPEAKER, grantsWorkshop: false }] }],
@@ -495,7 +504,7 @@ describe('a no while nothing is marked', () => {
         {
           type: 'success',
           title: 'Workshop access saved',
-          message: `“${SPEAKER}” is saved as no workshop access. No ticket type is marked, so the built-in list decides who can sign up.`,
+          message: `Saved, but “${SPEAKER}” holders can still sign up until a ticket type is set to grant access.`,
         },
       ],
     ])
@@ -505,7 +514,9 @@ describe('a no while nothing is marked', () => {
     render(<WorkshopAccessControl {...onBuiltInList} />)
 
     no()
-    fireEvent.click(screen.getByRole('button', { name: /^Deny this type/ }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Block “Speaker ticket”, keep/ }),
+    )
     act(() => h.options.onSuccess!())
 
     expect(h.notify.mock.calls[0][0].message).toBe(
@@ -513,28 +524,87 @@ describe('a no while nothing is marked', () => {
     )
   })
 
-  it('says the built-in list decides again after the last mark is taken away', () => {
+  /**
+   * The last type set to grant access is answered No. The built-in list
+   * decides again, so what the organizer is told depends on whether that list
+   * lets this type in: said by the server (`builtInGrants`), not guessed.
+   */
+  it.each([
+    [
+      true,
+      `Saved, but “${TWO_DAY}” holders can still sign up until a ticket type is set to grant access.`,
+    ],
+    [
+      false,
+      'Saved. No ticket type is set to grant access, so the built-in list decides who can sign up.',
+    ],
+  ])(
+    'after the last grant is taken away (built-in list lets the type in: %s)',
+    (builtInGrantsThis, message) => {
+      render(
+        <WorkshopAccessControl
+          {...props({
+            typeName: TWO_DAY,
+            configured: true,
+            stored: true,
+            lastGranting: true,
+            builtInGrantsThis,
+            builtInGranted: builtInGrantsThis ? [TWO_DAY] : [],
+          })}
+        />,
+      )
+
+      no()
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Save and use the built-in list' }),
+      )
+      act(() => h.options.onSuccess!())
+
+      expect(h.notify.mock.calls[0][0].message).toBe(message)
+    },
+  )
+
+  it('says the same of a No for a type the built-in list does not let in', () => {
+    render(
+      <WorkshopAccessControl
+        {...props({ typeName: 'Early Bird', configured: false })}
+      />,
+    )
+
+    // Nothing to overrule, so nothing to ask.
+    no()
+    expect(screen.queryAllByRole('alert')).toEqual([])
+    act(() => h.options.onSuccess!())
+
+    expect(h.notify.mock.calls[0][0].message).toBe(
+      'Saved. No ticket type is set to grant access, so the built-in list decides who can sign up.',
+    )
+  })
+
+  it('has no carry-over to offer when no other type is let in', () => {
     render(
       <WorkshopAccessControl
         {...props({
-          typeName: TWO_DAY,
-          configured: true,
-          stored: true,
-          lastGranting: true,
-          builtInGranted: [TWO_DAY],
+          typeName: SPEAKER,
+          configured: false,
+          builtInGrantsThis: true,
         })}
       />,
     )
 
     no()
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Save and use the built-in list' }),
-    )
-    act(() => h.options.onSuccess!())
 
-    expect(h.notify.mock.calls[0][0].message).toBe(
-      `“${TWO_DAY}” is saved as no workshop access. No ticket type is marked, so the built-in list decides who can sign up.`,
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `This No won’t block “${SPEAKER}” yet.Until a ticket type is set to grant access, the built-in list decides, and it lets “${SPEAKER}” holders sign up. The No takes effect once a ticket type is set to grant access.`,
     )
+    expect(
+      screen.getAllByRole('button').map((button) => button.textContent),
+    ).toEqual([
+      'Grants workshop access',
+      'No workshop access',
+      'Save the No, block nothing yet',
+      'Cancel',
+    ])
   })
 
   it('says a marked type grants', () => {
@@ -571,6 +641,42 @@ describe('while a save is on its way', () => {
     act(() => h.options.onSuccess!())
 
     expect(h.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * THE WRITE HAS LANDED, THE PAGE HAS NOT. Between the two the row still
+   * shows the answers of the old page, and a click would be decided from
+   * them. The refresh is held open here (the router's refresh returns a
+   * promise this case settles), so the row is exercised in exactly that
+   * window.
+   */
+  it('stays unavailable until the refreshed page is in', async () => {
+    let pageIsIn!: () => void
+    h.refresh.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        pageIsIn = resolve
+      }),
+    )
+    render(<WorkshopAccessControl {...row} />)
+    const group = () => screen.getByRole('group', { name: UPGRADE })
+    const unavailable = () =>
+      screen.getAllByRole('button').map((b) => b.getAttribute('aria-disabled'))
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grants workshop access/ }),
+    )
+    expect(h.mutate).toHaveBeenCalledTimes(1)
+    await act(async () => h.options.onSuccess!())
+
+    expect(group()).toHaveAccessibleDescription('Saving…')
+    expect(unavailable()).toEqual(['true', 'true'])
+    fireEvent.click(screen.getByRole('button', { name: /^No workshop access/ }))
+    expect(h.mutate).toHaveBeenCalledTimes(1)
+
+    await act(async () => pageIsIn())
+
+    expect(unavailable()).toEqual(['false', 'false'])
+    expect(group()).toHaveAccessibleDescription('No workshop access')
   })
 
   it('shows the row as saving and takes no second answer', () => {
@@ -649,5 +755,70 @@ describe('focus around a question', () => {
 
     expect(h.mutate).toHaveBeenCalledTimes(1)
     expect(opener()).toHaveFocus()
+  })
+})
+
+/**
+ * A CARRY-OVER NEVER OVERWRITES A STORED NO (#1332 review). While nothing is
+ * set to grant access the built-in list overrules a stored No, so a type can
+ * be let in today and hold a No. The server lists such types apart; the
+ * carry-over names and writes only the others, and the question says what
+ * becomes of the ones with a No.
+ */
+describe('another type that holds a stored No', () => {
+  const first = props({
+    typeName: 'Early Bird',
+    configured: false,
+    others: [TWO_DAY],
+    setToNo: [SPEAKER],
+  })
+
+  it('is not kept by the carry-over, and the question says it is blocked', () => {
+    render(<WorkshopAccessControl {...first} />)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grants workshop access/ }),
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `This is the first ticket type set to grant access.Saving it switches the built-in list off. Holders of “${TWO_DAY}” sign up through that list today, and are blocked unless that type is set to grant access in the same save. “${SPEAKER}” is already set to No: its holders are blocked too when the built-in list goes off.`,
+    )
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Grant “Early Bird”, keep “${TWO_DAY}”`,
+      }),
+    )
+
+    // "Speaker ticket" is not written: its stored No stands.
+    expect(h.mutate.mock.calls).toEqual([
+      [
+        {
+          updates: [
+            { typeName: 'Early Bird', grantsWorkshop: true },
+            { typeName: TWO_DAY, grantsWorkshop: true },
+          ],
+        },
+      ],
+    ])
+  })
+
+  it('is named in the question for a No as well', () => {
+    render(
+      <WorkshopAccessControl
+        {...props({
+          typeName: TWO_DAY,
+          configured: false,
+          builtInGrantsThis: true,
+          others: [UPGRADE],
+          setToNo: [SPEAKER, 'Early Bird'],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /^No workshop access/ }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `Set “${UPGRADE}” to grant access in the same save and the No takes effect. “${SPEAKER}” and “Early Bird” are already set to No: their holders are blocked too when the built-in list goes off.`,
+    )
   })
 })

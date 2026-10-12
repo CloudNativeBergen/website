@@ -46,8 +46,8 @@ export function WorkshopTickets({ conference }: { conference: Conference }) {
  * the workshops, the sign-ups and the registration settings down with it. And
  * one can: resolving the ticketing provider throws when the per-organization
  * credential lookup refuses to guess (`TenantEnvSlugUnavailableError`). So
- * anything that goes wrong becomes the unreadable state, which offers no
- * switch.
+ * anything that goes wrong becomes the could-not-be-loaded state, which offers
+ * no switch and blames nobody: the cause may be ours.
  */
 export async function LoadedWorkshopTickets({
   conference,
@@ -67,6 +67,7 @@ export async function LoadedWorkshopTickets({
         providerLabel={ticketingProviderLabel(
           conferenceProviderType(conference),
         )}
+        causeUnknown
       />
     )
   }

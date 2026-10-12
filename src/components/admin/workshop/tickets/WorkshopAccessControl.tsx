@@ -37,9 +37,11 @@ import { useSaveWorkshopAccess } from './useSaveWorkshopAccess'
  *     the save unless it carries the confirmation, so a stale page cannot skip
  *     the question.
  *
- * And one trap: A NO WHILE NOTHING IS MARKED CHANGES NOTHING. Only a mark
- * takes a conference off the built-in list, so a no for a type that list
- * grants leaves it granting. That click is confirmed as well, and says so.
+ * And one trap: A NO WHILE NOTHING IS SET TO GRANT BLOCKS NOBODY. Only a type
+ * set to grant access takes a conference off the built-in list, so a No for a
+ * type that list lets in leaves its holders signing up. That click is
+ * confirmed as well, and says so. A carry-over never names a type that holds a
+ * stored No: it would overwrite it.
  *
  * Recovery needs no Studio either: every type stays toggleable afterwards.
  *
@@ -71,9 +73,23 @@ export function WorkshopAccessControl({
   builtInGranted,
   row = false,
 }: WorkshopAccessControlProps) {
-  const { typeName, lastGranting, builtInGrantedOthers: others } = type
-  /** While nothing is marked: the built-in list grants this type. */
-  const builtInGrantsThis = !configured && type.access === 'granted'
+  const {
+    typeName,
+    lastGranting,
+    builtInGrantedOthers: others,
+    builtInGrantedOthersSetToNo: setToNo,
+  } = type
+  /** While nothing is set to grant: the built-in list lets this type in. */
+  const builtInGrantsThis = !configured && type.builtInGrants
+  /**
+   * Other types the built-in list lets in although they hold a stored No. A
+   * carry-over never names them (it would overwrite the No), so the question
+   * says what becomes of them.
+   */
+  const alsoBlocked =
+    setToNo.length > 0
+      ? ` ${quoteNames(setToNo)} ${setToNo.length === 1 ? 'is' : 'are'} already set to No: ${setToNo.length === 1 ? 'its' : 'their'} holders are blocked too when the built-in list goes off.`
+      : ''
 
   const [answer, setAnswer] = useState(type.stored)
   /** The pending answer while a cliff is being confirmed. */
@@ -132,9 +148,13 @@ export function WorkshopAccessControl({
     setAnswer(grants)
 
     const carried = carryOthers ? others.length : 0
-    // WHAT THE SAVE DOES, not what was clicked. Nothing is marked after a no
-    // that carries no mark with it, unless another type already grants: the
-    // built-in list then decides, whatever this type's stored answer says.
+    const keeps =
+      carried > 0
+        ? ` ${carried} other ticket ${carried === 1 ? 'type keeps' : 'types keep'} it.`
+        : ''
+    // WHAT THE SAVE DOES, not what was clicked. After a No that sets no type
+    // to grant access, and with no other type granting, the built-in list
+    // decides, whatever this type's stored answer says.
     const builtInListDecides =
       !grants && carried === 0 && (!configured || lastGranting)
     save(
@@ -151,13 +171,11 @@ export function WorkshopAccessControl({
       },
       {
         title: 'Workshop access saved',
-        message: builtInListDecides
-          ? `“${typeName}” is saved as no workshop access. No ticket type is marked, so the built-in list decides who can sign up.`
-          : `“${typeName}” ${grants ? 'now grants' : 'no longer grants'} workshop access.${
-              carried > 0
-                ? ` ${carried} other ticket ${carried === 1 ? 'type keeps' : 'types keep'} it.`
-                : ''
-            }`,
+        message: !builtInListDecides
+          ? `“${typeName}” ${grants ? 'now grants' : 'no longer grants'} workshop access.${keeps}`
+          : type.builtInGrants
+            ? `Saved, but “${typeName}” holders can still sign up until a ticket type is set to grant access.`
+            : 'Saved. No ticket type is set to grant access, so the built-in list decides who can sign up.',
       },
     )
   }
@@ -213,26 +231,18 @@ export function WorkshopAccessControl({
       >
         <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
           {confirming
-            ? 'This is the first ticket type marked at this conference.'
-            : 'A no on its own changes nothing.'}
+            ? 'This is the first ticket type set to grant access.'
+            : `This No won’t block “${typeName}” yet.`}
         </p>
         <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
-          {confirming ? (
-            <>
-              Saving it switches the built-in list off. {quoteNames(others)}{' '}
-              currently {others.length === 1 ? 'grants' : 'grant'} workshop
-              access through that list and will stop unless marked in the same
-              save.
-            </>
-          ) : (
-            <>
-              No ticket type is marked, so the built-in list keeps deciding, and
-              on it “{typeName}” still grants access.{' '}
-              {others.length > 0
-                ? `To revoke it, mark ${quoteNames(others)} in the same save: that switches the built-in list off.`
-                : 'To revoke it, first mark a type that should grant access.'}
-            </>
-          )}
+          {confirming
+            ? `Saving it switches the built-in list off. Holders of ${quoteNames(others)} sign up through that list today, and are blocked unless ${others.length === 1 ? 'that type is' : 'those types are'} set to grant access in the same save.`
+            : `Until a ticket type is set to grant access, the built-in list decides, and it lets “${typeName}” holders sign up. ${
+                others.length > 0
+                  ? `Set ${quoteNames(others)} to grant access in the same save and the No takes effect.`
+                  : 'The No takes effect once a ticket type is set to grant access.'
+              }`}
+          {alsoBlocked}
         </p>
 
         <div className="mt-2 flex flex-wrap gap-2">
@@ -243,8 +253,8 @@ export function WorkshopAccessControl({
               className="min-h-11 flex-1 basis-40 rounded-md bg-blue-600 px-3 py-2 text-left text-sm font-medium text-white hover:bg-blue-500 sm:max-w-80"
             >
               {confirming
-                ? `Mark this type and keep ${quoteNames(others)}`
-                : `Deny this type and keep ${quoteNames(others)}`}
+                ? `Grant “${typeName}”, keep ${quoteNames(others)}`
+                : `Block “${typeName}”, keep ${quoteNames(others)}`}
             </button>
           )}
           <button
@@ -253,8 +263,8 @@ export function WorkshopAccessControl({
             className="min-h-11 flex-1 basis-40 rounded-md bg-white px-3 py-2 text-left text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 sm:max-w-80 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
           >
             {confirming
-              ? `Only this type: ${quoteNames(others)} ${others.length === 1 ? 'loses' : 'lose'} workshop access`
-              : 'Save anyway: nothing changes yet'}
+              ? `Grant “${typeName}” only, block ${quoteNames(others)}`
+              : 'Save the No, block nothing yet'}
           </button>
           <button
             type="button"
@@ -335,15 +345,15 @@ export function WorkshopAccessControl({
             </>
           ) : (
             <>
-              This conference marks workshop access per ticket type, and nobody
+              This conference sets workshop access per ticket type, and nobody
               has answered for this one, so its holders are told to contact an
               organizer rather than being let in or turned away.
             </>
           )
         ) : (
           <>
-            No ticket type is marked for workshop access here, so access still
-            comes from the built-in list of type names. On that list, this type{' '}
+            No ticket type is set to grant access here, so the built-in list
+            decides. On that list, this type{' '}
             <span className="font-medium text-gray-900 dark:text-white">
               {builtInGrantsThis ? 'grants access' : 'grants no access'}
             </span>
@@ -355,9 +365,9 @@ export function WorkshopAccessControl({
       {/* THE CLIFF, named before any click can reach it. */}
       {others.length > 0 && (
         <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
-          The built-in list also grants access to {quoteNames(others)}. Marking
-          any type here switches that list off, and those types stop granting
-          access unless they are marked too.
+          The built-in list also grants access to {quoteNames(others)}. Setting
+          any type to grant access switches that list off, and those types stop
+          granting access unless they are set to grant access too.
         </p>
       )}
 

@@ -121,7 +121,7 @@ export const NotConfigured: Story = {
       }),
     )
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      'This is the first ticket type marked at this conference.',
+      'This is the first ticket type set to grant access.',
     )
   },
 }
@@ -144,9 +144,8 @@ export const NotConfiguredMobileDark: Story = {
 }
 
 /**
- * A NO WHILE NOTHING IS MARKED changes nothing: only a mark takes a
- * conference off the built-in list. The question says so, and offers the save
- * that does revoke access.
+ * A NO WHILE NO TYPE IS SET TO GRANT ACCESS blocks nobody: the built-in list
+ * keeps deciding. The question says so, and offers the save that does block.
  */
 export const LoneNo: Story = {
   args: NotConfigured.args,
@@ -158,8 +157,37 @@ export const LoneNo: Story = {
       }),
     )
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      'A no on its own changes nothing.No ticket type is marked, so the built-in list keeps deciding, and on it “Speaker ticket” still grants access. To revoke it, mark “Workshop + Conference (2 days)” in the same save: that switches the built-in list off.',
+      'This No won’t block “Speaker ticket” yet.Until a ticket type is set to grant access, the built-in list decides, and it lets “Speaker ticket” holders sign up. Set “Workshop + Conference (2 days)” to grant access in the same save and the No takes effect.',
     )
+  },
+}
+/**
+ * A STORED NO IS NEVER OVERWRITTEN. "Speaker ticket" was answered No while the
+ * built-in list still let it in. Setting the first type to grant access offers
+ * to keep the other type the list lets in, not that one, and says its holders
+ * are blocked.
+ */
+export const FirstGrantWithStoredNo: Story = {
+  args: {
+    list: buildWorkshopTicketList(TYPES, [
+      { typeName: SPEAKER, grantsWorkshop: false },
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Grants workshop access — "Early Bird"',
+      }),
+    )
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      '“Speaker ticket” is already set to No: its holders are blocked too when the built-in list goes off.',
+    )
+    await expect(
+      canvas.getByRole('button', {
+        name: 'Grant “Early Bird”, keep “Workshop + Conference (2 days)”',
+      }),
+    ).toBeVisible()
   },
 }
 export const LoneNoMobileDark: Story = {
@@ -232,7 +260,7 @@ export const LastGrantingType: Story = {
       }),
     )
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      'It grants workshop access to “Workshop + Conference (2 days)” and “Speaker ticket”, and to no other ticket type.',
+      'Holders of “Workshop + Conference (2 days)” and “Speaker ticket” will be able to sign up for workshops, and nobody else.',
     )
   },
 }
@@ -350,7 +378,7 @@ export const OrphanedLastGranting: Story = {
       }),
     )
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      'This leaves no ticket type that grants workshop access.',
+      'This leaves no ticket type set to grant access.',
     )
     await expect(
       canvas.getByRole('button', { name: 'Remove and use the built-in list' }),
@@ -441,6 +469,14 @@ export const TicketingNotConnectedMobileDark: Story = {
 }
 
 /** An operator switched ticketing off: nothing to fix in settings, so no link. */
+/**
+ * THE LIST COULD NOT BE LOADED, and it was not the provider's read that
+ * failed. The section names no cause.
+ */
+export const CouldNotBeLoaded: Story = {
+  args: { list: null, causeUnknown: true },
+}
+
 export const TicketingTurnedOff: Story = {
   render: () => (
     <WorkshopTicketsNotReady state="disabled" providerLabel="Checkin.no" />

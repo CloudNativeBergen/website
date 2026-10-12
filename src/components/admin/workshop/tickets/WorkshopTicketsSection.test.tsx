@@ -86,7 +86,7 @@ describe('a list nobody has configured', () => {
     expect(
       screen.getByText('This list is not configured yet.').parentElement,
     ).toHaveTextContent(
-      `No ticket type is marked, so the built-in list decides. Holders of “${SPEAKER}” and “${TWO_DAY}” can sign up for workshops, and nobody else can. Marking a type switches the built-in list off.`,
+      `No ticket type is set to grant access, so the built-in list decides. Holders of “${SPEAKER}” and “${TWO_DAY}” can sign up for workshops, and nobody else can. Setting a type to grant access switches the built-in list off.`,
     )
     // Each type shows what the built-in list decides for it.
     expect(answer(SPEAKER)).toBe('Grants workshop access (built-in list)')
@@ -101,7 +101,7 @@ describe('a list nobody has configured', () => {
     expect(
       screen.getByText('This list is not configured yet.').parentElement,
     ).toHaveTextContent(
-      'It matches none of this conference’s ticket types, so nobody can sign up for workshops until you mark a type.',
+      'This list is not configured yet.No ticket type is set to grant access, so the built-in list decides. It matches none of this conference’s ticket types, so nobody can sign up for workshops until a type is set to grant access.',
     )
   })
 
@@ -116,10 +116,12 @@ describe('a list nobody has configured', () => {
 
     expect(h.mutate).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toHaveTextContent(
-      `This is the first ticket type marked at this conference.Saving it switches the built-in list off. “${SPEAKER}” and “${TWO_DAY}” currently grant workshop access through that list and will stop unless marked in the same save.`,
+      `This is the first ticket type set to grant access.Saving it switches the built-in list off. Holders of “${SPEAKER}” and “${TWO_DAY}” sign up through that list today, and are blocked unless those types are set to grant access in the same save.`,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /^Mark this type/ }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grant “Early Bird”, keep/ }),
+    )
 
     expect(h.mutate.mock.calls).toEqual([
       [
@@ -142,7 +144,9 @@ describe('a list nobody has configured', () => {
         name: /^Grants workshop access/,
       }),
     )
-    fireEvent.click(screen.getByRole('button', { name: /^Only this type/ }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grant “Early Bird” only/ }),
+    )
 
     expect(h.mutate.mock.calls).toEqual([
       [{ updates: [{ typeName: 'Early Bird', grantsWorkshop: true }] }],
@@ -244,7 +248,7 @@ describe('a configured list', () => {
 
     expect(h.mutate).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toHaveTextContent(
-      `The built-in list will decide again. It grants workshop access to “${SPEAKER}”, and to no other ticket type.`,
+      `The built-in list will decide again. Holders of “${SPEAKER}” will be able to sign up for workshops, and nobody else.`,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -299,6 +303,28 @@ describe('an entry no ticket type matches', () => {
     expect(h.mutate).not.toHaveBeenCalled()
   })
 
+  it('moves focus to the section heading when its row leaves the page', () => {
+    const { rerender } = section(['Two-day pass'], roles)
+    const button = screen.getByRole('button', {
+      name: 'Remove the entry for "Workshop 2025"',
+    })
+    button.focus()
+    fireEvent.click(button)
+    expect(button).toHaveFocus()
+
+    // The page refreshes with the entry gone.
+    rerender(
+      <WorkshopTicketsSection
+        list={buildWorkshopTicketList(['Two-day pass'], roles.slice(0, 1))}
+        providerLabel="Checkin.no"
+      />,
+    )
+
+    expect(
+      screen.getByRole('heading', { name: 'Workshop tickets' }),
+    ).toHaveFocus()
+  })
+
   describe('that is the last one granting', () => {
     const last = [
       { typeName: 'Workshop 2025', grantsWorkshop: true },
@@ -312,7 +338,7 @@ describe('an entry no ticket type matches', () => {
 
       expect(h.mutate).not.toHaveBeenCalled()
       expect(screen.getByRole('alert')).toHaveTextContent(
-        `This leaves no ticket type that grants workshop access.The built-in list will decide again. It grants workshop access to “${SPEAKER}” and “${TWO_DAY}”, and to no other ticket type.`,
+        `This leaves no ticket type set to grant access.The built-in list will decide again. Holders of “${SPEAKER}” and “${TWO_DAY}” will be able to sign up for workshops, and nobody else.`,
       )
     })
 
@@ -360,12 +386,23 @@ describe('a provider that cannot be read', () => {
     render(<WorkshopTicketsSection list={null} providerLabel="Tito" />)
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The ticket types could not be read from Tito.The list cannot be shown or changed until they can. The saved list still decides who can sign up. Reload the page to try again.',
+      'The ticket types could not be read from Tito.It cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
     )
     expect(screen.queryAllByRole('button')).toHaveLength(0)
     // Not the empty list, and not the not-configured state either.
     expect(screen.queryByText(/lists no ticket types/)).not.toBeInTheDocument()
     expect(screen.queryByText(/not configured/i)).not.toBeInTheDocument()
+  })
+
+  it('names no cause when it was not the provider that failed', () => {
+    render(
+      <WorkshopTicketsSection list={null} providerLabel="Tito" causeUnknown />,
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This list could not be loaded.It cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
+    )
+    expect(screen.queryAllByRole('button')).toEqual([])
   })
 
   it('is told apart from a provider that lists no types', () => {
@@ -379,7 +416,7 @@ describe('a provider that cannot be read', () => {
 
     expect(
       screen.getByText(
-        'Checkin.no lists no ticket types for this event, so there is nothing to mark here. The saved list still decides who can sign up.',
+        'Checkin.no lists no ticket types for this event, so there is nothing to set here. Who can sign up has not changed.',
       ),
     ).toBeInTheDocument()
     // The read worked, so no error; and with nothing to compare the stored

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ExclamationTriangleIcon,
   TicketIcon,
@@ -15,6 +15,8 @@ import { BuiltInListConfirm } from './BuiltInListConfirm'
 import { WorkshopAccessControl } from './WorkshopAccessControl'
 import { quoteNames } from './names'
 import { useSaveWorkshopAccess } from './useSaveWorkshopAccess'
+
+const HEADING_ID = 'workshop-tickets-heading'
 
 /**
  * The card around the list: the heading, and the anchor the ticket-types page
@@ -31,14 +33,17 @@ export function WorkshopTicketsFrame({
   return (
     <section
       id={WORKSHOP_TICKETS_ANCHOR}
-      aria-labelledby="workshop-tickets-heading"
+      aria-labelledby={HEADING_ID}
       className="scroll-mt-24 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
     >
       <div className="flex flex-wrap items-center gap-2">
         <TicketIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
         <h3
-          id="workshop-tickets-heading"
-          className="text-lg font-medium text-gray-900 dark:text-white"
+          id={HEADING_ID}
+          // Focusable from code only: focus lands here when the control that
+          // held it leaves the page (a removed entry).
+          tabIndex={-1}
+          className="text-lg font-medium text-gray-900 outline-none dark:text-white"
         >
           Workshop tickets
         </h3>
@@ -56,12 +61,17 @@ export function WorkshopTicketsFrame({
 export interface WorkshopTicketsSectionProps {
   /**
    * The list, built on the server from the provider's ticket types and the
-   * stored answers. `null` when the provider could not be read: an unread list
-   * is never shown as an empty one.
+   * stored answers. `null` when it could not be loaded: an unread list is
+   * never shown as an empty one.
    */
   list: WorkshopTicketList | null
   /** The ticketing vendor's name, for copy. */
   providerLabel: string
+  /**
+   * With no list: it was NOT the vendor's ticket types that failed to read,
+   * so the section names no cause it does not know.
+   */
+  causeUnknown?: boolean
 }
 
 /**
@@ -76,6 +86,7 @@ export interface WorkshopTicketsSectionProps {
 export function WorkshopTicketsSection({
   list,
   providerLabel,
+  causeUnknown = false,
 }: WorkshopTicketsSectionProps) {
   if (!list) {
     return (
@@ -85,11 +96,13 @@ export function WorkshopTicketsSection({
           className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900"
         >
           <p className="font-medium">
-            The ticket types could not be read from {providerLabel}.
+            {causeUnknown
+              ? 'This list could not be loaded.'
+              : `The ticket types could not be read from ${providerLabel}.`}
           </p>
           <p className="mt-1">
-            The list cannot be shown or changed until they can. The saved list
-            still decides who can sign up. Reload the page to try again.
+            It cannot be shown or changed right now. Who can sign up has not
+            changed. Reload the page to try again.
           </p>
         </div>
       </WorkshopTicketsFrame>
@@ -104,7 +117,7 @@ export function WorkshopTicketsSection({
       <WorkshopTicketsFrame>
         <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
           {providerLabel} lists no ticket types for this event, so there is
-          nothing to mark here. The saved list still decides who can sign up.
+          nothing to set here. Who can sign up has not changed.
         </p>
       </WorkshopTicketsFrame>
     )
@@ -161,11 +174,10 @@ export function WorkshopTicketsSection({
         <div className="mt-4 rounded-md bg-blue-50 p-3 text-sm text-blue-900 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-200 dark:ring-blue-900">
           <p className="font-medium">This list is not configured yet.</p>
           <p className="mt-1">
-            No ticket type is marked, so the built-in list decides.{' '}
+            No ticket type is set to grant access, so the built-in list decides.{' '}
             {list.builtInGranted.length > 0
-              ? `Holders of ${quoteNames(list.builtInGranted)} can sign up for workshops, and nobody else can.`
-              : 'It matches none of this conference’s ticket types, so nobody can sign up for workshops until you mark a type.'}{' '}
-            Marking a type switches the built-in list off.
+              ? `Holders of ${quoteNames(list.builtInGranted)} can sign up for workshops, and nobody else can. Setting a type to grant access switches the built-in list off.`
+              : 'It matches none of this conference’s ticket types, so nobody can sign up for workshops until a type is set to grant access.'}
           </p>
         </div>
       )}
@@ -210,6 +222,19 @@ function OrphanedEntry({
       message: 'Failed to remove the entry.',
     },
   })
+
+  // ONCE REMOVED, THIS ROW LEAVES THE PAGE, and the focus its button holds
+  // would fall back to the top of the document. It goes to the section's
+  // heading instead. A layout effect: its cleanup runs while the button is
+  // still in the document, so it can still tell that it had focus.
+  useLayoutEffect(() => {
+    const removeButton = button.current
+    return () => {
+      if (removeButton && removeButton === document.activeElement) {
+        document.getElementById(HEADING_ID)?.focus()
+      }
+    }
+  }, [])
 
   const close = () => {
     setConfirming(false)
