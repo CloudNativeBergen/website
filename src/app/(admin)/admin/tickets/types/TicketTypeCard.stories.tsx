@@ -3,7 +3,8 @@ import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { expect, userEvent, within } from 'storybook/test'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
-import { TicketTypeCard } from './TicketTypeCard'
+import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
+import { TicketTypeCard, type TicketTypeWorkshopAccess } from './TicketTypeCard'
 import type { PublicTicketType } from '@/lib/tickets/provider/types'
 
 const paidTicket: PublicTicketType = {
@@ -39,6 +40,23 @@ const freeTicket: PublicTicketType = {
   position: 2,
 }
 
+/**
+ * The control's props for one ticket type, built the way the page builds them:
+ * from the provider's type names and the stored answers.
+ */
+function control(
+  typeName: string,
+  otherTypes: string[] = [],
+  roles: Parameters<typeof buildWorkshopTicketList>[1] = [],
+): TicketTypeWorkshopAccess {
+  const list = buildWorkshopTicketList([typeName, ...otherTypes], roles)
+  return {
+    type: list.types[0],
+    configured: list.configured,
+    builtInGranted: list.builtInGranted,
+  }
+}
+
 const meta = {
   title: 'Systems/Tickets/Admin/TicketTypeCard',
   component: TicketTypeCard,
@@ -64,7 +82,11 @@ const meta = {
       },
     },
   },
-  args: { ticket: paidTicket, publicFreeTicketIds: [] },
+  args: {
+    ticket: paidTicket,
+    publicFreeTicketIds: [],
+    workshopAccess: control(paidTicket.name),
+  },
   decorators: [
     (Story, ctx) => {
       const dark = ctx.parameters.theme === 'dark'
@@ -94,7 +116,11 @@ export const Default: Story = {}
 
 /** A free type: the #860 public opt-in appears on the bottom row. */
 export const PublicFreeType: Story = {
-  args: { ticket: freeTicket, publicFreeTicketIds: [4822] },
+  args: {
+    ticket: freeTicket,
+    publicFreeTicketIds: [4822],
+    workshopAccess: control(freeTicket.name),
+  },
 }
 
 /**
@@ -143,6 +169,7 @@ export const RoleProposed: Story = {
       name: 'Sponsor discount (workshop upgrade)',
       description: null,
     },
+    workshopAccess: control('Sponsor discount (workshop upgrade)'),
     roleProposal: {
       typeName: 'Sponsor discount (workshop upgrade)',
       admits: false,
@@ -200,12 +227,10 @@ export const RoleProposedMobileDark: Story = {
  */
 export const WorkshopOnBridge: Story = {
   args: {
-    workshopConfigured: false,
-    bridgeGrantsThisType: false,
-    bridgeGrantedOtherTypes: [
+    workshopAccess: control(paidTicket.name, [
       'Workshop + Conference (2 days)',
       'Speaker ticket',
-    ],
+    ]),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
@@ -249,7 +274,13 @@ export const WorkshopOnBridgeMobileDark: Story = {
 
 /** MARKED: the built-in list is behind this conference, and this type is settled. */
 export const WorkshopDeclared: Story = {
-  args: { workshopConfigured: true, declaredGrantsWorkshop: true },
+  args: {
+    workshopAccess: control(
+      paidTicket.name,
+      [],
+      [{ typeName: paidTicket.name, grantsWorkshop: true }],
+    ),
+  },
 }
 
 const SECTION = '/admin/workshops#workshop-tickets'
@@ -261,8 +292,11 @@ const SECTION = '/admin/workshops#workshop-tickets'
  */
 export const WorkshopBadge: Story = {
   args: {
-    workshopConfigured: true,
-    workshopList: { href: SECTION, access: 'granted' },
+    workshopAccess: {
+      sectionHref: SECTION,
+      access: 'granted',
+      configured: true,
+    },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
@@ -279,24 +313,33 @@ export const WorkshopBadge: Story = {
 
 export const WorkshopBadgeNoAccess: Story = {
   args: {
-    workshopConfigured: true,
-    workshopList: { href: SECTION, access: 'denied' },
+    workshopAccess: {
+      sectionHref: SECTION,
+      access: 'denied',
+      configured: true,
+    },
   },
 }
 
 /** Nobody answered for this type: its holders are refused until someone does. */
 export const WorkshopBadgeNotSet: Story = {
   args: {
-    workshopConfigured: true,
-    workshopList: { href: SECTION, access: 'unclassified' },
+    workshopAccess: {
+      sectionHref: SECTION,
+      access: 'unclassified',
+      configured: true,
+    },
   },
 }
 
 /** Nothing is marked yet: the answer is the built-in list's, and says so. */
 export const WorkshopBadgeBuiltInList: Story = {
   args: {
-    workshopConfigured: false,
-    workshopList: { href: SECTION, access: 'granted' },
+    workshopAccess: {
+      sectionHref: SECTION,
+      access: 'granted',
+      configured: false,
+    },
   },
 }
 
@@ -311,7 +354,11 @@ export const WorkshopBadgeMobileDark: Story = {
     const link = within(canvasElement).getByRole('link', {
       name: /Change under Workshops/,
     })
-    // The badge and the link text stay inside the card at phone width.
+    // At phone width (the runner's default is 1280, where nothing wraps)...
+    await expect(
+      canvasElement.ownerDocument.documentElement.clientWidth,
+    ).toBeLessThan(640)
+    // ...the badge and the link text stay inside the card.
     await expect(link.getBoundingClientRect().right).toBeLessThanOrEqual(
       canvasElement.getBoundingClientRect().right,
     )
@@ -324,5 +371,9 @@ export const MobileDark: Story = {
     theme: 'dark',
     backgrounds: { default: 'dark' },
   },
-  args: { ticket: freeTicket, publicFreeTicketIds: [4822] },
+  args: {
+    ticket: freeTicket,
+    publicFreeTicketIds: [4822],
+    workshopAccess: control(freeTicket.name),
+  },
 }

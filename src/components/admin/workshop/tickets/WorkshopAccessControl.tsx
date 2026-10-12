@@ -1,14 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { api } from '@/lib/trpc/client'
-import { useNotification } from '@/components/admin/NotificationProvider'
+import { useId, useRef, useState } from 'react'
 import { StatusBadge } from '@/components/StatusBadge'
-import type { WorkshopAccess } from '@/lib/tickets/classification'
+import type { WorkshopTicketType } from '@/lib/workshop/ticket-list'
 import { BuiltInListConfirm } from './BuiltInListConfirm'
 import { WorkshopAccessBadge } from './WorkshopAccessBadge'
 import { quoteNames } from './names'
+import { useSaveWorkshopAccess } from './useSaveWorkshopAccess'
 
 /**
  * Whether one ticket type lets its holder into the workshops: the organizer's
@@ -39,164 +37,164 @@ import { quoteNames } from './names'
  *     the save unless it carries the confirmation, so a stale page cannot skip
  *     the question.
  *
+ * And one trap: A NO WHILE NOTHING IS MARKED CHANGES NOTHING. Only a mark
+ * takes a conference off the built-in list, so a no for a type that list
+ * grants leaves it granting. That click is confirmed as well, and says so.
+ *
  * Recovery needs no Studio either: every type stays toggleable afterwards.
+ *
+ * Everything about the type and the list comes from the server
+ * (`buildWorkshopTicketList`): the built-in list of names never reaches the
+ * browser, and no name is matched here.
  */
 export interface WorkshopAccessControlProps {
-  /** The vendor's own type name — what gets written to `ticketTypeRoles`. */
-  typeName: string
-  /** The stored answer, when a human has already given one. */
-  declaredGrantsWorkshop?: boolean
+  /** This ticket type, as the server-built list describes it. */
+  type: WorkshopTicketType
   /** Has ANY type at this conference been marked as granting? */
-  workshopConfigured: boolean
-  /** While nothing is marked: does the built-in list grant access to THIS type? */
-  bridgeGrantsThisType?: boolean
-  /**
-   * While nothing is marked: the OTHER types the built-in list currently
-   * grants — exactly the ones that stop granting when this conference marks
-   * anything. Resolved on the server, so the list itself never reaches the
-   * browser.
-   */
-  bridgeGrantedOtherTypes?: readonly string[]
-  /**
-   * This type's answer is the only one that grants: answering no for it leaves
-   * nothing marked. Resolved on the server.
-   */
-  lastGranting?: boolean
+  configured: boolean
   /**
    * Every type the built-in list grants, this one included: who gets in again
-   * if the last mark goes. Resolved on the server.
+   * if the last mark goes.
    */
-  builtInGranted?: readonly string[]
+  builtInGranted: readonly string[]
   /**
    * Render as one row of the "Workshop tickets" list: the type's name, the
    * rule's answer for its holders, and the two buttons. The surrounding
    * section carries the explanation.
    */
-  row?: { access: WorkshopAccess }
+  row?: boolean
 }
 
 export function WorkshopAccessControl({
-  typeName,
-  declaredGrantsWorkshop,
-  workshopConfigured,
-  bridgeGrantsThisType = false,
-  bridgeGrantedOtherTypes = [],
-  lastGranting = false,
-  builtInGranted = [],
-  row,
+  type,
+  configured,
+  builtInGranted,
+  row = false,
 }: WorkshopAccessControlProps) {
-  const router = useRouter()
-  const { showNotification } = useNotification()
-  const [declared, setDeclared] = useState(declaredGrantsWorkshop)
+  const { typeName, lastGranting, builtInGrantedOthers: others } = type
+  /** While nothing is marked: the built-in list grants this type. */
+  const builtInGrantsThis = !configured && type.access === 'granted'
+
+  const [answer, setAnswer] = useState(type.stored)
   /** The pending answer while a cliff is being confirmed. */
   const [confirming, setConfirming] = useState<boolean | null>(null)
-  /** The last prop value this card has adopted, so a CHANGE can be spotted. */
-  const [syncedProp, setSyncedProp] = useState(declaredGrantsWorkshop)
-  /** True until the page has re-rendered with what the save left stored. */
-  const [refreshing, startRefresh] = useTransition()
+  /** The last stored answer this control has adopted, so a CHANGE can be spotted. */
+  const [synced, setSynced] = useState(type.stored)
+  /** Ties the row to its answer, so the group reads "Student, Not set". */
+  const answerId = useId()
+  /** The button that opened the question: focus returns to it. */
+  const opener = useRef<HTMLButtonElement | null>(null)
 
-  const mutation = api.tickets.admin.setWorkshopAccess.useMutation({
-    onSuccess: (_data, variables) => {
-      startRefresh(() => router.refresh())
-      const carried = variables.updates.length - 1
-      showNotification({
-        type: 'success',
-        title: 'Workshop access saved',
-        message: `“${typeName}” ${variables.updates[0].grantsWorkshop ? 'now grants' : 'no longer grants'} workshop access.${
-          carried > 0
-            ? ` ${carried} other ticket ${carried === 1 ? 'type keeps' : 'types keep'} it.`
-            : ''
-        }`,
-      })
+  const { busy, pending, save } = useSaveWorkshopAccess({
+    failed: {
+      title: 'Could not save',
+      message: 'Failed to save workshop access.',
     },
-    onError: (error) => {
-      setDeclared(declaredGrantsWorkshop)
-      showNotification({
-        type: 'error',
-        title: 'Could not save',
-        message: error.message || 'Failed to save workshop access.',
-      })
-    },
+    onError: () => setAnswer(type.stored),
   })
 
   /**
    * THE CARRY-OVER WRITES OTHER CARDS. One save marks several types, so every
-   * carried card's `declaredGrantsWorkshop` arrives changed after
-   * `router.refresh()` while its own `declared` state still holds the
-   * `undefined` it was mounted with — it would keep saying "Not set", with
-   * neither button pressed, until a full navigation. That is the flow that
-   * exists to stop an organizer stranding types; it must not look like it
-   * failed.
+   * carried card's stored answer arrives changed after the refresh while its
+   * own `answer` state still holds the `undefined` it was mounted with — it
+   * would keep saying "Not set", with neither button pressed, until a full
+   * navigation. That is the flow that exists to stop an organizer stranding
+   * types; it must not look like it failed.
    *
-   * Keyed on the prop CHANGING, not on its value, so the card being saved keeps
-   * its optimistic answer while its own stale prop is still in flight — and
-   * skipped entirely while this card has a write outstanding, so somebody
-   * else's refresh cannot overwrite an answer this organizer just clicked.
+   * Keyed on the stored answer CHANGING, not on its value, so the card being
+   * saved keeps its optimistic answer while its own stale prop is still in
+   * flight — and skipped entirely while this card has a write outstanding, so
+   * somebody else's refresh cannot overwrite an answer this organizer just
+   * clicked.
    */
-  if (syncedProp !== declaredGrantsWorkshop && !mutation.isPending) {
-    setSyncedProp(declaredGrantsWorkshop)
-    setDeclared(declaredGrantsWorkshop)
+  if (synced !== type.stored && !pending) {
+    setSynced(type.stored)
+    setAnswer(type.stored)
   }
 
   /** A no for the last granting type hands the decision back to the built-in list. */
   const leavesNothingMarked = (grants: boolean) =>
-    workshopConfigured && lastGranting && !grants
+    configured && lastGranting && !grants
 
   /**
    * A click is safe unless it moves this conference off the built-in list, back
    * onto it, or is a no that the list would quietly overrule.
    */
   const needsConfirm = (grants: boolean) => {
-    if (workshopConfigured) return leavesNothingMarked(grants)
-    return grants ? bridgeGrantedOtherTypes.length > 0 : bridgeGrantsThisType
+    if (configured) return leavesNothingMarked(grants)
+    return grants ? others.length > 0 : builtInGrantsThis
   }
 
   const write = (grants: boolean, carryOthers: boolean) => {
-    if (mutation.isPending) return
+    if (busy) return
+    // The question (if one was open) closes: back to the button that asked.
+    if (confirming !== null) opener.current?.focus()
     setConfirming(null)
-    setDeclared(grants)
-    mutation.mutate({
-      // THIS type first: the success message reads the head of the list.
-      updates: [
-        { typeName, grantsWorkshop: grants },
-        ...(carryOthers
-          ? bridgeGrantedOtherTypes.map((name) => ({
-              typeName: name,
-              grantsWorkshop: true,
-            }))
-          : []),
-      ],
-      // Only ever sent from the confirmation that named the consequence.
-      ...(leavesNothingMarked(grants) && { allowBuiltInList: true }),
-    })
+    setAnswer(grants)
+
+    const carried = carryOthers ? others.length : 0
+    // WHAT THE SAVE DOES, not what was clicked. Nothing is marked after a no
+    // that carries no mark with it, unless another type already grants: the
+    // built-in list then decides, whatever this type's stored answer says.
+    const builtInListDecides =
+      !grants && carried === 0 && (!configured || lastGranting)
+    save(
+      {
+        // THIS type first: it is the answer the organizer gave.
+        updates: [
+          { typeName, grantsWorkshop: grants },
+          ...(carryOthers
+            ? others.map((name) => ({ typeName: name, grantsWorkshop: true }))
+            : []),
+        ],
+        // Only ever sent from the confirmation that named the consequence.
+        ...(leavesNothingMarked(grants) && { allowBuiltInList: true }),
+      },
+      {
+        title: 'Workshop access saved',
+        message: builtInListDecides
+          ? `“${typeName}” is saved as no workshop access. No ticket type is marked, so the built-in list decides who can sign up.`
+          : `“${typeName}” ${grants ? 'now grants' : 'no longer grants'} workshop access.${
+              carried > 0
+                ? ` ${carried} other ticket ${carried === 1 ? 'type keeps' : 'types keep'} it.`
+                : ''
+            }`,
+      },
+    )
   }
 
-  const click = (grants: boolean) => {
-    if (mutation.isPending) return
+  const click = (grants: boolean, button: HTMLButtonElement) => {
+    if (busy) return
     if (needsConfirm(grants)) {
+      opener.current = button
       setConfirming(grants)
       return
     }
     write(grants, false)
   }
 
+  const cancel = () => {
+    setConfirming(null)
+    opener.current?.focus()
+  }
+
   const buttons = (
     <>
       <AccessButton
-        onClick={() => click(true)}
-        selected={declared === true}
-        disabled={mutation.isPending}
+        onClick={(button) => click(true, button)}
+        selected={answer === true}
+        unavailable={busy}
         label="Grants workshop access"
         typeName={typeName}
-        inRow={!!row}
+        inRow={row}
       />
       <AccessButton
-        onClick={() => click(false)}
-        selected={declared === false}
-        disabled={mutation.isPending}
+        onClick={(button) => click(false, button)}
+        selected={answer === false}
+        unavailable={busy}
         label="No workshop access"
         typeName={typeName}
-        inRow={!!row}
+        inRow={row}
       />
     </>
   )
@@ -207,7 +205,7 @@ export function WorkshopAccessControl({
         builtInGranted={builtInGranted}
         confirmLabel="Save and use the built-in list"
         onConfirm={() => write(confirming, false)}
-        onCancel={() => setConfirming(null)}
+        onCancel={cancel}
       />
     ) : (
       <div
@@ -215,36 +213,39 @@ export function WorkshopAccessControl({
         className="mt-3 rounded-md bg-amber-50 p-3 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900"
       >
         <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-          This is the first ticket type marked at this conference.
+          {confirming
+            ? 'This is the first ticket type marked at this conference.'
+            : 'A no on its own changes nothing.'}
         </p>
         <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
-          {bridgeGrantedOtherTypes.length > 0 ? (
+          {confirming ? (
             <>
-              Saving it switches the built-in list off.{' '}
-              {quoteNames(bridgeGrantedOtherTypes)} currently{' '}
-              {bridgeGrantedOtherTypes.length === 1 ? 'grants' : 'grant'}{' '}
-              workshop access through that list and will stop unless marked in
-              the same save.
+              Saving it switches the built-in list off. {quoteNames(others)}{' '}
+              currently {others.length === 1 ? 'grants' : 'grant'} workshop
+              access through that list and will stop unless marked in the same
+              save.
             </>
           ) : (
             <>
-              A no on its own marks nothing, so this conference keeps using the
-              built-in list, on which “{typeName}” still grants access. To
-              revoke it, first mark a type that should grant access.
+              No ticket type is marked, so the built-in list keeps deciding, and
+              on it “{typeName}” still grants access.{' '}
+              {others.length > 0
+                ? `To revoke it, mark ${quoteNames(others)} in the same save: that switches the built-in list off.`
+                : 'To revoke it, first mark a type that should grant access.'}
             </>
           )}
         </p>
 
         <div className="mt-2 flex flex-wrap gap-2">
-          {bridgeGrantedOtherTypes.length > 0 && (
+          {others.length > 0 && (
             <button
               type="button"
               onClick={() => write(confirming, true)}
               className="min-h-11 flex-1 basis-40 rounded-md bg-blue-600 px-3 py-2 text-left text-sm font-medium text-white hover:bg-blue-500 sm:max-w-80"
             >
               {confirming
-                ? `Mark this type and keep ${quoteNames(bridgeGrantedOtherTypes)}`
-                : `Deny this type and keep ${quoteNames(bridgeGrantedOtherTypes)}`}
+                ? `Mark this type and keep ${quoteNames(others)}`
+                : `Deny this type and keep ${quoteNames(others)}`}
             </button>
           )}
           <button
@@ -252,13 +253,13 @@ export function WorkshopAccessControl({
             onClick={() => write(confirming, false)}
             className="min-h-11 flex-1 basis-40 rounded-md bg-white px-3 py-2 text-left text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 sm:max-w-80 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
           >
-            {bridgeGrantedOtherTypes.length > 0
-              ? `Only this type: ${quoteNames(bridgeGrantedOtherTypes)} ${bridgeGrantedOtherTypes.length === 1 ? 'loses' : 'lose'} workshop access`
+            {confirming
+              ? `Only this type: ${quoteNames(others)} ${others.length === 1 ? 'loses' : 'lose'} workshop access`
               : 'Save anyway: nothing changes yet'}
           </button>
           <button
             type="button"
-            onClick={() => setConfirming(null)}
+            onClick={cancel}
             className="min-h-11 rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
           >
             Cancel
@@ -269,7 +270,12 @@ export function WorkshopAccessControl({
 
   if (row) {
     return (
-      <div className="py-3">
+      <div
+        role="group"
+        aria-label={typeName}
+        aria-describedby={answerId}
+        className="py-3"
+      >
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-sm font-medium wrap-anywhere text-gray-900 dark:text-white">
@@ -277,14 +283,16 @@ export function WorkshopAccessControl({
             </span>
             {/* The rule's answer, as the server resolved it. While a save is
                 on its way to the page the old answer would be a lie. */}
-            {mutation.isPending || refreshing ? (
-              <StatusBadge label="Saving…" color="gray" />
-            ) : (
-              <WorkshopAccessBadge
-                access={row.access}
-                configured={workshopConfigured}
-              />
-            )}
+            <span id={answerId} className="inline-flex">
+              {busy ? (
+                <StatusBadge label="Saving…" color="gray" />
+              ) : (
+                <WorkshopAccessBadge
+                  access={type.access}
+                  configured={configured}
+                />
+              )}
+            </span>
           </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">{buttons}</div>
         </div>
@@ -299,9 +307,9 @@ export function WorkshopAccessControl({
         <span className="text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
           Grants workshop access?
         </span>
-        {declared !== undefined ? (
+        {answer !== undefined ? (
           <StatusBadge label="Set" color="green" />
-        ) : workshopConfigured ? (
+        ) : configured ? (
           <StatusBadge label="Not set" color="gray" />
         ) : (
           <StatusBadge label="Built-in list" color="yellow" />
@@ -309,8 +317,8 @@ export function WorkshopAccessControl({
       </div>
 
       <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        {workshopConfigured ? (
-          declared === true ? (
+        {configured ? (
+          answer === true ? (
             <>
               Holders of this type{' '}
               <span className="font-medium text-gray-900 dark:text-white">
@@ -318,7 +326,7 @@ export function WorkshopAccessControl({
               </span>{' '}
               and are emailed the sign-in instructions.
             </>
-          ) : declared === false ? (
+          ) : answer === false ? (
             <>
               An organizer said this type{' '}
               <span className="font-medium text-gray-900 dark:text-white">
@@ -338,7 +346,7 @@ export function WorkshopAccessControl({
             No ticket type is marked for workshop access here, so access still
             comes from the built-in list of type names. On that list, this type{' '}
             <span className="font-medium text-gray-900 dark:text-white">
-              {bridgeGrantsThisType ? 'grants access' : 'grants no access'}
+              {builtInGrantsThis ? 'grants access' : 'grants no access'}
             </span>
             .
           </>
@@ -346,12 +354,11 @@ export function WorkshopAccessControl({
       </p>
 
       {/* THE CLIFF, named before any click can reach it. */}
-      {!workshopConfigured && bridgeGrantedOtherTypes.length > 0 && (
+      {others.length > 0 && (
         <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
-          The built-in list also grants access to{' '}
-          {quoteNames(bridgeGrantedOtherTypes)}. Marking any type here switches
-          that list off, and those types stop granting access unless they are
-          marked too.
+          The built-in list also grants access to {quoteNames(others)}. Marking
+          any type here switches that list off, and those types stop granting
+          access unless they are marked too.
         </p>
       )}
 
@@ -371,14 +378,15 @@ export function WorkshopAccessControl({
 function AccessButton({
   onClick,
   selected,
-  disabled,
+  unavailable,
   label,
   typeName,
   inRow,
 }: {
-  onClick: () => void
+  onClick: (button: HTMLButtonElement) => void
   selected: boolean
-  disabled: boolean
+  /** A save is on its way: the button stays focusable and does nothing. */
+  unavailable: boolean
   label: string
   typeName: string
   /** In a list row the pair sits beside the name and keeps to one line. */
@@ -387,14 +395,16 @@ function AccessButton({
   return (
     <button
       type="button"
-      onClick={onClick}
-      disabled={disabled}
+      onClick={(event) => onClick(event.currentTarget)}
+      // NOT `disabled`: a disabled button drops the focus it holds, and focus
+      // is returned here after a confirmation. The click handler ignores it.
+      aria-disabled={unavailable}
       aria-pressed={selected}
       aria-label={`${label} — "${typeName}"`}
       // Equal halves, left-aligned, same shape as the seating control next to
       // it: at phone width both labels wrap, and a centred wrap next to a
       // one-line neighbour reads as two unrelated controls.
-      className={`min-h-11 flex-1 basis-40 rounded-md px-3 py-2 text-left text-sm font-medium ring-1 transition-colors disabled:opacity-50 sm:max-w-60 ${
+      className={`min-h-11 flex-1 basis-40 rounded-md px-3 py-2 text-left text-sm font-medium ring-1 transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-50 sm:max-w-60 ${
         inRow ? 'sm:flex-none sm:basis-auto sm:whitespace-nowrap' : ''
       } ${
         selected

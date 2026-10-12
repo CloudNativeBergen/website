@@ -119,20 +119,20 @@ vi.mock('@/app/(admin)/admin/tickets/types/TicketTypeRoleControl', () => ({
 // the workshops. Those are the types an organizer strands by declaring one.
 vi.mock('@/components/admin/workshop/tickets/WorkshopAccessControl', () => ({
   WorkshopAccessControl: ({
-    typeName,
-    workshopConfigured,
-    bridgeGrantsThisType,
-    bridgeGrantedOtherTypes,
+    type,
+    configured,
   }: {
-    typeName: string
-    workshopConfigured: boolean
-    bridgeGrantsThisType?: boolean
-    bridgeGrantedOtherTypes?: readonly string[]
+    type: {
+      typeName: string
+      access: string
+      builtInGrantedOthers: readonly string[]
+    }
+    configured: boolean
   }) => (
     <div>
-      workshop-access-{typeName}|configured:{String(workshopConfigured)}
-      |grants:{String(bridgeGrantsThisType)}|others:
-      {(bridgeGrantedOtherTypes ?? []).join('+')}|
+      workshop-access-{type.typeName}|configured:{String(configured)}
+      |grants:{String(!configured && type.access === 'granted')}|others:
+      {type.builtInGrantedOthers.join('+')}|
     </div>
   ),
 }))

@@ -106,7 +106,7 @@ export default async function TicketTypesAdminPage() {
   // WORKSHOP ACCESS, resolved server-side so the legacy list of type names
   // never reaches the browser: each type's answer by the rule the portal runs,
   // and the two cliffs `WorkshopAccessControl` has to warn about by name.
-  const workshopList = buildWorkshopTicketList(
+  const workshopTickets = buildWorkshopTicketList(
     tickets.map((ticket) => ticket.name),
     classification.ticketTypeRoles,
   )
@@ -136,28 +136,18 @@ export default async function TicketTypesAdminPage() {
               ticket.name,
               classification.ticketTypeProposals,
             )}
-            declaredGrantsWorkshop={workshopList.types[index].stored}
-            workshopConfigured={workshopList.configured}
-            bridgeGrantsThisType={
-              !workshopList.configured &&
-              workshopList.types[index].access === 'granted'
-            }
-            bridgeGrantedOtherTypes={
-              workshopList.configured
-                ? []
-                : workshopList.builtInGranted.filter(
-                    (name) => typeKey(name) !== typeKey(ticket.name),
-                  )
-            }
-            lastGranting={workshopList.types[index].lastGranting}
-            builtInGranted={workshopList.builtInGranted}
-            workshopList={
+            workshopAccess={
               editedUnderWorkshops
                 ? {
-                    href: WORKSHOP_TICKETS_HREF,
-                    access: workshopList.types[index].access,
+                    sectionHref: WORKSHOP_TICKETS_HREF,
+                    access: workshopTickets.types[index].access,
+                    configured: workshopTickets.configured,
                   }
-                : undefined
+                : {
+                    type: workshopTickets.types[index],
+                    configured: workshopTickets.configured,
+                    builtInGranted: workshopTickets.builtInGranted,
+                  }
             }
           />
         ))}

@@ -22,14 +22,18 @@ import {
 import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
 import { WorkshopTicketsSection } from './WorkshopTicketsSection'
 
-const h = vi.hoisted(() => ({ mutate: vi.fn(), refresh: vi.fn() }))
+const h = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  refresh: vi.fn(),
+  isPending: false,
+}))
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
     tickets: {
       admin: {
         setWorkshopAccess: {
-          useMutation: () => ({ mutate: h.mutate, isPending: false }),
+          useMutation: () => ({ mutate: h.mutate, isPending: h.isPending }),
         },
       },
     },
@@ -56,11 +60,22 @@ const section = (
     />,
   )
 
-/** The row of one ticket type. */
+/** The row of one ticket type: a group named after it. */
 const row = (typeName: string) =>
-  within(screen.getByText(typeName, { selector: 'span' }).closest('li')!)
+  within(screen.getByRole('group', { name: typeName }))
 
-beforeEach(() => vi.clearAllMocks())
+/** The answer a row shows: the group's accessible description. */
+const answer = (typeName: string) =>
+  document.getElementById(
+    screen
+      .getByRole('group', { name: typeName })
+      .getAttribute('aria-describedby')!,
+  )!.textContent
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  h.isPending = false
+})
 afterEach(cleanup)
 
 describe('a list nobody has configured', () => {
@@ -74,12 +89,8 @@ describe('a list nobody has configured', () => {
       `No ticket type is marked, so the built-in list decides. Holders of “${SPEAKER}” and “${TWO_DAY}” can sign up for workshops, and nobody else can. Marking a type switches the built-in list off.`,
     )
     // Each type shows what the built-in list decides for it.
-    expect(
-      row(SPEAKER).getByText('Grants workshop access (built-in list)'),
-    ).toBeInTheDocument()
-    expect(
-      row('Early Bird').getByText('No workshop access (built-in list)'),
-    ).toBeInTheDocument()
+    expect(answer(SPEAKER)).toBe('Grants workshop access (built-in list)')
+    expect(answer('Early Bird')).toBe('No workshop access (built-in list)')
     // Nothing is "not set" before a type is marked.
     expect(screen.queryByText('Needs a decision')).not.toBeInTheDocument()
   })
@@ -156,13 +167,7 @@ describe('a configured list', () => {
       screen.queryByText('This list is not configured yet.'),
     ).not.toBeInTheDocument()
 
-    const answers = types.map((name) => [
-      name,
-      row(name).getByText(
-        /^(Grants workshop access|No workshop access|Not set)$/,
-        { selector: 'span.rounded-full' },
-      ).textContent,
-    ])
+    const answers = types.map((name) => [name, answer(name)])
     expect(answers).toEqual([
       ['Two-day pass', 'Grants workshop access'],
       ['Day pass', 'No workshop access'],
@@ -191,12 +196,30 @@ describe('a configured list', () => {
     )
   })
 
-  it('shows no banner when every type has an answer', () => {
-    section(['Two-day pass', 'Day pass'], roles.slice(0, 2))
+  it('shows the banner only while a type has no answer', () => {
+    const banner = () =>
+      screen.queryAllByRole('status', { name: 'Needs a decision' })
+    // The same two types, first with "Day pass" unanswered...
+    const { rerender } = section(
+      ['Two-day pass', 'Day pass'],
+      roles.slice(0, 1),
+    )
+    expect(banner().map((b) => b.textContent)).toEqual([
+      'Needs a decision“Day pass” is not set. Its holders cannot sign up for workshops until you choose an answer below.',
+    ])
 
-    expect(
-      screen.queryByRole('status', { name: 'Needs a decision' }),
-    ).not.toBeInTheDocument()
+    // ...then with every type answered.
+    rerender(
+      <WorkshopTicketsSection
+        list={buildWorkshopTicketList(
+          ['Two-day pass', 'Day pass'],
+          roles.slice(0, 2),
+        )}
+        providerLabel="Checkin.no"
+      />,
+    )
+    expect(banner()).toEqual([])
+    expect(answer('Day pass')).toBe('No workshop access')
   })
 
   it('saves an answer straight away while another type still grants', () => {
@@ -262,6 +285,20 @@ describe('an entry no ticket type matches', () => {
     ])
   })
 
+  it('takes no second removal while one is on its way', () => {
+    h.isPending = true
+    section(['Two-day pass'], roles)
+
+    const button = screen.getByRole('button', {
+      name: 'Remove the entry for "Workshop 2025"',
+    })
+    expect(button).toHaveTextContent('Removing…')
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(button)
+
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
   describe('that is the last one granting', () => {
     const last = [
       { typeName: 'Workshop 2025', grantsWorkshop: true },
@@ -279,14 +316,21 @@ describe('an entry no ticket type matches', () => {
       )
     })
 
-    it('writes nothing when the organizer cancels', () => {
+    it('writes nothing when the organizer cancels, and puts focus back on the action', () => {
       section(['Workshop 2026', SPEAKER], last)
 
       remove()
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      const cancel = screen.getByRole('button', { name: 'Cancel' })
+      cancel.focus()
+      fireEvent.click(cancel)
 
       expect(h.mutate).not.toHaveBeenCalled()
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.queryAllByRole('alert')).toEqual([])
+      expect(
+        screen.getByRole('button', {
+          name: 'Remove the entry for "Workshop 2025"',
+        }),
+      ).toHaveFocus()
     })
 
     it('removes it with the confirmation the server requires', () => {
@@ -325,11 +369,23 @@ describe('a provider that cannot be read', () => {
   })
 
   it('is told apart from a provider that lists no types', () => {
-    section([], [])
+    section(
+      [],
+      [
+        { typeName: 'Two-day pass', grantsWorkshop: true },
+        { typeName: 'Day pass', grantsWorkshop: false },
+      ],
+    )
 
     expect(
-      screen.getByText('Checkin.no lists no ticket types for this event.'),
+      screen.getByText(
+        'Checkin.no lists no ticket types for this event, so there is nothing to mark here. The saved list still decides who can sign up.',
+      ),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // The read worked, so no error; and with nothing to compare the stored
+    // answers against, none is offered for removal.
+    expect(screen.queryAllByRole('alert')).toEqual([])
+    expect(screen.queryAllByRole('button')).toEqual([])
+    expect(screen.queryAllByRole('status')).toEqual([])
   })
 })

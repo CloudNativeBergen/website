@@ -1,13 +1,10 @@
 'use client'
 
-import { useState, useTransition, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRef, useState, type ReactNode } from 'react'
 import {
   ExclamationTriangleIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
-import { api } from '@/lib/trpc/client'
-import { useNotification } from '@/components/admin/NotificationProvider'
 import { StatusBadge } from '@/components/StatusBadge'
 import type {
   OrphanedWorkshopEntry,
@@ -17,6 +14,7 @@ import { WORKSHOP_TICKETS_ANCHOR } from './anchor'
 import { BuiltInListConfirm } from './BuiltInListConfirm'
 import { WorkshopAccessControl } from './WorkshopAccessControl'
 import { quoteNames } from './names'
+import { useSaveWorkshopAccess } from './useSaveWorkshopAccess'
 
 /**
  * The card around the list: the heading, and the anchor the ticket-types page
@@ -98,6 +96,20 @@ export function WorkshopTicketsSection({
     )
   }
 
+  // A PROVIDER THAT LISTS NOTHING. There is nothing to mark, and nothing it
+  // says can make a stored answer orphaned, so neither a switch nor a removal
+  // is offered. Said as a fact, not as an error: the read worked.
+  if (list.types.length === 0) {
+    return (
+      <WorkshopTicketsFrame>
+        <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+          {providerLabel} lists no ticket types for this event, so there is
+          nothing to mark here. The saved list still decides who can sign up.
+        </p>
+      </WorkshopTicketsFrame>
+    )
+  }
+
   const notSet = list.types
     .filter((type) => type.access === 'unclassified')
     .map((type) => type.typeName)
@@ -158,36 +170,18 @@ export function WorkshopTicketsSection({
         </div>
       )}
 
-      {list.types.length === 0 ? (
-        <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-          {providerLabel} lists no ticket types for this event.
-        </p>
-      ) : (
-        <ul className="mt-2 divide-y divide-gray-100 dark:divide-gray-800">
-          {list.types.map((type, index) => (
-            <li key={`${index}:${type.typeName}`}>
-              <WorkshopAccessControl
-                typeName={type.typeName}
-                declaredGrantsWorkshop={type.stored}
-                workshopConfigured={list.configured}
-                bridgeGrantsThisType={
-                  !list.configured && type.access === 'granted'
-                }
-                bridgeGrantedOtherTypes={
-                  list.configured
-                    ? []
-                    : list.builtInGranted.filter(
-                        (name) => name !== type.typeName,
-                      )
-                }
-                lastGranting={type.lastGranting}
-                builtInGranted={list.builtInGranted}
-                row={{ access: type.access }}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="mt-2 divide-y divide-gray-100 dark:divide-gray-800">
+        {list.types.map((type, index) => (
+          <li key={`${index}:${type.typeName}`}>
+            <WorkshopAccessControl
+              type={type}
+              configured={list.configured}
+              builtInGranted={list.builtInGranted}
+              row
+            />
+          </li>
+        ))}
+      </ul>
     </WorkshopTicketsFrame>
   )
 }
@@ -207,38 +201,34 @@ function OrphanedEntry({
   builtInGranted: readonly string[]
   providerLabel: string
 }) {
-  const router = useRouter()
-  const { showNotification } = useNotification()
   const [confirming, setConfirming] = useState(false)
-  const [refreshing, startRefresh] = useTransition()
-
-  const mutation = api.tickets.admin.setWorkshopAccess.useMutation({
-    onSuccess: () => {
-      startRefresh(() => router.refresh())
-      showNotification({
-        type: 'success',
-        title: 'Entry removed',
-        message: `The workshop answer for “${entry.typeName}” is removed.`,
-      })
-    },
-    onError: (error) => {
-      showNotification({
-        type: 'error',
-        title: 'Could not remove',
-        message: error.message || 'Failed to remove the entry.',
-      })
+  /** Focus returns here when the question closes. */
+  const button = useRef<HTMLButtonElement>(null)
+  const { busy, save } = useSaveWorkshopAccess({
+    failed: {
+      title: 'Could not remove',
+      message: 'Failed to remove the entry.',
     },
   })
-  const busy = mutation.isPending || refreshing
+
+  const close = () => {
+    setConfirming(false)
+    button.current?.focus()
+  }
 
   const remove = () => {
-    if (busy) return
-    setConfirming(false)
-    mutation.mutate({
-      updates: [{ typeName: entry.typeName, grantsWorkshop: null }],
-      // Only ever sent from the confirmation that named the consequence.
-      ...(entry.lastGranting && { allowBuiltInList: true }),
-    })
+    if (confirming) close()
+    save(
+      {
+        updates: [{ typeName: entry.typeName, grantsWorkshop: null }],
+        // Only ever sent from the confirmation that named the consequence.
+        ...(entry.lastGranting && { allowBuiltInList: true }),
+      },
+      {
+        title: 'Entry removed',
+        message: `The workshop answer for “${entry.typeName}” is removed.`,
+      },
+    )
   }
 
   return (
@@ -253,11 +243,17 @@ function OrphanedEntry({
           been renamed there.
         </p>
         <button
+          ref={button}
           type="button"
-          onClick={() => (entry.lastGranting ? setConfirming(true) : remove())}
-          disabled={busy}
+          onClick={() => {
+            if (busy) return
+            if (entry.lastGranting) setConfirming(true)
+            else remove()
+          }}
+          // Not `disabled`, which would drop the focus returned here.
+          aria-disabled={busy}
           aria-label={`Remove the entry for "${entry.typeName}"`}
-          className="min-h-11 rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
+          className="min-h-11 rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
         >
           {busy ? 'Removing…' : 'Remove entry'}
         </button>
@@ -267,7 +263,7 @@ function OrphanedEntry({
           builtInGranted={builtInGranted}
           confirmLabel="Remove and use the built-in list"
           onConfirm={remove}
-          onCancel={() => setConfirming(false)}
+          onCancel={close}
         />
       )}
     </li>

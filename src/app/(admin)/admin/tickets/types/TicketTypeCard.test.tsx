@@ -39,6 +39,19 @@ import type { PublicTicketType } from '@/lib/tickets/provider/types'
 
 afterEach(cleanup)
 
+/** The control's props for one type, as the page's server-built list gives them. */
+const control = (stored?: boolean, configured = false) => ({
+  type: {
+    typeName: 'Conference Pass',
+    access: stored ? ('granted' as const) : ('denied' as const),
+    ...(stored !== undefined && { stored }),
+    lastGranting: false,
+    builtInGrantedOthers: [],
+  },
+  configured,
+  builtInGranted: [],
+})
+
 const paidTicket: PublicTicketType = {
   id: 4821,
   name: 'Conference Pass',
@@ -58,6 +71,7 @@ describe('availability', () => {
       <TicketTypeCard
         ticket={{ ...paidTicket, available: null }}
         publicFreeTicketIds={[]}
+        workshopAccess={control()}
       />,
     )
 
@@ -66,7 +80,13 @@ describe('availability', () => {
   })
 
   it('shows the count when the vendor did report one', () => {
-    render(<TicketTypeCard ticket={paidTicket} publicFreeTicketIds={[]} />)
+    render(
+      <TicketTypeCard
+        ticket={paidTicket}
+        publicFreeTicketIds={[]}
+        workshopAccess={control()}
+      />,
+    )
 
     expect(screen.getByText('120')).toBeInTheDocument()
     expect(screen.getByText('remaining')).toBeInTheDocument()
@@ -78,6 +98,7 @@ describe('availability', () => {
       <TicketTypeCard
         ticket={{ ...paidTicket, available: 0 }}
         publicFreeTicketIds={[]}
+        workshopAccess={control()}
       />,
     )
 
@@ -110,8 +131,7 @@ describe('workshop access', () => {
         <TicketTypeCard
           ticket={paidTicket}
           publicFreeTicketIds={[]}
-          workshopConfigured={configured}
-          workshopList={{ href: HREF, access }}
+          workshopAccess={{ sectionHref: HREF, access, configured }}
         />,
       )
 
@@ -129,8 +149,7 @@ describe('workshop access', () => {
       <TicketTypeCard
         ticket={paidTicket}
         publicFreeTicketIds={[]}
-        workshopConfigured
-        declaredGrantsWorkshop
+        workshopAccess={control(true, true)}
       />,
     )
 

@@ -38,6 +38,11 @@ const h = vi.hoisted(() => ({
   /** Saves the page has sent, so a test can wait for them. */
   saves: [] as Promise<unknown>[],
   save: null as null | ((input: unknown) => Promise<unknown>),
+  /** The organization the request resolves to. */
+  org: {} as Record<string, unknown>,
+  /** Thrown while the ticketing provider is being resolved, when set. */
+  resolveError: null as Error | null,
+  refresh: vi.fn(),
 }))
 
 vi.mock('@/lib/sanity/client', async () => {
@@ -90,6 +95,9 @@ vi.mock('@/lib/tickets/provider/checkin', () => ({
     static canCallApi() {
       return true
     }
+    constructor() {
+      if (h.resolveError) throw h.resolveError
+    }
     isConfigured() {
       return true
     }
@@ -108,12 +116,7 @@ vi.mock('@/lib/tickets/provider/checkin', () => ({
 }))
 
 vi.mock('@/lib/organization/sanity', () => ({
-  getOrganizationById: async () => ({
-    _id: 'org-A',
-    name: 'Tenant A',
-    slug: 'tenant-a',
-    plan: 'pro',
-  }),
+  getOrganizationById: async () => h.org,
   getOrganizationRefForCurrentConference: () => null,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
@@ -136,8 +139,11 @@ vi.mock('next/cache', () => ({
   cacheLife: vi.fn(),
   cacheTag: vi.fn(),
 }))
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
+// The real module, for `notFound` and `unstable_rethrow`; only the router hook
+// (which needs a mounted app router) is replaced.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({ refresh: h.refresh }),
 }))
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: vi.fn() }),
@@ -168,6 +174,10 @@ import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
 import { stubOwnTicketingSecret } from '../../helpers/ticketingSecrets'
 import { LoadedWorkshopTickets } from '@/components/admin/workshop/tickets/WorkshopTickets'
+import { TenantEnvSlugUnavailableError } from '@/lib/secrets/env-per-org'
+import WorkshopAdminPage from '@/app/(admin)/admin/workshops/page'
+import { notFound } from 'next/navigation'
+import { prerender } from 'react-dom/static'
 
 const ORG_A = 'org-A'
 const CONF_A = 'conf-A'
@@ -185,6 +195,8 @@ type Role = { typeName: string; admits?: boolean; grantsWorkshop?: boolean }
 
 function seed(roles: Role[] | undefined, types: string[] | Error) {
   h.commits = 0
+  h.resolveError = null
+  h.org = { _id: ORG_A, name: 'Tenant A', slug: 'tenant-a', plan: 'pro' }
   h.saves = []
   h.types = types
   h.dataset = [
@@ -209,9 +221,9 @@ const stored = () =>
   )
 
 /** Render the section the way /admin/workshops loads it. */
-async function openSection() {
+async function openSection(conference: Conference = CONFERENCE) {
   cleanup()
-  render(await LoadedWorkshopTickets({ conference: CONFERENCE }))
+  render(await LoadedWorkshopTickets({ conference }))
 }
 
 /** Every save the page sent has reached Sanity (or been refused). */
@@ -221,17 +233,21 @@ async function saved() {
   })
 }
 
+/** The row of one ticket type: a group named after it. */
 const row = (typeName: string) =>
-  within(screen.getByText(typeName, { selector: 'span' }).closest('li')!)
+  within(screen.getByRole('group', { name: typeName }))
 
-/** The answer shown for each listed type, in page order. */
+/**
+ * The answer shown for each listed type, in page order: each row's name and
+ * its accessible description, which is how the row ties the two together.
+ */
 const answers = () =>
   screen
-    .getAllByRole('listitem')
-    .filter((li) => within(li).queryAllByRole('button').length === 2)
-    .map((li) => [
-      li.querySelector('span')!.textContent,
-      li.querySelector('span.rounded-full')!.textContent,
+    .getAllByRole('group')
+    .map((group) => [
+      group.getAttribute('aria-label'),
+      document.getElementById(group.getAttribute('aria-describedby')!)!
+        .textContent,
     ])
 
 /** The portal's decision for the one holder of one ticket type. */
@@ -552,5 +568,150 @@ describe('a provider that cannot be read', () => {
     )
     expect(screen.queryAllByRole('button')).toHaveLength(0)
     expect(screen.queryByText(/Two-day pass/)).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * A PROVIDER THAT ANSWERS WITH NO TYPES is not a failed read, and it says
+ * nothing about the stored answers. Compared against an empty list every one
+ * of them would look orphaned, with a remove action and, for the last granting
+ * one, the confirmation on top.
+ */
+describe('a provider that lists no ticket types', () => {
+  it('says so, and offers neither a switch nor a removal for the stored answers', async () => {
+    seed(
+      [
+        { typeName: 'Two-day pass', admits: true, grantsWorkshop: true },
+        { typeName: 'Day pass', grantsWorkshop: false },
+      ],
+      [],
+    )
+
+    await openSection()
+
+    expect(
+      screen.getByText(
+        'Checkin.no lists no ticket types for this event, so there is nothing to mark here. The saved list still decides who can sign up.',
+      ),
+    ).toBeVisible()
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(screen.queryByText(/Two-day pass|Day pass/)).not.toBeInTheDocument()
+    // The read worked: this is not the unreadable state.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * TICKETING THAT IS NOT READY IS NOT A FAILED READ. With workshops on and no
+ * event bound, or ticketing switched off by an operator, reloading never
+ * helps: the section says what /admin/tickets/types says, and offers no switch.
+ */
+describe('ticketing that is not ready', () => {
+  it('points at the ticket settings when the conference is not bound to an event', async () => {
+    seed([{ typeName: 'Two-day pass', grantsWorkshop: true }], ['Two-day pass'])
+
+    await openSection({
+      _id: CONF_A,
+      organization: { _ref: ORG_A, _type: 'reference' },
+    } as unknown as Conference)
+
+    expect(screen.getByText('Ticketing is not connected yet')).toBeVisible()
+    expect(
+      screen.getByText(
+        'Connect this conference to its Checkin.no event in the ticket settings and workshop tickets will show up here.',
+      ),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('link', { name: 'Open ticket settings' }),
+    ).toHaveAttribute('href', '/admin/settings#tickets-registration')
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(screen.queryByText(/could not be read/)).not.toBeInTheDocument()
+    // Still where the ticket-types page links to.
+    expect(
+      screen.getByRole('region', { name: 'Workshop tickets' }),
+    ).toHaveAttribute('id', 'workshop-tickets')
+  })
+
+  it('says ticketing was turned off when an operator denied it', async () => {
+    seed([{ typeName: 'Two-day pass', grantsWorkshop: true }], ['Two-day pass'])
+    h.org = {
+      ...h.org,
+      featureOverrides: [{ feature: 'ticketing', enabled: false }],
+    }
+
+    await openSection()
+
+    expect(
+      screen.getByText('Ticketing has been turned off for your organization'),
+    ).toBeVisible()
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.queryByText(/could not be read/)).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * THE SECTION FAILS ON ITS OWN. It streams inside /admin/workshops, and there
+ * is no error boundary under `src/app`: an error that escaped here would take
+ * the workshops, the sign-ups and the registration settings down with it.
+ * Resolving the ticketing provider can throw (the per-organization credential
+ * lookup refuses to guess, `TenantEnvSlugUnavailableError`); the error here is
+ * thrown from the same call.
+ */
+describe('a failure while the section loads', () => {
+  it('shows the unreadable state instead of throwing', async () => {
+    seed([{ typeName: 'Two-day pass', grantsWorkshop: true }], ['Two-day pass'])
+    h.resolveError = new TenantEnvSlugUnavailableError(ORG_A, 'test')
+
+    await openSection()
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The ticket types could not be read from Checkin.no.',
+    )
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+
+  it('lets a signal of the framework through', async () => {
+    seed([], ['Two-day pass'])
+    // What `notFound()` throws: not a failure of this section to swallow.
+    let signal: unknown
+    try {
+      notFound()
+    } catch (error) {
+      signal = error
+    }
+    h.resolveError = signal as Error
+
+    await expect(
+      LoadedWorkshopTickets({ conference: CONFERENCE }),
+    ).rejects.toBe(signal)
+  })
+})
+
+/**
+ * WHAT /admin/workshops RENDERS IN THE SLOT. The page hands the section to its
+ * client shell; rendered on its own (the shell needs a live tRPC provider) it
+ * is the whole section, loaded.
+ */
+describe('/admin/workshops', () => {
+  it('renders the section for the conference of the request', async () => {
+    seed(
+      [{ typeName: 'Two-day pass', grantsWorkshop: true }],
+      ['Two-day pass', 'Student'],
+    )
+
+    const page = (await WorkshopAdminPage()) as {
+      props: { ticketsSection: React.ReactElement }
+    }
+    const { prelude } = await prerender(page.props.ticketsSection)
+    document.body.innerHTML = await new Response(prelude).text()
+
+    expect(
+      screen.getByRole('region', { name: 'Workshop tickets' }),
+    ).toHaveAttribute('id', 'workshop-tickets')
+    expect(answers()).toEqual([
+      ['Two-day pass', 'Grants workshop access'],
+      ['Student', 'Not set'],
+    ])
   })
 })

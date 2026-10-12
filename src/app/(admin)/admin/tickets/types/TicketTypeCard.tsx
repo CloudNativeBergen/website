@@ -17,7 +17,10 @@ import { TicketTypeRoleControl } from './TicketTypeRoleControl'
 // By file, not through the barrel: the barrel also exports the section's
 // server loader, and this card renders in Storybook.
 import { WorkshopAccessBadge } from '@/components/admin/workshop/tickets/WorkshopAccessBadge'
-import { WorkshopAccessControl } from '@/components/admin/workshop/tickets/WorkshopAccessControl'
+import {
+  WorkshopAccessControl,
+  type WorkshopAccessControlProps,
+} from '@/components/admin/workshop/tickets/WorkshopAccessControl'
 import type { WorkshopAccess } from '@/lib/tickets/classification'
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
 
@@ -44,6 +47,19 @@ function formatDate(dateStr: string | null): string {
 }
 
 /**
+ * Workshop access on a ticket-type card: WHERE it is edited decides what the
+ * card needs.
+ *
+ * A conference WITH the workshops feature edits the list in the "Workshop
+ * tickets" section of /admin/workshops (#1332), so the card shows the rule's
+ * answer for this type and links there. One WITHOUT it has no such page (it
+ * answers 404), so the card keeps the control and links nowhere.
+ */
+export type TicketTypeWorkshopAccess =
+  | { sectionHref: string; access: WorkshopAccess; configured: boolean }
+  | Omit<WorkshopAccessControlProps, 'row'>
+
+/**
  * One ticket type on /admin/tickets/types: name, status, pricing, availability,
  * the visibility window and — for public free types — the #860 opt-in.
  *
@@ -55,13 +71,7 @@ export function TicketTypeCard({
   publicFreeTicketIds,
   declaredAdmits,
   roleProposal,
-  declaredGrantsWorkshop,
-  workshopConfigured = false,
-  bridgeGrantsThisType = false,
-  bridgeGrantedOtherTypes = [],
-  lastGranting = false,
-  builtInGranted = [],
-  workshopList,
+  workshopAccess,
 }: {
   ticket: PublicTicketType
   publicFreeTicketIds: number[]
@@ -69,25 +79,7 @@ export function TicketTypeCard({
   declaredAdmits?: boolean
   /** What `@/lib/tickets/discovery` proposed for it, if anything. */
   roleProposal?: TicketTypeProposal
-  /** `grantsWorkshop` for this type, when a human declared one. */
-  declaredGrantsWorkshop?: boolean
-  /** Has ANY type at this conference declared workshop access? */
-  workshopConfigured?: boolean
-  /** On the bridge: does the historical list grant THIS type access? */
-  bridgeGrantsThisType?: boolean
-  /** On the bridge: the other types it grants — see {@link WorkshopAccessControl}. */
-  bridgeGrantedOtherTypes?: readonly string[]
-  /** This type is the only one marked as granting — see {@link WorkshopAccessControl}. */
-  lastGranting?: boolean
-  /** Every type the built-in list grants — see {@link WorkshopAccessControl}. */
-  builtInGranted?: readonly string[]
-  /**
-   * Set on a conference WITH the workshops feature: workshop access is edited
-   * in the "Workshop tickets" section of /admin/workshops (#1332), so the card
-   * shows the rule's answer for this type and links there. Absent, the card
-   * keeps the control: such a conference has no /admin/workshops to link to.
-   */
-  workshopList?: { href: string; access: WorkshopAccess }
+  workshopAccess: TicketTypeWorkshopAccess
 }) {
   const status = getTicketSaleStatus(ticket)
   const currency = ticket.price[0]?.key?.toUpperCase() || 'NOK'
@@ -234,32 +226,24 @@ export function TicketTypeCard({
       {/* Does this type let its holder into the workshops? Access control, not
           a count — and until some type is marked, the answer comes from a
           hardcoded list of another conference's type names. */}
-      {workshopList ? (
+      {'sectionHref' in workshopAccess ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-gray-800">
           <span className="text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
             Workshop access
           </span>
           <Link
-            href={workshopList.href}
+            href={workshopAccess.sectionHref}
             className="inline-flex min-h-11 flex-wrap items-center gap-2 rounded-md text-sm text-blue-700 hover:underline dark:text-blue-300"
           >
             <WorkshopAccessBadge
-              access={workshopList.access}
-              configured={workshopConfigured}
+              access={workshopAccess.access}
+              configured={workshopAccess.configured}
             />{' '}
             Change under Workshops
           </Link>
         </div>
       ) : (
-        <WorkshopAccessControl
-          typeName={ticket.name}
-          declaredGrantsWorkshop={declaredGrantsWorkshop}
-          workshopConfigured={workshopConfigured}
-          bridgeGrantsThisType={bridgeGrantsThisType}
-          bridgeGrantedOtherTypes={bridgeGrantedOtherTypes}
-          lastGranting={lastGranting}
-          builtInGranted={builtInGranted}
-        />
+        <WorkshopAccessControl {...workshopAccess} />
       )}
     </div>
   )

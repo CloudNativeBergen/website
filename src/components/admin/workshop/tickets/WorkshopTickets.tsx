@@ -1,11 +1,14 @@
 import { Suspense } from 'react'
+import { unstable_rethrow } from 'next/navigation'
 import type { Conference } from '@/lib/conference/types'
 import {
   resolveTicketingAdminAccess,
   ticketingProviderLabel,
 } from '@/lib/tickets/admin-access'
+import { conferenceProviderType } from '@/lib/tickets/provider'
 import { liveTicketTypeRoles } from '@/lib/workshop/eligibility'
 import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
+import { WorkshopTicketsNotReady } from './WorkshopTicketsNotReady'
 import {
   WorkshopTicketsFrame,
   WorkshopTicketsSection,
@@ -35,36 +38,70 @@ export function WorkshopTickets({ conference }: { conference: Conference }) {
 }
 
 /**
- * Exported for its test only: a Suspense boundary cannot be rendered to static
- * markup with an async child inside it.
+ * Exported for its tests only: a Suspense boundary cannot be rendered to
+ * static markup with an async child inside it.
+ *
+ * THE SECTION FAILS ON ITS OWN. It streams inside `/admin/workshops`, and no
+ * error boundary sits under `src/app`: an error that escaped here would take
+ * the workshops, the sign-ups and the registration settings down with it. And
+ * one can: resolving the ticketing provider throws when the per-organization
+ * credential lookup refuses to guess (`TenantEnvSlugUnavailableError`). So
+ * anything that goes wrong becomes the unreadable state, which offers no
+ * switch.
  */
 export async function LoadedWorkshopTickets({
   conference,
 }: {
   conference: Conference
 }) {
+  try {
+    return await loadWorkshopTickets(conference)
+  } catch (error) {
+    // A redirect, a not-found or a bail-out to dynamic rendering is Next's own
+    // signal, not a failure of this section.
+    unstable_rethrow(error)
+    console.error('Workshop tickets: the section could not be loaded:', error)
+    return (
+      <WorkshopTicketsSection
+        list={null}
+        providerLabel={ticketingProviderLabel(
+          conferenceProviderType(conference),
+        )}
+      />
+    )
+  }
+}
+
+async function loadWorkshopTickets(conference: Conference) {
   // The provider-neutral read `/admin/tickets/types` uses, so both pages list
   // the same types for Checkin and Tito alike.
   const access = await resolveTicketingAdminAccess(conference)
   const providerLabel = ticketingProviderLabel(access.providerType)
 
-  let typeNames: string[] | null = null
-  if (access.state === 'ready') {
-    try {
-      const { tickets } = await access.provider.fetchPublicTicketTypes(
-        access.eventRef,
-      )
-      typeNames = [...tickets]
-        .sort((a, b) => a.position - b.position)
-        .map((ticket) => ticket.name)
-    } catch (error) {
-      console.error('Workshop tickets: ticket types could not be read:', error)
-    }
+  // NOT READY IS NOT A FAILED READ: reloading never helps.
+  if (access.state !== 'ready') {
+    return (
+      <WorkshopTicketsNotReady
+        state={access.state}
+        providerLabel={providerLabel}
+      />
+    )
   }
 
-  // UNREADABLE IS NOT EMPTY. Without the provider's types every stored answer
-  // would look orphaned and the list would look empty, so nothing is offered.
-  if (!typeNames) {
+  let typeNames: string[]
+  try {
+    const { tickets } = await access.provider.fetchPublicTicketTypes(
+      access.eventRef,
+    )
+    typeNames = [...tickets]
+      .sort((a, b) => a.position - b.position)
+      .map((ticket) => ticket.name)
+  } catch (error) {
+    unstable_rethrow(error)
+    // UNREADABLE IS NOT EMPTY. Without the provider's types every stored
+    // answer would look orphaned and the list would look empty, so nothing is
+    // offered.
+    console.error('Workshop tickets: ticket types could not be read:', error)
     return <WorkshopTicketsSection list={null} providerLabel={providerLabel} />
   }
 

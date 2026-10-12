@@ -4,6 +4,7 @@ import { ThemeProvider } from 'next-themes'
 import { expect, userEvent, within } from 'storybook/test'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
+import { WorkshopTicketsNotReady } from './WorkshopTicketsNotReady'
 import { WorkshopTicketsSection } from './WorkshopTicketsSection'
 
 /**
@@ -67,8 +68,27 @@ type Story = StoryObj<typeof meta>
 const phone = { viewport: { defaultViewport: 'phone' } }
 const dark = { theme: 'dark', backgrounds: { default: 'dark' } }
 
-/** Nothing sticks out of the section sideways: the phone-width net. */
+/**
+ * THE PHONE BRANCH RENDERED, and nothing sticks out of the section sideways.
+ *
+ * The first half is what makes the second mean anything: at the test runner's
+ * default 1280 nothing overflows either. So the page must be phone-wide, and
+ * where the story has rows, the two buttons of a row must sit one under the
+ * other (from 640 up they sit side by side).
+ */
 const fitsItsWidth: Story['play'] = async ({ canvasElement }) => {
+  await expect(
+    canvasElement.ownerDocument.documentElement.clientWidth,
+  ).toBeLessThan(640)
+  const [first, second] = within(canvasElement).queryAllByRole('button', {
+    name: /workshop access —/,
+  })
+  if (first) {
+    await expect(second.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      first.getBoundingClientRect().bottom,
+    )
+  }
+
   const section = canvasElement.querySelector('section')!
   const { right } = section.getBoundingClientRect()
   await expect(section.scrollWidth).toBeLessThanOrEqual(section.clientWidth)
@@ -120,6 +140,35 @@ export const NotConfiguredMobile: Story = {
 export const NotConfiguredMobileDark: Story = {
   args: NotConfigured.args,
   parameters: { ...phone, ...dark },
+  play: fitsItsWidth,
+}
+
+/**
+ * A NO WHILE NOTHING IS MARKED changes nothing: only a mark takes a
+ * conference off the built-in list. The question says so, and offers the save
+ * that does revoke access.
+ */
+export const LoneNo: Story = {
+  args: NotConfigured.args,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'No workshop access — "Speaker ticket"',
+      }),
+    )
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      'A no on its own changes nothing.No ticket type is marked, so the built-in list keeps deciding, and on it “Speaker ticket” still grants access. To revoke it, mark “Workshop + Conference (2 days)” in the same save: that switches the built-in list off.',
+    )
+  },
+}
+export const LoneNoMobileDark: Story = {
+  args: NotConfigured.args,
+  parameters: { ...phone, ...dark },
+  play: async (context) => {
+    await LoneNo.play!(context)
+    await fitsItsWidth(context)
+  },
 }
 
 /** The built-in list names another conference's types: here it lets nobody in. */
@@ -161,6 +210,7 @@ export const ConfiguredMobile: Story = {
 export const ConfiguredMobileDark: Story = {
   args: Configured.args,
   parameters: { ...phone, ...dark },
+  play: fitsItsWidth,
 }
 
 /**
@@ -228,6 +278,7 @@ export const NotSetTypeMobile: Story = {
 export const NotSetTypeMobileDark: Story = {
   args: NotSetType.args,
   parameters: { ...phone, ...dark },
+  play: fitsItsWidth,
 }
 
 /**
@@ -277,6 +328,7 @@ export const OrphanedEntryMobile: Story = {
 export const OrphanedEntryMobileDark: Story = {
   args: OrphanedEntry.args,
   parameters: { ...phone, ...dark },
+  play: fitsItsWidth,
 }
 
 /**
@@ -335,9 +387,62 @@ export const ProviderUnreadableMobile: Story = {
 export const ProviderUnreadableMobileDark: Story = {
   args: ProviderUnreadable.args,
   parameters: { ...phone, ...dark },
+  play: fitsItsWidth,
 }
 
-/** The provider answered, and lists no ticket types: said plainly, no error. */
+/**
+ * THE PROVIDER ANSWERED, AND LISTS NO TICKET TYPES. Said as a fact, with no
+ * switch and no removal: an empty list says nothing about the stored answers,
+ * so none of them is called orphaned.
+ */
 export const NoTicketTypes: Story = {
-  args: { list: buildWorkshopTicketList([], []) },
+  args: { list: buildWorkshopTicketList([], CONFIGURED) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByText(/lists no ticket types for this event/),
+    ).toBeVisible()
+    await expect(canvas.queryAllByRole('button')).toHaveLength(0)
+  },
+}
+export const NoTicketTypesMobileDark: Story = {
+  args: NoTicketTypes.args,
+  parameters: { ...phone, ...dark },
+  play: async (context) => {
+    await NoTicketTypes.play!(context)
+    await fitsItsWidth(context)
+  },
+}
+
+/**
+ * TICKETING IS NOT READY: here, the conference is not bound to an event yet.
+ * Not a failed read, so not the unreadable state: the section says what
+ * /admin/tickets/types says and links to the ticket settings.
+ */
+export const TicketingNotConnected: Story = {
+  render: () => (
+    <WorkshopTicketsNotReady state="unconfigured" providerLabel="Checkin.no" />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('link', { name: 'Open ticket settings' }),
+    ).toHaveAttribute('href', '/admin/settings#tickets-registration')
+    await expect(canvas.queryAllByRole('button')).toHaveLength(0)
+  },
+}
+export const TicketingNotConnectedMobileDark: Story = {
+  render: TicketingNotConnected.render,
+  parameters: { ...phone, ...dark },
+  play: async (context) => {
+    await TicketingNotConnected.play!(context)
+    await fitsItsWidth(context)
+  },
+}
+
+/** An operator switched ticketing off: nothing to fix in settings, so no link. */
+export const TicketingTurnedOff: Story = {
+  render: () => (
+    <WorkshopTicketsNotReady state="disabled" providerLabel="Checkin.no" />
+  ),
 }
