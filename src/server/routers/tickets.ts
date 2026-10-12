@@ -321,11 +321,21 @@ async function updateTicketTargets(
 }
 
 /**
- * Declare what one or more ticket types ARE, on `conference.ticketTypeRoles`:
- * whether each seats a human (`admits`) and whether it grants workshop access
- * (`grantsWorkshop`). A field left `undefined` in an update is CARRIED FORWARD
- * from the document, never dropped — the two fields are written by two separate
- * controls and each must survive the other being saved.
+ * Declare what ticket types ARE, on `conference.ticketTypeRoles`: whether one
+ * seats a human (`admits`), or whether one or more grant workshop access
+ * (`grantsWorkshop`). The two answers are written by two separate controls and
+ * each must survive the other being saved.
+ *
+ * THE SEATING ANSWER IS SET IN PLACE, on the entry `classifyTicket` reads (the
+ * first one whose name matches), and nothing else in the list is touched. It
+ * used to replace the type's whole entry and every other spelling of its name,
+ * which made a seating toggle able to change workshop access: Studio can hold
+ * one type under several spellings, the rule reads only the first, and
+ * rebuilding the entry either carried an answer the rule was not reading into
+ * the entry it reads, or dropped the conference's only grant. A write that
+ * never names `grantsWorkshop` cannot do either.
+ *
+ * Everything below is about the WORKSHOP answers.
  *
  * ONE PATCH FOR THE WHOLE BATCH, because the carry-over offered by the workshop
  * control (`WorkshopAccessControl`) is only safe if it is all-or-nothing: the
@@ -359,54 +369,56 @@ async function updateTicketTargets(
  */
 async function setTicketTypeRoles(
   conferenceId: string,
-  updates: ReadonlyArray<{
-    typeName: string
-    admits?: boolean
-    /** `null` removes the stored answer; `undefined` carries it forward. */
-    grantsWorkshop?: boolean | null
-  }>,
-  /**
-   * Refuse a write that takes the LAST granting entry away, unless the
-   * organizer confirmed it. Decided from the same read the patch is
-   * conditioned on, so it holds for the revision that is written.
-   */
-  builtInList: 'allow' | 'refuse' = 'allow',
+  write:
+    | { seating: { typeName: string; admits: boolean } }
+    | {
+        workshop: ReadonlyArray<{
+          typeName: string
+          /** `null` removes the stored answer. */
+          grantsWorkshop: boolean | null
+        }>
+        /**
+         * The organizer confirmed a write that takes the LAST granting entry
+         * away. Without it such a write is refused, from the same read the
+         * patch is conditioned on, so it holds for the revision that is
+         * written.
+         */
+        allowBuiltInList: boolean
+      },
 ) {
-  // PRESERVE THE FIELD THIS CALL IS NOT CHANGING. Each write replaces a whole
-  // entry, so a bare `{ typeName, admits }` would silently drop the
-  // workshop-access flag (`@/lib/workshop/eligibility`) every time an organizer
-  // flipped the unrelated seats-an-attendee toggle — revoking /workshop for
-  // everyone holding that type — and the mirror image is just as bad: the
-  // workshop control must not fabricate a seating declaration.
+  // PRESERVE THE FIELD THIS CALL IS NOT CHANGING. The seating write sets one
+  // field and cannot touch the other. The workshop write replaces a whole
+  // entry, so it carries the seating answer forward (a bare
+  // `{ typeName, grantsWorkshop }` would drop it) and never fabricates one.
   //
   // REVISION-CONDITIONED, because preserving a field by reading it is a
   // read-modify-write no matter how narrow the read is: a Studio edit landing
-  // between the read and the patch would be overwritten by the stale value,
-  // silently revoking or restoring workshop access. The patch shape is atomic
-  // for OTHER entries; it does nothing for the field it is carrying forward.
-  // `ifRevisionId` makes the read binding — the patch applies only to the
-  // document revision it was computed from.
+  // between the read and the patch would be overwritten by the stale value.
+  // The patch shape is atomic for OTHER entries; it does nothing for the field
+  // it is carrying forward. `ifRevisionId` makes the read binding — the patch
+  // applies only to the document revision it was computed from. The seating
+  // write is conditioned too: it addresses the entry the read found.
   //
   // RETRY ONCE, then surface a CONFLICT. The operation is idempotent and the
-  // re-read picks up the winner's `grantsWorkshop`, so one retry absorbs the
-  // ordinary case (an organizer and a Studio edit in the same second) without
-  // an unbounded loop; a document under sustained churn tells the organizer to
+  // re-read picks up the winner's answers, so one retry absorbs the ordinary
+  // case (an organizer and a Studio edit in the same second) without an
+  // unbounded loop; a document under sustained churn tells the organizer to
   // reload rather than quietly writing a guess.
   let lastError: unknown
+  const updates = 'workshop' in write ? write.workshop : []
   const wantedKeys = new Set(updates.map((u) => typeKey(u.typeName)))
+  type StoredRole = {
+    _key?: string
+    typeName: string
+    admits?: boolean
+    grantsWorkshop?: boolean
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
-    let existing: {
-      _rev?: string
-      roles?: { typeName: string; admits?: boolean; grantsWorkshop?: boolean }[]
-    } | null
+    let existing: { _rev?: string; roles?: StoredRole[] } | null
     try {
       existing = await clientWrite.fetch<{
         _rev?: string
-        roles?: {
-          typeName: string
-          admits?: boolean
-          grantsWorkshop?: boolean
-        }[]
+        roles?: StoredRole[]
       } | null>(
         // groq-global-scoped: `conferenceId` is `resolveConferenceId()`'s —
         // derived from the request domain and already matched against the
@@ -421,7 +433,7 @@ async function setTicketTypeRoles(
         // agree with `typeKey`, and neither a patch path nor a GROQ `lower()`
         // does both. The array holds one entry per ticket type at one
         // conference; folding it here is cheaper than getting it subtly wrong.
-        `*[_id == $conferenceId][0]{ _rev, "roles": ticketTypeRoles[]{ typeName, admits, grantsWorkshop } }`,
+        `*[_id == $conferenceId][0]{ _rev, "roles": ticketTypeRoles[]{ _key, typeName, admits, grantsWorkshop } }`,
         { conferenceId },
       )
     } catch (error) {
@@ -443,38 +455,51 @@ async function setTicketTypeRoles(
       })
     }
 
-    // EVERY SPELLING OF THE TYPE, not the first one. Studio can hold two
-    // entries `typeKey` calls the same type, one answering each question, and
-    // the write below replaces them all with one entry. Reading only the first
-    // dropped the other's answer: a seating toggle could remove the
-    // conference's only grant. Where two spellings answer the same question,
-    // the first wins, as it does for the rule.
-    const priorOf = (typeName: string) => {
-      const spellings = (existing.roles ?? []).filter(
-        (role) => typeKey(role.typeName) === typeKey(typeName),
-      )
-      const first = (field: 'admits' | 'grantsWorkshop') =>
-        spellings.find((role) => typeof role[field] === 'boolean')?.[field]
-      return {
-        admits: first('admits'),
-        grantsWorkshop: first('grantsWorkshop'),
+    const roles = existing.roles ?? []
+    // The FIRST entry for a name: the one `classifyTicket` and
+    // `workshopAccessOf` read.
+    const indexOf = (typeName: string) =>
+      roles.findIndex((role) => typeKey(role.typeName) === typeKey(typeName))
+
+    if ('seating' in write) {
+      const { typeName, admits } = write.seating
+      const index = indexOf(typeName)
+      const patch = clientWrite.patch(conferenceId).ifRevisionId(existing._rev)
+      if (index === -1) {
+        // Nobody has said anything about this type: an entry that answers the
+        // seating question and no other.
+        patch
+          .setIfMissing({ ticketTypeRoles: [] })
+          .insert('after', 'ticketTypeRoles[-1]', [
+            { _key: generateKey('role'), typeName, admits },
+          ])
+      } else {
+        // By key; by position for an entry written without one, which the
+        // revision condition makes just as exact.
+        const key = roles[index]._key
+        const entry = key ? `_key==${JSON.stringify(key)}` : String(index)
+        patch.set({ [`ticketTypeRoles[${entry}].admits`]: admits })
+      }
+      try {
+        return await patch.commit()
+      } catch (error) {
+        lastError = error
+        continue
       }
     }
 
-    // Each update's whole entry. Absent stays ABSENT: defaulting either field
-    // would turn a question nobody answered into a declaration — the count
-    // would then report itself as blessed by a human who never saw it.
+    // Each update's whole entry, carrying the seating answer the seating rule
+    // reads. Absent stays ABSENT: defaulting either field would turn a
+    // question nobody answered into a declaration — the count would then
+    // report itself as blessed by a human who never saw it.
     const entries = updates.map((u) => {
-      const prior = priorOf(u.typeName)
-      const admits = u.admits ?? prior.admits
-      const grantsWorkshop =
-        u.grantsWorkshop === null
-          ? undefined
-          : (u.grantsWorkshop ?? prior.grantsWorkshop)
+      const admits = roles[indexOf(u.typeName)]?.admits
       return {
         typeName: u.typeName,
         ...(typeof admits === 'boolean' && { admits }),
-        ...(typeof grantsWorkshop === 'boolean' && { grantsWorkshop }),
+        ...(typeof u.grantsWorkshop === 'boolean' && {
+          grantsWorkshop: u.grantsWorkshop,
+        }),
       }
     })
 
@@ -484,13 +509,11 @@ async function setTicketTypeRoles(
     // its view can be stale (two organizers each unmarking one of two granting
     // types), so the question is settled here, against the document itself.
     if (
-      builtInList === 'refuse' &&
-      marksWorkshopAccess(existing.roles) &&
+      !write.allowBuiltInList &&
+      marksWorkshopAccess(roles) &&
       !marksWorkshopAccess([
         ...entries,
-        ...(existing.roles ?? []).filter(
-          (role) => !wantedKeys.has(typeKey(role.typeName)),
-        ),
+        ...roles.filter((role) => !wantedKeys.has(typeKey(role.typeName))),
       ])
     ) {
       throw new TRPCError({
@@ -506,7 +529,7 @@ async function setTicketTypeRoles(
     // `classifyTicket` / `workshopAccessOf` read whichever comes first — the
     // organizer's toggle appears to save while the old answer keeps applying.
     const unsetNames = new Set(updates.map((u) => u.typeName))
-    for (const role of existing.roles ?? []) {
+    for (const role of roles) {
       if (typeof role.typeName !== 'string') continue
       if (wantedKeys.has(typeKey(role.typeName))) unsetNames.add(role.typeName)
     }
@@ -882,9 +905,9 @@ export const ticketsRouter = router({
       .input(SetTicketTypeRoleSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
-        const result = await setTicketTypeRoles(conferenceId, [
-          { typeName: input.typeName, admits: input.admits },
-        ])
+        const result = await setTicketTypeRoles(conferenceId, {
+          seating: { typeName: input.typeName, admits: input.admits },
+        })
 
         revalidateTag('admin:tickets', 'default')
         // `ticketTypeRoles` lives on the CONFERENCE document, which the cached
@@ -921,11 +944,10 @@ export const ticketsRouter = router({
       .input(SetWorkshopAccessSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
-        const result = await setTicketTypeRoles(
-          conferenceId,
-          input.updates,
-          input.allowBuiltInList ? 'allow' : 'refuse',
-        )
+        const result = await setTicketTypeRoles(conferenceId, {
+          workshop: input.updates,
+          allowBuiltInList: input.allowBuiltInList === true,
+        })
 
         revalidateTag('admin:tickets', 'default')
         // The /workshop gate re-reads this field live, but the cached

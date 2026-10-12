@@ -108,7 +108,10 @@ vi.mock('@/lib/tickets/provider', () => ({
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
-import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
+import {
+  checkWorkshopEligibility,
+  workshopAccessOf,
+} from '@/lib/workshop/eligibility'
 import { ticketsRouter } from './tickets'
 
 const ORG_A = 'org-A'
@@ -266,34 +269,182 @@ describe('removing a stored workshop answer', () => {
 })
 
 /**
- * ONE TYPE STORED UNDER TWO SPELLINGS. Studio can hold two entries the rule
- * calls the same type, one answering the seating question and one the workshop
- * question. A save replaces every spelling with one entry, so it has to carry
- * the answers of all of them. Carrying only the first entry's dropped the
- * workshop answer on a seating toggle, and with it the conference's only
- * grant: the built-in list came back with no question asked.
+ * A SEATING ANSWER NEVER CHANGES WORKSHOP ACCESS.
+ *
+ * The seating save used to replace the type's whole entry, and every other
+ * spelling of its name with it. Studio can hold one type under several
+ * spellings, and the rule reads only the FIRST entry that matches a name, even
+ * when that entry holds no workshop answer. So rebuilding the entry from "the
+ * answers" could do two things on a seating toggle: carry an answer the rule
+ * was not reading into the entry it does read (the type gains or loses
+ * access), or drop the conference's only grant (the built-in list comes back
+ * for every type, with no question asked).
+ *
+ * The seating save now sets `admits` on the entry the seating rule reads and
+ * touches nothing else. Asserted on what the REAL rule answers for every type
+ * before and after, from the stored document, with the expected answers
+ * written out by hand.
  */
-describe('a type stored under two spellings', () => {
-  it('keeps the workshop answer of the other spelling when the seating answer is saved', async () => {
+describe('a seating answer never changes workshop access', () => {
+  const A = 'Two-day pass'
+  const TYPES = [A, 'Day pass', 'Speaker ticket', 'Student']
+  /** `ticketTypeRoles` as stored, keys included. */
+  const roles = () =>
+    (h.dataset.find((d) => d._id === CONF_A)!.ticketTypeRoles ?? []) as Role[]
+  const access = () =>
+    Object.fromEntries(
+      TYPES.map((type) => [type, workshopAccessOf(type, roles())]),
+    )
+
+  const cases: [string, Role[], Record<string, string>][] = [
+    [
+      'a seating-only entry ahead of a spelling that grants',
+      [
+        { _key: 'a', typeName: A, admits: true },
+        { _key: 'b', typeName: 'two-day pass ', grantsWorkshop: true },
+      ],
+      // The rule reads the first entry: nobody has answered for this type.
+      // The other spelling still keeps the conference off the built-in list.
+      {
+        [A]: 'unclassified',
+        'Day pass': 'unclassified',
+        'Speaker ticket': 'unclassified',
+        Student: 'unclassified',
+      },
+    ],
+    [
+      'a seating-only entry ahead of a spelling that says no',
+      [
+        { _key: 'a', typeName: A, admits: true },
+        { _key: 'b', typeName: 'two-day pass ', grantsWorkshop: false },
+        { _key: 'c', typeName: 'Day pass', grantsWorkshop: true },
+      ],
+      {
+        [A]: 'unclassified',
+        'Day pass': 'granted',
+        'Speaker ticket': 'unclassified',
+        Student: 'unclassified',
+      },
+    ],
+    [
+      'a no ahead of the spelling that is the only grant',
+      [
+        { _key: 'a', typeName: A, grantsWorkshop: false },
+        { _key: 'b', typeName: 'two-day pass ', grantsWorkshop: true },
+      ],
+      // Losing the second spelling would bring the built-in list back, and
+      // "Speaker ticket" would be granted by it.
+      {
+        [A]: 'denied',
+        'Day pass': 'unclassified',
+        'Speaker ticket': 'unclassified',
+        Student: 'unclassified',
+      },
+    ],
+    [
+      'three spellings: seating, no, grant',
+      [
+        { _key: 'a', typeName: A, admits: true },
+        { _key: 'b', typeName: 'two-day pass ', grantsWorkshop: false },
+        { _key: 'c', typeName: ' TWO-DAY PASS', grantsWorkshop: true },
+      ],
+      {
+        [A]: 'unclassified',
+        'Day pass': 'unclassified',
+        'Speaker ticket': 'unclassified',
+        Student: 'unclassified',
+      },
+    ],
+    [
+      'no entry for the type at all',
+      [{ _key: 'c', typeName: 'Day pass', grantsWorkshop: true }],
+      {
+        [A]: 'unclassified',
+        'Day pass': 'granted',
+        'Speaker ticket': 'unclassified',
+        Student: 'unclassified',
+      },
+    ],
+    [
+      'nothing marked, so the built-in list decides',
+      [{ _key: 'a', typeName: 'Speaker ticket', grantsWorkshop: false }],
+      {
+        [A]: 'denied',
+        'Day pass': 'denied',
+        'Speaker ticket': 'granted',
+        Student: 'denied',
+      },
+    ],
+  ]
+
+  it.each(cases)('%s', async (_name, seeded, expected) => {
+    seed(seeded)
+    expect(access()).toEqual(expected)
+
+    for (const admits of [false, true]) {
+      await tickets().admin.setTicketTypeRole({ typeName: A, admits })
+
+      // The answer was saved, on the entry the seating rule reads...
+      expect(
+        roles().find((r) => r.typeName.trim().toLowerCase() === 'two-day pass')!
+          .admits,
+      ).toBe(admits)
+      // ...and nobody's workshop access moved.
+      expect(access()).toEqual(expected)
+    }
+  })
+
+  it('touches no other entry, no other field, and no order', async () => {
     seed([
-      { _key: 'a', typeName: 'Two-day pass', admits: true },
-      { _key: 'b', typeName: 'two-day pass ', grantsWorkshop: true },
+      { _key: 'a', typeName: A, admits: true },
+      { _key: 'b', typeName: 'two-day pass ', grantsWorkshop: false },
+      {
+        _key: 'c',
+        typeName: ' TWO-DAY PASS',
+        admits: true,
+        grantsWorkshop: true,
+      },
+      { _key: 'd', typeName: 'Day pass', grantsWorkshop: false },
     ])
 
-    await tickets().admin.setTicketTypeRole({
-      typeName: 'Two-day pass',
-      admits: false,
-    })
+    await tickets().admin.setTicketTypeRole({ typeName: A, admits: false })
 
-    expect(stored()).toEqual([
-      { typeName: 'Two-day pass', admits: false, grantsWorkshop: true },
+    expect(roles()).toEqual([
+      { _key: 'a', typeName: A, admits: false },
+      { _key: 'b', typeName: 'two-day pass ', grantsWorkshop: false },
+      {
+        _key: 'c',
+        typeName: ' TWO-DAY PASS',
+        admits: true,
+        grantsWorkshop: true,
+      },
+      { _key: 'd', typeName: 'Day pass', grantsWorkshop: false },
     ])
   })
 
-  it('keeps the seating answer of the other spelling when the workshop answer is saved', async () => {
+  it('adds an entry that answers only the seating question when the type has none', async () => {
+    seed([{ _key: 'c', typeName: 'Day pass', grantsWorkshop: true }])
+
+    await tickets().admin.setTicketTypeRole({ typeName: A, admits: false })
+
+    expect(stored()).toEqual([
+      { typeName: 'Day pass', grantsWorkshop: true },
+      { typeName: A, admits: false },
+    ])
+  })
+})
+
+/**
+ * THE WORKSHOP SAVE CARRIES WHAT THE RULES READ: the first entry for the name.
+ * It replaces every spelling with one entry, so the seating answer it keeps is
+ * the one `classifyTicket` was reading, and the confirmation still guards the
+ * last grant when that grant sits in another spelling.
+ */
+describe('a workshop answer for a type stored under two spellings', () => {
+  it('keeps the seating answer the seating rule was reading', async () => {
     seed([
-      { _key: 'a', typeName: 'Two-day pass', grantsWorkshop: false },
-      { _key: 'b', typeName: 'two-day pass ', admits: false },
+      { _key: 'a', typeName: 'Two-day pass', admits: false },
+      { _key: 'b', typeName: 'two-day pass ', admits: true },
       { _key: 'c', typeName: 'Day pass', grantsWorkshop: true },
     ])
 
@@ -307,22 +458,18 @@ describe('a type stored under two spellings', () => {
     ])
   })
 
-  it('takes the first answer when the spellings disagree, as the rule does', async () => {
+  it('still asks before a no that removes a grant held by another spelling', async () => {
     seed([
-      { _key: 'a', typeName: 'Two-day pass', grantsWorkshop: false },
+      { _key: 'a', typeName: 'Two-day pass', admits: true },
       { _key: 'b', typeName: 'two-day pass ', grantsWorkshop: true },
-      { _key: 'c', typeName: 'Day pass', grantsWorkshop: true },
     ])
 
-    await tickets().admin.setTicketTypeRole({
-      typeName: 'Two-day pass',
-      admits: true,
-    })
-
-    expect(stored()).toEqual([
-      { typeName: 'Day pass', grantsWorkshop: true },
-      { typeName: 'Two-day pass', admits: true, grantsWorkshop: false },
-    ])
+    await expect(
+      tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: 'Two-day pass', grantsWorkshop: false }],
+      }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+    expect(h.commits).toBe(0)
   })
 })
 
@@ -438,9 +585,10 @@ describe('a save that leaves no granting type', () => {
       admits: false,
     })
 
+    // In place: the entry keeps its position and its workshop answer.
     expect(stored()).toEqual([
-      { typeName: 'Day pass', grantsWorkshop: false },
       { typeName: 'Two-day pass', admits: false, grantsWorkshop: true },
+      { typeName: 'Day pass', grantsWorkshop: false },
     ])
   })
 })
