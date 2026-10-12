@@ -800,6 +800,24 @@ describe('workshop portal — on a host that cannot sign in', () => {
     expect(elementsOf(page)[0].props.registrationClosed).toBe(true)
   })
 
+  it('says registration has closed when the end has passed and the start is still ahead (#1345)', async () => {
+    mockGetConference.mockResolvedValue({
+      conference: {
+        ...conference('org-tenant2'),
+        contactEmail: 'hello@cndn.example.org',
+        domains: ['unregistered.example.org'],
+        workshopRegistrationStart: '2999-01-01T00:00:00.000Z',
+        workshopRegistrationEnd: '2020-01-01T00:00:00.000Z',
+      },
+      error: null,
+    })
+    MARKED()
+    const page = await renderPage()
+
+    expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    expect(elementsOf(page)[0].props.registrationClosed).toBe(true)
+  })
+
   it('CONTROL: on a proven host the same tenant gets the signed-out view', async () => {
     const page = await renderPage()
     expect(elementsOf(page)[0].type).toBe(WorkshopSignedOut)
@@ -1045,6 +1063,18 @@ describe('workshop portal: the registration window', () => {
     expect(portal.banners).toEqual([CLOSED])
     expect(portal.text).toContain(
       'Registration closed on Wednesday, June 10, 2026 at 1:59 PM',
+    )
+  })
+
+  it('with an end that lies before a start still ahead, says it has closed and nothing else (#1345)', async () => {
+    const portal = await portalWith({
+      workshopRegistrationStart: LONG_AFTER,
+      workshopRegistrationEnd: LONG_BEFORE,
+    })
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([CLOSED])
+    expect(portal.text).toContain(
+      'Registration closed on Friday, May 1, 2026 at 9:00 AM',
     )
   })
 

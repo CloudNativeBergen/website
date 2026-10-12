@@ -91,6 +91,10 @@ export function sponsorStartTimeProblem(
  * Both bounds are inclusive: sign-up is open at the instant of the opening and
  * at the instant of the end.
  *
+ * AN END THAT HAS PASSED IS CLOSED, whatever the start or early access: the
+ * table's "After the end" row has no exception. (An end before a start still
+ * ahead is refused by the admin save, and Sanity Studio can store it.)
+ *
  * `earlyAccess` moves the opening to the sponsor start time and does nothing
  * else. With no early-access window it changes nothing at all.
  */
@@ -102,30 +106,26 @@ export function workshopRegistrationWindow(
   const start = instant(times.workshopRegistrationStart)
   const end = instant(times.workshopRegistrationEnd)
 
-  const closed: WorkshopRegistrationWindow | null =
-    end !== null && end < at
-      ? { status: 'closed', closedAt: times.workshopRegistrationEnd! }
-      : null
-
-  if (start !== null && start > at) {
-    const earlyStart = earlyAccess ? earlyAccessStart(times) : null
-    if (earlyStart === null) {
-      return {
-        status: 'not-open-yet',
-        opensAt: times.workshopRegistrationStart!,
-        early: false,
-      }
-    }
-    if (earlyStart > at) {
-      return {
-        status: 'not-open-yet',
-        opensAt: times.workshopRegistrationSponsorStart!,
-        early: true,
-      }
-    }
-    // Inside the early-access window. Early access moves the opening only: an
-    // end that has passed is closed for this caller as for everyone.
-    return closed ?? { status: 'open', early: true }
+  if (end !== null && end < at) {
+    return { status: 'closed', closedAt: times.workshopRegistrationEnd! }
   }
-  return closed ?? { status: 'open', early: false }
+  if (start === null || start <= at) return { status: 'open', early: false }
+
+  // The official opening is still ahead.
+  const earlyStart = earlyAccess ? earlyAccessStart(times) : null
+  if (earlyStart === null) {
+    return {
+      status: 'not-open-yet',
+      opensAt: times.workshopRegistrationStart!,
+      early: false,
+    }
+  }
+  if (earlyStart > at) {
+    return {
+      status: 'not-open-yet',
+      opensAt: times.workshopRegistrationSponsorStart!,
+      early: true,
+    }
+  }
+  return { status: 'open', early: true }
 }

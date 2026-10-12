@@ -14,7 +14,7 @@
  * Against the real tRPC client and query client, with only `fetch` supplied.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { api, getTRPCClient } from '@/lib/trpc/client'
@@ -189,5 +189,23 @@ describe('the workshop list and the registration window', () => {
         workshopRegistrationEnd: LONG_AFTER,
       }),
     ).toEqual(NOT_FOR_SIGN_UP)
+  })
+
+  it('with an end that lies before a start still ahead, is closed: the cancel question says there is no signing up again (#1345)', async () => {
+    expect(
+      await sectionsWith({
+        workshopRegistrationStart: LONG_AFTER,
+        workshopRegistrationEnd: LONG_BEFORE,
+      }),
+    ).toEqual(NOT_FOR_SIGN_UP)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Cancel Registration' }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Cancel your registration?' }),
+    ).toHaveTextContent(
+      'Registration has closed, so you will not be able to register again.',
+    )
   })
 })

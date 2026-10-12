@@ -88,6 +88,40 @@ describe('the registration window with early access', () => {
 })
 
 /**
+ * The table's "After the end" row has no exception: an end that has passed is
+ * closed whatever the start is. An end before a start still ahead is a
+ * combination no save through the admin accepts, and Sanity Studio can store.
+ */
+describe('an end that has passed wins over a start still ahead', () => {
+  const END_BEFORE_START = {
+    workshopRegistrationSponsorStart: '2026-05-25T06:00:00.000Z',
+    workshopRegistrationStart: OFFICIAL,
+    workshopRegistrationEnd: '2026-05-22T06:00:00.000Z',
+  }
+  const CLOSED_THEN = { status: 'closed', closedAt: '2026-05-22T06:00:00.000Z' }
+
+  it.each([
+    ['before the sponsor start time', '2026-05-23T12:00:00.000Z'],
+    ['inside the early-access window', IN_EARLY_ACCESS],
+    ['after the official opening', AFTER_OFFICIAL],
+  ])('%s, with and without early access', (_when, now) => {
+    expect(at(END_BEFORE_START, now, false)).toEqual(CLOSED_THEN)
+    expect(at(END_BEFORE_START, now, true)).toEqual(CLOSED_THEN)
+  })
+
+  it('CONTROL: before that end, the same times are not open yet', () => {
+    expect(at(END_BEFORE_START, BEFORE_SPONSOR, false)).toEqual(
+      OPENS_AT_OFFICIAL,
+    )
+    expect(at(END_BEFORE_START, BEFORE_SPONSOR, true)).toEqual({
+      status: 'not-open-yet',
+      opensAt: '2026-05-25T06:00:00.000Z',
+      early: true,
+    })
+  })
+})
+
+/**
  * Spec §2: the early-access window exists only when both times are set and the
  * sponsor start time is the earlier one. Without it early access changes
  * nothing, and the answer is today's.
