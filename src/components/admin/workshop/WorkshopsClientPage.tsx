@@ -26,7 +26,6 @@ import type { WorkshopAnnouncementView } from '@/lib/workshop/announcements'
 import { useRefreshAnnouncements } from './useRefreshAnnouncements'
 import { useSignupActions } from './useSignupActions'
 import { useQueryClient } from '@tanstack/react-query'
-import { useRouter } from 'next/navigation'
 import { EmptyState } from '@/components/EmptyState'
 
 interface SignupModalState {
@@ -113,35 +112,35 @@ export function WorkshopsClientPage({
       },
     )
 
-  const { data: workshopSignupsData, refetch: refetchWorkshopSignups } =
-    api.workshop.admin.listSignups.useQuery(
-      {
-        workshopId: signupModal.workshopId,
-        status: signupModal.status || undefined,
-      },
-      {
-        enabled: !!signupModal.workshopId && !!signupModal.status,
-      },
-    )
+  const { data: workshopSignupsData } = api.workshop.admin.listSignups.useQuery(
+    {
+      workshopId: signupModal.workshopId,
+      status: signupModal.status || undefined,
+    },
+    {
+      enabled: !!signupModal.workshopId && !!signupModal.status,
+    },
+  )
 
   const { data: statsData, refetch: refetchStats } =
     api.workshop.admin.getSummary.useQuery(undefined, {
       enabled: !!conferenceId,
     })
 
-  const router = useRouter()
+  const utils = api.useUtils()
 
   // Everything this page shows about sign-ups, read again. One function for
   // every action that changes them.
   const readSignupsAgain = () => {
     refetchSignups()
-    if (signupModal.workshopId && signupModal.status) refetchWorkshopSignups()
+    // EVERY list of a workshop, not only the open one: a move changes two of
+    // them, and one read a moment ago is otherwise shown again as it was.
+    void utils.workshop.admin.listSignups.invalidate()
+    // The summary carries each workshop's own counts and capacity, which is
+    // what the cards show (see `live` below). The server render is NOT asked
+    // for again: `router.refresh()` re-runs the whole page for three numbers,
+    // and one that cannot reach the server turns into a hard navigation.
     refetchStats()
-    // The cards' confirmed and waitlist counts are the SERVER's
-    // (`initialWorkshops`, the workshop's own counts). The list above is one
-    // page of 100 and cannot stand in for them, so the server render is asked
-    // for again; it reads those counts live, with nothing cached in between.
-    router.refresh()
   }
 
   // Confirm, move to waitlist, delete. Everything is read again after every
@@ -365,17 +364,27 @@ export function WorkshopsClientPage({
         ) : (
           initialWorkshops.map((workshop) => {
             const workshopSignups = signupsByWorkshop.get(workshop._id) || []
+            // The summary is read again after every action; the server render
+            // (`workshop`) never is. Once the summary is in, its numbers are
+            // the card's: the workshop's own counts from the same server read,
+            // not a count of the 100 sign-ups this page lists.
+            const live = statsData?.data.workshops.find(
+              (stats) => stats.workshopId === workshop._id,
+            )
             const confirmedCount =
-              workshop.signups ||
-              workshopSignups.filter((s) => s.status === 'confirmed').length
+              live?.confirmedSignups ??
+              (workshop.signups ||
+                workshopSignups.filter((s) => s.status === 'confirmed').length)
             const waitlistCount =
-              workshop.waitlistCount ||
-              workshopSignups.filter((s) => s.status === 'waitlist').length
+              live?.waitlistSignups ??
+              (workshop.waitlistCount ||
+                workshopSignups.filter((s) => s.status === 'waitlist').length)
+            const capacity = live?.capacity ?? workshop.capacity
 
             return (
               <WorkshopCard
                 key={workshop._id}
-                workshop={workshop}
+                workshop={{ ...workshop, capacity }}
                 confirmedCount={confirmedCount}
                 waitlistCount={waitlistCount}
                 onViewConfirmed={() =>
@@ -402,12 +411,11 @@ export function WorkshopsClientPage({
                   })
                 }
                 onEditCapacity={() => {
-                  const capacity = workshop.capacity || 30
                   setEditCapacityModal({
                     isOpen: true,
                     workshopId: workshop._id,
                     workshopTitle: workshop.title,
-                    currentCapacity: capacity,
+                    currentCapacity: capacity || 30,
                     currentSignups: confirmedCount,
                   })
                 }}

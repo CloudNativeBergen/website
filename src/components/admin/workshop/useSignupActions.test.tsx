@@ -179,6 +179,34 @@ describe('"Move to waitlist"', () => {
   })
 })
 
+describe('a request that got no answer', () => {
+  const NO_ANSWER =
+    "Ada Lovelace's sign-up may or may not have been changed. Check the list before trying again."
+
+  it.each(['move', 'confirm', 'delete'] as const)(
+    '%s: says the server was not reached and that the change may have gone through',
+    async (action) => {
+      // What the browser gives when the connection drops: no response at all.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => {
+          throw new TypeError('Failed to fetch')
+        }),
+      )
+      const { onSettled } = press(action)
+
+      await screen.findByText('No answer from the server')
+      expect(screen.getByText(NO_ANSWER)).toBeInTheDocument()
+      // It is not known to have failed, and the browser's own words say
+      // nothing an organizer can act on.
+      expect(screen.queryByText(/^Could not/)).not.toBeInTheDocument()
+      expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument()
+      expect(alert).not.toHaveBeenCalled()
+      expect(onSettled).toHaveBeenCalledTimes(1)
+    },
+  )
+})
+
 describe('"Move to Confirmed"', () => {
   it('confirms that one sign-up, with the email, and says so', async () => {
     const { onSettled } = press('confirm')

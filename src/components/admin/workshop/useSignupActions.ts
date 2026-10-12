@@ -32,6 +32,18 @@ export function useSignupActions(onSettled: () => void) {
     (action: keyof typeof TITLES, userName: string) =>
     (error: { message: string; data?: { code?: string } | null }) => {
       onSettled()
+      // No `data`: no answer came back (the connection dropped, the request
+      // timed out). The server may have made the change all the same, so this
+      // is not reported as a failure, and the browser's "Failed to fetch" is
+      // not shown.
+      if (!error.data) {
+        showNotification({
+          type: 'warning',
+          title: 'No answer from the server',
+          message: `${userName}'s sign-up may or may not have been changed. Check the list before trying again.`,
+        })
+        return
+      }
       showNotification({
         type: 'error',
         title: TITLES[action],
