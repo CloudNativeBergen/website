@@ -66,6 +66,7 @@ vi.mock('@/lib/workshop/sign-in', async (importOriginal) => ({
 }))
 
 import WorkshopAdminPage from '@/app/(admin)/admin/workshops/page'
+import { WorkshopTickets } from '@/components/admin/workshop/tickets'
 
 const PLATFORM_SLUG = 'platform-org'
 /** A configured platform org distinct from the request org (`org-A`), so the
@@ -139,6 +140,32 @@ describe('/admin/workshops — feature gate', () => {
     await expect(WorkshopAdminPage()).resolves.toBeTruthy()
     expect(mockGetWorkshops).toHaveBeenCalledWith('conf-1')
     expect(h.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('/admin/workshops — the workshop-ticket list (#1332)', () => {
+  it('mounts the section for the conference the request resolved', async () => {
+    stubOwnTicketingSecret('org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+
+    const page = (await WorkshopAdminPage()) as {
+      props: {
+        ticketsSection: {
+          type: unknown
+          props: { conference: { _id: string } }
+        }
+      }
+    }
+
+    // The section loads its own data inside a Suspense boundary, so the page
+    // only has to hand it over: with the conference, and nothing from a client.
+    expect(page.props.ticketsSection.type).toBe(WorkshopTickets)
+    expect(page.props.ticketsSection.props.conference._id).toBe('conf-1')
   })
 })
 
