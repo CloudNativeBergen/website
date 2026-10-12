@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
+import { expect, userEvent, within } from 'storybook/test'
 import { ThemeProvider } from 'next-themes'
 import { WorkshopRegistrationSettings } from './WorkshopRegistrationSettings'
 import { NotificationProvider } from './NotificationProvider'
@@ -123,6 +124,29 @@ export const ScheduledWithSponsorStart: Story = {
     workshopRegistrationStart: '2026-05-01T07:00:00.000Z',
     workshopRegistrationEnd: '2026-06-01T07:00:00.000Z',
   },
+}
+
+/** The edit form, opened: the sponsor start time comes first, with its rule. */
+export const Editing: Story = {
+  args: EarlyAccessOpen.args,
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', {
+        name: 'Edit Workshop Registration',
+      }),
+    )
+    // The dialog is portalled out of the canvas.
+    const dialog = await within(document.body).findByRole('dialog')
+    // 07:00 UTC on 10 April is 09:00 in Oslo.
+    await expect(
+      within(dialog).getByLabelText(/Sponsor Early Access Opens/),
+    ).toHaveValue('2026-04-10T09:00')
+  },
+}
+
+export const EditingDark: Story = {
+  ...Editing,
+  parameters: { theme: 'dark' },
 }
 
 export const NotConfigured: Story = {
