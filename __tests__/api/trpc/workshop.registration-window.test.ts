@@ -242,3 +242,33 @@ describe('workshop.signup and the registration window, as it was before #1345', 
     })
   })
 })
+
+describe('workshop.signup before the official opening (#1345)', () => {
+  it('names the day and the time of day, in the conference’s time zone', async () => {
+    // 22:30 UTC on Sunday 14 June is 00:30 on Monday 15 June in Oslo: the day
+    // itself differs between the server's zone (UTC here) and the conference's.
+    h.times = { workshopRegistrationStart: '2026-06-14T22:30:00.000Z' }
+    expect(await attempt()).toEqual({
+      refused: {
+        code: 'PRECONDITION_FAILED',
+        message:
+          'Workshop registration opens on Monday, June 15, 2026 at 12:30 AM',
+      },
+    })
+  })
+
+  it('names the official opening, whatever the sponsor start time is: nobody has early access yet', async () => {
+    h.times = {
+      workshopRegistrationSponsorStart: LONG_BEFORE,
+      workshopRegistrationStart: '2026-06-14T22:30:00.000Z',
+      workshopRegistrationEnd: LONG_AFTER,
+    }
+    expect(await attempt()).toEqual({
+      refused: {
+        code: 'PRECONDITION_FAILED',
+        message:
+          'Workshop registration opens on Monday, June 15, 2026 at 12:30 AM',
+      },
+    })
+  })
+})

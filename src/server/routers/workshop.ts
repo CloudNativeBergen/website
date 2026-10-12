@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { formatDate } from '@/lib/time'
+import { formatRegistrationInstant } from '@/lib/time'
 import {
   router,
   publicProcedure,
@@ -541,7 +541,9 @@ export const workshopRouter = router({
         if (registration.status === 'not-open-yet') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: `Workshop registration opens on ${formatDate(registration.opensAt)}`,
+            // The day AND the time of day, as the portal's banner names it:
+            // two start times can fall on one day (spec §6).
+            message: `Workshop registration opens on ${formatRegistrationInstant(registration.opensAt)}`,
           })
         }
 
