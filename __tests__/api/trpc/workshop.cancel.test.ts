@@ -160,7 +160,10 @@ vi.mock('@/lib/email/workshop', () => ({
   sendBasicWorkshopConfirmation: email.sendBasicWorkshopConfirmation,
 }))
 
-import { checkWorkshopCapacity } from '@/lib/workshop/sanity'
+import {
+  checkWorkshopCapacity,
+  getWorkshopSignupsByWorkshop,
+} from '@/lib/workshop/sanity'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 
 const WORKSHOP = 'ws-1'
@@ -437,10 +440,13 @@ describe('an organizer moves a confirmed sign-up to the waitlist', () => {
     // promotion's own sort by `_createdAt` can now put Ada ahead of Cy; left in
     // the order they were written, Ada would be first with no sort at all.
     h.dataset.reverse()
-    const waitlistAsRead = h.dataset.filter(
-      (d) => d._type === 'workshopSignup' && d.status === 'waitlist',
+    // The read the promotion itself makes, so this is what its sort is handed.
+    const waitlistAsRead = await getWorkshopSignupsByWorkshop(
+      WORKSHOP,
+      'conf-1',
+      'waitlist',
     )
-    expect(waitlistAsRead.map((d) => d._id)).toEqual([cy, ada])
+    expect(waitlistAsRead.map((signup) => signup._id)).toEqual([cy, ada])
     email.sendBasicWorkshopConfirmation.mockClear()
 
     const result = await createAdminCaller().workshop.admin.updateCapacity({
