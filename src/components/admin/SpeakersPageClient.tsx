@@ -460,6 +460,7 @@ export default function SpeakersPageClient({
             }
             ticketStatuses={ticketStatuses}
             ticketStatusesLoading={ticketStatusQuery.isPending}
+            ticketQuestions={ticketStatusQuery.data?.questions}
             onSendTicketInvitation={handleSendTicketInvitation}
             onFindTicket={setTicketAddressSpeakerId}
             sendingTicketSpeakerIds={sendingTicketSpeakerIds}

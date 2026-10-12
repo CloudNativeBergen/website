@@ -45,6 +45,11 @@ Error: Module not found: Can't resolve './fonts/google/Inter.woff2'
 describe('isFontFetchFailure', () => {
   it('recognises a Google Font that could not be downloaded', () => {
     expect(isFontFetchFailure(FONT_FETCH_FAILED)).toBe(true)
+    expect(
+      isFontFetchFailure(
+        '[next]/internal/font/google/ibm_plex_sans_8a8d0ae1.module.css',
+      ),
+    ).toBe(true)
   })
 
   it('does not take any other build failure for one', () => {

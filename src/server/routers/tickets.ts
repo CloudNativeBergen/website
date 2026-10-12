@@ -38,6 +38,7 @@ import {
   searchTicketCandidates,
   joinSpeakerTicketStatus,
 } from '@/lib/tickets/speakerStatus'
+import { discoverTicketQuestions } from '@/lib/tickets/questions'
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { buildTicketSummary, exportParticipants } from '@/lib/tickets/summary'
 import {
@@ -834,7 +835,17 @@ export const ticketsRouter = router({
       }
 
       const redeemed = await fetchRedeemedSpeakerEmails(conference)
-      return { statuses: joinSpeakerTicketStatus(inputs, redeemed, conference) }
+      // Only discover ticket questions if redeemed tickets were successfully read.
+      // If the provider had an outage (redeemed === null) or does not support invitations
+      // (e.g. Tito), skipping discovery prevents duplicate expensive provider fetches.
+      const candidates = redeemed
+        ? await fetchEventTicketCandidates(conference)
+        : null
+      const questions = candidates ? discoverTicketQuestions(candidates) : []
+      return {
+        statuses: joinSpeakerTicketStatus(inputs, redeemed, conference),
+        questions,
+      }
     }),
 
     /**
