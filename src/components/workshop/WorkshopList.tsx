@@ -13,6 +13,7 @@ import {
   getWorkshopIdFromSignup,
 } from '@/lib/workshop/utils'
 import { hasConfirmedSignup } from '@/lib/workshop/status'
+import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { Button } from '@/components/Button'
@@ -21,6 +22,8 @@ interface WorkshopListProps {
   userWorkOSId?: string
   userEmail?: string
   userName?: string
+  /** The conference's three registration times; see `workshopRegistrationWindow`. */
+  workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
 }
@@ -29,6 +32,7 @@ export default function WorkshopList({
   userWorkOSId,
   userEmail,
   userName,
+  workshopRegistrationSponsorStart,
   workshopRegistrationStart,
   workshopRegistrationEnd,
 }: WorkshopListProps) {
@@ -173,12 +177,18 @@ export default function WorkshopList({
   const workshops = (workshopsData?.data || []) as ProposalWithWorkshopData[]
   const userSignups = signupsData?.data || []
 
-  const now = new Date()
-  const registrationNotYetOpen =
-    workshopRegistrationStart && new Date(workshopRegistrationStart) > now
-  const registrationClosed =
-    workshopRegistrationEnd && new Date(workshopRegistrationEnd) < now
-  const registrationOpen = !registrationNotYetOpen && !registrationClosed
+  // THE ONE WINDOW RULE (#1345), the same call `workshop.signup` and the
+  // portal page make. Nobody has early access yet (#1346).
+  const registration = workshopRegistrationWindow(
+    {
+      workshopRegistrationSponsorStart,
+      workshopRegistrationStart,
+      workshopRegistrationEnd,
+    },
+    { now: new Date(), earlyAccess: false },
+  )
+  const registrationOpen = registration.status === 'open'
+  const registrationClosed = registration.status === 'closed'
 
   const userWorkshopIds = userSignups
     .filter((s) => s.status === 'confirmed' || s.status === 'waitlist')
@@ -326,7 +336,7 @@ export default function WorkshopList({
                   isLoading={
                     !!userSignup && cancelledSignupIds.includes(userSignup._id)
                   }
-                  registrationClosed={!!registrationClosed}
+                  registrationClosed={registrationClosed}
                   announcements={
                     <WorkshopAnnouncementsSection workshopId={workshop._id} />
                   }

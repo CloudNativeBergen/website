@@ -35,7 +35,11 @@ export type WorkshopRegistrationWindow =
        */
       early: boolean
     }
-  | { status: 'closed' }
+  | {
+      status: 'closed'
+      /** When sign-up closed, as stored. */
+      closedAt: string
+    }
 
 /** A stored time as an instant, or null when it is unset or unreadable. */
 function instant(value: string | null | undefined): number | null {
@@ -75,6 +79,11 @@ export function workshopRegistrationWindow(
   const start = instant(times.workshopRegistrationStart)
   const end = instant(times.workshopRegistrationEnd)
 
+  const closed: WorkshopRegistrationWindow | null =
+    end !== null && end < at
+      ? { status: 'closed', closedAt: times.workshopRegistrationEnd! }
+      : null
+
   if (start !== null && start > at) {
     const earlyStart = earlyAccess ? earlyAccessStart(times) : null
     if (earlyStart === null) {
@@ -93,10 +102,7 @@ export function workshopRegistrationWindow(
     }
     // Inside the early-access window. Early access moves the opening only: an
     // end that has passed is closed for this caller as for everyone.
-    return end !== null && end < at
-      ? { status: 'closed' }
-      : { status: 'open', early: true }
+    return closed ?? { status: 'open', early: true }
   }
-  if (end !== null && end < at) return { status: 'closed' }
-  return { status: 'open', early: false }
+  return closed ?? { status: 'open', early: false }
 }

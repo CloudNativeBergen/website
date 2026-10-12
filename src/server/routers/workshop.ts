@@ -52,6 +52,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
+import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import {
   isOrganizerForCurrentOrg,
   type OrganizerSpeaker,
@@ -531,21 +532,20 @@ export const workshopRouter = router({
         const userEmail = actor.email
         const userName = workshopUserName(actor)
 
-        const now = new Date()
-        if (
-          conference.workshopRegistrationStart &&
-          new Date(conference.workshopRegistrationStart) > now
-        ) {
+        // THE ONE WINDOW RULE (#1345), the same call the portal page and its
+        // list make. Nobody has early access yet (#1346).
+        const registration = workshopRegistrationWindow(conference, {
+          now: new Date(),
+          earlyAccess: false,
+        })
+        if (registration.status === 'not-open-yet') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: `Workshop registration opens on ${formatDate(conference.workshopRegistrationStart)}`,
+            message: `Workshop registration opens on ${formatDate(registration.opensAt)}`,
           })
         }
 
-        if (
-          conference.workshopRegistrationEnd &&
-          new Date(conference.workshopRegistrationEnd) < now
-        ) {
+        if (registration.status === 'closed') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             message: 'Workshop registration has closed',

@@ -23,6 +23,7 @@ import {
 import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
 import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
 import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
+import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import { signOutOfWorkshop } from './actions'
 
 /** Is `url` on `host` (a Host header value), compared as URLs compare hosts? */
@@ -88,13 +89,15 @@ export default async function WorkshopPage({
       const mainPortal = await workshopPortalUrl(conference)
       if (mainPortal) redirect(mainPortal)
     }
-    const registrationEnd = conference.workshopRegistrationEnd
     return (
       <WorkshopUnavailable
         conferenceTitle={conference.title}
         contactEmail={resolveConferenceContact(conference)}
         registrationClosed={
-          Boolean(registrationEnd) && new Date(registrationEnd!) < new Date()
+          workshopRegistrationWindow(conference, {
+            now: new Date(),
+            earlyAccess: false,
+          }).status === 'closed'
         }
       />
     )
@@ -196,13 +199,12 @@ export default async function WorkshopPage({
     }
   }
 
-  const now = new Date()
-  const registrationNotYetOpen =
-    conference.workshopRegistrationStart &&
-    new Date(conference.workshopRegistrationStart) > now
-  const registrationClosed =
-    conference.workshopRegistrationEnd &&
-    new Date(conference.workshopRegistrationEnd) < now
+  // THE ONE WINDOW RULE (#1345), the same call `workshop.signup` and the list
+  // below make. Nobody has early access yet (#1346).
+  const registration = workshopRegistrationWindow(conference, {
+    now: new Date(),
+    earlyAccess: false,
+  })
 
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24">
@@ -221,7 +223,7 @@ export default async function WorkshopPage({
             <p>Register for workshops at {conference.title}.</p>
           </div>
 
-          {registrationNotYetOpen && (
+          {registration.status === 'not-open-yet' && (
             <div className="mt-8 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
               <div className="flex">
                 <div className="shrink-0">
@@ -244,9 +246,7 @@ export default async function WorkshopPage({
                   <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
                     <p>
                       Registration will open on{' '}
-                      {formatRegistrationInstant(
-                        conference.workshopRegistrationStart!,
-                      )}
+                      {formatRegistrationInstant(registration.opensAt)}
                     </p>
                   </div>
                 </div>
@@ -254,7 +254,7 @@ export default async function WorkshopPage({
             </div>
           )}
 
-          {registrationClosed && (
+          {registration.status === 'closed' && (
             <div className="mt-8 rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
               <div className="flex">
                 <div className="shrink-0">
@@ -277,9 +277,7 @@ export default async function WorkshopPage({
                   <div className="mt-2 text-sm text-red-700 dark:text-red-300">
                     <p>
                       Registration closed on{' '}
-                      {formatRegistrationInstant(
-                        conference.workshopRegistrationEnd!,
-                      )}
+                      {formatRegistrationInstant(registration.closedAt)}
                     </p>
                   </div>
                 </div>
@@ -292,6 +290,9 @@ export default async function WorkshopPage({
               userWorkOSId={user.userId}
               userEmail={user.email}
               userName={userName}
+              workshopRegistrationSponsorStart={
+                conference.workshopRegistrationSponsorStart
+              }
               workshopRegistrationStart={conference.workshopRegistrationStart}
               workshopRegistrationEnd={conference.workshopRegistrationEnd}
             />

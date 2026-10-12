@@ -41,7 +41,7 @@ const OPENS_AT_SPONSOR = {
 }
 const OPEN = { status: 'open', early: false }
 const OPEN_EARLY = { status: 'open', early: true }
-const CLOSED = { status: 'closed' }
+const CLOSED = { status: 'closed', closedAt: END }
 
 describe('the registration window without early access', () => {
   it.each([
@@ -80,7 +80,10 @@ describe('the registration window with early access', () => {
   it('does not open a window whose end has already passed', () => {
     // An end before the sponsor start time: a combination no save accepts.
     const times = { ...ALL_THREE, workshopRegistrationEnd: BEFORE_SPONSOR }
-    expect(at(times, IN_EARLY_ACCESS, true)).toEqual(CLOSED)
+    expect(at(times, IN_EARLY_ACCESS, true)).toEqual({
+      status: 'closed',
+      closedAt: BEFORE_SPONSOR,
+    })
   })
 })
 
