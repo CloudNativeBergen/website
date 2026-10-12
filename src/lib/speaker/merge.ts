@@ -1057,6 +1057,8 @@ export function assertMergeable(
 //   - day-of reminder marker → `reminder.day-of.<conferenceId>.<speakerId>.<date>`
 //     (the ONE id whose speaker segment is not the last one — see
 //     `reminderLogId` / `dayOfLogId` in `src/lib/reminders/marker.ts`)
+//   - once-only not-set notice → `notification.workshop-not-set.<hash>.<recipientId>`
+//     (`@/lib/events/handlers/ticketTypeNotSetNotification`)
 // A plain reference repoint (the generic path) rewrites the inner ref to the
 // survivor but LEAVES the doc keyed by the loser id. If the survivor already
 // holds the canonical-id sibling for the same conversation, BOTH docs then point
@@ -1068,6 +1070,8 @@ export function assertMergeable(
 //   - the reminder cron's `createIfNotExists` against the SURVIVOR-keyed marker
 //     finds nothing → every recurring reminder the loser already received is
 //     RE-SENT, and a day-of ping goes out twice.
+//   - the not-set notice's `createIfNotExists` against the SURVIVOR-keyed id
+//     finds nothing either → the merged organizer is notified a second time.
 // So these docs must be RECONCILED onto the survivor's canonical id (merged when
 // it exists, recreated otherwise) and the loser-suffixed doc deleted — never left
 // repointed-but-loser-keyed.
@@ -1076,6 +1080,7 @@ export function assertMergeable(
 const DETERMINISTIC_ID_PREFIXES = [
   'convpref.',
   'notification.message.',
+  'notification.workshop-not-set.',
   'reminder.',
 ] as const
 
@@ -1181,6 +1186,8 @@ export interface DeterministicReconciliation {
  *    override is kept.
  *  - message notification: UNREAD if EITHER side is unread; the two unread piles
  *    are SUMMED (clamped) so the survivor's badge reflects both, never doubles.
+ *  - once-only not-set notice: READ if EITHER side is read; the loser's document
+ *    is dropped.
  *  - scheduledReminderLog: the send counts are SUMMED and the LATEST `lastSentAt`
  *    wins — both sides of the gate move in the "do not send again" direction.
  *    The two markers record mails delivered to the SAME person (once per
@@ -1235,6 +1242,17 @@ export function reconcileDeterministicDoc(
     }
     // Both already read → leave the survivor doc's readAt/count untouched.
     return { deleteId, canonicalId, mergeSet, mergeUnset }
+  }
+
+  // Once-only not-set notice: the two documents say the same thing to what is
+  // now one person, so having read either is having read it. Nothing else on
+  // the survivor's document changes.
+  if (deleteId.startsWith('notification.workshop-not-set.')) {
+    const mergeSet: Record<string, unknown> = {}
+    if (!survivorDoc.readAt && typeof loserDoc.readAt === 'string') {
+      mergeSet.readAt = loserDoc.readAt
+    }
+    return { deleteId, canonicalId, mergeSet }
   }
 
   // scheduledReminderLog — the gate is (count < maxSends) AND (spacing elapsed),

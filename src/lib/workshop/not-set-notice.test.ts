@@ -1,10 +1,9 @@
 /**
  * @vitest-environment node
  *
- * The pure half of the not-set notice (#1335): which ticket types count as
- * not set, and what one notification says and is called. The writes, the
- * recipient set and the read count are proven at the two call sites
- * (`eligibility.not-set.test.ts`, `checkin-ticket-sold.not-set.test.ts`).
+ * Which ticket types count as not set (#1335). What is written, to whom and
+ * at what cost is proven at the two call sites (`eligibility.not-set.test.ts`,
+ * `checkin-ticket-sold.not-set.test.ts`) and on the handler.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -24,10 +23,7 @@ vi.mock('@/lib/tickets/classification', async (importOriginal) => {
   }
 })
 
-import {
-  notSetTicketTypes,
-  ticketTypeNotSetNotifications,
-} from './not-set-notice'
+import { notSetTicketTypes } from './not-set-notice'
 
 const MARKED = [{ typeName: 'Workshop day', grantsWorkshop: true }]
 
@@ -77,92 +73,5 @@ describe('notSetTicketTypes', () => {
     // After #1332 the rule answers `unclassified`, and this follows.
     h.rule = (name) => (name === 'Crew' ? 'unclassified' : 'granted')
     expect(notSetTicketTypes(['Crew'], roles)).toEqual(['Crew'])
-  })
-})
-
-describe('ticketTypeNotSetNotifications', () => {
-  const build = (
-    over: Partial<Parameters<typeof ticketTypeNotSetNotifications>[0]> = {},
-  ) =>
-    ticketTypeNotSetNotifications({
-      conferenceId: 'conf-a',
-      typeName: 'Early Bird',
-      organizerIds: ['org-1', 'org-2'],
-      ...over,
-    })
-
-  it('writes one notification per organizer, naming the type and linking to the workshops page', () => {
-    expect(build()).toEqual([
-      {
-        id: expect.any(String),
-        recipientId: 'org-1',
-        conferenceId: 'conf-a',
-        notificationType: 'workshop_ticket_type_not_set',
-        title: '“Early Bird” needs a workshop decision',
-        message:
-          'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
-        link: '/admin/workshops',
-      },
-      {
-        id: expect.any(String),
-        recipientId: 'org-2',
-        conferenceId: 'conf-a',
-        notificationType: 'workshop_ticket_type_not_set',
-        title: '“Early Bird” needs a workshop decision',
-        message:
-          'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
-        link: '/admin/workshops',
-      },
-    ])
-  })
-
-  it('gives the same organizer the same document id for the same type, in either spelling', () => {
-    const [first] = build()
-    const [again] = build({ typeName: '  EARLY bird' })
-
-    expect(again.id).toBe(first.id)
-  })
-
-  it('gives a different id per type, per conference and per organizer', () => {
-    const ids = [
-      ...build(),
-      ...build({ typeName: 'Late Bird' }),
-      ...build({ conferenceId: 'conf-b' }),
-    ].map((item) => item.id)
-
-    expect(new Set(ids).size).toBe(6)
-  })
-
-  it('does not let two different triples share an id by moving a separator', () => {
-    const [a] = build({ conferenceId: 'conf.a', typeName: 'b' })
-    const [b] = build({ conferenceId: 'conf', typeName: 'a.b' })
-
-    expect(a.id).not.toBe(b.id)
-  })
-
-  it('produces an id Sanity accepts, whatever the type is called', () => {
-    const [item] = build({
-      typeName: 'Workshop + Conference (2 days) / “æøå” 🎟️'.repeat(20),
-      organizerIds: ['o'.repeat(120)],
-    })
-
-    // Sanity ids: a-z, A-Z, 0-9, `.`, `_`, `-`, at most 128 characters.
-    expect(item.id).toMatch(/^[A-Za-z0-9._-]{1,128}$/)
-  })
-
-  it('keeps a very long type name inside the stored title limit', () => {
-    const [item] = build({ typeName: 'x'.repeat(400) })
-
-    // `notification.title` is `Rule.max(200)` in the schema.
-    expect(item.title.length).toBeLessThanOrEqual(200)
-    expect(item.title).toBe(`“${'x'.repeat(171)}…” needs a workshop decision`)
-  })
-
-  it('drops a duplicated or empty organizer id', () => {
-    expect(
-      build({ organizerIds: ['org-1', '', 'org-1'] }).map(
-        (item) => item.recipientId,
-      ),
-    ).toEqual(['org-1'])
   })
 })

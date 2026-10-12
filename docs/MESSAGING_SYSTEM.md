@@ -111,7 +111,7 @@ per-user. Messaging uses two of its types:
 - **`message_stale`** — emitted by the stale-nudge cron: at most twice per
   trailing message (the first nudge, then one ESCALATION for an assigned thread).
 
-Every type the hub stores is listed, with its emitter, on `NotificationType` in
+The hub's types are the `NotificationType` union in
 `src/lib/notification/types.ts`. One of them outside messaging is written
 differently from the rest and is described here because it shares the
 deterministic-id technique:
@@ -125,11 +125,14 @@ deterministic-id technique:
   per `(conference, ticket type, organizer)` with a deterministic id, written
   with `createIfNotExists` through `createNotificationsOnce` and **never
   patched**, so a repeat write changes nothing, read state included. A
-  per-process memo in front of it keeps a type the process has already handled
+  per-process memo in front of it keeps a type the process has already raised
   from costing a read or a write. Recipients are the conference's own
-  `organizers[]`, not the organization-wide set. It stores the ticket type's
-  name and no personal data. The 90-day purge removes it like any other type,
-  after which a type that is still not set is notified again.
+  `organizers[]`. It is **bell only**: no web push is sent. It stores the
+  ticket type's name and no personal data. The 90-day purge removes it like
+  any other type, after which a type that is still not set is notified again.
+  The organizer is the id's last segment so that a speaker merge carries the
+  document to the surviving account (`DETERMINISTIC_ID_PREFIXES` in
+  `src/lib/speaker/merge.ts`).
 
 ### Deterministic-id schemes
 
@@ -139,7 +142,7 @@ deterministic-id technique:
 | `conversation.sponsor.<sfcId>`                        | The single sponsor thread (G2b) | `createIfNotExists` — portal + organizer converge  |
 | `convpref.<conversationId>.<speakerId>`               | One preference per participant  | doc-per-pair, no array RMW                         |
 | `notification.message.<conversationId>.<recipientId>` | The one collapsed hub item      | `createIfNotExists` + patch                        |
-| `notification.workshop-not-set.<sha256>`              | Not-set notice, per organizer   | `createIfNotExists`, no patch — repeats are no-ops |
+| `notification.workshop-not-set.<hash>.<recipientId>`  | Not-set notice, per organizer   | `createIfNotExists`, no patch — repeats are no-ops |
 
 `conversation.<nanoid>` (ordinary general threads) and `message.<nanoid>` are
 random. Marketing outreach uses `conversation.marketing.<hash>` instead: the

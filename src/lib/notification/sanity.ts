@@ -146,21 +146,16 @@ export async function createNotifications(
  *
  * CONTRACT: NEVER throws into the caller's flow, like `createNotifications`.
  *
- * RETURN: `committed` says whether the transaction went through, `created` how
- * many of the documents did not exist before. The two are separate because a
- * committed write that created nothing is a success (the notifications were
- * already there), and a caller deciding whether to try again must be able to
- * tell it from a failure.
- *
- * WEB PUSH goes to the recipients whose document this call CREATED, read from
- * the per-mutation `operation` in the commit answer. A repeat therefore pushes
- * nothing. Anything but an explicit `create` is treated as not created.
+ * NO WEB PUSH. A repeat must not push again, and telling a document this call
+ * created from one that was already there would rest on what the commit answer
+ * reports for an ignored write. Nothing that uses this needs a push, so none is
+ * sent.
  */
 export async function createNotificationsOnce(
   items: OnceNotificationInput[],
-): Promise<{ committed: boolean; created: number }> {
+): Promise<void> {
   if (items.length === 0) {
-    return { committed: true, created: 0 }
+    return
   }
 
   try {
@@ -172,27 +167,9 @@ export async function createNotificationsOnce(
         ...notificationDocument(item, createdAt),
       })
     }
-    const answer = await tx.commit()
-
-    const createdIds = new Set(
-      (answer?.results ?? [])
-        .filter((result) => result.operation === 'create')
-        .map((result) => result.id),
-    )
-    const created = items.filter((item) => createdIds.has(item.id))
-
-    if (created.length > 0) {
-      try {
-        await sendPushForNotifications(created)
-      } catch (pushError) {
-        console.error('Failed to send web push for notifications:', pushError)
-      }
-    }
-
-    return { committed: true, created: created.length }
+    await tx.commit()
   } catch (error) {
     console.error('Failed to create once-only notifications:', error)
-    return { committed: false, created: 0 }
   }
 }
 
@@ -208,7 +185,7 @@ export function messageNotificationId(
 }
 
 /** Schema cap on `notification.title` (Rule.max(200)). */
-const NOTIFICATION_TITLE_MAX = 200
+export const NOTIFICATION_TITLE_MAX = 200
 
 /**
  * Title copy for a collapsed message notification: a single unread message

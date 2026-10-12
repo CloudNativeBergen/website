@@ -9,28 +9,17 @@
  * executed, every write is built by the real client and applied by
  * `@sanity/mutator`.
  *
- * WHAT IS REPLACED: the ticketing provider, the push bridge (so its two reads
- * are not in the counts below) and `runAfterResponse`, which here holds each
- * task until `afterResponse()` so a test can look at the answer before the
- * write has run.
+ * WHAT IS REPLACED: the ticketing provider, and `runAfterResponse`, which here
+ * holds each task until `afterResponse()` so a test can look at the answer
+ * before the write has run, and can let several requests arrive first.
  */
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeAll,
-  beforeEach,
-  afterEach,
-} from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { EventTicket } from '@/lib/tickets/types'
 import type { SanityStore } from '../../../__tests__/helpers/sanityStore'
 
 const h = vi.hoisted(() => ({
   store: null as unknown as SanityStore,
   tasks: [] as (() => Promise<void>)[],
-  /** Make scheduling the after-response work itself throw. */
-  schedulingFails: false,
   resolveTicketingProvider: vi.fn(),
 }))
 vi.mock('@/lib/sanity/client', async () => {
@@ -45,12 +34,8 @@ vi.mock('@/lib/tickets/provider', () => ({
 vi.mock('@/lib/email/from', () => ({
   platformFallbackContact: () => 'fallback@example.test',
 }))
-vi.mock('@/lib/push/send', () => ({
-  sendPushForNotifications: vi.fn(async () => {}),
-}))
 vi.mock('@/server/runAfterResponse', () => ({
   runAfterResponse: (task: () => Promise<void>) => {
-    if (h.schedulingFails) throw new Error('nothing can be scheduled')
     h.tasks.push(task)
   },
 }))
@@ -130,24 +115,13 @@ const NOT_SET_REFUSAL =
 const UPGRADE_REFUSAL =
   'No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at help@x.test if you believe this is an error.'
 
-// The first raise imports the handler registry, which is every handler in the
-// application. Paid here so it is not charged to the first test's timeout.
-beforeAll(async () => {
-  await import('@/lib/events/registry')
-}, 60_000)
-
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   h.tasks.length = 0
-  h.schedulingFails = false
   h.store.reset(DATASET)
   __resetNotSetNoticeMemo()
   __resetRedeemedCache()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
 })
 
 describe('a refusal for a not-set type', () => {
@@ -204,6 +178,22 @@ describe('a refusal for a not-set type', () => {
     await refuse('bo@x.test')
     await afterResponse()
 
+    expect(h.store.commits).toHaveLength(1)
+    expect(notifications()).toHaveLength(2)
+  })
+
+  it('raises a burst for one type once: one task, one read, one write', async () => {
+    holding(['ada@x.test', 'Early Bird'], ['bo@x.test', 'Early Bird'])
+
+    // Three refused requests arrive before any after-response work has run.
+    await refuse('ada@x.test')
+    await refuse('bo@x.test')
+    await refuse('ada@x.test')
+    expect(h.tasks).toHaveLength(1)
+
+    await afterResponse()
+
+    expect(readsBeyondTheGate()).toHaveLength(1)
     expect(h.store.commits).toHaveLength(1)
     expect(notifications()).toHaveLength(2)
   })
@@ -292,13 +282,13 @@ describe('a refusal that is not about a missing decision', () => {
     expect(notifications()).toEqual([])
   })
 
-  it('writes none for someone with no ticket', async () => {
+  it('raises nothing for someone with no ticket', async () => {
     holding(['ada@x.test', 'Early Bird'])
 
-    await refuse('nobody@x.test')
-    await afterResponse()
+    const result = await refuse('nobody@x.test')
 
-    expect(notifications()).toEqual([])
+    expect(result.reason).toContain('No ticket found for nobody@x.test')
+    expect(h.tasks).toEqual([])
     expect(h.store.queries).toEqual([])
   })
 })
@@ -317,25 +307,17 @@ describe('when the notification cannot be written', () => {
       reason: NOT_SET_REFUSAL,
     })
     expect(result.tickets).toHaveLength(1)
-    expect(notifications()).toEqual([])
+    // The write was attempted, and it failed.
+    expect(console.error).toHaveBeenCalledWith(
+      'Failed to create once-only notifications:',
+      expect.any(Error),
+    )
 
     // And the next request is refused the same way.
     expect((await refuse('ada@x.test')).reason).toBe(NOT_SET_REFUSAL)
   })
 
-  it('gives the attendee the same refusal when raising it throws outright', async () => {
-    holding(['ada@x.test', 'Early Bird'])
-    h.schedulingFails = true
-
-    const result = await refuse('ada@x.test')
-
-    expect(result.reason).toBe(NOT_SET_REFUSAL)
-    expect(result.tickets).toHaveLength(1)
-  })
-
-  it('does not try again on every refused request, and does try again later', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date('2026-10-12T08:00:00Z'))
+  it('is left to the next process: this one does not try again', async () => {
     holding(['ada@x.test', 'Early Bird'])
     h.store.failWrites()
 
@@ -343,16 +325,15 @@ describe('when the notification cannot be written', () => {
       await refuse('ada@x.test')
       await afterResponse()
     }
+    // Four refused requests, one attempt: the organizers were read once.
     expect(readsBeyondTheGate()).toHaveLength(1)
 
-    // Sanity is back, and the pause after the failure has passed.
-    const queriesSoFar = h.store.queries.length
-    h.store.reset([...DATASET])
-    vi.setSystemTime(new Date('2026-10-12T08:11:00Z'))
+    // Sanity is back and a process that never met the type refuses it.
+    h.store.reset(DATASET)
+    __resetNotSetNoticeMemo()
     await refuse('ada@x.test')
     await afterResponse()
 
-    expect(queriesSoFar).toBe(4 + 1)
     expect(notifications()).toHaveLength(2)
   })
 })

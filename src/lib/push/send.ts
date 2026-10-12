@@ -191,7 +191,6 @@ export function pushCategoryForNotificationType(
     case 'marketing_task_overdue':
     case 'marketing_task_failed':
     case 'marketing_task_tag_withheld':
-    case 'workshop_ticket_type_not_set':
       return 'otherUpdates'
     default:
       return 'otherUpdates'

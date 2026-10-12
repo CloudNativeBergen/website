@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { ticketTypeNotSetNotifications } from '@/lib/events/handlers/ticketTypeNotSetNotification'
 import {
   repointReferencesInDocument,
   computeSurvivorFieldMerge,
@@ -1208,6 +1209,78 @@ describe('buildMergePlan — reminder markers (#1027 item 2)', () => {
     const plan = buildMergePlan(survivor, loser, [otherMarker])
     expect(plan.documentPatches.map((p) => p.id)).toEqual([otherMarker._id])
     expect(plan.deterministicReconciliations).toEqual([])
+  })
+})
+
+describe('buildMergePlan — once-only not-set notices (#1335)', () => {
+  const survivor = speaker({ _id: SURVIVOR })
+  const loser = speaker({ _id: LOSER })
+
+  // Ids come from the writer itself: what it stored for the loser, and what
+  // the next process to meet the type will ask for under the survivor.
+  const noticeFor = (organizerId: string) => {
+    const [item] = ticketTypeNotSetNotifications({
+      conferenceId: 'conf-1',
+      typeName: 'Early Bird',
+      organizerIds: [organizerId],
+    })
+    return {
+      _id: item.id,
+      _type: 'notification',
+      recipient: { ...ref(organizerId), _weak: true },
+      conference: ref('conf-1'),
+      notificationType: item.notificationType,
+      title: item.title,
+      createdAt: '2026-10-12T08:00:00.000Z',
+    }
+  }
+
+  it('moves the loser’s notice to the id the next write will look for', () => {
+    const plan = buildMergePlan(survivor, loser, [
+      { ...noticeFor(LOSER), _rev: 'r1' },
+    ])
+
+    // NOT a generic patch: repointed in place it would stay keyed by the
+    // loser, and the next write for the survivor would create a second one.
+    expect(plan.documentPatches).toEqual([])
+    expect(plan.deterministicReconciliations).toEqual([
+      {
+        deleteId: noticeFor(LOSER)._id,
+        canonicalId: noticeFor(SURVIVOR)._id,
+        createDoc: noticeFor(SURVIVOR),
+      },
+    ])
+  })
+
+  it('drops the loser’s notice when the survivor holds one, keeping it read if either was', () => {
+    const readByLoser = buildMergePlan(
+      survivor,
+      loser,
+      [{ ...noticeFor(LOSER), readAt: '2026-10-12T09:00:00.000Z' }],
+      [noticeFor(SURVIVOR)],
+    )
+    expect(readByLoser.documentPatches).toEqual([])
+    expect(readByLoser.deterministicReconciliations).toEqual([
+      {
+        deleteId: noticeFor(LOSER)._id,
+        canonicalId: noticeFor(SURVIVOR)._id,
+        mergeSet: { readAt: '2026-10-12T09:00:00.000Z' },
+      },
+    ])
+
+    const readBySurvivor = buildMergePlan(
+      survivor,
+      loser,
+      [noticeFor(LOSER)],
+      [{ ...noticeFor(SURVIVOR), readAt: '2026-10-12T10:00:00.000Z' }],
+    )
+    expect(readBySurvivor.deterministicReconciliations).toEqual([
+      {
+        deleteId: noticeFor(LOSER)._id,
+        canonicalId: noticeFor(SURVIVOR)._id,
+        mergeSet: {},
+      },
+    ])
   })
 })
 

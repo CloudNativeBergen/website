@@ -49,8 +49,8 @@ export type NotificationType =
   // A ticket type has no workshop decision (workshop tickets spec §8): one was
   // sold, or its holder was refused at the portal. Emitted once per type per
   // conference by the `workshop.ticket-type.not-set` bus handler to the
-  // conference's organizers; links to `/admin/workshops`. Rendered generically
-  // by the hub.
+  // conference's organizers; links to `/admin/workshops`. Bell only: no web
+  // push. Rendered generically by the hub.
   | 'workshop_ticket_type_not_set'
   | 'system'
 

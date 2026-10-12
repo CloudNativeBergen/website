@@ -10,10 +10,9 @@
  * built by the real client and applied by `@sanity/mutator`.
  *
  * WHAT IS REPLACED: the two conference lookups by Checkin event id, the
- * organization document, the email sender, the push bridge (so its two reads
- * are not in the counts below) and `runAfterResponse`, which here holds each
- * task until `afterResponse()` so a test can look at the webhook's answer
- * before the write has run.
+ * organization document, the email sender, and `runAfterResponse`, which here
+ * holds each task until `afterResponse()` so a test can look at the webhook's
+ * answer before the write has run, and can let several deliveries arrive first.
  */
 import crypto from 'crypto'
 import { NextRequest } from 'next/server'
@@ -23,8 +22,6 @@ import type { SanityStore } from '../../helpers/sanityStore'
 const h = vi.hoisted(() => ({
   store: null as unknown as SanityStore,
   tasks: [] as (() => Promise<void>)[],
-  /** Make scheduling the after-response work itself throw. */
-  schedulingFails: false,
   getConference: vi.fn(),
   getTenant: vi.fn(),
   getOrganizationById: vi.fn(),
@@ -46,12 +43,8 @@ vi.mock('@/lib/organization/sanity', () => ({
 vi.mock('@/lib/email/workshop', () => ({
   sendWorkshopSignupInstructions: h.sendWorkshop,
 }))
-vi.mock('@/lib/push/send', () => ({
-  sendPushForNotifications: vi.fn(async () => {}),
-}))
 vi.mock('@/server/runAfterResponse', () => ({
   runAfterResponse: (task: () => Promise<void>) => {
-    if (h.schedulingFails) throw new Error('nothing can be scheduled')
     h.tasks.push(task)
   },
 }))
@@ -162,18 +155,11 @@ const summary = () =>
     link: doc.link,
   }))
 
-// The first raise imports the handler registry, which is every handler in the
-// application. Paid here so it is not charged to the first test's timeout.
-beforeAll(async () => {
-  await import('@/lib/events/registry')
-}, 60_000)
-
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   h.tasks.length = 0
-  h.schedulingFails = false
   h.store.reset(Object.values(CONFERENCES))
   __resetNotSetNoticeMemo()
 
@@ -241,6 +227,20 @@ describe('a sale of a not-set ticket type', () => {
     await sale(['Early Bird', 'early bird '])
     await afterResponse()
 
+    expect(h.store.commits).toHaveLength(1)
+    expect(notifications()).toHaveLength(2)
+  })
+
+  it('raises a burst for one type once: one task, one read, one write', async () => {
+    // Three deliveries arrive before any after-response work has run.
+    await sale(['Early Bird'])
+    await sale(['Early Bird'])
+    await sale(['Early Bird'])
+    expect(h.tasks).toHaveLength(1)
+
+    await afterResponse()
+
+    expect(h.store.queries).toHaveLength(1)
     expect(h.store.commits).toHaveLength(1)
     expect(notifications()).toHaveLength(2)
   })
@@ -324,7 +324,7 @@ describe('a sale that raises nothing', () => {
     expect(h.store.queries).toEqual([])
   })
 
-  it('writes none when the conference does not have workshops', async () => {
+  it('raises nothing when the conference does not have workshops', async () => {
     h.getOrganizationById.mockResolvedValue({
       _id: 'org-platform',
       name: 'Platform',
@@ -332,18 +332,24 @@ describe('a sale that raises nothing', () => {
       plan: 'free',
     })
 
-    await sale(['Early Bird'])
-    await afterResponse()
+    const response = await sale(['Early Bird'])
 
-    expect(notifications()).toEqual([])
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      success: true,
+      message:
+        'Processed 1 ticket(s), sent 0 email(s) (workshops not enabled for this organization)',
+      results: [],
+    })
+    expect(h.tasks).toEqual([])
+    expect(h.store.queries).toEqual([])
   })
 
-  it('writes none for a delivery whose signature does not verify', async () => {
+  it('raises nothing for a delivery whose signature does not verify', async () => {
     const response = await sale(['Early Bird'], 42, 'not-the-secret')
-    await afterResponse()
 
     expect(response.status).toBe(401)
-    expect(notifications()).toEqual([])
+    expect(h.tasks).toEqual([])
     expect(h.store.queries).toEqual([])
   })
 })
@@ -373,21 +379,15 @@ describe('the answer to Checkin', () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(ANSWER)
     expect(h.sendWorkshop).toHaveBeenCalledTimes(1)
-    expect(notifications()).toEqual([])
+    // The write was attempted, and it failed.
+    expect(console.error).toHaveBeenCalledWith(
+      'Failed to create once-only notifications:',
+      expect.any(Error),
+    )
 
     // And so is the next delivery's.
     const next = await sale(['Workshop day', 'Early Bird'])
     expect(next.status).toBe(200)
     expect(await next.json()).toEqual(ANSWER)
-  })
-
-  it('is the same when raising the notification throws outright', async () => {
-    h.schedulingFails = true
-
-    const response = await sale(['Workshop day', 'Early Bird'])
-
-    expect(response.status).toBe(200)
-    expect(await response.json()).toEqual(ANSWER)
-    expect(h.sendWorkshop).toHaveBeenCalledTimes(1)
   })
 })
