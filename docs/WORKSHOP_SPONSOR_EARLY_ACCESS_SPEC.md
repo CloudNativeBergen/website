@@ -82,9 +82,10 @@ up:
 
 - **The sign-up instructions email** (`src/lib/email/workshop.ts`) keeps describing the official
   opening.
-- **The status label in `WorkshopRegistrationSettings`** ("Not yet open", "Currently open",
-  "Closed") is computed from the function and gains one state for the early-access window, so
-  organizers are not told "Not yet open" while sponsors' people are signing up.
+- **The status label in `WorkshopRegistrationSettings`** (with both times set: "Not yet open",
+  "Currently open" or "Closed") is computed from the function and gains one state for the
+  early-access window, so organizers are not told "Not yet open" while sponsors' people are
+  signing up.
 
 ## 4. The link
 
@@ -107,10 +108,11 @@ up:
   Sign-ups already made through it stay, with their sponsor still recorded (§6). Creating or
   sending again stores a new token, so the old address never works again.
 - **Only the published document counts.** The server's authenticated Sanity clients see Studio
-  drafts and release copies as well as published documents, so a draft made while a token was
-  stored would keep matching after a revoke. Every read that looks a link up excludes drafts and release
-  copies, and a revoke also removes the token from a draft of the sponsor when one exists, so
-  publishing that draft cannot bring the link back.
+  drafts as well as published documents, so a draft made while a token was stored would keep
+  matching after a revoke. Every read that looks a link up excludes drafts and release copies, the
+  pair other readers in the repository exclude. A revoke also removes the token from every
+  unpublished copy of the sponsor that exists, a draft or a release copy, so publishing one cannot
+  bring the link back.
 - **Every read that looks a link up carries the conference**, so a token of one conference never
   resolves on another conference's host.
 
@@ -121,14 +123,16 @@ A new route under `/workshop` takes the token from its path.
 - **It first answers as the portal does** for a conference without workshops, before anything is
   read about the token. On a host that cannot sign in while the conference's main host can, it
   forwards to the same address on the main host, as the portal page forwards to the main portal.
-  The cookie must be set by the host the person will sign up on.
+  The cookie must be set by the host the person will sign up on. When the main host cannot sign in
+  either, it forwards to the portal page, which says sign-up is not available, and sets nothing.
 - **A live link sets the cookie and forwards to the portal page.** The cookie holds the token and
   nothing else. It is `HttpOnly` and bound to the host (`hostCookie` in
   `src/lib/workshop/central-sign-in/cookies.ts`), and it expires at the official opening. Opening a
   second sponsor's link replaces it: the latest link counts.
-- **With no official opening ahead, nothing is set.** When the conference has no official opening,
-  or it has passed, sign-up is already open to the person or already closed, and a cookie would
-  have no expiry to take. The route forwards to the portal page and shows no notice.
+- **With no official opening ahead, a live link sets nothing.** When the conference has no
+  official opening, or it has passed, sign-up is already open to the person or already closed, and
+  a cookie would have no expiry to take. The route forwards to the portal page and shows no
+  notice. A link that is not live gets the notice below whatever the times are.
 - **A link that is not live forwards to the portal page with a notice**: "This early access link
   is no longer valid". An existing cookie is left as it is. A token that never existed, a revoked
   one and one of another conference are answered identically.
@@ -194,8 +198,9 @@ There is no early-access page. The portal page and its list render from the wind
 - **One cached read per conference serves the page and the route**: the conference's live links,
   each with its sponsor's name. It is not keyed by what the cookie holds, so a made-up value costs
   nothing. Creating and revoking a link expire it at once, so the next view shows the new answer.
-  `revalidateTag(tag, 'default')`, the call used across the repository, serves the old answer one
-  more time; this read needs `{ expire: 0 }`.
+  `revalidateTag(tag, 'default')`, the call used across the repository, can keep serving the old
+  answer while the new one loads; this read needs `{ expire: 0 }`, which makes the next request
+  wait for it.
 - **A cookie whose link was revoked is treated as no cookie.** The person sees the portal as
   everyone does, with no notice. The notice appears only on opening a link.
 - **With a link opened and no sponsor start time set**, the person sees the portal as everyone
@@ -210,9 +215,8 @@ There is no early-access page. The portal page and its list render from the wind
 - With no link: an action to create one and an action to send the email.
 - With a link: a copy action, a revoke action that asks first and says what it does (new early
   sign-ups through this link stop; sign-ups already made stay), and the count of §9.
-- **The address is built when it is asked for**, on create and on copy, as the portal link's
-  "Copy link only" works today. Finding the portal's working host is a live read, and viewing a
-  sponsor's record must not make it.
+- **The address is built when it is asked for**, on create and on copy. Finding the portal's
+  working host is a live read, and viewing a sponsor's record must not make it.
 
 **A new kind in the Send action**, "Workshop early access", next to information, contract,
 registration and discount codes in `sponsor.crm.sendCommunication`.
@@ -237,8 +241,9 @@ registration and discount codes in `sponsor.crm.sendCommunication`.
 ## 9. What organizers see
 
 `/admin/workshops` has no list of all sign-ups today. Sign-ups are shown per workshop and status,
-in a dialog opened from a workshop's card (`SignupDetailsModal`, read through
-`workshop.admin.listSignups`).
+in a dialog opened from a workshop's card (`SignupDetailsModal`). Its rows come from
+`workshop.admin.listSignups`, and from the page's general read of sign-ups until that answer has
+arrived.
 
 - **A badge in that dialog** marks an early sign-up: "via _Sponsor_". When the sponsor is no
   longer in the conference, it says "early access".
@@ -289,7 +294,8 @@ in a dialog opened from a workshop's card (`SignupDetailsModal`, read through
 
 ## 12. Slices
 
-1. #1345: the sponsor start time and the one window rule (§3). No attendee sees a difference.
+1. #1345: the sponsor start time and the one window rule (§3), and the refusal that names the
+   time of day (§6). Nobody can sign up earlier yet.
 2. #1346: the link from end to end: create, copy and revoke on the sponsor's record, the route and
    the cookie, the sign-up gate and the recorded sponsor, the portal, and `/privacy` (§4, §5, §6,
    §7, §8 first part, §10).
