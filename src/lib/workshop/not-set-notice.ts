@@ -20,8 +20,6 @@
  *     guarantees nothing across instances or restarts.
  */
 import { eventBus } from '@/lib/events/bus'
-// Subscribes the handler.
-import '@/lib/events/registry'
 import type { WorkshopTicketTypeNotSetEvent } from '@/lib/events/types'
 import {
   type TicketTypeRole,
@@ -76,6 +74,10 @@ export function __resetNotSetNoticeMemo(): void {
  * type already raised here, that is all that happens. For a new one the event
  * is published AFTER the response, so neither the webhook's answer nor the
  * attendee's refusal waits for Sanity or can be changed by it.
+ *
+ * NEVER THROWS. Both callers sit inside a `try` whose `catch` answers for the
+ * whole request (a 500 before any workshop email is sent; "unable to verify"
+ * instead of the refusal), so a throw from here would change their answer.
  */
 export function reportNotSetTicketTypes(params: {
   /** The server-resolved conference. Absent: nothing can be raised. */
@@ -84,33 +86,42 @@ export function reportNotSetTicketTypes(params: {
   ticketTypeRoles: readonly TicketTypeRole[] | null | undefined
   source: WorkshopTicketTypeNotSetEvent['metadata']['source']
 }): void {
-  const { conferenceId, source } = params
-  if (!conferenceId) return
+  try {
+    const { conferenceId, source } = params
+    if (!conferenceId) return
 
-  const due = notSetTicketTypes(
-    params.typeNames,
-    params.ticketTypeRoles,
-  ).filter((typeName) => {
-    const key = JSON.stringify([conferenceId, typeKey(typeName)])
-    if (raised.has(key)) return false
-    // Claimed here, before the work is even scheduled, so a burst of requests
-    // for one type raises it once and not once each.
-    raised.add(key)
-    return true
-  })
-  if (due.length === 0) return
+    const due = notSetTicketTypes(
+      params.typeNames,
+      params.ticketTypeRoles,
+    ).filter((typeName) => {
+      const key = JSON.stringify([conferenceId, typeKey(typeName)])
+      if (raised.has(key)) return false
+      // Claimed here, before the work is even scheduled, so a burst of
+      // requests for one type raises it once and not once each.
+      raised.add(key)
+      return true
+    })
+    if (due.length === 0) return
 
-  runAfterResponse(async () => {
-    await Promise.all(
-      due.map((typeName) =>
-        eventBus.publish({
-          eventType: 'workshop.ticket-type.not-set',
-          timestamp: new Date(),
-          conferenceId,
-          typeName,
-          metadata: { source },
-        }),
-      ),
-    )
-  })
+    runAfterResponse(async () => {
+      // The registry subscribes the handler. Loaded here and not at the top:
+      // it is every handler in the application, and this module is imported
+      // by the attendee portal and the webhook, which would carry all of it
+      // for a type that is rarely met.
+      await import('@/lib/events/registry')
+      await Promise.all(
+        due.map((typeName) =>
+          eventBus.publish({
+            eventType: 'workshop.ticket-type.not-set',
+            timestamp: new Date(),
+            conferenceId,
+            typeName,
+            metadata: { source },
+          }),
+        ),
+      )
+    })
+  } catch (error) {
+    console.error('workshop.ticket-type.not-set: could not be raised', error)
+  }
 }

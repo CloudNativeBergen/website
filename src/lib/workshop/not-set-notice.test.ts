@@ -23,7 +23,7 @@ vi.mock('@/lib/tickets/classification', async (importOriginal) => {
   }
 })
 
-import { notSetTicketTypes } from './not-set-notice'
+import { notSetTicketTypes, reportNotSetTicketTypes } from './not-set-notice'
 
 const MARKED = [{ typeName: 'Workshop day', grantsWorkshop: true }]
 
@@ -73,5 +73,27 @@ describe('notSetTicketTypes', () => {
     // After #1332 the rule answers `unclassified`, and this follows.
     h.rule = (name) => (name === 'Crew' ? 'unclassified' : 'granted')
     expect(notSetTicketTypes(['Crew'], roles)).toEqual(['Crew'])
+  })
+})
+
+describe('reportNotSetTicketTypes', () => {
+  it('returns, and says so in the log, when deciding throws', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    // A type name that is not a string, as a malformed provider payload cast
+    // through the types would deliver it: the rule's own `typeKey` throws.
+    expect(() =>
+      reportNotSetTicketTypes({
+        conferenceId: 'conf-a',
+        typeNames: [42 as unknown as string],
+        ticketTypeRoles: MARKED,
+        source: 'ticket-sold',
+      }),
+    ).not.toThrow()
+
+    expect(console.error).toHaveBeenCalledWith(
+      'workshop.ticket-type.not-set: could not be raised',
+      expect.any(TypeError),
+    )
   })
 })

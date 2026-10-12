@@ -10,10 +10,8 @@
  *   library ignores it, not because this file says so. A transaction applies
  *   whole or not at all.
  *
- * WHAT IT IS NOT: the Content Lake. `results[].operation` in the commit answer
- * (`create` for a document that did not exist, `none` for one that did) is
- * this file's rendering of `MutationOperation` from `@sanity/client`'s types,
- * not a recording of the live API.
+ * WHAT IT IS NOT: the Content Lake. `@sanity/mutator` is Sanity's own code for
+ * these semantics, but it is not the server.
  *
  * Use from a `vi.mock('@/lib/sanity/client')` factory:
  *
@@ -50,6 +48,8 @@ export interface SanityStore {
   readonly commits: SerializedMutation[][]
   /** Make every commit reject until the next `reset()`. */
   failWrites(error?: Error): void
+  /** Make every query reject until the next `reset()`. */
+  failReads(error?: Error): void
   /** The module shape of `@/lib/sanity/client` the code under test imports. */
   readonly clients: {
     clientReadUncached: { fetch: (...args: unknown[]) => Promise<unknown> }
@@ -70,10 +70,12 @@ export function createSanityStore(): SanityStore {
   let queries: string[] = []
   let commits: SerializedMutation[][] = []
   let writeFailure: Error | null = null
+  let readFailure: Error | null = null
 
   const fetch = async (...args: unknown[]) => {
     const [query, params] = args as [string, Record<string, unknown>?]
     queries.push(query)
+    if (readFailure) throw readFailure
     const result = await evaluate(parse(query), {
       dataset: [...documents.values()],
       params: params ?? {},
@@ -86,32 +88,19 @@ export function createSanityStore(): SanityStore {
     // Applied to a copy first: a transaction that throws half way leaves the
     // dataset as it was.
     const next = new Map(documents)
-    const results = mutations.map((mutation) => {
+    for (const mutation of mutations) {
       const [body] = Object.values(mutation)
       const id = body._id ?? body.id
       if (!id) throw new Error('sanityStore: a mutation without a document id')
-      const before = next.get(id) ?? null
-      const after = new Mutation({ mutations: [mutation] }).apply(before)
+      const after = new Mutation({ mutations: [mutation] }).apply(
+        next.get(id) ?? null,
+      )
       if (after) next.set(id, after)
       else next.delete(id)
-      return {
-        id,
-        operation: !after
-          ? 'delete'
-          : !before
-            ? 'create'
-            : JSON.stringify(after) === JSON.stringify(before)
-              ? 'none'
-              : 'update',
-      }
-    })
+    }
     documents = next
     commits.push(mutations)
-    return {
-      transactionId: `tx-${commits.length}`,
-      documentIds: results.map((result) => result.id),
-      results,
-    }
+    return { transactionId: `tx-${commits.length}` }
   }
 
   return {
@@ -120,6 +109,7 @@ export function createSanityStore(): SanityStore {
       queries = []
       commits = []
       writeFailure = null
+      readFailure = null
     },
     ofType: (type) =>
       [...documents.values()].filter((doc) => doc._type === type),
@@ -131,6 +121,9 @@ export function createSanityStore(): SanityStore {
     },
     failWrites(error = new Error('sanityStore: write refused')) {
       writeFailure = error
+    },
+    failReads(error = new Error('sanityStore: read refused')) {
+      readFailure = error
     },
     clients: {
       clientReadUncached: { fetch },

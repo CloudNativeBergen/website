@@ -155,6 +155,13 @@ const summary = () =>
     link: doc.link,
   }))
 
+// The first raise imports the handler registry, inside the deferred task. It
+// is every handler in the application, so it is loaded once here and not on
+// the first test's clock.
+beforeAll(async () => {
+  await import('@/lib/events/registry')
+}, 60_000)
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -389,5 +396,22 @@ describe('the answer to Checkin', () => {
     const next = await sale(['Workshop day', 'Early Bird'])
     expect(next.status).toBe(200)
     expect(await next.json()).toEqual(ANSWER)
+  })
+
+  it('is the same when the organizers cannot be read, and nothing is written', async () => {
+    const response = await sale(['Workshop day', 'Early Bird'])
+    // Only the read made after the response fails.
+    const failure = new Error('sanity is down')
+    h.store.failReads(failure)
+    await afterResponse()
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(ANSWER)
+    // The read was attempted, it failed, and the bus kept it there.
+    expect(console.error).toHaveBeenCalledWith(
+      'Event handler failed for workshop.ticket-type.not-set:',
+      failure,
+    )
+    expect(h.store.commits).toEqual([])
   })
 })

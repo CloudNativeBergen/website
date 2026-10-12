@@ -13,7 +13,7 @@
  * holds each task until `afterResponse()` so a test can look at the answer
  * before the write has run, and can let several requests arrive first.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import type { EventTicket } from '@/lib/tickets/types'
 import type { SanityStore } from '../../../__tests__/helpers/sanityStore'
 
@@ -114,6 +114,13 @@ const NOT_SET_REFUSAL =
   'Your ticket type “Early Bird” has not been set up for workshop access yet. This is a configuration gap on our side, not a problem with your ticket — please contact us at help@x.test so an organizer can mark which ticket types include workshop access.'
 const UPGRADE_REFUSAL =
   'No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at help@x.test if you believe this is an error.'
+
+// The first raise imports the handler registry, inside the deferred task. It
+// is every handler in the application, so it is loaded once here and not on
+// the first test's clock.
+beforeAll(async () => {
+  await import('@/lib/events/registry')
+}, 60_000)
 
 beforeEach(() => {
   vi.clearAllMocks()
