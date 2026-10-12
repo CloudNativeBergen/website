@@ -723,7 +723,7 @@ describe('a failure while the section loads', () => {
 
     // It does not blame the ticketing provider for what may be our own fault.
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'This list could not be loaded.It cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
+      'This list could not be loaded.The list cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
     )
     expect(screen.queryAllByRole('button')).toHaveLength(0)
   })

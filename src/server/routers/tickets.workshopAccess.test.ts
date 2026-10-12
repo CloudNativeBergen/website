@@ -441,10 +441,12 @@ describe('a seating answer never changes workshop access', () => {
  * last grant when that grant sits in another spelling.
  */
 describe('a workshop answer for a type stored under two spellings', () => {
-  it('keeps the seating answer the seating rule was reading', async () => {
+  it('carries the seating answer the seating rule was reading, and no other', async () => {
+    // The first entry answers no seating question, so `classifyTicket` reads
+    // "undeclared" for this type, whatever the second spelling says.
     seed([
-      { _key: 'a', typeName: 'Two-day pass', admits: false },
-      { _key: 'b', typeName: 'two-day pass ', admits: true },
+      { _key: 'a', typeName: 'Two-day pass', grantsWorkshop: false },
+      { _key: 'b', typeName: 'two-day pass ', admits: false },
       { _key: 'c', typeName: 'Day pass', grantsWorkshop: true },
     ])
 
@@ -452,9 +454,11 @@ describe('a workshop answer for a type stored under two spellings', () => {
       updates: [{ typeName: 'Two-day pass', grantsWorkshop: true }],
     })
 
+    // Undeclared before, undeclared after: no seating answer is carried in
+    // from a spelling the seating rule was not reading.
     expect(stored()).toEqual([
       { typeName: 'Day pass', grantsWorkshop: true },
-      { typeName: 'Two-day pass', admits: false, grantsWorkshop: true },
+      { typeName: 'Two-day pass', grantsWorkshop: true },
     ])
   })
 

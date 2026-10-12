@@ -101,8 +101,8 @@ export function WorkshopTicketsSection({
               : `The ticket types could not be read from ${providerLabel}.`}
           </p>
           <p className="mt-1">
-            It cannot be shown or changed right now. Who can sign up has not
-            changed. Reload the page to try again.
+            The list cannot be shown or changed right now. Who can sign up has
+            not changed. Reload the page to try again.
           </p>
         </div>
       </WorkshopTicketsFrame>

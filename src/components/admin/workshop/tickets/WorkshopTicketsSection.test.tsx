@@ -386,7 +386,7 @@ describe('a provider that cannot be read', () => {
     render(<WorkshopTicketsSection list={null} providerLabel="Tito" />)
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The ticket types could not be read from Tito.It cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
+      'The ticket types could not be read from Tito.The list cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
     )
     expect(screen.queryAllByRole('button')).toHaveLength(0)
     // Not the empty list, and not the not-configured state either.
@@ -400,7 +400,7 @@ describe('a provider that cannot be read', () => {
     )
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'This list could not be loaded.It cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
+      'This list could not be loaded.The list cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
     )
     expect(screen.queryAllByRole('button')).toEqual([])
   })
