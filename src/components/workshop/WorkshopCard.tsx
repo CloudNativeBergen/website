@@ -306,16 +306,13 @@ export default function WorkshopCard({
               : 'You can register again while registration is open, but the seat may be taken by then.'}
         </p>
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+          {/* The choice that cannot be undone is the QUIET one: outlined, and
+              in the secondary place (below on a phone, left on a desktop).
+              The filled button, where this portal's dialogs put the answer
+              they expect, keeps the sign-up. */}
           <Button
             type="button"
-            onClick={() => setShowCancelQuestion(false)}
             variant="outline"
-            className="min-h-11"
-          >
-            {isOnWaitlist ? 'Stay on Waitlist' : 'Keep My Seat'}
-          </Button>
-          <Button
-            type="button"
             aria-disabled={!cancelQuestionRead || undefined}
             onClick={() => {
               if (!cancelQuestionRead) return
@@ -325,6 +322,13 @@ export default function WorkshopCard({
             className="min-h-11"
           >
             {isOnWaitlist ? 'Leave Waitlist' : 'Cancel Registration'}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setShowCancelQuestion(false)}
+            className="min-h-11"
+          >
+            {isOnWaitlist ? 'Stay on Waitlist' : 'Keep My Seat'}
           </Button>
         </div>
       </div>

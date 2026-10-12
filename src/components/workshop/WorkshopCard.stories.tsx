@@ -19,8 +19,10 @@ const workshop = {
   available: 18,
   waitlistCount: 0,
   date: '2026-09-10',
-  startTime: '2026-09-10T09:00:00Z',
-  endTime: '2026-09-10T11:00:00Z',
+  // "HH:MM", the shape the schedule stores and `formatTime12Hour` reads. (An
+  // ISO string here rendered as "2014:00 PM": `parseInt` read the year.)
+  startTime: '09:00',
+  endTime: '11:00',
   room: 'Workshop Room A',
   description:
     'A hands-on introduction to building Kubernetes Operators with the ' +
@@ -108,9 +110,14 @@ const signedUp = (status: 'confirmed' | 'waitlist') => ({
   ] as never,
 })
 
-/** Press the card's button and read the question it asks. Nothing is cancelled. */
+/**
+ * Press the card's button and read the question it asks. Nothing is cancelled.
+ *
+ * The choice that cannot be undone is the quiet one: `keep` is the filled
+ * button, `button` (the cancel) the outlined one, and both are finger-sized.
+ */
 const asks =
-  (button: string, title: string, words: string): Story['play'] =>
+  (button: string, keep: string, title: string, words: string): Story['play'] =>
   async ({ canvasElement, args }) => {
     const body = within(canvasElement.ownerDocument.body)
     await userEvent.click(
@@ -119,12 +126,21 @@ const asks =
 
     const question = await body.findByRole('dialog', { name: title })
     await expect(question).toHaveTextContent(words)
+    const cancels = within(question).getByRole('button', { name: button })
+    const keeps = within(question).getByRole('button', { name: keep })
     // `waitFor`: the question fades in, and a fading element is not visible yet.
-    await waitFor(() =>
-      expect(
-        within(question).getByRole('button', { name: button }),
-      ).toBeVisible(),
+    await waitFor(() => expect(cancels).toBeVisible())
+    await expect(getComputedStyle(cancels).backgroundColor).toBe(
+      'rgba(0, 0, 0, 0)',
     )
+    await expect(getComputedStyle(keeps).backgroundColor).not.toBe(
+      'rgba(0, 0, 0, 0)',
+    )
+    for (const each of [cancels, keeps]) {
+      await expect(each.getBoundingClientRect().height).toBeGreaterThanOrEqual(
+        44,
+      )
+    }
     await expect(args.onCancel).not.toHaveBeenCalled()
     const root = canvasElement.ownerDocument.documentElement
     await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth)
@@ -132,44 +148,49 @@ const asks =
 
 /**
  * The same, at PHONE width: the question is a sheet with its two buttons
- * stacked. `defaultViewport` is load-bearing: the test runner resizes the page
- * from it, and at its default 1280 these assertions fail.
+ * stacked, the one that keeps the sign-up on top. `defaultViewport` is
+ * load-bearing: the test runner resizes the page from it, and at its default
+ * 1280 these assertions fail.
  */
 const asksOnAPhone =
   (button: string, keep: string, title: string, words: string): Story['play'] =>
   async (context) => {
-    await asks(button, title, words)!(context)
+    await asks(button, keep, title, words)!(context)
     const document = context.canvasElement.ownerDocument
     await expect(document.defaultView!.innerWidth).toBeLessThan(640)
     const question = within(document.body).getByRole('dialog', { name: title })
     await expect(
       within(question)
-        .getByRole('button', { name: keep })
+        .getByRole('button', { name: button })
         .getBoundingClientRect().top,
     ).toBeGreaterThanOrEqual(
       within(question)
-        .getByRole('button', { name: button })
+        .getByRole('button', { name: keep })
         .getBoundingClientRect().bottom,
     )
   }
 
 const SEAT_OPEN = [
   'Cancel Registration',
+  'Keep My Seat',
   'Cancel your registration?',
   'You give up your seat in Getting Started with Kubernetes Operators. You can register again while registration is open, but the seat may be taken by then.',
 ] as const
 const SEAT_CLOSED = [
   'Cancel Registration',
+  'Keep My Seat',
   'Cancel your registration?',
   'You give up your seat in Getting Started with Kubernetes Operators. Registration has closed, so you will not be able to register again.',
 ] as const
 const LINE_OPEN = [
   'Leave Waitlist',
+  'Stay on Waitlist',
   'Leave the waitlist?',
   'You give up your place in line for Getting Started with Kubernetes Operators. You can join again while registration is open, but you lose the place you have now.',
 ] as const
 const LINE_CLOSED = [
   'Leave Waitlist',
+  'Stay on Waitlist',
   'Leave the waitlist?',
   'You give up your place in line for Getting Started with Kubernetes Operators. Registration has closed, so you will not be able to join again.',
 ] as const
@@ -186,7 +207,7 @@ export const CancelQuestionDark: Story = { ...CancelQuestion, globals: dark }
 export const CancelQuestionMobile: Story = {
   ...CancelQuestion,
   parameters: phone,
-  play: asksOnAPhone(SEAT_OPEN[0], 'Keep My Seat', SEAT_OPEN[1], SEAT_OPEN[2]),
+  play: asksOnAPhone(...SEAT_OPEN),
 }
 
 /** A confirmed seat, registration closed: there is no signing up again. */
@@ -201,12 +222,7 @@ export const CancelQuestionRegistrationClosedDark: Story = {
 export const CancelQuestionRegistrationClosedMobile: Story = {
   ...CancelQuestionRegistrationClosed,
   parameters: phone,
-  play: asksOnAPhone(
-    SEAT_CLOSED[0],
-    'Keep My Seat',
-    SEAT_CLOSED[1],
-    SEAT_CLOSED[2],
-  ),
+  play: asksOnAPhone(...SEAT_CLOSED),
 }
 
 /** A place on the waitlist, registration open. */
@@ -221,12 +237,7 @@ export const LeaveWaitlistQuestionDark: Story = {
 export const LeaveWaitlistQuestionMobile: Story = {
   ...LeaveWaitlistQuestion,
   parameters: phone,
-  play: asksOnAPhone(
-    LINE_OPEN[0],
-    'Stay on Waitlist',
-    LINE_OPEN[1],
-    LINE_OPEN[2],
-  ),
+  play: asksOnAPhone(...LINE_OPEN),
 }
 
 /** A place on the waitlist, registration closed. */
@@ -241,10 +252,5 @@ export const LeaveWaitlistQuestionRegistrationClosedDark: Story = {
 export const LeaveWaitlistQuestionRegistrationClosedMobile: Story = {
   ...LeaveWaitlistQuestionRegistrationClosed,
   parameters: phone,
-  play: asksOnAPhone(
-    LINE_CLOSED[0],
-    'Stay on Waitlist',
-    LINE_CLOSED[1],
-    LINE_CLOSED[2],
-  ),
+  play: asksOnAPhone(...LINE_CLOSED),
 }
