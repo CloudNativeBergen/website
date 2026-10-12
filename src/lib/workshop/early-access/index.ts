@@ -1,0 +1,12 @@
+/**
+ * Early access to workshop sign-up for sponsors (#1343, #1346). See
+ * `docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md`.
+ */
+export {
+  createEarlyAccessLink,
+  earlyAccessUrl,
+  findEarlyAccessSponsor,
+  readEarlyAccessToken,
+  revokeEarlyAccessLink,
+} from './link'
+export { expireEarlyAccessLinks, resolveEarlyAccess } from './links'

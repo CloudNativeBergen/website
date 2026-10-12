@@ -303,7 +303,11 @@ export async function updateSponsor(
 export async function deleteSponsor(
   id: string,
   orgId: string | null,
-): Promise<{ error?: Error }> {
+): Promise<{
+  error?: Error
+  /** The conferences the sponsor was removed from. */
+  conferenceIds?: string[]
+}> {
   // FAIL CLOSED: no tenant, no query, no delete.
   if (!orgId) {
     return {
@@ -338,11 +342,13 @@ export async function deleteSponsor(
     const sfcDocs = await clientWrite.fetch<
       Array<{
         _id: string
+        conferenceId?: string | null
         contractAssetRef?: string
       }>
     >(
       `*[_type == "sponsorForConference" && sponsor._ref == $id]{
         _id,
+        "conferenceId": conference._ref,
         "contractAssetRef": contractDocument.asset._ref
       }`,
       { id },
@@ -394,7 +400,13 @@ export async function deleteSponsor(
     }
     await transaction.commit()
 
-    return {}
+    return {
+      conferenceIds: [
+        ...new Set(
+          sfcDocs.flatMap((d) => (d.conferenceId ? [d.conferenceId] : [])),
+        ),
+      ],
+    }
   } catch (error) {
     return { error: error as Error }
   }

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { WORKSHOP_EARLY_ACCESS_PATH } from '../sign-in-paths'
 
 /**
  * THE EARLY-ACCESS LINK OF A SPONSOR (#1346, spec §4): one token on the
@@ -157,6 +158,36 @@ export async function revokeEarlyAccessLink(
     transaction.patch(version._id, { unset: [EARLY_ACCESS_TOKEN_FIELD] })
   }
   await transaction.commit()
+}
+
+/**
+ * The token the sponsor's PUBLISHED document stores, or `null`: for building
+ * the address of a link that exists. Never creates one.
+ */
+export async function readEarlyAccessToken(
+  conferenceId: string,
+  sponsorForConferenceId: string,
+): Promise<string | null> {
+  const token = await scopedFetch<string | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "sponsorForConference" && _id == $id][0].workshopEarlyAccessToken`,
+    { id: sponsorForConferenceId },
+    { cache: 'no-store' },
+  )
+  return token || null
+}
+
+/**
+ * The address of a link: on the portal's working host, with the token in the
+ * path. `portalUrl` is what `workshopPortalUrl` answered, never the host an
+ * organizer happens to be on: the cookie is bound to the host that sets it.
+ */
+export function earlyAccessUrl(portalUrl: string, token: string): string {
+  return new URL(
+    `${WORKSHOP_EARLY_ACCESS_PATH}/${encodeURIComponent(token)}`,
+    portalUrl,
+  ).toString()
 }
 
 /**
