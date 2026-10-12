@@ -7,10 +7,9 @@ import {
 } from '@/lib/notification/sanity'
 import type { OnceNotificationInput } from '@/lib/notification/types'
 import { getConferenceOrganizerIds } from '@/lib/organizer-invite/sanity'
+import { fitsDocumentId } from '@/lib/sanity/helpers'
 import { typeKey } from '@/lib/tickets/classification'
 
-/** Sanity's limit on a document id. */
-const DOCUMENT_ID_MAX = 128
 const ID_PREFIX = 'notification.workshop-not-set.'
 const DIGEST_LENGTH = 32
 
@@ -41,9 +40,15 @@ function noticeId(
   return `${ID_PREFIX}${digest}.${organizerId}`
 }
 
-/** Whether an organizer's id leaves the document id inside Sanity's limit. */
+/**
+ * Whether an organizer can hold a notice at all: whether the document id with
+ * their id on the end is one Sanity accepts. Everything before the organizer
+ * has a fixed length, so the answer does not depend on the conference or the
+ * type. The speaker merge asks the same question of the same function
+ * (`fitsDocumentId`) before it moves a notice to another account.
+ */
 const fitsADocumentId = (organizerId: string) =>
-  ID_PREFIX.length + DIGEST_LENGTH + 1 + organizerId.length <= DOCUMENT_ID_MAX
+  fitsDocumentId(noticeId('', '', organizerId))
 
 /**
  * A type name made safe to show inside the title's quotes.

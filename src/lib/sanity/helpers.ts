@@ -77,6 +77,19 @@ export function ensureUniqueArrayKeys<T extends Record<string, unknown>>(
   )
 }
 
+/** Sanity's limit on the length of a document id. */
+const DOCUMENT_ID_MAX_LENGTH = 128
+
+/**
+ * Whether an id is short enough to be a Sanity document id. THE ONE RULE for
+ * every place that builds an id out of other ids (a deterministic id with a
+ * speaker id in it) and has to decide whether the result can be stored. It
+ * answers for the length only; the characters are the builder's to get right.
+ */
+export function fitsDocumentId(id: string): boolean {
+  return id.length <= DOCUMENT_ID_MAX_LENGTH
+}
+
 export function createReference(id: string): Reference {
   return { _type: 'reference', _ref: id }
 }

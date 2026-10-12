@@ -53,6 +53,7 @@ import { POST } from '@/app/api/webhooks/checkin/ticket-sold/route'
 import {
   MAX_TYPES_PER_CALL,
   MAX_TYPES_PER_CONFERENCE,
+  MEMO_LIFETIME_MS,
   __resetNotSetNoticeMemo,
 } from '@/lib/workshop/not-set-notice'
 
@@ -215,6 +216,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.useRealTimers()
 })
 
 describe('a sale of a not-set ticket type', () => {
@@ -408,7 +410,7 @@ describe('how much one delivery can cost', () => {
         .mock.calls.filter(([line]) => String(line).includes('raises no more')),
     ).toEqual([
       [
-        'workshop.ticket-type.not-set: 100 types raised for one conference; this process raises no more for it',
+        'workshop.ticket-type.not-set: 100 types raised for one conference; this process raises no more for it until they expire',
         { conferenceId: 'conf-a' },
       ],
     ])
@@ -417,6 +419,30 @@ describe('how much one delivery can cost', () => {
     await sale(['Early Bird'], 41)
     await afterResponse()
     expect(h.store.commits).toHaveLength(11)
+  })
+
+  it('has room for a conference again once its claims have expired', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const T0 = new Date('2026-10-12T08:00:00Z').getTime()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(T0)
+
+    for (let delivery = 0; delivery < 10; delivery++) {
+      await sale(types(10, delivery * 10))
+      await afterResponse()
+    }
+    expect(h.store.commits).toHaveLength(10)
+
+    // Full: nothing more, a moment before the first claims expire.
+    vi.setSystemTime(T0 + MEMO_LIFETIME_MS - 1)
+    await sale(types(10, 5_000))
+    expect(h.tasks).toEqual([])
+
+    vi.setSystemTime(T0 + MEMO_LIFETIME_MS)
+    await sale(types(10, 5_000))
+    await afterResponse()
+    expect(h.store.commits).toHaveLength(11)
+    expect(typesWritten().slice(-10)).toEqual(types(10, 5_000))
   })
 })
 

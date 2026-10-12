@@ -16,14 +16,15 @@
  *     removes it; spec §9).
  *  2. THE MEMO here, per process. It keeps the refusal path cheap: that path
  *     runs on every request of a refused attendee, and a type this process has
- *     already raised costs no Sanity read and no write. On its own it
- *     guarantees nothing across instances or restarts.
+ *     raised in the last {@link MEMO_LIFETIME_MS} costs no Sanity read and no
+ *     write. On its own it guarantees nothing across instances or restarts.
  *
  * WHAT ONE CALLER CAN MAKE IT COST. A webhook delivery carries as many ticket
  * names as its sender likes, and anyone holding an organization's Checkin
  * secret can sign one. So one call raises at most {@link MAX_TYPES_PER_CALL}
  * types in ONE event (one organizers read, one transaction), and one process
- * raises at most {@link MAX_TYPES_PER_CONFERENCE} types for one conference.
+ * holds at most {@link MAX_TYPES_PER_CONFERENCE} claims for one conference at
+ * a time.
  */
 import { eventBus } from '@/lib/events/bus'
 import type { WorkshopTicketTypeNotSetEvent } from '@/lib/events/types'
@@ -64,28 +65,50 @@ export function notSetTicketTypes(
 export const MAX_TYPES_PER_CALL = 10
 
 /**
- * How many types one process raises for one conference; no conference has a
- * hundred ticket types. When it is reached the process raises nothing more for
- * that conference, and says so once in the log. Another process starts again
- * from none. It is per conference so that one tenant filling its own cannot
- * silence another's.
+ * How many claims one process holds for one conference at a time; no
+ * conference has a hundred ticket types. When it is reached the process raises
+ * nothing more for that conference until claims expire, and says so in the
+ * log. Another process starts from none. It is per conference so that one
+ * tenant filling its own cannot silence another's.
  */
 export const MAX_TYPES_PER_CONFERENCE = 100
 
 /**
- * THE MEMO: per conference, the types this process has raised.
+ * How long a claim lasts: a day. After it the type is raised again.
+ *
+ * WHY A CLAIM EXPIRES. The retention job deletes a notification after 90 days,
+ * and a type still not set is then to be notified again (spec §9). A claim
+ * that never expired would keep a long-lived process from ever writing that
+ * second notification.
+ *
+ * WHY A DAY, AND NOT 90. A claim cannot know how old the document is: another
+ * process may have written it 89 days ago. So the lifetime is how late the
+ * second notification can be after the purge, on this process, and the purge
+ * itself runs once a day. What it costs is one organizers read and one
+ * transaction that changes nothing, per not-set type that is still being met,
+ * per process, per day.
+ *
+ * It also means a type whose write FAILED is tried again by this process after
+ * a day, and not only by the next process to meet it.
+ */
+export const MEMO_LIFETIME_MS = 24 * 60 * 60 * 1000
+
+/**
+ * THE MEMO: per conference, the types this process has raised and when each
+ * claim expires (milliseconds since the epoch).
  *
  * ON `globalThis`, not in module scope. Next builds pages and route handlers
  * into separate bundles, each with its own copy of this module, so a
- * module-level set would be one per bundle and the portal page and the webhook
+ * module-level map would be one per bundle and the portal page and the webhook
  * would each raise the same type. A cold start begins empty and its first
- * raise is absorbed by the document id. A type whose write failed stays in it:
- * the next process that meets the type writes it.
+ * raise is absorbed by the document id.
  */
 const MEMO = Symbol.for('workshop.not-set-notice.raised')
 
-function raisedTypes(): Map<string, Set<string>> {
-  const holder = globalThis as { [MEMO]?: Map<string, Set<string>> }
+type Claims = Map<string, number>
+
+function raisedTypes(): Map<string, Claims> {
+  const holder = globalThis as { [MEMO]?: Map<string, Claims> }
   return (holder[MEMO] ??= new Map())
 }
 
@@ -96,7 +119,7 @@ export function __resetNotSetNoticeMemo(): void {
 
 /**
  * Raise ONE not-set event for the not-set types among `typeNames` that this
- * process has not raised yet. The one entry point for both call sites.
+ * process holds no claim for. The one entry point for both call sites.
  *
  * WHAT A CALL COSTS. Deciding is the rule plus a set lookup: no I/O. For types
  * already raised here, that is all that happens. Otherwise the event is
@@ -122,8 +145,16 @@ export function reportNotSetTicketTypes(params: {
     // published raises it.
     if (!conferenceId || conferenceId.startsWith('drafts.')) return
 
+    // A clock for arithmetic, not a date for display.
+    const now = Date.now()
     const memo = raisedTypes()
-    const raised = memo.get(conferenceId) ?? new Set<string>()
+    const raised: Claims = memo.get(conferenceId) ?? new Map()
+    // An expired claim is as good as none: the type is raised again, and it
+    // no longer takes up room. Dropped here so the memo does not keep them.
+    for (const [key, expiresAt] of raised) {
+      if (expiresAt <= now) raised.delete(key)
+    }
+    if (raised.size === 0) memo.delete(conferenceId)
     const room = MAX_TYPES_PER_CONFERENCE - raised.size
     if (room <= 0) return
 
@@ -134,11 +165,13 @@ export function reportNotSetTicketTypes(params: {
 
     // Claimed here, before the work is even scheduled, so a burst of requests
     // for one type raises it once and not once each.
-    for (const typeName of due) raised.add(typeKey(typeName))
+    for (const typeName of due) {
+      raised.set(typeKey(typeName), now + MEMO_LIFETIME_MS)
+    }
     memo.set(conferenceId, raised)
     if (raised.size >= MAX_TYPES_PER_CONFERENCE) {
       console.warn(
-        `workshop.ticket-type.not-set: ${MAX_TYPES_PER_CONFERENCE} types raised for one conference; this process raises no more for it`,
+        `workshop.ticket-type.not-set: ${MAX_TYPES_PER_CONFERENCE} types raised for one conference; this process raises no more for it until they expire`,
         { conferenceId },
       )
     }

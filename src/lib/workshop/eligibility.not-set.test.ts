@@ -13,7 +13,15 @@
  * holds each task until `afterResponse()` so a test can look at the answer
  * before the write has run, and can let several requests arrive first.
  */
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  beforeEach,
+  afterEach,
+} from 'vitest'
 import type { EventTicket } from '@/lib/tickets/types'
 import type { SanityStore } from '../../../__tests__/helpers/sanityStore'
 
@@ -41,7 +49,7 @@ vi.mock('@/server/runAfterResponse', () => ({
 }))
 
 import { checkWorkshopEligibility } from './eligibility'
-import { __resetNotSetNoticeMemo } from './not-set-notice'
+import { MEMO_LIFETIME_MS, __resetNotSetNoticeMemo } from './not-set-notice'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 
 /** Run everything that was left for after the response. */
@@ -253,6 +261,94 @@ describe('a refusal for a not-set type', () => {
     expect(h.store.queries).toHaveLength(6 + 1)
     expect(readsBeyondTheGate()).toHaveLength(1)
     expect(h.store.commits).toHaveLength(1)
+  })
+})
+
+describe('a refusal for a not-set type, over time', () => {
+  const T0 = new Date('2026-10-12T08:00:00Z').getTime()
+
+  beforeEach(() => {
+    // The memo reads the clock; so does the 30-second ticket list, which is
+    // simply read again after each jump.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(T0)
+    holding(['ada@x.test', 'Early Bird'])
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('forgets a type after a day, and not before', () => {
+    expect(MEMO_LIFETIME_MS).toBe(24 * 60 * 60 * 1000)
+  })
+
+  it('makes no read and no write for the same type inside the lifetime', async () => {
+    await refuse('ada@x.test')
+    await afterResponse()
+
+    vi.setSystemTime(T0 + MEMO_LIFETIME_MS - 1)
+    await refuse('ada@x.test')
+    await afterResponse()
+
+    expect(readsBeyondTheGate()).toHaveLength(1)
+    expect(h.store.commits).toHaveLength(1)
+  })
+
+  it('raises it again after the lifetime, and the write is ignored while the notification exists', async () => {
+    await refuse('ada@x.test')
+    await afterResponse()
+    const before = structuredClone(notifications())
+
+    vi.setSystemTime(T0 + MEMO_LIFETIME_MS)
+    await refuse('ada@x.test')
+    await afterResponse()
+
+    // One more organizers read and one more transaction, which changed nothing.
+    expect(readsBeyondTheGate()).toHaveLength(2)
+    expect(h.store.commits).toHaveLength(2)
+    expect(notifications()).toEqual(before)
+
+    // And that claim lasts a lifetime of its own.
+    vi.setSystemTime(T0 + 2 * MEMO_LIFETIME_MS - 1)
+    await refuse('ada@x.test')
+    await afterResponse()
+    expect(h.store.commits).toHaveLength(2)
+  })
+
+  it('writes the notification again once the purge has removed it and the lifetime has passed', async () => {
+    await refuse('ada@x.test')
+    await afterResponse()
+    expect(notifications()).toHaveLength(2)
+
+    // The retention job deletes the notifications. Inside the lifetime this
+    // process still holds its claim, so nothing is written.
+    h.store.reset(DATASET)
+    vi.setSystemTime(T0 + MEMO_LIFETIME_MS - 1)
+    await refuse('ada@x.test')
+    await afterResponse()
+    expect(h.store.commits).toEqual([])
+
+    vi.setSystemTime(T0 + MEMO_LIFETIME_MS)
+    await refuse('ada@x.test')
+    await afterResponse()
+    expect(h.store.commits).toHaveLength(1)
+    expect(notifications().map((doc) => doc.title)).toEqual([
+      '“Early Bird” needs a workshop decision',
+      '“Early Bird” needs a workshop decision',
+    ])
+  })
+
+  it('tries a failed write again after the lifetime', async () => {
+    h.store.failWrites()
+    await refuse('ada@x.test')
+    await afterResponse()
+
+    h.store.reset(DATASET)
+    vi.setSystemTime(T0 + MEMO_LIFETIME_MS)
+    await refuse('ada@x.test')
+    await afterResponse()
+
+    expect(notifications()).toHaveLength(2)
   })
 })
 
