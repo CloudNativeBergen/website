@@ -10,3 +10,5 @@ export {
   revokeEarlyAccessLink,
 } from './link'
 export { expireEarlyAccessLinks, resolveEarlyAccess } from './links'
+export { earlyAccessCookie } from './cookie'
+export { openEarlyAccessLink } from './open'
