@@ -97,6 +97,21 @@ describe('ticket questions discovery & normalization', () => {
     expect(workshopQ.options).toContain('No')
   })
 
+  it('preserves distinct prompt keys and does not collide on punctuation or non-ASCII', () => {
+    const questions = discoverTicketQuestions([
+      {
+        additionals: [
+          { name: 'Diet? - Vegan', value: '1' },
+          { name: 'Diet! - Halal', value: '1' },
+          { name: 'Ønsker middag? - Ja', value: '1' },
+        ],
+      },
+    ])
+    expect(questions).toHaveLength(3)
+    const ids = questions.map((q) => q.id)
+    expect(new Set(ids).size).toBe(3)
+  })
+
   it('resolves speaker answers accurately', () => {
     const speaker1 = {
       additionals: [

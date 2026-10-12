@@ -642,7 +642,12 @@ export const ticketsRouter = router({
       }
 
       const redeemed = await fetchRedeemedSpeakerEmails(conference)
-      const candidates = await fetchEventTicketCandidates(conference)
+      // Only discover ticket questions if redeemed tickets were successfully read.
+      // If the provider had an outage (redeemed === null) or does not support invitations
+      // (e.g. Tito), skipping discovery prevents duplicate expensive provider fetches.
+      const candidates = redeemed
+        ? await fetchEventTicketCandidates(conference)
+        : null
       const questions = candidates ? discoverTicketQuestions(candidates) : []
       return {
         statuses: joinSpeakerTicketStatus(inputs, redeemed, conference),

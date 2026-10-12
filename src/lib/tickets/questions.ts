@@ -131,7 +131,7 @@ export function discoverTicketQuestions(
       for (const a of ticket.additionals) {
         if (!a.name || !a.name.trim()) continue
         const { questionPrompt, optionText } = splitQuestionAndOption(a.name)
-        const id = `additional:${questionPrompt.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+        const id = `additional:${questionPrompt.trim().toLowerCase()}`
 
         const existing = discoveredMap.get(id)
         if (existing) {

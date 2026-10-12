@@ -367,6 +367,11 @@ export function SpeakerTable({
         if (!q) return true
         const answer = resolveSpeakerAnswer(ticketStatus, q)
         if (expectedVal === '__unanswered__') {
+          // A known ticket state is required: during provider outage (unknown) or while loading,
+          // tickets cannot be verified as unanswered.
+          if (!ticketStatus || ticketStatus.state === 'unknown') {
+            return false
+          }
           return !answer
         }
         return answer?.toLowerCase() === expectedVal.toLowerCase()
