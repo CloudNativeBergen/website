@@ -125,23 +125,34 @@ export function buildWorkshopTicketList(
       }
     }),
     builtInGranted,
-    // An entry that only answers the seating question is not a workshop
-    // answer: there is nothing here to remove from it. And a provider that
-    // lists NO types says nothing about which entries are orphaned: every one
-    // would look it, so none is called it.
+    // AN ORPHAN IS LOOKED FOR ACROSS EVERY SPELLING of a name the provider
+    // does not list, not only in the first entry: a later spelling's grant
+    // still keeps the conference off the built-in list, and with no row for
+    // the type there would be nothing to remove it with. It grants if any
+    // spelling does, which is all the entries of an unlisted name still
+    // decide. A name whose spellings only answer the seating question is not
+    // a workshop answer: there is nothing here to remove from it. And a
+    // provider that lists NO types says nothing about which entries are
+    // orphaned: every one would look it, so none is called it.
     orphaned:
       typeNames.length === 0
         ? []
-        : [...answers.entries()].flatMap(([key, role]) =>
-            !listed.has(key) && typeof role.grantsWorkshop === 'boolean'
-              ? [
+        : [...answers.entries()].flatMap(([key, first]) => {
+            if (listed.has(key)) return []
+            const answered = roles.filter(
+              (role) =>
+                typeKey(role.typeName) === key &&
+                typeof role.grantsWorkshop === 'boolean',
+            )
+            return answered.length === 0
+              ? []
+              : [
                   {
-                    typeName: role.typeName,
-                    grantsWorkshop: role.grantsWorkshop,
-                    lastGranting: lastGranting(role.typeName),
+                    typeName: first.typeName,
+                    grantsWorkshop: marksWorkshopAccess(answered),
+                    lastGranting: lastGranting(first.typeName),
                   },
                 ]
-              : [],
-          ),
+          }),
   }
 }

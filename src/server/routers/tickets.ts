@@ -327,7 +327,8 @@ async function updateTicketTargets(
  * each must survive the other being saved.
  *
  * THE SEATING ANSWER IS SET IN PLACE, on the entry `classifyTicket` reads (the
- * first one whose name matches), and nothing else in the list is touched. It
+ * first one whose name matches, addressed by its position under the revision
+ * condition), and nothing else in the list is touched. It
  * used to replace the type's whole entry and every other spelling of its name,
  * which made a seating toggle able to change workshop access: Studio can hold
  * one type under several spellings, the rule reads only the first, and
@@ -408,7 +409,6 @@ async function setTicketTypeRoles(
   const updates = 'workshop' in write ? write.workshop : []
   const wantedKeys = new Set(updates.map((u) => typeKey(u.typeName)))
   type StoredRole = {
-    _key?: string
     typeName: string
     admits?: boolean
     grantsWorkshop?: boolean
@@ -433,7 +433,7 @@ async function setTicketTypeRoles(
         // agree with `typeKey`, and neither a patch path nor a GROQ `lower()`
         // does both. The array holds one entry per ticket type at one
         // conference; folding it here is cheaper than getting it subtly wrong.
-        `*[_id == $conferenceId][0]{ _rev, "roles": ticketTypeRoles[]{ _key, typeName, admits, grantsWorkshop } }`,
+        `*[_id == $conferenceId][0]{ _rev, "roles": ticketTypeRoles[]{ typeName, admits, grantsWorkshop } }`,
         { conferenceId },
       )
     } catch (error) {
@@ -474,11 +474,10 @@ async function setTicketTypeRoles(
             { _key: generateKey('role'), typeName, admits },
           ])
       } else {
-        // By key; by position for an entry written without one, which the
-        // revision condition makes just as exact.
-        const key = roles[index]._key
-        const entry = key ? `_key==${JSON.stringify(key)}` : String(index)
-        patch.set({ [`ticketTypeRoles[${entry}].admits`]: admits })
+        // BY POSITION, not by `_key`: two entries can share a key, and a path
+        // by key would then set both. The revision condition makes the
+        // position exact: it is the position in the array this read saw.
+        patch.set({ [`ticketTypeRoles[${index}].admits`]: admits })
       }
       try {
         return await patch.commit()

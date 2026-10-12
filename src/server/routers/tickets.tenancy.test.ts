@@ -893,34 +893,24 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
       admits: false,
     })
 
+    // By POSITION, under the revision condition: a key can be shared by two
+    // entries, and a path by key would then set both.
+    expect(patch.ifRevisionId).toHaveBeenCalledWith('rev-1')
     expect(patch.set.mock.calls).toEqual([
-      [{ 'ticketTypeRoles[_key=="k1"].admits': false }],
+      [{ 'ticketTypeRoles[1].admits': false }],
     ])
     expect(patch.unset).not.toHaveBeenCalled()
     expect(patch.insert).not.toHaveBeenCalled()
   })
 
-  /** A stored key reaches a patch PATH, so it is escaped like a name was. */
-  it('escapes the key of the entry it addresses', async () => {
-    vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
-      _rev: 'rev-1',
-      roles: [{ _key: 'k"] or true//', typeName: UPGRADE }],
-    } as never)
-
-    await tickets().admin.setTicketTypeRole({ typeName: UPGRADE, admits: true })
-
-    expect(patch.set.mock.calls).toEqual([
-      [{ 'ticketTypeRoles[_key=="k\\"] or true//"].admits': true }],
-    ])
-  })
-
-  /** An entry written without a key is addressed by position, under the same revision. */
-  it('addresses an entry that has no key by its position', async () => {
+  /** Names are folded the way the rules fold them, and the FIRST match is the entry. */
+  it('addresses the first entry whose name matches, whatever its spelling', async () => {
     vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
       _rev: 'rev-4',
       roles: [
         { typeName: 'Day pass' },
         { typeName: ' sponsor discount (workshop upgrade)' },
+        { typeName: UPGRADE, admits: false },
       ],
     } as never)
 

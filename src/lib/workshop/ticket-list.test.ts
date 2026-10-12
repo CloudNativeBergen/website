@@ -287,7 +287,55 @@ describe('a conference that has marked a type', () => {
     expect(list.types[0].lastGranting).toBe(false)
   })
 
-  it('lists a twice-stored name once, with the answer the rule reads', () => {
+  /**
+   * AN ORPHANED GRANT BEHIND ANOTHER SPELLING. A renamed type stored under two
+   * spellings, the first answering only the seating question: read by first
+   * entry it looks like "no workshop answer", yet the second spelling keeps
+   * the conference off the built-in list. With no row and no orphan the
+   * organizer would have nothing to remove the cause with. So an orphan is
+   * looked for across EVERY spelling of a name the provider does not list.
+   */
+  it('finds an orphaned workshop answer in a later spelling of an unlisted name', () => {
+    const list = buildWorkshopTicketList(
+      ['Workshop 2026'],
+      [
+        { typeName: 'Workshop 2025', admits: true },
+        { typeName: 'workshop 2025 ', grantsWorkshop: true },
+      ],
+    )
+
+    expect(list.configured).toBe(true)
+    // Named by its first spelling, which is the one a removal keeps the
+    // seating answer under.
+    expect(list.orphaned).toEqual([
+      { typeName: 'Workshop 2025', grantsWorkshop: true, lastGranting: true },
+    ])
+    expect(list.types[0].access).toBe('unclassified')
+  })
+
+  it('reads a LISTED type by its first entry only, as the rule does', () => {
+    const list = buildWorkshopTicketList(
+      ['Workshop 2025'],
+      [
+        { typeName: 'Workshop 2025', admits: true },
+        { typeName: 'workshop 2025 ', grantsWorkshop: true },
+      ],
+    )
+
+    expect(list.orphaned).toEqual([])
+    expect(list.types).toEqual([
+      {
+        typeName: 'Workshop 2025',
+        access: 'unclassified',
+        lastGranting: true,
+        builtInGrants: false,
+        builtInGrantedOthers: [],
+        builtInGrantedOthersSetToNo: [],
+      },
+    ])
+  })
+
+  it('lists a twice-stored unlisted name once', () => {
     const list = buildWorkshopTicketList(
       ['Workshop dag'],
       [
@@ -297,8 +345,11 @@ describe('a conference that has marked a type', () => {
       ],
     )
 
+    // One orphan for the name. It grants if ANY spelling does: for a name no
+    // ticket carries, that is all its entries still decide (whether the
+    // conference is off the built-in list).
     expect(list.orphaned).toEqual([
-      { typeName: 'Old', grantsWorkshop: false, lastGranting: false },
+      { typeName: 'Old', grantsWorkshop: true, lastGranting: false },
     ])
   })
 })

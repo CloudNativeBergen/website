@@ -112,6 +112,7 @@ import {
   checkWorkshopEligibility,
   workshopAccessOf,
 } from '@/lib/workshop/eligibility'
+import { marksWorkshopAccess } from '@/lib/tickets/classification'
 import { ticketsRouter } from './tickets'
 
 const ORG_A = 'org-A'
@@ -147,7 +148,8 @@ function tickets(orgId: string = ORG_A) {
 }
 
 type Role = {
-  _key: string
+  /** Absent only where a case is about an entry written without one. */
+  _key?: string
   typeName: string
   admits?: boolean
   grantsWorkshop?: boolean
@@ -216,6 +218,36 @@ describe('a save changes what the portal decides', () => {
 })
 
 describe('removing a stored workshop answer', () => {
+  /**
+   * The orphan the section lists for a renamed type stored under two
+   * spellings (`buildWorkshopTicketList`): the first answers only the seating
+   * question, the second holds the grant that keeps the conference off the
+   * built-in list. The removal has to reach that second spelling.
+   */
+  it('clears a grant held by a later spelling of the name', async () => {
+    seed([
+      { _key: 'a', typeName: 'Workshop 2025', admits: true },
+      { _key: 'b', typeName: 'workshop 2025 ', grantsWorkshop: true },
+      { _key: 'c', typeName: 'Workshop 2026', grantsWorkshop: false },
+    ])
+    const marked = () =>
+      marksWorkshopAccess(
+        h.dataset.find((d) => d._id === CONF_A)!.ticketTypeRoles as Role[],
+      )
+    expect(marked()).toBe(true)
+
+    await tickets().admin.setWorkshopAccess({
+      updates: [{ typeName: 'Workshop 2025', grantsWorkshop: null }],
+      allowBuiltInList: true,
+    })
+
+    expect(stored()).toEqual([
+      { typeName: 'Workshop 2026', grantsWorkshop: false },
+      { typeName: 'Workshop 2025', admits: true },
+    ])
+    expect(marked()).toBe(false)
+  })
+
   it('keeps the seating answer of an entry that has one', async () => {
     seed([
       { _key: 'a', typeName: 'Two-day pass', grantsWorkshop: true },
@@ -356,6 +388,21 @@ describe('a seating answer never changes workshop access', () => {
       },
     ],
     [
+      // Addressed by position: an entry may have been written without a key.
+      'entries written without a key',
+      [
+        { typeName: 'Day pass', grantsWorkshop: false },
+        { typeName: A, admits: true },
+        { typeName: 'two-day pass ', grantsWorkshop: true },
+      ],
+      {
+        [A]: 'unclassified',
+        'Day pass': 'denied',
+        'Speaker ticket': 'unclassified',
+        Student: 'unclassified',
+      },
+    ],
+    [
       'no entry for the type at all',
       [{ _key: 'c', typeName: 'Day pass', grantsWorkshop: true }],
       {
@@ -419,6 +466,25 @@ describe('a seating answer never changes workshop access', () => {
         grantsWorkshop: true,
       },
       { _key: 'd', typeName: 'Day pass', grantsWorkshop: false },
+    ])
+  })
+
+  /**
+   * TWO ENTRIES CAN SHARE A KEY (a copy made in Studio, a script). A path by
+   * key would then set the answer on both; the entry is addressed by its
+   * position, which the revision condition makes exact.
+   */
+  it('sets it on one entry when two share a key', async () => {
+    seed([
+      { _key: 'same', typeName: 'Day pass', grantsWorkshop: true },
+      { _key: 'same', typeName: A, grantsWorkshop: false },
+    ])
+
+    await tickets().admin.setTicketTypeRole({ typeName: A, admits: false })
+
+    expect(roles()).toEqual([
+      { _key: 'same', typeName: 'Day pass', grantsWorkshop: true },
+      { _key: 'same', typeName: A, admits: false, grantsWorkshop: false },
     ])
   })
 
