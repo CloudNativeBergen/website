@@ -18,12 +18,50 @@ describe('a conference that has marked nothing', () => {
 
     expect(list.configured).toBe(false)
     expect(list.builtInGranted).toEqual([SPEAKER, TWO_DAY])
+    // Each type also carries the OTHER types that list grants: the ones that
+    // stop granting when this type is the first one marked.
     expect(list.types).toEqual([
-      { typeName: 'Early Bird', access: 'denied', lastGranting: false },
-      { typeName: SPEAKER, access: 'granted', lastGranting: false },
-      { typeName: TWO_DAY, access: 'granted', lastGranting: false },
+      {
+        typeName: 'Early Bird',
+        access: 'denied',
+        lastGranting: false,
+        builtInGrantedOthers: [SPEAKER, TWO_DAY],
+      },
+      {
+        typeName: SPEAKER,
+        access: 'granted',
+        lastGranting: false,
+        builtInGrantedOthers: [TWO_DAY],
+      },
+      {
+        typeName: TWO_DAY,
+        access: 'granted',
+        lastGranting: false,
+        builtInGrantedOthers: [SPEAKER],
+      },
     ])
     expect(list.orphaned).toEqual([])
+  })
+
+  /**
+   * The carry-over is saved as one batch, and the save refuses a batch that
+   * names one type twice (names fold case and surrounding space). So the
+   * others are matched the way the save matches them: never this type under
+   * another spelling, and never one type twice.
+   */
+  it('never offers the same type twice in the carry-over', () => {
+    const list = buildWorkshopTicketList(
+      [SPEAKER, 'speaker ticket ', TWO_DAY],
+      [],
+    )
+
+    expect(list.types.map((t) => [t.typeName, t.builtInGrantedOthers])).toEqual(
+      [
+        [SPEAKER, [TWO_DAY]],
+        ['speaker ticket ', [TWO_DAY]],
+        [TWO_DAY, [SPEAKER]],
+      ],
+    )
   })
 
   it('stays not configured on a lone no, and keeps that stored answer', () => {
@@ -40,6 +78,7 @@ describe('a conference that has marked nothing', () => {
         access: 'granted',
         stored: false,
         lastGranting: false,
+        builtInGrantedOthers: [],
       },
     ])
   })
@@ -49,6 +88,28 @@ describe('a conference that has marked nothing', () => {
 
     expect(list).toEqual({
       configured: false,
+      types: [],
+      builtInGranted: [],
+      orphaned: [],
+    })
+  })
+
+  /**
+   * A PROVIDER THAT LISTS NOTHING SAYS NOTHING ABOUT THE STORED ANSWERS. With
+   * no types to compare against, every entry would look orphaned and be
+   * offered for removal, the last granting one included.
+   */
+  it('calls no stored answer orphaned when the provider lists no types', () => {
+    const list = buildWorkshopTicketList(
+      [],
+      [
+        { typeName: 'Two-day pass', grantsWorkshop: true },
+        { typeName: 'Day pass', grantsWorkshop: false },
+      ],
+    )
+
+    expect(list).toEqual({
+      configured: true,
       types: [],
       builtInGranted: [],
       orphaned: [],
@@ -86,19 +147,37 @@ describe('a conference that has marked a type', () => {
         access: 'granted',
         stored: true,
         lastGranting: false,
+        builtInGrantedOthers: [],
       },
       {
         typeName: 'Conference only',
         access: 'denied',
         stored: false,
         lastGranting: false,
+        builtInGrantedOthers: [],
       },
       // An entry with only a seating answer, and a type with no entry at all:
       // both not set.
-      { typeName: 'Seating only', access: 'unclassified', lastGranting: false },
-      { typeName: 'New type', access: 'unclassified', lastGranting: false },
-      // The built-in list is off: its name no longer grants.
-      { typeName: SPEAKER, access: 'unclassified', lastGranting: false },
+      {
+        typeName: 'Seating only',
+        access: 'unclassified',
+        lastGranting: false,
+        builtInGrantedOthers: [],
+      },
+      {
+        typeName: 'New type',
+        access: 'unclassified',
+        lastGranting: false,
+        builtInGrantedOthers: [],
+      },
+      // The built-in list is off: its name no longer grants, and there is
+      // nothing left to carry over.
+      {
+        typeName: SPEAKER,
+        access: 'unclassified',
+        lastGranting: false,
+        builtInGrantedOthers: [],
+      },
     ])
     // ...but it is still what comes back if the last marked type goes.
     expect(list.builtInGranted).toEqual([SPEAKER])

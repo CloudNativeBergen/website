@@ -1,4 +1,5 @@
 import {
+  marksWorkshopAccess,
   typeKey,
   workshopAccessOf,
   type TicketTypeRole,
@@ -27,6 +28,12 @@ export interface WorkshopTicketType {
    * no granting entry, which brings the built-in list back.
    */
   lastGranting: boolean
+  /**
+   * While nothing is marked: the OTHER types the built-in list grants, which
+   * stop granting when this type is the first one marked. One spelling per
+   * type, and never this type's own. Empty once a type is marked.
+   */
+  builtInGrantedOthers: string[]
 }
 
 /** A stored workshop answer whose `typeName` matches no provider type. */
@@ -54,13 +61,14 @@ export function buildWorkshopTicketList(
   ticketTypeRoles?: readonly TicketTypeRole[] | null,
 ): WorkshopTicketList {
   const roles = ticketTypeRoles ?? []
-  const granting = new Set(
-    roles
-      .filter((r) => r.grantsWorkshop === true)
-      .map((r) => typeKey(r.typeName)),
-  )
+  const configured = marksWorkshopAccess(roles)
+  // Taking this name's entries away leaves nothing marked: the question the
+  // save asks of the stored document, asked here of the same roles.
   const lastGranting = (name: string) =>
-    granting.size === 1 && granting.has(typeKey(name))
+    configured &&
+    !marksWorkshopAccess(
+      roles.filter((role) => typeKey(role.typeName) !== typeKey(name)),
+    )
 
   // The first entry for a name is the one the rule reads.
   const answers = new Map<string, TicketTypeRole>()
@@ -70,33 +78,52 @@ export function buildWorkshopTicketList(
   }
   const listed = new Set(typeNames.map(typeKey))
 
+  // With no roles the rule answers from the built-in list alone.
+  const builtInGranted = typeNames.filter(
+    (name) => workshopAccessOf(name, []) === 'granted',
+  )
+  // One spelling per type, the first: the carry-over is saved as one batch,
+  // and the save refuses a batch that names a type twice.
+  const builtInOnce = new Map<string, string>()
+  for (const name of builtInGranted) {
+    if (!builtInOnce.has(typeKey(name))) builtInOnce.set(typeKey(name), name)
+  }
+
   return {
-    configured: granting.size > 0,
+    configured,
     types: typeNames.map((typeName) => {
-      const stored = answers.get(typeKey(typeName))?.grantsWorkshop
+      const key = typeKey(typeName)
+      const stored = answers.get(key)?.grantsWorkshop
       return {
         typeName,
         access: workshopAccessOf(typeName, roles),
         ...(typeof stored === 'boolean' && { stored }),
         lastGranting: lastGranting(typeName),
+        builtInGrantedOthers: configured
+          ? []
+          : [...builtInOnce].flatMap(([other, name]) =>
+              other === key ? [] : [name],
+            ),
       }
     }),
-    // With no roles the rule answers from the built-in list alone.
-    builtInGranted: typeNames.filter(
-      (name) => workshopAccessOf(name, []) === 'granted',
-    ),
+    builtInGranted,
     // An entry that only answers the seating question is not a workshop
-    // answer: there is nothing here to remove from it.
-    orphaned: [...answers.entries()].flatMap(([key, role]) =>
-      !listed.has(key) && typeof role.grantsWorkshop === 'boolean'
-        ? [
-            {
-              typeName: role.typeName,
-              grantsWorkshop: role.grantsWorkshop,
-              lastGranting: lastGranting(role.typeName),
-            },
-          ]
-        : [],
-    ),
+    // answer: there is nothing here to remove from it. And a provider that
+    // lists NO types says nothing about which entries are orphaned: every one
+    // would look it, so none is called it.
+    orphaned:
+      typeNames.length === 0
+        ? []
+        : [...answers.entries()].flatMap(([key, role]) =>
+            !listed.has(key) && typeof role.grantsWorkshop === 'boolean'
+              ? [
+                  {
+                    typeName: role.typeName,
+                    grantsWorkshop: role.grantsWorkshop,
+                    lastGranting: lastGranting(role.typeName),
+                  },
+                ]
+              : [],
+          ),
   }
 }

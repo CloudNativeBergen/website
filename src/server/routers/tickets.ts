@@ -27,7 +27,7 @@ import {
 } from '../schemas/tickets'
 import { clientWrite } from '@/lib/sanity/client'
 import { generateKey } from '@/lib/sanity/helpers'
-import { typeKey } from '@/lib/tickets/classification'
+import { marksWorkshopAccess, typeKey } from '@/lib/tickets/classification'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   fetchEventTicketCandidates,
@@ -443,21 +443,34 @@ async function setTicketTypeRoles(
       })
     }
 
-    const priorOf = (typeName: string) =>
-      existing.roles?.find(
+    // EVERY SPELLING OF THE TYPE, not the first one. Studio can hold two
+    // entries `typeKey` calls the same type, one answering each question, and
+    // the write below replaces them all with one entry. Reading only the first
+    // dropped the other's answer: a seating toggle could remove the
+    // conference's only grant. Where two spellings answer the same question,
+    // the first wins, as it does for the rule.
+    const priorOf = (typeName: string) => {
+      const spellings = (existing.roles ?? []).filter(
         (role) => typeKey(role.typeName) === typeKey(typeName),
       )
+      const first = (field: 'admits' | 'grantsWorkshop') =>
+        spellings.find((role) => typeof role[field] === 'boolean')?.[field]
+      return {
+        admits: first('admits'),
+        grantsWorkshop: first('grantsWorkshop'),
+      }
+    }
 
     // Each update's whole entry. Absent stays ABSENT: defaulting either field
     // would turn a question nobody answered into a declaration — the count
     // would then report itself as blessed by a human who never saw it.
     const entries = updates.map((u) => {
       const prior = priorOf(u.typeName)
-      const admits = u.admits ?? prior?.admits
+      const admits = u.admits ?? prior.admits
       const grantsWorkshop =
         u.grantsWorkshop === null
           ? undefined
-          : (u.grantsWorkshop ?? prior?.grantsWorkshop)
+          : (u.grantsWorkshop ?? prior.grantsWorkshop)
       return {
         typeName: u.typeName,
         ...(typeof admits === 'boolean' && { admits }),
@@ -470,15 +483,15 @@ async function setTicketTypeRoles(
     // for every type at once. The page asks before it sends such a save, but
     // its view can be stale (two organizers each unmarking one of two granting
     // types), so the question is settled here, against the document itself.
-    const grants = (role: { grantsWorkshop?: boolean }) =>
-      role.grantsWorkshop === true
     if (
       builtInList === 'refuse' &&
-      (existing.roles ?? []).some(grants) &&
-      !entries.some(grants) &&
-      !(existing.roles ?? []).some(
-        (role) => grants(role) && !wantedKeys.has(typeKey(role.typeName)),
-      )
+      marksWorkshopAccess(existing.roles) &&
+      !marksWorkshopAccess([
+        ...entries,
+        ...(existing.roles ?? []).filter(
+          (role) => !wantedKeys.has(typeKey(role.typeName)),
+        ),
+      ])
     ) {
       throw new TRPCError({
         code: 'PRECONDITION_FAILED',

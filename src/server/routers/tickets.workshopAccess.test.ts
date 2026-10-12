@@ -266,6 +266,67 @@ describe('removing a stored workshop answer', () => {
 })
 
 /**
+ * ONE TYPE STORED UNDER TWO SPELLINGS. Studio can hold two entries the rule
+ * calls the same type, one answering the seating question and one the workshop
+ * question. A save replaces every spelling with one entry, so it has to carry
+ * the answers of all of them. Carrying only the first entry's dropped the
+ * workshop answer on a seating toggle, and with it the conference's only
+ * grant: the built-in list came back with no question asked.
+ */
+describe('a type stored under two spellings', () => {
+  it('keeps the workshop answer of the other spelling when the seating answer is saved', async () => {
+    seed([
+      { _key: 'a', typeName: 'Two-day pass', admits: true },
+      { _key: 'b', typeName: 'two-day pass ', grantsWorkshop: true },
+    ])
+
+    await tickets().admin.setTicketTypeRole({
+      typeName: 'Two-day pass',
+      admits: false,
+    })
+
+    expect(stored()).toEqual([
+      { typeName: 'Two-day pass', admits: false, grantsWorkshop: true },
+    ])
+  })
+
+  it('keeps the seating answer of the other spelling when the workshop answer is saved', async () => {
+    seed([
+      { _key: 'a', typeName: 'Two-day pass', grantsWorkshop: false },
+      { _key: 'b', typeName: 'two-day pass ', admits: false },
+      { _key: 'c', typeName: 'Day pass', grantsWorkshop: true },
+    ])
+
+    await tickets().admin.setWorkshopAccess({
+      updates: [{ typeName: 'Two-day pass', grantsWorkshop: true }],
+    })
+
+    expect(stored()).toEqual([
+      { typeName: 'Day pass', grantsWorkshop: true },
+      { typeName: 'Two-day pass', admits: false, grantsWorkshop: true },
+    ])
+  })
+
+  it('takes the first answer when the spellings disagree, as the rule does', async () => {
+    seed([
+      { _key: 'a', typeName: 'Two-day pass', grantsWorkshop: false },
+      { _key: 'b', typeName: 'two-day pass ', grantsWorkshop: true },
+      { _key: 'c', typeName: 'Day pass', grantsWorkshop: true },
+    ])
+
+    await tickets().admin.setTicketTypeRole({
+      typeName: 'Two-day pass',
+      admits: true,
+    })
+
+    expect(stored()).toEqual([
+      { typeName: 'Day pass', grantsWorkshop: true },
+      { typeName: 'Two-day pass', admits: true, grantsWorkshop: false },
+    ])
+  })
+})
+
+/**
  * THE CLIFF IN THE OTHER DIRECTION. The built-in list decides whenever no
  * entry grants, so the save that takes the last granting entry away changes
  * who gets in for every type at once. The page asks first; the procedure
