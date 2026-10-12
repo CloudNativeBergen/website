@@ -10,8 +10,8 @@ import { liveTicketTypeRolesOrThrow } from '@/lib/workshop/eligibility'
 import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
 import { WorkshopTicketsNotReady } from './WorkshopTicketsNotReady'
 import {
-  WorkshopTicketsFrame,
   WorkshopTicketsSection,
+  WorkshopTicketsSkeleton,
 } from './WorkshopTicketsSection'
 
 /**
@@ -19,19 +19,12 @@ import {
  *
  * STREAMED. The ticket types are one request to the ticketing provider, which
  * can be slow, and nothing else on the page waits for it: the frame (and the
- * anchor `/admin/tickets/types` links to) renders at once.
+ * anchor `/admin/tickets/types` links to) renders at once, with a skeleton of
+ * the rows so the page keeps its shape.
  */
 export function WorkshopTickets({ conference }: { conference: Conference }) {
   return (
-    <Suspense
-      fallback={
-        <WorkshopTicketsFrame>
-          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-            Reading the ticket types…
-          </p>
-        </WorkshopTicketsFrame>
-      }
-    >
+    <Suspense fallback={<WorkshopTicketsSkeleton />}>
       <LoadedWorkshopTickets conference={conference} />
     </Suspense>
   )

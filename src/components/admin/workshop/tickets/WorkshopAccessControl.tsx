@@ -3,7 +3,7 @@
 import { useCallback, useId, useRef, useState } from 'react'
 import { StatusBadge } from '@/components/StatusBadge'
 import type { WorkshopTicketType } from '@/lib/workshop/ticket-list'
-import { BuiltInListConfirm } from './BuiltInListConfirm'
+import { BuiltInListConfirm, OTHER_CHOICE, SAFE_CHOICE } from './Question'
 import { WorkshopAccessBadge } from './WorkshopAccessBadge'
 import { quoteNames } from './names'
 import { useSaveWorkshopAccess } from './useSaveWorkshopAccess'
@@ -293,21 +293,30 @@ export function WorkshopAccessControl({
         </p>
 
         <div className="mt-2 flex flex-wrap gap-2">
-          {others.length > 0 && (
+          {others.length > 0 ? (
+            // A type can be kept: keeping it is the prominent choice.
             <button
               type="button"
               onClick={() => write(confirming, true)}
-              className="min-h-11 flex-1 basis-40 rounded-md bg-blue-600 px-3 py-2 text-left text-sm font-medium text-white hover:bg-blue-500 sm:max-w-80"
+              className={`${SAFE_CHOICE} flex-1 basis-40 sm:max-w-80`}
             >
               {confirming
                 ? `Grant “${typeName}”, keep ${quoteNames(others)}`
                 : `Block “${typeName}”, keep ${quoteNames(others)}`}
             </button>
+          ) : (
+            confirming && (
+              // Nothing to keep, and the grant blocks the types that hold a
+              // No: leaving things as they are is the prominent choice.
+              <button type="button" onClick={cancel} className={SAFE_CHOICE}>
+                Cancel
+              </button>
+            )
           )}
           <button
             type="button"
             onClick={() => write(confirming, false)}
-            className="min-h-11 flex-1 basis-40 rounded-md bg-white px-3 py-2 text-left text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 sm:max-w-80 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
+            className={`${OTHER_CHOICE} flex-1 basis-40 sm:max-w-80`}
           >
             {!confirming
               ? 'Save the No, block nothing yet'
@@ -316,18 +325,34 @@ export function WorkshopAccessControl({
                 : // Nothing to keep: the other types hold a No, which stands.
                   `Grant “${typeName}”`}
           </button>
-          <button
-            type="button"
-            onClick={cancel}
-            className="min-h-11 rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-          >
-            Cancel
-          </button>
+          {(others.length > 0 || !confirming) && (
+            <button
+              type="button"
+              onClick={cancel}
+              className="min-h-11 rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </div>
     )
 
   const question = confirmation && <div ref={returnFocus}>{confirmation}</div>
+  /** Escape closes an open question, from anywhere in the control. */
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape' && asked) cancel()
+  }
+  /**
+   * A stored No that the built-in list still overrules: the pressed "No" and
+   * the answer "grants (built-in list)" are both true, and side by side they
+   * read as a fault unless the row says why.
+   */
+  const noWaits = builtInGrantsThis && type.stored === false && (
+    <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+      Saved as No. It takes effect once a ticket type is set to grant access.
+    </p>
+  )
 
   if (row) {
     return (
@@ -335,6 +360,7 @@ export function WorkshopAccessControl({
         role="group"
         aria-label={typeName}
         aria-describedby={answerId}
+        onKeyDown={onKeyDown}
         className="py-3"
       >
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -344,7 +370,9 @@ export function WorkshopAccessControl({
             </span>
             {/* The rule's answer, as the server resolved it. While a save is
                 on its way to the page the old answer would be a lie. */}
-            <span id={answerId} className="inline-flex">
+            {/* A polite live region: "Saving…" and then the new answer are
+                read out, without interrupting. */}
+            <span id={answerId} role="status" className="inline-flex">
               {busy ? (
                 <StatusBadge label="Saving…" color="gray" />
               ) : (
@@ -357,13 +385,17 @@ export function WorkshopAccessControl({
           </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">{buttons}</div>
         </div>
+        {noWaits}
         {question}
       </div>
     )
   }
 
   return (
-    <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+    <div
+      onKeyDown={onKeyDown}
+      className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-800"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
           Grants workshop access?
@@ -424,6 +456,7 @@ export function WorkshopAccessControl({
       )}
 
       <div className="mt-2 flex flex-wrap gap-2">{buttons}</div>
+      {noWaits}
 
       {question}
 

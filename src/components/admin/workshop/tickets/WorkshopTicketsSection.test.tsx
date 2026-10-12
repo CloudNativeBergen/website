@@ -23,7 +23,10 @@ import {
   buildWorkshopTicketList,
   workshopAnswersVersion,
 } from '@/lib/workshop/ticket-list'
-import { WorkshopTicketsSection } from './WorkshopTicketsSection'
+import {
+  WorkshopTicketsSection,
+  WorkshopTicketsSkeleton,
+} from './WorkshopTicketsSection'
 
 const h = vi.hoisted(() => ({
   mutate: vi.fn(),
@@ -210,7 +213,7 @@ describe('a configured list', () => {
     section(types, roles)
 
     expect(
-      screen.getByRole('status', { name: 'Needs a decision' }),
+      screen.getByRole('region', { name: 'Needs a decision' }),
     ).toHaveTextContent(
       'Needs a decision“Student” and “Late Bird” are not set. Their holders cannot sign up for workshops until you choose an answer below.',
     )
@@ -218,7 +221,7 @@ describe('a configured list', () => {
 
   it('shows the banner only while a type has no answer', () => {
     const banner = () =>
-      screen.queryAllByRole('status', { name: 'Needs a decision' })
+      screen.queryAllByRole('region', { name: 'Needs a decision' })
     // The same two types, first with "Day pass" unanswered...
     const { rerender } = section(
       ['Two-day pass', 'Day pass'],
@@ -293,16 +296,73 @@ describe('an entry no ticket type matches', () => {
     section(['Two-day pass'], roles)
 
     expect(
-      screen.getByRole('status', { name: 'Needs a decision' }),
+      screen.getByRole('region', { name: 'Needs a decision' }),
     ).toHaveTextContent(
       '“Workshop 2025” is saved as granting workshop access, but Checkin.no lists no ticket type with that name. It may have been renamed there.',
     )
+  })
+
+  /**
+   * A REMOVAL IS ALWAYS ASKED ABOUT. If the provider keeps the old name on
+   * tickets already sold, removing a granting entry locks their holders out.
+   */
+  it('asks before removing a granting entry, and says who it can lock out', () => {
+    section(['Two-day pass'], roles)
+
+    remove()
+
+    expect(h.mutate).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This removes the saved answer for “Workshop 2025”.Anyone whose ticket still carries that name will no longer be able to sign up for workshops.',
+    )
+    // Keeping it is the first and the prominent choice.
+    const choices = within(screen.getByRole('alert')).getAllByRole('button')
+    expect(choices.map((b) => b.textContent)).toEqual([
+      'Keep the entry',
+      'Remove it',
+    ])
+    expect(choices[0].className).toContain('bg-blue-600')
+    expect(choices[1].className).not.toContain('bg-blue-600')
+  })
+
+  it('says a No entry changes nothing for anyone', () => {
+    section(
+      ['Two-day pass'],
+      [roles[0], { typeName: 'Workshop 2025', grantsWorkshop: false }],
+    )
+
+    remove()
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This removes the saved answer for “Workshop 2025”.It is set to No, so nobody gains or loses access.',
+    )
+  })
+
+  it('writes nothing when the organizer keeps the entry, or presses Escape', () => {
+    section(['Two-day pass'], roles)
+
+    remove()
+    fireEvent.click(screen.getByRole('button', { name: 'Keep the entry' }))
+    expect(screen.queryAllByRole('alert')).toEqual([])
+
+    remove()
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Remove it' }), {
+      key: 'Escape',
+    })
+    expect(screen.queryAllByRole('alert')).toEqual([])
+    expect(h.mutate).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('button', {
+        name: 'Remove the entry for "Workshop 2025"',
+      }),
+    ).toHaveFocus()
   })
 
   it('is removed in one save that asks for the workshop answer only', () => {
     section(['Two-day pass'], roles)
 
     remove()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove it' }))
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(h.mutate.mock.calls).toEqual([
@@ -336,6 +396,7 @@ describe('an entry no ticket type matches', () => {
     })
     button.focus()
     fireEvent.click(button)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove it' }))
     expect(button).toHaveFocus()
 
     // The page refreshes with the entry gone.
@@ -436,7 +497,7 @@ describe('a provider that cannot be read', () => {
     render(<WorkshopTicketsSection list={null} providerLabel="Tito" />)
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The ticket types could not be read from Tito.The list cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
+      'The ticket types could not be read from Tito.The list cannot be shown or changed right now. Reload the page to try again.',
     )
     expect(screen.queryAllByRole('button')).toHaveLength(0)
     // Not the empty list, and not the not-configured state either.
@@ -450,7 +511,7 @@ describe('a provider that cannot be read', () => {
     )
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'This list could not be loaded.The list cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
+      'This list could not be loaded.The list cannot be shown or changed right now. Reload the page to try again.',
     )
     expect(screen.queryAllByRole('button')).toEqual([])
   })
@@ -466,13 +527,36 @@ describe('a provider that cannot be read', () => {
 
     expect(
       screen.getByText(
-        'Checkin.no lists no ticket types for this event, so there is nothing to set here. Who can sign up has not changed.',
+        'Checkin.no lists no ticket types for this event, so there is nothing to set here.',
       ),
     ).toBeInTheDocument()
     // The read worked, so no error; and with nothing to compare the stored
     // answers against, none is offered for removal.
     expect(screen.queryAllByRole('alert')).toEqual([])
     expect(screen.queryAllByRole('button')).toEqual([])
-    expect(screen.queryAllByRole('status')).toEqual([])
+    expect(
+      screen.queryAllByRole('region', { name: 'Needs a decision' }),
+    ).toEqual([])
+  })
+})
+
+/**
+ * WHILE THE TICKET TYPES ARE BEING READ the section keeps the shape it will
+ * have, so the workshops under it do not jump when the list arrives.
+ */
+describe('while the list is loading', () => {
+  it('holds the place of the heading and six rows, and says so to a screen reader', () => {
+    const { container } = render(<WorkshopTicketsSkeleton />)
+
+    expect(
+      screen.getByRole('region', { name: 'Workshop tickets' }),
+    ).toHaveAttribute('id', 'workshop-tickets')
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Reading the ticket types…',
+    )
+    // Placeholders only: nothing to read and nothing to press.
+    const rows = container.querySelectorAll('ul[aria-hidden] > li')
+    expect(rows).toHaveLength(6)
+    expect(screen.queryAllByRole('button')).toEqual([])
   })
 })

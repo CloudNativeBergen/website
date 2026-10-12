@@ -11,7 +11,7 @@ import type {
   WorkshopTicketList,
 } from '@/lib/workshop/ticket-list'
 import { WORKSHOP_TICKETS_ANCHOR } from './anchor'
-import { BuiltInListConfirm } from './BuiltInListConfirm'
+import { BuiltInListConfirm, Question } from './Question'
 import { WorkshopAccessControl } from './WorkshopAccessControl'
 import { quoteNames } from './names'
 import { useSaveWorkshopAccess } from './useSaveWorkshopAccess'
@@ -23,7 +23,7 @@ const HEADING_ID = 'workshop-tickets-heading'
  * links to. Its own component so the anchor exists while the ticket types are
  * still being read from the provider.
  */
-export function WorkshopTicketsFrame({
+function WorkshopTicketsFrame({
   badge,
   children,
 }: {
@@ -55,6 +55,38 @@ export function WorkshopTicketsFrame({
       </p>
       {children}
     </section>
+  )
+}
+
+/**
+ * THE SHAPE OF WHAT IS COMING, shown while the ticket types are read from the
+ * provider, so the workshops below do not jump when the list streams in: a
+ * conference has a dozen ticket types or so.
+ */
+export function WorkshopTicketsSkeleton() {
+  return (
+    <WorkshopTicketsFrame>
+      <p className="sr-only" role="status">
+        Reading the ticket types…
+      </p>
+      <ul
+        aria-hidden
+        className="mt-2 animate-pulse divide-y divide-gray-100 dark:divide-gray-800"
+      >
+        {Array.from({ length: 6 }, (_, row) => (
+          <li
+            key={row}
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3"
+          >
+            <div className="h-5 w-56 max-w-full rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+              <div className="h-11 flex-1 basis-40 rounded-md bg-gray-200 sm:w-44 sm:flex-none dark:bg-gray-700" />
+              <div className="h-11 flex-1 basis-40 rounded-md bg-gray-200 sm:w-40 sm:flex-none dark:bg-gray-700" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </WorkshopTicketsFrame>
   )
 }
 
@@ -100,9 +132,11 @@ export function WorkshopTicketsSection({
               ? 'This list could not be loaded.'
               : `The ticket types could not be read from ${providerLabel}.`}
           </p>
+          {/* WHAT COULD NOT BE SHOWN, and nothing about what did or did not
+              change: this state can replace the list right after a save. */}
           <p className="mt-1">
-            The list cannot be shown or changed right now. Who can sign up has
-            not changed. Reload the page to try again.
+            The list cannot be shown or changed right now. Reload the page to
+            try again.
           </p>
         </div>
       </WorkshopTicketsFrame>
@@ -117,7 +151,7 @@ export function WorkshopTicketsSection({
       <WorkshopTicketsFrame>
         <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
           {providerLabel} lists no ticket types for this event, so there is
-          nothing to set here. Who can sign up has not changed.
+          nothing to set here.
         </p>
       </WorkshopTicketsFrame>
     )
@@ -136,8 +170,9 @@ export function WorkshopTicketsSection({
       }
     >
       {(notSet.length > 0 || list.orphaned.length > 0) && (
-        <div
-          role="status"
+        // A labelled region, NOT a live one: it holds buttons and questions,
+        // and a live region would be read out again whole on every change.
+        <section
           aria-labelledby="workshop-tickets-attention"
           className="mt-4 rounded-md bg-amber-50 p-3 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900"
         >
@@ -168,7 +203,7 @@ export function WorkshopTicketsSection({
               ))}
             </ul>
           )}
-        </div>
+        </section>
       )}
 
       {!list.configured && (
@@ -217,10 +252,18 @@ function OrphanedEntry({
   providerLabel: string
   basedOn: string
 }) {
-  // The question is about losing the last grant. If another row's save makes
-  // that untrue (or changes what the built-in list would grant), it closes: a
-  // question stays on screen only while what it says still holds.
-  const facts = JSON.stringify([entry.lastGranting, builtInGranted])
+  // A REMOVAL IS ALWAYS ASKED ABOUT. Whether the provider keeps the old name
+  // on tickets already sold after a rename is not known here; if it does,
+  // removing a granting entry locks those holders out. The question says so,
+  // and the one for the last grant says more. If another row's save changes
+  // what it says (this stops or starts being the last grant, or the built-in
+  // list would grant something else), it closes: a question stays on screen
+  // only while what it says still holds.
+  const facts = JSON.stringify([
+    entry.grantsWorkshop,
+    entry.lastGranting,
+    builtInGranted,
+  ])
   const [askedOn, setAskedOn] = useState<string | null>(null)
   if (askedOn !== null && askedOn !== facts) setAskedOn(null)
   const confirming = askedOn === facts
@@ -269,7 +312,12 @@ function OrphanedEntry({
   }
 
   return (
-    <li className="py-2">
+    <li
+      className="py-2"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && confirming) close()
+      }}
+    >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <p className="min-w-0 flex-1 basis-60 text-sm text-amber-800 dark:text-amber-300">
           “{entry.typeName}” is saved as{' '}
@@ -283,9 +331,7 @@ function OrphanedEntry({
           ref={button}
           type="button"
           onClick={() => {
-            if (busy) return
-            if (entry.lastGranting) setConfirming(true)
-            else remove()
+            if (!busy) setConfirming(true)
           }}
           // Not `disabled`, which would drop the focus returned here.
           aria-disabled={busy}
@@ -295,14 +341,27 @@ function OrphanedEntry({
           {busy ? 'Removing…' : 'Remove entry'}
         </button>
       </div>
-      {confirming && (
-        <BuiltInListConfirm
-          builtInGranted={builtInGranted}
-          confirmLabel="Remove and use the built-in list"
-          onConfirm={remove}
-          onCancel={close}
-        />
-      )}
+      {confirming &&
+        (entry.lastGranting ? (
+          <BuiltInListConfirm
+            builtInGranted={builtInGranted}
+            confirmLabel="Remove and use the built-in list"
+            onConfirm={remove}
+            onCancel={close}
+          />
+        ) : (
+          <Question
+            title={`This removes the saved answer for “${entry.typeName}”.`}
+            cancelLabel="Keep the entry"
+            confirmLabel="Remove it"
+            onConfirm={remove}
+            onCancel={close}
+          >
+            {entry.grantsWorkshop
+              ? 'Anyone whose ticket still carries that name will no longer be able to sign up for workshops.'
+              : 'It is set to No, so nobody gains or loses access.'}
+          </Question>
+        ))}
     </li>
   )
 }

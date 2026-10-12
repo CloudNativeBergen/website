@@ -18,7 +18,14 @@
  * arguments being the thing that reaches the conference document.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render, screen, cleanup, fireEvent } from '@testing-library/react'
+import {
+  act,
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  within,
+} from '@testing-library/react'
 import {
   WorkshopAccessControl,
   type WorkshopAccessControlProps,
@@ -895,9 +902,13 @@ describe('another type that holds a stored No', () => {
     ).toEqual([
       'Grants workshop access',
       'No workshop access',
-      'Grant “Early Bird”',
+      // Leaving things as they are comes first, and is the prominent one.
       'Cancel',
+      'Grant “Early Bird”',
     ])
+    expect(screen.getByRole('button', { name: 'Cancel' }).className).toContain(
+      'bg-blue-600',
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Grant “Early Bird”' }))
     expect(h.mutate.mock.calls).toEqual([
@@ -1051,5 +1062,104 @@ describe('a question open while the page changes under it', () => {
     )
     // And the organizer's place in it is kept: focus is not pulled away.
     expect(confirm()).toHaveFocus()
+  })
+})
+
+/**
+ * WHAT A SCREEN READER AND A KEYBOARD GET. The saving state and the answer
+ * that follows it are announced politely; Escape closes an open question and
+ * leaves focus on the button that asked.
+ */
+describe('without a mouse or a screen', () => {
+  const last = props({
+    typeName: TWO_DAY,
+    configured: true,
+    stored: true,
+    lastGranting: true,
+    builtInGranted: [SPEAKER],
+  })
+
+  it('announces the answer of a row, and that it is saving, politely', () => {
+    h.isPending = true
+    render(<WorkshopAccessControl {...last} row />)
+
+    // `status` is a polite live region: what it holds is read out when it
+    // changes, without interrupting.
+    expect(screen.getByRole('status')).toHaveTextContent('Saving…')
+  })
+
+  it('closes an open question on Escape, with focus back on the button that asked', () => {
+    render(<WorkshopAccessControl {...last} row />)
+    const opener = screen.getByRole('button', { name: /^No workshop access/ })
+    fireEvent.click(opener)
+    const keep = screen.getByRole('button', { name: 'Cancel' })
+    keep.focus()
+
+    fireEvent.keyDown(keep, { key: 'Escape' })
+
+    expect(screen.queryAllByRole('alert')).toEqual([])
+    expect(opener).toHaveFocus()
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('makes leaving things as they are the prominent choice of the last-grant question', () => {
+    render(<WorkshopAccessControl {...last} row />)
+    fireEvent.click(screen.getByRole('button', { name: /^No workshop access/ }))
+
+    const choices = within(screen.getByRole('alert')).getAllByRole('button')
+    expect(choices.map((b) => b.textContent)).toEqual([
+      'Cancel',
+      'Save and use the built-in list',
+    ])
+    expect(choices[0].className).toContain('bg-blue-600')
+    expect(choices[1].className).not.toContain('bg-blue-600')
+  })
+})
+
+/**
+ * A STORED NO THAT BLOCKS NOBODY YET. After "Save the No, block nothing yet"
+ * the row has "No workshop access" pressed beside the answer "Grants workshop
+ * access (built-in list)". Both are true; the row says why.
+ */
+describe('a No saved while the built-in list still decides', () => {
+  const NOTE =
+    'Saved as No. It takes effect once a ticket type is set to grant access.'
+
+  it('says why the row shows both a No and a grant', () => {
+    render(
+      <WorkshopAccessControl
+        {...props({
+          typeName: SPEAKER,
+          configured: false,
+          stored: false,
+          builtInGrantsThis: true,
+        })}
+        row
+      />,
+    )
+
+    expect(screen.getByRole('group', { name: SPEAKER })).toHaveTextContent(NOTE)
+    expect(
+      screen.getByRole('button', { name: /^No workshop access/ }),
+    ).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it.each([
+    ['the No is in effect', { configured: true, stored: false }],
+    [
+      'the built-in list does not let the type in anyway',
+      { configured: false, stored: false },
+    ],
+    ['no No is stored', { configured: false, builtInGrantsThis: true }],
+  ])('says nothing of the kind when %s', (_when, state) => {
+    render(
+      <WorkshopAccessControl {...props({ typeName: SPEAKER, ...state })} row />,
+    )
+
+    expect(screen.getByRole('group', { name: SPEAKER })).not.toHaveTextContent(
+      'Saved as No',
+    )
+    // The row is there, with its two buttons.
+    expect(screen.getAllByRole('button')).toHaveLength(2)
   })
 })

@@ -412,7 +412,7 @@ describe('a type whose entry carries only a seating answer', () => {
       ['Day pass', 'No workshop access'],
     ])
     expect(
-      screen.getByRole('status', { name: 'Needs a decision' }),
+      screen.getByRole('region', { name: 'Needs a decision' }),
     ).toHaveTextContent(
       '“Student” is not set. Its holders cannot sign up for workshops until you choose an answer below.',
     )
@@ -611,7 +611,7 @@ describe('an orphaned grant held by a later spelling of a renamed type', () => {
 
     await openSection()
     expect(
-      screen.getByRole('status', { name: 'Needs a decision' }),
+      screen.getByRole('region', { name: 'Needs a decision' }),
     ).toHaveTextContent(
       '“Workshop 2025” is saved as granting workshop access, but Checkin.no lists no ticket type with that name.',
     )
@@ -709,7 +709,7 @@ describe('losing the last granting type', () => {
     expect((await gate(SPEAKER)).isEligible).toBe(true)
   })
 
-  it('removes an orphaned entry without asking while another type grants', async () => {
+  it('asks before removing any orphaned entry, and keeps its seating answer', async () => {
     seed(
       [
         { typeName: 'Two-day pass', grantsWorkshop: true },
@@ -724,7 +724,14 @@ describe('losing the last granting type', () => {
         name: 'Remove the entry for "Workshop 2025"',
       }),
     )
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // Another type grants, so this is not the last-grant question: but it is
+    // a question, and nothing is written until it is answered.
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This removes the saved answer for “Workshop 2025”.Anyone whose ticket still carries that name will no longer be able to sign up for workshops.',
+    )
+    await saved()
+    expect(h.commits).toBe(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove it' }))
     await saved()
 
     expect(stored()).toEqual([
@@ -733,8 +740,8 @@ describe('losing the last granting type', () => {
     ])
     await openSection()
     expect(
-      screen.queryByRole('status', { name: 'Needs a decision' }),
-    ).not.toBeInTheDocument()
+      screen.queryAllByRole('region', { name: 'Needs a decision' }),
+    ).toEqual([])
   })
 })
 
@@ -775,7 +782,7 @@ describe('a provider that lists no ticket types', () => {
 
     expect(
       screen.getByText(
-        'Checkin.no lists no ticket types for this event, so there is nothing to set here. Who can sign up has not changed.',
+        'Checkin.no lists no ticket types for this event, so there is nothing to set here.',
       ),
     ).toBeVisible()
     expect(screen.queryAllByRole('button')).toHaveLength(0)
@@ -851,7 +858,7 @@ describe('a failure while the section loads', () => {
 
     // It does not blame the ticketing provider for what may be our own fault.
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'This list could not be loaded.The list cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
+      'This list could not be loaded.The list cannot be shown or changed right now. Reload the page to try again.',
     )
     expect(screen.queryAllByRole('button')).toHaveLength(0)
   })
@@ -1032,7 +1039,7 @@ describe('a live roles read that fails', () => {
     await openSection(CACHED)
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'This list could not be loaded.The list cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
+      'This list could not be loaded.The list cannot be shown or changed right now. Reload the page to try again.',
     )
     expect(screen.queryAllByRole('button')).toEqual([])
     expect(screen.queryAllByRole('group')).toEqual([])

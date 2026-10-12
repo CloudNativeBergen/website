@@ -5,7 +5,10 @@ import { expect, userEvent, within } from 'storybook/test'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
 import { WorkshopTicketsNotReady } from './WorkshopTicketsNotReady'
-import { WorkshopTicketsSection } from './WorkshopTicketsSection'
+import {
+  WorkshopTicketsSection,
+  WorkshopTicketsSkeleton,
+} from './WorkshopTicketsSection'
 
 /**
  * "Workshop tickets" on /admin/workshops (#1332): which ticket types let their
@@ -217,6 +220,43 @@ export const FirstGrantOnlyStoredNoes: Story = {
     ).toBeVisible()
   },
 }
+/**
+ * A NO SAVED WHILE THE BUILT-IN LIST STILL DECIDES. "Speaker ticket" has "No
+ * workshop access" pressed and the answer "Grants workshop access (built-in
+ * list)". Both are true, and the row says why.
+ */
+export const LoneNoSaved: Story = {
+  args: {
+    list: buildWorkshopTicketList(TYPES, [
+      { typeName: SPEAKER, grantsWorkshop: false },
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole('group', { name: SPEAKER }),
+    ).toHaveTextContent(
+      'Saved as No. It takes effect once a ticket type is set to grant access.',
+    )
+  },
+}
+export const LoneNoSavedDark: Story = {
+  args: LoneNoSaved.args,
+  parameters: dark,
+}
+export const LoneNoSavedMobile: Story = {
+  args: LoneNoSaved.args,
+  parameters: phone,
+  play: async (context) => {
+    await LoneNoSaved.play!(context)
+    await fitsItsWidth(context)
+  },
+}
+export const LoneNoSavedMobileDark: Story = {
+  args: LoneNoSaved.args,
+  parameters: { ...phone, ...dark },
+  play: fitsItsWidth,
+}
+
 export const LoneNoMobileDark: Story = {
   args: NotConfigured.args,
   parameters: { ...phone, ...dark },
@@ -244,7 +284,7 @@ export const Configured: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
-      canvas.queryByRole('status', { name: 'Needs a decision' }),
+      canvas.queryByRole('region', { name: 'Needs a decision' }),
     ).not.toBeInTheDocument()
     await expect(
       canvas.getByRole('button', {
@@ -314,7 +354,7 @@ export const NotSetType: Story = {
   },
   play: async ({ canvasElement }) => {
     await expect(
-      within(canvasElement).getByRole('status', { name: 'Needs a decision' }),
+      within(canvasElement).getByRole('region', { name: 'Needs a decision' }),
     ).toHaveTextContent('“Student” and “Late Bird” are not set.')
   },
 }
@@ -357,7 +397,7 @@ export const OrphanedEntry: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
-      canvas.getByRole('status', { name: 'Needs a decision' }),
+      canvas.getByRole('region', { name: 'Needs a decision' }),
     ).toHaveTextContent(
       '“Workshop + Conference 2025” is saved as granting workshop access, but Checkin.no lists no ticket type with that name.',
     )
@@ -387,6 +427,36 @@ export const OrphanedEntryMobileDark: Story = {
 }
 
 /**
+ * REMOVING AN ENTRY IS ALWAYS ASKED ABOUT. Tickets already sold may still
+ * carry the old name; keeping the entry is the prominent choice.
+ */
+export const OrphanedEntryRemoval: Story = {
+  args: OrphanedEntry.args,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Remove the entry for "Workshop + Conference 2025"',
+      }),
+    )
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      'This removes the saved answer for “Workshop + Conference 2025”.Anyone whose ticket still carries that name will no longer be able to sign up for workshops.',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Keep the entry' }),
+    ).toBeVisible()
+  },
+}
+export const OrphanedEntryRemovalMobileDark: Story = {
+  args: OrphanedEntry.args,
+  parameters: { ...phone, ...dark },
+  play: async (context) => {
+    await OrphanedEntryRemoval.play!(context)
+    await fitsItsWidth(context)
+  },
+}
+
+/**
  * AN ORPHANED ENTRY THAT IS THE LAST ONE GRANTING. Removing it brings the
  * built-in list back, so the removal asks first.
  */
@@ -411,6 +481,18 @@ export const OrphanedLastGranting: Story = {
       canvas.getByRole('button', { name: 'Remove and use the built-in list' }),
     ).toBeVisible()
   },
+}
+
+/**
+ * WHILE THE TICKET TYPES ARE BEING READ: the heading and the shape of six
+ * rows, so the page does not jump when the list streams in.
+ */
+export const Loading: Story = {
+  render: () => <WorkshopTicketsSkeleton />,
+}
+export const LoadingMobileDark: Story = {
+  render: Loading.render,
+  parameters: { ...phone, ...dark },
 }
 
 /**
