@@ -5,18 +5,15 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import {
   isAuthHost,
-  resolveSignInHost,
   resolveTenantHost,
   toPortal,
 } from '../central-sign-in/decision'
 import { workshopMainHost } from '../sign-in'
-import {
-  WORKSHOP_EARLY_ACCESS_INVALID_QUERY,
-  WORKSHOP_PORTAL_PATH,
-} from '../sign-in-paths'
+import { WORKSHOP_EARLY_ACCESS_INVALID_QUERY } from '../sign-in-paths'
 import { earlyAccessCookie } from './cookie'
 import { earlyAccessUrl } from './link'
 import { resolveEarlyAccess } from './links'
+import { earlyAccessPortalUrl } from './portal'
 
 /** The token is in the address: no answer is cached or sends a referrer. */
 const SEALED = {
@@ -66,19 +63,16 @@ export async function openEarlyAccessLink(
       !mainHost ||
       normalizeDomain(mainHost) ===
         normalizeDomain(request.headers.get('host') ?? '')
-    // The main host as it is claimed NOW, read live. `conference` comes
-    // through a cache: when its main domain has since changed hands, the
-    // token must not travel there in an address. The same comparison the
-    // request's own host gets below.
-    const main = onMainHost ? null : await resolveSignInHost(mainHost)
-    return main?.destination.conference._id === conference._id
-      ? NextResponse.redirect(
-          earlyAccessUrl(
-            `${main.destination.origin}${WORKSHOP_PORTAL_PATH}`,
-            token,
-          ),
-          { status: 307, headers: SEALED },
-        )
+    // Only to a main host that can sign in and is still this conference's
+    // (`earlyAccessPortalUrl`): the token must not travel anywhere else.
+    const mainPortal = onMainHost
+      ? null
+      : await earlyAccessPortalUrl(conference)
+    return mainPortal
+      ? NextResponse.redirect(earlyAccessUrl(mainPortal, token), {
+          status: 307,
+          headers: SEALED,
+        })
       : toPortal()
   }
   // The conference is read through a cache. Right after a host changes hands

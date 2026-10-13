@@ -6,9 +6,9 @@ import { workshopAdminProcedure } from '../workshopAdmin'
 import { SponsorDiscountCodeOptionsSchema as SponsorOfConferenceSchema } from '../schemas/sponsorForConference'
 import { notFoundMessage, requireDocumentInCurrentConference } from '../tenancy'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { workshopPortalUrl } from '@/lib/workshop/sign-in'
 import {
   createEarlyAccessLink,
+  earlyAccessPortalUrl,
   earlyAccessUrl,
   expireEarlyAccessLinks,
   readEarlyAccessToken,
@@ -52,15 +52,16 @@ async function requireSponsor(sponsorForConferenceId: string): Promise<string> {
 }
 
 /**
- * Where the portal is, for a link that leaves the request: the conference's
- * main host when it can sign people in. A LIVE READ, made only when an address
- * is asked for. Refused, with the reason, when there is none: a link there
- * would open nothing.
+ * Where this conference's links point: its main host, when that host can sign
+ * people in and is still this conference's (`earlyAccessPortalUrl`). A LIVE
+ * READ, made only when an address is asked for. Refused, with the reason,
+ * when there is none: a link there would open nothing, or open on a host that
+ * is no longer this conference's.
  */
 async function requirePortalUrl(): Promise<string> {
   const { conference, error } = await getConferenceForCurrentDomain()
   const portalUrl =
-    error || !conference ? null : await workshopPortalUrl(conference)
+    error || !conference ? null : await earlyAccessPortalUrl(conference)
   if (!portalUrl) {
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',

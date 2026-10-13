@@ -203,6 +203,26 @@ describe('create', () => {
     expect(stored(SFC)).toMatch(new RegExp(`^${UUID}$`))
   })
 
+  it('is refused, and writes nothing, when another conference claims the main host now', async () => {
+    // The conference is read through a cache and still names this host. It
+    // has changed hands, and can sign people in to ANOTHER conference: an
+    // address there would put this sponsor's link on that tenant's host.
+    h.getDomainClaim.mockImplementation(
+      claimsById(provenClaim(MAIN_HOST, {}, { _id: 'conf-b' })),
+    )
+
+    await expect(
+      caller().create({ sponsorForConferenceId: SFC }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('no working workshop portal'),
+    })
+    expect(store().commits).toEqual([])
+    expect(stored(SFC)).toBeUndefined()
+    // One live read of the host, as when it is ours.
+    expect(h.getDomainClaim).toHaveBeenCalledTimes(1)
+  })
+
   it('is refused when the conference has no workshops, before anything is read', async () => {
     h.workshopsEnabled.mockResolvedValue(false)
 
@@ -263,6 +283,21 @@ describe('getAddress', () => {
     expect(await caller().getAddress({ sponsorForConferenceId: SFC })).toEqual({
       url: `https://${MAIN_HOST}/workshop/early-access/stored-token`,
     })
+  })
+
+  it('is refused when another conference claims the main host now', async () => {
+    store().reset([...DATASET, sponsor({ [FIELD]: 'stored-token' })])
+    h.getDomainClaim.mockImplementation(
+      claimsById(provenClaim(MAIN_HOST, {}, { _id: 'conf-b' })),
+    )
+
+    await expect(
+      caller().getAddress({ sponsorForConferenceId: SFC }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('no working workshop portal'),
+    })
+    expect(h.getDomainClaim).toHaveBeenCalledTimes(1)
   })
 
   it('never creates a link: a sponsor without one is refused and nothing is written', async () => {
