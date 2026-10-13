@@ -81,7 +81,7 @@ The CRM join document linking a sponsor to a conference with relationship metada
 
 Contact person roles are defined by `CONTACT_ROLE_OPTIONS` in `src/lib/sponsor/types.ts`. The `isPrimary` flag identifies the main contact for contract signing.
 
-`workshopEarlyAccessToken` holds the token of the sponsor's workshop early-access link, which its people open to sign up for workshops before sign-up opens for everyone. It is separate from `registrationToken`, and is created and revoked on the sponsor's record, never edited in Studio. See `docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md`.
+`workshopEarlyAccessToken` holds the token of the sponsor's workshop early-access link, which its people open to sign up for workshops before sign-up opens for everyone. It is separate from `registrationToken`, and is created and revoked on the sponsor's record, never edited in Studio. Sending the link (the `workshop-early-access` kind of `crm.sendCommunication`, #1347) creates it when the sponsor has none and otherwise reuses the stored one. See `docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md`.
 
 ### `contractTemplate`
 
@@ -115,7 +115,7 @@ Audit log for CRM actions. Each activity references a `sponsorForConference` doc
 | `createdBy`    | Reference to the organizer who performed the action                                                                                                                                                    |
 | `createdAt`    | ISO timestamp                                                                                                                                                                                          |
 
-**Sent-email audit record (#1261).** An `email` activity written by `sponsor.crm.sendCommunication` additionally carries `communicationKind` (`information` · `contract` · `registration` · `discount`), `recipients[]` (contact key, name, email, role, `isDefault` — a snapshot as sent), `subject`, `body` (the rendered HTML exactly as handed to Resend), `template` (weak ref) + `templateEdited`, `attachments[]`, `providerMessageId`, `deliveryStatus` (`sent` · `failed`) and `error`. A record with `communicationKind` is immutable: `activities.update`/`delete` refuse it. The list projection omits `body`/`attachments`; `activities.get` loads them on expand, and `activities.listCommunications` powers the drawer's **Communications** tab (kind filter, paged).
+**Sent-email audit record (#1261).** An `email` activity written by `sponsor.crm.sendCommunication` additionally carries `communicationKind` (`information` · `contract` · `registration` · `discount` · `workshop-early-access`), `recipients[]` (contact key, name, email, role, `isDefault` — a snapshot as sent), `subject`, `body` (the rendered HTML exactly as handed to Resend), `template` (weak ref) + `templateEdited`, `attachments[]`, `providerMessageId`, `deliveryStatus` (`sent` · `failed`) and `error`. A record with `communicationKind` is immutable: `activities.update`/`delete` refuse it. The list projection omits `body`/`attachments`; `activities.get` loads them on expand, and `activities.listCommunications` powers the drawer's **Communications** tab (kind filter, paged).
 
 ## Status Enumerations
 
