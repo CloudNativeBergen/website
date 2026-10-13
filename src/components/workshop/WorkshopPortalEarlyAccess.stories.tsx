@@ -254,27 +254,140 @@ export const InsideTheWindowLongNameDark = dark(InsideTheWindowLongName)
 export const InsideTheWindowLongNameMobile = mobile(InsideTheWindowLongName)
 
 /**
- * A SIGN-UP REFUSED BECAUSE THE LINK WAS REVOKED while the page was open. The
- * server refuses for the window, the list says the early access is no longer
- * valid and asks the page to render again. The page (here: a host that
- * answers as the server would, without early access) then shows the banner
- * naming the official opening, and the list KEEPS saying what happened.
+ * A SIGN-UP REFUSED BECAUSE THE LINK WAS REVOKED while the page was open, in
+ * the order it happens:
+ *
+ *  1. The server refuses for the window. The dialog is still open and shows
+ *     the refusal; the list shows it too, and asks the page to render again.
+ *     Nothing says the early access is gone yet: the page has not said so.
+ *     (`…BeforeThePageRendersAgain` stops here.)
+ *  2. The page renders again (here: a host that answers as the server would,
+ *     without early access, after a moment). The workshops go, and the dialog
+ *     with them; the banner naming the official opening is shown; the list's
+ *     notice now says "Your early access is no longer valid.", stays, and has
+ *     the keyboard.
  */
 const REFUSAL =
   'Workshop registration opens on Monday, June 15, 2026 at 10:00 AM'
-function PortalWhoseLinkIsRevoked(args: ComponentProps<typeof WorkshopPortal>) {
+function PortalWhoseLinkIsRevoked({
+  rendersAgain,
+  ...args
+}: ComponentProps<typeof WorkshopPortal> & { rendersAgain: boolean }) {
   const [renderedAgain, setRenderedAgain] = useState(false)
   return (
     <WorkshopPortal
       {...args}
       {...(renderedAgain ? portal(SPONSOR_START, null) : {})}
-      refreshAction={async () => setRenderedAgain(true)}
+      refreshAction={async () => {
+        if (!rendersAgain) return
+        // As long as a round trip to the server takes.
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        setRenderedAgain(true)
+      }}
     />
   )
 }
+const refusedForTheWindow = {
+  msw: {
+    handlers: [
+      ...handlers,
+      http.post('/api/trpc/workshop.signup', () =>
+        HttpResponse.json(
+          {
+            error: {
+              message: REFUSAL,
+              code: -32012,
+              data: { code: 'PRECONDITION_FAILED', httpStatus: 412 },
+            },
+          },
+          { status: 412 },
+        ),
+      ),
+    ],
+  },
+}
+/** Press "Register for Workshop" and confirm, in the dialog. */
+async function signUp(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement)
+  await userEvent.click(
+    await canvas.findByRole('button', { name: 'Register for Workshop' }),
+  )
+  // The confirmation is a dialog, rendered outside the canvas.
+  const dialog = within(
+    await within(canvasElement.ownerDocument.body).findByRole('dialog'),
+  )
+  await userEvent.click(
+    await dialog.findByRole('button', { name: /confirm registration/i }),
+  )
+  return dialog
+}
+
+export const SignUpRefusedBeforeThePageRendersAgain: Story = {
+  args: portal(SPONSOR_START, ACME),
+  render: (args) => <PortalWhoseLinkIsRevoked {...args} rendersAgain={false} />,
+  parameters: refusedForTheWindow,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const dialog = await signUp(canvasElement)
+
+    // The dialog is still open, with the refusal in it.
+    await expect(await dialog.findByText(REFUSAL)).toBeInTheDocument()
+    // The list says what the server said, and nothing about the link. It
+    // lies behind the dialog, and does not take the keyboard from it.
+    const notice = await canvas.findByRole('alert')
+    await expect(notice.textContent).toBe(REFUSAL)
+    await expect(notice).not.toHaveFocus()
+    await expect(statuses(canvasElement)).toEqual([
+      'You have early access through Acme AS',
+    ])
+  },
+}
+export const SignUpRefusedBeforeThePageRendersAgainDark = dark(
+  SignUpRefusedBeforeThePageRendersAgain,
+)
+export const SignUpRefusedBeforeThePageRendersAgainMobile = mobile(
+  SignUpRefusedBeforeThePageRendersAgain,
+)
+
 export const SignUpRefusedAfterRevoke: Story = {
   args: portal(SPONSOR_START, ACME),
-  render: (args) => <PortalWhoseLinkIsRevoked {...args} />,
+  render: (args) => <PortalWhoseLinkIsRevoked {...args} rendersAgain />,
+  parameters: refusedForTheWindow,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const body = within(canvasElement.ownerDocument.body)
+    const dialog = await signUp(canvasElement)
+    await expect(await dialog.findByText(REFUSAL)).toBeInTheDocument()
+
+    // The page renders again, as everyone sees it.
+    await expect(
+      await canvas.findByRole('heading', {
+        level: 3,
+        name: 'Workshop registration is not yet open',
+      }),
+    ).toBeInTheDocument()
+    await expect(statuses(canvasElement)).toEqual([])
+    await expect(body.queryByRole('dialog')).not.toBeInTheDocument()
+    const notice = canvas.getByRole('alert')
+    await expect(notice.textContent).toBe(
+      `Your early access is no longer valid. ${REFUSAL}`,
+    )
+    // The dialog that held the keyboard is gone: the notice has it.
+    await expect(notice).toHaveFocus()
+  },
+}
+export const SignUpRefusedAfterRevokeDark = dark(SignUpRefusedAfterRevoke)
+export const SignUpRefusedAfterRevokeMobile = mobile(SignUpRefusedAfterRevoke)
+
+/**
+ * EARLY ACCESS COULD NOT BE CHECKED: the live lookup of the link failed. The
+ * sign-up is refused, never let through, and the refusal says so in the
+ * dialog, which stays open to try again from.
+ */
+const COULD_NOT_CHECK =
+  'We could not check your early access right now. Please try again in a moment.'
+export const EarlyAccessCouldNotBeChecked: Story = {
+  args: portal(SPONSOR_START, ACME),
   parameters: {
     msw: {
       handlers: [
@@ -283,46 +396,39 @@ export const SignUpRefusedAfterRevoke: Story = {
           HttpResponse.json(
             {
               error: {
-                message: REFUSAL,
-                code: -32012,
-                data: { code: 'PRECONDITION_FAILED', httpStatus: 412 },
+                message: COULD_NOT_CHECK,
+                code: -32603,
+                data: { code: 'SERVICE_UNAVAILABLE', httpStatus: 503 },
               },
             },
-            { status: 412 },
+            { status: 503 },
           ),
         ),
       ],
     },
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    await userEvent.click(
-      await canvas.findByRole('button', { name: 'Register for Workshop' }),
-    )
-    // The confirmation is a dialog, rendered outside the canvas.
-    await userEvent.click(
-      await within(canvasElement.ownerDocument.body).findByRole('button', {
-        name: /confirm registration/i,
-      }),
-    )
-    await expect(await canvas.findByRole('alert')).toHaveTextContent(
-      `Your early access is no longer valid. ${REFUSAL}`,
-    )
-    // The page has rendered again, as everyone sees it.
+    const dialog = await signUp(canvasElement)
+
+    await expect(await dialog.findByText(COULD_NOT_CHECK)).toBeInTheDocument()
     await expect(
-      await canvas.findByRole('heading', {
-        level: 3,
-        name: 'Workshop registration is not yet open',
-      }),
-    ).toBeInTheDocument()
-    await expect(statuses(canvasElement)).toEqual([])
-    await expect(canvas.getByRole('alert')).toHaveTextContent(
-      `Your early access is no longer valid. ${REFUSAL}`,
-    )
+      dialog.getByRole('button', { name: /confirm registration/i }),
+    ).toBeEnabled()
+    // The early access is as it was: nothing says it is gone.
+    await expect(statuses(canvasElement)).toEqual([
+      'You have early access through Acme AS',
+    ])
+    await expect(
+      within(canvasElement).queryByText(/no longer valid/),
+    ).not.toBeInTheDocument()
   },
 }
-export const SignUpRefusedAfterRevokeDark = dark(SignUpRefusedAfterRevoke)
-export const SignUpRefusedAfterRevokeMobile = mobile(SignUpRefusedAfterRevoke)
+export const EarlyAccessCouldNotBeCheckedDark = dark(
+  EarlyAccessCouldNotBeChecked,
+)
+export const EarlyAccessCouldNotBeCheckedMobile = mobile(
+  EarlyAccessCouldNotBeChecked,
+)
 
 /**
  * AFTER THE OFFICIAL OPENING: the portal as everyone sees it. Nothing mentions

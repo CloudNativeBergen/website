@@ -329,6 +329,53 @@ export const RevokedWithCopyLeftMobile: Story = {
 }
 
 /**
+ * Revoked, and what is left is an unpublished copy of ANOTHER sponsor record
+ * the link had been copied to: the warning says so. "Try again" hands the
+ * server the copy it named, which it could not find from this sponsor.
+ */
+export const RevokedWithAnotherRecordsCopyLeft: Story = {
+  args: { hasLink: true },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/sponsor.crm.earlyAccess.revoke', () =>
+          answer({
+            success: true,
+            notCleared: ['versions.rSpring.sfc-456'],
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Revoke' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Revoke link' }))
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'The link is revoked, but 1 unpublished copy of another sponsor record in Sanity Studio still holds it. Publishing it would make the link work again. Try again, or discard it in Studio.',
+    )
+    // Tried again, with the same answer: the keyboard stays on the button.
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }))
+    await expect(
+      await canvas.findByRole('button', { name: 'Try again' }),
+    ).toHaveFocus()
+    await expect(await canvas.findByRole('alert')).toBeInTheDocument()
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const RevokedWithAnotherRecordsCopyLeftDark: Story = {
+  ...RevokedWithAnotherRecordsCopyLeft,
+  ...dark,
+}
+export const RevokedWithAnotherRecordsCopyLeftMobile: Story = {
+  ...RevokedWithAnotherRecordsCopyLeft,
+  parameters: {
+    ...RevokedWithAnotherRecordsCopyLeft.parameters,
+    ...mobile.parameters,
+  },
+}
+
+/**
  * COPY, WHEN THE LINK IS GONE: a colleague revoked it while this record was
  * open. The server's answer is shown and the record is read again, here by a
  * host that answers "no link", so the section is back at Create link.
