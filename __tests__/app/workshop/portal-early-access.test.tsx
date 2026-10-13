@@ -445,6 +445,18 @@ describe('a person with early access', () => {
     expect(portal.status).toEqual([`You have early access through ${name}`])
   })
 
+  // One token on two published documents (a copy made by a script): the
+  // name shown is that of the sponsor with the lowest id, which is also the
+  // one a sign-up records. Stored here after the one with the higher id.
+  it('with one token on two sponsors, names the one with the lowest id', async () => {
+    h.store!.put(sponsor('sfc-aardvark', LIVE, 'sponsor-globex'))
+    await request({ earlyAccess: LIVE })
+
+    const portal = await view()
+
+    expect(portal.status).toEqual(['You have early access through Globex'])
+  })
+
   it('after the official opening: the portal as everyone sees it, and nothing is looked up', async () => {
     vi.setSystemTime(new Date(OFFICIAL_OPENING))
     await request({ earlyAccess: LIVE })

@@ -498,6 +498,39 @@ describe('a revoke that left an unpublished copy of another document, and the ne
   })
 })
 
+/**
+ * TWO PUBLISHED DOCUMENTS HOLDING ONE TOKEN (a copy made by a script; Studio
+ * can no longer duplicate): the sponsor recorded at sign-up comes from the
+ * live read and the name shown from the cached one. Both take the lowest
+ * `_id`, so they name the same sponsor, whatever order the store answers in.
+ */
+describe('one token on two published documents', () => {
+  const GLOBEX = { _id: 'sponsor-globex', _type: 'sponsor', name: 'Globex' }
+  // Stored with the higher id FIRST: an unordered read answers that one.
+  const twice = [
+    ACME,
+    GLOBEX,
+    sponsor({ _id: 'sfc-zenith', workshopEarlyAccessToken: TOKEN }),
+    sponsor({
+      _id: 'sfc-aardvark',
+      sponsor: ref('sponsor-globex'),
+      workshopEarlyAccessToken: TOKEN,
+    }),
+  ]
+
+  it('the live read and the cached read answer the same sponsor: the lowest id', async () => {
+    store().reset(twice)
+
+    expect({
+      recorded: await findEarlyAccessSponsor(CONF, TOKEN),
+      shown: await resolveEarlyAccess(CONF, TOKEN),
+    }).toEqual({
+      recorded: { _id: 'sfc-aardvark' },
+      shown: { sponsorName: 'Globex' },
+    })
+  })
+})
+
 describe('the stored token, read for a link’s address', () => {
   // The procedure's own guard refuses a foreign sponsor first. This is the
   // read's own scope, on the query as it is executed: without it the read

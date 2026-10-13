@@ -443,6 +443,10 @@ export function earlyAccessUrl(portalUrl: string, token: string): string {
  * a revoke takes effect on the next attempt.
  *
  * The param is not named `token`: the client treats that name as its own.
+ *
+ * ORDERED BY `_id`, as the cached read is (`conferenceEarlyAccessLinks`):
+ * should two published documents hold one token, the sponsor recorded here
+ * and the name the portal page shows are the same sponsor's.
  */
 export async function findEarlyAccessSponsor(
   conferenceId: string,
@@ -452,7 +456,7 @@ export async function findEarlyAccessSponsor(
   return scopedFetch<{ _id: string } | null>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "sponsorForConference" && workshopEarlyAccessToken == $linkToken && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{ _id }`,
+    `*[_type == "sponsorForConference" && workshopEarlyAccessToken == $linkToken && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(_id asc)[0]{ _id }`,
     { linkToken: token },
     { cache: 'no-store' },
   )

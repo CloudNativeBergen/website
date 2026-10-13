@@ -44,6 +44,10 @@ const hashOf = (token: string) =>
  * stores a token. Drafts and release copies are left out by the query: the
  * server's clients see drafts, and a copy can hold a token that was revoked.
  *
+ * ORDERED BY `_id`, as the live lookup is (`findEarlyAccessSponsor`): should
+ * two published documents hold one token, `resolveEarlyAccess` takes the
+ * first, and both name the same sponsor.
+ *
  * FILLED FROM SANITY'S ORIGIN, not its CDN: expiring the tag does not reach
  * the CDN, and a refill through it could pin the old answer.
  */
@@ -58,7 +62,7 @@ export async function conferenceEarlyAccessLinks(
   >(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "sponsorForConference" && defined(workshopEarlyAccessToken) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ "token": workshopEarlyAccessToken, "sponsorName": sponsor->name }`,
+    `*[_type == "sponsorForConference" && defined(workshopEarlyAccessToken) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(_id asc){ "token": workshopEarlyAccessToken, "sponsorName": sponsor->name }`,
   )
   return (rows ?? []).flatMap(({ token, sponsorName }) =>
     typeof token === 'string' && token

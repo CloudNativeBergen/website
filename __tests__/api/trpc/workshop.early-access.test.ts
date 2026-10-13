@@ -358,6 +358,17 @@ describe('inside the early-access window', () => {
     },
   )
 
+  // One token on two published documents (a copy made by a script): the
+  // sponsor recorded is the one with the lowest id, which is also the one
+  // whose name the portal page shows. Stored here with the higher id first.
+  it('with one token on two sponsors, the sign-up records the one with the lowest id', async () => {
+    store().reset([...DATASET, sponsor('sfc-aardvark', LIVE)])
+
+    expect(await attempt(LIVE)).toMatchObject({
+      stored: { earlyAccessSponsor: { _ref: 'sfc-aardvark', _weak: true } },
+    })
+  })
+
   it('a full workshop gives a waitlisted sign-up with the sponsor recorded', async () => {
     store().reset([
       ...DATASET.filter((doc) => doc._id !== 'workshop-1'),
