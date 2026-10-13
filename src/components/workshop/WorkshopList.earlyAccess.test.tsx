@@ -340,6 +340,27 @@ describe('a sign-up the server refuses while the list shows early access', () =>
     expect(screen.getByRole('alert').textContent).toBe(OPENS_FOR_SPONSORS)
   })
 
+  // The notice lies behind the dialog until the workshops go. A browser can
+  // leave the keyboard nowhere in that time (the pressed button is disabled
+  // while the request runs): the notice must not take it from the dialog.
+  it('while the page still resolves early access, the notice never takes the keyboard, even when it is nowhere', async () => {
+    const { rerender } = await refusedWith(OPENS_OFFICIALLY)
+    ;(document.activeElement as HTMLElement).blur()
+    expect(document.activeElement).toBe(document.body)
+
+    rerender(
+      <Providers>
+        <WorkshopList
+          {...props}
+          earlyAccess
+          workshopRegistrationSponsorStart={SPONSOR_START}
+        />
+      </Providers>,
+    )
+
+    expect(document.activeElement).toBe(document.body)
+  })
+
   it('does not for any other refusal', async () => {
     const onEarlyAccessRefused = vi.fn()
     signupAnswer = refusal(

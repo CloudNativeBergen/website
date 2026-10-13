@@ -59,12 +59,15 @@ export default function WorkshopList({
   // THE KEYBOARD AFTER THAT REFUSAL. When the page renders again without
   // early access, the workshops go, and with them the dialog the person was
   // in: focus would fall back to the page. It goes to the notice instead,
-  // once, and only when it is in fact nowhere: while the dialog is open it
-  // stays there.
+  // once, and only when it is in fact nowhere. NEVER WHILE THE PAGE STILL
+  // RESOLVES EARLY ACCESS: until then the dialog can be open, the notice lies
+  // behind it, and a browser may report the keyboard as nowhere while the
+  // pressed button is disabled.
   const refusalNotice = useRef<HTMLDivElement>(null)
   const refusalWantsFocus = useRef(false)
   useEffect(() => {
     if (!refusalWantsFocus.current || !refusalNotice.current) return
+    if (earlyAccess) return
     const lost =
       !document.activeElement || document.activeElement === document.body
     if (!lost) return
