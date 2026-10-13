@@ -210,7 +210,7 @@ export async function getConferenceForDomain(
      * ({@link CONFERENCE_CACHE_LIFE}) and the Sanity CDN. Reserved for admin surfaces
      * that must reflect a write the organizer just made — the homepage
      * composer preview and `/admin/workshops` (whose registration card is the
-     * baseline its saves are diffed against) are the only callers. Public
+     * baseline its saves are diffed against) are among the callers. Public
      * pages must never pass this: every request would hit the origin dataset.
      */
     uncached?: boolean
