@@ -83,9 +83,13 @@ const section = (props: {
   copyRefusal?: string
   recordUpdatedAt?: string
   sponsorStartSet?: boolean
+  earlySignupCount?: number
+  earlySignupsHref?: string
 }) => (
   <SponsorEarlyAccessSection
     sponsorForConferenceId="sfc-1"
+    earlySignupCount={props.earlySignupCount}
+    earlySignupsHref={props.earlySignupsHref}
     createRefusal={props.createRefusal}
     copyRefusal={props.copyRefusal}
     sponsorStartSet={props.sponsorStartSet}
@@ -1054,5 +1058,103 @@ describe('revoking', () => {
     expect(screen.getByRole('button', { name: 'Create link' })).toBeVisible()
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * The count is read with the sponsor's record
+ * (`src/lib/sponsor-crm/sanity.earlySignupCount.test.ts`): the section is
+ * handed a number and asks the server for nothing.
+ */
+describe('how many early sign-ups were made through this sponsor’s links (#1348)', () => {
+  const LIST = '/admin/workshops?earlySponsor=sfc-1#early-sign-ups'
+
+  it('says the count, and links it to the list narrowed to this sponsor', () => {
+    render(
+      section({ hasLink: true, earlySignupCount: 3, earlySignupsHref: LIST }),
+    )
+
+    expect(
+      screen.getByRole('link', { name: '3 early sign-ups' }),
+    ).toHaveAttribute('href', LIST)
+    expect(
+      screen.getByText(
+        (_text, element) =>
+          element?.tagName === 'P' &&
+          element.textContent ===
+            '3 early sign-ups were made through this sponsor’s links, confirmed and waitlisted together.',
+      ),
+    ).toBeVisible()
+  })
+
+  it('says one sign-up in the singular', () => {
+    render(
+      section({ hasLink: true, earlySignupCount: 1, earlySignupsHref: LIST }),
+    )
+
+    expect(screen.getByRole('link', { name: '1 early sign-up' })).toBeVisible()
+    expect(
+      screen.getByText(
+        (_text, element) =>
+          element?.tagName === 'P' &&
+          element.textContent ===
+            '1 early sign-up was made through this sponsor’s links.',
+      ),
+    ).toBeVisible()
+  })
+
+  it('still says it for a sponsor whose link was revoked since', () => {
+    render(
+      section({ hasLink: false, earlySignupCount: 2, earlySignupsHref: LIST }),
+    )
+
+    expect(
+      screen.getByRole('link', { name: '2 early sign-ups' }),
+    ).toHaveAttribute('href', LIST)
+    // And the sponsor can be given a new link.
+    expect(screen.getByRole('button', { name: 'Create link' })).toBeVisible()
+  })
+
+  it('says there are none yet for a sponsor with a link, and links nowhere', () => {
+    render(
+      section({ hasLink: true, earlySignupCount: 0, earlySignupsHref: LIST }),
+    )
+
+    expect(
+      screen.getByText('No early sign-ups through this sponsor’s links yet.'),
+    ).toBeVisible()
+    expect(screen.queryByRole('link')).toBeNull()
+  })
+
+  it('says nothing about sign-ups for a sponsor with no link and none made', () => {
+    render(
+      section({ hasLink: false, earlySignupCount: 0, earlySignupsHref: LIST }),
+    )
+
+    expect(screen.queryByText(/early sign-up/)).toBeNull()
+    expect(screen.queryByRole('link')).toBeNull()
+  })
+
+  it('says the count without a link where the list cannot be opened', () => {
+    render(section({ hasLink: true, earlySignupCount: 3 }))
+
+    expect(screen.getByText('3 early sign-ups')).toBeVisible()
+    expect(screen.queryByRole('link')).toBeNull()
+  })
+
+  it('says nothing when the record carries no count', () => {
+    render(section({ hasLink: true }))
+
+    expect(screen.queryByText(/early sign-up/)).toBeNull()
+  })
+
+  it('asks the server for nothing', () => {
+    render(
+      section({ hasLink: true, earlySignupCount: 3, earlySignupsHref: LIST }),
+    )
+
+    expect(h.address).not.toHaveBeenCalled()
+    expect(h.create).not.toHaveBeenCalled()
+    expect(h.revoke).not.toHaveBeenCalled()
   })
 })

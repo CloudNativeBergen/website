@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import {
@@ -37,6 +38,17 @@ export interface SponsorEarlyAccessSectionProps {
    */
   sponsorStartSet?: boolean
   /**
+   * How many early sign-ups were made through this sponsor's links, confirmed
+   * and waitlisted together (#1348). Read with the sponsor's record; the
+   * section asks for nothing. Unset: the record carries no count.
+   */
+  earlySignupCount?: number
+  /**
+   * The "Early sign-ups" list narrowed to this sponsor. Unset: the count is
+   * said without a link (workshops were turned off, so the list is gone).
+   */
+  earlySignupsHref?: string
+  /**
    * The link was created or revoked, or turned out not to be what the record
    * says: the host reads the sponsor again.
    */
@@ -59,6 +71,8 @@ export function SponsorEarlyAccessSection({
   copyRefusal,
   recordUpdatedAt,
   sponsorStartSet,
+  earlySignupCount,
+  earlySignupsHref,
   onChanged,
 }: SponsorEarlyAccessSectionProps) {
   const utils = api.useUtils()
@@ -405,6 +419,12 @@ export function SponsorEarlyAccessSection({
         </div>
       )}
 
+      <EarlySignupCount
+        count={earlySignupCount}
+        href={earlySignupsHref}
+        linked={linked}
+      />
+
       {linked && copyFailed && (
         <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">
           Could not copy the link. Select it above and copy it by hand.
@@ -507,5 +527,54 @@ function LeftAfterRevoke({
       . Publishing {one ? 'it' : 'one of them'} would make the link work again.
       Try again, or discard {one ? 'it' : 'them'} in Studio.
     </>
+  )
+}
+
+/**
+ * How many early sign-ups were made through this sponsor's links (#1348,
+ * spec §9): sign-ups, not people, and the ones made through a link revoked
+ * since are among them, so it is said for a sponsor without a link too. The
+ * count links to the "Early sign-ups" list narrowed to this sponsor.
+ */
+function EarlySignupCount({
+  count,
+  href,
+  linked,
+}: {
+  count: number | undefined
+  href: string | undefined
+  linked: boolean
+}) {
+  if (count === undefined || (count === 0 && !linked)) return null
+  const text = 'mt-3 text-sm text-gray-600 dark:text-gray-400'
+  if (count === 0) {
+    return (
+      <p className={text}>
+        No early sign-ups through this sponsor&rsquo;s links yet.
+      </p>
+    )
+  }
+  const one = count === 1
+  const counted = `${count} early sign-up${one ? '' : 's'}`
+  return (
+    <p className={text}>
+      {href ? (
+        // NOT PREFETCHED: opening a sponsor's record must not render the
+        // workshops page, whose reads are live.
+        <Link
+          href={href}
+          prefetch={false}
+          className="font-semibold text-indigo-600 underline hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+        >
+          {counted}
+        </Link>
+      ) : (
+        <span className="font-semibold text-gray-900 dark:text-white">
+          {counted}
+        </span>
+      )}{' '}
+      {one ? 'was' : 'were'} made through this sponsor&rsquo;s links
+      {one ? '.' : ', confirmed and waitlisted together.'}
+    </p>
   )
 }

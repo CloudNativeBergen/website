@@ -8,6 +8,7 @@ import { ContractReadinessIndicator } from './ContractReadinessIndicator'
 import { ContractFlowStep } from './ContractFlowStep'
 import { SponsorPortalSection } from './SponsorPortalSection'
 import { SponsorEarlyAccessSection } from './SponsorEarlyAccessSection'
+import { earlySignupsHref } from '@/components/admin/workshop/early-signups/anchor'
 import { OrganizerSignatureCapture } from '@/components/admin/OrganizerSignatureCapture'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { formatNumber } from '@/lib/format'
@@ -619,6 +620,11 @@ export function SponsorContractView({
           hasLink={!!sponsor.hasWorkshopEarlyAccessLink}
           recordUpdatedAt={sponsor._updatedAt}
           sponsorStartSet={sponsorStartSet}
+          earlySignupCount={sponsor.workshopEarlySignupCount}
+          // With workshops off there is no list to open.
+          earlySignupsHref={
+            workshopsEnabled ? earlySignupsHref(sponsor._id) : undefined
+          }
           // With workshops off the link opens nothing and its address cannot
           // be built: only revoking is left.
           copyRefusal={
