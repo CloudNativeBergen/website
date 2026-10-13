@@ -78,16 +78,17 @@ export function SponsorEarlyAccessSection({
     /** The address the server last answered. */
     url: string | null
     /**
-     * Unpublished copies this section's last create or revoke could not
-     * bring in step: after a create they lack the link, after a revoke they
-     * still hold it.
+     * The ids of the unpublished copies this section's last create or revoke
+     * could not bring in step: after a create they lack the link, after a
+     * revoke they still hold it. After a revoke they are not always this
+     * sponsor's own: see `LeftAfterRevoke`.
      */
-    outOfStep: number
+    behind: readonly string[]
   }>({
     record: { hasLink, updatedAt: recordUpdatedAt },
     linked: null,
     url: null,
-    outOfStep: 0,
+    behind: [],
   })
   const [confirming, setConfirming] = useState(false)
   const [fetching, setFetching] = useState(false)
@@ -101,11 +102,12 @@ export function SponsorEarlyAccessSection({
       record: { hasLink, updatedAt: recordUpdatedAt },
       linked: null,
       url: agrees ? done.url : null,
-      outOfStep: agrees ? done.outOfStep : 0,
+      behind: agrees ? done.behind : [],
     })
   }
   const linked = done.linked ?? hasLink
-  const { url, outOfStep } = done
+  const { url, behind } = done
+  const outOfStep = behind.length
 
   // KEYBOARD FOCUS FOLLOWS THE ACTION. Each action replaces the control that
   // was pressed; without this, focus falls back to the page. The control that
@@ -149,7 +151,7 @@ export function SponsorEarlyAccessSection({
         ...was,
         linked: true,
         url: data.url,
-        outOfStep: data.notWritten.length,
+        behind: data.notWritten,
       }))
       setError(null)
       setAnnouncement('Link created')
@@ -164,7 +166,7 @@ export function SponsorEarlyAccessSection({
         ...was,
         linked: false,
         url: null,
-        outOfStep: data.notCleared.length,
+        behind: data.notCleared,
       }))
       setConfirming(false)
       clipboard.reset()
@@ -380,25 +382,28 @@ export function SponsorEarlyAccessSection({
                 Studio.
               </>
             ) : (
-              <>
-                The link is revoked, but {outOfStep} unpublished{' '}
-                {outOfStep === 1 ? 'copy' : 'copies'} of this sponsor in Sanity
-                Studio still {outOfStep === 1 ? 'holds' : 'hold'} it. Publishing{' '}
-                {outOfStep === 1 ? 'it' : 'one of them'} would make the link
-                work again. Try again, or discard{' '}
-                {outOfStep === 1 ? 'it' : 'them'} in Studio.
-              </>
+              <LeftAfterRevoke
+                copies={behind}
+                sponsorForConferenceId={sponsorForConferenceId}
+              />
             )}
           </p>
           {/* Beside the warning, not inside it: a button is not part of what
               is announced. With a link, create writes the STORED link to
               every copy (the address handed out stays the same); without
-              one, revoke clears what the last revoke left. */}
+              one, revoke clears what the last revoke left, and is handed
+              the copies it named: one of another record it cannot find
+              from this sponsor, which holds no link by now. */}
           <button
             type="button"
             onClick={() => {
               if (busy) return
-              ;(linked ? create : revoke).mutate({ sponsorForConferenceId })
+              if (linked) create.mutate({ sponsorForConferenceId })
+              else
+                revoke.mutate({
+                  sponsorForConferenceId,
+                  leftCopies: [...behind],
+                })
             }}
             aria-disabled={busy}
             className={`${quietButton} mt-2`}
@@ -413,5 +418,45 @@ export function SponsorEarlyAccessSection({
         </p>
       )}
     </div>
+  )
+}
+
+/**
+ * What a revoke left: the unpublished copies that still hold the revoked
+ * link. Usually they are this sponsor's own draft or release copies. A link
+ * that was copied to ANOTHER sponsor record is revoked there too, and an
+ * unpublished copy of that record can be what is left: the warning says so.
+ */
+function LeftAfterRevoke({
+  copies,
+  sponsorForConferenceId,
+}: {
+  copies: readonly string[]
+  sponsorForConferenceId: string
+}) {
+  const own = copies.filter(
+    (id) =>
+      id === `drafts.${sponsorForConferenceId}` ||
+      (id.startsWith('versions.') &&
+        id.split('.').slice(2).join('.') === sponsorForConferenceId),
+  ).length
+  const others = copies.length - own
+  const one = copies.length === 1
+  return (
+    <>
+      The link is revoked, but {copies.length} unpublished{' '}
+      {one ? 'copy' : 'copies'}{' '}
+      {others === 0
+        ? 'of this sponsor '
+        : own === 0
+          ? 'of another sponsor record '
+          : ''}
+      in Sanity Studio still {one ? 'holds' : 'hold'} it
+      {own > 0 && others > 0
+        ? `: ${own} of this sponsor and ${others} of another sponsor record`
+        : ''}
+      . Publishing {one ? 'it' : 'one of them'} would make the link work again.
+      Try again, or discard {one ? 'it' : 'them'} in Studio.
+    </>
   )
 }

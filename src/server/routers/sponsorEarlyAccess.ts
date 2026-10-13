@@ -1,4 +1,5 @@
 import { TRPCError } from '@trpc/server'
+import { z } from 'zod'
 import { adminProcedure, router } from '../trpc'
 import { workshopAdminProcedure } from '../workshopAdmin'
 // One sponsor by `sponsorForConferenceId`: the schema the discount-code picker
@@ -150,15 +151,25 @@ export const sponsorEarlyAccessRouter = router({
    *
    * `notCleared`: the unpublished copies that still hold the revoked token.
    * The link is not live; publishing one of them would bring it back.
+   *
+   * `leftCopies`: the `notCleared` of an earlier revoke, handed back so this
+   * one can try them again. They are CLIENT INPUT and are trusted for
+   * nothing: `revokeEarlyAccessLink` clears a token there only from an
+   * unpublished copy of the request's conference that holds a dead one.
    */
   revoke: adminProcedure
-    .input(SponsorOfConferenceSchema)
+    .input(
+      SponsorOfConferenceSchema.extend({
+        leftCopies: z.array(z.string().min(1).max(200)).max(50).optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
       const conferenceId = await requireSponsor(input.sponsorForConferenceId)
       try {
         const { notCleared } = await revokeEarlyAccessLink(
           conferenceId,
           input.sponsorForConferenceId,
+          { leftCopies: input.leftCopies },
         )
         return { success: true as const, notCleared }
       } finally {

@@ -576,6 +576,93 @@ describe('the cached links are expired whenever a write may have landed', () => 
     expect(stored(SFC)).toBeUndefined()
     expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
   })
+
+  // An unpublished copy of ANOTHER document that still holds the revoked
+  // token cannot be found from the sponsor once the sponsor holds none: the
+  // next revoke is handed the ids the first one answered.
+  describe('revoke, handed the copies an earlier revoke could not clear', () => {
+    const OTHERS_COPY = 'versions.rSpring.sfc-acme-copy'
+    const leftBehind = async () => {
+      store().reset([
+        ...DATASET,
+        sponsor({ [FIELD]: 'stored-token' }),
+        sponsor({ _id: OTHERS_COPY, [FIELD]: 'stored-token' }),
+      ])
+      store().failPatchesOf(OTHERS_COPY)
+      expect(await caller().revoke({ sponsorForConferenceId: SFC })).toEqual({
+        success: true,
+        notCleared: [OTHERS_COPY],
+      })
+    }
+
+    it('clears them, and answers that nothing is left', async () => {
+      await leftBehind()
+      store().allowPatchesOf(OTHERS_COPY)
+
+      expect(
+        await caller().revoke({
+          sponsorForConferenceId: SFC,
+          leftCopies: [OTHERS_COPY],
+        }),
+      ).toEqual({ success: true, notCleared: [] })
+      expect(stored(OTHERS_COPY)).toBeUndefined()
+    })
+
+    it('names them again while they still cannot be cleared', async () => {
+      await leftBehind()
+
+      expect(
+        await caller().revoke({
+          sponsorForConferenceId: SFC,
+          leftCopies: [OTHERS_COPY],
+        }),
+      ).toEqual({ success: true, notCleared: [OTHERS_COPY] })
+    })
+
+    it('without them, a second revoke has nothing to find and says so', async () => {
+      await leftBehind()
+      store().allowPatchesOf(OTHERS_COPY)
+
+      expect(await caller().revoke({ sponsorForConferenceId: SFC })).toEqual({
+        success: true,
+        notCleared: [],
+      })
+      expect(stored(OTHERS_COPY)).toBe('stored-token')
+    })
+
+    it("leaves another conference's copy as it is, whatever is asked", async () => {
+      store().reset([
+        ...DATASET,
+        sponsor(),
+        foreignSponsor(),
+        sponsor({
+          _id: 'drafts.sfc-theirs',
+          conference: ref('conf-b'),
+          [FIELD]: 'their-token',
+        }),
+      ])
+
+      expect(
+        await caller().revoke({
+          sponsorForConferenceId: SFC,
+          leftCopies: ['drafts.sfc-theirs', FOREIGN],
+        }),
+      ).toEqual({ success: true, notCleared: [] })
+      expect(stored('drafts.sfc-theirs')).toBe('their-token')
+      expect(stored(FOREIGN)).toBe('their-token')
+      expect(store().commits).toEqual([])
+    })
+
+    it('refuses more ids than a revoke could have answered', async () => {
+      await expect(
+        caller().revoke({
+          sponsorForConferenceId: SFC,
+          leftCopies: Array.from({ length: 51 }, (_, n) => `drafts.sfc-${n}`),
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      expect(store().reads).toEqual([])
+    })
+  })
 })
 
 describe('who may call', () => {

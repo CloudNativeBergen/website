@@ -781,6 +781,50 @@ describe('revoking', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
+  // The copies a revoke names are not always this sponsor's own: the token
+  // may have been copied to another record, and an unpublished copy of THAT
+  // can be what is left. The warning says which, and Try again hands the
+  // server the ids, since it cannot find another record's copy by itself.
+  describe('copies of another sponsor record', () => {
+    const OTHERS = 'versions.rSpring.sfc-other'
+    const OWN = 'drafts.sfc-1'
+    const revokedLeaving = (notCleared: string[]) => {
+      h.revoke.mockImplementationOnce((_input, options: Options) =>
+        options.onSuccess?.({ success: true, notCleared } as never),
+      )
+      render(section({ hasLink: true }))
+      fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Revoke link' }))
+    }
+
+    it('are named for what they are', () => {
+      revokedLeaving([OTHERS])
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The link is revoked, but 1 unpublished copy of another sponsor record in Sanity Studio still holds it. Publishing it would make the link work again. Try again, or discard it in Studio.',
+      )
+    })
+
+    it('are told apart from this sponsor’s own when both are left', () => {
+      revokedLeaving([OWN, OTHERS, 'drafts.sfc-other'])
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The link is revoked, but 3 unpublished copies in Sanity Studio still hold it: 1 of this sponsor and 2 of another sponsor record. Publishing one of them would make the link work again. Try again, or discard them in Studio.',
+      )
+    })
+
+    it('Try again hands the server the copies that were named', () => {
+      revokedLeaving([OWN, OTHERS])
+
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+      expect(h.revoke.mock.calls.map(([input]) => input)).toEqual([
+        { sponsorForConferenceId: 'sfc-1' },
+        { sponsorForConferenceId: 'sfc-1', leftCopies: [OWN, OTHERS] },
+      ])
+    })
+  })
+
   it('the Try again button is beside the warning, not inside what is announced', () => {
     h.revoke.mockImplementation((_input, options: Options) =>
       options.onSuccess?.({
