@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import WorkshopCard from './WorkshopCard'
 import WorkshopAnnouncementsSection from './WorkshopAnnouncementsSection'
 import type {
@@ -52,9 +52,25 @@ export default function WorkshopList({
 }: WorkshopListProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  // The server's refusal of a sign-up this list offered because of early
-  // access: the link was revoked while the page was open.
-  const [earlyAccessEnded, setEarlyAccessEnded] = useState<string | null>(null)
+  // The server's refusal, for the window, of a sign-up this list offered
+  // because of early access. Usually the link was revoked while the page was
+  // open; it can also be the browser's clock running ahead of the server's.
+  const [refusedEarly, setRefusedEarly] = useState<string | null>(null)
+  // THE KEYBOARD AFTER THAT REFUSAL. When the page renders again without
+  // early access, the workshops go, and with them the dialog the person was
+  // in: focus would fall back to the page. It goes to the notice instead,
+  // once, and only when it is in fact nowhere: while the dialog is open it
+  // stays there.
+  const refusalNotice = useRef<HTMLDivElement>(null)
+  const refusalWantsFocus = useRef(false)
+  useEffect(() => {
+    if (!refusalWantsFocus.current || !refusalNotice.current) return
+    const lost =
+      !document.activeElement || document.activeElement === document.body
+    if (!lost) return
+    refusalWantsFocus.current = false
+    refusalNotice.current.focus()
+  })
   // Sign-ups whose cancel the server has answered. The cancel DELETED the
   // sign-up, so a second one is refused with "Signup not found"; while such a
   // sign-up is still on the page (the list has not been read again yet, or the
@@ -89,7 +105,8 @@ export default function WorkshopList({
         data.message || 'Successfully signed up for the workshop!',
       )
       setErrorMessage(null)
-      setEarlyAccessEnded(null)
+      setRefusedEarly(null)
+      refusalWantsFocus.current = false
       setTimeout(() => setSuccessMessage(null), 5000)
       refetchWorkshops()
       refetchSignups()
@@ -114,11 +131,14 @@ export default function WorkshopList({
         shown.early &&
         error.data?.code === 'PRECONDITION_FAILED'
       ) {
-        // The page is about to change under the person: the banner goes, and
-        // so do the workshops they were choosing from. Say what happened, and
-        // leave it standing: no timer takes it away.
+        // The page may be about to change under the person: if the link was
+        // revoked the banner goes, and so do the workshops they were choosing
+        // from. Say what the server said, and leave it standing: no timer
+        // takes it away. Whether the early access is gone is for the page to
+        // say, once it has rendered again (see the notice below).
         setErrorMessage(null)
-        setEarlyAccessEnded(error.message)
+        setRefusedEarly(error.message)
+        refusalWantsFocus.current = true
         void onEarlyAccessRefused?.()
         return
       }
@@ -277,12 +297,21 @@ export default function WorkshopList({
         </div>
       )}
 
-      {earlyAccessEnded && (
+      {refusedEarly && (
         <div
+          ref={refusalNotice}
           role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200"
+          tabIndex={-1}
+          className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 focus:outline-2 focus:outline-offset-2 focus:outline-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:focus:outline-red-400"
         >
-          Your early access is no longer valid. {earlyAccessEnded}
+          {/* "No longer valid" only once the page has rendered again WITHOUT
+              early access. While it still resolves it (the refresh has not
+              landed, or the link is live and the browser's clock is ahead
+              of the server's at the sponsor start time), the server's
+              refusal stands alone: the line above the list still says
+              "You have early access". */}
+          {earlyAccess ? '' : 'Your early access is no longer valid. '}
+          {refusedEarly}
         </div>
       )}
 

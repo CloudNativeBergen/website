@@ -232,10 +232,14 @@ describe('a sign-up the server refuses while the list shows early access', () =>
     fireEvent.click(
       screen.getByRole('button', { name: 'Register for Workshop' }),
     )
-    fireEvent.click(
-      await screen.findByRole('button', { name: /confirm registration/i }),
-    )
+    // The keyboard is in the dialog, as it is for a person: on its button.
+    const confirm = await screen.findByRole('button', {
+      name: /confirm registration/i,
+    })
+    confirm.focus()
+    fireEvent.click(confirm)
     await screen.findAllByText(message)
+    return confirm
   }
 
   it('asks the page to render again when the refusal is for the window: the link was revoked', async () => {
@@ -248,26 +252,28 @@ describe('a sign-up the server refuses while the list shows early access', () =>
     })
 
     const timers = vi.spyOn(globalThis, 'setTimeout')
-    await signUpAndBeRefused(OPENS_OFFICIALLY)
+    const confirm = await signUpAndBeRefused(OPENS_OFFICIALLY)
 
     await waitFor(() => expect(onEarlyAccessRefused).toHaveBeenCalledTimes(1))
-    // What happened is said, announced, and stays: no timer takes it away.
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      `Your early access is no longer valid. ${OPENS_OFFICIALLY}`,
-    )
+    // The server's refusal is said, announced, and stays: no timer takes it
+    // away. Nothing is claimed about the link yet: the page has not said.
+    expect(screen.getByRole('alert').textContent).toBe(OPENS_OFFICIALLY)
     expect(timers.mock.calls.filter(([, delay]) => delay === 5000)).toEqual([])
+    // The dialog is still open, and the keyboard stays in it.
+    expect(document.activeElement).toBe(confirm)
   })
 
-  it('keeps saying so after the page has rendered again without early access', async () => {
-    signupAnswer = refusal('PRECONDITION_FAILED', OPENS_OFFICIALLY)
-    const props = {
-      userWorkOSId: 'workos-1',
-      userEmail: 'attendee@example.com',
-      userName: 'Attendee One',
-      workshopRegistrationStart: OFFICIAL_OPENING,
-      workshopRegistrationEnd: END,
-    }
-    const { rerender } = render(
+  const props = {
+    userWorkOSId: 'workos-1',
+    userEmail: 'attendee@example.com',
+    userName: 'Attendee One',
+    workshopRegistrationStart: OFFICIAL_OPENING,
+    workshopRegistrationEnd: END,
+  }
+  /** The list with early access, a sign-up refused with `message`. */
+  async function refusedWith(message: string) {
+    signupAnswer = refusal('PRECONDITION_FAILED', message)
+    const view = render(
       <Providers>
         <WorkshopList
           {...props}
@@ -277,7 +283,12 @@ describe('a sign-up the server refuses while the list shows early access', () =>
       </Providers>,
     )
     await screen.findByRole('heading', { level: 2, name: 'Your Workshops' })
-    await signUpAndBeRefused(OPENS_OFFICIALLY)
+    await signUpAndBeRefused(message)
+    return view
+  }
+
+  it('once the page has rendered again without early access, says the early access is no longer valid, and keeps saying so', async () => {
+    const { rerender } = await refusedWith(OPENS_OFFICIALLY)
 
     // The refresh: the page no longer resolves early access.
     rerender(
@@ -286,12 +297,47 @@ describe('a sign-up the server refuses while the list shows early access', () =>
       </Providers>,
     )
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
+    expect(screen.getByRole('alert').textContent).toBe(
       `Your early access is no longer valid. ${OPENS_OFFICIALLY}`,
     )
     expect(
       screen.queryByRole('button', { name: 'Register for Workshop' }),
     ).toBeNull()
+  })
+
+  // The workshops the person was choosing from are gone, and with them the
+  // dialog that held the keyboard: it goes to what says why.
+  it('then the keyboard is on that notice, not lost to the page', async () => {
+    const { rerender } = await refusedWith(OPENS_OFFICIALLY)
+
+    rerender(
+      <Providers>
+        <WorkshopList {...props} />
+      </Providers>,
+    )
+
+    expect(document.activeElement).toBe(screen.getByRole('alert'))
+  })
+
+  // The browser's clock is ahead of the server's at the sponsor start time:
+  // the list offers sign-up, the server says not yet, and THE LINK IS LIVE.
+  // The page renders again with early access. Nothing may say it is gone.
+  it('when the page still resolves early access, shows the server’s refusal alone', async () => {
+    const OPENS_FOR_SPONSORS =
+      'Workshop registration opens on Monday, June 8, 2026 at 9:00 AM'
+    const { rerender } = await refusedWith(OPENS_FOR_SPONSORS)
+
+    rerender(
+      <Providers>
+        <WorkshopList
+          {...props}
+          earlyAccess
+          workshopRegistrationSponsorStart={SPONSOR_START}
+        />
+      </Providers>,
+    )
+
+    expect(screen.getByRole('alert').textContent).toBe(OPENS_FOR_SPONSORS)
   })
 
   it('does not for any other refusal', async () => {
