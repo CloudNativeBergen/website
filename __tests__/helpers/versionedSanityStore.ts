@@ -89,6 +89,8 @@ export interface VersionedSanityStore {
   failPatchesOf(id: string): void
   /** Make the reads this picks reject until the next `reset()`. */
   failReadsThat(pick: (read: RecordedRead) => boolean): void
+  /** Run before every read, until the next `reset()`: for a write that lands in between. */
+  beforeEachRead(hook: (read: RecordedRead) => unknown): void
   /** Make every commit reject until the next `reset()`. */
   failWrites(error?: Error): void
   /** The module shape of `@/lib/sanity/client` the code under test imports. */
@@ -125,6 +127,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
   let afterHooks: Array<() => unknown> = []
   let unpatchable = new Set<string>()
   let unreadable: ((read: RecordedRead) => boolean) | null = null
+  let readHook: ((read: RecordedRead) => unknown) | null = null
   let writeFailure: Error | null = null
   let revCounter = 0
 
@@ -152,7 +155,9 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         perspective: options.perspective,
       })
       events.push('read')
-      if (unreadable?.(reads[reads.length - 1])) {
+      const read = reads[reads.length - 1]
+      await readHook?.(read)
+      if (unreadable?.(read)) {
         throw new Error('503: read refused (test)')
       }
       return runGroq(visible(apiVersion, options.perspective), query, params)
@@ -267,6 +272,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       afterHooks = []
       unpatchable = new Set()
       unreadable = null
+      readHook = null
       writeFailure = null
     },
     put(document) {
@@ -297,6 +303,9 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     },
     failReadsThat(pick) {
       unreadable = pick
+    },
+    beforeEachRead(hook) {
+      readHook = hook
     },
     failWrites(error = new Error('versionedSanityStore: write refused')) {
       writeFailure = error

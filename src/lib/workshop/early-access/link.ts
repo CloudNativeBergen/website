@@ -94,9 +94,11 @@ const releaseWriter = () =>
 /**
  * The sponsor's link, created when it has none.
  *
- * WRITTEN ONLY IF NONE IS STORED (`setIfMissing`, as
- * `generateRegistrationToken` does): two organizers creating at once both get
- * the token the first write stored, read back from the committed document.
+ * WRITTEN ONLY IF NONE IS STORED, and only to the revision that was checked.
+ * Two organizers creating at once: the second write is refused (the revision
+ * moved), its create starts over, finds the first one's token and answers
+ * it. `setIfMissing`, as `generateRegistrationToken` uses, stays as the
+ * operation: it could not overwrite a stored token even without the check.
  *
  * ONLY A SPONSOR WITH A WON DEAL IS GIVEN ONE. A link that exists is answered
  * whatever the deal says now: only revoking ends it.
@@ -120,12 +122,13 @@ export async function createEarlyAccessLink(
   let failure: unknown
   for (let attempt = 1; attempt <= CREATE_ATTEMPTS; attempt++) {
     const sponsor = await scopedFetch<{
+      _rev: string
       status: string | null
       token: string | null
     } | null>(
       clientReadUncached,
       { conferenceId },
-      `*[_type == "sponsorForConference" && _id == $id][0]{ status, "token": workshopEarlyAccessToken }`,
+      `*[_type == "sponsorForConference" && _id == $id][0]{ _rev, status, "token": workshopEarlyAccessToken }`,
       { id: sponsorForConferenceId },
       { cache: 'no-store' },
     )
@@ -133,11 +136,21 @@ export async function createEarlyAccessLink(
     let token = sponsor.token
     if (!token) {
       if (sponsor.status !== 'closed-won') return { refused: 'not-won' }
-      const committed = await clientWrite
-        .patch(sponsorForConferenceId)
-        .setIfMissing({ [EARLY_ACCESS_TOKEN_FIELD]: randomUUID() })
-        .commit<{ [EARLY_ACCESS_TOKEN_FIELD]: string }>()
-      token = committed[EARLY_ACCESS_TOKEN_FIELD]
+      // WRITTEN ONLY TO THE REVISION THAT PASSED THE CHECKS ABOVE: this
+      // conference's sponsor, with a won deal. A CRM update or a Studio edit
+      // in between refuses the write, and the checks run again.
+      try {
+        const committed = await clientWrite
+          .patch(sponsorForConferenceId)
+          .ifRevisionId(sponsor._rev)
+          .setIfMissing({ [EARLY_ACCESS_TOKEN_FIELD]: randomUUID() })
+          .commit<{ [EARLY_ACCESS_TOKEN_FIELD]: string }>()
+        token = committed[EARLY_ACCESS_TOKEN_FIELD]
+      } catch (error) {
+        if (!isRevisionConflict(error)) throw error
+        failure = error
+        continue
+      }
     }
 
     const versions = await readVersions(conferenceId, sponsorForConferenceId)
@@ -169,17 +182,14 @@ export async function createEarlyAccessLink(
       failure = error
     }
   }
-  // Every attempt to write the copies was refused. What is stored now decides.
-  const sponsor = await scopedFetch<{ token: string | null } | null>(
-    clientReadUncached,
-    { conferenceId },
-    `*[_type == "sponsorForConference" && _id == $id][0]{ "token": workshopEarlyAccessToken }`,
-    { id: sponsorForConferenceId },
-    { cache: 'no-store' },
-  )
-  if (sponsor?.token) {
-    const { token } = sponsor
-    const versions = await readVersions(conferenceId, sponsorForConferenceId)
+  // No attempt went through. What is stored NOW decides, from ONE read of
+  // every version: the token answered is the one the published document
+  // holds in the same snapshot the copies are judged by.
+  const versions = await readVersions(conferenceId, sponsorForConferenceId)
+  const token = versions.find(
+    (version) => version._id === sponsorForConferenceId,
+  )?.token
+  if (token) {
     return {
       token,
       notWritten: versions
@@ -197,6 +207,10 @@ export async function createEarlyAccessLink(
 }
 
 const isReleaseCopy = (id: string) => id.startsWith('versions.')
+
+/** Sanity's answer to a write whose `ifRevisionID` no longer matches. */
+const isRevisionConflict = (error: unknown) =>
+  (error as { statusCode?: unknown } | null)?.statusCode === 409
 
 /**
  * Remove the sponsor's link. The link and every cookie set from it stop being

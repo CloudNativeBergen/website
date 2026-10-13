@@ -133,6 +133,43 @@ describe('creating a link', () => {
   })
 })
 
+describe('the token is written only to the sponsor that passed the checks', () => {
+  it('a deal moved out of won between the check and the write gets no token, and the refusal', async () => {
+    // The CRM update lands after the create read "won" and before it writes.
+    store().beforeNextCommit(() => {
+      store().put(sponsor({ _rev: 'r1', status: 'closed-lost' }))
+    })
+
+    expect(await createEarlyAccessLink(CONF, SFC)).toEqual({
+      refused: 'not-won',
+    })
+    expect(stored(SFC)).toBeUndefined()
+  })
+
+  it('a sponsor moved to another conference between the check and the write gets no token', async () => {
+    store().beforeNextCommit(() => {
+      store().put(sponsor({ _rev: 'r1', conference: ref('conf-b') }))
+    })
+
+    expect(await createEarlyAccessLink(CONF, SFC)).toEqual({
+      refused: 'not-found',
+    })
+    expect(stored(SFC)).toBeUndefined()
+  })
+
+  it('an unrelated edit in between does not stop the create: it starts over and stores the token', async () => {
+    store().beforeNextCommit(() => {
+      store().put(sponsor({ _rev: 'r1', notes: 'Called them on Tuesday' }))
+    })
+
+    const result = (await createEarlyAccessLink(CONF, SFC)) as { token: string }
+
+    expect(result.token).toMatch(UUID)
+    expect(stored(SFC)).toBe(result.token)
+    expect(store().doc(SFC)?.notes).toBe('Called them on Tuesday')
+  })
+})
+
 describe('the unpublished copies of the sponsor are kept in step', () => {
   it('a draft and a release copy that exist when a link is created receive the token', async () => {
     store().reset(withCopies())
@@ -264,6 +301,27 @@ describe('a create never answers a link that is no longer stored', () => {
     expect(result.notWritten).toEqual([DRAFT, RELEASE_COPY])
     // Pressing create again answers the same link.
     expect(await createEarlyAccessLink(CONF, SFC)).toEqual(result)
+  })
+
+  it('a revoke that lands after the last failed attempt: the create does not answer the revoked token', async () => {
+    store().reset(withCopies())
+    store().failPatchesOf(RELEASE_COPY)
+    // The copies cannot be written, so every attempt fails and the create
+    // falls back to what is stored. A revoke lands just before that last
+    // look: the fourth time every version is read.
+    let versionReads = 0
+    let revoked: unknown
+    store().beforeEachRead(async (read) => {
+      if (!read.query.includes('versions.**') || ++versionReads !== 4) return
+      revoked = stored(SFC)
+      await revokeEarlyAccessLink(CONF, SFC)
+    })
+
+    await expect(createEarlyAccessLink(CONF, SFC)).rejects.toThrow(
+      'early-access link',
+    )
+    expect(revoked).toMatch(UUID)
+    expect(stored(SFC)).toBeUndefined()
   })
 
   it('refuses, rather than answer a dead address, when it keeps losing', async () => {
