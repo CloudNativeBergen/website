@@ -129,6 +129,20 @@ describe('the status label with no early-access window', () => {
     expect(statusAt(times, AFTER_END)).toBe('Closed')
   })
 
+  // CHANGED FROM MAIN (#1345): there the card compared the start first and
+  // said "Not yet open" for this combination, which Sanity Studio can store.
+  it('with an end that has passed and a start still ahead, is closed', () => {
+    expect(
+      statusAt(
+        {
+          workshopRegistrationStart: OFFICIAL,
+          workshopRegistrationEnd: '2026-05-22T06:00:00.000Z',
+        },
+        IN_EARLY_ACCESS,
+      ),
+    ).toBe('Closed')
+  })
+
   it('with no time set, is not configured', () => {
     expect(statusAt({}, IN_EARLY_ACCESS)).toBe('Not configured')
   })
