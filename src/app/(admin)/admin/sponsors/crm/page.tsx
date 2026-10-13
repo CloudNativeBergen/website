@@ -4,6 +4,7 @@ import { ErrorDisplay } from '@/components/admin'
 import { SponsorCRMPageClient } from '@/components/admin/sponsor-crm'
 import { headers } from 'next/headers'
 import { isTicketingEnabledForConference } from '@/lib/features/ticketing'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 
 export default async function AdminSponsorsCRM() {
   const headerList = await headers()
@@ -49,6 +50,9 @@ export default async function AdminSponsorsCRM() {
       conference={conference}
       domain={domain}
       canSendDiscountCodes={canSendDiscountCodes}
+      // The sponsor's record offers a workshop early-access link (#1346)
+      // only where there is a workshop portal for it to open.
+      workshopsEnabled={await isWorkshopsEnabledForConference(conference)}
     />
   )
 }

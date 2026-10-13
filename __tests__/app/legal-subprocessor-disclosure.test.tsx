@@ -653,6 +653,61 @@ describe('a failed read must NOT shorten the disclosure', () => {
   })
 })
 
+describe('/privacy describes early access to workshop sign-up (#1346)', () => {
+  /** A tenant whose organization has no workshop sign-in. */
+  function withoutWorkshops() {
+    world({
+      conference: conference({
+        organization: { _ref: OTHER_ORG, _type: 'reference' },
+      }),
+      organization: organization({
+        _id: OTHER_ORG,
+        name: 'Acme Events',
+        plan: 'community',
+      }),
+    })
+  }
+  const cookiePassage = (html: string) =>
+    html.match(/<strong>Workshop early access:<\/strong>[^<]*/)?.[0]
+
+  it('names the recorded sponsor among the workshop registration data', async () => {
+    world()
+
+    const html = await renderPrivacy()
+
+    expect(html).toContain(
+      'If you sign up through a sponsor&#x27;s early-access link before registration opens for everyone: which sponsor&#x27;s link you used. This usually says who you work for.',
+    )
+  })
+
+  it('lists the cookie: what it holds, that only opening a link sets it, and when it expires', async () => {
+    world()
+
+    const passage = cookiePassage(await renderPrivacy())
+
+    expect(passage).toContain(
+      'this site sets one cookie that holds the code of that link and nothing else',
+    )
+    expect(passage).toContain('It is set only by opening such a link')
+    expect(passage).toContain(
+      'It expires when registration opens for everyone, as that time stood when you opened the link',
+    )
+    expect(passage).toContain('Signing out does not remove it')
+  })
+
+  it('lists the cookie for a tenant without workshop sign-in too, naming no processor', async () => {
+    // The cookie can outlive a switch-off of workshops, until it expires.
+    withoutWorkshops()
+
+    const html = await renderPrivacy()
+
+    expect(cookiePassage(html)).toContain(
+      'this site sets one cookie that holds the code of that link and nothing else',
+    )
+    expect(html).not.toContain('WorkOS')
+  })
+})
+
 describe('/terms names only the sign-in routes this tenant has', () => {
   it('mentions WorkOS AuthKit for a tenant with workshops', async () => {
     world()

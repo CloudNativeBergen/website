@@ -7,6 +7,7 @@ import { api } from '@/lib/trpc/client'
 import { ContractReadinessIndicator } from './ContractReadinessIndicator'
 import { ContractFlowStep } from './ContractFlowStep'
 import { SponsorPortalSection } from './SponsorPortalSection'
+import { SponsorEarlyAccessSection } from './SponsorEarlyAccessSection'
 import { OrganizerSignatureCapture } from '@/components/admin/OrganizerSignatureCapture'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { formatNumber } from '@/lib/format'
@@ -35,6 +36,10 @@ interface SponsorContractViewProps {
    * nothing — the server decides the action from the contract state.
    */
   onSendContract?: (options: ContractSendOptions) => void
+  /** The conference has workshops: offer the early-access link (#1346). */
+  workshopsEnabled?: boolean
+  /** The conference has a "Sponsor Early Access Opens" time (see the section). */
+  sponsorStartSet?: boolean
 }
 
 export interface ContractSendOptions {
@@ -48,6 +53,8 @@ export function SponsorContractView({
   onSuccess,
   onSendRegistration,
   onSendContract,
+  workshopsEnabled = false,
+  sponsorStartSet,
 }: SponsorContractViewProps) {
   const [step, setStep] = useState<Step>('overview')
   const [pdfData, setPdfData] = useState<string | null>(null)
@@ -602,6 +609,32 @@ export function SponsorContractView({
             </a>
           )}
         </div>
+      )}
+
+      {/* Shown for a link that exists even after workshops were turned off,
+          so it can still be revoked. */}
+      {(workshopsEnabled || sponsor.hasWorkshopEarlyAccessLink) && (
+        <SponsorEarlyAccessSection
+          sponsorForConferenceId={sponsor._id}
+          hasLink={!!sponsor.hasWorkshopEarlyAccessLink}
+          recordUpdatedAt={sponsor._updatedAt}
+          sponsorStartSet={sponsorStartSet}
+          // With workshops off the link opens nothing and its address cannot
+          // be built: only revoking is left.
+          copyRefusal={
+            workshopsEnabled
+              ? undefined
+              : 'Workshops are not enabled for this conference, so this link opens nothing.'
+          }
+          createRefusal={
+            !workshopsEnabled
+              ? 'Workshops are not enabled for this conference.'
+              : !isSponsorWon
+                ? 'Move the sponsor to Closed Won before creating an early-access link.'
+                : undefined
+          }
+          onChanged={onSuccess}
+        />
       )}
     </div>
   )

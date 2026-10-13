@@ -684,6 +684,22 @@ on the platform, and `/privacy` says so to workshop participants. Organizers onl
 the workshop registrations of their own organization's conferences: the organizer
 procedures are `adminProcedure`, which is org-scoped (`src/lib/authz/organizer.ts`).
 
+### The early-access cookie on the tenant host
+
+`__Host-workshop-early-access` (`src/lib/workshop/early-access/cookie.ts`) is the portal's
+second cookie on the tenant host. It is **not a session and proves no identity**: it holds
+the token of a sponsor's early-access link and nothing else, with the same attributes as
+the session cookie (HttpOnly, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain`).
+
+`GET /workshop/early-access/<token>` (`early-access/open.ts`) sets it, on a host that can
+sign in, for a link that is live, while the conference's official opening is still ahead.
+It expires at that opening. Opening another sponsor's link replaces it; a link that is not
+live leaves it as it is. It counts only while the link is live, which is checked when it
+is used: by the portal page for a person it admits (one cached read per conference), and
+by `workshop.signup` after the attendee gate (a live read). Sign-out does not clear it,
+since it says nothing about who the person is. The design is in
+[WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md](WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md).
+
 ### Sign-out
 
 `signOutOfWorkshop` (`src/app/(workshop)/workshop/actions.ts`) clears the session cookie

@@ -70,9 +70,16 @@ vi.mock('@dnd-kit/core', () => ({
 // single unambiguous DOM question.
 vi.mock('@/components/admin/sponsor-crm/SponsorCRMForm', () => ({
   __esModule: true,
-  SponsorCRMForm: ({ onClose }: { onClose: () => void }) => (
+  SponsorCRMForm: ({
+    onClose,
+    sponsorStartSet,
+  }: {
+    onClose: () => void
+    sponsorStartSet?: boolean
+  }) => (
     <div data-testid="sponsor-form">
       <button onClick={onClose}>close form</button>
+      <span>sponsor start set: {String(sponsorStartSet)}</span>
     </div>
   ),
 }))
@@ -169,6 +176,28 @@ describe('SponsorCRMPipeline — sponsor form open/close', () => {
     })
   })
   afterEach(cleanup)
+
+  // The section that offers an early-access link (#1346) says when a link
+  // gives no head start. It is told from the conference this page holds.
+  it.each([
+    ['2026-10-10T08:00:00Z', true],
+    [undefined, false],
+  ])(
+    'tells the form whether the conference has a sponsor start time (%s)',
+    (workshopRegistrationSponsorStart, expected) => {
+      render(
+        <SponsorCRMPipeline
+          conferenceId="conf-2026"
+          conference={{ ...conference, workshopRegistrationSponsorStart }}
+          domain="cloudnativebergen.dev"
+        />,
+      )
+
+      expect(screen.getByTestId('sponsor-form')).toHaveTextContent(
+        `sponsor start set: ${expected}`,
+      )
+    },
+  )
 
   it('restores the sponsor form from ?sponsor=', () => {
     renderPipeline()

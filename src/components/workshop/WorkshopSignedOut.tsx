@@ -6,6 +6,7 @@ import {
   WORKSHOP_SIGN_IN_PATH,
   WORKSHOP_SIGN_UP_PATH,
 } from '@/lib/workshop/sign-in-paths'
+import { WorkshopEarlyAccessInvalidNotice } from './WorkshopEarlyAccess'
 
 /**
  * The workshop portal for a visitor with no session (#1296).
@@ -17,13 +18,18 @@ import {
  *
  * `signInIncomplete`: the visitor came back from a sign-in that was not
  * accepted. One neutral line, the same whatever the reason.
+ *
+ * `earlyAccessInvalid`: the visitor just opened an early-access link that is
+ * not live (#1346). Nothing else about early access is shown signed out.
  */
 export function WorkshopSignedOut({
   conferenceTitle,
   signInIncomplete = false,
+  earlyAccessInvalid = false,
 }: {
   conferenceTitle: string
   signInIncomplete?: boolean
+  earlyAccessInvalid?: boolean
 }) {
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24">
@@ -45,6 +51,8 @@ export function WorkshopSignedOut({
               Sign-in did not complete. Please try again.
             </p>
           )}
+
+          {earlyAccessInvalid && <WorkshopEarlyAccessInvalidNotice />}
 
           {/* FORMS, NOT LINKS. These targets are route handlers that set a
               cookie and redirect to another origin. `next/link` would fetch

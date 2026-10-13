@@ -124,6 +124,18 @@ export default defineType({
     }),
 
     defineField({
+      // #1346: set only for a sign-up made before the official opening. Weak,
+      // so the sponsor can still be removed from the conference; the server's
+      // own write stores `_weak: true`, since this flag governs Studio only.
+      name: 'earlyAccessSponsor',
+      title: 'Early Access Sponsor',
+      type: 'reference',
+      to: [{ type: 'sponsorForConference' }],
+      weak: true,
+      readOnly: true,
+      description: 'The sponsor whose early-access link admitted this sign-up',
+    }),
+    defineField({
       name: 'confirmationEmailSent',
       title: 'Confirmation Email Sent',
       type: 'boolean',

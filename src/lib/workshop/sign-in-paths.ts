@@ -36,6 +36,12 @@ export const WORKSHOP_SIGN_UP_PATH = '/workshop/sign-up'
 export const WORKSHOP_PORTAL_PATH = '/workshop'
 
 /**
+ * Where a sponsor's early-access link opens (#1346): this path followed by
+ * `/<token>`, on the tenant host.
+ */
+export const WORKSHOP_EARLY_ACCESS_PATH = '/workshop/early-access'
+
+/**
  * Where the auth host hands a finished sign-in to the tenant host (#1311):
  * the tenant host's route that turns a hand-off token into its own session.
  */
@@ -50,3 +56,13 @@ export const WORKSHOP_SIGN_IN_INCOMPLETE = {
   value: 'incomplete',
 } as const
 export const WORKSHOP_SIGN_IN_INCOMPLETE_QUERY = `?${WORKSHOP_SIGN_IN_INCOMPLETE.param}=${WORKSHOP_SIGN_IN_INCOMPLETE.value}`
+
+/**
+ * What the early-access route adds to the portal path for a link that is not
+ * live (#1346): the portal page then says the link is no longer valid.
+ */
+export const WORKSHOP_EARLY_ACCESS_INVALID = {
+  param: 'early-access',
+  value: 'invalid',
+} as const
+export const WORKSHOP_EARLY_ACCESS_INVALID_QUERY = `?${WORKSHOP_EARLY_ACCESS_INVALID.param}=${WORKSHOP_EARLY_ACCESS_INVALID.value}`

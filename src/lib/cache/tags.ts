@@ -24,6 +24,10 @@
  *   costs nothing" true for WELL-FORMED codes: an unknown one is ruled out
  *   against this cached set instead of costing a Sanity read of its own.
  *   Every write that CREATES, backfills or deletes a code must expire it.
+ * - `earlyAccessLinksTag(conferenceId)` — the per-CONFERENCE tag on the live
+ *   workshop early-access links of that conference (#1346). Creating and
+ *   revoking a link, and every path that removes a sponsor from a conference,
+ *   must expire it with `{ expire: 0 }`.
  * - `organizationTag(orgId)` — the per-ORGANIZATION-document tag, for cached
  *   reads keyed on the tenant itself rather than one of its conference
  *   editions (plan/entitlement resolution). Mutations that edit an
@@ -59,4 +63,13 @@ export function shortLinkTag(documentId: string): string {
  */
 export function shortLinkIndexTag(conferenceId: string): string {
   return `sanity:short-link-index-${conferenceId}`
+}
+
+/**
+ * The live workshop early-access links of one conference (#1346). Expire it
+ * with `{ expire: 0 }`, not a profile: a revoked link must not keep being
+ * shown as live while the new answer loads.
+ */
+export function earlyAccessLinksTag(conferenceId: string): string {
+  return `sanity:workshop-early-access-${conferenceId}`
 }

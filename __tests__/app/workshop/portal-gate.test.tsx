@@ -112,6 +112,8 @@ import WorkshopLayout from '@/app/(workshop)/layout'
 import WorkshopPage from '@/app/(workshop)/workshop/page'
 import { signOutOfWorkshop } from '@/app/(workshop)/workshop/actions'
 import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
+import { WorkshopNoTicket } from '@/components/workshop/WorkshopNoTicket'
+import { WorkshopPortal } from '@/components/workshop/WorkshopPortal'
 import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
 import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
@@ -189,10 +191,26 @@ function conference(orgId: string | null) {
   }
 }
 
+/**
+ * The two views the page used to hold inline (#1346): the no-ticket view and
+ * the signed-in portal. They are rendered here, so that every assertion below
+ * reads what it read while their markup was part of the page.
+ */
+function inlineView(node: ReactNode): ReactNode {
+  if (
+    isValidElement(node) &&
+    (node.type === WorkshopNoTicket || node.type === WorkshopPortal)
+  ) {
+    return (node.type as (props: unknown) => ReactNode)(node.props)
+  }
+  return node
+}
+
 /** Every element in the tree the page RETURNED, without rendering components. */
 function elementsOf(
-  node: ReactNode,
+  rawNode: ReactNode,
 ): React.ReactElement<Record<string, unknown>>[] {
+  const node = inlineView(rawNode)
   if (Array.isArray(node)) return node.flatMap(elementsOf)
   if (!isValidElement<Record<string, unknown>>(node)) return []
   return [node, ...elementsOf(node.props.children as ReactNode)]
@@ -209,7 +227,8 @@ function hrefsOf(node: ReactNode): string[] {
  * Every string in the element tree the page RETURNED, without rendering any
  * component — enough to tell which of the page's states it chose.
  */
-function textOf(node: ReactNode): string {
+function textOf(rawNode: ReactNode): string {
+  const node = inlineView(rawNode)
   if (typeof node === 'string' || typeof node === 'number') return String(node)
   if (Array.isArray(node)) return node.map(textOf).join(' ')
   if (isValidElement<{ children?: ReactNode }>(node)) {
@@ -670,6 +689,7 @@ describe('workshop portal — sign-in and sign-out', () => {
     expect(signedOut[0].props).toEqual({
       conferenceTitle: 'CNDN',
       signInIncomplete: false,
+      earlyAccessInvalid: false,
     })
     expect(hrefsOf(page)).toEqual([])
   })

@@ -515,6 +515,18 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      // The workshop early-access link (#1346). Separate from
+      // `registrationToken`, which opens the sponsor's own portal. Created and
+      // revoked on the sponsor's record in the admin, which also keeps drafts
+      // and release copies in step.
+      name: 'workshopEarlyAccessToken',
+      title: 'Workshop Early-Access Token',
+      type: 'string',
+      description:
+        'Token of the link that lets people this sponsor sends sign up for workshops early',
+      readOnly: true,
+    }),
+    defineField({
       name: 'registrationComplete',
       title: 'Registration Complete',
       type: 'boolean',

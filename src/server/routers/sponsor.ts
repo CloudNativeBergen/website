@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
+import { sponsorEarlyAccessRouter } from './sponsorEarlyAccess'
+import { expireEarlyAccessLinks } from '@/lib/workshop/early-access'
 import {
   requireDocumentInCurrentConference,
   requireDocumentInCurrentOrg,
@@ -924,7 +926,13 @@ export const sponsorRouter = router({
       // layer re-proves ownership from `ctx.orgId` — the org the admin
       // procedure already gated on, never anything derived from `input`.
       await requireDocumentInCurrentOrg(input.id, 'sponsor')
-      const { error } = await deleteSponsor(input.id, ctx.orgId)
+      const { error, conferenceIds } = await deleteSponsor(input.id, ctx.orgId)
+      // The sponsor left every conference it was in, and so did its
+      // early-access link (#1346). Expired after any ATTEMPTED removal: a
+      // delete can be committed and still report a failure.
+      for (const conferenceId of conferenceIds ?? []) {
+        expireEarlyAccessLinks(conferenceId)
+      }
 
       if (error) {
         throw new TRPCError({
@@ -2007,7 +2015,7 @@ export const sponsorRouter = router({
         // OWNERSHIP (#730): the conference-scoped fetch below runs only inside
         // `if (input.cancelAgreements)` and gates nothing — `bulkDeleteSponsors`
         // itself is unscoped. Refuse the whole batch unless every id is ours.
-        await requireDocumentsInCurrentConference(
+        const conferenceId = await requireDocumentsInCurrentConference(
           input.ids,
           'sponsorForConference',
         )
@@ -2048,11 +2056,9 @@ export const sponsorRouter = router({
 
         try {
           // TENANCY: scoped to the REQUEST's conference (see bulkUpdate).
-          return await bulkDeleteSponsors(
-            input.ids,
-            await resolveConferenceId(),
-            { deleteContractAssets: input.deleteContractAssets },
-          )
+          return await bulkDeleteSponsors(input.ids, conferenceId, {
+            deleteContractAssets: input.deleteContractAssets,
+          })
         } catch (error) {
           // Preserve refusals: a fail-closed tenancy denial must not surface as
           // a 500, or the guard becomes indistinguishable from a server fault.
@@ -2069,6 +2075,10 @@ export const sponsorRouter = router({
             message: 'Failed to perform bulk delete',
             cause: error,
           })
+        } finally {
+          // Their early-access links went with them (#1346). After any
+          // ATTEMPTED removal: a delete can be committed and still throw.
+          expireEarlyAccessLinks(conferenceId)
         }
       }),
 
@@ -2077,7 +2087,7 @@ export const sponsorRouter = router({
       .mutation(async ({ input }) => {
         // OWNERSHIP (#730): same shape as `bulkDelete` — the scoped fetch below
         // lives inside `if (input.cancelAgreement)` and gates nothing.
-        await requireDocumentInCurrentConference(
+        const conferenceId = await requireDocumentInCurrentConference(
           input.id,
           'sponsorForConference',
         )
@@ -2113,6 +2123,9 @@ export const sponsorRouter = router({
         const { error } = await deleteSponsorForConference(input.id, {
           deleteContractAsset: input.deleteContractAsset,
         })
+        // Its early-access link went with it (#1346). After any ATTEMPTED
+        // removal: a delete can be committed and still report a failure.
+        expireEarlyAccessLinks(conferenceId)
 
         if (error) {
           throw new TRPCError({
@@ -3055,6 +3068,9 @@ export const sponsorRouter = router({
         }
         return { success: true as const, linkedCodes: added.map((c) => c.code) }
       }),
+
+    /** The sponsor's workshop early-access link (#1346). */
+    earlyAccess: sponsorEarlyAccessRouter,
 
     /**
      * DEPRECATED shim for the external `cnctl` CLI (`cnctl admin sponsors

@@ -55,10 +55,15 @@ vi.mock('@/components/admin/sponsor-crm/SponsorContractView', () => ({
   __esModule: true,
   SponsorContractView: ({
     sponsor,
+    sponsorStartSet,
   }: {
     sponsor: SponsorForConferenceExpanded
+    sponsorStartSet?: boolean
   }) => (
-    <div data-testid="contract-view">persisted status: {sponsor.status}</div>
+    <div data-testid="contract-view">
+      persisted status: {sponsor.status} | sponsor start set:{' '}
+      {String(sponsorStartSet)}
+    </div>
   ),
 }))
 
@@ -188,6 +193,31 @@ describe('SponsorCRMForm — header primary action', () => {
       'persisted status: closed-won',
     )
   })
+
+  it.each([true, false])(
+    'tells the contract view whether the conference has a sponsor start time (%s)',
+    (sponsorStartSet) => {
+      render(
+        <SponsorCRMForm
+          conferenceId="conf-2026"
+          sponsor={mockSponsor({
+            status: 'closed-won',
+            contractStatus: 'none',
+          })}
+          sponsorStartSet={sponsorStartSet}
+          isOpen
+          onClose={vi.fn()}
+          onSuccess={vi.fn()}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Start contract/ }))
+
+      expect(screen.getByTestId('contract-view')).toHaveTextContent(
+        `sponsor start set: ${sponsorStartSet}`,
+      )
+    },
+  )
 
   /** A blocked step must still say what is missing rather than save. */
   it('will not save a transition the state machine blocks', async () => {

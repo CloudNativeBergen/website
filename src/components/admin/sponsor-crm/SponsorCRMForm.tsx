@@ -61,6 +61,10 @@ interface SponsorCRMFormProps {
   onSendRegistration?: () => void
   /** Send → Contract (#1264), raised from the contract view's contract and signing steps. */
   onSendContract?: (options: ContractSendOptions) => void
+  /** The conference has workshops: the contract view offers an early-access link (#1346). */
+  workshopsEnabled?: boolean
+  /** The conference has a "Sponsor Early Access Opens" time, passed on with it. */
+  sponsorStartSet?: boolean
 }
 
 export function SponsorCRMForm({
@@ -76,6 +80,8 @@ export function SponsorCRMForm({
   onSendDiscountCodes,
   onSendRegistration,
   onSendContract,
+  workshopsEnabled = false,
+  sponsorStartSet,
 }: SponsorCRMFormProps) {
   const [view, setViewState] = useState<FormView>(initialView)
   const setView = useCallback(
@@ -438,6 +444,8 @@ export function SponsorCRMForm({
               }}
               onSendRegistration={onSendRegistration}
               onSendContract={onSendContract}
+              workshopsEnabled={workshopsEnabled}
+              sponsorStartSet={sponsorStartSet}
             />
           ) : view === 'communications' && sponsor ? (
             <SponsorCommunicationsPanel

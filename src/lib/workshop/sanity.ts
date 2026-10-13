@@ -97,6 +97,12 @@ export async function checkWorkshopCapacity(workshopId: string): Promise<{
 
 export async function createWorkshopSignup(
   signupData: WorkshopSignupInput,
+  /**
+   * Decided by the server, never part of what a client sends: the sponsor
+   * whose early-access link admitted this sign-up (#1346). Only for an early
+   * sign-up.
+   */
+  { earlyAccessSponsorId }: { earlyAccessSponsorId?: string } = {},
 ): Promise<WorkshopSignupExisting> {
   const workshopId = signupData.workshop._ref
 
@@ -144,6 +150,16 @@ export async function createWorkshopSignup(
         confirmationEmailSent: false,
         experienceLevel: signupData.experienceLevel,
         operatingSystem: signupData.operatingSystem,
+        // WEAK IN THE WRITE ITSELF: the schema's `weak` governs Studio only,
+        // and a strong reference would keep the sponsor from being removed
+        // from the conference.
+        ...(earlyAccessSponsorId && {
+          earlyAccessSponsor: {
+            _type: 'reference' as const,
+            _ref: earlyAccessSponsorId,
+            _weak: true,
+          },
+        }),
       }
 
       tx.create(document)

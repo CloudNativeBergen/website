@@ -61,6 +61,8 @@ interface SponsorCRMPipelineProps {
    * the org AND a Checkin event to read codes from. False hides the kind.
    */
   canSendDiscountCodes?: boolean
+  /** The conference has workshops: sponsors can be given an early-access link (#1346). */
+  workshopsEnabled?: boolean
 }
 
 import { useDebounce } from '@/hooks/useDebounce'
@@ -71,6 +73,7 @@ export function SponsorCRMPipeline({
   domain,
   externalNewTrigger = 0,
   canSendDiscountCodes = false,
+  workshopsEnabled = false,
 }: SponsorCRMPipelineProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -614,6 +617,9 @@ export function SponsorCRMPipeline({
         <SponsorCRMForm
           key={selectedSponsor?._id || 'new'}
           conferenceId={conferenceId}
+          workshopsEnabled={workshopsEnabled}
+          // Without one a link gives no head start, and the section says so.
+          sponsorStartSet={!!conference.workshopRegistrationSponsorStart}
           sponsor={selectedSponsor}
           isOpen={isFormOpen}
           onClose={handleCloseForm}

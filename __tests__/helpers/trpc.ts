@@ -14,6 +14,8 @@ const createCaller = t.createCallerFactory(appRouter)
 function mockReq(): Context['req'] {
   return {
     headers: new Headers(),
+    // A request that carries no cookie.
+    cookies: { get: () => undefined },
     url: 'http://localhost:3000',
   } as unknown as Context['req']
 }
@@ -36,9 +38,11 @@ export function createAnonymousCaller() {
  */
 export function createWorkshopCaller(
   workosUser?: Partial<import('@/server/trpc').WorkshopUserIdentity>,
+  /** The request itself, for a procedure that reads a cookie from it. */
+  req: Context['req'] = mockReq(),
 ) {
   return createCaller({
-    req: mockReq(),
+    req,
     session: null,
     speaker: undefined,
     user: undefined,

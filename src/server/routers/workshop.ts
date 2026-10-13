@@ -4,7 +4,6 @@ import {
   router,
   publicProcedure,
   protectedProcedure,
-  adminProcedure,
   resolveConferenceId,
   type Context,
   type WorkshopUserIdentity,
@@ -49,14 +48,19 @@ import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import { workshopAdminProcedure } from '../workshopAdmin'
 import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
 import {
   sponsorStartTimeProblem,
-  workshopRegistrationWindow,
   type WorkshopRegistrationTimes,
 } from '@/lib/workshop/registration-window'
+import {
+  earlyAccessTokenOf,
+  expireEarlyAccessLinksIfTheyDisagree,
+  findEarlyAccessSponsor,
+  registrationWindowFor,
+} from '@/lib/workshop/early-access'
 import {
   isOrganizerForCurrentOrg,
   type OrganizerSpeaker,
@@ -187,30 +191,6 @@ async function authorizeAnnouncementMutation(
 function workshopUserName(user: WorkshopUserIdentity): string {
   return user.name || user.email
 }
-
-/**
- * The ORGANIZER workshop surface, gated on the `workshops` feature (#689).
- * `adminProcedure` has already resolved the request org from the domain
- * conference and gated on organizer membership, so this only adds the feature
- * decision — and it asks `isWorkshopsEnabledForConference` rather than the
- * generic `requireFeature` middleware, because the workshop gate requires
- * working ticketing on top of the raw entitlement set (#1295): the API must not
- * disagree with the `/admin/workshops` page, the portal and the ticket-sold
- * email, which all go through that one resolver. It is asked with the domain
- * conference — the same one `ctx.orgId` was resolved from — because the answer
- * depends on that conference's ticketing vendor. An unresolvable conference or
- * org is DISABLED (the resolver fails closed), matching the waist's posture.
- */
-const workshopAdminProcedure = adminProcedure.use(async ({ next }) => {
-  const { conference, error } = await getConferenceForCurrentDomain()
-  if (!(await isWorkshopsEnabledForConference(error ? null : conference))) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'The "workshops" feature is not enabled for this organization',
-    })
-  }
-  return next()
-})
 
 /**
  * The names `WorkshopRegistrationSettings` gives the three registration
@@ -546,17 +526,52 @@ export const workshopRouter = router({
         const userEmail = actor.email
         const userName = workshopUserName(actor)
 
-        // THE ONE WINDOW RULE (#1345), the same call the portal page and its
-        // list make. Nobody has early access yet (#1346).
-        const registration = workshopRegistrationWindow(conference, {
-          now: new Date(),
-          earlyAccess: false,
-        })
+        // THE ONE WINDOW RULE (#1345), the same one the portal page and its
+        // list ask, with this caller's early access (#1346). The gate above
+        // has passed. The link is looked up LIVE, within this conference, and
+        // only when it can matter: the request carries the cookie, the
+        // conference has an early-access window and the official opening has
+        // not passed. A revoke takes effect on the next attempt.
+        const { registration, access: sponsor } = await registrationWindowFor(
+          conference,
+          new Date(),
+          async () => {
+            const token = earlyAccessTokenOf(ctx.req.cookies)
+            if (!token) return null
+            let found: Awaited<ReturnType<typeof findEarlyAccessSponsor>>
+            try {
+              found = await findEarlyAccessSponsor(conference._id, token)
+            } catch (error) {
+              // NEVER ADMITS, and never names the official opening to a
+              // person whose early access was simply not checked.
+              console.error('[workshop] early-access lookup failed', error)
+              throw new TRPCError({
+                code: 'SERVICE_UNAVAILABLE',
+                message:
+                  'We could not check your early access right now. Please try again in a moment.',
+              })
+            }
+            // The link is not live. If the portal page's cached links still
+            // say it is, the page is showing this person an early access
+            // they do not have: make its next view read them again.
+            if (!found) {
+              await expireEarlyAccessLinksIfTheyDisagree(
+                conference._id,
+                token,
+                {
+                  live: false,
+                },
+              )
+            }
+            return found
+          },
+        )
         if (registration.status === 'not-open-yet') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             // The day AND the time of day, as the portal's banner names it:
-            // two start times can fall on one day (spec §6).
+            // two start times can fall on one day (spec §6). For a caller
+            // with early access this is the sponsor start time.
             message: `Workshop registration opens on ${formatRegistrationInstant(registration.opensAt)}`,
           })
         }
@@ -603,19 +618,25 @@ export const workshopRouter = router({
         const capacity = await checkWorkshopCapacity(input.workshop._ref)
         const isWaitlist = !capacity || capacity.available <= 0
 
-        const signup = await createWorkshopSignup({
-          userWorkOSId,
-          userEmail,
-          userName,
-          experienceLevel: input.experienceLevel,
-          operatingSystem: input.operatingSystem,
-          workshop: input.workshop,
-          conference: { _type: 'reference' as const, _ref: conference._id },
-          notes: input.notes,
-          status: isWaitlist
-            ? WorkshopSignupStatus.WAITLIST
-            : WorkshopSignupStatus.CONFIRMED,
-        })
+        const signup = await createWorkshopSignup(
+          {
+            userWorkOSId,
+            userEmail,
+            userName,
+            experienceLevel: input.experienceLevel,
+            operatingSystem: input.operatingSystem,
+            workshop: input.workshop,
+            conference: { _type: 'reference' as const, _ref: conference._id },
+            notes: input.notes,
+            status: isWaitlist
+              ? WorkshopSignupStatus.WAITLIST
+              : WorkshopSignupStatus.CONFIRMED,
+          },
+          // AN EARLY SIGN-UP records the sponsor whose link admitted it. A
+          // sponsor was looked up only inside the early-access window, so a
+          // sign-up after the official opening records nothing, cookie or not.
+          sponsor ? { earlyAccessSponsorId: sponsor._id } : {},
+        )
 
         await sendBasicWorkshopConfirmation({
           userEmail: signup.userEmail,

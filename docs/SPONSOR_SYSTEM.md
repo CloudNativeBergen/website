@@ -81,6 +81,8 @@ The CRM join document linking a sponsor to a conference with relationship metada
 
 Contact person roles are defined by `CONTACT_ROLE_OPTIONS` in `src/lib/sponsor/types.ts`. The `isPrimary` flag identifies the main contact for contract signing.
 
+`workshopEarlyAccessToken` holds the token of the sponsor's workshop early-access link, which its people open to sign up for workshops before sign-up opens for everyone. It is separate from `registrationToken`, and is created and revoked on the sponsor's record, never edited in Studio. See `docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md`.
+
 ### `contractTemplate`
 
 Defines the structure and content for contract PDF generation. Each template is scoped to a conference and optionally to a specific tier. Supports variable substitution via `{{{VARIABLE}}}` placeholders.

@@ -29,12 +29,29 @@ import { evaluate, parse } from 'groq-js'
 type Doc = Record<string, unknown> & { _id: string }
 type SerializedMutation = Record<string, { _id?: string; id?: string }>
 
-const { Mutation } = createRequire(
+/**
+ * Sanity's own implementation of mutation semantics, loaded from the package
+ * `sanity` depends on. Shared with `./versionedSanityStore`.
+ */
+export const { Mutation } = createRequire(
   createRequire(import.meta.url).resolve('sanity/package.json'),
 )('@sanity/mutator') as {
   Mutation: new (options: { mutations: unknown[] }) => {
     apply: (doc: Doc | null) => Doc | null
   }
+}
+
+/** Run query text through `groq-js` over these documents. */
+export async function runGroq(
+  documents: readonly Doc[],
+  query: string,
+  params: Record<string, unknown> = {},
+): Promise<unknown> {
+  const result = await evaluate(parse(query), {
+    dataset: [...documents],
+    params,
+  })
+  return result.get()
 }
 
 export interface SanityStore {
@@ -76,11 +93,7 @@ export function createSanityStore(): SanityStore {
     const [query, params] = args as [string, Record<string, unknown>?]
     queries.push(query)
     if (readFailure) throw readFailure
-    const result = await evaluate(parse(query), {
-      dataset: [...documents.values()],
-      params: params ?? {},
-    })
-    return result.get()
+    return runGroq([...documents.values()], query, params ?? {})
   }
 
   const commit = (mutations: SerializedMutation[]) => {

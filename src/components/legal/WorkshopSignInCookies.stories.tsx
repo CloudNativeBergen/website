@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, within } from 'storybook/test'
 import {
+  WorkshopEarlyAccessCookieNote,
+  WorkshopEarlyAccessSponsorItem,
   WorkshopSessionCookieItem,
   WorkshopSignInCookieNote,
 } from './WorkshopSignInCookies'
@@ -111,5 +113,46 @@ export const DataListItem: Story = {
 
 export const DataListItemDark: Story = {
   ...DataListItem,
+  globals: { theme: 'dark' },
+}
+
+/** The early-access cookie (#1346), below the sign-in cookies. */
+export const EarlyAccessCookie: Story = {
+  decorators: inCookiesSection,
+  render: () => <WorkshopEarlyAccessCookieNote />,
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText(/Workshop early access:/).parentElement,
+    ).toHaveTextContent(
+      'this site sets one cookie that holds the code of that link and nothing else',
+    )
+  },
+}
+
+export const EarlyAccessCookieDark: Story = {
+  ...EarlyAccessCookie,
+  globals: { theme: 'dark' },
+}
+
+export const EarlyAccessCookieMobile: Story = {
+  ...EarlyAccessCookie,
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+
+/** The sponsor an early sign-up records, in the list of workshop data. */
+export const EarlyAccessSponsorItem: Story = {
+  decorators: inDataList,
+  render: () => <WorkshopEarlyAccessSponsorItem />,
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText(
+        /which sponsor’s link you used|which sponsor's link you used/,
+      ),
+    ).toBeInTheDocument()
+  },
+}
+
+export const EarlyAccessSponsorItemDark: Story = {
+  ...EarlyAccessSponsorItem,
   globals: { theme: 'dark' },
 }
