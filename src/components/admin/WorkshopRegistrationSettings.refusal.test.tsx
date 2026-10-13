@@ -170,6 +170,9 @@ describe('a save refused about a time the form does not show', () => {
       ).toHaveTextContent(REFUSAL),
     )
     expect(h.saves).toEqual([{ startDate: '2026-05-30T07:00:00.000Z' }])
+    // Said once, in the form, where it stays: not also in a toast, which on a
+    // phone covers the fields and Save.
+    expect(screen.getAllByText(REFUSAL)).toHaveLength(1)
 
     // The card was read again, once, and the form took in what is stored…
     expect(h.refreshes).toBe(1)
@@ -219,5 +222,53 @@ describe('a save refused about a time the form does not show', () => {
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0))
     expect(h.saves).toEqual([{ endDate: '2026-07-02T08:00:00.000Z' }])
     expect(h.refreshes).toBe(1)
+    // An accepted save still says so in a toast, as it did before.
+    expect(screen.getAllByText('Workshop Registration saved.')).toHaveLength(1)
+  })
+})
+
+/**
+ * A SAVE THAT CHANGES NOTHING STILL ANSWERS FOR WHAT IS STORED (review round
+ * 3). The form sends nothing when its fields equal what the card shows. If the
+ * card is stale, closing in silence leaves the organizer looking at a time
+ * they just "saved" that is not the stored one.
+ */
+describe('a save that changes nothing, over a card that is out of date', () => {
+  /** What the card shows next to a row's name. */
+  const row = (name: string) =>
+    screen.getByText(name).nextElementSibling?.textContent
+
+  it('sends nothing, reads the card again, and the card shows what is stored', async () => {
+    // The organizer's page was read when registration opened on 20 October.
+    render(
+      <Providers>
+        <Page
+          first={{
+            workshopRegistrationStart: '2026-10-20T07:00:00.000Z',
+            workshopRegistrationEnd: '2026-11-01T08:00:00.000Z',
+          }}
+        />
+      </Providers>,
+    )
+    // A colleague has moved it to 21 October since.
+    h.stored = {
+      workshopRegistrationStart: '2026-10-21T07:00:00.000Z',
+      workshopRegistrationEnd: '2026-11-01T08:00:00.000Z',
+    }
+    expect(row('Registration Opens')).toBe('20. oktober 2026 kl. 09:00')
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit Workshop Registration' }),
+    )
+    // Retyped as it stands: 20 October is what the form believes is stored.
+    fireEvent.change(field(/Registration Opens/), {
+      target: { value: '2026-10-20T09:00' },
+    })
+    save()
+
+    await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0))
+    expect(h.saves).toEqual([])
+    expect(h.refreshes).toBe(1)
+    expect(row('Registration Opens')).toBe('21. oktober 2026 kl. 09:00')
   })
 })
