@@ -134,6 +134,26 @@ describe('creating a link', () => {
 })
 
 describe('the token is written only to the sponsor that passed the checks', () => {
+  it('the write, as the real client sends it: only if none is stored, and only to the revision that was read', async () => {
+    const { token } = (await createEarlyAccessLink(CONF, SFC)) as {
+      token: string
+    }
+
+    // `ifRevisionID` is enforced by Sanity, and here by the store's model of
+    // it; `setIfMissing` by `@sanity/mutator` itself.
+    expect(store().commits).toEqual([
+      [
+        {
+          patch: {
+            id: SFC,
+            ifRevisionID: 'r0',
+            setIfMissing: { [FIELD]: token },
+          },
+        },
+      ],
+    ])
+  })
+
   it('a deal moved out of won between the check and the write gets no token, and the refusal', async () => {
     // The CRM update lands after the create read "won" and before it writes.
     store().beforeNextCommit(() => {
