@@ -79,9 +79,17 @@ export async function openEarlyAccessLink(
   // it can differ from the one that claims the host now: then nothing is set.
   if (tenant.destination.conference._id !== conference._id) return toPortal()
 
-  if (!(await resolveEarlyAccess(conference._id, token))) {
-    return toPortal(WORKSHOP_EARLY_ACCESS_INVALID_QUERY)
+  let live: Awaited<ReturnType<typeof resolveEarlyAccess>>
+  try {
+    live = await resolveEarlyAccess(conference._id, token)
+  } catch (error) {
+    // The links could not be read: nothing is known about this one. To the
+    // portal page, with no cookie and NO notice: saying "no longer valid"
+    // would be an answer this failure does not give.
+    console.error('[workshop] early-access links could not be read', error)
+    return toPortal()
   }
+  if (!live) return toPortal(WORKSHOP_EARLY_ACCESS_INVALID_QUERY)
   const response = toPortal()
   const opening = conference.workshopRegistrationStart
     ? new Date(conference.workshopRegistrationStart)

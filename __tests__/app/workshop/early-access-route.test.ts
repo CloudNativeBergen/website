@@ -410,6 +410,29 @@ describe('a host that cannot sign in', () => {
   })
 })
 
+describe('when the links cannot be read', () => {
+  it.each([
+    ['a live token', LIVE],
+    ['a token that never existed', NEVER_EXISTED],
+  ])(
+    'goes to the portal page, sets nothing and shows no notice: %s',
+    async (_case, token) => {
+      store().failReadsThat((read) =>
+        read.query.includes('defined(workshopEarlyAccessToken)'),
+      )
+
+      const response = await open(token)
+
+      // Not an error page, and not "no longer valid": nothing is known.
+      expect(response.status).toBe(307)
+      expect(response.headers.get('location')).toBe('/workshop')
+      expect(response.headers.getSetCookie()).toEqual([])
+      expectUncachedAndNoReferrer(response)
+      expect(console.error).toHaveBeenCalledTimes(1)
+    },
+  )
+})
+
 describe('the reads the route makes', () => {
   it('are the same whatever the token: the host decision and one read of the links', async () => {
     const perToken = []
