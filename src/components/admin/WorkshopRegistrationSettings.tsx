@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CalendarIcon,
@@ -55,6 +55,14 @@ export function WorkshopRegistrationSettings({
 
   const [isOpen, setIsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A REFUSAL IS BROUGHT INTO VIEW when it arrives: on a short screen it sits
+  // above the Save button that was just tapped. Counted, not keyed on the
+  // text, so the same refusal a second time comes into view again.
+  const errorRef = useRef<HTMLParagraphElement>(null)
+  const [refusals, setRefusals] = useState(0)
+  useEffect(() => {
+    if (refusals > 0) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [refusals])
   const stored = () => ({
     sponsorStartDate: toLocalInput(workshopRegistrationSponsorStart),
     startDate: toLocalInput(workshopRegistrationStart),
@@ -112,6 +120,7 @@ export function WorkshopRegistrationSettings({
           err.message ||
             'Failed to update the workshop registration window. Please try again.',
         )
+        setRefusals((count) => count + 1)
       },
     })
 
@@ -309,6 +318,8 @@ export function WorkshopRegistrationSettings({
         >
           {error ? (
             <p
+              ref={errorRef}
+              id="workshop-reg-error"
               role="alert"
               className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300"
             >
@@ -328,7 +339,11 @@ export function WorkshopRegistrationSettings({
               type="datetime-local"
               value={sponsorStartDate}
               onChange={(e) => setSponsorStartDate(e.target.value)}
-              aria-describedby="workshop-reg-sponsor-start-help"
+              aria-describedby={
+                error
+                  ? 'workshop-reg-sponsor-start-help workshop-reg-error'
+                  : 'workshop-reg-sponsor-start-help'
+              }
               className="block min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             />
             <p
@@ -349,6 +364,7 @@ export function WorkshopRegistrationSettings({
             </label>
             <input
               id="workshop-reg-start"
+              aria-describedby={error ? 'workshop-reg-error' : undefined}
               type="datetime-local"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
@@ -365,6 +381,7 @@ export function WorkshopRegistrationSettings({
             </label>
             <input
               id="workshop-reg-end"
+              aria-describedby={error ? 'workshop-reg-error' : undefined}
               type="datetime-local"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}

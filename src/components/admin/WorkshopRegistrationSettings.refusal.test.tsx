@@ -63,7 +63,12 @@ vi.mock('next/navigation', () => ({
   }),
 }))
 
+/** jsdom has no `scrollIntoView`; this records what was asked to come into view. */
+const scrolledIntoView = vi.fn<(this: Element, options?: unknown) => void>()
+
 beforeEach(() => {
+  scrolledIntoView.mockClear()
+  Element.prototype.scrollIntoView = scrolledIntoView
   Object.assign(h, {
     stored: {},
     saves: [],
@@ -164,6 +169,19 @@ describe('a save refused about a time the form does not show', () => {
       screen.getByRole('button', { name: 'Edit Workshop Registration' }),
     )
     expect(field(/Sponsor Early Access Opens/).value).toBe('')
+    // No refusal yet: nothing describes the fields but the sponsor field's help.
+    expect({
+      sponsorStart: field(/Sponsor Early Access Opens/).getAttribute(
+        'aria-describedby',
+      ),
+      start: field(/Registration Opens/).getAttribute('aria-describedby'),
+      end: field(/Registration Closes/).getAttribute('aria-describedby'),
+    }).toEqual({
+      sponsorStart: 'workshop-reg-sponsor-start-help',
+      start: null,
+      end: null,
+    })
+    expect(scrolledIntoView.mock.calls).toEqual([])
 
     // The organizer moves the opening to 30 May, before that sponsor start.
     fireEvent.change(field(/Registration Opens/), {
@@ -182,6 +200,26 @@ describe('a save refused about a time the form does not show', () => {
     // Said once, in the form, where it stays: not also in a toast, which on a
     // phone covers the fields and Save.
     expect(screen.getAllByText(REFUSAL)).toHaveLength(1)
+    // BROUGHT INTO VIEW: on a short screen the refusal is above the Save
+    // button that was just tapped. Asked of the refusal itself, once, and no
+    // further than it has to move.
+    const alert = within(screen.getByRole('dialog')).getByRole('alert')
+    expect(scrolledIntoView.mock.contexts).toEqual([alert])
+    expect(scrolledIntoView.mock.calls).toEqual([[{ block: 'nearest' }]])
+    // TIED TO THE FIELDS: each one is described by it, the sponsor field by
+    // its help text as well.
+    expect(alert.id).toBe('workshop-reg-error')
+    expect({
+      sponsorStart: field(/Sponsor Early Access Opens/).getAttribute(
+        'aria-describedby',
+      ),
+      start: field(/Registration Opens/).getAttribute('aria-describedby'),
+      end: field(/Registration Closes/).getAttribute('aria-describedby'),
+    }).toEqual({
+      sponsorStart: 'workshop-reg-sponsor-start-help workshop-reg-error',
+      start: 'workshop-reg-error',
+      end: 'workshop-reg-error',
+    })
 
     // The card was read again, once, and the form took in what is stored…
     expect(h.refreshes).toBe(1)
