@@ -7,6 +7,7 @@ import { defineConfig } from 'sanity'
 import { structureTool } from 'sanity/structure'
 import { slugOnSave } from './sanity/actions/slugOnSave'
 import { shortCodeSafeActions } from './sanity/actions/shortCodeSafeActions'
+import { sponsorLinkSafeActions } from './sanity/actions/sponsorLinkSafeActions'
 import { taskEntrySafeActions } from './sanity/actions/taskEntrySafeActions'
 import { inlineSvgInput } from '@starefossen/sanity-plugin-inline-svg-input'
 
@@ -47,8 +48,13 @@ export default defineConfig({
       // a code with the original (short-links spec §2.2).
       // Duplicate is also hidden on a render Task's gallery entry (#1165),
       // which is found by the `task` a copy would carry too.
-      taskEntrySafeActions(
-        shortCodeSafeActions(prev, context.schemaType),
+      // And it is removed for a sponsor of a conference (#1346): a copy would
+      // hold the same early-access and portal tokens under another id.
+      sponsorLinkSafeActions(
+        taskEntrySafeActions(
+          shortCodeSafeActions(prev, context.schemaType),
+          context.schemaType,
+        ),
         context.schemaType,
       ).map((originalAction) =>
         originalAction.action === 'publish'
