@@ -670,6 +670,7 @@ describe('workshop portal — sign-in and sign-out', () => {
     expect(signedOut[0].props).toEqual({
       conferenceTitle: 'CNDN',
       signInIncomplete: false,
+      earlyAccessInvalid: false,
     })
     expect(hrefsOf(page)).toEqual([])
   })

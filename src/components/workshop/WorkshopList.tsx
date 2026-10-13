@@ -26,6 +26,12 @@ interface WorkshopListProps {
   workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
+  /**
+   * The server has resolved that this person has early access (#1346): their
+   * browser opened a sponsor's live link. Only then is the sponsor start time
+   * handed over too.
+   */
+  earlyAccess?: boolean
 }
 
 export default function WorkshopList({
@@ -35,6 +41,7 @@ export default function WorkshopList({
   workshopRegistrationSponsorStart,
   workshopRegistrationStart,
   workshopRegistrationEnd,
+  earlyAccess = false,
 }: WorkshopListProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -177,15 +184,15 @@ export default function WorkshopList({
   const workshops = (workshopsData?.data || []) as ProposalWithWorkshopData[]
   const userSignups = signupsData?.data || []
 
-  // THE ONE WINDOW RULE (#1345), the same call `workshop.signup` and the
-  // portal page make. Nobody has early access yet (#1346).
+  // THE ONE WINDOW RULE (#1345), the same one `workshop.signup` and the
+  // portal page ask, with the early access the page resolved (#1346).
   const registration = workshopRegistrationWindow(
     {
       workshopRegistrationSponsorStart,
       workshopRegistrationStart,
       workshopRegistrationEnd,
     },
-    { now: new Date(), earlyAccess: false },
+    { now: new Date(), earlyAccess },
   )
   const registrationOpen = registration.status === 'open'
   const registrationClosed = registration.status === 'closed'

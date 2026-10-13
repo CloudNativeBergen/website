@@ -54,7 +54,6 @@ import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
 import {
   sponsorStartTimeProblem,
-  workshopRegistrationWindow,
   type WorkshopRegistrationTimes,
 } from '@/lib/workshop/registration-window'
 import {

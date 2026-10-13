@@ -10,7 +10,10 @@ import { resolveConferenceContact } from '@/lib/email/from'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
 import { notFound, redirect } from 'next/navigation'
 import { cookies, headers } from 'next/headers'
-import { WORKSHOP_SIGN_IN_INCOMPLETE } from '@/lib/workshop/sign-in-paths'
+import {
+  WORKSHOP_EARLY_ACCESS_INVALID,
+  WORKSHOP_SIGN_IN_INCOMPLETE,
+} from '@/lib/workshop/sign-in-paths'
 import {
   readWorkshopPortal,
   sessionCookie,
@@ -24,6 +27,15 @@ import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
 import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
 import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
 import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
+import {
+  earlyAccessTokenOf,
+  registrationWindowFor,
+  resolveEarlyAccess,
+} from '@/lib/workshop/early-access'
+import {
+  WorkshopEarlyAccessBanner,
+  WorkshopEarlyAccessInvalidNotice,
+} from '@/components/workshop/WorkshopEarlyAccess'
 import { signOutOfWorkshop } from './actions'
 
 /** Is `url` on `host` (a Host header value), compared as URLs compare hosts? */
@@ -108,13 +120,21 @@ export default async function WorkshopPage({
   // the two can differ: then nobody is signed in to the one shown here.
   const user =
     portal.session?.conferenceId === conference._id ? portal.session : null
+  // JUST OPENED AN EARLY-ACCESS LINK THAT IS NOT LIVE (#1346): the route that
+  // opens a link lands here with one fixed marker. The notice is all the
+  // signed-out view and the no-ticket view ever show about early access.
+  const query = await searchParams
+  const earlyAccessInvalid =
+    query[WORKSHOP_EARLY_ACCESS_INVALID.param] ===
+    WORKSHOP_EARLY_ACCESS_INVALID.value
   if (!user) {
     // A refused redeem lands here with one fixed marker, whatever refused it.
-    const { [WORKSHOP_SIGN_IN_INCOMPLETE.param]: marker } = await searchParams
+    const { [WORKSHOP_SIGN_IN_INCOMPLETE.param]: marker } = query
     return (
       <WorkshopSignedOut
         conferenceTitle={conference.title}
         signInIncomplete={marker === WORKSHOP_SIGN_IN_INCOMPLETE.value}
+        earlyAccessInvalid={earlyAccessInvalid}
       />
     )
   }
@@ -144,6 +164,8 @@ export default async function WorkshopPage({
                 </h1>
                 <WorkshopSignOutButton action={signOutOfWorkshop} />
               </div>
+
+              {earlyAccessInvalid && <WorkshopEarlyAccessInvalidNotice />}
 
               <div className="mt-8 rounded-lg bg-yellow-50 p-6 dark:bg-yellow-900/20">
                 <div className="flex">
@@ -199,12 +221,20 @@ export default async function WorkshopPage({
     }
   }
 
-  // THE ONE WINDOW RULE (#1345), the same call `workshop.signup` and the list
-  // below make. Nobody has early access yet (#1346).
-  const registration = workshopRegistrationWindow(conference, {
-    now: new Date(),
-    earlyAccess: false,
-  })
+  // THE ONE WINDOW RULE (#1345), the same one `workshop.signup` and the list
+  // below ask, with this person's early access (#1346).
+  //
+  // RESOLVED ONLY HERE, for a person the portal admits, and only when it can
+  // matter (see `registrationWindowFor`): the cookie is not even read after
+  // the official opening. Through the ONE cached read of the conference's
+  // links, never a live read: it decides what is shown, and the sign-up
+  // checks the link live. A cookie whose link is no longer live is no cookie.
+  const { registration, access: earlyAccess } = await registrationWindowFor(
+    conference,
+    new Date(),
+    async () =>
+      resolveEarlyAccess(conference._id, earlyAccessTokenOf(await cookies())),
+  )
 
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24">
@@ -223,7 +253,22 @@ export default async function WorkshopPage({
             <p>Register for workshops at {conference.title}.</p>
           </div>
 
-          {registration.status === 'not-open-yet' && (
+          {earlyAccessInvalid && <WorkshopEarlyAccessInvalidNotice />}
+
+          {/* ONE OR THE OTHER, never both: with early access the banner
+              below takes the place of the one naming the official opening. */}
+          {earlyAccess && registration.status !== 'closed' && (
+            <WorkshopEarlyAccessBanner
+              sponsorName={earlyAccess.sponsorName}
+              opensAt={
+                registration.status === 'not-open-yet'
+                  ? registration.opensAt
+                  : undefined
+              }
+            />
+          )}
+
+          {registration.status === 'not-open-yet' && !earlyAccess && (
             <div className="mt-8 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
               <div className="flex">
                 <div className="shrink-0">
@@ -290,9 +335,16 @@ export default async function WorkshopPage({
               userWorkOSId={user.userId}
               userEmail={user.email}
               userName={userName}
-              // NOT the sponsor start time: the list is a client component,
-              // so every prop is sent to the attendee's browser, and nobody
-              // has early access yet (#1346).
+              // The list is a client component, so every prop is sent to the
+              // attendee's browser. The sponsor start time goes only to a
+              // person whose early access was resolved above (#1346); the
+              // link's token and the sponsor's name are not passed at all.
+              earlyAccess={!!earlyAccess}
+              workshopRegistrationSponsorStart={
+                earlyAccess
+                  ? conference.workshopRegistrationSponsorStart
+                  : undefined
+              }
               workshopRegistrationStart={conference.workshopRegistrationStart}
               workshopRegistrationEnd={conference.workshopRegistrationEnd}
             />
