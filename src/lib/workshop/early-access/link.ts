@@ -371,18 +371,17 @@ async function clearOne(holder: Version): Promise<void> {
  * answer the ones that still hold one.
  *
  * THE IDS COME FROM THE CALLER, so nothing is taken from them but where to
- * look. A token is cleared only from a document that is an unpublished copy
- * (a draft or a release copy), of this conference, whose token NO PUBLISHED
- * document of the conference holds. A published document, another
- * conference's copy and a copy in step with a link that is live are left as
- * they are, whatever was asked.
+ * look. A token is cleared only when it is DEAD: held by a document of this
+ * conference, and by NO PUBLISHED document of the conference. So a published
+ * document (whose own token is live by that rule), another conference's copy
+ * and a copy in step with a link that is live are left as they are, whatever
+ * was asked.
  */
 async function clearDeadCopies(
   conferenceId: string,
   ids: readonly string[],
 ): Promise<string[]> {
-  const unpublished = ids.filter(isUnpublished)
-  if (unpublished.length === 0) return []
+  if (ids.length === 0) return []
   const reader = clientReadUncached.withConfig({
     apiVersion: RELEASES_API_VERSION,
   })
@@ -390,7 +389,7 @@ async function clearDeadCopies(
     const copies =
       (await reader.fetch<Version[]>(
         `*[_type == "sponsorForConference" && conference._ref == $conferenceId && _id in $ids && defined(workshopEarlyAccessToken)]{ _id, _rev, "token": workshopEarlyAccessToken }`,
-        { conferenceId, ids: unpublished },
+        { conferenceId, ids: [...ids] },
         { cache: 'no-store', perspective: 'raw' },
       )) ?? []
     if (copies.length === 0) return []

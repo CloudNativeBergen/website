@@ -319,6 +319,22 @@ describe('a sign-up the server refuses while the list shows early access', () =>
     expect(document.activeElement).toBe(screen.getByRole('alert'))
   })
 
+  it('a keyboard the person has moved elsewhere by then is left where it is', async () => {
+    const elsewhere = document.createElement('button')
+    document.body.append(elsewhere)
+    const { rerender } = await refusedWith(OPENS_OFFICIALLY)
+    elsewhere.focus()
+
+    rerender(
+      <Providers>
+        <WorkshopList {...props} />
+      </Providers>,
+    )
+
+    expect(document.activeElement).toBe(elsewhere)
+    elsewhere.remove()
+  })
+
   // The browser's clock is ahead of the server's at the sponsor start time:
   // the list offers sign-up, the server says not yet, and THE LINK IS LIVE.
   // The page renders again with early access. Nothing may say it is gone.
