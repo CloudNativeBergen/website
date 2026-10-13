@@ -117,6 +117,53 @@ export const EarlyAccessOpenDark: Story = {
   parameters: { theme: 'dark' },
 }
 
+/**
+ * The phone case, pinned. `defaultViewport` is load-bearing:
+ * `.storybook/test-runner.ts` reads it and resizes the page, and its default
+ * is 1280, where no value wraps and the assertions below would hold for the
+ * wrong reason.
+ *
+ * At this width a time does not fit beside its label and wraps. Every line of
+ * every wrapped value must end at the row's right edge: the three rows wrap
+ * alike. (The sponsor row was added right-aligned while the two older ones
+ * wrapped to the left.) Measured on the lines of text, not on the elements:
+ * a left-aligned value's box reaches the edge too.
+ */
+export const EarlyAccessOpenPhone: Story = {
+  args: EarlyAccessOpen.args,
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    let wrapped = 0
+
+    for (const name of [
+      'Sponsor Early Access Opens',
+      'Registration Opens',
+      'Registration Closes',
+    ]) {
+      const label = await canvas.findByText(name)
+      const value = label.nextElementSibling!
+      const rowRight = label.parentElement!.getBoundingClientRect().right
+
+      const text = document.createRange()
+      text.selectNodeContents(value)
+      const lines = [...text.getClientRects()]
+      if (lines.length > 1) wrapped += 1
+      for (const line of lines) {
+        await expect(Math.abs(line.right - rowRight)).toBeLessThan(1.5)
+      }
+      // The label and the value never touch.
+      await expect(
+        value.getBoundingClientRect().left -
+          label.getBoundingClientRect().right,
+      ).toBeGreaterThanOrEqual(16)
+    }
+
+    // CONTROL: this really is the narrow case. All three values wrapped.
+    await expect(wrapped).toBe(3)
+  },
+}
+
 /** Before the sponsor start time: nobody can sign up yet. */
 export const ScheduledWithSponsorStart: Story = {
   args: {
