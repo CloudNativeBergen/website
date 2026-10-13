@@ -1,8 +1,9 @@
 /**
  * An in-memory Sanity dataset that knows about drafts and release copies, for
  * tests that must not take a mock's word for what a query returns or what a
- * write does (#1346). A sibling of `./sanityStore`, with the visibility rules
- * of `src/lib/speaker/erasure.assets.sanity.test.ts`.
+ * write does (#1346). Built on `./sanityStore` (its mutator and its GROQ
+ * runner), with the visibility rules of
+ * `src/lib/speaker/erasure.assets.sanity.test.ts` and revisions on top.
  *
  * REAL: reads run the query text under test through `groq-js`. Writes are
  * built by the real `@sanity/client` (`patch()` and `transaction()`); only
@@ -39,9 +40,8 @@
  *     return h.store.clients
  *   })
  */
-import { createRequire } from 'node:module'
 import { createClient } from '@sanity/client'
-import { evaluate, parse } from 'groq-js'
+import { Mutation, runGroq } from './sanityStore'
 
 type Doc = Record<string, unknown> & { _id: string }
 type PatchBody = { id: string; ifRevisionID?: string }
@@ -51,14 +51,6 @@ type SerializedMutation =
   | { create: Doc }
   | { createIfNotExists: Doc }
   | { createOrReplace: Doc }
-
-const { Mutation } = createRequire(
-  createRequire(import.meta.url).resolve('sanity/package.json'),
-)('@sanity/mutator') as {
-  Mutation: new (options: { mutations: unknown[] }) => {
-    apply: (doc: Doc | null) => Doc | null
-  }
-}
 
 /** The clients' own `apiVersion` (`src/lib/sanity/client.ts`). */
 const DEFAULT_API_VERSION = '2023-05-03'
@@ -163,11 +155,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       if (unreadable?.(reads[reads.length - 1])) {
         throw new Error('503: read refused (test)')
       }
-      const result = await evaluate(parse(query), {
-        dataset: visible(apiVersion, options.perspective),
-        params,
-      })
-      return result.get()
+      return runGroq(visible(apiVersion, options.perspective), query, params)
     }
 
   const apply = async (
