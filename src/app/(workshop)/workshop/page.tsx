@@ -178,8 +178,10 @@ export default async function WorkshopPage({
         )
       } catch (error) {
         // THE PAGE ONLY DECIDES WHAT IS SHOWN: when the links cannot be read,
-        // the person sees the portal as everyone does. A sign-up still checks
-        // the link live, and says so when it cannot.
+        // the person sees the portal as everyone does. For a person who does
+        // have early access that is wrong until a later view: they see the
+        // banner naming the official opening and no workshop to sign up for,
+        // and nothing tells them why.
         console.error('[workshop] early-access links could not be read', error)
         return null
       }

@@ -43,13 +43,17 @@ export function useCopyToClipboard(
   options: CopyOptions = {},
 ): UseCopyToClipboardReturn {
   const { timeout = 2000, onSuccess, onError } = options
-  const [outcome, setOutcome] = useState<'copied' | 'failed' | null>(null)
+  const [copied, setCopied] = useState(false)
+  // Beside `copied`, not in its place: for the callers that only read
+  // `copied`, a later failed copy changes nothing about it, as before.
+  const [failed, setFailed] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const reset = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     timeoutRef.current = null
-    setOutcome(null)
+    setCopied(false)
+    setFailed(false)
   }, [])
 
   const copyToClipboard = useCallback(
@@ -82,7 +86,9 @@ export function useCopyToClipboard(
             // a plain write below, once the text is there.
           }
         }
-        const value = await text
+        // A STRING IS NOT AWAITED: for it the write below is made in the same
+        // turn as the call, as it always was.
+        const value = typeof text === 'string' ? text : await text
         if (!written) {
           if (clipboard && typeof clipboard.writeText === 'function') {
             await clipboard.writeText(value)
@@ -90,12 +96,13 @@ export function useCopyToClipboard(
             copyWithoutClipboardApi(value)
           }
         }
-        setOutcome('copied')
+        setCopied(true)
+        setFailed(false)
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current)
         }
         timeoutRef.current = setTimeout(() => {
-          setOutcome(null)
+          setCopied(false)
           timeoutRef.current = null
         }, timeout)
         onSuccess?.(value)
@@ -103,9 +110,7 @@ export function useCopyToClipboard(
         const error =
           err instanceof Error ? err : new Error('Failed to copy to clipboard')
         console.error('Failed to copy to clipboard:', error)
-        if (timeoutRef.current) clearTimeout(timeoutRef.current)
-        timeoutRef.current = null
-        setOutcome('failed')
+        setFailed(true)
         onError?.(error)
       }
     },
@@ -120,10 +125,5 @@ export function useCopyToClipboard(
     }
   }, [])
 
-  return {
-    copied: outcome === 'copied',
-    failed: outcome === 'failed',
-    copyToClipboard,
-    reset,
-  }
+  return { copied, failed, copyToClipboard, reset }
 }

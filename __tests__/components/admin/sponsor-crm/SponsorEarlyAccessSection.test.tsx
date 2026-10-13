@@ -66,7 +66,7 @@ beforeEach(() => {
   Object.assign(navigator, { clipboard: { writeText } })
   h.address.mockResolvedValue({ url: URL_OF_LINK })
   h.create.mockImplementation((_input, options: Options) =>
-    options.onSuccess?.({ url: URL_OF_LINK } as never),
+    options.onSuccess?.({ url: URL_OF_LINK, notWritten: [] } as never),
   )
   h.revoke.mockImplementation((_input, options: Options) =>
     options.onSuccess?.({ success: true, notCleared: [] } as never),
@@ -112,6 +112,23 @@ describe('a sponsor without a link', () => {
     expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Revoke' })).toBeVisible()
     expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the link and says which copies did not get it, and what to do', () => {
+    h.create.mockImplementation((_input, options: Options) =>
+      options.onSuccess?.({
+        url: URL_OF_LINK,
+        notWritten: ['drafts.sfc-1', 'versions.rSpring.sfc-1'],
+      } as never),
+    )
+    render(section({ hasLink: false }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The link works, but 2 unpublished copies of this sponsor in Sanity Studio did not get it. Publishing one of them would remove the link: discard them in Studio, or create the link again.',
+    )
   })
 
   it('says why no link can be created when the server refuses', () => {

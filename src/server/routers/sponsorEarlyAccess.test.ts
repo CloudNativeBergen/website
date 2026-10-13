@@ -376,9 +376,10 @@ describe('the cached links are expired whenever a write may have landed', () => 
   const DRAFT = `drafts.${SFC}`
   const RELEASE_COPY = `versions.rSpring.${SFC}`
 
-  it('create: the token is stored and writing it to a copy fails', async () => {
-    store().reset([...DATASET, sponsor(), sponsor({ _id: DRAFT })])
-    store().failPatchesOf(DRAFT)
+  it('create: the commit that stored the token landed and then threw', async () => {
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
 
     await expect(
       caller().create({ sponsorForConferenceId: SFC }),
@@ -388,17 +389,47 @@ describe('the cached links are expired whenever a write may have landed', () => 
     expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
   })
 
-  it('revoke: the commit landed and then threw', async () => {
+  it('create answers the address of a link whose copy could not be written, and names the copy', async () => {
+    store().reset([...DATASET, sponsor(), sponsor({ _id: DRAFT })])
+    store().failPatchesOf(DRAFT)
+
+    const answer = await caller().create({ sponsorForConferenceId: SFC })
+
+    expect(answer).toEqual({
+      url: `https://${MAIN_HOST}/workshop/early-access/${stored(SFC)}`,
+      notWritten: [DRAFT],
+    })
+    expect(stored(SFC)).toMatch(new RegExp(`^${UUID}$`))
+    expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
+  })
+
+  it('revoke: the commit landed and then threw, and the revoke finds the link gone', async () => {
     store().reset([...DATASET, sponsor({ [FIELD]: 'stored-token' })])
     store().afterNextCommit(() => {
       throw new Error('socket hang up')
     })
 
-    await expect(
-      caller().revoke({ sponsorForConferenceId: SFC }),
-    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(await caller().revoke({ sponsorForConferenceId: SFC })).toEqual({
+      success: true,
+      notCleared: [],
+    })
 
     expect(stored(SFC)).toBeUndefined()
+    expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
+  })
+
+  it('revoke: it fails, and the links are expired all the same', async () => {
+    store().reset([...DATASET, sponsor({ [FIELD]: 'stored-token' })])
+    store().failPatchesOf(SFC)
+
+    await expect(
+      caller().revoke({ sponsorForConferenceId: SFC }),
+    ).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: expect.stringContaining('Could not revoke'),
+    })
+
+    expect(stored(SFC)).toBe('stored-token')
     expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
   })
 

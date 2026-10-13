@@ -269,6 +269,26 @@ describe('a sign-up the server refuses while the list shows early access', () =>
     expect(onEarlyAccessRefused).not.toHaveBeenCalled()
   })
 
+  it('does not once sign-up is open for everyone: the list was not showing early access', async () => {
+    const onEarlyAccessRefused = vi.fn()
+    // The page was rendered with early access; the official opening has
+    // since passed, and sign-up then closes under the person's hands.
+    vi.setSystemTime(new Date(OFFICIAL_OPENING))
+    signupAnswer = refusal(
+      'PRECONDITION_FAILED',
+      'Workshop registration has closed',
+    )
+    await sectionsFor({
+      earlyAccess: true,
+      workshopRegistrationSponsorStart: SPONSOR_START,
+      onEarlyAccessRefused,
+    })
+
+    await signUpAndBeRefused('Workshop registration has closed')
+
+    expect(onEarlyAccessRefused).not.toHaveBeenCalled()
+  })
+
   it('does not for a person who was not shown early access', async () => {
     const onEarlyAccessRefused = vi.fn()
     vi.setSystemTime(new Date(OFFICIAL_OPENING))

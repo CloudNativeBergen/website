@@ -47,7 +47,7 @@ vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 vi.mock('next/cache', () => ({
   cacheLife: vi.fn(),
   cacheTag: vi.fn(),
-  refresh: vi.fn(),
+  refresh: (...args: unknown[]) => h.refresh(...args),
   revalidateTag: (...args: unknown[]) => h.revalidateTag(...args),
 }))
 
@@ -90,6 +90,7 @@ const h = vi.hoisted(() => ({
         options?: unknown,
       ) => Promise<unknown>),
   revalidateTag: vi.fn(),
+  refresh: vi.fn(),
 }))
 vi.mock('@/lib/sanity/client', async () => {
   const { createVersionedSanityStore } =
@@ -644,6 +645,16 @@ describe('what reaches the browser', () => {
       }
     },
   )
+
+  it('that action refreshes the page, and does nothing else', async () => {
+    await request({ earlyAccess: LIVE })
+
+    await refreshWorkshopPortal()
+
+    expect(h.refresh.mock.calls).toEqual([[]])
+    expect(h.fetch).not.toHaveBeenCalled()
+    expect(h.revalidateTag).not.toHaveBeenCalled()
+  })
 
   it('the list is handed the action that renders the page again', async () => {
     await request({ earlyAccess: LIVE })

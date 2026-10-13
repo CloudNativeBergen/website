@@ -66,7 +66,10 @@ describe('creating a link', () => {
   it('stores a random token on the sponsor and answers it', async () => {
     const result = await createEarlyAccessLink(CONF, SFC)
 
-    expect(result).toEqual({ token: expect.stringMatching(UUID) })
+    expect(result).toEqual({
+      token: expect.stringMatching(UUID),
+      notWritten: [],
+    })
     expect(stored(SFC)).toBe((result as { token: string }).token)
   })
 
@@ -75,6 +78,7 @@ describe('creating a link', () => {
 
     expect(await createEarlyAccessLink(CONF, SFC)).toEqual({
       token: 'stored-token',
+      notWritten: [],
     })
     expect(stored(SFC)).toBe('stored-token')
     expect(store().commits).toEqual([])
@@ -88,7 +92,10 @@ describe('creating a link', () => {
 
     // The race ran: both read "no token" before either wrote.
     expect(store().events.slice(0, 3)).toEqual(['read', 'read', 'commit'])
-    expect(first).toEqual({ token: expect.stringMatching(UUID) })
+    expect(first).toEqual({
+      token: expect.stringMatching(UUID),
+      notWritten: [],
+    })
     expect(second).toEqual(first)
     expect(stored(SFC)).toBe((first as { token: string }).token)
   })
@@ -111,6 +118,7 @@ describe('creating a link', () => {
 
     expect(await createEarlyAccessLink(CONF, SFC)).toEqual({
       token: 'stored-token',
+      notWritten: [],
     })
   })
 
@@ -241,6 +249,23 @@ describe('a create never answers a link that is no longer stored', () => {
     expect(stored(SFC)).toBe(token)
   })
 
+  it('a copy that cannot be written does not hide a link that is stored: the token is answered, and the copy named', async () => {
+    store().reset(withCopies())
+    store().failPatchesOf(RELEASE_COPY)
+
+    const result = (await createEarlyAccessLink(CONF, SFC)) as {
+      token: string
+      notWritten: string[]
+    }
+
+    expect(result.token).toMatch(UUID)
+    expect(stored(SFC)).toBe(result.token)
+    // One transaction writes the copies: neither got the token.
+    expect(result.notWritten).toEqual([DRAFT, RELEASE_COPY])
+    // Pressing create again answers the same link.
+    expect(await createEarlyAccessLink(CONF, SFC)).toEqual(result)
+  })
+
   it('refuses, rather than answer a dead address, when it keeps losing', async () => {
     const revoke = () => revokeEarlyAccessLink(CONF, SFC)
     // The hooks run after the first, third and fifth commit: each attempt's
@@ -365,6 +390,42 @@ describe('revoking a link', () => {
     )
     // The control for the test above: here the link IS still live.
     expect(await findEarlyAccessSponsor(CONF, TOKEN)).toEqual({ _id: SFC })
+  })
+
+  it('a second revoke and a create finish while this one waits to write: the new link is left whole', async () => {
+    store().reset(withCopies({ [FIELD]: TOKEN }))
+    let created: string | undefined
+    // This revoke has read every version holding TOKEN. Before its first
+    // write lands, a colleague's revoke and then a create both complete.
+    store().beforeNextCommit(async () => {
+      await revokeEarlyAccessLink(CONF, SFC)
+      created = ((await createEarlyAccessLink(CONF, SFC)) as { token: string })
+        .token
+    })
+
+    const result = await revokeEarlyAccessLink(CONF, SFC)
+
+    expect(created).toMatch(UUID)
+    expect(created).not.toBe(TOKEN)
+    // The new token is on every version that had it, the revoked one on none.
+    expect(stored(SFC)).toBe(created)
+    expect(stored(DRAFT)).toBe(created)
+    expect(stored(RELEASE_COPY)).toBe(created)
+    expect(result).toEqual({ notCleared: [] })
+  })
+
+  it('a draft that is gone by the time the revoke writes does not stop it', async () => {
+    store().reset([
+      sponsor({ [FIELD]: TOKEN }),
+      sponsor({ _id: DRAFT, [FIELD]: TOKEN }),
+    ])
+    // The draft is published or discarded between the read and the write.
+    store().beforeNextCommit(() => {
+      store().reset([sponsor({ _rev: 'r0', [FIELD]: TOKEN })])
+    })
+
+    expect(await revokeEarlyAccessLink(CONF, SFC)).toEqual({ notCleared: [] })
+    expect(stored(SFC)).toBeUndefined()
   })
 
   it('acts only within the conference it is given', async () => {

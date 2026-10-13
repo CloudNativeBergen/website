@@ -102,7 +102,12 @@ export const sponsorEarlyAccessRouter = router({
               message: notFoundMessage('sponsorForConference'),
             })
       }
-      return { url: earlyAccessUrl(portalUrl, result.token) }
+      return {
+        url: earlyAccessUrl(portalUrl, result.token),
+        // Unpublished copies that did not get the token. The link works;
+        // publishing one of them would remove it.
+        notWritten: result.notWritten,
+      }
     }),
 
   /**

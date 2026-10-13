@@ -45,7 +45,14 @@ export const isEarlyAccessToken = (value: unknown): value is string =>
   typeof value === 'string' && TOKEN_SHAPE.test(value)
 
 export type CreateEarlyAccessLink =
-  | { token: string }
+  | {
+      token: string
+      /**
+       * Unpublished copies that could not be given the token. The link works;
+       * publishing one of these would remove it.
+       */
+      notWritten: string[]
+    }
   /** No such sponsor in this conference, or its deal is not won. */
   | { refused: 'not-found' | 'not-won' }
 
@@ -99,8 +106,12 @@ const releaseWriter = () =>
  * longer holds it (a revoke landed, or a copy without it was published) starts
  * the create over. Copies that are behind are written in a transaction that
  * goes through only while the published document is that same revision, so no
- * copy is left holding a token that was revoked. A create that keeps losing
- * throws: it never answers an address that is already dead.
+ * copy is left holding a token that was revoked.
+ *
+ * WHEN THE COPIES CANNOT BE WRITTEN and the published document holds the
+ * token, the link is live: the token is answered, with the copies that did not
+ * get it. A create whose token is gone after every attempt throws: it never
+ * answers an address that is already dead.
  */
 export async function createEarlyAccessLink(
   conferenceId: string,
@@ -137,7 +148,7 @@ export async function createEarlyAccessLink(
     const behind = versions.filter(
       (version) => version !== published && version.token !== token,
     )
-    if (behind.length === 0) return { token }
+    if (behind.length === 0) return { token, notWritten: [] }
     const transaction = releaseWriter()
       .transaction()
       // Changes nothing. It makes the transaction refuse when the published
@@ -153,9 +164,30 @@ export async function createEarlyAccessLink(
     }
     try {
       await transaction.commit()
-      return { token }
+      return { token, notWritten: [] }
     } catch (error) {
       failure = error
+    }
+  }
+  // Every attempt to write the copies was refused. What is stored now decides.
+  const sponsor = await scopedFetch<{ token: string | null } | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "sponsorForConference" && _id == $id][0]{ "token": workshopEarlyAccessToken }`,
+    { id: sponsorForConferenceId },
+    { cache: 'no-store' },
+  )
+  if (sponsor?.token) {
+    const { token } = sponsor
+    const versions = await readVersions(conferenceId, sponsorForConferenceId)
+    return {
+      token,
+      notWritten: versions
+        .filter(
+          (version) =>
+            version._id !== sponsorForConferenceId && version.token !== token,
+        )
+        .map((version) => version._id),
     }
   }
   throw new Error(
@@ -171,7 +203,11 @@ const isReleaseCopy = (id: string) => id.startsWith('versions.')
  * live; a later create stores a new token.
  *
  *  1. THE PUBLISHED DOCUMENT AND ITS DRAFT, in a transaction of their own.
- *     Nothing about a release copy can keep the link live.
+ *     Nothing about a release copy can keep the link live. Each is cleared
+ *     only as the revision that was read: when another revoke and a create
+ *     got in between, what is stored is a NEW link, and this write is
+ *     refused. So is it when the draft is gone by then. Either way step 2
+ *     reads again and decides.
  *  2. EVERY VERSION THAT STILL HOLDS A REVOKED TOKEN, the published document
  *     included, until none does: all of them are read again after each write.
  *     A copy made while the revoke ran is found, and so is a copy that was
@@ -199,9 +235,16 @@ export async function revokeEarlyAccessLink(
   if (own.length > 0) {
     const transaction = clientWrite.transaction()
     for (const version of own) {
-      transaction.patch(version._id, { unset: [EARLY_ACCESS_TOKEN_FIELD] })
+      transaction.patch(version._id, {
+        ifRevisionID: version._rev,
+        unset: [EARLY_ACCESS_TOKEN_FIELD],
+      })
     }
-    await transaction.commit()
+    try {
+      await transaction.commit()
+    } catch {
+      // Something changed since the read. The rounds below read again.
+    }
   }
 
   for (let round = 1; ; round++) {

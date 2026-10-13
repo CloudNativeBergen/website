@@ -51,9 +51,12 @@ export function SponsorEarlyAccessSection({
     linked: boolean | null
     /** The address the server last answered. */
     url: string | null
-    /** Unpublished copies the last revoke could not clear. */
-    notCleared: number
-  }>({ recordHasLink: hasLink, linked: null, url: null, notCleared: 0 })
+    /**
+     * Unpublished copies the last create or revoke could not bring in step:
+     * after a create they lack the link, after a revoke they still hold it.
+     */
+    outOfStep: number
+  }>({ recordHasLink: hasLink, linked: null, url: null, outOfStep: 0 })
   const [confirming, setConfirming] = useState(false)
   const [fetching, setFetching] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,11 +65,11 @@ export function SponsorEarlyAccessSection({
       recordHasLink: hasLink,
       linked: null,
       url: done.linked === hasLink ? done.url : null,
-      notCleared: done.notCleared,
+      outOfStep: done.outOfStep,
     })
   }
   const linked = done.linked ?? hasLink
-  const { url, notCleared } = done
+  const { url, outOfStep } = done
 
   const create = api.sponsor.crm.earlyAccess.create.useMutation({
     onSuccess: (data) => {
@@ -74,7 +77,7 @@ export function SponsorEarlyAccessSection({
         ...was,
         linked: true,
         url: data.url,
-        notCleared: 0,
+        outOfStep: data.notWritten.length,
       }))
       setError(null)
       onChanged?.()
@@ -87,7 +90,7 @@ export function SponsorEarlyAccessSection({
         ...was,
         linked: false,
         url: null,
-        notCleared: data.notCleared.length,
+        outOfStep: data.notCleared.length,
       }))
       setConfirming(false)
       clipboard.reset()
@@ -238,16 +241,29 @@ export function SponsorEarlyAccessSection({
           Could not copy the link. Select it above and copy it by hand.
         </p>
       )}
-      {!linked && notCleared > 0 && (
+      {outOfStep > 0 && (
         <p
           role="alert"
           className="mt-2 text-xs text-amber-700 dark:text-amber-400"
         >
-          The link is revoked, but {notCleared} unpublished{' '}
-          {notCleared === 1 ? 'copy' : 'copies'} of this sponsor in Sanity
-          Studio still {notCleared === 1 ? 'holds' : 'hold'} it. Publishing{' '}
-          {notCleared === 1 ? 'it' : 'one of them'} would make the link work
-          again: discard {notCleared === 1 ? 'it' : 'them'} in Studio.
+          {linked ? (
+            <>
+              The link works, but {outOfStep} unpublished{' '}
+              {outOfStep === 1 ? 'copy' : 'copies'} of this sponsor in Sanity
+              Studio did not get it. Publishing{' '}
+              {outOfStep === 1 ? 'it' : 'one of them'} would remove the link:
+              discard {outOfStep === 1 ? 'it' : 'them'} in Studio, or create the
+              link again.
+            </>
+          ) : (
+            <>
+              The link is revoked, but {outOfStep} unpublished{' '}
+              {outOfStep === 1 ? 'copy' : 'copies'} of this sponsor in Sanity
+              Studio still {outOfStep === 1 ? 'holds' : 'hold'} it. Publishing{' '}
+              {outOfStep === 1 ? 'it' : 'one of them'} would make the link work
+              again: discard {outOfStep === 1 ? 'it' : 'them'} in Studio.
+            </>
+          )}
         </p>
       )}
       {error && (

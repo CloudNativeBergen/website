@@ -94,9 +94,24 @@ export default function WorkshopList({
       setErrorMessage(error.message)
       setSuccessMessage(null)
       setTimeout(() => setErrorMessage(null), 5000)
-      // The server refused for the window a person this page showed early
-      // access to: what is on screen is out of date.
-      if (earlyAccess && error.data?.code === 'PRECONDITION_FAILED') {
+      // The server refused for the window while this list was offering
+      // sign-up BECAUSE OF early access: the one case where a refusal
+      // contradicts what is on screen. (Once sign-up is open for everyone a
+      // refusal for the window is the end having passed, which a refresh of
+      // early access has nothing to say about.)
+      const shown = workshopRegistrationWindow(
+        {
+          workshopRegistrationSponsorStart,
+          workshopRegistrationStart,
+          workshopRegistrationEnd,
+        },
+        { now: new Date(), earlyAccess },
+      )
+      if (
+        shown.status === 'open' &&
+        shown.early &&
+        error.data?.code === 'PRECONDITION_FAILED'
+      ) {
         void onEarlyAccessRefused?.()
       }
     },

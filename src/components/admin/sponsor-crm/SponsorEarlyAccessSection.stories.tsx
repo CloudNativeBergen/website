@@ -9,7 +9,7 @@ const LINK =
 const answer = (data: unknown) => HttpResponse.json({ result: { data } })
 const handlers = [
   http.post('/api/trpc/sponsor.crm.earlyAccess.create', () =>
-    answer({ url: LINK }),
+    answer({ url: LINK, notWritten: [] }),
   ),
   http.get('/api/trpc/sponsor.crm.earlyAccess.getAddress', () =>
     answer({ url: LINK }),
@@ -87,6 +87,9 @@ export const DealNotWon: Story = {
   },
 }
 
+export const DealNotWonDark: Story = { ...DealNotWon, ...dark }
+export const DealNotWonMobile: Story = { ...DealNotWon, ...mobile }
+
 /** Creating answers the address, on the portal's own host. */
 export const Created: Story = {
   play: async ({ canvasElement, args }) => {
@@ -95,6 +98,39 @@ export const Created: Story = {
     await expect(await canvas.findByDisplayValue(LINK)).toBeInTheDocument()
     await expect(args.onChanged).toHaveBeenCalledTimes(1)
   },
+}
+
+/**
+ * Created, but a copy of the sponsor in Sanity Studio could not be given the
+ * link: the address is shown, and the organizer is told what to do.
+ */
+export const CreatedWithCopyBehind: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/sponsor.crm.earlyAccess.create', () =>
+          answer({ url: LINK, notWritten: ['versions.rSpring.sfc-123'] }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Create link' }))
+    await expect(await canvas.findByDisplayValue(LINK)).toBeInTheDocument()
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      'The link works, but 1 unpublished copy of this sponsor in Sanity Studio did not get it.',
+    )
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const CreatedWithCopyBehindDark: Story = {
+  ...CreatedWithCopyBehind,
+  ...dark,
+}
+export const CreatedWithCopyBehindMobile: Story = {
+  ...CreatedWithCopyBehind,
+  parameters: { ...CreatedWithCopyBehind.parameters, ...mobile.parameters },
 }
 
 /** The sponsor has a link. Its address is not on the page until asked for. */
@@ -245,4 +281,9 @@ export const NoWorkingPortal: Story = {
       'This conference has no working workshop portal',
     )
   },
+}
+export const NoWorkingPortalDark: Story = { ...NoWorkingPortal, ...dark }
+export const NoWorkingPortalMobile: Story = {
+  ...NoWorkingPortal,
+  parameters: { ...NoWorkingPortal.parameters, ...mobile.parameters },
 }
