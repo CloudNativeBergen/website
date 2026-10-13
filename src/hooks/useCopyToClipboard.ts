@@ -73,13 +73,14 @@ export function useCopyToClipboard(
           // arrives. Safari refuses a write that comes after an awaited
           // request.
           try {
-            await clipboard.write([
-              new ClipboardItem({
-                'text/plain': text.then(
-                  (value) => new Blob([value], { type: 'text/plain' }),
-                ),
-              }),
-            ])
+            const blob = text.then(
+              (value) => new Blob([value], { type: 'text/plain' }),
+            )
+            // A text that never arrives is reported once, where it is awaited
+            // below. A browser that refuses the write never reads `blob`,
+            // which would otherwise be left as an unhandled rejection.
+            blob.catch(() => {})
+            await clipboard.write([new ClipboardItem({ 'text/plain': blob })])
             written = true
           } catch {
             // Refused, or this browser's ClipboardItem takes no pending text:

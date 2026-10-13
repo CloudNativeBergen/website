@@ -668,6 +668,50 @@ describe('a copy of a link a colleague has revoked', () => {
   })
 })
 
+describe('a copy of a link a colleague has revoked: where the keyboard is', () => {
+  const gone = async () => {
+    h.address.mockRejectedValue(
+      new Error('This sponsor has no early-access link.'),
+    )
+    const view = render(
+      section({ hasLink: true, recordUpdatedAt: '2026-10-13T10:00:00Z' }),
+    )
+    const copy = screen.getByRole('button', { name: 'Copy link' })
+    copy.focus()
+    await act(async () => {
+      fireEvent.click(copy)
+    })
+    // What the host answers once it has read the record again.
+    const readAgain = () =>
+      view.rerender(
+        section({ hasLink: false, recordUpdatedAt: '2026-10-13T10:00:05Z' }),
+      )
+    return { readAgain }
+  }
+
+  it('once the record says so too, Copy link is gone and Create link has focus', async () => {
+    const { readAgain } = await gone()
+
+    readAgain()
+
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Create link' }),
+    )
+  })
+
+  it('focus the organizer has moved elsewhere in the meantime is left there', async () => {
+    const elsewhere = document.createElement('button')
+    document.body.append(elsewhere)
+    const { readAgain } = await gone()
+    elsewhere.focus()
+
+    readAgain()
+
+    expect(document.activeElement).toBe(elsewhere)
+    elsewhere.remove()
+  })
+})
+
 describe('a copy while an earlier one has failed', () => {
   it('says nothing about a failed copy while the address is being asked for again', async () => {
     h.address.mockRejectedValueOnce(new Error('No such link'))

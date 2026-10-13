@@ -118,7 +118,17 @@ export function SponsorEarlyAccessSection({
   const revokeButton = useRef<HTMLButtonElement>(null)
   const keepButton = useRef<HTMLButtonElement>(null)
   const focusNext = useRef<'create' | 'copy' | 'revoke' | 'keep' | null>(null)
+  // A copy found the link gone. Copy link disappears only when the host has
+  // read the record again; if that leaves the keyboard nowhere, Create link
+  // (or the heading) takes it. Focus the organizer has moved is left alone.
+  const linkFoundGone = useRef(false)
   useEffect(() => {
+    if (linkFoundGone.current && !linked) {
+      linkFoundGone.current = false
+      const lost =
+        !document.activeElement || document.activeElement === document.body
+      if (lost) (createButton.current ?? heading.current)?.focus()
+    }
     const next = focusNext.current
     if (!next) return
     focusNext.current = null
@@ -169,6 +179,7 @@ export function SponsorEarlyAccessSection({
   const copy = async () => {
     setError(null)
     setFetching(true)
+    linkFoundGone.current = false
     // ASKED FOR ON EVERY COPY, never reused: a colleague may have revoked the
     // link and created a new one since the last answer.
     const address = utils.sponsor.crm.earlyAccess.getAddress
@@ -185,6 +196,7 @@ export function SponsorEarlyAccessSection({
       )
       // The record said there is a link and the server could not give its
       // address: a colleague may have revoked it. Read the record again.
+      linkFoundGone.current = true
       onChanged?.()
     } finally {
       setFetching(false)

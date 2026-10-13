@@ -120,6 +120,46 @@ describe('copying a text that is still on its way', () => {
     expect(result.current.copied).toBe(true)
   })
 
+  // The browser refuses the write at once (no permission, no focus) and the
+  // text then never arrives: the server refused. The caller hears of the one
+  // failure; the promise made for the ClipboardItem must not be left as a
+  // second, unhandled one.
+  it('a text that never arrives, after a refused write, fails once and leaves no unhandled rejection', async () => {
+    vi.useRealTimers()
+    vi.stubGlobal('ClipboardItem', FakeClipboardItem)
+    write.mockRejectedValue(new Error('NotAllowedError'))
+    Object.assign(navigator, { clipboard: { write, writeText } })
+    const unhandled: unknown[] = []
+    const record = (reason: unknown) => unhandled.push(reason)
+    process.on('unhandledRejection', record)
+    const onError = vi.fn()
+    let refuse: (error: Error) => void = () => {}
+    const pending = new Promise<string>((_, reject) => {
+      refuse = reject
+    })
+    const { result } = renderHook(() => useCopyToClipboard({ onError }))
+
+    try {
+      let copying: Promise<void> = Promise.resolve()
+      act(() => {
+        copying = result.current.copyToClipboard(pending)
+      })
+      refuse(new Error('This sponsor has no early-access link.'))
+      await act(() => copying)
+      // Node reports an unhandled rejection after the turn it was made in.
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      expect(onError.mock.calls).toEqual([
+        [new Error('This sponsor has no early-access link.')],
+      ])
+      expect(result.current.failed).toBe(true)
+      expect(writeText).not.toHaveBeenCalled()
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', record)
+    }
+  })
+
   it('reset forgets the outcome', async () => {
     const { result } = renderHook(() => useCopyToClipboard())
     await act(() => result.current.copyToClipboard('the text'))
