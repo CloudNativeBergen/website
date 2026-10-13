@@ -968,3 +968,213 @@ export const RegistrationDark: Story = {
   globals: { theme: 'dark' },
   parameters: { msw: { handlers: registrationHandlers } },
 }
+
+/**
+ * What `crm.earlyAccess.sendReadiness` answers (#1347): the decision the Send
+ * action itself refuses with. The modal shows the answer and decides nothing.
+ */
+const EARLY_ACCESS_LINK =
+  'https://cloudnativebergen.dev/workshop/early-access/4b1c9d2e-7a55-4f0a-9c3e-1f2a3b4c5d6e'
+const earlyAccessReady = {
+  refusal: null,
+  url: EARLY_ACCESS_LINK as string | null,
+  // 10:00 in Oslo on both days.
+  sponsorStart: '2026-09-24T08:00:00.000Z',
+  officialOpening: '2026-10-01T08:00:00.000Z',
+}
+const earlyAccessHandlers = (answer: unknown) => [
+  http.get('/api/trpc/sponsor.crm.earlyAccess.sendReadiness', () =>
+    HttpResponse.json({ result: { data: answer } }),
+  ),
+  ...handlers,
+]
+const wonSponsor = mockSponsor({
+  contactPersons: contacts,
+  status: 'closed-won',
+  hasWorkshopEarlyAccessLink: true,
+})
+const NO_WINDOW =
+  'This conference has no early-access period. Under Workshops, set a "Sponsor Early Access Opens" time that is earlier than the time registration opens for everyone.'
+
+/**
+ * Send → Workshop early access (#1347). The modal asks the server whether
+ * the link may be sent; here it may. The built-in text is the starting body,
+ * no template is preselected, and the link rides in the block the server
+ * appends, so editing the message cannot lose it.
+ */
+export const EarlyAccess: Story = {
+  args: { kind: 'workshop-early-access', sponsorForConference: wonSponsor },
+  parameters: { msw: { handlers: earlyAccessHandlers(earlyAccessReady) } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await waitFor(() =>
+      expect(
+        body.queryByText('Checking whether early access can be sent…'),
+      ).not.toBeInTheDocument(),
+    )
+    await expect(
+      body.getByRole('heading', { name: 'Send workshop early access' }),
+    ).toBeInTheDocument()
+    await expect(
+      body.getByDisplayValue(
+        'Workshop early access: Cloud Native Days Norway 2026',
+      ),
+    ).toBeInTheDocument()
+    await expect(
+      body.getByText(/gets early access to workshop sign-up/),
+    ).toBeInTheDocument()
+    await expect(body.queryByRole('alert')).not.toBeInTheDocument()
+    await expect(body.getByRole('combobox')).toHaveValue('')
+  },
+}
+
+/** The sponsor has no link yet: the modal says that sending creates it. */
+export const EarlyAccessNoLinkYet: Story = {
+  args: {
+    kind: 'workshop-early-access',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      status: 'closed-won',
+    }),
+  },
+  parameters: {
+    msw: { handlers: earlyAccessHandlers({ ...earlyAccessReady, url: null }) },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByText(
+        'This sponsor has no early-access link yet. Sending creates it.',
+      ),
+    ).toHaveAttribute('role', 'status')
+  },
+}
+
+/** The preview shows the block the server appends: both times, who can use the link, and the link. */
+export const EarlyAccessPreview: Story = {
+  args: { kind: 'workshop-early-access', sponsorForConference: wonSponsor },
+  parameters: { msw: { handlers: earlyAccessHandlers(earlyAccessReady) } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await waitFor(() =>
+      expect(
+        body.queryByText('Checking whether early access can be sent…'),
+      ).not.toBeInTheDocument(),
+    )
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    const heading = await body.findByText('Early access to workshop sign-up')
+    await expect(heading.parentElement).toHaveTextContent(
+      'With this link, workshop sign-up opens on Thursday, September 24, 2026 at 10:00 AM. For everyone else it opens on Thursday, October 1, 2026 at 10:00 AM.',
+    )
+    await expect(
+      body.getByRole('link', { name: 'Open early access' }),
+    ).toHaveAttribute('href', EARLY_ACCESS_LINK)
+  },
+}
+
+/** No link yet: the preview says where the link will be, and offers none. */
+export const EarlyAccessPreviewNoLinkYet: Story = {
+  ...EarlyAccessNoLinkYet,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByText(
+      'This sponsor has no early-access link yet. Sending creates it.',
+    )
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    await expect(
+      await body.findByText(
+        'The link is created when this email is sent, and appears here.',
+      ),
+    ).toBeInTheDocument()
+    await expect(
+      body.queryByRole('link', { name: 'Open early access' }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+/**
+ * Refused: the server's reason, in its words. Every refusal looks like this
+ * one (no early-access period, the official opening passed, no working
+ * portal host, localhost, a deal that is not won), and so does a server that
+ * could not be asked.
+ */
+export const EarlyAccessRefused: Story = {
+  args: { kind: 'workshop-early-access', sponsorForConference: wonSponsor },
+  parameters: {
+    msw: {
+      handlers: earlyAccessHandlers({
+        refusal: { reason: 'no-window', message: NO_WINDOW },
+      }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(await body.findByRole('alert')).toHaveTextContent(NO_WINDOW)
+  },
+}
+
+/** While the server is being asked, nothing can be sent. */
+export const EarlyAccessChecking: Story = {
+  args: { kind: 'workshop-early-access', sponsorForConference: wonSponsor },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(
+          '/api/trpc/sponsor.crm.earlyAccess.sendReadiness',
+          async () => {
+            await delay('infinite')
+            return HttpResponse.json({ result: { data: earlyAccessReady } })
+          },
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByText('Checking whether early access can be sent…'),
+    ).toHaveAttribute('role', 'status')
+  },
+}
+
+export const EarlyAccessDark: Story = {
+  ...EarlyAccess,
+  globals: { theme: 'dark' },
+}
+
+export const EarlyAccessRefusedDark: Story = {
+  ...EarlyAccessRefused,
+  globals: { theme: 'dark' },
+}
+
+export const EarlyAccessPreviewDark: Story = {
+  ...EarlyAccessPreview,
+  globals: { theme: 'dark' },
+}
+
+export const EarlyAccessMobile: Story = {
+  ...EarlyAccessNoLinkYet,
+  parameters: {
+    ...EarlyAccessNoLinkYet.parameters,
+    viewport: { value: 'mobile1', isRotated: false },
+  },
+}
+
+export const EarlyAccessRefusedMobile: Story = {
+  ...EarlyAccessRefused,
+  parameters: {
+    ...EarlyAccessRefused.parameters,
+    viewport: { value: 'mobile1', isRotated: false },
+  },
+}
+
+export const EarlyAccessPreviewMobile: Story = {
+  ...EarlyAccessPreview,
+  parameters: {
+    ...EarlyAccessPreview.parameters,
+    viewport: { value: 'mobile1', isRotated: false },
+  },
+}

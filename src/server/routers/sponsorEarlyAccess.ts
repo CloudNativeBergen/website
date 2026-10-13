@@ -130,10 +130,7 @@ export async function createSponsorEarlyAccessLink(
 }
 
 /** A send that may go ahead, as {@link decideEarlyAccessSend} answers it. */
-export type EarlyAccessSendPlan = Extract<
-  EarlyAccessSendDecision,
-  { refused: null }
->
+type EarlyAccessSendPlan = Extract<EarlyAccessSendDecision, { refused: null }>
 
 /** Why a send is refused, with the words the organizer is told. */
 function sendRefusal(reason: EarlyAccessSendRefusal) {

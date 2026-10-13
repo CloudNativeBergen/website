@@ -698,7 +698,10 @@ describe('a refused send', () => {
   it('creates no link for the registration merge field, which only a registration send can fill', async () => {
     await expect(
       send({ subject: 'Open {{{SPONSOR_PORTAL_URL}}}' }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('only a registration send can fill in'),
+    })
     expectNothingHappened()
   })
 
