@@ -50,12 +50,11 @@ describe('Studio cannot duplicate a sponsor of a conference', () => {
         >[1]) as DocumentActionComponent[],
       )
 
-    expect(resolve('sponsorForConference')).toEqual([
-      'publish',
-      'delete',
-      'unpublish',
-    ])
+    // (The config wraps publish, so that entry carries no name here.)
+    expect(resolve('sponsorForConference')).not.toContain('duplicate')
+    expect(resolve('sponsorForConference')).toHaveLength(ALL.length - 1)
     // Still offered elsewhere.
     expect(resolve('sponsor')).toContain('duplicate')
+    expect(resolve('sponsor')).toHaveLength(ALL.length)
   })
 })
