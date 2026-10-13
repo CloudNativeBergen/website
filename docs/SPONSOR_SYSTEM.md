@@ -48,39 +48,40 @@ Defines pricing tiers for a conference. Each tier is scoped to a single conferen
 
 The CRM join document linking a sponsor to a conference with relationship metadata. This is the central document the CRM pipeline operates on.
 
-| Field                      | Description                                                                                                                                                                                                                     |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sponsor`                  | Reference to `sponsor` document                                                                                                                                                                                                 |
-| `conference`               | Reference to `conference` document                                                                                                                                                                                              |
-| `tier`                     | Reference to a `sponsorTier` (standard/special)                                                                                                                                                                                 |
-| `addons[]`                 | Array of references to addon-type `sponsorTier` documents                                                                                                                                                                       |
-| `contactPersons[]`         | Per-conference contacts (name, email, phone, role, `isPrimary`)                                                                                                                                                                 |
-| `billing`                  | Per-conference billing info (email, reference, comments)                                                                                                                                                                        |
-| `status`                   | Pipeline stage: `prospect` &rarr; `contacted` &rarr; `negotiating` &rarr; `closed-won` / `closed-lost`                                                                                                                          |
-| `contractStatus`           | `none` &rarr; `verbal-agreement` &rarr; `contract-sent` &rarr; `contract-signed`                                                                                                                                                |
-| `signatureStatus`          | Digital signature state: `not-started` &rarr; `pending` &rarr; `signed` / `rejected` / `expired`                                                                                                                                |
-| `signatureId`              | External ID from e-signing provider (read-only)                                                                                                                                                                                 |
-| `signerEmail`              | Email of the person designated to sign the contract                                                                                                                                                                             |
-| `signingUrl`               | Contract signing URL for portal display and reminder emails (read-only)                                                                                                                                                         |
-| `contractSentAt`           | When the contract was sent for signing (read-only)                                                                                                                                                                              |
-| `organizerSignedBy`        | Name of the organizer who counter-signed the contract (read-only)                                                                                                                                                               |
-| `organizerSignedAt`        | When the organizer counter-signed (read-only)                                                                                                                                                                                   |
-| `contractDocument`         | Generated PDF contract stored as a Sanity file asset                                                                                                                                                                            |
-| `reminderCount`            | Number of contract signing reminders sent (read-only)                                                                                                                                                                           |
-| `contractTemplate`         | Reference to the `contractTemplate` used to generate the contract                                                                                                                                                               |
-| `invoiceStatus`            | `not-sent` &rarr; `sent` &rarr; `paid` / `overdue` / `cancelled`                                                                                                                                                                |
-| `assignedTo`               | Reference to an organizer (speaker with `isOrganizer: true`)                                                                                                                                                                    |
-| `contractValue`            | Actual contract value (defaults to tier price)                                                                                                                                                                                  |
-| `contractCurrency`         | `NOK`, `USD`, `EUR`, or `GBP`                                                                                                                                                                                                   |
-| `tags[]`                   | Classification tags (see Tags section below)                                                                                                                                                                                    |
-| `notes`                    | Freeform text                                                                                                                                                                                                                   |
-| `registrationToken`        | Unique token for sponsor self-service registration portal (read-only)                                                                                                                                                           |
-| `registrationComplete`     | Whether the sponsor has completed registration (read-only)                                                                                                                                                                      |
-| `registrationCompletedAt`  | When the sponsor completed registration (read-only)                                                                                                                                                                             |
-| `workshopEarlyAccessToken` | Token of the sponsor's workshop early-access link, which its people open to sign up for workshops before sign-up opens for everyone. Separate from `registrationToken`; created and revoked on the sponsor's record (read-only) |
-| Timestamps                 | `contactInitiatedAt`, `contractSignedAt`, `invoiceSentAt`, `invoicePaidAt`                                                                                                                                                      |
+| Field                     | Description                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `sponsor`                 | Reference to `sponsor` document                                                                        |
+| `conference`              | Reference to `conference` document                                                                     |
+| `tier`                    | Reference to a `sponsorTier` (standard/special)                                                        |
+| `addons[]`                | Array of references to addon-type `sponsorTier` documents                                              |
+| `contactPersons[]`        | Per-conference contacts (name, email, phone, role, `isPrimary`)                                        |
+| `billing`                 | Per-conference billing info (email, reference, comments)                                               |
+| `status`                  | Pipeline stage: `prospect` &rarr; `contacted` &rarr; `negotiating` &rarr; `closed-won` / `closed-lost` |
+| `contractStatus`          | `none` &rarr; `verbal-agreement` &rarr; `contract-sent` &rarr; `contract-signed`                       |
+| `signatureStatus`         | Digital signature state: `not-started` &rarr; `pending` &rarr; `signed` / `rejected` / `expired`       |
+| `signatureId`             | External ID from e-signing provider (read-only)                                                        |
+| `signerEmail`             | Email of the person designated to sign the contract                                                    |
+| `signingUrl`              | Contract signing URL for portal display and reminder emails (read-only)                                |
+| `contractSentAt`          | When the contract was sent for signing (read-only)                                                     |
+| `organizerSignedBy`       | Name of the organizer who counter-signed the contract (read-only)                                      |
+| `organizerSignedAt`       | When the organizer counter-signed (read-only)                                                          |
+| `contractDocument`        | Generated PDF contract stored as a Sanity file asset                                                   |
+| `reminderCount`           | Number of contract signing reminders sent (read-only)                                                  |
+| `contractTemplate`        | Reference to the `contractTemplate` used to generate the contract                                      |
+| `invoiceStatus`           | `not-sent` &rarr; `sent` &rarr; `paid` / `overdue` / `cancelled`                                       |
+| `assignedTo`              | Reference to an organizer (speaker with `isOrganizer: true`)                                           |
+| `contractValue`           | Actual contract value (defaults to tier price)                                                         |
+| `contractCurrency`        | `NOK`, `USD`, `EUR`, or `GBP`                                                                          |
+| `tags[]`                  | Classification tags (see Tags section below)                                                           |
+| `notes`                   | Freeform text                                                                                          |
+| `registrationToken`       | Unique token for sponsor self-service registration portal (read-only)                                  |
+| `registrationComplete`    | Whether the sponsor has completed registration (read-only)                                             |
+| `registrationCompletedAt` | When the sponsor completed registration (read-only)                                                    |
+| Timestamps                | `contactInitiatedAt`, `contractSignedAt`, `invoiceSentAt`, `invoicePaidAt`                             |
 
 Contact person roles are defined by `CONTACT_ROLE_OPTIONS` in `src/lib/sponsor/types.ts`. The `isPrimary` flag identifies the main contact for contract signing.
+
+`workshopEarlyAccessToken` holds the token of the sponsor's workshop early-access link, which its people open to sign up for workshops before sign-up opens for everyone. It is separate from `registrationToken`, and is created and revoked on the sponsor's record, never edited in Studio. See `docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md`.
 
 ### `contractTemplate`
 
