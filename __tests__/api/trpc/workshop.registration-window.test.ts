@@ -36,6 +36,10 @@ const h = vi.hoisted(() => ({
   afterRead: null as (() => void) | null,
   /** While set, the save's live read hands its answer back only after it. */
   readGate: null as Promise<void> | null,
+  /** The options every live read of the save was made with. */
+  readOptions: [] as unknown[],
+  /** The next patch fails with this, for a reason that is not its revision. */
+  failWrite: null as Error | null,
   /** What each of those patches set, as serialised by the real client. */
   sets: [] as unknown[],
   /** Other tenants' conferences in the same dataset. */
@@ -93,10 +97,15 @@ vi.mock('@/lib/sanity/client', async () => {
     // sign-up's access decision are read here too: none are stored, so the
     // built-in list decides who holds a workshop ticket.)
     clientReadUncached: {
-      fetch: async (query: string, params: Record<string, unknown> = {}) => {
+      fetch: async (
+        query: string,
+        params: Record<string, unknown> = {},
+        options?: unknown,
+      ) => {
         const savesRead = query.includes('workshopRegistration')
         if (savesRead) {
           h.reads.push(params)
+          h.readOptions.push(options)
           if (h.failRead) throw new Error('Sanity down')
         }
         const stored = h.rev ? { ...h.stored, _rev: h.rev } : h.stored
@@ -127,6 +136,7 @@ vi.mock('@/lib/sanity/client', async () => {
         patch.commit = (async () => {
           const mutation = patch.serialize()
           h.attempts.push(mutation.ifRevisionID ?? null)
+          if (h.failWrite) throw h.failWrite
           if (id !== h.stored._id) {
             throw Object.assign(new Error('missing'), { statusCode: 404 })
           }
@@ -253,6 +263,8 @@ beforeEach(() => {
   h.failRead = false
   h.afterRead = null
   h.readGate = null
+  h.readOptions = []
+  h.failWrite = null
   h.sets = []
   h.others = []
   h.reads = []
@@ -556,7 +568,9 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
   it('still refuses an end that is not after the start', async () => {
     expect(
       await save({ sponsorStartDate: null, startDate: END, endDate: OFFICIAL }),
-    ).toEqual(refusedWith('End date must be after start date'))
+    ).toEqual(
+      refusedWith('Registration Closes must be later than Registration Opens'),
+    )
   })
 
   /**
@@ -657,13 +671,17 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
 
     it('refuses an end that is not after the STORED start', async () => {
       expect(await save({ endDate: '2026-05-09T06:00:00.000Z' })).toEqual(
-        refused(`End date must be after start date.${STORED_OPENING}`),
+        refused(
+          `Registration Closes must be later than Registration Opens.${STORED_OPENING}`,
+        ),
       )
     })
 
     it('refuses a start that is not before the STORED end', async () => {
       expect(await save({ startDate: '2026-05-21T06:00:00.000Z' })).toEqual(
-        refused(`End date must be after start date.${STORED_END}`),
+        refused(
+          `Registration Closes must be later than Registration Opens.${STORED_END}`,
+        ),
       )
     })
 
@@ -689,6 +707,9 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
         },
       })
       expect(h.reads).toEqual([{ id: 'conf-1' }])
+      // Past Next's fetch cache as well as Sanity's CDN: a remembered answer
+      // would be the times from before a colleague's save.
+      expect(h.readOptions).toEqual([{ cache: 'no-store' }])
       expect(h.others).toEqual([OTHER])
     })
 
@@ -796,6 +817,40 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
         writes: [],
         stored: EDITED,
       })
+    })
+  })
+
+  /**
+   * ONLY A MOVED REVISION IS A CONFLICT. "Changed while you were saving, try
+   * again" is advice for that case alone: told about any other failed write,
+   * an organizer would keep retrying a save that Sanity is not taking.
+   */
+  describe('a save whose write fails for another reason than its revision', () => {
+    const FAILED = {
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to update workshop registration times',
+    }
+
+    it.each([
+      [
+        'Sanity answers 503',
+        Object.assign(new Error('unavailable'), { statusCode: 503 }),
+      ],
+      ['the request never gets an answer', new Error('fetch failed')],
+      [
+        'the document is gone',
+        Object.assign(new Error('missing'), { statusCode: 404 }),
+      ],
+    ])('is not told as a conflict: %s', async (_why, failure) => {
+      h.failWrite = failure
+
+      expect(await save({ endDate: END })).toEqual({
+        refused: FAILED,
+        writes: [],
+        stored: BEFORE,
+      })
+      // It was attempted, once, on the revision that was read: no retry.
+      expect(h.attempts).toEqual(['rev-1'])
     })
   })
 
