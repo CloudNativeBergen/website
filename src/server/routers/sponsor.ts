@@ -2966,6 +2966,7 @@ export const sponsorRouter = router({
           }
         }
 
+        const copiesBehind = earlyAccess?.notWritten().length ?? 0
         return {
           success: true as const,
           activityId: result.activityId,
@@ -2978,10 +2979,7 @@ export const sponsorRouter = router({
           ...(contract && { contractAction: contract.action }),
           // Unpublished copies of the sponsor that did not get the link's
           // token: the organizer is told, as on the record's "Create link".
-          ...(earlyAccess &&
-            earlyAccess.notWritten().length > 0 && {
-              earlyAccessCopiesBehind: earlyAccess.notWritten().length,
-            }),
+          ...(copiesBehind > 0 && { earlyAccessCopiesBehind: copiesBehind }),
           ...(contractStateFailed && { contractStateFailed: true as const }),
           ...(contractCopyFailed && { contractCopyFailed: true as const }),
         }

@@ -4,7 +4,7 @@
  * THE WORKSHOP EARLY-ACCESS KIND of `sponsor.crm.sendCommunication` (#1347,
  * spec `docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md` §8), and the question the
  * Send modal asks before it offers the send
- * (`sponsor.crm.earlyAccess.sendReadiness`).
+ * (`sponsor.crm.earlyAccess.getSendReadiness`).
  *
  * REAL: both procedures and their guards, the link module with its query text
  * (`groq-js`) and its writes (`@sanity/mutator`), the portal address and the
@@ -90,6 +90,8 @@ const t = initTRPC.context<Context>().create()
 const ORG = 'org-a'
 const CONF = 'conf-a'
 const MAIN_HOST = 'conf.example.org'
+/** Another host the conference answers on. Its links still point at the main one. */
+const SECOND_HOST = 'second.example.org'
 const SFC = 'sfc-acme'
 const FIELD = 'workshopEarlyAccessToken'
 const UUID =
@@ -452,6 +454,200 @@ describe('the block', () => {
   })
 })
 
+/**
+ * THE TIMES ARE READ LIVE. The conference a request resolves is cached, and a
+ * save of the times expires that cache in a way that still serves the old
+ * answer to the next request. An email cannot be taken back, so this kind
+ * asks for the times without a cache (`{ uncached: true }`, the read
+ * `/admin/workshops` makes), on the send and on the modal's question alike.
+ */
+describe('the times are the stored ones, not the cached ones', () => {
+  /** What the cached read of the request's conference still answers. */
+  const cachedAs = (stale: Record<string, unknown>) => ({
+    /** What is stored now: what a live read answers. */
+    storedAs: (stored: Record<string, unknown>) => {
+      h.getConference.mockImplementation(
+        async (options?: { uncached?: boolean }) => ({
+          conference: conference(options?.uncached ? stored : stale),
+          domain: MAIN_HOST,
+          error: null,
+        }),
+      )
+    },
+  })
+  const liveReads = () =>
+    h.getConference.mock.calls.filter(([options]) => options?.uncached)
+  const readiness = () =>
+    caller().crm.earlyAccess.getSendReadiness({ sponsorForConferenceId: SFC })
+
+  it('mails the times an organizer just saved, not the ones the cache still holds', async () => {
+    cachedAs({}).storedAs({
+      // Moved a day later, both of them: 10:00 in Oslo on the 25th and the 2nd.
+      workshopRegistrationSponsorStart: '2026-09-25T08:00:00.000Z',
+      workshopRegistrationStart: '2026-10-02T08:00:00.000Z',
+    })
+
+    await send()
+
+    const text = textOf(sentHtml())
+    expect(text).toContain(
+      'With this link, workshop sign-up opens on Friday, September 25, 2026 at 10:00 AM. For everyone else it opens on Friday, October 2, 2026 at 10:00 AM.',
+    )
+    expect(text).not.toContain(SPONSOR_START_TEXT)
+    expect(text).not.toContain(OFFICIAL_OPENING_TEXT)
+    expect(records()[0].body).toBe(sentHtml())
+  })
+
+  it('refuses when the sponsor start time was just removed, though the cache still holds one', async () => {
+    cachedAs({}).storedAs({ workshopRegistrationSponsorStart: undefined })
+
+    await expect(send()).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('no early-access period'),
+    })
+    expectNothingHappened()
+    await expect(readiness()).resolves.toMatchObject({
+      refusal: { reason: 'no-window' },
+    })
+  })
+
+  it('sends when a sponsor start time was just set, though the cache holds none yet', async () => {
+    cachedAs({ workshopRegistrationSponsorStart: undefined }).storedAs({})
+
+    await expect(readiness()).resolves.toEqual({
+      refusal: null,
+      url: null,
+      sponsorStart: SPONSOR_START,
+      officialOpening: OFFICIAL_OPENING,
+    })
+    await expect(send()).resolves.toMatchObject({ success: true })
+    expect(textOf(sentHtml())).toContain(SPONSOR_START_TEXT)
+  })
+
+  it('refuses when the official opening was just moved into the past, though the cached one is still ahead', async () => {
+    cachedAs({}).storedAs({
+      workshopRegistrationSponsorStart: '2026-09-10T08:00:00.000Z',
+      workshopRegistrationStart: '2026-09-15T08:00:00.000Z',
+    })
+
+    await expect(send()).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('The early-access period is over'),
+    })
+    expectNothingHappened()
+    await expect(readiness()).resolves.toMatchObject({
+      refusal: { reason: 'opening-passed' },
+    })
+  })
+
+  it('makes one live read per send and one per question from the modal', async () => {
+    await send()
+    expect(liveReads()).toHaveLength(1)
+    expect(liveReads()[0][0]).toEqual({ uncached: true })
+
+    h.getConference.mockClear()
+    await readiness()
+    expect(liveReads()).toHaveLength(1)
+  })
+
+  it('makes no live read from localhost, where the answer needs none', async () => {
+    h.getConference.mockResolvedValue({
+      conference: conference(),
+      domain: 'localhost:3000',
+      error: null,
+    })
+
+    await expect(send()).rejects.toMatchObject({
+      message: expect.stringContaining('localhost'),
+    })
+    await readiness()
+
+    expect(liveReads()).toEqual([])
+  })
+
+  it('makes no live read for a send of another kind', async () => {
+    await send({ kind: 'information' })
+
+    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(liveReads()).toEqual([])
+  })
+
+  it('refuses, and writes nothing, when the live read fails: stale times are not a fallback', async () => {
+    h.getConference.mockImplementation(
+      async (options?: { uncached?: boolean }) =>
+        options?.uncached
+          ? { conference: null, domain: MAIN_HOST, error: new Error('503') }
+          : { conference: conference(), domain: MAIN_HOST, error: null },
+    )
+
+    await expect(send()).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch conference',
+    })
+    expectNothingHappened()
+    await expect(readiness()).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+  })
+
+  // No guard of its own: the sponsor is looked up within the conference the
+  // live read answers, and is not one of that conference's.
+  it('refuses a sponsor as missing when the host is another conference\u2019s by now', async () => {
+    h.getConference.mockImplementation(
+      async (options?: { uncached?: boolean }) => ({
+        conference: conference(options?.uncached ? { _id: 'conf-b' } : {}),
+        domain: MAIN_HOST,
+        error: null,
+      }),
+    )
+
+    await expect(send()).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expectNothingHappened()
+  })
+})
+
+/**
+ * THE ADDRESS IS ON THE PORTAL'S HOST, whatever host the organizer is on: the
+ * cookie a link sets is bound to the host that sets it (spec \u00a74).
+ */
+describe('sent from another host of the conference', () => {
+  beforeEach(() => {
+    h.getConference.mockResolvedValue({
+      conference: conference({ domains: [MAIN_HOST, SECOND_HOST] }),
+      domain: SECOND_HOST,
+      error: null,
+    })
+  })
+
+  it('mails and records the address on the main host', async () => {
+    await send()
+
+    const token = stored(SFC)
+    expect(token).toMatch(new RegExp(`^${UUID}$`))
+    expect(sentHtml()).toContain(
+      `href="https://${MAIN_HOST}/workshop/early-access/${token}"`,
+    )
+    expect(sentHtml()).not.toContain(SECOND_HOST)
+    expect(records()[0].attachments).toEqual([
+      expect.objectContaining({
+        url: `https://${MAIN_HOST}/workshop/early-access/${token}`,
+      }),
+    ])
+  })
+
+  it('tells the modal the address on the main host for a link that exists', async () => {
+    store().reset([...DATASET, sponsorDoc({ [FIELD]: STORED })])
+
+    const answer = await caller().crm.earlyAccess.getSendReadiness({
+      sponsorForConferenceId: SFC,
+    })
+
+    expect(answer).toMatchObject({
+      url: `https://${MAIN_HOST}/workshop/early-access/${STORED}`,
+    })
+  })
+})
+
 /** What a refused send must leave behind: no email, no link, no record. */
 function expectNothingHappened() {
   expect(h.send).not.toHaveBeenCalled()
@@ -721,9 +917,9 @@ describe('a refused send', () => {
   })
 })
 
-describe('what the Send modal is told (sendReadiness)', () => {
+describe('what the Send modal is told (getSendReadiness)', () => {
   const readiness = (sponsorForConferenceId = SFC) =>
-    caller().crm.earlyAccess.sendReadiness({ sponsorForConferenceId })
+    caller().crm.earlyAccess.getSendReadiness({ sponsorForConferenceId })
 
   it.each(REFUSALS)(
     'is the refusal the send itself gives, in the same words: $name',

@@ -72,11 +72,14 @@ export interface SendSponsorCommunicationArgs {
   /**
    * A block that can only be built by WRITING something (the workshop
    * early-access link, created on send when the sponsor has none, #1347).
-   * Called once, AFTER every refusal this function can make (the sponsor, the
-   * recipients, the message) and before the provider is asked, so no refusal
-   * can follow the write. What it answers is appended after `appendHtml` and
-   * listed after `attachments`. A throw is the caller's own refusal: nothing
-   * is sent and nothing is recorded.
+   * Called once, after the three refusals this function makes itself (no
+   * such sponsor, a bad recipient, a message that cannot be rendered) and
+   * before the sender is resolved and the provider is asked. A FAILURE CAN
+   * STILL FOLLOW IT: the tenant's sender cannot be resolved, or the provider
+   * refuses or does not answer. What the callback wrote then stays, and the
+   * failed send is recorded with it. What it answers is appended after
+   * `appendHtml` and listed after `attachments`. A throw from the callback
+   * itself is the caller's own refusal: nothing is sent or recorded.
    */
   appendLate?: () => Promise<{
     html: string
@@ -253,7 +256,8 @@ export async function sendSponsorCommunication(
       message: 'Failed to convert message to HTML',
     }
   }
-  // Nothing above can refuse any more: only now may a send write.
+  // The sponsor, the recipients and the message are accepted: only now may
+  // a send write. The sender and the provider can still fail after this.
   const late = await args.appendLate?.()
   const attachments = late?.attachments?.length
     ? [...(args.attachments ?? []), ...late.attachments]

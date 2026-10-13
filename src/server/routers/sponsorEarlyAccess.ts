@@ -11,7 +11,6 @@ import {
   EARLY_ACCESS_SEND_REFUSALS,
   earlyAccessAttachments,
   earlyAccessCardHtml,
-  type EarlyAccessSendRefusal,
 } from '@/lib/sponsor-crm/early-access-email'
 import type { ConferenceTheme } from '@/lib/branding/theme'
 import {
@@ -23,7 +22,9 @@ import {
   expireEarlyAccessLinksIfTheyDisagree,
   readEarlyAccessToken,
   revokeEarlyAccessLink,
+  type EarlyAccessSendConference,
   type EarlyAccessSendDecision,
+  type EarlyAccessSendRefusal,
 } from '@/lib/workshop/early-access'
 
 /**
@@ -138,13 +139,35 @@ function sendRefusal(reason: EarlyAccessSendRefusal) {
 }
 
 /**
+ * THE REQUEST'S CONFERENCE, READ WITHOUT A CACHE: where a send of the link
+ * takes the registration times from. The read `/admin/workshops` makes, for
+ * the same reason: `updateRegistrationTimes` expires the cached conference
+ * with a profile that still serves the old answer to the next request.
+ *
+ * A read that fails is refused: the cached times are not a fallback. When it
+ * answers ANOTHER conference than the cached read did (the host has changed
+ * hands), the decision looks the sponsor up in that one and does not find it.
+ */
+async function readConferenceLive(): Promise<EarlyAccessSendConference> {
+  const { conference, error } = await getConferenceForCurrentDomain({
+    uncached: true,
+  })
+  if (error || !conference) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch conference',
+    })
+  }
+  return conference
+}
+
+/**
  * {@link decideEarlyAccessSend} for the request's conference, asked now. A
  * sponsor that is not there is refused as a missing one; every other answer
  * is handed back, for the Send action to refuse with and for the Send modal
  * to show.
  */
 async function decideSendForRequest(
-  conference: Parameters<typeof decideEarlyAccessSend>[0]['conference'],
   domain: string | undefined,
   sponsorForConferenceId: string,
 ): Promise<
@@ -152,7 +175,7 @@ async function decideSendForRequest(
   | { refusal: null; plan: EarlyAccessSendPlan }
 > {
   const decision = await decideEarlyAccessSend({
-    conference,
+    readConference: readConferenceLive,
     domain,
     sponsorForConferenceId,
     now: new Date(),
@@ -172,22 +195,22 @@ async function decideSendForRequest(
  * THE "WORKSHOP EARLY ACCESS" KIND of `sponsor.crm.sendCommunication` (#1347):
  * refuse, or answer how the send gets its link.
  *
- * EVERY REFUSAL IS MADE HERE, BEFORE ANYTHING IS WRITTEN OR SENT. What is
- * answered is handed to the send primitive as its `appendLate`: it creates
- * the link (or answers the stored one) only once the primitive has nothing
- * left to refuse, and builds the block and the listed link from the token
- * that is stored. When the email then fails, the link stays: it is the
- * sponsor's link, the record shows it, and the next send reuses it.
+ * EVERY REFUSAL OF THIS KIND IS MADE HERE, BEFORE ANYTHING IS WRITTEN OR
+ * SENT. What is answered is handed to the send primitive as its
+ * `appendLate`: it creates the link (or answers the stored one) only once
+ * the primitive has accepted the sponsor, the recipients and the message,
+ * and builds the block and the listed link from the token that is stored.
+ * When the email then fails (no sender, or the provider refuses), the link
+ * stays: it is the sponsor's link, the failed send is recorded with it, and
+ * the next send reuses it.
  */
 export async function prepareEarlyAccessSend(
-  conference: Parameters<typeof decideEarlyAccessSend>[0]['conference'] & {
-    theme?: ConferenceTheme | null
-  },
+  /** The request's conference, as the Send action resolved it. */
+  conference: { _id: string; theme?: ConferenceTheme | null },
   domain: string | undefined,
   sponsorForConferenceId: string,
 ) {
   const { refusal, plan } = await decideSendForRequest(
-    conference,
     domain,
     sponsorForConferenceId,
   )
@@ -256,23 +279,17 @@ export const sponsorEarlyAccessRouter = router({
    * shows: the two times, and the address of the link the sponsor already
    * has (`null`: sending creates one).
    *
-   * Finding the portal's working host is a live read. It is made here, when
-   * a send is being composed, and never by viewing a sponsor's record.
+   * TWO LIVE READS, made here, when a send is being composed, and never by
+   * viewing a sponsor's record: the conference's registration times, and
+   * the portal's working host.
    */
-  sendReadiness: workshopAdminProcedure
+  getSendReadiness: workshopAdminProcedure
     .input(SponsorOfConferenceSchema)
     .query(async ({ input }) => {
       await requireSponsor(input.sponsorForConferenceId)
-      const { conference, domain, error } =
-        await getConferenceForCurrentDomain()
-      if (error || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch conference',
-        })
-      }
+      // The host only: the times are read live by the decision.
+      const { domain } = await getConferenceForCurrentDomain()
       const { refusal, plan } = await decideSendForRequest(
-        conference,
         domain,
         input.sponsorForConferenceId,
       )

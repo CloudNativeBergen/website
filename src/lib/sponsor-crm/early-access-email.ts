@@ -15,11 +15,10 @@ import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { escapeHtml } from '@/lib/html/escape'
 import { CONFERENCE_TIME_ZONE, formatRegistrationInstant } from '@/lib/time'
+// A type only: the decision and its reasons live with the workshop code, and
+// this module stays free of anything a browser cannot load.
+import type { EarlyAccessSendRefusal } from '@/lib/workshop/early-access/send'
 import type { CommunicationAttachment } from './types'
-
-/** Why a workshop early-access email cannot be sent (spec §8). */
-export type EarlyAccessSendRefusal =
-  'localhost' | 'no-window' | 'opening-passed' | 'not-won' | 'no-portal'
 
 /** What the organizer is told, in the modal and by the server alike. */
 export const EARLY_ACCESS_SEND_REFUSALS: Record<
