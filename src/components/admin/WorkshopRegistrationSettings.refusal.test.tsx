@@ -48,6 +48,8 @@ const h = vi.hoisted(() => ({
   saves: [] as unknown[],
   /** How the server answers the next save: a refusal's text, or nothing. */
   refuseWith: null as string | null,
+  /** While set, the server answers a save only after it. */
+  hold: null as Promise<void> | null,
   refreshes: 0,
   rereadPage: () => {},
 }))
@@ -61,8 +63,19 @@ vi.mock('next/navigation', () => ({
   }),
 }))
 
+/** jsdom has no `scrollIntoView`; this records what was asked to come into view. */
+const scrolledIntoView = vi.fn<(this: Element, options?: unknown) => void>()
+
 beforeEach(() => {
-  Object.assign(h, { stored: {}, saves: [], refuseWith: null, refreshes: 0 })
+  scrolledIntoView.mockClear()
+  Element.prototype.scrollIntoView = scrolledIntoView
+  Object.assign(h, {
+    stored: {},
+    saves: [],
+    refuseWith: null,
+    hold: null,
+    refreshes: 0,
+  })
   vi.useFakeTimers({
     toFake: ['Date'],
     now: new Date('2026-05-20T12:00:00.000Z'),
@@ -77,6 +90,7 @@ beforeEach(() => {
       h.saves.push(JSON.parse(String(init?.body))['0'])
       const refusal = h.refuseWith
       h.refuseWith = null
+      await h.hold
       return new Response(
         JSON.stringify([
           refusal
@@ -155,6 +169,19 @@ describe('a save refused about a time the form does not show', () => {
       screen.getByRole('button', { name: 'Edit Workshop Registration' }),
     )
     expect(field(/Sponsor Early Access Opens/).value).toBe('')
+    // No refusal yet: nothing describes the fields but the sponsor field's help.
+    expect({
+      sponsorStart: field(/Sponsor Early Access Opens/).getAttribute(
+        'aria-describedby',
+      ),
+      start: field(/Registration Opens/).getAttribute('aria-describedby'),
+      end: field(/Registration Closes/).getAttribute('aria-describedby'),
+    }).toEqual({
+      sponsorStart: 'workshop-reg-sponsor-start-help',
+      start: null,
+      end: null,
+    })
+    expect(scrolledIntoView.mock.calls).toEqual([])
 
     // The organizer moves the opening to 30 May, before that sponsor start.
     fireEvent.change(field(/Registration Opens/), {
@@ -173,6 +200,26 @@ describe('a save refused about a time the form does not show', () => {
     // Said once, in the form, where it stays: not also in a toast, which on a
     // phone covers the fields and Save.
     expect(screen.getAllByText(REFUSAL)).toHaveLength(1)
+    // BROUGHT INTO VIEW: on a short screen the refusal is above the Save
+    // button that was just tapped. Asked of the refusal itself, once, and no
+    // further than it has to move.
+    const alert = within(screen.getByRole('dialog')).getByRole('alert')
+    expect(scrolledIntoView.mock.contexts).toEqual([alert])
+    expect(scrolledIntoView.mock.calls).toEqual([[{ block: 'nearest' }]])
+    // TIED TO THE FIELDS: each one is described by it, the sponsor field by
+    // its help text as well.
+    expect(alert.id).toBe('workshop-reg-error')
+    expect({
+      sponsorStart: field(/Sponsor Early Access Opens/).getAttribute(
+        'aria-describedby',
+      ),
+      start: field(/Registration Opens/).getAttribute('aria-describedby'),
+      end: field(/Registration Closes/).getAttribute('aria-describedby'),
+    }).toEqual({
+      sponsorStart: 'workshop-reg-sponsor-start-help workshop-reg-error',
+      start: 'workshop-reg-error',
+      end: 'workshop-reg-error',
+    })
 
     // The card was read again, once, and the form took in what is stored…
     expect(h.refreshes).toBe(1)
@@ -270,5 +317,118 @@ describe('a save that changes nothing, over a card that is out of date', () => {
     expect(h.saves).toEqual([])
     expect(h.refreshes).toBe(1)
     expect(row('Registration Opens')).toBe('21. oktober 2026 kl. 09:00')
+  })
+})
+
+/**
+ * THE FORM STAYS WHILE A SAVE IS ON ITS WAY (adversarial round 2). The
+ * refusal is shown in the form and nowhere else, so a form closed during
+ * "Saving…" (the header X, Escape or the backdrop: one `onClose`) would report
+ * a failed save nowhere. And a form closed and reopened during a save would be
+ * closed again by that save's success, discarding what was typed since.
+ *
+ * Read as a value, at once: a dialog asked to close carries `data-leave` from
+ * that moment until it is gone, so nothing here waits to see whether it goes.
+ */
+describe('closing the form while a save is pending', () => {
+  const TIMES = {
+    workshopRegistrationStart: OFFICIAL,
+    workshopRegistrationEnd: END,
+  }
+
+  function formIs(): 'open' | 'opening' | 'closing' | 'gone' {
+    const dialog = screen.queryByRole('dialog', { hidden: true })
+    if (!dialog) return 'gone'
+    if (dialog.hasAttribute('data-leave')) return 'closing'
+    return dialog.hasAttribute('data-enter') ? 'opening' : 'open'
+  }
+  const pressEscape = () =>
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+  const pressTheX = () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+
+  async function openAndMoveTheEnd() {
+    render(
+      <Providers>
+        <Page first={TIMES} />
+      </Providers>,
+    )
+    h.stored = { ...TIMES }
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit Workshop Registration' }),
+    )
+    await waitFor(() => expect(formIs()).toBe('open'))
+    fireEvent.change(field(/Registration Closes/), {
+      target: { value: '2026-07-02T10:00' },
+    })
+  }
+
+  /** The save has reached the server, which is not answering yet. */
+  async function saveAndHold(refusal: string | null) {
+    let answer = () => {}
+    h.hold = new Promise<void>((resolve) => (answer = resolve))
+    h.refuseWith = refusal
+    save()
+    await waitFor(() => expect(h.saves).toHaveLength(1))
+    return answer
+  }
+
+  it('CONTROL: with no save pending, the X closes it', async () => {
+    await openAndMoveTheEnd()
+    pressTheX()
+    expect(formIs()).toBe('closing')
+  })
+
+  it('CONTROL: with no save pending, Escape closes it', async () => {
+    await openAndMoveTheEnd()
+    pressEscape()
+    expect(formIs()).toBe('closing')
+  })
+
+  it('stays open under the X and Escape, so a save that is then refused is reported in it', async () => {
+    await openAndMoveTheEnd()
+    const answer = await saveAndHold(REFUSAL)
+
+    pressTheX()
+    expect(formIs()).toBe('open')
+    pressEscape()
+    expect(formIs()).toBe('open')
+
+    answer()
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('dialog')).getByRole('alert'),
+      ).toHaveTextContent(REFUSAL),
+    )
+    expect(formIs()).toBe('open')
+    // What was typed is still there to be corrected.
+    expect(field(/Registration Closes/).value).toBe('2026-07-02T10:00')
+  })
+
+  it('stays open under the X and Escape until the save’s success closes it', async () => {
+    await openAndMoveTheEnd()
+    const answer = await saveAndHold(null)
+
+    pressEscape()
+    expect(formIs()).toBe('open')
+    pressTheX()
+    expect(formIs()).toBe('open')
+
+    answer()
+    await waitFor(() => expect(formIs()).toBe('gone'))
+    expect(h.saves).toEqual([{ endDate: '2026-07-02T08:00:00.000Z' }])
+    expect(screen.getAllByText('Workshop Registration saved.')).toHaveLength(1)
+  })
+
+  it('can be closed again once the refusal has arrived', async () => {
+    await openAndMoveTheEnd()
+    const answer = await saveAndHold(REFUSAL)
+    answer()
+    await screen.findByRole('alert')
+
+    pressTheX()
+    expect(formIs()).toBe('closing')
   })
 })

@@ -21,6 +21,7 @@ import {
   updateVolunteerDetails,
   deleteVolunteer,
   createVolunteer,
+  recordVolunteerApprovalEmailSent,
 } from '@/lib/volunteer/sanity'
 import { VolunteerStatus } from '@/lib/volunteer/types'
 import type { VolunteerInput } from '@/lib/volunteer/types'
@@ -303,7 +304,7 @@ export const volunteerRouter = router({
 
     sendEmail: adminProcedure
       .input(SendVolunteerEmailSchema)
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         try {
           // OWNERSHIP (#858) — see `updateStatus` above. Unguarded, this read
           // any tenant's volunteer application and mailed its owner. It also
@@ -341,11 +342,15 @@ export const volunteerRouter = router({
             })
           }
 
-          let conferenceForEmail: typeof volunteer.conference =
-            volunteer.conference
-          if (!conferenceForEmail || !conferenceForEmail.contactEmail) {
+          let conferenceForEmail = volunteer.conference
+          if (
+            !conferenceForEmail ||
+            (!conferenceForEmail.contactEmail && !conferenceForEmail.cfpEmail)
+          ) {
             const { conference: currentConf, error: confError } =
-              await getConferenceForCurrentDomain()
+              await getConferenceForCurrentDomain({
+                includeVolunteerRegistrationLink: true,
+              })
             if (confError || !currentConf) {
               throw new TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
@@ -370,22 +375,30 @@ export const volunteerRouter = router({
               // moves.
               organization:
                 volunteer.conference?.organization ?? currentConf.organization,
-              contactEmail: currentConf.contactEmail,
-              cfpEmail: currentConf.cfpEmail,
-              city: currentConf.city,
-              country: currentConf.country,
-              startDate: currentConf.startDate,
-              domains: currentConf.domains,
-              organizer: currentConf.organizer,
-              socialLinks:
-                Array.isArray(currentConf.socialLinks) &&
-                currentConf.socialLinks.length > 0 &&
-                typeof currentConf.socialLinks[0] === 'object'
-                  ? (currentConf.socialLinks as unknown as Array<{
-                      platform: string
-                      url: string
-                    }>)
-                  : [],
+              contactEmail:
+                volunteer.conference?.contactEmail ?? currentConf.contactEmail,
+              cfpEmail: volunteer.conference?.cfpEmail ?? currentConf.cfpEmail,
+              city: volunteer.conference?.city ?? currentConf.city,
+              country: volunteer.conference?.country ?? currentConf.country,
+              startDate:
+                volunteer.conference?.startDate ?? currentConf.startDate,
+              domains: volunteer.conference?.domains ?? currentConf.domains,
+              organizer:
+                volunteer.conference?.organizer ?? currentConf.organizer,
+              socialLinks: Array.isArray(currentConf.socialLinks)
+                ? currentConf.socialLinks.map((link) =>
+                    typeof link === 'string'
+                      ? { platform: 'web', url: link }
+                      : (link as { platform: string; url: string }),
+                  )
+                : [],
+              theme: volunteer.conference?.theme ?? currentConf.theme,
+              volunteerRegistrationLink:
+                volunteer.conference?.volunteerRegistrationLink ??
+                currentConf.volunteerRegistrationLink,
+              volunteerSlackInviteUrl:
+                volunteer.conference?.volunteerSlackInviteUrl ??
+                currentConf.volunteerSlackInviteUrl,
             }
           }
 
@@ -394,6 +407,10 @@ export const volunteerRouter = router({
             conferenceForEmail,
             input.subject,
             input.message,
+            {
+              registrationUrl: input.ticketUrl,
+              slackInviteUrl: input.slackInviteUrl,
+            },
           )
 
           if (result.error) {
@@ -403,9 +420,25 @@ export const volunteerRouter = router({
             })
           }
 
+          let trackingRecorded = false
+          if (ctx.speaker?._id) {
+            const recordResult = await recordVolunteerApprovalEmailSent(
+              input.volunteerId,
+              ctx.speaker._id,
+            )
+            trackingRecorded = recordResult.success
+            if (!recordResult.success) {
+              console.error(
+                'Failed to record volunteer approval email sent in Sanity:',
+                recordResult.error,
+              )
+            }
+          }
+
           return {
             success: true,
             emailId: result.data?.emailId,
+            trackingRecorded,
           }
         } catch (error) {
           if (error instanceof TRPCError) throw error

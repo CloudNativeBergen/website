@@ -114,6 +114,7 @@ export default async function AdminSettings() {
     // This page EDITS the links, so it has to read the stored values back.
     includeSponsorRegistrationLink: true,
     includeSpeakerRegistrationLink: true,
+    includeVolunteerRegistrationLink: true,
   })
 
   if (error) {
@@ -558,6 +559,8 @@ export default async function AdminSettings() {
                   initialValues={{
                     registrationEnabled: conference.registrationEnabled,
                     registrationLink: conference.registrationLink,
+                    volunteerRegistrationLink:
+                      conference.volunteerRegistrationLink,
                     sponsorRegistrationLink: conference.sponsorRegistrationLink,
                     speakerRegistrationLink: conference.speakerRegistrationLink,
                   }}
@@ -572,6 +575,11 @@ export default async function AdminSettings() {
               <FieldRow
                 label="Registration Link"
                 value={conference.registrationLink}
+                type="url"
+              />
+              <FieldRow
+                label="Volunteer Registration Link"
+                value={conference.volunteerRegistrationLink}
                 type="url"
               />
               <FieldRow
@@ -791,6 +799,7 @@ export default async function AdminSettings() {
                     salesNotificationChannel:
                       conference.salesNotificationChannel,
                     cfpNotificationChannel: conference.cfpNotificationChannel,
+                    volunteerSlackInviteUrl: conference.volunteerSlackInviteUrl,
                   }}
                 />
               }
@@ -809,6 +818,11 @@ export default async function AdminSettings() {
                 label="Sponsor Email"
                 value={conference.sponsorEmail}
                 type="email"
+              />
+              <FieldRow
+                label="Volunteer Slack Invite Link"
+                value={conference.volunteerSlackInviteUrl}
+                type="url"
               />
               <FieldRow
                 label="Sales / Weekly Update Channel"

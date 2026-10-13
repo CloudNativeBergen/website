@@ -12,7 +12,7 @@ import {
   type VolunteerWithConference,
 } from '@/lib/volunteer/types'
 
-interface VolunteerEditModalProps {
+export interface VolunteerEditModalProps {
   isOpen: boolean
   onClose: () => void
   volunteer: VolunteerWithConference
