@@ -45,6 +45,21 @@ describe('SendVolunteerEmailSchema', () => {
     })
     expect(parsed.success).toBe(false)
   })
+
+  it('accepts empty string and nullish inputs, converting them to undefined', () => {
+    const parsed = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: 'You have been approved.',
+      ticketUrl: '',
+      slackInviteUrl: null,
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.ticketUrl).toBeUndefined()
+      expect(parsed.data.slackInviteUrl).toBeUndefined()
+    }
+  })
 })
 
 describe('Conference Volunteer Links Validation', () => {
@@ -69,7 +84,8 @@ describe('Conference Volunteer Links Validation', () => {
       contactEmail: 'contact@example.com',
       cfpEmail: 'cfp@example.com',
       sponsorEmail: 'sponsor@example.com',
-      volunteerSlackInviteUrl: 'https://join.slack.com/t/test/shared_invite/123',
+      volunteerSlackInviteUrl:
+        'https://join.slack.com/t/test/shared_invite/123',
     })
     expect(parsed.success).toBe(true)
   })

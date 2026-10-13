@@ -3,10 +3,7 @@
 import { useState, useMemo } from 'react'
 import { api } from '@/lib/trpc/client'
 import { formatDateTimeSafe } from '@/lib/time'
-import {
-  VolunteerStatus,
-  VolunteerWithConference,
-} from '@/lib/volunteer/types'
+import { VolunteerStatus, VolunteerWithConference } from '@/lib/volunteer/types'
 import {
   UserGroupIcon,
   EnvelopeIcon,
@@ -20,10 +17,7 @@ import {
   PaperAirplaneIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
-import {
-  FilterDropdown,
-  FilterOption,
-} from '@/components/admin/FilterDropdown'
+import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { AdminPageHeader } from '@/components/admin'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { VolunteerEditModal } from '@/components/volunteer/VolunteerEditModal'
@@ -163,7 +157,9 @@ export default function VolunteerAdminPage() {
         const query = searchQuery.toLowerCase()
         const matchesName = v.name.toLowerCase().includes(query)
         const matchesEmail = v.email.toLowerCase().includes(query)
-        const matchesPhone = v.phone ? v.phone.toLowerCase().includes(query) : false
+        const matchesPhone = v.phone
+          ? v.phone.toLowerCase().includes(query)
+          : false
         const matchesOccupation = v.occupation
           ? v.occupation.toLowerCase().includes(query)
           : false
@@ -221,13 +217,16 @@ export default function VolunteerAdminPage() {
   }) => {
     if (!emailModalVolunteer) return
 
-    // If volunteer is still pending, approve them first
-    if (emailModalVolunteer.status === VolunteerStatus.PENDING) {
+    // If volunteer is not yet approved (pending or rejected), approve them first
+    if (emailModalVolunteer.status !== VolunteerStatus.APPROVED) {
       await updateStatus.mutateAsync({
         volunteerId: emailModalVolunteer._id,
         status: VolunteerStatus.APPROVED,
         reviewNotes: pendingApprovalReviewNotes || undefined,
       })
+      setEmailModalVolunteer((prev) =>
+        prev ? { ...prev, status: VolunteerStatus.APPROVED } : null,
+      )
     }
 
     // Send the email with ticket & slack links
@@ -396,12 +395,16 @@ export default function VolunteerAdminPage() {
                           <div className="mt-1 flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400">
                             <span className="flex items-center gap-1.5 truncate">
                               <EnvelopeIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                              <span className="truncate">{volunteer.email}</span>
+                              <span className="truncate">
+                                {volunteer.email}
+                              </span>
                             </span>
                             {volunteer.phone && (
                               <span className="flex items-center gap-1.5 truncate">
                                 <PhoneIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                                <span className="truncate">{volunteer.phone}</span>
+                                <span className="truncate">
+                                  {volunteer.phone}
+                                </span>
                               </span>
                             )}
                           </div>
@@ -414,8 +417,8 @@ export default function VolunteerAdminPage() {
                         />
                       </div>
 
-                      <div className="mt-3 flex items-center justify-between gap-2 pt-2 border-t border-gray-100 text-xs text-gray-500 dark:border-gray-700/50 dark:text-gray-400">
-                        <span className="capitalize font-medium text-gray-700 dark:text-gray-300">
+                      <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-gray-700/50 dark:text-gray-400">
+                        <span className="font-medium text-gray-700 capitalize dark:text-gray-300">
                           {volunteer.occupation || 'Volunteer'}
                         </span>
                         <span>
@@ -463,8 +466,8 @@ export default function VolunteerAdminPage() {
               {/* Header & Main Actions */}
               <div className="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-start sm:justify-between dark:border-gray-700">
                 <div>
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  <div className="flex min-w-0 flex-wrap items-center gap-3">
+                    <h2 className="text-xl font-bold break-words text-gray-900 dark:text-white">
                       {selectedVolunteer.name}
                     </h2>
                     <StatusBadge
@@ -512,7 +515,7 @@ export default function VolunteerAdminPage() {
 
               {/* Contact Information */}
               <div>
-                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <h3 className="mb-3 text-sm font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">
                   Contact Information
                 </h3>
                 <div className="grid grid-cols-1 gap-4 rounded-lg bg-gray-50 p-4 sm:grid-cols-2 dark:bg-gray-900/50">
@@ -523,7 +526,7 @@ export default function VolunteerAdminPage() {
                     <div className="mt-0.5">
                       <a
                         href={`mailto:${selectedVolunteer.email}`}
-                        className="text-sm font-medium text-brand-cloud-blue hover:underline dark:text-blue-400"
+                        className="text-sm font-medium break-all text-brand-cloud-blue hover:underline dark:text-blue-400"
                       >
                         {selectedVolunteer.email}
                       </a>
@@ -543,7 +546,9 @@ export default function VolunteerAdminPage() {
                           {selectedVolunteer.phone}
                         </a>
                       ) : (
-                        <span className="text-sm text-gray-400">None provided</span>
+                        <span className="text-sm text-gray-400">
+                          None provided
+                        </span>
                       )}
                     </div>
                   </div>
@@ -552,7 +557,7 @@ export default function VolunteerAdminPage() {
 
               {/* Volunteer Preferences & Details */}
               <div>
-                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <h3 className="mb-3 text-sm font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">
                   Application Details
                 </h3>
                 <div className="space-y-4">
@@ -567,7 +572,7 @@ export default function VolunteerAdminPage() {
                         selectedVolunteer.preferredTasks.map((task, idx) => (
                           <span
                             key={idx}
-                            className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-900/30 dark:text-blue-300 dark:ring-blue-400/20"
+                            className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-700/10 ring-inset dark:bg-blue-900/30 dark:text-blue-300 dark:ring-blue-400/20"
                           >
                             {task}
                           </span>
@@ -637,7 +642,7 @@ export default function VolunteerAdminPage() {
               {/* Review History / Status Banner */}
               {selectedVolunteer.status !== VolunteerStatus.PENDING && (
                 <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  <h4 className="text-xs font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">
                     Review Information
                   </h4>
                   <div className="mt-2 space-y-1 text-sm">
@@ -667,7 +672,10 @@ export default function VolunteerAdminPage() {
                               selectedVolunteer.approvalEmailSentAt,
                             )}
                             {selectedVolunteer.approvalEmailSentBy && (
-                              <> by {selectedVolunteer.approvalEmailSentBy.name}</>
+                              <>
+                                {' '}
+                                by {selectedVolunteer.approvalEmailSentBy.name}
+                              </>
                             )}
                           </span>
                         ) : (
@@ -706,7 +714,9 @@ export default function VolunteerAdminPage() {
                     <div className="flex flex-wrap items-center gap-3">
                       {/* Primary Approve Action: Opens Approval Email Dialog */}
                       <AdminButton
-                        onClick={() => handleOpenApprovalModal(selectedVolunteer)}
+                        onClick={() =>
+                          handleOpenApprovalModal(selectedVolunteer)
+                        }
                         disabled={updateStatus.isPending}
                         variant="primary"
                         color="green"
@@ -717,7 +727,9 @@ export default function VolunteerAdminPage() {
 
                       {/* Secondary: Approve without sending email */}
                       <AdminButton
-                        onClick={() => handleStatusUpdate(VolunteerStatus.APPROVED)}
+                        onClick={() =>
+                          handleStatusUpdate(VolunteerStatus.APPROVED)
+                        }
                         disabled={updateStatus.isPending}
                         variant="secondary"
                       >
@@ -726,7 +738,9 @@ export default function VolunteerAdminPage() {
 
                       {/* Reject */}
                       <AdminButton
-                        onClick={() => handleStatusUpdate(VolunteerStatus.REJECTED)}
+                        onClick={() =>
+                          handleStatusUpdate(VolunteerStatus.REJECTED)
+                        }
                         disabled={updateStatus.isPending}
                         variant="primary"
                         color="red"
@@ -751,7 +765,9 @@ export default function VolunteerAdminPage() {
                     </AdminButton>
 
                     <AdminButton
-                      onClick={() => handleStatusUpdate(VolunteerStatus.REJECTED)}
+                      onClick={() =>
+                        handleStatusUpdate(VolunteerStatus.REJECTED)
+                      }
                       disabled={updateStatus.isPending}
                       variant="secondary"
                     >
@@ -763,7 +779,9 @@ export default function VolunteerAdminPage() {
                 {selectedVolunteer.status === VolunteerStatus.REJECTED && (
                   <div className="flex flex-wrap items-center gap-3">
                     <AdminButton
-                      onClick={() => handleStatusUpdate(VolunteerStatus.PENDING)}
+                      onClick={() =>
+                        handleStatusUpdate(VolunteerStatus.PENDING)
+                      }
                       disabled={updateStatus.isPending}
                       variant="secondary"
                     >

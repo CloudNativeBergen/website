@@ -134,7 +134,8 @@ const handlers = [
         // use default
       }
     }
-    const volunteer = mockVolunteers.find((v) => v._id === id) || mockVolunteers[0]
+    const volunteer =
+      mockVolunteers.find((v) => v._id === id) || mockVolunteers[0]
     return HttpResponse.json({ result: { data: volunteer } })
   }),
   http.post('/api/trpc/volunteer.admin.updateStatus', () =>

@@ -11,24 +11,35 @@ export const UpdateVolunteerStatusSchema = z.object({
   reviewNotes: z.string().optional(),
 })
 
+const isHttpsUrl = (val: string) => {
+  try {
+    const url = new URL(val)
+    return url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export const SendVolunteerEmailSchema = z.object({
   volunteerId: z.string(),
   subject: z.string().min(1),
   message: z.string().min(1),
   ticketUrl: z
     .string()
-    .url()
-    .refine((val) => val.startsWith('https://'), {
-      message: 'Ticket URL must be an HTTPS URL',
+    .trim()
+    .refine((val) => !val || isHttpsUrl(val), {
+      message: 'Ticket URL must be an absolute HTTPS URL',
     })
-    .optional(),
+    .nullish()
+    .transform((val) => val || undefined),
   slackInviteUrl: z
     .string()
-    .url()
-    .refine((val) => val.startsWith('https://'), {
-      message: 'Slack invite URL must be an HTTPS URL',
+    .trim()
+    .refine((val) => !val || isHttpsUrl(val), {
+      message: 'Slack invite URL must be an absolute HTTPS URL',
     })
-    .optional(),
+    .nullish()
+    .transform((val) => val || undefined),
 })
 
 export const DeleteVolunteerSchema = z.object({

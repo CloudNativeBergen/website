@@ -345,9 +345,7 @@ export const volunteerRouter = router({
           let conferenceForEmail = volunteer.conference
           if (
             !conferenceForEmail ||
-            !conferenceForEmail.contactEmail ||
-            !conferenceForEmail.volunteerRegistrationLink ||
-            !conferenceForEmail.volunteerSlackInviteUrl
+            (!conferenceForEmail.contactEmail && !conferenceForEmail.cfpEmail)
           ) {
             const { conference: currentConf, error: confError } =
               await getConferenceForCurrentDomain({
@@ -387,15 +385,13 @@ export const volunteerRouter = router({
               domains: volunteer.conference?.domains ?? currentConf.domains,
               organizer:
                 volunteer.conference?.organizer ?? currentConf.organizer,
-              socialLinks:
-                Array.isArray(currentConf.socialLinks) &&
-                currentConf.socialLinks.length > 0 &&
-                typeof currentConf.socialLinks[0] === 'object'
-                  ? (currentConf.socialLinks as unknown as Array<{
-                      platform: string
-                      url: string
-                    }>)
-                  : [],
+              socialLinks: Array.isArray(currentConf.socialLinks)
+                ? currentConf.socialLinks.map((link) =>
+                    typeof link === 'string'
+                      ? { platform: 'web', url: link }
+                      : (link as { platform: string; url: string }),
+                  )
+                : [],
               theme: volunteer.conference?.theme ?? currentConf.theme,
               volunteerRegistrationLink:
                 volunteer.conference?.volunteerRegistrationLink ??

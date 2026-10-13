@@ -35,10 +35,34 @@ export function VolunteerApprovalModal({
   const [ticketUrl, setTicketUrl] = useState(defaultTicketUrl)
   const [slackInviteUrl, setSlackInviteUrl] = useState(defaultSlackUrl)
 
+  const isHttpsUrl = (val: string) => {
+    try {
+      const url = new URL(val)
+      return url.protocol === 'https:'
+    } catch {
+      return false
+    }
+  }
+
+  const trimmedTicket = ticketUrl.trim()
+  const trimmedSlack = slackInviteUrl.trim()
+  const ticketError =
+    trimmedTicket && !isHttpsUrl(trimmedTicket)
+      ? 'Must be an absolute https:// URL'
+      : null
+  const slackError =
+    trimmedSlack && !isHttpsUrl(trimmedSlack)
+      ? 'Must be an absolute https:// URL'
+      : null
+
   const handleSend = async (data: {
     subject: string
     message: PortableTextBlock[]
   }) => {
+    if (ticketError || slackError) {
+      return
+    }
+
     const htmlMessage = portableTextToHTML(
       data.message as unknown as Parameters<typeof portableTextToHTML>[0],
     )
@@ -47,8 +71,8 @@ export function VolunteerApprovalModal({
     await onSend({
       subject: data.subject,
       message: plainTextMessage,
-      ticketUrl: ticketUrl.trim() || undefined,
-      slackInviteUrl: slackInviteUrl.trim() || undefined,
+      ticketUrl: trimmedTicket || undefined,
+      slackInviteUrl: trimmedSlack || undefined,
     })
   }
 
@@ -75,43 +99,66 @@ export function VolunteerApprovalModal({
         label: 'Links:',
         content: (
           <div className="space-y-2">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-              <label
-                htmlFor="volunteer-ticket-link"
-                className="w-24 shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400"
-              >
-                Ticket Link:
-              </label>
-              <input
-                id="volunteer-ticket-link"
-                type="url"
-                value={ticketUrl}
-                onChange={(e) => setTicketUrl(e.target.value)}
-                placeholder={
-                  defaultTicketUrl ||
-                  'Configure in Conference Settings or paste here'
-                }
-                className="flex-1 rounded border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
-              />
+            <div>
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+                <label
+                  htmlFor="volunteer-ticket-link"
+                  className="w-24 shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Ticket Link:
+                </label>
+                <input
+                  id="volunteer-ticket-link"
+                  type="url"
+                  value={ticketUrl}
+                  onChange={(e) => setTicketUrl(e.target.value)}
+                  placeholder={
+                    defaultTicketUrl ||
+                    'Configure in Conference Settings or paste here'
+                  }
+                  className={`flex-1 rounded border bg-white px-2.5 py-1 text-xs text-gray-900 placeholder-gray-400 focus:outline-none dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 ${
+                    ticketError
+                      ? 'border-red-500 focus:border-red-500'
+                      : 'border-gray-200 focus:border-brand-cloud-blue dark:border-gray-700'
+                  }`}
+                />
+              </div>
+              {ticketError && (
+                <p className="mt-0.5 pl-0 text-xs text-red-600 sm:pl-25 dark:text-red-400">
+                  {ticketError}
+                </p>
+              )}
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-              <label
-                htmlFor="volunteer-slack-link"
-                className="w-24 shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400"
-              >
-                Slack Invite:
-              </label>
-              <input
-                id="volunteer-slack-link"
-                type="url"
-                value={slackInviteUrl}
-                onChange={(e) => setSlackInviteUrl(e.target.value)}
-                placeholder={
-                  defaultSlackUrl ||
-                  'Configure in Conference Settings or paste here'
-                }
-                className="flex-1 rounded border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
-              />
+
+            <div>
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+                <label
+                  htmlFor="volunteer-slack-link"
+                  className="w-24 shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Slack Invite:
+                </label>
+                <input
+                  id="volunteer-slack-link"
+                  type="url"
+                  value={slackInviteUrl}
+                  onChange={(e) => setSlackInviteUrl(e.target.value)}
+                  placeholder={
+                    defaultSlackUrl ||
+                    'Configure in Conference Settings or paste here'
+                  }
+                  className={`flex-1 rounded border bg-white px-2.5 py-1 text-xs text-gray-900 placeholder-gray-400 focus:outline-none dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 ${
+                    slackError
+                      ? 'border-red-500 focus:border-red-500'
+                      : 'border-gray-200 focus:border-brand-cloud-blue dark:border-gray-700'
+                  }`}
+                />
+              </div>
+              {slackError && (
+                <p className="mt-0.5 pl-0 text-xs text-red-600 sm:pl-25 dark:text-red-400">
+                  {slackError}
+                </p>
+              )}
             </div>
           </div>
         ),
@@ -138,8 +185,12 @@ export function VolunteerApprovalModal({
               message={messageHTML.replace(/<[^>]*>/g, '')}
               socialLinks={socialLinks}
               brandColor={emailBrandColor(conf?.theme)}
-              registrationUrl={ticketUrl.trim() || undefined}
-              slackInviteUrl={slackInviteUrl.trim() || undefined}
+              registrationUrl={
+                !ticketError && trimmedTicket ? trimmedTicket : undefined
+              }
+              slackInviteUrl={
+                !slackError && trimmedSlack ? trimmedSlack : undefined
+              }
             />
           </div>
         )

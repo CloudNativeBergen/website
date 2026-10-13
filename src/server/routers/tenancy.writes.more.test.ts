@@ -125,7 +125,9 @@ const vol = vi.hoisted(() => ({
   updateVolunteerDetails: vi.fn(),
   deleteVolunteer: vi.fn(),
   sendVolunteerApprovalEmail: vi.fn(),
-  recordVolunteerApprovalEmailSent: vi.fn().mockResolvedValue({ success: true, error: null }),
+  recordVolunteerApprovalEmailSent: vi
+    .fn()
+    .mockResolvedValue({ success: true, error: null }),
 }))
 vi.mock('@/lib/email/volunteer', () => ({
   sendVolunteerApprovalEmail: vol.sendVolunteerApprovalEmail,

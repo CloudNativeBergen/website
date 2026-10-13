@@ -426,10 +426,16 @@ export async function getConferenceForDomain(
   if (!includeSpeakerRegistrationLink && conference?.speakerRegistrationLink) {
     delete conference.speakerRegistrationLink
   }
-  if (!includeVolunteerRegistrationLink && conference?.volunteerRegistrationLink) {
+  if (
+    !includeVolunteerRegistrationLink &&
+    conference?.volunteerRegistrationLink
+  ) {
     delete conference.volunteerRegistrationLink
   }
-  if (!includeVolunteerRegistrationLink && conference?.volunteerSlackInviteUrl) {
+  if (
+    !includeVolunteerRegistrationLink &&
+    conference?.volunteerSlackInviteUrl
+  ) {
     delete conference.volunteerSlackInviteUrl
   }
 

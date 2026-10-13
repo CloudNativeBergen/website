@@ -594,6 +594,12 @@ export default defineType({
       title: 'Volunteer Registration Link',
       type: 'string',
       fieldset: 'registration',
+      validation: (Rule) =>
+        Rule.custom((val) =>
+          !val || (typeof val === 'string' && val.startsWith('https://'))
+            ? true
+            : 'Must be an absolute https:// URL',
+        ),
       description:
         'Checkin or ticketing invite link for the complimentary volunteer ticket category. Belongs only in volunteer email, never on the public site.',
     }),
@@ -1045,6 +1051,12 @@ export default defineType({
       title: 'Volunteer Slack Invite Link',
       type: 'string',
       fieldset: 'communication',
+      validation: (Rule) =>
+        Rule.custom((val) =>
+          !val || (typeof val === 'string' && val.startsWith('https://'))
+            ? true
+            : 'Must be an absolute https:// URL',
+        ),
       description:
         'Private invitation link for volunteers to join the conference Slack workspace or channel.',
     }),

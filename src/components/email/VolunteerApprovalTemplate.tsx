@@ -86,7 +86,8 @@ export const VolunteerApprovalTemplate: React.FC<
             🎟️ Volunteer Ticket Registration
           </EmailSectionHeader>
           <EmailText size="14px" color="#64748B">
-            Please claim your complimentary volunteer ticket using the link below:
+            Please claim your complimentary volunteer ticket using the link
+            below:
           </EmailText>
           <div style={{ marginTop: '16px' }}>
             <EmailButton href={registrationUrl}>
@@ -102,11 +103,10 @@ export const VolunteerApprovalTemplate: React.FC<
           borderColor="#CBD5E1"
           borderLeftColor={brandedOr(brand, '#1D4ED8')}
         >
-          <EmailSectionHeader>
-            💬 Join Our Slack Community
-          </EmailSectionHeader>
+          <EmailSectionHeader>💬 Join Our Slack Community</EmailSectionHeader>
           <EmailText size="14px" color="#64748B">
-            Join our Slack workspace to coordinate with the organizer team and fellow volunteers:
+            Join our Slack workspace to coordinate with the organizer team and
+            fellow volunteers:
           </EmailText>
           <div style={{ marginTop: '16px' }}>
             <EmailButton href={slackInviteUrl}>
