@@ -125,7 +125,14 @@ export function WorkshopRegistrationSettings({
     setIsOpen(true)
   }
 
+  // The header X, Escape and the backdrop all arrive here (ModalShell's one
+  // `onClose`), and so does Cancel.
   const closeModal = () => {
+    // NOT WHILE A SAVE IS ON ITS WAY. Its refusal is shown in this form and
+    // nowhere else, so a form closed during "Saving…" would report a failed
+    // save nowhere; and one closed and reopened would be closed again by that
+    // save's success, with whatever was typed since.
+    if (updateRegistrationTimes.isPending) return
     setIsOpen(false)
     setError(null)
   }
