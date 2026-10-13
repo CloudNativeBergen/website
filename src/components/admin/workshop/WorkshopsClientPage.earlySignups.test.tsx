@@ -151,6 +151,11 @@ const server = {
 
 const ok = (data: unknown) => ({ result: { data } })
 
+const scrollIntoView = vi.fn()
+/** The id of each element the page brought into view, in order. */
+const broughtIntoView = () =>
+  scrollIntoView.mock.contexts.map((element) => (element as Element).id)
+
 async function answer(procedure: string, input: unknown): Promise<unknown> {
   switch (procedure) {
     case 'workshop.admin.getAllSignups':
@@ -234,6 +239,10 @@ beforeEach(() => {
   }
   router.replace.mockReset()
   router.refresh.mockReset()
+  // jsdom lays nothing out and has no `scrollIntoView`: what is asserted is
+  // WHICH element the page asks the browser to bring into view, and when.
+  scrollIntoView.mockReset()
+  Element.prototype.scrollIntoView = scrollIntoView
   realReplaceState(null, '', '/admin/workshops')
   vi.spyOn(window.history, 'replaceState').mockImplementation(
     (_state, _unused, address) => setAddress(String(address)),
@@ -533,6 +542,96 @@ describe('the "Early sign-ups" list on the page', () => {
           ),
       ).toEqual(['Gus Grissom', 'Cy Young']),
     )
+  })
+})
+
+/**
+ * THE COUNT'S LINK ENDS AT THE LIST, NOT AT THE TOP OF THE PAGE (#1348,
+ * review round 2). The list is the last section of the page, and Next applies
+ * a link's fragment once, at the first commit of the navigation, which is the
+ * route's loading state: the section is not there yet (or is hidden, on a page
+ * Next kept). So the page brings the list into view itself, when the address
+ * carries the list's fragment.
+ */
+describe('arriving with the list’s fragment in the address', () => {
+  it('brings the list’s section into view', async () => {
+    renderPage('/admin/workshops?earlySponsor=sfc-acme#early-sign-ups')
+    await waitFor(() => expect(rows()).toHaveLength(2))
+
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
+    expect(scrollIntoView.mock.contexts[0]).toBe(list())
+  })
+
+  it('does so without a sponsor too', async () => {
+    renderPage('/admin/workshops#early-sign-ups')
+    await waitFor(() => expect(rows()).toHaveLength(3))
+
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
+  })
+
+  it.each([
+    ['an ordinary view', '/admin/workshops'],
+    [
+      'a sponsor in the address and no fragment',
+      '/admin/workshops?earlySponsor=sfc-acme',
+    ],
+    [
+      'another section’s fragment',
+      '/admin/workshops?earlySponsor=sfc-acme#workshop-tickets',
+    ],
+  ])('moves nothing for %s', async (_case, address) => {
+    renderPage(address)
+    await waitFor(() => expect(within(list()).getByRole('table')).toBeVisible())
+
+    expect(broughtIntoView()).toEqual([])
+  })
+
+  it('brings it into view AGAIN when a page that stayed mounted is opened for another sponsor', async () => {
+    renderPage('/admin/workshops?earlySponsor=sfc-acme#early-sign-ups')
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
+
+    arriveAt('/admin/workshops?earlySponsor=sfc-globex#early-sign-ups')
+    await waitFor(() => expect(rows()).toHaveLength(1))
+
+    expect(broughtIntoView()).toEqual(['early-sign-ups', 'early-sign-ups'])
+  })
+
+  it('brings it into view when a page first seen without the fragment is opened by the count’s link', async () => {
+    renderPage()
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(broughtIntoView()).toEqual([])
+
+    arriveAt('/admin/workshops?earlySponsor=sfc-globex#early-sign-ups')
+    await waitFor(() => expect(rows()).toHaveLength(1))
+
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
+  })
+
+  it('moves nothing when the organizer narrows with the control: they are at the list already', async () => {
+    renderPage()
+    await waitFor(() => expect(rows()).toHaveLength(3))
+
+    narrowTo('sfc-acme')
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    // The address now carries the fragment, written by the control.
+    expect(window.location.hash).toBe('#early-sign-ups')
+    narrowTo('')
+    await waitFor(() => expect(rows()).toHaveLength(3))
+
+    expect(broughtIntoView()).toEqual([])
+  })
+
+  it('still follows the count’s link after the control was used', async () => {
+    renderPage()
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    narrowTo('sfc-acme')
+    await waitFor(() => expect(rows()).toHaveLength(2))
+
+    arriveAt('/admin/workshops?earlySponsor=sfc-globex#early-sign-ups')
+    await waitFor(() => expect(rows()).toHaveLength(1))
+
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
   })
 })
 

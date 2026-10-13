@@ -31,6 +31,7 @@ import {
   EarlySignupsList,
   EARLY_SIGNUPS_ANCHOR,
   EARLY_SPONSOR_PARAM,
+  useBringEarlySignupsIntoView,
 } from './early-signups'
 import { workshopEarlySignupsSchema } from '@/server/schemas/workshop'
 import { useSearchParams } from 'next/navigation'
@@ -164,12 +165,17 @@ export function WorkshopsClientPage({
       placeholderData: keepPreviousData,
     },
   )
+  // The count's link carries the list's fragment, and the list is the last
+  // section of the page: it is brought into view (see the hook for why Next
+  // does not).
+  const { narrowedHere } = useBringEarlySignupsIntoView(earlySponsorId)
   const narrowEarlySignups = (sponsorId: string | null) => {
+    narrowedHere()
     // Written to the address, which `useSearchParams` above follows. Through
     // the History API, not the router: a navigation would render this page on
     // the server again, and its reads are live. Narrowed, the address is the
     // one the count's link has, anchor included, so a reload shows the same
-    // list and scrolls to it. Everything else in the address is kept.
+    // list and brings it into view. Everything else in the address is kept.
     const url = new URL(window.location.href)
     if (sponsorId) {
       url.searchParams.set(EARLY_SPONSOR_PARAM, sponsorId)
