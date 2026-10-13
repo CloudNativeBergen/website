@@ -330,8 +330,9 @@ const LIST = [
   signup('su-foreign', { via: 'sfc-theirs', at: '2026-06-09T08:02:00Z' }),
   signup('su-gus', { via: 'sfc-globex', at: '2026-06-09T08:01:00Z' }),
   // Neither a seat nor a place in line: no sign-up is stored like this today.
+  // Through a sponsor nobody else signed up through.
   signup('su-void', {
-    via: 'sfc-acme',
+    via: 'sfc-quiet',
     status: 'cancelled',
     at: '2026-06-09T08:00:30Z',
   }),
@@ -350,6 +351,8 @@ const LIST = [
     workshop: 'ws-theirs',
     via: 'sfc-theirs-other',
   }),
+  // Theirs, through a sponsor of THIS conference that none of ours used.
+  signup('su-theirs-quiet', { conf: OTHER_CONF, via: 'sfc-quiet' }),
   // Theirs, pointing at this conference's workshop and sponsor.
   signup('su-theirs-crossed', { conf: OTHER_CONF, via: 'sfc-acme' }),
 ]
@@ -455,6 +458,22 @@ describe('the list of early sign-ups (workshop.admin.listEarlySignups)', () => {
 
     expect(foreign).toEqual({ signups: [], sponsors: [ACME, GLOBEX] })
     expect(missing).toEqual({ signups: [], sponsors: [ACME, GLOBEX] })
+  })
+
+  it('reads every match: 130 early sign-ups through one sponsor are 130 rows', async () => {
+    store().reset([
+      ...BASE,
+      ...Array.from({ length: 130 }, (_, n) =>
+        signup(`su-many-${n}`, { via: 'sfc-globex' }),
+      ),
+    ])
+
+    const { signups } = await caller().admin.listEarlySignups({
+      sponsorId: 'sfc-globex',
+    })
+
+    expect(signups).toHaveLength(130)
+    expect(new Set(signups.map((row) => row._id)).size).toBe(130)
   })
 
   it('makes one read', async () => {

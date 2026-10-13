@@ -19,6 +19,23 @@ import type {
   SponsorTag,
 } from './types'
 
+/**
+ * How many early sign-ups were made through this sponsor's workshop
+ * early-access links (#1348, spec §9), as a field of the sponsor's record: it
+ * rides the read that already fetches the record, so it costs none of its own.
+ *
+ * Sign-ups, not people. Confirmed and waitlisted together, the only two
+ * statuses a sign-up is stored with: the same filter as the "Early sign-ups"
+ * list (`listEarlySignups`), so the count is the number of rows that list
+ * shows for this sponsor. A sign-up records the sponsor, not the link, so the
+ * ones made through a link revoked since are counted too.
+ *
+ * ONLY SIGN-UPS OF THE SPONSOR'S OWN CONFERENCE: a sign-up of another
+ * conference that names this sponsor (a bad write) is not this conference's.
+ */
+// groq-global-scoped: correlated to the sponsor it is projected on (`conference._ref == ^.conference._ref`); every read that carries these fields reads sponsors of one conference.
+const EARLY_SIGNUP_COUNT = `count(*[_type == "workshopSignup" && conference._ref == ^.conference._ref && earlyAccessSponsor._ref == ^._id && status in ["confirmed", "waitlist"]])`
+
 const SPONSOR_FOR_CONFERENCE_FIELDS = `
   _id,
   _rev,
@@ -136,6 +153,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   registrationComplete,
   registrationCompletedAt,
   "hasWorkshopEarlyAccessLink": defined(workshopEarlyAccessToken),
+  "workshopEarlySignupCount": ${EARLY_SIGNUP_COUNT},
   nextFollowUpAt,
   outreachCount,
   "lastActivity": *[_type == "sponsorActivity" && sponsorForConference._ref == ^._id] | order(createdAt desc)[0]{
