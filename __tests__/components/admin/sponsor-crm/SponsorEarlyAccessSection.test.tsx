@@ -218,6 +218,184 @@ describe('keyboard focus and what is announced', () => {
 
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
+
+  it('a successful copy is announced: "Link copied"', async () => {
+    render(section({ hasLink: true }))
+
+    await act(async () => press('Copy link'))
+
+    expect(screen.getByRole('status')).toHaveTextContent('Link copied')
+  })
+})
+
+/**
+ * A LIVE REGION SPEAKS ONLY WHEN ITS TEXT CHANGES. An action that ends with
+ * the words that are already there (a retry that leaves the same copy
+ * behind, a second identical refusal, a second "Link revoked") would be
+ * silent. So what the last action said leaves when the next one STARTS, and
+ * the answer is put there anew. These tests hold the server's answer back to
+ * look at the section in between.
+ */
+describe('what is said while an action runs, and after it', () => {
+  const button = (name: string) => screen.getByRole('button', { name })
+  const press = (name: string) => {
+    button(name).focus()
+    fireEvent.click(button(name))
+  }
+  const OWN_COPY = 'versions.rSpring.sfc-1'
+  /** Hold the next answer of `mutation` back; `answer()` lets it through. */
+  function heldBack(mutation: typeof h.create) {
+    let options: Options | undefined
+    mutation.mockImplementationOnce((_input, given: Options) => {
+      options = given
+    })
+    return {
+      succeed: (data: unknown) =>
+        act(() => options?.onSuccess?.(data as never)),
+      fail: (message: string) => act(() => options?.onError?.({ message })),
+    }
+  }
+  const said = () => ({
+    status: screen.getByRole('status').textContent,
+    alerts: screen.queryAllByRole('alert').map((alert) => alert.textContent),
+  })
+
+  it('a second identical refusal: the first leaves when Create link is pressed again, and the answer is said anew', () => {
+    const REFUSAL = 'This conference has no working workshop portal.'
+    h.create.mockImplementationOnce((_input, options: Options) =>
+      options.onError?.({ message: REFUSAL }),
+    )
+    render(section({ hasLink: false }))
+    press('Create link')
+    expect(said().alerts).toEqual([REFUSAL])
+
+    const answer = heldBack(h.create)
+    press('Create link')
+    expect(said()).toEqual({ status: '', alerts: [] })
+
+    answer.fail(REFUSAL)
+    expect(said().alerts).toEqual([REFUSAL])
+  })
+
+  describe('Try again after a revoke that left a copy', () => {
+    const revokedLeavingACopy = () => {
+      h.revoke.mockImplementationOnce((_input, options: Options) =>
+        options.onSuccess?.({
+          success: true,
+          notCleared: [OWN_COPY],
+        } as never),
+      )
+      render(section({ hasLink: true }))
+      press('Revoke')
+      press('Revoke link')
+      expect(said().status).toBe('Link revoked')
+      expect(said().alerts).toHaveLength(1)
+    }
+
+    it('while it runs, the warning and the announcement are gone, and the button keeps the keyboard', () => {
+      revokedLeavingACopy()
+      heldBack(h.revoke)
+
+      press('Try again')
+
+      expect(said()).toEqual({ status: '', alerts: [] })
+      expect(document.activeElement).toBe(button('Trying…'))
+    })
+
+    it('one that leaves the copy still: the same warning is said anew, and focus stays on Try again', () => {
+      revokedLeavingACopy()
+      const [warning] = said().alerts
+      const answer = heldBack(h.revoke)
+      press('Try again')
+
+      answer.succeed({ success: true, notCleared: [OWN_COPY] })
+
+      expect(said()).toEqual({ status: 'Link revoked', alerts: [warning] })
+      expect(document.activeElement).toBe(button('Try again'))
+    })
+
+    it('one that clears it: "Link revoked" is said anew, and focus is on the heading, not on Create link', () => {
+      revokedLeavingACopy()
+      const answer = heldBack(h.revoke)
+      press('Try again')
+
+      answer.succeed({ success: true, notCleared: [] })
+
+      expect(said()).toEqual({ status: 'Link revoked', alerts: [] })
+      // A second Enter must not create a new link.
+      expect(document.activeElement).toBe(
+        screen.getByRole('heading', { name: 'Workshop early access' }),
+      )
+    })
+
+    it('one that fails: the reason is said, and the warning is back', () => {
+      revokedLeavingACopy()
+      const [warning] = said().alerts
+      const answer = heldBack(h.revoke)
+      press('Try again')
+
+      answer.fail('Sanity is not answering.')
+
+      expect(said().alerts).toEqual([warning, 'Sanity is not answering.'])
+      expect(document.activeElement).toBe(button('Try again'))
+    })
+  })
+
+  describe('Try again after a create that left a copy behind', () => {
+    const createdLeavingACopy = () => {
+      h.create.mockImplementationOnce((_input, options: Options) =>
+        options.onSuccess?.({
+          url: URL_OF_LINK,
+          notWritten: [OWN_COPY],
+        } as never),
+      )
+      render(section({ hasLink: false }))
+      press('Create link')
+      expect(said().status).toBe('Link created')
+    }
+
+    it('one that leaves the copy behind still: the warning is said anew, and focus stays on Try again', () => {
+      createdLeavingACopy()
+      const [warning] = said().alerts
+      const answer = heldBack(h.create)
+      press('Try again')
+      expect(said()).toEqual({ status: '', alerts: [] })
+
+      answer.succeed({ url: URL_OF_LINK, notWritten: [OWN_COPY] })
+
+      expect(said()).toEqual({ status: 'Link created', alerts: [warning] })
+      expect(document.activeElement).toBe(button('Try again'))
+    })
+
+    it('one that brings every copy in step: focus is on Copy link', () => {
+      createdLeavingACopy()
+      const answer = heldBack(h.create)
+      press('Try again')
+
+      answer.succeed({ url: URL_OF_LINK, notWritten: [] })
+
+      expect(said()).toEqual({ status: 'Link created', alerts: [] })
+      expect(document.activeElement).toBe(button('Copy link'))
+    })
+  })
+
+  it('a copy clears what was said before it starts', async () => {
+    render(section({ hasLink: false }))
+    press('Create link')
+    expect(said().status).toBe('Link created')
+    let arrive: (answer: { url: string }) => void = () => {}
+    h.address.mockReturnValue(
+      new Promise((resolve) => {
+        arrive = resolve
+      }),
+    )
+
+    press('Copy link')
+    expect(said().status).toBe('')
+
+    await act(async () => arrive({ url: URL_OF_LINK }))
+    expect(said().status).toBe('Link copied')
+  })
 })
 
 describe('a sponsor without a link', () => {

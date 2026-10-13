@@ -62,7 +62,16 @@ export function SponsorEarlyAccessSection({
   onChanged,
 }: SponsorEarlyAccessSectionProps) {
   const utils = api.useUtils()
-  const clipboard = useCopyToClipboard()
+  /**
+   * What just happened, for a screen reader: said politely. A live region
+   * speaks only when its text CHANGES, so this is emptied when the next
+   * action starts (`start`), and an action that ends with the same words is
+   * heard again.
+   */
+  const [announcement, setAnnouncement] = useState('')
+  const clipboard = useCopyToClipboard({
+    onSuccess: () => setAnnouncement('Link copied'),
+  })
   // WHAT THIS SECTION DID since the record was read, until the record is read
   // again. `record` is the record as it stood then: whether it has a link,
   // and when it last changed. A create or a revoke changes the sponsor, so
@@ -119,7 +128,9 @@ export function SponsorEarlyAccessSection({
   const copyButton = useRef<HTMLButtonElement>(null)
   const revokeButton = useRef<HTMLButtonElement>(null)
   const keepButton = useRef<HTMLButtonElement>(null)
-  const focusNext = useRef<'create' | 'copy' | 'revoke' | 'keep' | null>(null)
+  const focusNext = useRef<
+    'create' | 'copy' | 'revoke' | 'keep' | 'heading' | null
+  >(null)
   // A copy found the link gone. Copy link disappears only when the host has
   // read the record again; if that leaves the keyboard nowhere, Create link
   // (or the heading) takes it. Focus the organizer has moved is left alone.
@@ -139,11 +150,22 @@ export function SponsorEarlyAccessSection({
       copy: copyButton,
       revoke: revokeButton,
       keep: keepButton,
+      heading,
     }[next]
     ;(control.current ?? heading.current)?.focus()
   })
-  /** What just happened, for a screen reader: said politely, once. */
-  const [announcement, setAnnouncement] = useState('')
+  // A create or a revoke is on its way. What the last action said is taken
+  // off the page for that time, the warning about copies included, so that
+  // the answer is said anew even when it is the same answer. `retry`: it was
+  // started from "Try again", which decides where the keyboard goes after.
+  const [acting, setActing] = useState(false)
+  const startedByRetry = useRef(false)
+  const start = (retry: boolean) => {
+    startedByRetry.current = retry
+    setActing(true)
+    setAnnouncement('')
+    setError(null)
+  }
 
   const create = api.sponsor.crm.earlyAccess.create.useMutation({
     onSuccess: (data) => {
@@ -153,12 +175,20 @@ export function SponsorEarlyAccessSection({
         url: data.url,
         behind: data.notWritten,
       }))
+      setActing(false)
       setError(null)
       setAnnouncement('Link created')
-      focusNext.current = 'copy'
+      // After "Try again" with a copy still behind, the keyboard stays on
+      // "Try again". Otherwise the pressed button is gone: Copy link.
+      if (!(startedByRetry.current && data.notWritten.length > 0)) {
+        focusNext.current = 'copy'
+      }
       onChanged?.()
     },
-    onError: (failure) => setError(failure.message),
+    onError: (failure) => {
+      setActing(false)
+      setError(failure.message)
+    },
   })
   const revoke = api.sponsor.crm.earlyAccess.revoke.useMutation({
     onSuccess: (data) => {
@@ -170,16 +200,26 @@ export function SponsorEarlyAccessSection({
       }))
       setConfirming(false)
       clipboard.reset()
+      setActing(false)
       setError(null)
       setAnnouncement('Link revoked')
-      focusNext.current = 'create'
+      // After "Try again": on it while a copy is left, and on the heading
+      // when none is. NOT on Create link: a second Enter there would create
+      // a new link. After the confirmation, where one press was asked for
+      // twice already, Create link takes the place of what was pressed.
+      if (!startedByRetry.current) focusNext.current = 'create'
+      else if (data.notCleared.length === 0) focusNext.current = 'heading'
       onChanged?.()
     },
-    onError: (failure) => setError(failure.message),
+    onError: (failure) => {
+      setActing(false)
+      setError(failure.message)
+    },
   })
 
   const copy = async () => {
     setError(null)
+    setAnnouncement('')
     setFetching(true)
     linkFoundGone.current = false
     // ASKED FOR ON EVERY COPY, never reused: a colleague may have revoked the
@@ -210,7 +250,7 @@ export function SponsorEarlyAccessSection({
   // is the error above, not a failed copy.
   const copyFailed = clipboard.failed && !fetching && !error
 
-  const busy = create.isPending || revoke.isPending || fetching
+  const busy = acting || create.isPending || revoke.isPending || fetching
   // A press while something is in flight does nothing: every handler below
   // starts with this check, since `aria-disabled` alone stops no click.
 
@@ -247,7 +287,9 @@ export function SponsorEarlyAccessSection({
               ref={createButton}
               type="button"
               onClick={() => {
-                if (!busy) create.mutate({ sponsorForConferenceId })
+                if (busy) return
+                start(false)
+                create.mutate({ sponsorForConferenceId })
               }}
               aria-disabled={busy}
               className={quietButton}
@@ -296,7 +338,9 @@ export function SponsorEarlyAccessSection({
                 <button
                   type="button"
                   onClick={() => {
-                    if (!busy) revoke.mutate({ sponsorForConferenceId })
+                    if (busy) return
+                    start(false)
+                    revoke.mutate({ sponsorForConferenceId })
                   }}
                   aria-disabled={busy}
                   className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
@@ -368,26 +412,30 @@ export function SponsorEarlyAccessSection({
       )}
       {outOfStep > 0 && (
         <>
-          <p
-            role="alert"
-            className="mt-2 text-xs text-amber-700 dark:text-amber-400"
-          >
-            {linked ? (
-              <>
-                The link works, but {outOfStep} unpublished{' '}
-                {outOfStep === 1 ? 'copy' : 'copies'} of this sponsor in Sanity
-                Studio did not get it. Publishing{' '}
-                {outOfStep === 1 ? 'it' : 'one of them'} would remove the link.
-                Try again, or discard {outOfStep === 1 ? 'it' : 'them'} in
-                Studio.
-              </>
-            ) : (
-              <LeftAfterRevoke
-                copies={behind}
-                sponsorForConferenceId={sponsorForConferenceId}
-              />
-            )}
-          </p>
+          {/* Taken off the page while a retry runs, and put back with its
+              answer: said anew also when it is word for word the same. */}
+          {!acting && (
+            <p
+              role="alert"
+              className="mt-2 text-xs text-amber-700 dark:text-amber-400"
+            >
+              {linked ? (
+                <>
+                  The link works, but {outOfStep} unpublished{' '}
+                  {outOfStep === 1 ? 'copy' : 'copies'} of this sponsor in
+                  Sanity Studio did not get it. Publishing{' '}
+                  {outOfStep === 1 ? 'it' : 'one of them'} would remove the
+                  link. Try again, or discard {outOfStep === 1 ? 'it' : 'them'}{' '}
+                  in Studio.
+                </>
+              ) : (
+                <LeftAfterRevoke
+                  copies={behind}
+                  sponsorForConferenceId={sponsorForConferenceId}
+                />
+              )}
+            </p>
+          )}
           {/* Beside the warning, not inside it: a button is not part of what
               is announced. With a link, create writes the STORED link to
               every copy (the address handed out stays the same); without
@@ -398,6 +446,7 @@ export function SponsorEarlyAccessSection({
             type="button"
             onClick={() => {
               if (busy) return
+              start(true)
               if (linked) create.mutate({ sponsorForConferenceId })
               else
                 revoke.mutate({
@@ -408,7 +457,7 @@ export function SponsorEarlyAccessSection({
             aria-disabled={busy}
             className={`${quietButton} mt-2`}
           >
-            {create.isPending || revoke.isPending ? 'Trying…' : 'Try again'}
+            {acting ? 'Trying…' : 'Try again'}
           </button>
         </>
       )}
