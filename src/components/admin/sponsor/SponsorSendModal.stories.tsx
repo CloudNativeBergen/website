@@ -1112,6 +1112,55 @@ export const EarlyAccessRefused: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
     await expect(await body.findByRole('alert')).toHaveTextContent(NO_WINDOW)
+    // Send is held, so the way out is in the notice: ask again, after the
+    // organizer has set the time in another tab.
+    await expect(
+      body.getByRole('button', { name: 'Check again' }),
+    ).toBeInTheDocument()
+  },
+}
+
+/**
+ * The server could not be asked (here: it answers with an error). Nothing is
+ * known, so Send is held, and the notice offers "Check again": the question
+ * is asked once per open and never retried by itself.
+ */
+export const EarlyAccessNotChecked: Story = {
+  args: { kind: 'workshop-early-access', sponsorForConference: wonSponsor },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/sponsor.crm.earlyAccess.getSendReadiness', () =>
+          HttpResponse.json(
+            { error: { message: 'Failed to fetch conference', code: -32603 } },
+            { status: 500 },
+          ),
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(await body.findByRole('alert')).toHaveTextContent(
+      'Could not check whether early access can be sent: Failed to fetch conference',
+    )
+    await expect(
+      body.getByRole('button', { name: 'Check again' }),
+    ).toBeInTheDocument()
+  },
+}
+
+export const EarlyAccessNotCheckedDark: Story = {
+  ...EarlyAccessNotChecked,
+  globals: { theme: 'dark' },
+}
+
+export const EarlyAccessNotCheckedMobile: Story = {
+  ...EarlyAccessNotChecked,
+  parameters: {
+    ...EarlyAccessNotChecked.parameters,
+    viewport: { value: 'mobile1', isRotated: false },
   },
 }
 
