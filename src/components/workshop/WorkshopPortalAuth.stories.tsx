@@ -74,6 +74,37 @@ export const SignInIncompleteMobile: Story = {
   },
 }
 
+/**
+ * Just opened an early-access link that is not live (#1346), signed out: the
+ * one notice, and nothing else about early access.
+ */
+export const EarlyAccessLinkNotLive: Story = {
+  args: { earlyAccessInvalid: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('status')).toHaveTextContent(
+      'This early access link is no longer valid',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Sign In' }),
+    ).toBeInTheDocument()
+  },
+}
+
+export const EarlyAccessLinkNotLiveDark: Story = {
+  args: { earlyAccessInvalid: true },
+  parameters: { dark: true },
+}
+
+export const EarlyAccessLinkNotLiveMobile: Story = {
+  args: { earlyAccessInvalid: true },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    const page = canvasElement.ownerDocument.documentElement
+    await expect(page.scrollWidth).toBeLessThanOrEqual(page.clientWidth)
+  },
+}
+
 /** A long conference name, on a phone: the buttons must not overflow. */
 export const SignedOutLongTitleMobile: Story = {
   args: {

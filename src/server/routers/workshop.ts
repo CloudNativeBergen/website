@@ -620,12 +620,10 @@ export const workshopRouter = router({
               ? WorkshopSignupStatus.WAITLIST
               : WorkshopSignupStatus.CONFIRMED,
           },
-          // AN EARLY SIGN-UP records the sponsor whose link admitted it: one
-          // made inside the early-access window. A sign-up after the official
-          // opening records nothing, cookie or not.
-          registration.early && sponsor
-            ? { earlyAccessSponsorId: sponsor._id }
-            : {},
+          // AN EARLY SIGN-UP records the sponsor whose link admitted it. A
+          // sponsor was looked up only inside the early-access window, so a
+          // sign-up after the official opening records nothing, cookie or not.
+          sponsor ? { earlyAccessSponsorId: sponsor._id } : {},
         )
 
         await sendBasicWorkshopConfirmation({
