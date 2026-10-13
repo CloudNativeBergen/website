@@ -1393,7 +1393,7 @@ export const workshopRouter = router({
             throw new TRPCError({
               code: 'CONFLICT',
               message:
-                'The registration times were changed while you were saving, so nothing was saved. Check the times now shown and try again.',
+                'The registration times were changed while you were saving, so nothing was saved. Review the times and try again.',
             })
           }
 

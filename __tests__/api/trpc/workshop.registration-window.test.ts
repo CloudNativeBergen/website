@@ -710,7 +710,7 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
     const CHANGED_MEANWHILE = {
       code: 'CONFLICT',
       message:
-        'The registration times were changed while you were saving, so nothing was saved. Check the times now shown and try again.',
+        'The registration times were changed while you were saving, so nothing was saved. Review the times and try again.',
     }
 
     it('conditions its patch on the revision the times were read at', async () => {
