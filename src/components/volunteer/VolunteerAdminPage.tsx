@@ -81,9 +81,9 @@ export default function VolunteerAdminPage() {
     onSuccess: async (_, variables) => {
       await Promise.all([
         utils.volunteer.admin.list.invalidate(),
-        selectedVolunteerId
+        variables.volunteerId
           ? utils.volunteer.admin.getById.invalidate({
-              id: selectedVolunteerId,
+              id: variables.volunteerId,
             })
           : Promise.resolve(),
       ])
@@ -103,14 +103,14 @@ export default function VolunteerAdminPage() {
   })
 
   const sendEmail = api.volunteer.admin.sendEmail.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (data, variables) => {
       setEmailModalOpen(false)
       setEmailModalVolunteer(null)
       await Promise.all([
         utils.volunteer.admin.list.invalidate(),
-        selectedVolunteerId
+        variables.volunteerId
           ? utils.volunteer.admin.getById.invalidate({
-              id: selectedVolunteerId,
+              id: variables.volunteerId,
             })
           : Promise.resolve(),
       ])
@@ -118,20 +118,30 @@ export default function VolunteerAdminPage() {
         type: 'success',
         title: 'Approval email sent successfully',
       })
-    },
-    onError: (err) => {
-      notify?.showNotification({
-        type: 'error',
-        title: 'Failed to send approval email',
-        message: err.message,
-      })
+      if (data?.trackingRecorded === false) {
+        notify?.showNotification({
+          type: 'warning',
+          title: 'Email sent, but tracking not recorded',
+          message:
+            'The approval email was delivered, but recording the sent timestamp on the volunteer record failed.',
+        })
+      }
     },
   })
 
   const deleteVolunteer = api.volunteer.admin.delete.useMutation({
-    onSuccess: async () => {
-      await utils.volunteer.admin.list.invalidate()
-      setSelectedVolunteerId(null)
+    onSuccess: async (_, variables) => {
+      await Promise.all([
+        utils.volunteer.admin.list.invalidate(),
+        variables.volunteerId
+          ? utils.volunteer.admin.getById.invalidate({
+              id: variables.volunteerId,
+            })
+          : Promise.resolve(),
+      ])
+      if (selectedVolunteerId === variables.volunteerId) {
+        setSelectedVolunteerId(null)
+      }
       setDeleteVolunteerId(null)
       notify?.showNotification({
         type: 'success',
