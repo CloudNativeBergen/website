@@ -5,7 +5,7 @@
  * `docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md` §8).
  *
  * The modal decides nothing about whether the link may be sent: it asks the
- * server (`sponsor.crm.earlyAccess.sendReadiness`, the decision the Send
+ * server (`sponsor.crm.earlyAccess.getSendReadiness`, the decision the Send
  * action itself refuses with) and shows the answer. So what is pinned here
  * is that it ASKS only on this kind, SHOWS the answer in the server's words,
  * and POSTS nothing while the answer is a refusal or is not known.
@@ -27,7 +27,7 @@ import { mockContactPerson, mockSponsor } from '@/__mocks__/sponsor-data'
 const h = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
   showNotification: vi.fn(),
-  /** What `earlyAccess.sendReadiness` answers, and how it was asked. */
+  /** What `earlyAccess.getSendReadiness` answers, and how it was asked. */
   readiness: {} as {
     data?: unknown
     isLoading?: boolean
@@ -36,6 +36,8 @@ const h = vi.hoisted(() => ({
     error?: { message: string }
   },
   readinessAsked: [] as Array<{ input: unknown; options: unknown }>,
+  /** The modal asked the server again (`refetch`). */
+  refetch: vi.fn(),
   templates: [] as unknown[],
   /** Any other query or mutation of the other kinds that was reached. */
   otherKindsAsked: [] as string[],
@@ -66,10 +68,10 @@ vi.mock('@/lib/trpc/client', () => ({
           },
         },
         earlyAccess: {
-          sendReadiness: {
+          getSendReadiness: {
             useQuery: (input: unknown, options: unknown) => {
               h.readinessAsked.push({ input, options })
-              return h.readiness
+              return { ...h.readiness, refetch: h.refetch }
             },
           },
         },
@@ -212,7 +214,7 @@ const READY = {
   sponsorStart: '2026-09-24T08:00:00.000Z',
   officialOpening: '2026-10-01T08:00:00.000Z',
 }
-/** The server's words for each reason, as `sendReadiness` hands them over. */
+/** The server's words for each reason, as `getSendReadiness` hands them over. */
 const REFUSALS = [
   [
     'localhost',
@@ -236,6 +238,27 @@ const REFUSALS = [
   ],
 ] as const
 
+/** What an organization may have flagged as its default templates. */
+const DEFAULT_TEMPLATE = {
+  _id: 'tpl-default',
+  _createdAt: '',
+  _updatedAt: '',
+  title: 'Follow-up',
+  slug: { current: 'follow-up' },
+  category: 'follow-up',
+  language: 'en',
+  subject: 'Sponsor news',
+  isDefault: true,
+}
+const DEFAULT_CONTRACT_TEMPLATE = {
+  ...DEFAULT_TEMPLATE,
+  _id: 'tpl-contract',
+  title: 'Contract',
+  slug: { current: 'contract-sent' },
+  category: 'contract',
+  subject: 'Your agreement',
+}
+
 const contacts = [
   mockContactPerson({
     _key: 'c-primary',
@@ -250,11 +273,11 @@ const contacts = [
   }),
 ]
 
-function renderModal(
+function modal(
   kind: SendableKind = 'workshop-early-access',
   props: { isOpen?: boolean; onSent?: () => void } = {},
 ) {
-  return render(
+  return (
     <SponsorSendModal
       isOpen={props.isOpen ?? true}
       kind={kind}
@@ -274,9 +297,11 @@ function renderModal(
         startDate: '2026-10-28',
         domains: ['conf.example.org'],
       }}
-    />,
+    />
   )
 }
+const renderModal = (...args: Parameters<typeof modal>) =>
+  render(modal(...args))
 
 const pressSend = () =>
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -334,7 +359,14 @@ describe('asking the server', () => {
 })
 
 describe('a send that may go ahead', () => {
-  it('is titled for the kind and starts from the built-in text, with no template', () => {
+  it('is titled for the kind and starts from the built-in text, with no template, though the organization has defaults', () => {
+    h.templates = [DEFAULT_TEMPLATE, DEFAULT_CONTRACT_TEMPLATE]
+    // The same templates on an information send: one IS preselected.
+    renderModal('information')
+    expect(screen.getByTestId('template')).toHaveTextContent('tpl-default')
+    expect(screen.getByTestId('subject')).toHaveTextContent('Sponsor news')
+    cleanup()
+
     renderModal()
 
     expect(
@@ -527,6 +559,62 @@ describe('a send that is refused', () => {
       }),
     )
     expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('a modal left open while the answer changed', () => {
+  const OPENING_PASSED = REFUSALS[2][1]
+
+  it('asks the server again when the send is refused, and then holds Send with the refusal', async () => {
+    // The official opening passed after the modal opened: it still says
+    // "ready", and only the server knows better.
+    h.mutateAsync.mockRejectedValue(new Error(OPENING_PASSED))
+    const { rerender } = renderModal()
+    expect(refusalShown()).toBe('')
+
+    pressSend()
+
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith({
+        type: 'error',
+        title: OPENING_PASSED,
+      }),
+    )
+    expect(h.mutateAsync).toHaveBeenCalledTimes(1)
+    expect(h.refetch).toHaveBeenCalledTimes(1)
+
+    // The new answer arrives: the modal now says what the server said.
+    h.readiness = {
+      data: { refusal: { reason: 'opening-passed', message: OPENING_PASSED } },
+      isFetching: false,
+    }
+    rerender(modal())
+    expect(screen.getByRole('alert')).toHaveTextContent(OPENING_PASSED)
+    expect(screen.queryByTestId('allow-empty-body')).toBeNull()
+
+    h.showNotification.mockClear()
+    pressSend()
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith({
+        type: 'error',
+        title: OPENING_PASSED,
+      }),
+    )
+    // Held: nothing was posted a second time.
+    expect(h.mutateAsync).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not ask again after a send that went out', async () => {
+    renderModal()
+
+    pressSend()
+
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'success' }),
+      ),
+    )
+    expect(h.refetch).not.toHaveBeenCalled()
   })
 })
 

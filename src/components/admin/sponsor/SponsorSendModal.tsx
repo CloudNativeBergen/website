@@ -630,7 +630,7 @@ export function SponsorDiscountCodePicker({
 /**
  * WHETHER A WORKSHOP EARLY-ACCESS EMAIL MAY BE SENT (#1347), as the server
  * answered it. The modal decides none of it: `ready` and `refused` are
- * `sponsor.crm.earlyAccess.sendReadiness`'s answer, the decision the Send
+ * `sponsor.crm.earlyAccess.getSendReadiness`'s answer, the decision the Send
  * action itself refuses with, in its words.
  */
 type EarlyAccessSend =
@@ -682,7 +682,7 @@ export function SponsorSendModal(props: SponsorSendModalProps) {
  * neither viewing a sponsor's record nor composing any other kind may make.
  */
 function EarlyAccessSendModal(props: SponsorSendModalProps) {
-  const readiness = api.sponsor.crm.earlyAccess.sendReadiness.useQuery(
+  const readiness = api.sponsor.crm.earlyAccess.getSendReadiness.useQuery(
     { sponsorForConferenceId: props.sponsorForConference._id },
     {
       enabled: props.isOpen,
@@ -712,7 +712,16 @@ function EarlyAccessSendModal(props: SponsorSendModalProps) {
               sponsorStart: answer.sponsorStart,
               officialOpening: answer.officialOpening,
             }
-  return <SponsorSendComposer {...props} earlyAccess={earlyAccess} />
+  return (
+    <SponsorSendComposer
+      {...props}
+      earlyAccess={earlyAccess}
+      // A modal left open can be behind the server: the official opening
+      // passed, the deal moved, the times were changed. A send that fails is
+      // the moment to find out, so the hold shown is the server's again.
+      onEarlyAccessSendFailed={() => void readiness.refetch()}
+    />
+  )
 }
 
 function SponsorSendComposer({
@@ -727,9 +736,12 @@ function SponsorSendComposer({
   senderName,
   conference,
   earlyAccess,
+  onEarlyAccessSendFailed,
 }: SponsorSendModalProps & {
   /** Set on the workshop early-access kind, by {@link EarlyAccessSendModal}. */
   earlyAccess?: EarlyAccessSend
+  /** The server did not send: its answer may have changed since the modal opened. */
+  onEarlyAccessSendFailed?: () => void
 }) {
   const { showNotification } = useNotification()
   const sendMutation = api.sponsor.crm.sendCommunication.useMutation()
@@ -1276,10 +1288,14 @@ function SponsorSendComposer({
         rememberApplied(null)
         try {
           result = await sendMutation.mutateAsync(base)
+        } catch (retryError) {
+          onEarlyAccessSendFailed?.()
+          throw retryError
         } finally {
           invalidateRecords()
         }
       } else {
+        onEarlyAccessSendFailed?.()
         throw error
       }
     }

@@ -259,6 +259,8 @@ export function SponsorEarlyAccessSection({
   const copyFailed = clipboard.failed && !fetching && !error
 
   const busy = acting || create.isPending || revoke.isPending || fetching
+  // A press while something is in flight does nothing: every handler below
+  // starts with this check, since `aria-disabled` alone stops no click.
   const sendAction = onSend && (
     <button
       type="button"
@@ -272,8 +274,6 @@ export function SponsorEarlyAccessSection({
       Send by email
     </button>
   )
-  // A press while something is in flight does nothing: every handler below
-  // starts with this check, since `aria-disabled` alone stops no click.
 
   return (
     <div className="relative rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/5">

@@ -5,6 +5,7 @@ import { SponsorSendModal } from './SponsorSendModal'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { withPortalTheme } from '@/lib/storybook'
 import { mockContactPerson, mockSponsor } from '@/__mocks__/sponsor-data'
+import { EARLY_ACCESS_SEND_REFUSALS } from '@/lib/sponsor-crm/early-access-email'
 
 const FIXED_NOW = new Date('2026-02-15T12:00:00Z')
 
@@ -970,7 +971,7 @@ export const RegistrationDark: Story = {
 }
 
 /**
- * What `crm.earlyAccess.sendReadiness` answers (#1347): the decision the Send
+ * What `crm.earlyAccess.getSendReadiness` answers (#1347): the decision the Send
  * action itself refuses with. The modal shows the answer and decides nothing.
  */
 const EARLY_ACCESS_LINK =
@@ -983,7 +984,7 @@ const earlyAccessReady = {
   officialOpening: '2026-10-01T08:00:00.000Z',
 }
 const earlyAccessHandlers = (answer: unknown) => [
-  http.get('/api/trpc/sponsor.crm.earlyAccess.sendReadiness', () =>
+  http.get('/api/trpc/sponsor.crm.earlyAccess.getSendReadiness', () =>
     HttpResponse.json({ result: { data: answer } }),
   ),
   ...handlers,
@@ -993,8 +994,7 @@ const wonSponsor = mockSponsor({
   status: 'closed-won',
   hasWorkshopEarlyAccessLink: true,
 })
-const NO_WINDOW =
-  'This conference has no early-access period. Under Workshops, set a "Sponsor Early Access Opens" time that is earlier than the time registration opens for everyone.'
+const NO_WINDOW = EARLY_ACCESS_SEND_REFUSALS['no-window']
 
 /**
  * Send → Workshop early access (#1347). The modal asks the server whether
@@ -1122,7 +1122,7 @@ export const EarlyAccessChecking: Story = {
     msw: {
       handlers: [
         http.get(
-          '/api/trpc/sponsor.crm.earlyAccess.sendReadiness',
+          '/api/trpc/sponsor.crm.earlyAccess.getSendReadiness',
           async () => {
             await delay('infinite')
             return HttpResponse.json({ result: { data: earlyAccessReady } })
