@@ -40,6 +40,8 @@ interface SponsorContractViewProps {
   workshopsEnabled?: boolean
   /** The conference has a "Sponsor Early Access Opens" time (see the section). */
   sponsorStartSet?: boolean
+  /** Send → Workshop early access (#1347): opens the host's Send modal on that kind. */
+  onSendEarlyAccess?: () => void
 }
 
 export interface ContractSendOptions {
@@ -55,6 +57,7 @@ export function SponsorContractView({
   onSendContract,
   workshopsEnabled = false,
   sponsorStartSet,
+  onSendEarlyAccess,
 }: SponsorContractViewProps) {
   const [step, setStep] = useState<Step>('overview')
   const [pdfData, setPdfData] = useState<string | null>(null)
@@ -634,6 +637,8 @@ export function SponsorContractView({
                 : undefined
           }
           onChanged={onSuccess}
+          // With workshops off nothing can be sent: the server would refuse.
+          onSend={workshopsEnabled ? onSendEarlyAccess : undefined}
         />
       )}
     </div>

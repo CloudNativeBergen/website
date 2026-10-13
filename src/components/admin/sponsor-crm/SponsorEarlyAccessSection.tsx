@@ -6,6 +6,7 @@ import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import {
   CheckIcon,
   ClipboardDocumentIcon,
+  EnvelopeIcon,
   LinkIcon,
   NoSymbolIcon,
 } from '@heroicons/react/24/outline'
@@ -41,6 +42,12 @@ export interface SponsorEarlyAccessSectionProps {
    * says: the host reads the sponsor again.
    */
   onChanged?: () => void
+  /**
+   * Send the link by email (#1347): opens the host's Send modal on the
+   * "Workshop early access" kind, which asks the server whether it may be
+   * sent and creates the link if there is none. Unset: no send action.
+   */
+  onSend?: () => void
 }
 
 const quietButton =
@@ -60,6 +67,7 @@ export function SponsorEarlyAccessSection({
   recordUpdatedAt,
   sponsorStartSet,
   onChanged,
+  onSend,
 }: SponsorEarlyAccessSectionProps) {
   const utils = api.useUtils()
   /**
@@ -251,6 +259,19 @@ export function SponsorEarlyAccessSection({
   const copyFailed = clipboard.failed && !fetching && !error
 
   const busy = acting || create.isPending || revoke.isPending || fetching
+  const sendAction = onSend && (
+    <button
+      type="button"
+      onClick={() => {
+        if (!busy) onSend()
+      }}
+      aria-disabled={busy}
+      className={quietButton}
+    >
+      <EnvelopeIcon className="size-4" />
+      Send by email
+    </button>
+  )
   // A press while something is in flight does nothing: every handler below
   // starts with this check, since `aria-disabled` alone stops no click.
 
@@ -282,7 +303,7 @@ export function SponsorEarlyAccessSection({
 
       {!linked ? (
         !createRefusal ? (
-          <div className="mt-3">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               ref={createButton}
               type="button"
@@ -297,6 +318,7 @@ export function SponsorEarlyAccessSection({
               <LinkIcon className="size-4" />
               {create.isPending ? 'Creating…' : 'Create link'}
             </button>
+            {sendAction}
           </div>
         ) : (
           <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
@@ -386,6 +408,7 @@ export function SponsorEarlyAccessSection({
                   {copied ? 'Copied' : 'Copy link'}
                 </button>
               )}
+              {sendAction}
               <button
                 ref={revokeButton}
                 type="button"

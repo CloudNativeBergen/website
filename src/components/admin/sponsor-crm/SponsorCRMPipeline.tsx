@@ -316,6 +316,14 @@ export function SponsorCRMPipeline({
     },
     [],
   )
+  const handleOpenEarlyAccessSend = useCallback(
+    (sponsor: SponsorForConferenceExpanded) => {
+      setEmailKind('workshop-early-access')
+      setEmailSponsor(sponsor)
+      setIsEmailModalOpen(true)
+    },
+    [],
+  )
   // Send → Contract (#1264): what the contract view previewed (template +
   // counter-signature) rides along to the modal; a reminder or signed copy
   // carries nothing and the server decides the action from the state.
@@ -668,6 +676,11 @@ export function SponsorCRMPipeline({
           onSendContract={
             selectedSponsor && conference
               ? (options) => handleOpenContractSend(selectedSponsor, options)
+              : undefined
+          }
+          onSendEarlyAccess={
+            selectedSponsor && conference
+              ? () => handleOpenEarlyAccessSend(selectedSponsor)
               : undefined
           }
         />
