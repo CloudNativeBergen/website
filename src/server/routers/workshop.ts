@@ -57,6 +57,7 @@ import {
 } from '@/lib/workshop/registration-window'
 import {
   earlyAccessTokenOf,
+  expireEarlyAccessLinksIfStale,
   findEarlyAccessSponsor,
   registrationWindowFor,
 } from '@/lib/workshop/early-access'
@@ -537,8 +538,9 @@ export const workshopRouter = router({
           async () => {
             const token = earlyAccessTokenOf(ctx.req.cookies)
             if (!token) return null
+            let found: Awaited<ReturnType<typeof findEarlyAccessSponsor>>
             try {
-              return await findEarlyAccessSponsor(conference._id, token)
+              found = await findEarlyAccessSponsor(conference._id, token)
             } catch (error) {
               // NEVER ADMITS, and never names the official opening to a
               // person whose early access was simply not checked.
@@ -549,6 +551,12 @@ export const workshopRouter = router({
                   'We could not check your early access right now. Please try again in a moment.',
               })
             }
+            // The link is not live. If the portal page's cached links still
+            // say it is, the page is showing this person an early access
+            // they do not have: make its next view read them again.
+            if (!found)
+              await expireEarlyAccessLinksIfStale(conference._id, token)
+            return found
           },
         )
         if (registration.status === 'not-open-yet') {

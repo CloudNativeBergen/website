@@ -9,7 +9,11 @@ export {
   readEarlyAccessToken,
   revokeEarlyAccessLink,
 } from './link'
-export { expireEarlyAccessLinks, resolveEarlyAccess } from './links'
+export {
+  expireEarlyAccessLinks,
+  expireEarlyAccessLinksIfStale,
+  resolveEarlyAccess,
+} from './links'
 export { earlyAccessCookie, earlyAccessTokenOf } from './cookie'
 export { registrationWindowFor } from './window'
 export { openEarlyAccessLink } from './open'

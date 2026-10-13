@@ -101,3 +101,30 @@ export function expireEarlyAccessLinks(conferenceId: string): void {
     )
   }
 }
+
+/**
+ * A SIGN-UP FOUND `token` DEAD: the live lookup knows no sponsor for it. When
+ * the cached links still resolve it, they are stale (an expiry that did not
+ * land, a change made around the procedures), and the page keeps showing an
+ * early access every attempt will be refused for. Expire them, so the next
+ * view reads them again.
+ *
+ * ONLY ON THAT DISAGREEMENT, never on a plain miss: a dead or made-up token
+ * the cache does not hold expires nothing, so it cannot be used to force
+ * refills. It never throws: the sign-up it rides on has its own answer.
+ */
+export async function expireEarlyAccessLinksIfStale(
+  conferenceId: string,
+  deadToken: string,
+): Promise<void> {
+  try {
+    if (await resolveEarlyAccess(conferenceId, deadToken)) {
+      expireEarlyAccessLinks(conferenceId)
+    }
+  } catch (error) {
+    console.error(
+      `[workshop] could not compare the early-access links of ${conferenceId}`,
+      error,
+    )
+  }
+}

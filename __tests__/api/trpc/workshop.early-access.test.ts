@@ -27,10 +27,19 @@ const h = vi.hoisted(() => ({
   store: null as null | VersionedSanityStore,
   /** The registration times of the conference this request resolves to. */
   times: {} as Record<string, string | null | undefined>,
+  /**
+   * What the CACHED read of the conference's links still holds, when that is
+   * not what is stored now: the documents its query is answered from. `null`:
+   * the cache agrees with what is stored.
+   */
+  cacheHolds: null as null | Record<string, unknown>[],
+  /** How often the cached read of the links was asked. */
+  linksReads: 0,
+  revalidateTag: vi.fn(),
 }))
 
 vi.mock('next/cache', () => ({
-  revalidateTag: vi.fn(),
+  revalidateTag: (...args: unknown[]) => h.revalidateTag(...args),
   cacheLife: vi.fn(),
   cacheTag: vi.fn(),
 }))
@@ -61,8 +70,27 @@ vi.mock('@/lib/organization/sanity', () => ({
 vi.mock('@/lib/sanity/client', async () => {
   const { createVersionedSanityStore } =
     await import('../../helpers/versionedSanityStore')
+  const { runGroq } = await import('../../helpers/sanityStore')
   h.store = createVersionedSanityStore()
-  return h.store.clients
+  type Fetch = (
+    query: string,
+    params?: Record<string, unknown>,
+    options?: unknown,
+  ) => Promise<unknown>
+  const reader = h.store.clients.clientReadUncached as { fetch: Fetch }
+  const fetch: Fetch = async (query, params, options) => {
+    // The one read `'use cache: remote'` holds per conference. The directive
+    // is inert here, so a stale entry is modelled at this boundary: the
+    // query answered from the documents as they were when it was filled.
+    if (query.includes('defined(workshopEarlyAccessToken)')) {
+      h.linksReads++
+      if (h.cacheHolds) {
+        return runGroq(h.cacheHolds as never, query, params)
+      }
+    }
+    return reader.fetch(query, params, options)
+  }
+  return { ...h.store.clients, clientReadUncached: { ...reader, fetch } }
 })
 
 const ticketing = vi.hoisted(() => ({
@@ -232,8 +260,16 @@ const ORDINARY = {
   },
 }
 
+/** The early-access tags that were expired at once. */
+const expired = () =>
+  h.revalidateTag.mock.calls.filter(([tag]) =>
+    String(tag).includes('workshop-early-access'),
+  )
+
 beforeEach(() => {
   vi.clearAllMocks()
+  h.cacheHolds = null
+  h.linksReads = 0
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) })
   __resetRedeemedCache()
   store().reset(DATASET)
@@ -336,6 +372,67 @@ describe('a cookie value that is not a token', () => {
       expect(await attempt(LIVE)).toEqual(EARLY())
     },
   )
+})
+
+/**
+ * THE CACHED LINKS CAN BE STALE (an expiry that did not land, a change made
+ * around the procedures). The page then keeps showing early access, and every
+ * sign-up is refused. The sign-up is where the disagreement is KNOWN: the
+ * live lookup found no sponsor for a token the cached read still resolves.
+ */
+describe('the cached links still hold a link that is no longer live', () => {
+  /** The cache was filled while sfc-revoked still held its token. */
+  const STALE = [
+    { _id: 'sponsor-acme', _type: 'sponsor', name: 'Acme AS' },
+    sponsor('sfc-revoked', REVOKED),
+  ]
+
+  it('the sign-up is refused, and the conference’s links are expired at once', async () => {
+    h.cacheHolds = STALE
+
+    expect(await attempt(REVOKED)).toEqual(OPENS_OFFICIALLY)
+    expect(expired()).toEqual([
+      ['sanity:workshop-early-access-conf-1', { expire: 0 }],
+    ])
+  })
+
+  it('nothing is expired for a dead token the cache does not hold either', async () => {
+    expect(await attempt(REVOKED)).toEqual(OPENS_OFFICIALLY)
+    expect(await attempt(MADE_UP)).toEqual(OPENS_OFFICIALLY)
+    h.cacheHolds = STALE
+    expect(await attempt(MADE_UP)).toEqual(OPENS_OFFICIALLY)
+
+    expect(expired()).toEqual([])
+  })
+
+  it('a live token signs up: the cached links are not asked, and nothing is expired', async () => {
+    h.cacheHolds = STALE
+
+    expect(await attempt(LIVE)).toEqual(EARLY())
+    expect(h.linksReads).toBe(0)
+    expect(expired()).toEqual([])
+  })
+
+  it('a caller without a workshop ticket causes nothing: no lookup, no read of the links, no expiry', async () => {
+    h.cacheHolds = STALE
+    ticketing.fetchEventTickets.mockResolvedValue([])
+
+    expect((await attempt(REVOKED)).refused?.code).toBe('FORBIDDEN')
+    expect(linkLookups()).toEqual([])
+    expect(h.linksReads).toBe(0)
+    expect(expired()).toEqual([])
+  })
+
+  it('a cached read that fails does not fail the sign-up path: the window still answers', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    store().failReadsThat((read) =>
+      read.query.includes('defined(workshopEarlyAccessToken)'),
+    )
+
+    expect(await attempt(REVOKED)).toEqual(OPENS_OFFICIALLY)
+    expect(h.linksReads).toBe(1)
+    expect(expired()).toEqual([])
+  })
 })
 
 describe('before the sponsor start time', () => {
