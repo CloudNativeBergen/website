@@ -329,13 +329,27 @@ const LIST = [
   signup('su-gone', { via: 'sfc-removed', at: '2026-06-09T08:03:00Z' }),
   signup('su-foreign', { via: 'sfc-theirs', at: '2026-06-09T08:02:00Z' }),
   signup('su-gus', { via: 'sfc-globex', at: '2026-06-09T08:01:00Z' }),
-  // Neither a seat nor a place in line: no sign-up is stored like this today.
-  // Through a sponsor nobody else signed up through.
-  signup('su-void', {
+  // OURS, pointing at ANOTHER conference's workshop (only a bad write does
+  // that): the row stays, and never carries that workshop's title.
+  signup('su-crossed-ws', {
+    via: 'sfc-globex',
+    workshop: 'ws-theirs',
+    at: '2026-06-09T08:00:45Z',
+  }),
+  // UNPUBLISHED COPIES, as Sanity Studio makes them when a sign-up is edited
+  // there. The server's client sees drafts. A copy is not a second sign-up.
+  signup('drafts.su-ada', { via: 'sfc-acme', at: '2026-06-09T08:05:00Z' }),
+  signup('versions.rSpring.su-ada', {
+    via: 'sfc-acme',
+    at: '2026-06-09T08:05:00Z',
+  }),
+  // A draft with no published sign-up, through a sponsor nobody else used.
+  signup('drafts.su-unpublished', {
     via: 'sfc-quiet',
-    status: 'cancelled',
     at: '2026-06-09T08:00:30Z',
   }),
+  // An unpublished copy of a SPONSOR of this conference.
+  sponsorOfConference('drafts.sfc-acme', CONF, 'sponsor-acme'),
   // A sponsor of this conference that nobody signed up through.
   sponsorOfConference('sfc-quiet', CONF, 'sponsor-quiet'),
   { _id: 'sponsor-quiet', _type: 'sponsor', name: 'Quiet Corp' },
@@ -405,6 +419,16 @@ const GUS = {
   workshop: K8S,
   earlyAccess: { sponsor: GLOBEX },
 }
+/** Ours, pointing at another conference's workshop: no workshop is read. */
+const CROSSED_WS = {
+  _id: 'su-crossed-ws',
+  userName: 'Person su-crossed-ws',
+  userEmail: 'su-crossed-ws@example.com',
+  status: 'confirmed',
+  signedUpAt: '2026-06-09T08:00:45Z',
+  workshop: null,
+  earlyAccess: { sponsor: GLOBEX },
+}
 
 describe('the list of early sign-ups (workshop.admin.listEarlySignups)', () => {
   beforeEach(() => {
@@ -419,13 +443,17 @@ describe('the list of early sign-ups (workshop.admin.listEarlySignups)', () => {
 
     const { signups } = await caller().admin.listEarlySignups({})
 
-    expect(signups).toEqual([ADA, BEA, GONE, FOREIGN, GUS])
+    // One row per sign-up: `su-ada` has a draft and a release copy, and one
+    // draft has no published sign-up at all.
+    expect(signups).toEqual([ADA, BEA, GONE, FOREIGN, GUS, CROSSED_WS])
   })
 
   it('offers, for narrowing, the sponsors of this conference that an early sign-up names', async () => {
     const { sponsors } = await caller().admin.listEarlySignups({})
 
-    // Not the removed one, not another conference's, not one without sign-ups.
+    // Not the removed one, not another conference's, not one without
+    // sign-ups (a draft is not a sign-up), and each sponsor once: the draft
+    // copy of Acme is not a second sponsor.
     expect(sponsors).toEqual([ACME, GLOBEX])
   })
 
@@ -436,7 +464,7 @@ describe('the list of early sign-ups (workshop.admin.listEarlySignups)', () => {
     expect(
       (await caller().admin.listEarlySignups({ sponsorId: 'sfc-globex' }))
         .signups,
-    ).toEqual([GUS])
+    ).toEqual([GUS, CROSSED_WS])
   })
 
   it('narrowed to a sponsor of this conference without sign-ups, is empty and still names that sponsor', async () => {
@@ -476,6 +504,37 @@ describe('the list of early sign-ups (workshop.admin.listEarlySignups)', () => {
     expect(new Set(signups.map((row) => row._id)).size).toBe(130)
   })
 
+  it('answers an unpublished copy of a sponsor exactly as an id that does not exist', async () => {
+    expect(
+      await caller().admin.listEarlySignups({ sponsorId: 'drafts.sfc-acme' }),
+    ).toEqual({ signups: [], sponsors: [ACME, GLOBEX] })
+  })
+
+  it('never reads the title of a workshop of another conference', async () => {
+    const { signups } = await caller().admin.listEarlySignups({
+      sponsorId: 'sfc-globex',
+    })
+
+    expect(signups.map((row) => [row._id, row.workshop])).toEqual([
+      ['su-gus', { _id: WORKSHOP, title: 'Kubernetes 101' }],
+      ['su-crossed-ws', null],
+    ])
+    expect(JSON.stringify(signups)).not.toContain('Their workshop')
+  })
+
+  it('answers a failed read with its own message, not Sanity’s', async () => {
+    store().failReadsThat(() => true)
+
+    const failure = await caller()
+      .admin.listEarlySignups({})
+      .catch((error) => error)
+
+    expect({ code: failure.code, message: failure.message }).toEqual({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch early sign-ups',
+    })
+  })
+
   it('makes one read', async () => {
     await caller().admin.listEarlySignups({ sponsorId: 'sfc-acme' })
 
@@ -498,6 +557,7 @@ describe('the list of early sign-ups (workshop.admin.listEarlySignups)', () => {
       ['su-gone', '2026-06-09T08:03:00Z'],
       ['su-foreign', '2026-06-09T08:02:00Z'],
       ['su-gus', '2026-06-09T08:01:00Z'],
+      ['su-crossed-ws', '2026-06-09T08:00:45Z'],
     ])
   })
 
@@ -517,6 +577,7 @@ describe('the list of early sign-ups (workshop.admin.listEarlySignups)', () => {
       ['su-gone', 'confirmed'],
       ['su-foreign', 'confirmed'],
       ['su-gus', 'waitlist'],
+      ['su-crossed-ws', 'confirmed'],
     ])
   })
 

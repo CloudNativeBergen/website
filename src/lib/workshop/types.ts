@@ -1,6 +1,5 @@
 import type { SanityDocument } from 'sanity'
 import type { ProposalExisting, Level } from '@/lib/proposal/types'
-import type { SignupEarlyAccess } from './early-access/signups'
 
 export enum WorkshopSignupStatus {
   CONFIRMED = 'confirmed',
@@ -8,6 +7,21 @@ export enum WorkshopSignupStatus {
 }
 
 export type ExperienceLevel = Level
+
+/** A sponsor of the conference (`sponsorForConference`), as a sign-up names it. */
+export interface EarlyAccessSponsor {
+  _id: string
+  name: string | null
+}
+
+/**
+ * Whose early-access link admitted a sign-up (#1348), as the organizer reads
+ * answer it (`EARLY_ACCESS_OF_SIGNUP`). `null`: the sign-up is not early.
+ */
+export type SignupEarlyAccess = {
+  /** `null`: the sponsor is no longer in the conference. */
+  sponsor: EarlyAccessSponsor | null
+} | null
 export type OperatingSystem = 'windows' | 'macos' | 'linux'
 
 /** Individual workshop statistics returned by getWorkshopStatistics() */

@@ -798,9 +798,21 @@ export const workshopRouter = router({
      */
     listEarlySignups: workshopAdminProcedure
       .input(workshopEarlySignupsSchema)
-      .query(async ({ input }) =>
-        listEarlySignups(await resolveConferenceId(), input.sponsorId),
-      ),
+      .query(async ({ input }) => {
+        try {
+          return await listEarlySignups(
+            await resolveConferenceId(),
+            input.sponsorId,
+          )
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch early sign-ups',
+            cause: error,
+          })
+        }
+      }),
 
     confirmSignup: workshopAdminProcedure
       .input(confirmWorkshopSignupSchema)

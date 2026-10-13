@@ -6,29 +6,33 @@
  * barrel, which would pull the cached links and `next/cache` into it.
  */
 import { clientReadUncached } from '@/lib/sanity/client'
-import type { WorkshopSignupStatus } from '../types'
+import type {
+  EarlyAccessSponsor,
+  SignupEarlyAccess,
+  WorkshopSignupStatus,
+} from '../types'
 
 /**
- * The sponsor behind an early sign-up, for a projection of `workshopSignup`
- * in a query that binds `$conferenceId`.
+ * THE SPONSOR A SIGN-UP RECORDS, READ ONLY IF IT IS A SPONSOR OF
+ * `$conferenceId`, else `null`. Written once, for every read that shows it.
  *
- *  - `null` for a sign-up that is not early.
- *  - `{ sponsor: null }` for an early one whose sponsor is not in the
- *    conference: the reference is weak, so the sponsor can have been removed.
- *  - THE NAME IS READ ONLY FROM A SPONSOR OF `$conferenceId`. The stored
- *    reference is followed wherever it points, so a sign-up that names another
- *    conference's sponsor (a bad write) answers `{ sponsor: null }`, never
- *    that sponsor's name.
+ * The stored reference is weak and is followed wherever it points. So a
+ * sponsor that was removed from the conference answers `null`, and so does
+ * another conference's sponsor (which only a bad write records): its name is
+ * never read.
+ *
+ * A value expression, interpolated where a projection gives a field its
+ * value. The tenancy lint reads a root's FILTER as text and cannot see into an
+ * interpolation there; one in a projection's value it reads past.
  */
-export const EARLY_ACCESS_PROJECTION = `"earlyAccess": select(defined(earlyAccessSponsor._ref) => {
-    "sponsor": select(earlyAccessSponsor->conference._ref == $conferenceId => earlyAccessSponsor->{ _id, "name": sponsor->name })
-  })`
+const SPONSOR_OF_THIS_CONFERENCE = `select(earlyAccessSponsor->conference._ref == $conferenceId => earlyAccessSponsor->{ _id, "name": sponsor->name })`
 
-/** What {@link EARLY_ACCESS_PROJECTION} answers for one sign-up. */
-export type SignupEarlyAccess = {
-  /** `null`: the sponsor is no longer in the conference. */
-  sponsor: { _id: string; name: string | null } | null
-} | null
+/**
+ * The value of `earlyAccess` in a projection of `workshopSignup`, in a query
+ * that binds `$conferenceId` ({@link SignupEarlyAccess}): `null` for a sign-up
+ * that is not early, `{ sponsor }` for one that is.
+ */
+export const EARLY_ACCESS_OF_SIGNUP = `select(defined(earlyAccessSponsor._ref) => { "sponsor": ${SPONSOR_OF_THIS_CONFERENCE} })`
 
 /** One row of the "Early sign-ups" list on `/admin/workshops`. */
 export interface EarlySignupRow {
@@ -38,6 +42,7 @@ export interface EarlySignupRow {
   status: WorkshopSignupStatus
   /** When the sign-up was made: `signedUpAt`, or when it was created. */
   signedUpAt: string
+  /** `null`: the sign-up's workshop is not one of the conference's. */
   workshop: { _id: string; title: string | null } | null
   earlyAccess: NonNullable<SignupEarlyAccess>
 }
@@ -49,31 +54,33 @@ export interface EarlySignups {
    * early sign-up names, and the one it is narrowed to now when that is a
    * sponsor of the conference.
    */
-  sponsors: { _id: string; name: string | null }[]
+  sponsors: EarlyAccessSponsor[]
 }
 
 // THE TWO ROOTS OF THE LIST, sent as one query, so the list costs one read.
 //
-// Each is spelled out, with the conference in its own filter and nothing
-// interpolated: the tenancy lint reads a root only when it is literal text.
-// That is why the projection below repeats `EARLY_ACCESS_PROJECTION`.
+// Each FILTER is spelled out, with the conference in it and nothing
+// interpolated, so the tenancy lint can read it.
 //
-// `status in ["confirmed", "waitlist"]`: a seat or a place in line, the only
-// two statuses a sign-up is stored with. The count on the sponsor's record
-// (`SPONSOR_FOR_CONFERENCE_FIELDS`) asks for the same two, so the two agree.
-// A cancelled sign-up has neither: it is deleted (`deleteWorkshopSignup`).
-const NARROWED_SIGNUPS = `*[_type == "workshopSignup" && conference._ref == $conferenceId && defined(earlyAccessSponsor._ref) && status in ["confirmed", "waitlist"] && (!defined($sponsorId) || earlyAccessSponsor._ref == $sponsorId)] | order(coalesce(signedUpAt, _createdAt) desc) {
+// PUBLISHED DOCUMENTS ONLY, on every root. The server's client sees drafts,
+// and Sanity Studio makes a draft (or a release copy) of a sign-up the moment
+// an organizer edits its notes there: a copy is not a second sign-up. The
+// count on the sponsor's record (`SPONSOR_FOR_CONFERENCE_FIELDS`) leaves them
+// out the same way.
+//
+// THE WORKSHOP IS READ ONLY IF IT IS ONE OF THE CONFERENCE'S, as the sponsor
+// is: a sign-up that points at another conference's workshop (a bad write)
+// never carries that workshop's title.
+const NARROWED_SIGNUPS = `*[_type == "workshopSignup" && conference._ref == $conferenceId && defined(earlyAccessSponsor._ref) && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (!defined($sponsorId) || earlyAccessSponsor._ref == $sponsorId)] | order(coalesce(signedUpAt, _createdAt) desc) {
   _id,
   userName,
   userEmail,
   status,
   "signedUpAt": coalesce(signedUpAt, _createdAt),
-  "workshop": workshop->{ _id, title },
-  "earlyAccess": {
-    "sponsor": select(earlyAccessSponsor->conference._ref == $conferenceId => earlyAccessSponsor->{ _id, "name": sponsor->name })
-  }
+  "workshop": select(workshop->conference._ref == $conferenceId => workshop->{ _id, title }),
+  "earlyAccess": { "sponsor": ${SPONSOR_OF_THIS_CONFERENCE} }
 }`
-const SPONSORS_TO_NARROW_TO = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (_id == $sponsorId || _id in *[_type == "workshopSignup" && conference._ref == $conferenceId && defined(earlyAccessSponsor._ref) && status in ["confirmed", "waitlist"]].earlyAccessSponsor._ref)] | order(sponsor->name asc, _id asc) { _id, "name": sponsor->name }`
+const SPONSORS_TO_NARROW_TO = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (_id == $sponsorId || _id in *[_type == "workshopSignup" && conference._ref == $conferenceId && defined(earlyAccessSponsor._ref) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].earlyAccessSponsor._ref)] | order(sponsor->name asc, _id asc) { _id, "name": sponsor->name }`
 
 /**
  * EVERY early sign-up of `conferenceId`, newest first, optionally narrowed to

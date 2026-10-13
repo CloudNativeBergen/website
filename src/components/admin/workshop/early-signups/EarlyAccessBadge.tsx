@@ -1,4 +1,4 @@
-import type { SignupEarlyAccess } from '@/lib/workshop/early-access/signups'
+import type { SignupEarlyAccess } from '@/lib/workshop/types'
 
 /**
  * Marks an early sign-up (#1348, spec §9): "via _Sponsor_", the sponsor whose

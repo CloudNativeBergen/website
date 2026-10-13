@@ -21,20 +21,26 @@ import type {
 
 /**
  * How many early sign-ups were made through this sponsor's workshop
- * early-access links (#1348, spec §9), as a field of the sponsor's record: it
- * rides the read that already fetches the record, so it costs none of its own.
+ * early-access links (#1348, spec §9), as a field of the sponsor's record.
  *
- * Sign-ups, not people. Confirmed and waitlisted together, the only two
- * statuses a sign-up is stored with: the same filter as the "Early sign-ups"
- * list (`listEarlySignups`), so the count is the number of rows that list
- * shows for this sponsor. A sign-up records the sponsor, not the link, so the
- * ones made through a link revoked since are counted too.
+ * WHAT IT COSTS: no request of its own, since it rides the read that already
+ * fetches the record. It does add one sub-query per sponsor to EVERY reader
+ * of these fields: the CRM board (which polls), the budget page, the status
+ * summary and the audience sync, none of which but the board's record show
+ * it.
+ *
+ * Sign-ups, not people, confirmed and waitlisted together: every published
+ * sign-up that records this sponsor, which is what the "Early sign-ups" list
+ * (`listEarlySignups`) shows when narrowed to it. A draft or a release copy
+ * of a sign-up is not a second sign-up, there as here. A sign-up records the
+ * sponsor, not the link, so the ones made through a link revoked since are
+ * counted too.
  *
  * ONLY SIGN-UPS OF THE SPONSOR'S OWN CONFERENCE: a sign-up of another
  * conference that names this sponsor (a bad write) is not this conference's.
  */
 // groq-global-scoped: correlated to the sponsor it is projected on (`conference._ref == ^.conference._ref`); every read that carries these fields reads sponsors of one conference.
-const EARLY_SIGNUP_COUNT = `count(*[_type == "workshopSignup" && conference._ref == ^.conference._ref && earlyAccessSponsor._ref == ^._id && status in ["confirmed", "waitlist"]])`
+const EARLY_SIGNUP_COUNT = `count(*[_type == "workshopSignup" && conference._ref == ^.conference._ref && earlyAccessSponsor._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))])`
 
 const SPONSOR_FOR_CONFERENCE_FIELDS = `
   _id,

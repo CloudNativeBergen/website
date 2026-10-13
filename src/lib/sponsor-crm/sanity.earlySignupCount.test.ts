@@ -77,8 +77,12 @@ beforeEach(() => {
     signup('su-1', 'sfc-linked', { person: 'ada' }),
     signup('su-2', 'sfc-linked', { person: 'ada' }),
     signup('su-3', 'sfc-linked', { status: 'waitlist' }),
-    // Neither a seat nor a place in line: not a sign-up the list shows.
-    signup('su-void', 'sfc-linked', { status: 'cancelled' }),
+    // UNPUBLISHED COPIES of one of them, as Sanity Studio makes them. The
+    // server's client sees drafts. A copy is not a second sign-up.
+    signup('drafts.su-1', 'sfc-linked', { person: 'ada' }),
+    signup('versions.rSpring.su-1', 'sfc-linked', { person: 'ada' }),
+    // A draft with no published sign-up.
+    signup('drafts.su-unpublished', 'sfc-unused'),
     signup('su-4', 'sfc-revoked'),
     signup('su-5', 'sfc-revoked', { status: 'waitlist' }),
     // A sign-up that is not early records no sponsor.
@@ -130,8 +134,7 @@ describe('the early sign-ups made through a sponsor’s links, as the CRM reads 
       (await listEarlySignups(CONF, 'sfc-linked')).signups.map(
         (row) => row._id,
       ),
-    ).toEqual(expect.arrayContaining(['su-1', 'su-2', 'su-3']))
-    expect((await listEarlySignups(CONF, 'sfc-linked')).signups).toHaveLength(3)
+    ).toEqual(['su-1', 'su-2', 'su-3'])
     expect((await listEarlySignups(CONF, 'sfc-revoked')).signups).toHaveLength(
       2,
     )
