@@ -1288,14 +1288,34 @@ export const workshopRouter = router({
           // the stored ones, read live. A save that moves or clears the
           // official opening is judged against the sponsor start time that is
           // stored, whether or not the form that sent it knew of one.
-          const stored =
-            await clientReadUncached.fetch<WorkshopRegistrationTimes | null>(
-              // groq-global-scoped: keyed by `resolveConferenceId()`'s id, the request's own conference and the one patched below; never client input.
-              `*[_type == "conference" && _id == $id][0]{ workshopRegistrationSponsorStart, workshopRegistrationStart, workshopRegistrationEnd }`,
-              { id: conferenceId },
-              { cache: 'no-store' },
-            )
-          const merged: WorkshopRegistrationTimes = { ...stored, ...changes }
+          //
+          // `_rev` comes from the SAME read as the times, and the patch below
+          // is conditioned on it: two saves of different fields at once would
+          // otherwise each pass against the same stored pair and together
+          // store a combination neither was judged on.
+          const stored = await clientReadUncached.fetch<
+            (WorkshopRegistrationTimes & { _rev?: string }) | null
+          >(
+            // groq-global-scoped: keyed by `resolveConferenceId()`'s id, the request's own conference and the one patched below; never client input.
+            `*[_type == "conference" && _id == $id][0]{ _rev, workshopRegistrationSponsorStart, workshopRegistrationStart, workshopRegistrationEnd }`,
+            { id: conferenceId },
+            { cache: 'no-store' },
+          )
+          // No document, or none that a write can be conditioned on: judging
+          // the sent times alone would let through what the stored ones
+          // forbid. Refused before anything is written.
+          if (!stored?._rev) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message:
+                'This conference could not be read, so nothing was saved. Reload the page and try again.',
+            })
+          }
+          const { _rev: readAt, ...storedTimes } = stored
+          const merged: WorkshopRegistrationTimes = {
+            ...storedTimes,
+            ...changes,
+          }
 
           if (
             merged.workshopRegistrationStart &&
@@ -1320,8 +1340,26 @@ export const workshopRouter = router({
             })
           }
 
-          // Only the fields that were sent: the others are not touched.
-          await clientWrite.patch(conferenceId).set(changes).commit()
+          // Only the fields that were sent: the others are not touched. And
+          // only if the document is still the one that was read. No retry: a
+          // second pass would judge the organizer's change against times they
+          // have not seen.
+          try {
+            await clientWrite
+              .patch(conferenceId)
+              .ifRevisionId(readAt)
+              .set(changes)
+              .commit()
+          } catch (error) {
+            if ((error as { statusCode?: number } | null)?.statusCode !== 409) {
+              throw error
+            }
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'The registration times were changed while you were saving, so nothing was saved. Check the times now shown and try again.',
+            })
+          }
 
           revalidateTag('admin:settings', 'default')
           revalidateTag(conferenceTag(conferenceId), 'default')
