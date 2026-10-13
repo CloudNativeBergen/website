@@ -166,6 +166,7 @@
     "socialLinks": "array",
     "socialLinks[string]": "string",
     "speakerDinnerInfo": "text",
+    "speakerRegistrationLink": "string",
     "speakersAnnouncedDate": "date",
     "sponsorBenefits": "array",
     "sponsorBenefits[object]": "object",
@@ -225,6 +226,11 @@
     "ticketTargets.milestones[object].targetPercentage": "number",
     "ticketTargets.salesStartDate": "date",
     "ticketTargets.targetCurve": "string",
+    "ticketTypeRoles": "array",
+    "ticketTypeRoles[object]": "object",
+    "ticketTypeRoles[object].admits": "boolean",
+    "ticketTypeRoles[object].grantsWorkshop": "boolean",
+    "ticketTypeRoles[object].typeName": "string",
     "ticketingProvider": "string",
     "title": "string",
     "titoAccountSlug": "string",
@@ -242,6 +248,7 @@
     "venueTravelInfo": "text",
     "visibility": "string",
     "workshopRegistrationEnd": "datetime",
+    "workshopRegistrationSponsorStart": "datetime",
     "workshopRegistrationStart": "datetime"
   },
   "organization": {

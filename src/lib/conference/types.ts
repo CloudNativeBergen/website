@@ -205,6 +205,12 @@ export interface Conference {
    */
   speakerRegistrationLink?: string
   registrationEnabled: boolean
+  /**
+   * The sponsor start time (#1345): when workshop sign-up opens for a caller
+   * with early access. Counts only when it is earlier than
+   * `workshopRegistrationStart`; see `workshopRegistrationWindow`.
+   */
+  workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
   contactEmail: string
