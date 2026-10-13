@@ -148,4 +148,25 @@ describe('the early sign-ups made through a sponsor’s links, as the CRM reads 
     await getSponsorForConference('sfc-linked')
     expect(h.store!.reads).toHaveLength(2)
   })
+  // The store hides release copies at the clients' API version, so the tests
+  // above cannot tell whether the count leaves them out. Here the exact text
+  // `listSponsorsForConference` sends is run through `groq-js` over EVERY
+  // stored document, the release copy of `su-1` included.
+  it('does not count a release copy of a sign-up, whoever can see it', async () => {
+    const { runGroq } = await import('../../../__tests__/helpers/sanityStore')
+    await listSponsorsForConference(CONF)
+    const { query, params } = h.store!.reads.at(-1)!
+
+    const sponsors = (await runGroq(h.store!.all(), query, params)) as {
+      _id: string
+      workshopEarlySignupCount: number
+    }[]
+
+    expect(h.store!.doc('versions.rSpring.su-1')).toBeDefined()
+    expect(counts(sponsors)).toEqual({
+      'sfc-linked': 3,
+      'sfc-revoked': 2,
+      'sfc-unused': 0,
+    })
+  })
 })

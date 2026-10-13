@@ -634,3 +634,65 @@ describe('listEarlySignups, the read itself', () => {
     ).toEqual(['su-ada', 'su-bea'])
   })
 })
+
+/**
+ * RELEASE COPIES (`versions.<release>.<id>`), ON THE QUERY TEXT ITSELF.
+ *
+ * The store above answers a read the way Sanity does at the clients' API
+ * version, where a release copy is not visible at all, so nothing in the
+ * tests above can tell whether the queries leave release copies out. Here the
+ * exact text and parameters `listEarlySignups` sends are taken from the store
+ * and run through `groq-js` over EVERY stored document, release copies
+ * included: what a client that does see them would be answered.
+ */
+describe('listEarlySignups leaves release copies out, whoever can see them', () => {
+  const RELEASE = [
+    signup('su-ada', { via: 'sfc-acme', at: '2026-06-09T08:05:00Z' }),
+    // A release copy of that sign-up.
+    signup('versions.rSpring.su-ada', {
+      via: 'sfc-acme',
+      at: '2026-06-09T08:05:00Z',
+    }),
+    // A sign-up that exists only in a release, through a sponsor nobody else
+    // signed up through.
+    sponsorOfConference('sfc-quiet', CONF, 'sponsor-quiet'),
+    { _id: 'sponsor-quiet', _type: 'sponsor', name: 'Quiet Corp' },
+    signup('versions.rSpring.su-unreleased', {
+      via: 'sfc-quiet',
+      at: '2026-06-09T08:04:00Z',
+    }),
+    // A release copy of a SPONSOR of this conference.
+    sponsorOfConference('versions.rSpring.sfc-acme', CONF, 'sponsor-acme'),
+  ]
+
+  async function onEveryDocument(sponsorId?: string) {
+    const { listEarlySignups } = await import('@/lib/workshop/early-access')
+    const { runGroq } = await import('../../../__tests__/helpers/sanityStore')
+    store().reset([...BASE, ...RELEASE])
+    await listEarlySignups(CONF, sponsorId)
+    const { query, params } = store().reads.at(-1)!
+    return (await runGroq(store().all(), query, params)) as {
+      signups: { _id: string }[]
+      sponsors: { _id: string; name: string | null }[]
+    }
+  }
+
+  it('a release copy of a sign-up is not a second row, and one only in a release is no row', async () => {
+    const { signups } = await onEveryDocument()
+
+    expect(signups.map((row) => row._id)).toEqual(['su-ada'])
+  })
+
+  it('a sign-up only in a release does not put its sponsor in the control', async () => {
+    const { sponsors } = await onEveryDocument()
+
+    expect(sponsors).toEqual([ACME])
+  })
+
+  it('a release copy of a sponsor is not offered, also when the list is narrowed to it', async () => {
+    expect(await onEveryDocument('versions.rSpring.sfc-acme')).toEqual({
+      signups: [],
+      sponsors: [ACME],
+    })
+  })
+})
