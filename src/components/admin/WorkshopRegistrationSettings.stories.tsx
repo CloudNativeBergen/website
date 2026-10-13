@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
-import { expect, userEvent, within } from 'storybook/test'
+import { getRouter } from '@storybook/nextjs-vite/navigation.mock'
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test'
+import { useEffect, useState, type ComponentProps } from 'react'
 import { ThemeProvider } from 'next-themes'
 import { WorkshopRegistrationSettings } from './WorkshopRegistrationSettings'
 import { NotificationProvider } from './NotificationProvider'
@@ -195,6 +197,123 @@ export const EditingDark: Story = {
   args: Editing.args,
   play: Editing.play,
   parameters: { theme: 'dark' },
+}
+
+/**
+ * What is stored by the time the refused save below reads the card again: a
+ * colleague has set a sponsor start time the open form does not show.
+ */
+const STORED_BEHIND_THE_FORM = {
+  workshopRegistrationSponsorStart: '2026-04-20T07:00:00.000Z',
+  workshopRegistrationStart: '2026-05-01T07:00:00.000Z',
+  workshopRegistrationEnd: '2026-06-01T07:00:00.000Z',
+}
+
+/** The server's refusal, as `workshop.admin.updateRegistrationTimes` words it. */
+const REFUSAL =
+  'Sponsor early access must start before registration opens for everyone. Sponsor Early Access Opens is set to 20. april 2026 kl. 09:00.'
+
+/** `router.refresh()` in the story below: the page reads the card again. */
+let rereadCard = () => {}
+
+/** Stands in for the server page: hands the card what it read last. */
+function PageBehindTheCard(
+  first: ComponentProps<typeof WorkshopRegistrationSettings>,
+) {
+  const [times, setTimes] = useState(first)
+  useEffect(() => {
+    rereadCard = () => setTimes(STORED_BEHIND_THE_FORM)
+    return () => {
+      rereadCard = () => {}
+    }
+  }, [])
+  return <WorkshopRegistrationSettings {...times} />
+}
+
+/**
+ * A REFUSED SAVE. The form was opened when no sponsor start time was stored;
+ * a colleague has stored one since, and the organizer moves the opening to
+ * before it. The refusal is shown in the form and names the stored time, the
+ * card is read again, and the form takes that time in without discarding what
+ * was typed: the sponsor field now shows it, and can be cleared.
+ */
+export const RefusedSave: Story = {
+  args: {
+    workshopRegistrationStart: '2026-05-01T07:00:00.000Z',
+    workshopRegistrationEnd: '2026-06-01T07:00:00.000Z',
+  },
+  render: (args) => <PageBehindTheCard {...args} />,
+  // `router.refresh()` is Storybook's mock: make it do what it does in the
+  // app, and have the page hand the card what is stored.
+  beforeEach: () => {
+    getRouter().refresh.mockImplementation(() => rereadCard())
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/workshop.admin.updateRegistrationTimes', () =>
+          // One object, not a batch: Storybook's tRPC client is `httpLink`
+          // (`.storybook/decorators/TRPCDecorator.tsx`).
+          HttpResponse.json(
+            {
+              error: {
+                message: REFUSAL,
+                code: -32600,
+                data: { code: 'BAD_REQUEST', httpStatus: 400 },
+              },
+            },
+            { status: 400 },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', {
+        name: 'Edit Workshop Registration',
+      }),
+    )
+    const dialog = await within(document.body).findByRole('dialog')
+    const sponsorStart = within(dialog).getByLabelText(
+      /Sponsor Early Access Opens/,
+    )
+    const opening = within(dialog).getByLabelText(/Registration Opens/)
+    await expect(sponsorStart).toHaveValue('')
+
+    // 18 April, two days before the sponsor start the form cannot see.
+    fireEvent.change(opening, { target: { value: '2026-04-18T09:00' } })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      REFUSAL,
+    )
+    // The stored time is now in its field, and the typed one is kept.
+    await waitFor(() => expect(sponsorStart).toHaveValue('2026-04-20T09:00'))
+    await expect(opening).toHaveValue('2026-04-18T09:00')
+    // Said once: no toast repeats it over the form.
+    await expect(within(document.body).getAllByText(REFUSAL)).toHaveLength(1)
+  },
+}
+
+export const RefusedSaveDark: Story = {
+  args: RefusedSave.args,
+  render: RefusedSave.render,
+  beforeEach: RefusedSave.beforeEach,
+  play: RefusedSave.play,
+  parameters: { ...RefusedSave.parameters, theme: 'dark' },
+}
+
+/** The same at phone width, where the form is a sheet over the card. */
+export const RefusedSavePhone: Story = {
+  args: RefusedSave.args,
+  render: RefusedSave.render,
+  beforeEach: RefusedSave.beforeEach,
+  play: RefusedSave.play,
+  parameters: {
+    ...RefusedSave.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
 }
 
 export const NotConfigured: Story = {
