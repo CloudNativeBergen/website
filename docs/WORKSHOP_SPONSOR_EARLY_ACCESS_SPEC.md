@@ -98,11 +98,18 @@ up:
   is created the way `generateRegistrationToken` (`src/lib/sponsor-crm/registration.ts`) creates
   its token: written only if none is stored, so two organizers creating at once end up with the
   same link.
-- **The address is on the portal's working host**, with the token in the path. It is built from
-  `workshopPortalUrl` (`src/lib/workshop/sign-in.ts`), the link the sign-up emails carry, and not
-  from the host the organizer happens to be on: the cookie of §5 is bound to the host that sets it.
-  When the conference has no working portal, no link can be created, and the organizer is told
-  why.
+- **The address is on the portal's working host**, with the token in the path. It is built by
+  `earlyAccessPortalUrl` (`src/lib/workshop/early-access/portal.ts`), and not from the host the
+  organizer happens to be on: the cookie of §5 is bound to the host that sets it. That function
+  answers the address `workshopPortalUrl` (`src/lib/workshop/sign-in.ts`) gives, the link the
+  sign-up emails carry, but only while the conference that claims the main host, read live, is
+  still this one. The conference itself is read through a cache, and right after a main domain
+  changes hands the cached main host belongs to another conference: an address with a token in it
+  must not point there. The route of §5 forwards through the same function. When the conference
+  has no working portal, no link can be created, and the organizer is told why.
+- **A link that was sent keeps the host it was built with.** After the conference's main domain
+  changes, an address already handed out still names the old host. Revoke the link and create it
+  again after such a change.
 - **Only a sponsor with a won deal can be given a link**, the rule the registration send applies
   today. The rule is checked when a link is created or sent. A link that exists keeps working if
   the deal later leaves that state: only revoking ends it.
