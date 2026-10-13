@@ -1,4 +1,8 @@
-import { ClockIcon, SparklesIcon } from '@heroicons/react/24/outline'
+import {
+  ClockIcon,
+  ExclamationTriangleIcon,
+  SparklesIcon,
+} from '@heroicons/react/24/outline'
 import { formatRegistrationInstant } from '@/lib/time'
 
 /**
@@ -64,15 +68,25 @@ export function WorkshopEarlyAccessBanner({
  * The notice for a person who just opened an early-access link that is not
  * live (spec §5): the same whether the link was revoked, never existed or is
  * another conference's.
+ *
+ * A BORDER AND AN ICON, not a background alone: where the system's own
+ * colours replace the page's (forced colours), the background goes, and the
+ * notice would be plain indented text.
  */
 export function WorkshopEarlyAccessInvalidNotice() {
   return (
-    <p
-      role="status"
-      className="mt-8 rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
-    >
-      This early access link is no longer valid. Ask whoever sent it to you for
-      a new one.
-    </p>
+    <div className="mt-8 flex rounded-lg border border-yellow-300 bg-yellow-50 p-4 dark:border-yellow-700 dark:bg-yellow-900/20">
+      <ExclamationTriangleIcon
+        aria-hidden="true"
+        className="size-5 shrink-0 text-yellow-600 dark:text-yellow-300"
+      />
+      <p
+        role="status"
+        className="ml-3 min-w-0 text-sm text-yellow-800 dark:text-yellow-200"
+      >
+        This early access link is no longer valid. Ask whoever sent it to you
+        for a new one.
+      </p>
+    </div>
   )
 }
