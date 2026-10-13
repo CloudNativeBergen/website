@@ -18,7 +18,6 @@
  */
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { evaluate, parse } from 'groq-js'
 import {
   beginRequest,
   cookies,
@@ -27,6 +26,7 @@ import {
 } from '../../helpers/nextHeadersJar'
 import { provenClaim } from '../../helpers/domainClaims'
 import { stubPlatformTicketingAccount } from '../../helpers/ticketingSecrets'
+import type { VersionedSanityStore } from '../../helpers/versionedSanityStore'
 
 const mockGetConference = vi.fn()
 
@@ -47,7 +47,8 @@ vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 vi.mock('next/cache', () => ({
   cacheLife: vi.fn(),
   cacheTag: vi.fn(),
-  revalidateTag: vi.fn(),
+  refresh: vi.fn(),
+  revalidateTag: (...args: unknown[]) => h.revalidateTag(...args),
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -66,19 +67,45 @@ vi.mock('@/lib/organization/sanity', () => ({
 }))
 
 /**
- * THE LIVE CLIENT, and every read is counted. A host's record is answered
- * from `claims`; anything else runs as GROQ over `dataset`.
+ * THE LIVE CLIENT, and every read is counted (`h.fetch`). A host's record is
+ * answered from `claims`; anything else runs as GROQ over the stored
+ * documents, which the organizer's revoke below also writes to.
  */
 const h = vi.hoisted(() => ({
   fetch:
     vi.fn<
-      (query: string, params?: Record<string, unknown>) => Promise<unknown>
+      (
+        query: string,
+        params?: Record<string, unknown>,
+        options?: unknown,
+      ) => Promise<unknown>
     >(),
   claims: new Map<string, unknown>(),
-  dataset: [] as Record<string, unknown>[],
+  store: null as null | VersionedSanityStore,
+  readStore: null as
+    | null
+    | ((
+        query: string,
+        params?: unknown,
+        options?: unknown,
+      ) => Promise<unknown>),
+  revalidateTag: vi.fn(),
 }))
-vi.mock('@/lib/sanity/client', () => ({
-  clientReadUncached: { fetch: h.fetch },
+vi.mock('@/lib/sanity/client', async () => {
+  const { createVersionedSanityStore } =
+    await import('../../helpers/versionedSanityStore')
+  h.store = createVersionedSanityStore()
+  const reader = h.store.clients.clientReadUncached as {
+    fetch: NonNullable<typeof h.readStore>
+  }
+  h.readStore = reader.fetch
+  return {
+    ...h.store.clients,
+    clientReadUncached: { ...reader, fetch: h.fetch },
+  }
+})
+vi.mock('@/lib/auth', () => ({
+  getAuthSession: vi.fn().mockResolvedValue(null),
 }))
 
 const ticketing = vi.hoisted(() => ({
@@ -90,9 +117,15 @@ vi.mock('@/lib/tickets/provider', async (importActual) => ({
   resolveTicketingProvider: ticketing.resolve,
 }))
 
+import { initTRPC } from '@trpc/server'
 import { isValidElement, type ReactNode } from 'react'
 import WorkshopPage from '@/app/(workshop)/workshop/page'
+import { refreshWorkshopPortal } from '@/app/(workshop)/workshop/actions'
+import { WorkshopNoTicket } from '@/components/workshop/WorkshopNoTicket'
+import { WorkshopPortal } from '@/components/workshop/WorkshopPortal'
 import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
+import type { Context } from '@/server/trpc'
+import { sponsorEarlyAccessRouter } from '@/server/routers/sponsorEarlyAccess'
 import {
   WorkshopEarlyAccessBanner,
   WorkshopEarlyAccessInvalidNotice,
@@ -140,12 +173,14 @@ const sponsor = (
 ) => ({
   _id: id,
   _type: 'sponsorForConference',
+  _rev: 'r0',
   conference: ref('conf-1'),
   sponsor: ref(company),
   status: 'closed-won',
   ...(token && { workshopEarlyAccessToken: token }),
 })
 const DATASET = [
+  { _id: 'conf-1', _type: 'conference', organization: ref('org-platform') },
   { _id: 'sponsor-acme', _type: 'sponsor', name: 'Acme AS' },
   { _id: 'sponsor-globex', _type: 'sponsor', name: 'Globex' },
   sponsor('sfc-acme', LIVE),
@@ -226,8 +261,8 @@ type Element = React.ReactElement<Record<string, unknown>>
 
 /**
  * Every element of what the page returned, with the portal's own plain
- * components rendered: the early-access banner and notice, and the signed-out
- * view. Client components (the list) are left as they were handed over.
+ * components rendered: its three views, and the early-access banner and
+ * notice. Client components (the list) are left as they were handed over.
  */
 function elementsOf(node: ReactNode): Element[] {
   if (Array.isArray(node)) return node.flatMap(elementsOf)
@@ -235,6 +270,8 @@ function elementsOf(node: ReactNode): Element[] {
   const rendered = [
     WorkshopEarlyAccessBanner,
     WorkshopEarlyAccessInvalidNotice,
+    WorkshopNoTicket,
+    WorkshopPortal,
     WorkshopSignedOut,
   ] as unknown[]
   if (rendered.includes(node.type)) {
@@ -300,10 +337,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) })
   h.claims.clear()
-  h.dataset = structuredClone(DATASET)
-  h.fetch.mockImplementation(async (query, params = {}) => {
+  h.store!.reset(DATASET)
+  h.fetch.mockImplementation(async (query, params = {}, options) => {
     if (isRecordRead(query)) return h.claims.get(String(params.id)) ?? null
-    return (await evaluate(parse(query), { dataset: h.dataset, params })).get()
+    return h.readStore!(query, params, options)
   })
   const { record, conference } = provenClaim(
     HOST,
@@ -506,19 +543,114 @@ describe('just opened a link that is not live', () => {
   })
 })
 
+/**
+ * EVERYTHING A VIEW SENDS TO THE BROWSER: the server components are rendered
+ * down to markup, and a client component (it uses a hook, so it cannot be
+ * rendered here) contributes every prop it is handed, since props of a client
+ * component are serialised into the response.
+ */
+async function sentToBrowser(
+  node: unknown,
+  out: string[] = [],
+): Promise<string[]> {
+  if (typeof node === 'string' || typeof node === 'number') {
+    out.push(String(node))
+    return out
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) await sentToBrowser(child, out)
+    return out
+  }
+  if (!isValidElement<Record<string, unknown>>(node)) return out
+  const { children, ...props } = node.props
+  if (typeof node.type === 'function') {
+    let rendered: unknown
+    try {
+      rendered = await (node.type as (props: unknown) => unknown)(node.props)
+    } catch {
+      out.push(...everyValueIn(props))
+      return sentToBrowser(children, out)
+    }
+    return sentToBrowser(rendered, out)
+  }
+  out.push(...everyValueIn(props))
+  return sentToBrowser(children, out)
+}
+
 describe('what reaches the browser', () => {
-  it('the name of the sponsor of the person’s own link, and no token, hash or other sponsor', async () => {
+  const HASH = /[0-9a-f]{64}/
+  const views: [
+    string,
+    { earlyAccess?: string; signedIn?: boolean; ticket?: boolean; at?: string },
+    { sponsor: boolean; reaches: string },
+  ][] = [
+    [
+      'signed out, holding a live cookie',
+      { signedIn: false, earlyAccess: LIVE },
+      { sponsor: false, reaches: 'Sign in to register for workshops at ' },
+    ],
+    [
+      'no workshop ticket, holding a live cookie',
+      { ticket: false, earlyAccess: LIVE },
+      { sponsor: false, reaches: 'Workshop Access Required' },
+    ],
+    [
+      'admitted, no cookie',
+      {},
+      { sponsor: false, reaches: 'Workshop registration is not yet open' },
+    ],
+    [
+      'admitted, a revoked cookie',
+      { earlyAccess: REVOKED },
+      { sponsor: false, reaches: 'Workshop registration is not yet open' },
+    ],
+    [
+      'admitted, a live cookie inside the window',
+      { earlyAccess: LIVE },
+      { sponsor: true, reaches: 'You have early access through ' },
+    ],
+    [
+      'admitted, a live cookie after the official opening',
+      { earlyAccess: LIVE, at: OFFICIAL_OPENING },
+      { sponsor: false, reaches: 'Workshop Signup' },
+    ],
+  ]
+
+  it.each(views)(
+    '%s: no token, no hash, no other sponsor, with or without the notice',
+    async (_view, { ticket = true, at, ...holding }, expected) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      if (!ticket) ticketing.fetchEventTickets.mockResolvedValue([])
+      if (at) vi.setSystemTime(new Date(at))
+
+      for (const query of [{}, { 'early-access': 'invalid' }]) {
+        await request(holding)
+        const sent = (
+          await sentToBrowser(
+            await WorkshopPage({ searchParams: Promise.resolve(query) }),
+          )
+        ).join('\n')
+
+        // The view was rendered down to its text, and the list's props are in.
+        expect(sent).toContain(expected.reaches)
+        for (const token of [LIVE, OTHER_LIVE, REVOKED]) {
+          expect(sent).not.toContain(token)
+        }
+        expect(sent).not.toMatch(HASH)
+        expect(sent).not.toContain('Globex')
+        expect(sent.includes('Acme AS')).toBe(expected.sponsor)
+        // The sponsor start time goes only with early access.
+        expect(sent.includes(SPONSOR_START)).toBe(expected.sponsor)
+      }
+    },
+  )
+
+  it('the list is handed the action that renders the page again', async () => {
     await request({ earlyAccess: LIVE })
 
-    const { sent } = await view()
-
-    expect(sent).toContain('Acme AS')
-    expect(sent).not.toContain('Globex')
-    for (const token of [LIVE, OTHER_LIVE, REVOKED]) {
-      expect(sent).not.toContain(token)
-    }
-    expect(sent).not.toMatch(/[0-9a-f]{64}/)
-    expect(sent).not.toContain('tokenHash')
+    expect((await view()).list?.onEarlyAccessRefused).toBe(
+      refreshWorkshopPortal,
+    )
   })
 })
 
@@ -527,14 +659,10 @@ describe('the live reads one portal view makes', () => {
     await request()
     await view()
 
-    expect(liveReads()).toMatchObject({ record: 1, links: [] })
+    expect(liveReads()).toMatchObject({ total: 2, record: 1, links: [] })
   })
 
   it('with the cookie: one more, the conference’s links, keyed by the conference alone', async () => {
-    await request()
-    await view()
-    const without = liveReads().total
-
     await request({ earlyAccess: LIVE })
     await view()
     const withLive = liveReads()
@@ -542,30 +670,83 @@ describe('the live reads one portal view makes', () => {
     await view()
     const withRevoked = liveReads()
 
-    expect(withLive.total).toBe(without + 1)
+    expect(withLive.total).toBe(3)
     // Whatever the cookie holds, it is the same read: the one the cache holds
     // per conference.
     expect(withLive.links).toEqual([{ conferenceId: 'conf-1' }])
-    expect(withRevoked.links).toEqual(withLive.links)
-    expect(withRevoked.total).toBe(withLive.total)
+    expect(withRevoked).toEqual(withLive)
   })
 
-  it('the first view after a revoke renders without early access, and without a notice', async () => {
+  it.each([
+    ['a word', 'early-access'],
+    ['a very long value', 'a'.repeat(4000)],
+  ])(
+    'a cookie that is not a token (%s) reads nothing about links',
+    async (_case, value) => {
+      await request({ earlyAccess: value })
+      const portal = await view()
+
+      expect(liveReads()).toMatchObject({ total: 2, links: [] })
+      expect(portal.banners).toEqual([NOT_YET_OPEN])
+    },
+  )
+})
+
+describe('after an organizer revokes the link', () => {
+  function organizer() {
+    const speaker = { _id: 'sp-admin', organizerOrgIds: ['org-platform'] }
+    const user = { email: 'organizer@example.com', name: 'Organizer' }
+    return initTRPC
+      .context<Context>()
+      .create()
+      .createCallerFactory(sponsorEarlyAccessRouter)({
+      req: { headers: new Headers(), url: `https://${HOST}` },
+      session: { user, speaker },
+      speaker,
+      user,
+      workosUser: null,
+      ipAddress: '127.0.0.1',
+    } as unknown as Context)
+  }
+
+  it('the links are expired at once, and the next view renders without early access or a notice', async () => {
     await request({ earlyAccess: LIVE })
     expect((await view()).status).toEqual([
       'You have early access through Acme AS',
     ])
 
-    // Revoked: the token is gone from the published document.
-    h.dataset = h.dataset.map((doc) =>
-      doc._id === 'sfc-acme' ? sponsor('sfc-acme', undefined) : doc,
-    )
+    await organizer().revoke({ sponsorForConferenceId: 'sfc-acme' })
+
+    // What makes the NEXT view read the links again, in a deployment.
+    expect(h.revalidateTag.mock.calls).toEqual([
+      ['sanity:workshop-early-access-conf-1', { expire: 0 }],
+    ])
     await request({ earlyAccess: LIVE })
     const portal = await view()
-
     expect(portal.status).toEqual([])
     expect(portal.banners).toEqual([NOT_YET_OPEN])
     expect(portal.list?.earlyAccess).toBe(false)
     expect(portal.sent).not.toContain('Acme AS')
+  })
+})
+
+describe('when the links cannot be read', () => {
+  it('the portal is shown as everyone sees it, and the failure is logged', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.store!.failReadsThat((read) =>
+      read.query.includes('defined(workshopEarlyAccessToken)'),
+    )
+    await request({ earlyAccess: LIVE })
+
+    const portal = await view()
+
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([NOT_YET_OPEN])
+    expect(portal.text).toContain(OPENS_OFFICIALLY)
+    expect(portal.status).toEqual([])
+    expect(portal.list?.earlyAccess).toBe(false)
+    expect(logged).toHaveBeenCalledTimes(1)
+    // The read was made, and it is the one that failed.
+    expect(liveReads().links).toEqual([{ conferenceId: 'conf-1' }])
   })
 })

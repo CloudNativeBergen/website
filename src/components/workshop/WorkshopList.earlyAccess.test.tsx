@@ -12,7 +12,13 @@
  * is signed up for, one with seats and one that is full. The clock is pinned.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { api, getTRPCClient } from '@/lib/trpc/client'
@@ -61,10 +67,18 @@ function answer(procedure: string): unknown {
       return ok({ success: true, data: [SIGNUP], count: 1 })
     case 'workshop.announcementsByWorkshop':
       return ok({ success: true, data: {} })
+    case 'workshop.signup':
+      return signupAnswer
     default:
       throw new Error(`unexpected procedure ${procedure}`)
   }
 }
+
+/** What the server answers a sign-up with. */
+let signupAnswer: unknown
+const refusal = (code: string, message: string) => ({
+  error: { message, code: -32000, data: { code } },
+})
 
 /** The pinned clock: 14:00 in Oslo on Wednesday 10 June 2026. */
 const NOW = '2026-06-10T12:00:00.000Z'
@@ -85,7 +99,11 @@ beforeEach(() => {
       const answers = decodeURIComponent(pathname.slice('/api/trpc/'.length))
         .split(',')
         .map(answer)
+      const refused = answers.some(
+        (each) => typeof each === 'object' && each !== null && 'error' in each,
+      )
       return new Response(JSON.stringify(answers), {
+        status: refused ? 412 : 200,
         headers: { 'content-type': 'application/json' },
       })
     }),
@@ -114,6 +132,7 @@ function Providers({ children }: { children: ReactNode }) {
 async function sectionsFor(props: {
   earlyAccess?: boolean
   workshopRegistrationSponsorStart?: string
+  onEarlyAccessRefused?: () => void
 }) {
   render(
     <Providers>
@@ -201,5 +220,66 @@ describe('the workshop list for a person without early access', () => {
   it('from the official opening, offers every workshop', async () => {
     vi.setSystemTime(new Date(OFFICIAL_OPENING))
     expect(await sectionsFor({})).toEqual(OPEN)
+  })
+})
+
+describe('a sign-up the server refuses while the list shows early access', () => {
+  const OPENS_OFFICIALLY =
+    'Workshop registration opens on Monday, June 15, 2026 at 12:30 AM'
+
+  /** Press "Register for Workshop" and confirm, and wait for the refusal. */
+  async function signUpAndBeRefused(message: string) {
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Register for Workshop' }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: /confirm registration/i }),
+    )
+    await screen.findAllByText(message)
+  }
+
+  it('asks the page to render again when the refusal is for the window: the link was revoked', async () => {
+    const onEarlyAccessRefused = vi.fn()
+    signupAnswer = refusal('PRECONDITION_FAILED', OPENS_OFFICIALLY)
+    await sectionsFor({
+      earlyAccess: true,
+      workshopRegistrationSponsorStart: SPONSOR_START,
+      onEarlyAccessRefused,
+    })
+
+    await signUpAndBeRefused(OPENS_OFFICIALLY)
+
+    await waitFor(() => expect(onEarlyAccessRefused).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not for any other refusal', async () => {
+    const onEarlyAccessRefused = vi.fn()
+    signupAnswer = refusal(
+      'CONFLICT',
+      'You are already signed up for this workshop',
+    )
+    await sectionsFor({
+      earlyAccess: true,
+      workshopRegistrationSponsorStart: SPONSOR_START,
+      onEarlyAccessRefused,
+    })
+
+    await signUpAndBeRefused('You are already signed up for this workshop')
+
+    expect(onEarlyAccessRefused).not.toHaveBeenCalled()
+  })
+
+  it('does not for a person who was not shown early access', async () => {
+    const onEarlyAccessRefused = vi.fn()
+    vi.setSystemTime(new Date(OFFICIAL_OPENING))
+    signupAnswer = refusal(
+      'PRECONDITION_FAILED',
+      'Workshop registration has closed',
+    )
+    await sectionsFor({ onEarlyAccessRefused })
+
+    await signUpAndBeRefused('Workshop registration has closed')
+
+    expect(onEarlyAccessRefused).not.toHaveBeenCalled()
   })
 })

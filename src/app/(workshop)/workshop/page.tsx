@@ -1,13 +1,9 @@
-import { formatRegistrationInstant } from '@/lib/time'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import WorkshopList from '@/components/workshop/WorkshopList'
 import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
-import { Button } from '@/components/Button'
 import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { resolveConferenceContact } from '@/lib/email/from'
-import { EnvelopeIcon } from '@heroicons/react/24/outline'
 import { notFound, redirect } from 'next/navigation'
 import { cookies, headers } from 'next/headers'
 import {
@@ -25,18 +21,15 @@ import {
 } from '@/lib/workshop/sign-in'
 import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
 import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
-import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
+import { WorkshopNoTicket } from '@/components/workshop/WorkshopNoTicket'
+import { WorkshopPortal } from '@/components/workshop/WorkshopPortal'
 import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import {
   earlyAccessTokenOf,
   registrationWindowFor,
   resolveEarlyAccess,
 } from '@/lib/workshop/early-access'
-import {
-  WorkshopEarlyAccessBanner,
-  WorkshopEarlyAccessInvalidNotice,
-} from '@/components/workshop/WorkshopEarlyAccess'
-import { signOutOfWorkshop } from './actions'
+import { refreshWorkshopPortal, signOutOfWorkshop } from './actions'
 
 /** Is `url` on `host` (a Host header value), compared as URLs compare hosts? */
 function isSameHost(url: string, host: string | null): boolean {
@@ -154,69 +147,14 @@ export default async function WorkshopPage({
 
     if (!access.allowed) {
       return (
-        <div className="relative py-20 sm:pt-36 sm:pb-24">
-          <BackgroundImage className="-top-36 -bottom-14" />
-          <Container className="relative">
-            <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-              <div className="flex items-center justify-between">
-                <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
-                  Workshop Access Required
-                </h1>
-                <WorkshopSignOutButton action={signOutOfWorkshop} />
-              </div>
-
-              {earlyAccessInvalid && <WorkshopEarlyAccessInvalidNotice />}
-
-              <div className="mt-8 rounded-lg bg-yellow-50 p-6 dark:bg-yellow-900/20">
-                <div className="flex">
-                  <div className="shrink-0">
-                    <svg
-                      className="h-5 w-5 text-yellow-400"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      {access.denial === 'email-unverified'
-                        ? 'Email Address Not Verified'
-                        : 'Workshop Ticket Required'}
-                    </h3>
-                    <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                      <p>{access.reason}</p>
-                      {access.tickets.length > 0 && (
-                        <div className="mt-4">
-                          <p className="font-medium">Your current ticket(s):</p>
-                          <ul className="mt-2 list-inside list-disc">
-                            {access.tickets.map((ticket, i) => (
-                              <li key={i}>{ticket.category}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8">
-                <Button
-                  href={`mailto:${resolveConferenceContact(conference)}`}
-                  variant="outline"
-                >
-                  <EnvelopeIcon className="mr-2 h-5 w-5" />
-                  Contact Support
-                </Button>
-              </div>
-            </div>
-          </Container>
-        </div>
+        <WorkshopNoTicket
+          denial={access.denial}
+          reason={access.reason}
+          tickets={access.tickets}
+          contactEmail={resolveConferenceContact(conference)}
+          signOutAction={signOutOfWorkshop}
+          earlyAccessInvalid={earlyAccessInvalid}
+        />
       )
     }
   }
@@ -232,125 +170,39 @@ export default async function WorkshopPage({
   const { registration, access: earlyAccess } = await registrationWindowFor(
     conference,
     new Date(),
-    async () =>
-      resolveEarlyAccess(conference._id, earlyAccessTokenOf(await cookies())),
+    async () => {
+      try {
+        return await resolveEarlyAccess(
+          conference._id,
+          earlyAccessTokenOf(await cookies()),
+        )
+      } catch (error) {
+        // THE PAGE ONLY DECIDES WHAT IS SHOWN: when the links cannot be read,
+        // the person sees the portal as everyone does. A sign-up still checks
+        // the link live, and says so when it cannot.
+        console.error('[workshop] early-access links could not be read', error)
+        return null
+      }
+    },
   )
 
   return (
-    <div className="relative py-20 sm:pt-36 sm:pb-24">
-      <BackgroundImage className="-top-36 -bottom-14" />
-      <Container className="relative">
-        <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="font-display text-4xl font-bold tracking-tighter text-blue-600 sm:text-5xl lg:text-7xl dark:text-blue-400">
-              Workshop Signup
-            </h1>
-            <WorkshopSignOutButton action={signOutOfWorkshop} />
-          </div>
-
-          <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">
-            <p>Welcome, {userName}</p>
-            <p>Register for workshops at {conference.title}.</p>
-          </div>
-
-          {earlyAccessInvalid && <WorkshopEarlyAccessInvalidNotice />}
-
-          {/* ONE OR THE OTHER, never both: with early access the banner
-              below takes the place of the one naming the official opening. */}
-          {earlyAccess && registration.status !== 'closed' && (
-            <WorkshopEarlyAccessBanner
-              sponsorName={earlyAccess.sponsorName}
-              opensAt={
-                registration.status === 'not-open-yet'
-                  ? registration.opensAt
-                  : undefined
-              }
-            />
-          )}
-
-          {registration.status === 'not-open-yet' && !earlyAccess && (
-            <div className="mt-8 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
-              <div className="flex">
-                <div className="shrink-0">
-                  <svg
-                    className="h-5 w-5 text-yellow-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                    Workshop registration is not yet open
-                  </h3>
-                  <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                    <p>
-                      Registration will open on{' '}
-                      {formatRegistrationInstant(registration.opensAt)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {registration.status === 'closed' && (
-            <div className="mt-8 rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
-              <div className="flex">
-                <div className="shrink-0">
-                  <svg
-                    className="h-5 w-5 text-red-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                    Workshop registration has closed
-                  </h3>
-                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">
-                    <p>
-                      Registration closed on{' '}
-                      {formatRegistrationInstant(registration.closedAt)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-12">
-            <WorkshopList
-              userWorkOSId={user.userId}
-              userEmail={user.email}
-              userName={userName}
-              // The list is a client component, so every prop is sent to the
-              // attendee's browser. The sponsor start time goes only to a
-              // person whose early access was resolved above (#1346); the
-              // link's token and the sponsor's name are not passed at all.
-              earlyAccess={!!earlyAccess}
-              workshopRegistrationSponsorStart={
-                earlyAccess
-                  ? conference.workshopRegistrationSponsorStart
-                  : undefined
-              }
-              workshopRegistrationStart={conference.workshopRegistrationStart}
-              workshopRegistrationEnd={conference.workshopRegistrationEnd}
-            />
-          </div>
-        </div>
-      </Container>
-    </div>
+    <WorkshopPortal
+      conferenceTitle={conference.title}
+      userWorkOSId={user.userId}
+      userEmail={user.email}
+      userName={userName}
+      times={{
+        workshopRegistrationSponsorStart:
+          conference.workshopRegistrationSponsorStart,
+        workshopRegistrationStart: conference.workshopRegistrationStart,
+        workshopRegistrationEnd: conference.workshopRegistrationEnd,
+      }}
+      registration={registration}
+      earlyAccess={earlyAccess}
+      earlyAccessInvalid={earlyAccessInvalid}
+      signOutAction={signOutOfWorkshop}
+      refreshAction={refreshWorkshopPortal}
+    />
   )
 }

@@ -1,5 +1,6 @@
 'use server'
 
+import { refresh } from 'next/cache'
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import {
@@ -24,4 +25,14 @@ export async function signOutOfWorkshop(): Promise<void> {
   const sealed = store.get(cookie.name)?.value
   clearCookie(store, cookie)
   redirect(await workshopSignOutTarget(await headers(), sealed), 'replace')
+}
+
+/**
+ * Render the portal page again, with what the server knows now (#1346). The
+ * list calls it when a sign-up is refused for a person the page showed early
+ * access to: their link was revoked while the page was open, and the banner
+ * and the buttons on screen are no longer true. It reads and writes nothing.
+ */
+export async function refreshWorkshopPortal(): Promise<void> {
+  refresh()
 }

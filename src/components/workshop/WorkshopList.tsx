@@ -32,6 +32,12 @@ interface WorkshopListProps {
    * handed over too.
    */
   earlyAccess?: boolean
+  /**
+   * Called when a sign-up is refused for the window although this list was
+   * told the person has early access: the link was revoked while the page was
+   * open. The page passes the action that renders it again.
+   */
+  onEarlyAccessRefused?: () => void | Promise<void>
 }
 
 export default function WorkshopList({
@@ -42,6 +48,7 @@ export default function WorkshopList({
   workshopRegistrationStart,
   workshopRegistrationEnd,
   earlyAccess = false,
+  onEarlyAccessRefused,
 }: WorkshopListProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -87,6 +94,11 @@ export default function WorkshopList({
       setErrorMessage(error.message)
       setSuccessMessage(null)
       setTimeout(() => setErrorMessage(null), 5000)
+      // The server refused for the window a person this page showed early
+      // access to: what is on screen is out of date.
+      if (earlyAccess && error.data?.code === 'PRECONDITION_FAILED') {
+        void onEarlyAccessRefused?.()
+      }
     },
   })
 
