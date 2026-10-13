@@ -16,6 +16,8 @@ import {
   waitFor,
 } from '@testing-library/react'
 
+const NEW_URL =
+  'https://conf.example.org/workshop/early-access/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
 const URL_OF_LINK =
   'https://conf.example.org/workshop/early-access/4b1c9d2e-7a55-4f0a-9c3e-1f2a3b4c5d6e'
 
@@ -67,7 +69,7 @@ beforeEach(() => {
     options.onSuccess?.({ url: URL_OF_LINK } as never),
   )
   h.revoke.mockImplementation((_input, options: Options) =>
-    options.onSuccess?.({ success: true } as never),
+    options.onSuccess?.({ success: true, notCleared: [] } as never),
   )
 })
 afterEach(cleanup)
@@ -155,7 +157,25 @@ describe('a sponsor with a link', () => {
     )
   })
 
-  it('still shows the address when the browser refuses the clipboard', async () => {
+  it('asks the server again on every copy: a link a colleague revoked and created again is not handed out', async () => {
+    render(section({ hasLink: true }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+
+    h.address.mockResolvedValue({ url: NEW_URL })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Cop/ }))
+    })
+
+    expect(h.address).toHaveBeenCalledTimes(2)
+    expect(screen.getByDisplayValue(NEW_URL)).toBeVisible()
+    expect(screen.queryByDisplayValue(URL_OF_LINK)).toBeNull()
+    expect(writeText).toHaveBeenLastCalledWith(NEW_URL)
+  })
+
+  it('says so when the copy fails, and leaves the address to be selected', async () => {
     writeText.mockRejectedValue(new Error('NotAllowedError'))
     render(section({ hasLink: true }))
 
@@ -163,8 +183,43 @@ describe('a sponsor with a link', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
     })
 
-    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not copy the link. Select it above and copy it by hand.',
+    )
+    const field = screen.getByDisplayValue(URL_OF_LINK)
+    expect(field).toBeVisible()
+    expect(field).toHaveAttribute('readonly')
     expect(screen.queryByRole('button', { name: 'Copied' })).toBeNull()
+  })
+
+  it('says so when the browser has no clipboard at all', async () => {
+    Object.assign(navigator, { clipboard: undefined })
+    render(section({ hasLink: true }))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not copy the link. Select it above and copy it by hand.',
+    )
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+  })
+
+  it('the next copy that works takes the failure away', async () => {
+    writeText.mockRejectedValueOnce(new Error('NotAllowedError'))
+    render(section({ hasLink: true }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+    expect(screen.getByRole('alert')).toBeVisible()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeVisible()
   })
 
   it('keeps working for a deal that is no longer won', () => {
@@ -175,7 +230,136 @@ describe('a sponsor with a link', () => {
   })
 })
 
+describe('copying where the browser allows a clipboard write only inside the click', () => {
+  // Safari refuses a write that comes after an awaited request. A
+  // `ClipboardItem` built from the pending address is written in the click.
+  class FakeClipboardItem {
+    constructor(public items: Record<string, Promise<Blob>>) {}
+  }
+  const write = vi.fn()
+
+  beforeEach(() => {
+    vi.stubGlobal('ClipboardItem', FakeClipboardItem)
+    write.mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { write, writeText } })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('writes to the clipboard before the address has arrived, and fills it in when it does', async () => {
+    let arrive: (answer: { url: string }) => void = () => {}
+    h.address.mockReturnValue(
+      new Promise((resolve) => {
+        arrive = resolve
+      }),
+    )
+    render(section({ hasLink: true }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+
+    // Still waiting for the server, and the write has been made.
+    expect(write).toHaveBeenCalledTimes(1)
+    const [item] = write.mock.calls[0][0] as FakeClipboardItem[]
+    await act(async () => arrive({ url: URL_OF_LINK }))
+    expect(await (await item.items['text/plain']).text()).toBe(URL_OF_LINK)
+    expect(writeText).not.toHaveBeenCalled()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Copied' })).toBeVisible(),
+    )
+  })
+
+  it('falls back to a plain write when that one is refused', async () => {
+    write.mockRejectedValue(new Error('NotAllowedError'))
+    render(section({ hasLink: true }))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+
+    expect(writeText).toHaveBeenCalledWith(URL_OF_LINK)
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeVisible()
+  })
+
+  it('says so when both are refused', async () => {
+    write.mockRejectedValue(new Error('NotAllowedError'))
+    writeText.mockRejectedValue(new Error('NotAllowedError'))
+    render(section({ hasLink: true }))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not copy the link. Select it above and copy it by hand.',
+    )
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+  })
+})
+
+describe('the record is refreshed', () => {
+  it('after a create here, a revoke by a colleague shows', () => {
+    const { rerender } = render(section({ hasLink: false }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+
+    // The refresh confirms the create, then a later one shows the revoke.
+    rerender(section({ hasLink: true }))
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+    rerender(section({ hasLink: false }))
+
+    expect(screen.getByRole('button', { name: 'Create link' })).toBeVisible()
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('after a revoke here, a create by a colleague shows, without the old address', async () => {
+    const { rerender } = render(section({ hasLink: true }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke link' }))
+    expect(screen.getByRole('button', { name: 'Create link' })).toBeVisible()
+
+    rerender(section({ hasLink: false }))
+    rerender(section({ hasLink: true }))
+
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Revoke' })).toBeVisible()
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('a link a colleague revoked and created again is not shown with the address copied before', async () => {
+    const { rerender } = render(section({ hasLink: true }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+
+    rerender(section({ hasLink: false }))
+    rerender(section({ hasLink: true }))
+
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+})
+
 describe('revoking', () => {
+  it('says which copies could not be cleared, and what to do about them', () => {
+    h.revoke.mockImplementation((_input, options: Options) =>
+      options.onSuccess?.({
+        success: true,
+        notCleared: ['versions.rSpring.sfc-1'],
+      } as never),
+    )
+    render(section({ hasLink: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke link' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The link is revoked, but 1 unpublished copy of this sponsor in Sanity Studio still holds it. Publishing it would make the link work again: discard it in Studio.',
+    )
+    expect(screen.getByRole('button', { name: 'Create link' })).toBeVisible()
+  })
+
   it('asks first and says what it does', () => {
     render(section({ hasLink: true }))
 

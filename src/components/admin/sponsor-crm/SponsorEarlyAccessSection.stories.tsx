@@ -15,7 +15,7 @@ const handlers = [
     answer({ url: LINK }),
   ),
   http.post('/api/trpc/sponsor.crm.earlyAccess.revoke', () =>
-    answer({ success: true }),
+    answer({ success: true, notCleared: [] }),
   ),
 ]
 
@@ -124,6 +124,34 @@ export const LinkShown: Story = {
 export const LinkShownDark: Story = { ...LinkShown, ...dark }
 export const LinkShownMobile: Story = { ...LinkShown, ...mobile }
 
+/**
+ * The browser refuses the clipboard: the section says so, and the address
+ * stays in its field to be selected and copied by hand.
+ */
+export const CopyFailed: Story = {
+  args: { hasLink: true },
+  play: async ({ canvasElement }) => {
+    const refuse = () => Promise.reject(new Error('NotAllowedError'))
+    Object.defineProperty(
+      canvasElement.ownerDocument.defaultView!.navigator,
+      'clipboard',
+      {
+        value: { write: refuse, writeText: refuse },
+        configurable: true,
+      },
+    )
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Copy link' }))
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'Could not copy the link. Select it above and copy it by hand.',
+    )
+    await expect(canvas.getByDisplayValue(LINK)).toBeInTheDocument()
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const CopyFailedDark: Story = { ...CopyFailed, ...dark }
+export const CopyFailedMobile: Story = { ...CopyFailed, ...mobile }
+
 /** Revoking asks first and says what it does. */
 export const RevokeConfirmation: Story = {
   args: { hasLink: true },
@@ -158,6 +186,35 @@ export const Revoked: Story = {
     )
     await expect(args.onChanged).toHaveBeenCalledTimes(1)
   },
+}
+
+/**
+ * Revoked, but a copy of the sponsor in a Studio release could not be
+ * cleared: the organizer is told, and what to do about it.
+ */
+export const RevokedWithCopyLeft: Story = {
+  args: { hasLink: true },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/sponsor.crm.earlyAccess.revoke', () =>
+          answer({ success: true, notCleared: ['versions.rSpring.sfc-123'] }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Revoke' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Revoke link' }))
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'The link is revoked, but 1 unpublished copy of this sponsor in Sanity Studio still holds it.',
+    )
+  },
+}
+export const RevokedWithCopyLeftDark: Story = {
+  ...RevokedWithCopyLeft,
+  ...dark,
 }
 
 /** The server says why no link can be created. */
