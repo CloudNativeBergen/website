@@ -55,13 +55,20 @@ export function WorkshopRegistrationSettings({
 
   const [isOpen, setIsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const stored = () => ({
+    sponsorStartDate: toLocalInput(workshopRegistrationSponsorStart),
+    startDate: toLocalInput(workshopRegistrationStart),
+    endDate: toLocalInput(workshopRegistrationEnd),
+  })
+  // WHAT THE FORM WAS OPENED WITH. A save sends only the fields that differ
+  // from it (the server leaves the others alone), so a form opened before a
+  // colleague's save cannot erase a time it never showed.
+  const [opened, setOpened] = useState(stored)
   const [sponsorStartDate, setSponsorStartDate] = useState(
-    toLocalInput(workshopRegistrationSponsorStart),
+    opened.sponsorStartDate,
   )
-  const [startDate, setStartDate] = useState(
-    toLocalInput(workshopRegistrationStart),
-  )
-  const [endDate, setEndDate] = useState(toLocalInput(workshopRegistrationEnd))
+  const [startDate, setStartDate] = useState(opened.startDate)
+  const [endDate, setEndDate] = useState(opened.endDate)
 
   const updateRegistrationTimes =
     api.workshop.admin.updateRegistrationTimes.useMutation({
@@ -89,9 +96,11 @@ export function WorkshopRegistrationSettings({
     })
 
   const openModal = () => {
-    setSponsorStartDate(toLocalInput(workshopRegistrationSponsorStart))
-    setStartDate(toLocalInput(workshopRegistrationStart))
-    setEndDate(toLocalInput(workshopRegistrationEnd))
+    const now = stored()
+    setOpened(now)
+    setSponsorStartDate(now.sponsorStartDate)
+    setStartDate(now.startDate)
+    setEndDate(now.endDate)
     setError(null)
     setIsOpen(true)
   }
@@ -107,11 +116,18 @@ export function WorkshopRegistrationSettings({
     // the read-only rows); persist the unambiguous ISO instant. Malformed
     // values degrade to unset rather than throwing.
     const toIso = (v: string) => osloLocalInputToIso(v)
-    updateRegistrationTimes.mutate({
-      sponsorStartDate: toIso(sponsorStartDate),
-      startDate: toIso(startDate),
-      endDate: toIso(endDate),
-    })
+    const changes = {
+      ...(sponsorStartDate !== opened.sponsorStartDate && {
+        sponsorStartDate: toIso(sponsorStartDate),
+      }),
+      ...(startDate !== opened.startDate && { startDate: toIso(startDate) }),
+      ...(endDate !== opened.endDate && { endDate: toIso(endDate) }),
+    }
+    if (Object.keys(changes).length === 0) {
+      closeModal()
+      return
+    }
+    updateRegistrationTimes.mutate(changes)
   }
 
   const formatDateTime = (dateString?: string) => {

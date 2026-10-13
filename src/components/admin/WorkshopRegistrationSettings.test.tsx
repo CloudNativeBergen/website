@@ -10,7 +10,13 @@
  * router in `__tests__/api/trpc/workshop.registration-window.test.ts`.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { WorkshopRegistrationSettings } from './WorkshopRegistrationSettings'
 import { NotificationProvider } from './NotificationProvider'
 
@@ -45,7 +51,7 @@ type Times = Parameters<typeof WorkshopRegistrationSettings>[0]
 
 function renderCard(times: Times, now: string) {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(now) })
-  render(
+  return render(
     <NotificationProvider>
       <WorkshopRegistrationSettings {...times} />
     </NotificationProvider>,
@@ -190,7 +196,13 @@ describe('saving the registration times', () => {
   const save = () =>
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-  it('sends the sponsor start time entered as Oslo wall-clock, with the other two', () => {
+  const ALL_THREE = {
+    workshopRegistrationSponsorStart: SPONSOR,
+    workshopRegistrationStart: OFFICIAL,
+    workshopRegistrationEnd: END,
+  }
+
+  it('sends the sponsor start time entered as Oslo wall-clock, and not the two it did not change', () => {
     renderCard(
       { workshopRegistrationStart: OFFICIAL, workshopRegistrationEnd: END },
       BEFORE_SPONSOR,
@@ -203,20 +215,11 @@ describe('saving the registration times', () => {
     })
     save()
 
-    expect(mutate.mock.calls).toEqual([
-      [{ sponsorStartDate: SPONSOR, startDate: OFFICIAL, endDate: END }],
-    ])
+    expect(mutate.mock.calls).toEqual([[{ sponsorStartDate: SPONSOR }]])
   })
 
   it('opens with the stored sponsor start time and sends null once it is cleared', () => {
-    renderCard(
-      {
-        workshopRegistrationSponsorStart: SPONSOR,
-        workshopRegistrationStart: OFFICIAL,
-        workshopRegistrationEnd: END,
-      },
-      BEFORE_SPONSOR,
-    )
+    renderCard(ALL_THREE, BEFORE_SPONSOR)
     edit()
     expect(field(/Sponsor Early Access Opens/).value).toBe('2026-06-01T08:00')
 
@@ -225,8 +228,77 @@ describe('saving the registration times', () => {
     })
     save()
 
+    expect(mutate.mock.calls).toEqual([[{ sponsorStartDate: null }]])
+  })
+
+  it('sends only the end when only the end was changed', () => {
+    renderCard(ALL_THREE, BEFORE_SPONSOR)
+    edit()
+
+    // 10:00 in Oslo on 2 July is 08:00 UTC.
+    fireEvent.change(field(/Registration Closes/), {
+      target: { value: '2026-07-02T10:00' },
+    })
+    save()
+
     expect(mutate.mock.calls).toEqual([
-      [{ sponsorStartDate: null, startDate: OFFICIAL, endDate: END }],
+      [{ endDate: '2026-07-02T08:00:00.000Z' }],
     ])
+  })
+
+  it('sends every time that was changed', () => {
+    renderCard(ALL_THREE, BEFORE_SPONSOR)
+    edit()
+
+    fireEvent.change(field(/Sponsor Early Access Opens/), {
+      target: { value: '2026-06-02T08:00' },
+    })
+    fireEvent.change(field(/Registration Opens/), {
+      target: { value: '' },
+    })
+    save()
+
+    expect(mutate.mock.calls).toEqual([
+      [{ sponsorStartDate: '2026-06-02T06:00:00.000Z', startDate: null }],
+    ])
+  })
+
+  it('does not send a time that changed behind the open form: it compares with what it was opened with', () => {
+    // Opened when no sponsor start time was stored. A colleague sets one, and
+    // the card is drawn again with it while the form is still open.
+    const { rerender } = renderCard(
+      { workshopRegistrationStart: OFFICIAL, workshopRegistrationEnd: END },
+      BEFORE_SPONSOR,
+    )
+    edit()
+    rerender(
+      <NotificationProvider>
+        <WorkshopRegistrationSettings {...ALL_THREE} />
+      </NotificationProvider>,
+    )
+    expect(field(/Sponsor Early Access Opens/).value).toBe('')
+
+    fireEvent.change(field(/Registration Closes/), {
+      target: { value: '2026-07-02T10:00' },
+    })
+    save()
+
+    // The empty sponsor field is what the form was opened with, so it is no
+    // change: sending `null` for it would erase the colleague's time.
+    expect(mutate.mock.calls).toEqual([
+      [{ endDate: '2026-07-02T08:00:00.000Z' }],
+    ])
+  })
+
+  it('with nothing changed, sends nothing and closes the form', async () => {
+    renderCard(ALL_THREE, BEFORE_SPONSOR)
+    edit()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+
+    save()
+
+    // The form leaves with a transition.
+    await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0))
+    expect(mutate.mock.calls).toEqual([])
   })
 })
