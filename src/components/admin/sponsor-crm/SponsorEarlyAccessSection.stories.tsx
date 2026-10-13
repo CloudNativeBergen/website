@@ -151,6 +151,33 @@ export const Link: Story = {
 export const LinkDark: Story = { ...Link, ...dark }
 export const LinkMobile: Story = { ...Link, ...mobile }
 
+/**
+ * Workshops were turned off for the conference after the link was created: it
+ * opens nothing, so no address is offered. It can still be revoked.
+ */
+const WORKSHOPS_OFF =
+  'Workshops are not enabled for this conference, so this link opens nothing.'
+export const LinkWorkshopsOff: Story = {
+  args: {
+    hasLink: true,
+    createRefusal: 'Workshops are not enabled for this conference.',
+    copyRefusal: WORKSHOPS_OFF,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText(WORKSHOPS_OFF)).toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('button', { name: 'Copy link' }),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.getByRole('button', { name: 'Revoke' }),
+    ).toBeInTheDocument()
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const LinkWorkshopsOffDark: Story = { ...LinkWorkshopsOff, ...dark }
+export const LinkWorkshopsOffMobile: Story = { ...LinkWorkshopsOff, ...mobile }
+
 /** Copy link asks for the address, shows it and copies it. */
 export const LinkShown: Story = {
   args: { hasLink: true },

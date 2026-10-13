@@ -67,10 +67,14 @@ vi.mock('@/components/admin/sponsor-crm/SponsorEarlyAccessSection', () => ({
   SponsorEarlyAccessSection: (props: {
     hasLink: boolean
     createRefusal?: string
+    copyRefusal?: string
+    recordUpdatedAt?: string
   }) => (
     <div data-testid="early-access-section">
       {props.hasLink ? 'has link' : 'no link'}
       {props.createRefusal ? ` | ${props.createRefusal}` : ' | can create'}
+      {props.copyRefusal ? ` | no copy: ${props.copyRefusal}` : ''}
+      {props.recordUpdatedAt ? ` | record of ${props.recordUpdatedAt}` : ''}
     </div>
   ),
 }))
@@ -170,11 +174,34 @@ describe('SponsorContractView', () => {
       expect(screen.queryByTestId('early-access-section')).toBeNull()
     })
 
-    it('stays for a link that exists after workshops were turned off, so it can be revoked', () => {
+    it('stays for a link that exists after workshops were turned off, so it can be revoked, and offers no copy', () => {
       view({ status: 'closed-won', hasWorkshopEarlyAccessLink: true }, false)
 
       expect(screen.getByTestId('early-access-section')).toHaveTextContent(
-        'has link | Workshops are not enabled for this conference.',
+        'has link | Workshops are not enabled for this conference. | no copy: Workshops are not enabled for this conference, so this link opens nothing.',
+      )
+    })
+
+    it('with workshops on, a link can be copied', () => {
+      view({ status: 'closed-won', hasWorkshopEarlyAccessLink: true }, true)
+
+      expect(screen.getByTestId('early-access-section')).not.toHaveTextContent(
+        'no copy',
+      )
+    })
+
+    it('hands the section the record’s own change time', () => {
+      view(
+        {
+          status: 'closed-won',
+          hasWorkshopEarlyAccessLink: true,
+          _updatedAt: '2026-10-13T10:00:05Z',
+        },
+        true,
+      )
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'record of 2026-10-13T10:00:05Z',
       )
     })
   })

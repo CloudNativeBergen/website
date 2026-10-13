@@ -614,6 +614,14 @@ export function SponsorContractView({
         <SponsorEarlyAccessSection
           sponsorForConferenceId={sponsor._id}
           hasLink={!!sponsor.hasWorkshopEarlyAccessLink}
+          recordUpdatedAt={sponsor._updatedAt}
+          // With workshops off the link opens nothing and its address cannot
+          // be built: only revoking is left.
+          copyRefusal={
+            workshopsEnabled
+              ? undefined
+              : 'Workshops are not enabled for this conference, so this link opens nothing.'
+          }
           createRefusal={
             !workshopsEnabled
               ? 'Workshops are not enabled for this conference.'

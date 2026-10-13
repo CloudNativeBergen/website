@@ -76,11 +76,18 @@ afterEach(cleanup)
 
 const NOT_WON =
   'Move the sponsor to Closed Won before creating an early-access link.'
-const section = (props: { hasLink: boolean; createRefusal?: string }) => (
+const section = (props: {
+  hasLink: boolean
+  createRefusal?: string
+  copyRefusal?: string
+  recordUpdatedAt?: string
+}) => (
   <SponsorEarlyAccessSection
     sponsorForConferenceId="sfc-1"
     createRefusal={props.createRefusal}
+    copyRefusal={props.copyRefusal}
     hasLink={props.hasLink}
+    recordUpdatedAt={props.recordUpdatedAt}
     onChanged={onChanged}
   />
 )
@@ -399,6 +406,90 @@ describe('the record is refreshed', () => {
     rerender(section({ hasLink: true }))
 
     expect(screen.queryByRole('textbox')).toBeNull()
+  })
+})
+
+describe('a link that opens nothing: workshops were turned off', () => {
+  const OFF =
+    'Workshops are not enabled for this conference, so this link opens nothing.'
+
+  it('offers no copy, says why in one line, and keeps revoke', () => {
+    render(section({ hasLink: true, createRefusal: OFF, copyRefusal: OFF }))
+
+    expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull()
+    expect(screen.getByText(OFF)).toBeVisible()
+    expect(h.address).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke link' }))
+    expect(h.revoke).toHaveBeenCalledTimes(1)
+  })
+
+  it('the same sponsor with workshops on can copy', () => {
+    render(section({ hasLink: true }))
+
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeVisible()
+    expect(screen.queryByText(OFF)).toBeNull()
+  })
+})
+
+describe('the record read again after this section acted', () => {
+  // The refetch that follows a create or a revoke brings a record with a new
+  // `_updatedAt`. From then on the record is the truth, also when it says
+  // what it said before: a colleague undid it in between.
+  const BEFORE = '2026-10-13T10:00:00Z'
+  const AFTER = '2026-10-13T10:00:05Z'
+
+  it('created here, revoked by a colleague before the refetch landed: no link is shown', () => {
+    const { rerender } = render(
+      section({ hasLink: false, recordUpdatedAt: BEFORE }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+
+    // The refetch: still no link, and the record has changed.
+    rerender(section({ hasLink: false, recordUpdatedAt: AFTER }))
+
+    expect(screen.getByRole('button', { name: 'Create link' })).toBeVisible()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Revoke' })).toBeNull()
+  })
+
+  it('revoked here, created by a colleague before the refetch landed: the link is shown, without an address', () => {
+    const { rerender } = render(
+      section({ hasLink: true, recordUpdatedAt: BEFORE }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke link' }))
+    expect(screen.getByRole('button', { name: 'Create link' })).toBeVisible()
+
+    rerender(section({ hasLink: true, recordUpdatedAt: AFTER }))
+
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Revoke' })).toBeVisible()
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('created here and confirmed by the refetch: the address stays', () => {
+    const { rerender } = render(
+      section({ hasLink: false, recordUpdatedAt: BEFORE }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+
+    rerender(section({ hasLink: true, recordUpdatedAt: AFTER }))
+
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+  })
+
+  it('a render that brings the same record changes nothing', () => {
+    const { rerender } = render(
+      section({ hasLink: false, recordUpdatedAt: BEFORE }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+
+    rerender(section({ hasLink: false, recordUpdatedAt: BEFORE }))
+
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
   })
 })
 

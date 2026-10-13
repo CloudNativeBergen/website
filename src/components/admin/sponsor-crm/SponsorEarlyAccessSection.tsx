@@ -19,6 +19,17 @@ export interface SponsorEarlyAccessSectionProps {
    * won, say). Unset: one can. A link that exists stays usable either way.
    */
   createRefusal?: string
+  /**
+   * Why the link's address is not offered (workshops were turned off, so the
+   * link opens nothing). Unset: it can be copied. Revoke stays either way.
+   */
+  copyRefusal?: string
+  /**
+   * When the sponsor's record last changed (`_updatedAt`). A new value means
+   * the record was read again after a change: it is then the truth about the
+   * link, over anything this section did before.
+   */
+  recordUpdatedAt?: string
   /** The link was created or revoked: the host refreshes the sponsor. */
   onChanged?: () => void
 }
@@ -36,17 +47,22 @@ export function SponsorEarlyAccessSection({
   sponsorForConferenceId,
   hasLink,
   createRefusal,
+  copyRefusal,
+  recordUpdatedAt,
   onChanged,
 }: SponsorEarlyAccessSectionProps) {
   const utils = api.useUtils()
   const clipboard = useCopyToClipboard()
-  // WHAT THIS SECTION DID since the record was read, until the record says
-  // something new. `recordHasLink` is the record as it stood then. When the
-  // host hands over a record that says otherwise (its own refresh after this
-  // section's change, or a colleague's create or revoke), the record is the
-  // truth again, and an address from before the link went away is dropped.
+  // WHAT THIS SECTION DID since the record was read, until the record is read
+  // again. `record` is the record as it stood then: whether it has a link,
+  // and when it last changed. A create or a revoke changes the sponsor, so
+  // the refetch that follows brings a record with a new change time. From
+  // then on the record is the truth, whoever changed the link last, also when
+  // it says what it said before: a colleague may have undone this section's
+  // change in between. What this section did is kept only where the record
+  // agrees with it.
   const [done, setDone] = useState<{
-    recordHasLink: boolean
+    record: { hasLink: boolean; updatedAt: string | undefined }
     /** The link this section created (`true`) or revoked (`false`). */
     linked: boolean | null
     /** The address the server last answered. */
@@ -57,19 +73,25 @@ export function SponsorEarlyAccessSection({
      * still hold it.
      */
     outOfStep: number
-  }>({ recordHasLink: hasLink, linked: null, url: null, outOfStep: 0 })
+  }>({
+    record: { hasLink, updatedAt: recordUpdatedAt },
+    linked: null,
+    url: null,
+    outOfStep: 0,
+  })
   const [confirming, setConfirming] = useState(false)
   const [fetching, setFetching] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  if (done.recordHasLink !== hasLink) {
+  if (
+    done.record.hasLink !== hasLink ||
+    done.record.updatedAt !== recordUpdatedAt
+  ) {
+    const agrees = done.linked === hasLink
     setDone({
-      recordHasLink: hasLink,
+      record: { hasLink, updatedAt: recordUpdatedAt },
       linked: null,
-      url: done.linked === hasLink ? done.url : null,
-      // A warning about copies is about what THIS section's create or revoke
-      // left behind. Once the record says something else, a colleague acted,
-      // and it is no longer true of the link as it is now.
-      outOfStep: done.linked === hasLink ? done.outOfStep : 0,
+      url: agrees ? done.url : null,
+      outOfStep: agrees ? done.outOfStep : 0,
     })
   }
   const linked = done.linked ?? hasLink
@@ -214,19 +236,25 @@ export function SponsorEarlyAccessSection({
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={copy}
-                disabled={busy}
-                className={quietButton}
-              >
-                {copied ? (
-                  <CheckIcon className="size-4 text-green-500" />
-                ) : (
-                  <ClipboardDocumentIcon className="size-4" />
-                )}
-                {copied ? 'Copied' : 'Copy link'}
-              </button>
+              {copyRefusal ? (
+                <p className="w-full text-xs text-amber-600 dark:text-amber-400">
+                  {copyRefusal}
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={copy}
+                  disabled={busy}
+                  className={quietButton}
+                >
+                  {copied ? (
+                    <CheckIcon className="size-4 text-green-500" />
+                  ) : (
+                    <ClipboardDocumentIcon className="size-4" />
+                  )}
+                  {copied ? 'Copied' : 'Copy link'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setConfirming(true)}
