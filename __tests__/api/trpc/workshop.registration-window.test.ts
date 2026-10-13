@@ -565,6 +565,30 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
     ).toEqual(refusedWith(NO_OFFICIAL_OPENING))
   })
 
+  it('refuses an end at the very instant of the start', async () => {
+    expect(
+      await save({
+        sponsorStartDate: null,
+        startDate: OFFICIAL,
+        endDate: OFFICIAL,
+      }),
+    ).toEqual(
+      refusedWith('Registration Closes must be later than Registration Opens'),
+    )
+  })
+
+  it('refuses an end at the instant of the start, spelled in another offset', async () => {
+    expect(
+      await save({
+        sponsorStartDate: null,
+        startDate: OFFICIAL,
+        endDate: '2026-06-15T08:30:00+02:00',
+      }),
+    ).toEqual(
+      refusedWith('Registration Closes must be later than Registration Opens'),
+    )
+  })
+
   it('still refuses an end that is not after the start', async () => {
     expect(
       await save({ sponsorStartDate: null, startDate: END, endDate: OFFICIAL }),
@@ -673,6 +697,23 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
       expect(await save({ endDate: '2026-05-09T06:00:00.000Z' })).toEqual(
         refused(
           `Registration Closes must be later than Registration Opens.${STORED_OPENING}`,
+        ),
+      )
+    })
+
+    it('refuses an end at the very instant of the STORED start', async () => {
+      // The stored opening is 10 May 06:00 UTC, and is not sent.
+      expect(await save({ endDate: '2026-05-10T06:00:00.000Z' })).toEqual(
+        refused(
+          `Registration Closes must be later than Registration Opens.${STORED_OPENING}`,
+        ),
+      )
+    })
+
+    it('refuses a start at the very instant of the STORED end', async () => {
+      expect(await save({ startDate: '2026-05-20T06:00:00.000Z' })).toEqual(
+        refused(
+          `Registration Closes must be later than Registration Opens.${STORED_END}`,
         ),
       )
     })
