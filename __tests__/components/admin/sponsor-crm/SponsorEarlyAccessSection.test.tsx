@@ -14,6 +14,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 
 const NEW_URL =
@@ -81,11 +82,13 @@ const section = (props: {
   createRefusal?: string
   copyRefusal?: string
   recordUpdatedAt?: string
+  sponsorStartSet?: boolean
 }) => (
   <SponsorEarlyAccessSection
     sponsorForConferenceId="sfc-1"
     createRefusal={props.createRefusal}
     copyRefusal={props.copyRefusal}
+    sponsorStartSet={props.sponsorStartSet}
     hasLink={props.hasLink}
     recordUpdatedAt={props.recordUpdatedAt}
     onChanged={onChanged}
@@ -103,6 +106,117 @@ describe('viewing the record', () => {
     expect(h.address).not.toHaveBeenCalled()
     expect(h.create).not.toHaveBeenCalled()
     expect(screen.queryByRole('textbox')).toBeNull()
+  })
+})
+
+describe('what the section says the link does', () => {
+  it('names the time by the label the workshop settings give it', () => {
+    render(section({ hasLink: false, sponsorStartSet: true }))
+
+    expect(
+      screen.getByText(
+        'A link the sponsor can pass on to its people. Whoever opens it can sign up for workshops from the time set as “Sponsor Early Access Opens”, before registration opens for everyone. They still need a ticket that includes workshops.',
+      ),
+    ).toBeVisible()
+    expect(screen.queryByText(/gives no head start/)).toBeNull()
+  })
+
+  it('says so when the conference has no such time set, and where to set it', () => {
+    render(section({ hasLink: true, sponsorStartSet: false }))
+
+    expect(
+      screen.getByText(
+        'No “Sponsor Early Access Opens” time is set for this conference, so a link gives no head start yet. Set one under Workshops.',
+      ),
+    ).toBeVisible()
+    // Known from the conference the page already has: nothing is asked for.
+    expect(h.address).not.toHaveBeenCalled()
+  })
+})
+
+describe('keyboard focus and what is announced', () => {
+  const focused = () => document.activeElement
+  const button = (name: string) => screen.getByRole('button', { name })
+  const press = (name: string) => {
+    button(name).focus()
+    fireEvent.click(button(name))
+  }
+
+  it('after Create link, focus is on Copy link, and "Link created" is announced', () => {
+    render(section({ hasLink: false }))
+
+    press('Create link')
+
+    expect(focused()).toBe(button('Copy link'))
+    expect(screen.getByRole('status')).toHaveTextContent('Link created')
+  })
+
+  it('after Revoke, focus is on Keep link; after Keep link, back on Revoke', () => {
+    render(section({ hasLink: true }))
+
+    press('Revoke')
+    expect(focused()).toBe(button('Keep link'))
+
+    press('Keep link')
+    expect(focused()).toBe(button('Revoke'))
+  })
+
+  it('after Revoke link, focus is on Create link, and "Link revoked" is announced', () => {
+    render(section({ hasLink: true }))
+    press('Revoke')
+
+    press('Revoke link')
+
+    expect(focused()).toBe(button('Create link'))
+    expect(screen.getByRole('status')).toHaveTextContent('Link revoked')
+  })
+
+  it('after Revoke link with no Create to go to, focus is on the section’s heading', () => {
+    render(section({ hasLink: true, createRefusal: NOT_WON }))
+    press('Revoke')
+
+    press('Revoke link')
+
+    expect(focused()).toBe(
+      screen.getByRole('heading', { name: 'Workshop early access' }),
+    )
+  })
+
+  it('Copy link keeps focus while the address is asked for and after it has come', async () => {
+    let arrive: (answer: { url: string }) => void = () => {}
+    h.address.mockReturnValue(
+      new Promise((resolve) => {
+        arrive = resolve
+      }),
+    )
+    render(section({ hasLink: true }))
+
+    press('Copy link')
+    // Busy, and still focusable: it is not `disabled`.
+    expect(button('Copy link')).toHaveAttribute('aria-disabled', 'true')
+    expect(button('Copy link')).not.toBeDisabled()
+    expect(focused()).toBe(button('Copy link'))
+
+    await act(async () => arrive({ url: URL_OF_LINK }))
+    expect(focused()).toBe(screen.getByRole('button', { name: /Cop/ }))
+  })
+
+  it('a button that is busy does nothing when pressed again', async () => {
+    h.address.mockReturnValue(new Promise(() => {}))
+    render(section({ hasLink: true }))
+    press('Copy link')
+
+    press('Copy link')
+    press('Revoke')
+
+    expect(h.address).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Revoke link' })).toBeNull()
+  })
+
+  it('announces nothing before anything was done', () => {
+    render(section({ hasLink: true }))
+
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 })
 
@@ -536,6 +650,24 @@ describe('a warning about copies belongs to what this section did', () => {
   })
 })
 
+describe('a copy of a link a colleague has revoked', () => {
+  it('shows the server’s answer and asks for the record to be read again', async () => {
+    h.address.mockRejectedValue(
+      new Error('This sponsor has no early-access link.'),
+    )
+    render(section({ hasLink: true }))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This sponsor has no early-access link.',
+    )
+    expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('a copy while an earlier one has failed', () => {
   it('says nothing about a failed copy while the address is being asked for again', async () => {
     h.address.mockRejectedValueOnce(new Error('No such link'))
@@ -580,9 +712,44 @@ describe('revoking', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Revoke link' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The link is revoked, but 1 unpublished copy of this sponsor in Sanity Studio still holds it. Publishing it would make the link work again: discard it in Studio.',
+      'The link is revoked, but 1 unpublished copy of this sponsor in Sanity Studio still holds it. Publishing it would make the link work again. Try again, or discard it in Studio.',
     )
     expect(screen.getByRole('button', { name: 'Create link' })).toBeVisible()
+  })
+
+  it('trying again revokes once more, and the warning goes when nothing is left', () => {
+    h.revoke.mockImplementationOnce((_input, options: Options) =>
+      options.onSuccess?.({
+        success: true,
+        notCleared: ['versions.rSpring.sfc-1'],
+      } as never),
+    )
+    render(section({ hasLink: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke link' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('still holds it')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(h.revoke).toHaveBeenCalledTimes(2)
+    expect(h.create).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+
+  it('the Try again button is beside the warning, not inside what is announced', () => {
+    h.revoke.mockImplementation((_input, options: Options) =>
+      options.onSuccess?.({
+        success: true,
+        notCleared: ['versions.rSpring.sfc-1'],
+      } as never),
+    )
+    render(section({ hasLink: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke link' }))
+
+    expect(within(screen.getByRole('alert')).queryByRole('button')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible()
   })
 
   it('asks first and says what it does', () => {

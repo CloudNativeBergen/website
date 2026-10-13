@@ -69,12 +69,14 @@ vi.mock('@/components/admin/sponsor-crm/SponsorEarlyAccessSection', () => ({
     createRefusal?: string
     copyRefusal?: string
     recordUpdatedAt?: string
+    sponsorStartSet?: boolean
   }) => (
     <div data-testid="early-access-section">
       {props.hasLink ? 'has link' : 'no link'}
       {props.createRefusal ? ` | ${props.createRefusal}` : ' | can create'}
       {props.copyRefusal ? ` | no copy: ${props.copyRefusal}` : ''}
       {props.recordUpdatedAt ? ` | record of ${props.recordUpdatedAt}` : ''}
+      {` | sponsor start set: ${String(props.sponsorStartSet)}`}
     </div>
   ),
 }))
@@ -189,6 +191,24 @@ describe('SponsorContractView', () => {
         'no copy',
       )
     })
+
+    it.each([true, false])(
+      'tells the section whether the conference has a sponsor start time (%s)',
+      (sponsorStartSet) => {
+        render(
+          <SponsorContractView
+            conferenceId="conf-2026"
+            sponsor={mockSponsor({ status: 'closed-won' })}
+            workshopsEnabled
+            sponsorStartSet={sponsorStartSet}
+          />,
+        )
+
+        expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+          `sponsor start set: ${sponsorStartSet}`,
+        )
+      },
+    )
 
     it('hands the section the record’s own change time', () => {
       view(

@@ -38,6 +38,8 @@ interface SponsorContractViewProps {
   onSendContract?: (options: ContractSendOptions) => void
   /** The conference has workshops: offer the early-access link (#1346). */
   workshopsEnabled?: boolean
+  /** The conference has a "Sponsor Early Access Opens" time (see the section). */
+  sponsorStartSet?: boolean
 }
 
 export interface ContractSendOptions {
@@ -52,6 +54,7 @@ export function SponsorContractView({
   onSendRegistration,
   onSendContract,
   workshopsEnabled = false,
+  sponsorStartSet,
 }: SponsorContractViewProps) {
   const [step, setStep] = useState<Step>('overview')
   const [pdfData, setPdfData] = useState<string | null>(null)
@@ -615,6 +618,7 @@ export function SponsorContractView({
           sponsorForConferenceId={sponsor._id}
           hasLink={!!sponsor.hasWorkshopEarlyAccessLink}
           recordUpdatedAt={sponsor._updatedAt}
+          sponsorStartSet={sponsorStartSet}
           // With workshops off the link opens nothing and its address cannot
           // be built: only revoking is left.
           copyRefusal={

@@ -618,6 +618,8 @@ export function SponsorCRMPipeline({
           key={selectedSponsor?._id || 'new'}
           conferenceId={conferenceId}
           workshopsEnabled={workshopsEnabled}
+          // Without one a link gives no head start, and the section says so.
+          sponsorStartSet={!!conference.workshopRegistrationSponsorStart}
           sponsor={selectedSponsor}
           isOpen={isFormOpen}
           onClose={handleCloseForm}
