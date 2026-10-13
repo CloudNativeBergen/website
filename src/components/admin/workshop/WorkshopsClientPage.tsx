@@ -27,7 +27,13 @@ import { useRefreshAnnouncements } from './useRefreshAnnouncements'
 import { useSignupActions } from './useSignupActions'
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query'
 import { EmptyState } from '@/components/EmptyState'
-import { EarlySignupsList, EARLY_SPONSOR_PARAM } from './early-signups'
+import {
+  EarlySignupsList,
+  EARLY_SIGNUPS_ANCHOR,
+  EARLY_SPONSOR_PARAM,
+} from './early-signups'
+import { workshopEarlySignupsSchema } from '@/server/schemas/workshop'
+import { useSearchParams } from 'next/navigation'
 
 interface SignupModalState {
   isOpen: boolean
@@ -67,11 +73,6 @@ interface WorkshopsClientPageProps {
   resendDisabledReason: string | null
   /** The "Workshop tickets" section (#1332), rendered by the server page. */
   ticketsSection?: ReactNode
-  /**
-   * The sponsor the "Early sign-ups" list opens narrowed to (#1348): the
-   * address's `earlySponsor`, as the link on a sponsor's record sets it.
-   */
-  initialEarlySponsorId?: string
 }
 
 export function WorkshopsClientPage({
@@ -82,7 +83,6 @@ export function WorkshopsClientPage({
   workshopRegistrationEnd,
   resendDisabledReason,
   ticketsSection,
-  initialEarlySponsorId,
 }: WorkshopsClientPageProps) {
   const queryClient = useQueryClient()
   const { showNotification } = useNotification()
@@ -142,9 +142,18 @@ export function WorkshopsClientPage({
   // THE "EARLY SIGN-UPS" LIST (#1348). Narrowing it to a sponsor is a new
   // read with the sponsor in its input: the server narrows, over every match.
   // Nothing here filters, since `signups` above is the first hundred only.
-  const [earlySponsorId, setEarlySponsorId] = useState<string | null>(
-    initialEarlySponsorId ?? null,
+  //
+  // THE ADDRESS IS THE ONE SOURCE OF WHAT IT IS NARROWED TO (`earlySponsor`,
+  // as the count's link on a sponsor's record sets it). No state is kept for
+  // it: with Cache Components, Next keeps a visited route mounted and hidden,
+  // so state seeded from the address once would still hold the OLD narrowing
+  // when that link brings the organizer back with another sponsor. A value
+  // the read's schema would refuse is no narrowing.
+  const searchParams = useSearchParams()
+  const inAddress = workshopEarlySignupsSchema.shape.sponsorId.safeParse(
+    searchParams.get(EARLY_SPONSOR_PARAM) ?? undefined,
   )
+  const earlySponsorId = (inAddress.success && inAddress.data) || null
   const earlySignups = api.workshop.admin.listEarlySignups.useQuery(
     earlySponsorId ? { sponsorId: earlySponsorId } : {},
     {
@@ -156,14 +165,23 @@ export function WorkshopsClientPage({
     },
   )
   const narrowEarlySignups = (sponsorId: string | null) => {
-    setEarlySponsorId(sponsorId)
-    // The address follows, so a reload shows the same list. Through the
-    // History API, not the router: a navigation would render this page on
-    // the server again, and its reads are live.
+    // Written to the address, which `useSearchParams` above follows. Through
+    // the History API, not the router: a navigation would render this page on
+    // the server again, and its reads are live. Narrowed, the address is the
+    // one the count's link has, anchor included, so a reload shows the same
+    // list and scrolls to it. Everything else in the address is kept.
     const url = new URL(window.location.href)
-    if (sponsorId) url.searchParams.set(EARLY_SPONSOR_PARAM, sponsorId)
-    else url.searchParams.delete(EARLY_SPONSOR_PARAM)
-    window.history.replaceState(null, '', `${url.pathname}${url.search}`)
+    if (sponsorId) {
+      url.searchParams.set(EARLY_SPONSOR_PARAM, sponsorId)
+      url.hash = EARLY_SIGNUPS_ANCHOR
+    } else {
+      url.searchParams.delete(EARLY_SPONSOR_PARAM)
+    }
+    window.history.replaceState(
+      null,
+      '',
+      `${url.pathname}${url.search}${url.hash}`,
+    )
   }
 
   const utils = api.useUtils()

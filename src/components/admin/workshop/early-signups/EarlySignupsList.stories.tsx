@@ -187,6 +187,27 @@ export const Reading: Story = {
   },
 }
 
+/**
+ * Opened from a sponsor's record, before the first answer: the list does not
+ * know yet whether the sponsor is one of the conference's, and does not say
+ * that it is not.
+ */
+export const ReadingFirstAnswer: Story = {
+  args: { signups: undefined, sponsors: undefined, sponsorId: 'sfc-acme' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const control = canvas.getByRole('combobox', { name: 'Sponsor' })
+    await expect(control).toHaveValue('sfc-acme')
+    await expect(
+      within(control).getByRole('option', { name: 'Selected sponsor' }),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.queryByText(/not in this conference/i),
+    ).not.toBeInTheDocument()
+  },
+}
+export const ReadingFirstAnswerDark: Story = { ...ReadingFirstAnswer, ...dark }
+
 export const CouldNotRead: Story = {
   args: {
     signups: undefined,

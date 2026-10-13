@@ -86,6 +86,17 @@ describe('the "Early sign-ups" list', () => {
     ).toBeVisible()
   })
 
+  // The count on a sponsor's record links to
+  // `/admin/workshops?earlySponsor=…#early-sign-ups`
+  // (`SponsorContractView.test.tsx`): the fragment is this section's id.
+  it('is the section the count’s link points at: its id is "early-sign-ups"', () => {
+    renderList()
+
+    expect(
+      screen.getByRole('region', { name: 'Early sign-ups' }),
+    ).toHaveAttribute('id', 'early-sign-ups')
+  })
+
   it('shows the person, the workshop, the status, the sponsor and the day of each sign-up', () => {
     renderList()
 
@@ -165,6 +176,62 @@ describe('the "Early sign-ups" list', () => {
     })
 
     expect(onSponsorChange.mock.calls).toEqual([[null]])
+  })
+
+  /** The control's options, as it labels them. */
+  const offered = () =>
+    within(screen.getByRole('combobox', { name: 'Sponsor' }))
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+
+  // "Not in this conference" is the SERVER's answer. Until it has answered
+  // for this narrowing, the list does not know, and does not say so.
+  describe('narrowed to a sponsor it has no answer about', () => {
+    it('does not call it "not in this conference" while the first answer is on its way', () => {
+      renderList({
+        signups: undefined,
+        sponsors: undefined,
+        sponsorId: 'sfc-acme',
+      })
+
+      expect(offered()).toEqual(['All sponsors', 'Selected sponsor'])
+      expect(screen.getByRole('combobox', { name: 'Sponsor' })).toHaveValue(
+        'sfc-acme',
+      )
+      expect(screen.queryByText(/not in this conference/i)).toBeNull()
+    })
+
+    it('nor while the next answer is on its way and the last one did not offer it', () => {
+      renderList({
+        signups: undefined,
+        sponsors: [GLOBEX],
+        sponsorId: 'sfc-acme',
+      })
+
+      expect(offered()).toEqual(['All sponsors', 'Globex', 'Selected sponsor'])
+    })
+
+    it('nor when the answer could not be read', () => {
+      renderList({
+        signups: undefined,
+        sponsors: undefined,
+        sponsorId: 'sfc-acme',
+        error: 'The early sign-ups could not be read.',
+      })
+
+      expect(offered()).toEqual(['All sponsors', 'Selected sponsor'])
+      expect(screen.queryByText(/not in this conference/i)).toBeNull()
+    })
+
+    it('names it once the answer offers it', () => {
+      renderList({
+        signups: [ROWS[0]],
+        sponsors: [ACME, GLOBEX],
+        sponsorId: 'sfc-acme',
+      })
+
+      expect(offered()).toEqual(['All sponsors', 'Acme AS', 'Globex'])
+    })
   })
 
   it('keeps what it is narrowed to selectable when that sponsor is not one of the conference’s', () => {

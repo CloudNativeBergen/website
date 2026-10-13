@@ -37,7 +37,11 @@ import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { WorkshopsClientPage } from './WorkshopsClientPage'
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }))
-vi.mock('next/navigation', () => ({ useRouter: () => router }))
+vi.mock('next/navigation', () => ({
+  useRouter: () => router,
+  // The page reads what its "Early sign-ups" list is narrowed to (#1348).
+  useSearchParams: () => new URLSearchParams(),
+}))
 
 /**
  * The stored state. The counts are the workshop's own and far above what one

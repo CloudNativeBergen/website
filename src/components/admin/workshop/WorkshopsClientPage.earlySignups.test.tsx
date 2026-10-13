@@ -12,12 +12,24 @@
  * other answer holds, so a row that shows them cannot have been filtered out
  * of anything the browser had.
  *
+ * THE ADDRESS IS THE ONE SOURCE OF WHAT THE LIST IS NARROWED TO. The page
+ * keeps no state of its own for it: with Cache Components, Next keeps a
+ * visited route mounted and hidden, so a page that seeded state once from the
+ * address would show its OLD narrowing when the link on a sponsor's record
+ * brings the organizer back with another sponsor.
+ *
  * Real here: the page, the list, the dialog, the tRPC and query clients (with
  * the app's 60 s stale time). The server is the `fetch` below, which records
  * the input of every read of the list.
+ *
+ * MODELLED: `useSearchParams`, as a hook that follows the address. That
+ * Next's own does so, for a navigation into a route it kept mounted and for
+ * `history.replaceState`, is in its docs and was run on a production build
+ * (see the PR); it is not something this file can show.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -32,8 +44,44 @@ import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { WorkshopsClientPage } from './WorkshopsClientPage'
 
-const router = vi.hoisted(() => ({ refresh: vi.fn(), replace: vi.fn() }))
-vi.mock('next/navigation', () => ({ useRouter: () => router }))
+const router = vi.hoisted(() => ({
+  refresh: vi.fn(),
+  replace: vi.fn(),
+  /** Called whenever the address changes: the page's hook reads it again. */
+  addressChanged: new Set<() => void>(),
+}))
+vi.mock('next/navigation', async () => {
+  const { useMemo, useSyncExternalStore } = await import('react')
+  const subscribe = (listener: () => void) => {
+    router.addressChanged.add(listener)
+    return () => void router.addressChanged.delete(listener)
+  }
+  return {
+    useRouter: () => router,
+    useSearchParams: () => {
+      const search = useSyncExternalStore(
+        subscribe,
+        () => window.location.search,
+      )
+      return useMemo(() => new URLSearchParams(search), [search])
+    },
+  }
+})
+
+/**
+ * The address changes under the page, and whoever reads it is told: what a
+ * navigation does, and what Next's patched `history.replaceState` does.
+ */
+const realReplaceState = window.history.replaceState.bind(window.history)
+function setAddress(address: string) {
+  realReplaceState(null, '', address)
+  for (const listener of [...router.addressChanged]) listener()
+}
+/**
+ * The organizer arrives at this route again while the page is still mounted:
+ * the link on a sponsor's record, with Next showing the page it kept.
+ */
+const arriveAt = (address: string) => act(() => setAddress(address))
 
 const SERVER_RENDER = [
   {
@@ -180,7 +228,16 @@ beforeEach(() => {
     },
     earlyInputs: [],
   })
-  window.history.replaceState(null, '', '/admin/workshops')
+  server.early['sfc-globex'] = {
+    signups: [early('su-gus', 'Gus Grissom', GLOBEX, 'waitlist')],
+    sponsors: [ACME, GLOBEX],
+  }
+  router.replace.mockReset()
+  router.refresh.mockReset()
+  realReplaceState(null, '', '/admin/workshops')
+  vi.spyOn(window.history, 'replaceState').mockImplementation(
+    (_state, _unused, address) => setAddress(String(address)),
+  )
   vi.stubGlobal(
     'fetch',
     vi.fn(async (request: RequestInfo | URL, init?: RequestInit) => {
@@ -207,6 +264,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 function Providers({ children }: { children: ReactNode }) {
@@ -226,14 +284,15 @@ function Providers({ children }: { children: ReactNode }) {
   )
 }
 
-function renderPage(initialEarlySponsorId?: string) {
+/** The page, opened at this address. */
+function renderPage(address = '/admin/workshops') {
+  realReplaceState(null, '', address)
   render(
     <Providers>
       <WorkshopsClientPage
         conferenceId="conf-1"
         initialWorkshops={SERVER_RENDER}
         resendDisabledReason={null}
-        initialEarlySponsorId={initialEarlySponsorId}
       />
     </Providers>,
   )
@@ -310,7 +369,7 @@ describe('the "Early sign-ups" list on the page', () => {
   })
 
   it('opened from a sponsor’s record, asks for that sponsor only', async () => {
-    renderPage('sfc-acme')
+    renderPage('/admin/workshops?earlySponsor=sfc-acme#early-sign-ups')
 
     await waitFor(() =>
       expect(rows()).toEqual([
@@ -324,20 +383,115 @@ describe('the "Early sign-ups" list on the page', () => {
     ).toHaveValue('sfc-acme')
   })
 
-  it('keeps the narrowing in the address, without asking the server for the page again', async () => {
+  // The two paths an organizer takes (#1348, review): the page was visited
+  // before, Next kept it mounted, and the count's link on a sponsor's record
+  // brings them back to it with a sponsor in the address.
+  describe('follows the address while it stays mounted', () => {
+    it('seen un-narrowed first, then opened from a sponsor’s record: narrowed to that sponsor', async () => {
+      renderPage()
+      await waitFor(() => expect(rows()).toHaveLength(3))
+
+      arriveAt('/admin/workshops?earlySponsor=sfc-globex#early-sign-ups')
+
+      await waitFor(() =>
+        expect(rows()).toEqual([['Gus Grissom', 'Waitlist', 'Globex']]),
+      )
+      expect(server.earlyInputs).toEqual([{}, { sponsorId: 'sfc-globex' }])
+      expect(
+        within(list()).getByRole('combobox', { name: 'Sponsor' }),
+      ).toHaveValue('sfc-globex')
+    })
+
+    it('narrowed to one sponsor with the control, then opened from ANOTHER sponsor’s record: narrowed to the second', async () => {
+      renderPage()
+      await waitFor(() => expect(rows()).toHaveLength(3))
+      narrowTo('sfc-acme')
+      await waitFor(() => expect(rows()).toHaveLength(2))
+
+      arriveAt('/admin/workshops?earlySponsor=sfc-globex#early-sign-ups')
+
+      await waitFor(() =>
+        expect(rows()).toEqual([['Gus Grissom', 'Waitlist', 'Globex']]),
+      )
+      expect(server.earlyInputs).toEqual([
+        {},
+        { sponsorId: 'sfc-acme' },
+        { sponsorId: 'sfc-globex' },
+      ])
+      expect(
+        within(list()).getByRole('combobox', { name: 'Sponsor' }),
+      ).toHaveValue('sfc-globex')
+    })
+
+    it('opened without a sponsor after being narrowed: every sponsor again', async () => {
+      renderPage('/admin/workshops?earlySponsor=sfc-acme')
+      await waitFor(() => expect(rows()).toHaveLength(2))
+
+      arriveAt('/admin/workshops')
+
+      await waitFor(() => expect(rows()).toHaveLength(3))
+      expect(
+        within(list()).getByRole('combobox', { name: 'Sponsor' }),
+      ).toHaveValue('')
+    })
+  })
+
+  it.each([
+    ['an empty sponsor', '/admin/workshops?earlySponsor='],
+    [
+      'one longer than an id',
+      `/admin/workshops?earlySponsor=${'x'.repeat(201)}`,
+    ],
+  ])(
+    'opened with %s in the address, shows every sponsor and asks the server for nothing else',
+    async (_case, address) => {
+      renderPage(address)
+
+      await waitFor(() => expect(rows()).toHaveLength(3))
+      expect(server.earlyInputs).toEqual([{}])
+      expect(
+        within(list()).getByRole('combobox', { name: 'Sponsor' }),
+      ).toHaveValue('')
+    },
+  )
+
+  it('writes the narrowing to the address, with the list’s anchor, without asking the server for the page again', async () => {
     renderPage()
     await waitFor(() => expect(rows()).toHaveLength(3))
 
     narrowTo('sfc-acme')
-    expect(window.location.search).toBe('?earlySponsor=sfc-acme')
+    // What the count's link on the sponsor's record points at: a reload
+    // shows the same list, and scrolls to it.
+    expect(
+      window.location.pathname + window.location.search + window.location.hash,
+    ).toBe('/admin/workshops?earlySponsor=sfc-acme#early-sign-ups')
 
     narrowTo('')
-    expect(window.location.search).toBe('')
+    expect(
+      window.location.pathname + window.location.search + window.location.hash,
+    ).toBe('/admin/workshops#early-sign-ups')
     expect(router.refresh).not.toHaveBeenCalled()
     expect(router.replace).not.toHaveBeenCalled()
     // Back to every sponsor: answered from what was read a moment ago.
     await waitFor(() => expect(rows()).toHaveLength(3))
     expect(server.earlyInputs).toEqual([{}, { sponsorId: 'sfc-acme' }])
+  })
+
+  it('keeps the rest of the address as it is', async () => {
+    renderPage('/admin/workshops?tab=tickets#early-sign-ups')
+    await waitFor(() => expect(rows()).toHaveLength(3))
+
+    narrowTo('sfc-acme')
+    expect(window.location.search + window.location.hash).toBe(
+      '?tab=tickets&earlySponsor=sfc-acme#early-sign-ups',
+    )
+    await waitFor(() => expect(rows()).toHaveLength(2))
+
+    narrowTo('')
+    expect(window.location.search + window.location.hash).toBe(
+      '?tab=tickets#early-sign-ups',
+    )
+    await waitFor(() => expect(rows()).toHaveLength(3))
   })
 
   it('is read again after an organizer deletes a sign-up', async () => {

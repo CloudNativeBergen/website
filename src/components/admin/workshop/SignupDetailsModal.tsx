@@ -7,7 +7,7 @@ import { TrashIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { DataTable, type Column } from '@/components/DataTable'
-import { EarlyAccessBadge } from './early-signups/EarlyAccessBadge'
+import { EarlyAccessBadge } from './early-signups'
 import type {
   WorkshopSignupExisting,
   WorkshopSignupStatus,

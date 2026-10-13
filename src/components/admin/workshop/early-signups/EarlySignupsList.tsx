@@ -9,6 +9,7 @@ import type {
   EarlySignupRow,
   EarlySignups,
 } from '@/lib/workshop/early-access/signups'
+import type { EarlyAccessSponsor } from '@/lib/workshop/types'
 import { EARLY_SIGNUPS_ANCHOR } from './anchor'
 import { EarlyAccessBadge } from './EarlyAccessBadge'
 
@@ -90,9 +91,15 @@ const columns: Column<EarlySignupRow>[] = [
 ]
 
 /** What a sponsor of the conference is called in the control and the text. */
-const nameOf = (sponsor: { name: string | null }) =>
+const nameOf = (sponsor: EarlyAccessSponsor) =>
   sponsor.name ?? 'Unnamed sponsor'
-const NOT_IN_CONFERENCE = 'A sponsor not in this conference'
+// A sponsor the list is narrowed to that the server did not answer as one of
+// the conference's: as an option of the control, and inside a sentence.
+const NOT_IN_CONFERENCE_OPTION = 'A sponsor not in this conference'
+const NOT_IN_CONFERENCE_IN_TEXT = 'a sponsor not in this conference'
+// The same option before the server has answered for this narrowing (the
+// first answer is on its way, or it failed): the list does not know yet.
+const UNANSWERED_OPTION = 'Selected sponsor'
 
 /**
  * The "Early sign-ups" list on `/admin/workshops` (#1348, spec §9): the
@@ -113,9 +120,11 @@ export function EarlySignupsList({
   const narrowedTo = sponsorId
     ? offered.find((sponsor) => sponsor._id === sponsorId)
     : undefined
-  const narrowedName = narrowedTo
-    ? nameOf(narrowedTo)
-    : NOT_IN_CONFERENCE.replace(/^A/, 'a')
+  // Only once the rows for this narrowing are in: `signups` is unset while
+  // an answer is on its way and when it failed.
+  const through = !sponsorId
+    ? ''
+    : ` through ${narrowedTo ? nameOf(narrowedTo) : NOT_IN_CONFERENCE_IN_TEXT}`
   const count = signups?.length ?? 0
 
   return (
@@ -162,7 +171,9 @@ export function EarlySignupsList({
                 </option>
               ))}
               {sponsorId && !narrowedTo && (
-                <option value={sponsorId}>{NOT_IN_CONFERENCE}</option>
+                <option value={sponsorId}>
+                  {signups ? NOT_IN_CONFERENCE_OPTION : UNANSWERED_OPTION}
+                </option>
               )}
             </select>
           </div>
@@ -193,7 +204,7 @@ export function EarlySignupsList({
           <div className="rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
             <p className="text-sm font-medium text-gray-900 dark:text-white">
               {sponsorId
-                ? `No early sign-ups through ${narrowedName}`
+                ? `No early sign-ups${through}`
                 : 'No early sign-ups yet'}
             </p>
             {sponsorId ? (
@@ -215,7 +226,7 @@ export function EarlySignupsList({
           <>
             <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
               {count} early sign-up{count === 1 ? '' : 's'}
-              {sponsorId ? ` through ${narrowedName}` : ''}
+              {through}
             </p>
             <DataTable<EarlySignupRow>
               data={signups}

@@ -10,14 +10,8 @@ import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopMainHost } from '@/lib/workshop/sign-in'
 import { resendPortal } from '@/lib/workshop/resend-instructions'
 import { WorkshopTickets } from '@/components/admin/workshop/tickets'
-import { EARLY_SPONSOR_PARAM } from '@/components/admin/workshop/early-signups/anchor'
-import { workshopEarlySignupsSchema } from '@/server/schemas/workshop'
 
-export default async function WorkshopAdminPage({
-  searchParams = Promise.resolve({}),
-}: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>
-} = {}) {
+export default async function WorkshopAdminPage() {
   // GUARDED BEFORE THE READ: the read below is live on every view, and the
   // admin layout's organizer check does not stop this page from running (see
   // denyNonOrganizer). A request from someone who is not an organizer of this
@@ -77,17 +71,6 @@ export default async function WorkshopAdminPage({
 
   if (loadError) return loadError
 
-  // THE "EARLY SIGN-UPS" LIST'S NARROWING (#1348), as the link on a sponsor's
-  // record sets it. Only handed on: the list's own read scopes the id to this
-  // conference, so nothing is read for it here. A value the read's schema
-  // would refuse is dropped, and the list opens on every sponsor.
-  const earlySponsor = workshopEarlySignupsSchema.shape.sponsorId.safeParse(
-    (await searchParams)[EARLY_SPONSOR_PARAM],
-  )
-  const initialEarlySponsorId = earlySponsor.success
-    ? earlySponsor.data
-    : undefined
-
   const workshops = await getWorkshopsByConference(conference._id)
   // The resend action (#1298), refused for the reasons the server refuses it.
   const mainHost = workshopMainHost(conference)
@@ -114,7 +97,6 @@ export default async function WorkshopAdminPage({
       workshopRegistrationEnd={conference.workshopRegistrationEnd ?? undefined}
       resendDisabledReason={resendDisabledReason}
       ticketsSection={<WorkshopTickets conference={conference} />}
-      initialEarlySponsorId={initialEarlySponsorId}
     />
   )
 }
