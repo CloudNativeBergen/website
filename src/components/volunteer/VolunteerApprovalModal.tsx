@@ -8,7 +8,6 @@ import { emailBrandColor } from '@/lib/branding/theme'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatConferenceDateLong } from '@/lib/time'
 import { PortableTextBlock } from '@sanity/types'
-import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 
 export interface VolunteerApprovalModalProps {
   isOpen: boolean
@@ -55,18 +54,34 @@ export function VolunteerApprovalModal({
       ? 'Must be an absolute https:// URL'
       : null
 
+  const extractPlainText = (blocks: PortableTextBlock[]): string => {
+    if (!Array.isArray(blocks)) return ''
+    return blocks
+      .map((block) => {
+        if (block._type === 'block' && Array.isArray(block.children)) {
+          return block.children
+            .map((child: { _type?: string; text?: string }) =>
+              child._type === 'span' ? child.text || '' : '',
+            )
+            .join('')
+        }
+        return ''
+      })
+      .filter(Boolean)
+      .join('\n\n')
+  }
+
   const handleSend = async (data: {
     subject: string
     message: PortableTextBlock[]
   }) => {
     if (ticketError || slackError) {
-      return
+      throw new Error(
+        ticketError || slackError || 'Please fix URL errors before sending.',
+      )
     }
 
-    const htmlMessage = portableTextToHTML(
-      data.message as unknown as Parameters<typeof portableTextToHTML>[0],
-    )
-    const plainTextMessage = htmlMessage.replace(/<[^>]*>/g, '')
+    const plainTextMessage = extractPlainText(data.message)
 
     await onSend({
       subject: data.subject,
@@ -91,6 +106,26 @@ export function VolunteerApprovalModal({
       brandColor={emailBrandColor(conf?.theme)}
       storageKey={`volunteer-approval-${conf?._id || 'conf'}-${volunteer._id}`}
       submitButtonText="Send Approval Email"
+      warningContent={
+        !fromAddress ? (
+          <div className="rounded-md bg-yellow-50 p-2 text-xs text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200">
+            ⚠️ Conference contact email is not configured. Outbound approval
+            emails may fail.
+          </div>
+        ) : undefined
+      }
+      additionalFields={{
+        ticketUrl,
+        slackInviteUrl,
+      }}
+      onAdditionalFieldsChange={(fields) => {
+        if (typeof fields.ticketUrl === 'string') {
+          setTicketUrl(fields.ticketUrl)
+        }
+        if (typeof fields.slackInviteUrl === 'string') {
+          setSlackInviteUrl(fields.slackInviteUrl)
+        }
+      }}
       initialValues={{
         subject: `Welcome to the ${confTitle} Volunteer Team!`,
         message: `Dear ${volunteer.name},\n\nWe are delighted to confirm that your application to volunteer at ${confTitle} has been approved!\n\nWe will be in touch soon with more details regarding schedules and role orientations.\n\nThank you for offering your time and dedication to make the conference an unforgettable experience!`,
@@ -163,7 +198,7 @@ export function VolunteerApprovalModal({
           </div>
         ),
       }}
-      previewComponent={({ messageHTML }) => {
+      previewComponent={({ message }) => {
         const eventLocation =
           conf?.city && conf?.country
             ? `${conf.city}, ${conf.country}`
@@ -172,7 +207,11 @@ export function VolunteerApprovalModal({
           ? formatConferenceDateLong(conf.startDate)
           : 'TBD'
         const eventUrl = conf ? conferenceBaseUrl(conf) : '#'
-        const socialLinks = (conf?.socialLinks || []).map((l) => l.url)
+        const socialLinks = (conf?.socialLinks || [])
+          .map((l) =>
+            typeof l === 'string' ? l : (l as { url?: string })?.url,
+          )
+          .filter((l): l is string => typeof l === 'string' && Boolean(l))
 
         return (
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-xs dark:border-gray-700 dark:bg-gray-900">
@@ -182,7 +221,7 @@ export function VolunteerApprovalModal({
               eventLocation={eventLocation}
               eventDate={eventDate}
               eventUrl={eventUrl}
-              message={messageHTML.replace(/<[^>]*>/g, '')}
+              message={extractPlainText(message)}
               socialLinks={socialLinks}
               brandColor={emailBrandColor(conf?.theme)}
               registrationUrl={

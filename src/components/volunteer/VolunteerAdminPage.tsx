@@ -154,7 +154,7 @@ export default function VolunteerAdminPage() {
         return false
       }
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase()
+        const query = searchQuery.trim().toLowerCase()
         const matchesName = v.name.toLowerCase().includes(query)
         const matchesEmail = v.email.toLowerCase().includes(query)
         const matchesPhone = v.phone
@@ -164,7 +164,7 @@ export default function VolunteerAdminPage() {
           ? v.occupation.toLowerCase().includes(query)
           : false
         const matchesTasks = Array.isArray(v.preferredTasks)
-          ? v.preferredTasks.some((t) => t.toLowerCase().includes(query))
+          ? v.preferredTasks.some((t) => t?.toLowerCase().includes(query))
           : false
 
         if (
@@ -380,8 +380,16 @@ export default function VolunteerAdminPage() {
                   return (
                     <div
                       key={volunteer._id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setSelectedVolunteerId(volunteer._id)}
-                      className={`cursor-pointer rounded-lg border p-4 transition-all ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setSelectedVolunteerId(volunteer._id)
+                        }
+                      }}
+                      className={`cursor-pointer rounded-lg border p-4 text-left transition-all ${
                         isSelected
                           ? 'border-brand-cloud-blue bg-blue-50/70 shadow-xs dark:border-blue-500 dark:bg-blue-950/30'
                           : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-2xs dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600'

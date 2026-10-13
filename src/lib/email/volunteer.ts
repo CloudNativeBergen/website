@@ -45,8 +45,8 @@ export async function sendVolunteerApprovalEmail(
   subject: string,
   message: string,
   options?: {
-    registrationUrl?: string
-    slackInviteUrl?: string
+    registrationUrl?: string | null
+    slackInviteUrl?: string | null
   },
 ): Promise<EmailResult<{ emailId: string }>> {
   try {
@@ -75,18 +75,41 @@ export async function sendVolunteerApprovalEmail(
       ? formatConferenceDateLong(conference.startDate)
       : 'TBD'
     const eventUrl = conferenceBaseUrl(conference)
-    const socialLinks = conference.socialLinks?.map((link) => link.url) || []
+    const toSafeHttpsUrl = (url?: string | null): string | undefined => {
+      if (!url) return undefined
+      try {
+        const parsed = new URL(url.trim())
+        return parsed.protocol === 'https:' ? parsed.href : undefined
+      } catch {
+        return undefined
+      }
+    }
+
+    const socialLinks =
+      conference.socialLinks
+        ?.map((link) =>
+          typeof link === 'string' ? link : (link as { url?: string })?.url,
+        )
+        .filter((l): l is string => typeof l === 'string' && Boolean(l)) || []
 
     const { client } = await resolveEmailSender(conference.organization?._ref)
 
     const registrationUrl =
-      options?.registrationUrl !== undefined
-        ? options.registrationUrl
-        : conference.volunteerRegistrationLink
+      options?.registrationUrl === null
+        ? undefined
+        : toSafeHttpsUrl(
+            options?.registrationUrl !== undefined
+              ? options.registrationUrl
+              : conference.volunteerRegistrationLink,
+          )
     const slackInviteUrl =
-      options?.slackInviteUrl !== undefined
-        ? options.slackInviteUrl
-        : conference.volunteerSlackInviteUrl
+      options?.slackInviteUrl === null
+        ? undefined
+        : toSafeHttpsUrl(
+            options?.slackInviteUrl !== undefined
+              ? options.slackInviteUrl
+              : conference.volunteerSlackInviteUrl,
+          )
 
     const result = await retryWithBackoff(async () => {
       const response = await client.emails.send({

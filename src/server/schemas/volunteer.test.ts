@@ -46,7 +46,7 @@ describe('SendVolunteerEmailSchema', () => {
     expect(parsed.success).toBe(false)
   })
 
-  it('accepts empty string and nullish inputs, converting them to undefined', () => {
+  it('accepts empty string and nullish inputs, converting empty/null to null and omitted to undefined', () => {
     const parsed = SendVolunteerEmailSchema.safeParse({
       volunteerId: 'vol-123',
       subject: 'Welcome!',
@@ -56,9 +56,29 @@ describe('SendVolunteerEmailSchema', () => {
     })
     expect(parsed.success).toBe(true)
     if (parsed.success) {
-      expect(parsed.data.ticketUrl).toBeUndefined()
-      expect(parsed.data.slackInviteUrl).toBeUndefined()
+      expect(parsed.data.ticketUrl).toBeNull()
+      expect(parsed.data.slackInviteUrl).toBeNull()
     }
+
+    const omitted = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: 'You have been approved.',
+    })
+    expect(omitted.success).toBe(true)
+    if (omitted.success) {
+      expect(omitted.data.ticketUrl).toBeUndefined()
+      expect(omitted.data.slackInviteUrl).toBeUndefined()
+    }
+  })
+
+  it('rejects subjects with CRLF or newlines (header injection protection)', () => {
+    const parsed = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!\r\nBcc: spy@attacker.com',
+      message: 'You have been approved.',
+    })
+    expect(parsed.success).toBe(false)
   })
 })
 

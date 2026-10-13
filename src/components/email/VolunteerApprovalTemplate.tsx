@@ -72,7 +72,9 @@ export const VolunteerApprovalTemplate: React.FC<
           borderColor="#CBD5E1"
           borderLeftColor={brandedOr(brand, '#1D4ED8')}
         >
-          <EmailText>{message}</EmailText>
+          {message.split(/\n\n+/).map((paragraph, idx) => (
+            <EmailText key={idx}>{paragraph}</EmailText>
+          ))}
         </EmailSection>
       )}
 

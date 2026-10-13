@@ -420,16 +420,25 @@ export const volunteerRouter = router({
             })
           }
 
+          let trackingRecorded = false
           if (ctx.speaker?._id) {
-            await recordVolunteerApprovalEmailSent(
+            const recordResult = await recordVolunteerApprovalEmailSent(
               input.volunteerId,
               ctx.speaker._id,
             )
+            trackingRecorded = recordResult.success
+            if (!recordResult.success) {
+              console.error(
+                'Failed to record volunteer approval email sent in Sanity:',
+                recordResult.error,
+              )
+            }
           }
 
           return {
             success: true,
             emailId: result.data?.emailId,
+            trackingRecorded,
           }
         } catch (error) {
           if (error instanceof TRPCError) throw error
