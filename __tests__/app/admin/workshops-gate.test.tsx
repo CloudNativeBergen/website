@@ -403,7 +403,14 @@ describe('/admin/workshops — the live conference is the authorized one', () =>
   }
 
   beforeEach(() => {
-    stubOwnTicketingSecret('org-A')
+    // BOTH orgs have the workshop feature (pro, with ticketing of their own):
+    // nothing but the page's own check stands between this organizer and the
+    // other conference's workshops, so a missing check shows them.
+    const ticketing = { apiKey: 'tenant-key', apiSecret: 'tenant-secret' }
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-A': { ticketing }, 'org-B': { ticketing } }),
+    )
     mockGetOrganizationById.mockImplementation(async (id: string) => ({
       _id: id,
       name: `Tenant ${id}`,
@@ -436,14 +443,21 @@ describe('/admin/workshops — the live conference is the authorized one', () =>
 
   /** What one view did: what it showed, and what it fetched for a conference. */
   async function view() {
-    const page = (await WorkshopAdminPage()) as React.ReactElement<{
-      conferenceId?: string
-    }>
-    return {
-      shown:
+    let shown: string
+    try {
+      const page = (await WorkshopAdminPage()) as React.ReactElement<{
+        conferenceId?: string
+      }>
+      shown =
         textOf(page) === 'Access Denied'
           ? 'Access Denied'
-          : `the workshops of ${page.props.conferenceId}`,
+          : `the workshops of ${page.props.conferenceId}`
+    } catch (error) {
+      if (!(error instanceof NotFoundError)) throw error
+      shown = 'Not Found'
+    }
+    return {
+      shown,
       workshopReads: mockGetWorkshops.mock.calls,
       organizationReads: mockGetOrganizationById.mock.calls,
     }
