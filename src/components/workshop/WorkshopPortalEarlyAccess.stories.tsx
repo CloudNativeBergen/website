@@ -1,7 +1,7 @@
 import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
-import { useEffect } from 'react'
+import { useEffect, useState, type ComponentProps } from 'react'
 import { http, HttpResponse } from 'msw'
-import { expect, within } from 'storybook/test'
+import { expect, userEvent, within } from 'storybook/test'
 import { WorkshopPortal } from './WorkshopPortal'
 import { WorkshopNoTicket } from './WorkshopNoTicket'
 import { mockDateBeforeEach } from '@/lib/storybook'
@@ -34,6 +34,10 @@ const END = '2026-09-01T07:00:00.000Z'
 const LATER = new Date('2026-06-16T12:00:00Z')
 
 const ACME = { sponsorName: 'Acme AS' }
+/** One word of 82 letters: nothing in it lets a line break by itself. */
+const LONG_NAME =
+  'Donaudampfschifffahrtselektrizitätenhauptbetriebswerkbauunterbeamtengesellschaft AS'
+const LONG = { sponsorName: LONG_NAME }
 
 /** The portal's props for these times, at `now`, with or without early access. */
 function portal(
@@ -217,6 +221,108 @@ export const InsideTheWindow: Story = {
 }
 export const InsideTheWindowDark = dark(InsideTheWindow)
 export const InsideTheWindowMobile = mobile(InsideTheWindow)
+
+/**
+ * A SPONSOR WITH A LONG NAME, in both banners: the name wraps inside the
+ * banner and the page does not scroll sideways (asserted at phone width).
+ */
+export const BeforeSponsorStartLongName: Story = {
+  args: portal(SPONSOR_START_AHEAD, LONG),
+  play: async ({ canvasElement }) => {
+    await expect(banners(canvasElement)).toEqual([
+      `Early access through ${LONG_NAME} opens Friday, June 12, 2026 at 9:00 AM`,
+    ])
+  },
+}
+export const BeforeSponsorStartLongNameDark = dark(BeforeSponsorStartLongName)
+export const BeforeSponsorStartLongNameMobile = mobile(
+  BeforeSponsorStartLongName,
+)
+
+export const InsideTheWindowLongName: Story = {
+  args: portal(SPONSOR_START, LONG),
+  play: async ({ canvasElement }) => {
+    await expect(statuses(canvasElement)).toEqual([
+      `You have early access through ${LONG_NAME}`,
+    ])
+    await within(canvasElement).findByRole('button', {
+      name: 'Register for Workshop',
+    })
+  },
+}
+export const InsideTheWindowLongNameDark = dark(InsideTheWindowLongName)
+export const InsideTheWindowLongNameMobile = mobile(InsideTheWindowLongName)
+
+/**
+ * A SIGN-UP REFUSED BECAUSE THE LINK WAS REVOKED while the page was open. The
+ * server refuses for the window, the list says the early access is no longer
+ * valid and asks the page to render again. The page (here: a host that
+ * answers as the server would, without early access) then shows the banner
+ * naming the official opening, and the list KEEPS saying what happened.
+ */
+const REFUSAL =
+  'Workshop registration opens on Monday, June 15, 2026 at 10:00 AM'
+function PortalWhoseLinkIsRevoked(args: ComponentProps<typeof WorkshopPortal>) {
+  const [renderedAgain, setRenderedAgain] = useState(false)
+  return (
+    <WorkshopPortal
+      {...args}
+      {...(renderedAgain ? portal(SPONSOR_START, null) : {})}
+      refreshAction={async () => setRenderedAgain(true)}
+    />
+  )
+}
+export const SignUpRefusedAfterRevoke: Story = {
+  args: portal(SPONSOR_START, ACME),
+  render: (args) => <PortalWhoseLinkIsRevoked {...args} />,
+  parameters: {
+    msw: {
+      handlers: [
+        ...handlers,
+        http.post('/api/trpc/workshop.signup', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: REFUSAL,
+                code: -32012,
+                data: { code: 'PRECONDITION_FAILED', httpStatus: 412 },
+              },
+            },
+            { status: 412 },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Register for Workshop' }),
+    )
+    // The confirmation is a dialog, rendered outside the canvas.
+    await userEvent.click(
+      await within(canvasElement.ownerDocument.body).findByRole('button', {
+        name: /confirm registration/i,
+      }),
+    )
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      `Your early access is no longer valid. ${REFUSAL}`,
+    )
+    // The page has rendered again, as everyone sees it.
+    await expect(
+      await canvas.findByRole('heading', {
+        level: 3,
+        name: 'Workshop registration is not yet open',
+      }),
+    ).toBeInTheDocument()
+    await expect(statuses(canvasElement)).toEqual([])
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      `Your early access is no longer valid. ${REFUSAL}`,
+    )
+  },
+}
+export const SignUpRefusedAfterRevokeDark = dark(SignUpRefusedAfterRevoke)
+export const SignUpRefusedAfterRevokeMobile = mobile(SignUpRefusedAfterRevoke)
 
 /**
  * AFTER THE OFFICIAL OPENING: the portal as everyone sees it. Nothing mentions

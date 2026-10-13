@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
+import { useState, type ComponentProps } from 'react'
 import { SponsorEarlyAccessSection } from './SponsorEarlyAccessSection'
 
 const LINK =
@@ -36,6 +37,7 @@ const meta = {
   args: {
     sponsorForConferenceId: 'sfc-123',
     hasLink: false,
+    sponsorStartSet: true,
     onChanged: fn(),
   },
   decorators: [
@@ -74,6 +76,29 @@ export const NoLink: Story = {
 export const NoLinkDark: Story = { ...NoLink, ...dark }
 export const NoLinkMobile: Story = { ...NoLink, ...mobile }
 
+/**
+ * The conference has no "Sponsor Early Access Opens" time: a link can be
+ * created, but gives no head start until one is set. The section says so, and
+ * where to set it.
+ */
+export const NoSponsorStart: Story = {
+  args: { sponsorStartSet: false },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByText(
+        'No “Sponsor Early Access Opens” time is set for this conference, so a link gives no head start yet. Set one under Workshops.',
+      ),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByRole('button', { name: 'Create link' }),
+    ).toBeInTheDocument()
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const NoSponsorStartDark: Story = { ...NoSponsorStart, ...dark }
+export const NoSponsorStartMobile: Story = { ...NoSponsorStart, ...mobile }
+
 /** A link can be created only for a won deal. */
 export const DealNotWon: Story = {
   args: {
@@ -97,6 +122,12 @@ export const Created: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Create link' }))
     await expect(await canvas.findByDisplayValue(LINK)).toBeInTheDocument()
     await expect(args.onChanged).toHaveBeenCalledTimes(1)
+    // The pressed button is gone: the one in its place has the keyboard, and
+    // a screen reader is told what happened.
+    await expect(
+      canvas.getByRole('button', { name: 'Copy link' }),
+    ).toHaveFocus()
+    await expect(canvas.getByRole('status')).toHaveTextContent('Link created')
   },
 }
 
@@ -252,12 +283,17 @@ export const Revoked: Story = {
       ).toBeInTheDocument(),
     )
     await expect(args.onChanged).toHaveBeenCalledTimes(1)
+    await expect(
+      canvas.getByRole('button', { name: 'Create link' }),
+    ).toHaveFocus()
+    await expect(canvas.getByRole('status')).toHaveTextContent('Link revoked')
   },
 }
 
 /**
  * Revoked, but a copy of the sponsor in a Studio release could not be
- * cleared: the organizer is told, and what to do about it.
+ * cleared: the organizer is told, and what to do about it. "Try again"
+ * revokes once more.
  */
 export const RevokedWithCopyLeft: Story = {
   args: { hasLink: true },
@@ -275,13 +311,91 @@ export const RevokedWithCopyLeft: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Revoke' }))
     await userEvent.click(canvas.getByRole('button', { name: 'Revoke link' }))
     await expect(await canvas.findByRole('alert')).toHaveTextContent(
-      'The link is revoked, but 1 unpublished copy of this sponsor in Sanity Studio still holds it.',
+      'The link is revoked, but 1 unpublished copy of this sponsor in Sanity Studio still holds it. Publishing it would make the link work again. Try again, or discard it in Studio.',
     )
+    await expect(
+      canvas.getByRole('button', { name: 'Try again' }),
+    ).toBeInTheDocument()
+    await expectNoSidewaysScroll(canvasElement)
   },
 }
 export const RevokedWithCopyLeftDark: Story = {
   ...RevokedWithCopyLeft,
   ...dark,
+}
+export const RevokedWithCopyLeftMobile: Story = {
+  ...RevokedWithCopyLeft,
+  parameters: { ...RevokedWithCopyLeft.parameters, ...mobile.parameters },
+}
+
+/**
+ * COPY, WHEN THE LINK IS GONE: a colleague revoked it while this record was
+ * open. The server's answer is shown and the record is read again, here by a
+ * host that answers "no link", so the section is back at Create link.
+ */
+function RecordReadAgainWithoutItsLink(
+  args: ComponentProps<typeof SponsorEarlyAccessSection>,
+) {
+  const [record, setRecord] = useState({
+    hasLink: args.hasLink,
+    recordUpdatedAt: '2026-06-10T12:00:00Z',
+  })
+  return (
+    <SponsorEarlyAccessSection
+      {...args}
+      {...record}
+      onChanged={() => {
+        args.onChanged?.()
+        setRecord({ hasLink: false, recordUpdatedAt: '2026-06-10T12:00:05Z' })
+      }}
+    />
+  )
+}
+export const CopyWhenTheLinkIsGone: Story = {
+  args: { hasLink: true },
+  render: (args) => <RecordReadAgainWithoutItsLink {...args} />,
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/sponsor.crm.earlyAccess.getAddress', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: 'This sponsor has no early-access link.',
+                code: -32004,
+                data: { code: 'NOT_FOUND', httpStatus: 404 },
+              },
+            },
+            { status: 404 },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Copy link' }))
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'This sponsor has no early-access link.',
+    )
+    await expect(args.onChanged).toHaveBeenCalledTimes(1)
+    // Copy link is gone: the button in its place has the keyboard.
+    await expect(
+      await canvas.findByRole('button', { name: 'Create link' }),
+    ).toHaveFocus()
+    await expect(
+      canvas.queryByText('This sponsor has an early-access link'),
+    ).not.toBeInTheDocument()
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const CopyWhenTheLinkIsGoneDark: Story = {
+  ...CopyWhenTheLinkIsGone,
+  ...dark,
+}
+export const CopyWhenTheLinkIsGoneMobile: Story = {
+  ...CopyWhenTheLinkIsGone,
+  parameters: { ...CopyWhenTheLinkIsGone.parameters, ...mobile.parameters },
 }
 
 /** The server says why no link can be created. */
