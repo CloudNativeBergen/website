@@ -28,8 +28,21 @@ export const EARLY_ACCESS_TOKEN_FIELD = 'workshopEarlyAccessToken'
  */
 const RELEASES_API_VERSION = COUNT_API_VERSION
 
-/** How often a create starts over, and how many rounds a revoke clears copies. */
-const ATTEMPTS = 3
+/** How often a create starts over when another write got in between. */
+const CREATE_ATTEMPTS = 3
+
+/** How many times a revoke reads every version again and clears what it finds. */
+const REVOKE_ROUNDS = 3
+
+/**
+ * The shape of a token this module issues (`randomUUID`). A value of any
+ * other shape is no token: nothing is read for it.
+ */
+const TOKEN_SHAPE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+export const isEarlyAccessToken = (value: unknown): value is string =>
+  typeof value === 'string' && TOKEN_SHAPE.test(value)
 
 export type CreateEarlyAccessLink =
   | { token: string }
@@ -94,7 +107,7 @@ export async function createEarlyAccessLink(
   sponsorForConferenceId: string,
 ): Promise<CreateEarlyAccessLink> {
   let failure: unknown
-  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= CREATE_ATTEMPTS; attempt++) {
     const sponsor = await scopedFetch<{
       status: string | null
       token: string | null
@@ -159,14 +172,17 @@ const isReleaseCopy = (id: string) => id.startsWith('versions.')
  *
  *  1. THE PUBLISHED DOCUMENT AND ITS DRAFT, in a transaction of their own.
  *     Nothing about a release copy can keep the link live.
- *  2. THE COPIES, until none holds a token the published document does not
- *     hold: every version is read again after each write, so a copy made
- *     while the revoke ran is found. Each is cleared on its own, and only as
- *     the revision that was read: a copy a later create has since written is
- *     left alone.
+ *  2. EVERY VERSION THAT STILL HOLDS A REVOKED TOKEN, the published document
+ *     included, until none does: all of them are read again after each write.
+ *     A copy made while the revoke ran is found, and so is a copy that was
+ *     PUBLISHED while it ran, which would otherwise bring the link back. Each
+ *     is cleared on its own, and only as the revision that was read. A token
+ *     stored by a later create is not a revoked one, and is left alone.
  *
- * Answers the copies that still hold the revoked token after {@link ATTEMPTS}
- * rounds. Publishing one of those would bring the link back.
+ * Answers the unpublished copies that still hold a revoked token after
+ * {@link REVOKE_ROUNDS} rounds: publishing one of those would bring the link
+ * back. THROWS when the published document itself still holds one: then the
+ * link is live, and nothing may report it revoked.
  *
  * Acts within `conferenceId` only.
  */
@@ -175,12 +191,11 @@ export async function revokeEarlyAccessLink(
   sponsorForConferenceId: string,
 ): Promise<{ notCleared: string[] }> {
   const read = () => readVersions(conferenceId, sponsorForConferenceId)
-  const linked = await read()
-  if (!linked.some((version) => version.token)) return { notCleared: [] }
+  const linked = (await read()).filter((version) => version.token)
+  if (linked.length === 0) return { notCleared: [] }
+  const revoked = new Set(linked.map((version) => version.token))
 
-  const own = linked.filter(
-    (version) => version.token && !isReleaseCopy(version._id),
-  )
+  const own = linked.filter((version) => !isReleaseCopy(version._id))
   if (own.length > 0) {
     const transaction = clientWrite.transaction()
     for (const version of own) {
@@ -190,25 +205,22 @@ export async function revokeEarlyAccessLink(
   }
 
   for (let round = 1; ; round++) {
-    const versions = await read()
-    const live =
-      versions.find((version) => version._id === sponsorForConferenceId)
-        ?.token ?? null
-    const stale = versions.filter(
-      (version) =>
-        version._id !== sponsorForConferenceId &&
-        version.token &&
-        version.token !== live,
-    )
-    if (stale.length === 0 || round > ATTEMPTS) {
+    const stale = (await read()).filter((version) => revoked.has(version.token))
+    if (stale.length === 0) return { notCleared: [] }
+    if (round > REVOKE_ROUNDS) {
+      if (stale.some((version) => version._id === sponsorForConferenceId)) {
+        throw new Error(
+          'Could not revoke the early-access link: the sponsor still holds it. Revoke again.',
+        )
+      }
       return { notCleared: stale.map((version) => version._id) }
     }
-    for (const copy of stale) {
+    for (const version of stale) {
       try {
         await releaseWriter()
           .transaction()
-          .patch(copy._id, {
-            ifRevisionID: copy._rev,
+          .patch(version._id, {
+            ifRevisionID: version._rev,
             unset: [EARLY_ACCESS_TOKEN_FIELD],
           })
           .commit()
@@ -260,7 +272,7 @@ export async function findEarlyAccessSponsor(
   conferenceId: string,
   token: string,
 ): Promise<{ _id: string } | null> {
-  if (!token) return null
+  if (!isEarlyAccessToken(token)) return null
   return scopedFetch<{ _id: string } | null>(
     clientReadUncached,
     { conferenceId },

@@ -19,12 +19,17 @@ vi.mock('@/lib/sanity/client', async () => {
   return h.store.clients
 })
 
-import { createEarlyAccessLink, revokeEarlyAccessLink } from './link'
+import {
+  createEarlyAccessLink,
+  findEarlyAccessSponsor,
+  revokeEarlyAccessLink,
+} from './link'
 
 const store = () => h.store!
 const CONF = 'conf-a'
 const SFC = 'sfc-acme'
 const FIELD = 'workshopEarlyAccessToken'
+const TOKEN = '4b1c9d2e-7a55-4f0a-9c3e-1f2a3b4c5d6e'
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
@@ -327,6 +332,39 @@ describe('revoking a link', () => {
 
     expect(stored(SFC)).toBe('new-token')
     expect(stored(RELEASE_COPY)).toBe('new-token')
+  })
+
+  it('a copy that still holds the revoked token is published while the revoke runs: the link is not live', async () => {
+    store().reset([
+      sponsor({ [FIELD]: TOKEN }),
+      sponsor({ _id: RELEASE_COPY, [FIELD]: TOKEN }),
+    ])
+    // Right after the revoke cleared the published document, the release is
+    // published: the copy, token and all, replaces it.
+    store().afterNextCommit(() => {
+      store().put(sponsor({ _rev: 'published-from-release', [FIELD]: TOKEN }))
+    })
+
+    const result = await revokeEarlyAccessLink(CONF, SFC)
+
+    expect(stored(SFC)).toBeUndefined()
+    expect(stored(RELEASE_COPY)).toBeUndefined()
+    expect(await findEarlyAccessSponsor(CONF, TOKEN)).toBeNull()
+    expect(result).toEqual({ notCleared: [] })
+  })
+
+  it('fails, and says so, when the published document still holds the revoked token after the last round', async () => {
+    store().reset([sponsor({ [FIELD]: TOKEN })])
+    store().afterNextCommit(() => {
+      store().put(sponsor({ _rev: 'published-from-release', [FIELD]: TOKEN }))
+      store().failPatchesOf(SFC)
+    })
+
+    await expect(revokeEarlyAccessLink(CONF, SFC)).rejects.toThrow(
+      'Could not revoke the early-access link',
+    )
+    // The control for the test above: here the link IS still live.
+    expect(await findEarlyAccessSponsor(CONF, TOKEN)).toEqual({ _id: SFC })
   })
 
   it('acts only within the conference it is given', async () => {

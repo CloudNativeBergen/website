@@ -561,7 +561,19 @@ export const workshopRouter = router({
           new Date(),
           async () => {
             const token = earlyAccessTokenOf(ctx.req.cookies)
-            return token ? findEarlyAccessSponsor(conference._id, token) : null
+            if (!token) return null
+            try {
+              return await findEarlyAccessSponsor(conference._id, token)
+            } catch (error) {
+              // NEVER ADMITS, and never names the official opening to a
+              // person whose early access was simply not checked.
+              console.error('[workshop] early-access lookup failed', error)
+              throw new TRPCError({
+                code: 'SERVICE_UNAVAILABLE',
+                message:
+                  'We could not check your early access right now. Please try again in a moment.',
+              })
+            }
           },
         )
         if (registration.status === 'not-open-yet') {

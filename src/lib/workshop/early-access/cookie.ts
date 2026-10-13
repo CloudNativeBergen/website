@@ -1,4 +1,5 @@
 import { hostCookie } from '../central-sign-in/cookies'
+import { isEarlyAccessToken } from './link'
 
 /**
  * EARLY ACCESS, AS A BROWSER HOLDS IT (#1346, spec §5): a cookie with the
@@ -8,9 +9,13 @@ import { hostCookie } from '../central-sign-in/cookies'
  */
 export const earlyAccessCookie = () => hostCookie('workshop-early-access')
 
-/** The token the request's browser holds, or `undefined`. */
+/**
+ * The token the request's browser holds, or `undefined`. A value that is not
+ * the shape of a token this issues is no token: nothing is looked up for it.
+ */
 export function earlyAccessTokenOf(cookies: {
   get(name: string): { value: string } | undefined
 }): string | undefined {
-  return cookies.get(earlyAccessCookie().name)?.value || undefined
+  const value = cookies.get(earlyAccessCookie().name)?.value
+  return isEarlyAccessToken(value) ? value : undefined
 }

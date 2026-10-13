@@ -95,6 +95,8 @@ export interface VersionedSanityStore {
   afterNextCommit(hook: () => unknown): void
   /** Refuse every patch of this document until the next `reset()`. */
   failPatchesOf(id: string): void
+  /** Make the reads this picks reject until the next `reset()`. */
+  failReadsThat(pick: (read: RecordedRead) => boolean): void
   /** Make every commit reject until the next `reset()`. */
   failWrites(error?: Error): void
   /** The module shape of `@/lib/sanity/client` the code under test imports. */
@@ -130,6 +132,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
   let hooks: Array<() => unknown> = []
   let afterHooks: Array<() => unknown> = []
   let unpatchable = new Set<string>()
+  let unreadable: ((read: RecordedRead) => boolean) | null = null
   let writeFailure: Error | null = null
   let revCounter = 0
 
@@ -157,6 +160,9 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         perspective: options.perspective,
       })
       events.push('read')
+      if (unreadable?.(reads[reads.length - 1])) {
+        throw new Error('503: read refused (test)')
+      }
       const result = await evaluate(parse(query), {
         dataset: visible(apiVersion, options.perspective),
         params,
@@ -272,6 +278,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       hooks = []
       afterHooks = []
       unpatchable = new Set()
+      unreadable = null
       writeFailure = null
     },
     put(document) {
@@ -299,6 +306,9 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     },
     failPatchesOf(id) {
       unpatchable.add(id)
+    },
+    failReadsThat(pick) {
+      unreadable = pick
     },
     failWrites(error = new Error('versionedSanityStore: write refused')) {
       writeFailure = error

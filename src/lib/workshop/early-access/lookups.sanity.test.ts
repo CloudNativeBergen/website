@@ -17,6 +17,8 @@
  * therefore ALSO run the query text over every stored document.
  */
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { evaluate, parse } from 'groq-js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VersionedSanityStore } from '../../../../__tests__/helpers/versionedSanityStore'
@@ -235,6 +237,22 @@ describe('the cached read of a conference', () => {
   })
 })
 
+describe('the cached read is a cached function', () => {
+  // The directive is inert under Vitest, so nothing here can run it. Without
+  // it every view and every opened link would read Sanity, and "a made-up
+  // token costs no read" would be false. Pinned on the source.
+  it("opens with 'use cache: remote'", () => {
+    const source = readFileSync(join(__dirname, 'links.ts'), 'utf8')
+    const body = source.slice(
+      source.indexOf('export async function conferenceEarlyAccessLinks'),
+    )
+
+    expect(body.slice(body.indexOf('{\n') + 2).trimStart()).toMatch(
+      /^'use cache: remote'\n/,
+    )
+  })
+})
+
 describe('the live read', () => {
   it('goes to the uncached client, within the conference', async () => {
     await findEarlyAccessSponsor(CONF, TOKEN)
@@ -244,8 +262,18 @@ describe('the live read', () => {
     expect(store().reads[0].params).toMatchObject({ conferenceId: CONF })
   })
 
-  it('reads nothing for an empty token', async () => {
-    expect(await findEarlyAccessSponsor(CONF, '')).toBeNull()
-    expect(store().reads).toEqual([])
-  })
+  it.each([
+    ['an empty value', ''],
+    ['a word', 'early-access'],
+    ['a token with something appended', `${TOKEN}"]`],
+    ['a very long value', 'a'.repeat(4000)],
+  ])(
+    'reads nothing for %s: it is not a token this issues',
+    async (_case, value) => {
+      expect(await findEarlyAccessSponsor(CONF, value)).toBeNull()
+      expect(store().reads).toEqual([])
+      // A token of that very shape is read.
+      expect(await findEarlyAccessSponsor(CONF, TOKEN)).toEqual({ _id: SFC })
+    },
+  )
 })

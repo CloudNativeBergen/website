@@ -307,6 +307,37 @@ describe('inside the early-access window', () => {
   })
 })
 
+describe('when the link cannot be checked', () => {
+  it('refuses, says early access could not be checked, and stores nothing', async () => {
+    store().failReadsThat((read) => 'linkToken' in read.params)
+
+    expect(await attempt(LIVE)).toEqual({
+      refused: {
+        code: 'SERVICE_UNAVAILABLE',
+        message:
+          'We could not check your early access right now. Please try again in a moment.',
+      },
+    })
+    // Without a cookie nothing is checked, and the answer is the window's.
+    expect(await attempt()).toEqual(OPENS_OFFICIALLY)
+  })
+})
+
+describe('a cookie value that is not a token', () => {
+  it.each([
+    ['a word', 'early-access'],
+    ['a very long value', 'a'.repeat(4000)],
+    ['a token with something appended', `${LIVE}x`],
+  ])(
+    '%s is told the official opening, and nothing is looked up',
+    async (_case, value) => {
+      expect(await attempt(value)).toEqual(OPENS_OFFICIALLY)
+      expect(linkLookups()).toEqual([])
+      expect(await attempt(LIVE)).toEqual(EARLY())
+    },
+  )
+})
+
 describe('before the sponsor start time', () => {
   beforeEach(() => {
     h.times = {
