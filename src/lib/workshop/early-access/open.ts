@@ -5,11 +5,15 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import {
   isAuthHost,
+  resolveSignInHost,
   resolveTenantHost,
   toPortal,
 } from '../central-sign-in/decision'
-import { workshopMainHost, workshopPortalUrl } from '../sign-in'
-import { WORKSHOP_EARLY_ACCESS_INVALID_QUERY } from '../sign-in-paths'
+import { workshopMainHost } from '../sign-in'
+import {
+  WORKSHOP_EARLY_ACCESS_INVALID_QUERY,
+  WORKSHOP_PORTAL_PATH,
+} from '../sign-in-paths'
 import { earlyAccessCookie } from './cookie'
 import { earlyAccessUrl } from './link'
 import { resolveEarlyAccess } from './links'
@@ -30,8 +34,9 @@ const notFound = () =>
  *     on the auth host, for a host with no conference and for a conference
  *     without workshops.
  *  2. A HOST THAT CANNOT SIGN IN sets nothing. While the conference's main
- *     host can, the browser goes to the same address there: the cookie has to
- *     be set by the host the person will sign up on. Otherwise to the portal
+ *     host can, AND IS STILL THIS CONFERENCE'S, the browser goes to the same
+ *     address there: the cookie has to be set by the host the person will
+ *     sign up on. Otherwise to the portal
  *     page, which says sign-up is not available. Never from the main host to
  *     itself.
  *  3. A LINK THAT IS NOT LIVE goes to the portal page with one notice, and an
@@ -61,12 +66,19 @@ export async function openEarlyAccessLink(
       !mainHost ||
       normalizeDomain(mainHost) ===
         normalizeDomain(request.headers.get('host') ?? '')
-    const mainPortal = onMainHost ? null : await workshopPortalUrl(conference)
-    return mainPortal
-      ? NextResponse.redirect(earlyAccessUrl(mainPortal, token), {
-          status: 307,
-          headers: SEALED,
-        })
+    // The main host as it is claimed NOW, read live. `conference` comes
+    // through a cache: when its main domain has since changed hands, the
+    // token must not travel there in an address. The same comparison the
+    // request's own host gets below.
+    const main = onMainHost ? null : await resolveSignInHost(mainHost)
+    return main?.destination.conference._id === conference._id
+      ? NextResponse.redirect(
+          earlyAccessUrl(
+            `${main.destination.origin}${WORKSHOP_PORTAL_PATH}`,
+            token,
+          ),
+          { status: 307, headers: SEALED },
+        )
       : toPortal()
   }
   // The conference is read through a cache. Right after a host changes hands

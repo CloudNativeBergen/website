@@ -338,6 +338,42 @@ describe('a host that cannot sign in', () => {
     expect(reads().sanity).toEqual([])
   })
 
+  it('does not forward the token to a main host that another conference claims now', async () => {
+    // The conference is read through a cache: its main domain has since
+    // changed hands, and can sign people in to ANOTHER conference.
+    h.getDomainClaim.mockImplementation(
+      claimsById(provenClaim(MAIN, {}, { _id: 'conf-b', domains: [MAIN] })),
+    )
+
+    const response = await open(LIVE, SECONDARY)
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/workshop')
+    expect(response.headers.getSetCookie()).toEqual([])
+    expectUncachedAndNoReferrer(response)
+    expect(await sentText(response)).not.toContain(LIVE)
+    // The same two live reads as a forward makes, and nothing about links.
+    expect(reads()).toEqual({
+      hostDecision: [
+        `domainVerification.${SECONDARY}`,
+        `domainVerification.${MAIN}`,
+      ],
+      sanity: [],
+    })
+  })
+
+  it('makes the same two live reads when it does forward', async () => {
+    await open(LIVE, SECONDARY)
+
+    expect(reads()).toEqual({
+      hostDecision: [
+        `domainVerification.${SECONDARY}`,
+        `domainVerification.${MAIN}`,
+      ],
+      sanity: [],
+    })
+  })
+
   it('forwards to the portal page, never to itself, when it is the main host', async () => {
     h.getDomainClaim.mockResolvedValue(null)
 
