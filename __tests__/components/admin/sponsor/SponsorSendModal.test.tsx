@@ -649,12 +649,21 @@ describe('discount kind', () => {
     )
   })
 
-  it('shows a code stored on another sponsor as unpickable, with whose it is', () => {
+  it('does not show codes stored on or attributed to another sponsor', async () => {
     h.codeOptions = options
     renderModal({}, 'discount')
+    // Positive presence assertion: ACME_LINKED exists and is rendered
     expect(
-      screen.getByRole('checkbox', { name: 'GLOBEX-VIP (linked to Globex)' }),
-    ).toBeDisabled()
+      screen.getByRole('checkbox', { name: ACME_LINKED }),
+    ).toBeInTheDocument()
+    // Negative assertion: foreign code is excluded
+    expect(
+      screen.queryByRole('checkbox', { name: /GLOBEX-VIP/ }),
+    ).not.toBeInTheDocument()
+    // Action value proof: submitting dispatches with only the sponsor's valid codes
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0].discountCodes).toEqual(['ACME-2026'])
   })
 
   it('refuses to post with no code ticked', async () => {
@@ -875,7 +884,7 @@ describe('discount kind', () => {
     ).toBeChecked()
   })
 
-  it('never preselects a code stored on another sponsor, whatever the server says', () => {
+  it('never shows a code stored on another sponsor', () => {
     h.codeOptions = {
       ...options,
       codes: [
@@ -889,11 +898,11 @@ describe('discount kind', () => {
     }
     renderModal({}, 'discount')
     expect(
-      screen.getByRole('checkbox', { name: 'GLOBEX-VIP (linked to Globex)' }),
-    ).not.toBeChecked()
+      screen.queryByRole('checkbox', { name: /GLOBEX-VIP/ }),
+    ).not.toBeInTheDocument()
   })
 
-  it('says in the accessible name when sending would move a code from another sponsor', () => {
+  it('does not show codes attributed to another sponsor', () => {
     h.codeOptions = {
       ...options,
       codes: [
@@ -907,10 +916,10 @@ describe('discount kind', () => {
     }
     renderModal({}, 'discount')
     expect(
-      screen.getByRole('checkbox', {
-        name: 'ACME-WORKSHOP, now counted for Workshop AS; sending moves it to this sponsor',
+      screen.queryByRole('checkbox', {
+        name: /ACME-WORKSHOP/,
       }),
-    ).toBeInTheDocument()
+    ).not.toBeInTheDocument()
   })
 
   it('an information send carries no codes', async () => {
