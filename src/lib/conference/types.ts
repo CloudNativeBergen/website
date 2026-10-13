@@ -259,6 +259,8 @@ export interface Conference {
   sponsorRevenueGoal?: number
   salesNotificationChannel?: string
   cfpNotificationChannel?: string
+  volunteerSlackInviteUrl?: string
+  volunteerRegistrationLink?: string
   socialLinks?: string[]
   /**
    * Optional organizer sub-teams — a SOFT routing lens, never access control.

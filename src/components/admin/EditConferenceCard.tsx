@@ -417,6 +417,14 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         description:
           'Checkin "Send invitations" link for the speaker ticket category (contains action=invite, category= and pass=). This is ONE SHARED URL, not per-person: anyone holding it can claim a free speaker ticket, so it goes in speaker email only — never on the public site. Leave blank and confirmed speakers get only Checkin\'s own per-person invitation email.',
       },
+      {
+        name: 'volunteerRegistrationLink',
+        label: 'Volunteer Registration Link',
+        type: 'url',
+        nullableWhenEmpty: true,
+        description:
+          'Checkin "Send invitations" link or ticket signup URL for the volunteer ticket category. Included in volunteer approval emails, never on the public site.',
+      },
     ],
   },
   communication: {
@@ -449,6 +457,14 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         type: 'text',
         nullableWhenEmpty: true,
         description: 'Slack channel, e.g. #conference-cfp',
+      },
+      {
+        name: 'volunteerSlackInviteUrl',
+        label: 'Volunteer Slack Invite Link',
+        type: 'url',
+        nullableWhenEmpty: true,
+        description:
+          'Private invitation link for volunteers to join the conference Slack workspace/channel.',
       },
     ],
   },

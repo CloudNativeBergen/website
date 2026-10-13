@@ -132,6 +132,21 @@ export default defineType({
       type: 'text',
       hidden: ({ document }) => document?.status === 'pending',
     }),
+    defineField({
+      name: 'approvalEmailSentAt',
+      title: 'Approval Email Sent At',
+      type: 'datetime',
+      readOnly: true,
+      hidden: ({ document }) => document?.status !== 'approved',
+    }),
+    defineField({
+      name: 'approvalEmailSentBy',
+      title: 'Approval Email Sent By',
+      type: 'reference',
+      to: [{ type: 'speaker' }],
+      readOnly: true,
+      hidden: ({ document }) => document?.status !== 'approved',
+    }),
 
     // GDPR Consent
     defineField({
