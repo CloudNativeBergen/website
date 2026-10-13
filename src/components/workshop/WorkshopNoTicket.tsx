@@ -35,7 +35,9 @@ export function WorkshopNoTicket({
       <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-          <div className="flex items-center justify-between">
+          {/* On a phone the title and the button do not fit on one row:
+              there the button goes below. From `sm` up it is as it was. */}
+          <div className="flex items-center justify-between gap-4 max-sm:flex-wrap">
             <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
               Workshop Access Required
             </h1>

@@ -66,7 +66,9 @@ export function WorkshopPortal({
       <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-          <div className="flex items-center justify-between gap-4">
+          {/* On the narrowest phones the title and the button do not fit on
+              one row: there, and only there, the button goes below. */}
+          <div className="flex items-center justify-between gap-4 max-[360px]:flex-wrap">
             <h1 className="font-display text-4xl font-bold tracking-tighter text-blue-600 sm:text-5xl lg:text-7xl dark:text-blue-400">
               Workshop Signup
             </h1>

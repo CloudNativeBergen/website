@@ -162,11 +162,16 @@ const sections = (canvasElement: HTMLElement) =>
   within(canvasElement)
     .queryAllByRole('heading', { level: 2 })
     .map((heading) => heading.textContent)
-/** The headings of the banners shown. */
+/**
+ * The headings of the banners shown. (A workshop's card has a heading of the
+ * same level: those are the workshops' titles, and are left out.)
+ */
+const WORKSHOP_TITLES = WORKSHOPS.map((each) => each.title)
 const banners = (canvasElement: HTMLElement) =>
   within(canvasElement)
     .queryAllByRole('heading', { level: 3 })
-    .map((heading) => heading.textContent)
+    .map((heading) => heading.textContent ?? '')
+    .filter((heading) => !WORKSHOP_TITLES.includes(heading))
 const statuses = (canvasElement: HTMLElement) =>
   within(canvasElement)
     .queryAllByRole('status')
