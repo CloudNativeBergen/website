@@ -183,3 +183,56 @@ describe('removing a sponsor expires the cached links at once', () => {
     expect(expired()).toEqual([])
   })
 })
+
+/**
+ * A delete can be committed and its acknowledgement lost: the procedure then
+ * fails, and the sponsor is gone all the same. The cached links are expired
+ * after any ATTEMPTED removal.
+ */
+describe('a removal that commits and then fails still expires the cached links', () => {
+  const commitsThenThrows = () =>
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+
+  it('one sponsor (sponsor.crm.delete)', async () => {
+    commitsThenThrows()
+
+    await expect(caller().crm.delete({ id: 'sfc-acme' })).rejects.toMatchObject(
+      { code: 'INTERNAL_SERVER_ERROR' },
+    )
+
+    expect(store().doc('sfc-acme')).toBeUndefined()
+    expect(expired()).toEqual([[tag(CONF), { expire: 0 }]])
+  })
+
+  it('several sponsors (sponsor.crm.bulkDelete)', async () => {
+    commitsThenThrows()
+
+    await expect(
+      caller().crm.bulkDelete({ ids: ['sfc-acme', 'sfc-other'] }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+
+    expect(store().doc('sfc-acme')).toBeUndefined()
+    expect(expired()).toEqual([[tag(CONF), { expire: 0 }]])
+  })
+
+  it('the sponsor itself, in every conference it is in (sponsor.delete)', async () => {
+    store().reset(DATASET.filter((doc) => doc._id !== 'sfc-other'))
+    commitsThenThrows()
+
+    await expect(caller().delete({ id: 'sponsor-acme' })).rejects.toMatchObject(
+      { code: 'INTERNAL_SERVER_ERROR' },
+    )
+
+    expect(store().doc('sfc-acme')).toBeUndefined()
+    expect(store().doc('sfc-acme-2025')).toBeUndefined()
+    expect(expired()).toHaveLength(2)
+    expect(expired()).toEqual(
+      expect.arrayContaining([
+        [tag(CONF), { expire: 0 }],
+        [tag(LAST_YEAR), { expire: 0 }],
+      ]),
+    )
+  })
+})
