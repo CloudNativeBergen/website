@@ -3200,25 +3200,13 @@ export const sponsorRouter = router({
           const sponsors = await clientReadUncached.fetch<
             Array<{ _id: string; status: string }>
           >(
-            `*[_type == "sponsorForConference" && conference._ref == $conferenceId]{_id, status}`,
+            `*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won"]{_id, status}`,
             { conferenceId: conference._id },
           )
 
           if (sponsors.length > 0 && userId) {
             const sponsorIds = sponsors.map((s) => s._id)
             await logBulkEmailSent(sponsorIds, input.subject, userId)
-
-            const prospectIds = sponsors
-              .filter((s) => s.status === 'prospect')
-              .map((s) => s._id)
-
-            if (prospectIds.length > 0) {
-              const transaction = clientWrite.transaction()
-              for (const id of prospectIds) {
-                transaction.patch(id, { set: { status: 'contacted' } })
-              }
-              await transaction.commit()
-            }
           }
         } catch (crmError) {
           console.warn('[broadcastEmail] CRM tracking failed:', crmError)
@@ -3248,8 +3236,11 @@ export const sponsorRouter = router({
         })
       }
 
+      // Audiences are scoped to confirmed (closed-won) sponsors. Prospects
+      // and negotiating sponsors must not receive general sponsor broadcasts.
       const eligibleSponsors = crmSponsors.filter(
         (s: SponsorForConferenceExpanded) =>
+          s.status === 'closed-won' &&
           s.contactPersons &&
           s.contactPersons.length > 0 &&
           s.contactPersons.some((contact) => contact.email),
@@ -3259,7 +3250,7 @@ export const sponsorRouter = router({
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message:
-            'No sponsors with contact information found. Add contact information to sponsors before syncing.',
+            'No confirmed sponsors with contact information found. Add contact information to closed-won sponsors before syncing.',
         })
       }
 

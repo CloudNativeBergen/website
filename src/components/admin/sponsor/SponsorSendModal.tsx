@@ -530,11 +530,13 @@ export function SponsorDiscountCodePicker({
   options,
   selectedCodes,
   onToggle,
+  sponsorName,
   state = 'ready',
 }: {
   options: readonly DiscountCodeOption[]
   selectedCodes: ReadonlySet<string>
   onToggle: (code: string) => void
+  sponsorName?: string
   state?: 'loading' | 'error' | 'ready'
 }) {
   if (state === 'loading') {
@@ -556,9 +558,12 @@ export function SponsorDiscountCodePicker({
   }
   if (options.length === 0) {
     return (
-      <span className="font-inter text-sm text-red-600 dark:text-red-400">
-        This event has no discount codes yet — create one in Discount Codes
-        first.
+      <span
+        role="alert"
+        className="font-inter text-sm text-amber-600 dark:text-amber-400"
+      >
+        No discount code is linked to {sponsorName || 'this sponsor'} yet.
+        Create or assign a code first.
       </span>
     )
   }
@@ -569,36 +574,23 @@ export function SponsorDiscountCodePicker({
       className="flex flex-wrap items-center gap-2"
     >
       {options.map((option) => {
-        const selectable = !option.linkedTo
         const selected = selectedCodes.has(option.code)
-        // The "counted for X" hint wraps onto its own line rather than
-        // truncating the code — the code is what the organizer must read.
-        const hinted = selectable && !!option.attributedTo
         return (
           <label
             key={option.code}
-            title={
-              selectable
-                ? option.code
-                : `${option.code} is linked to ${option.linkedTo}`
-            }
+            title={option.code}
             className={clsx(
-              'font-inter inline-flex min-h-8 max-w-full items-center gap-1.5 border px-2.5 py-1 text-sm transition-colors select-none',
-              hinted ? 'flex-wrap rounded-2xl' : 'rounded-full',
+              'font-inter inline-flex min-h-8 max-w-full cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors select-none',
               'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500 has-[:focus-visible]:ring-offset-1 dark:has-[:focus-visible]:ring-offset-gray-900',
-              selectable && 'cursor-pointer',
               selected
                 ? 'border-brand-cloud-blue bg-brand-sky-mist text-brand-slate-gray dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-100'
-                : selectable
-                  ? 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500'
-                  : 'cursor-not-allowed border-dashed border-gray-300 text-gray-400 dark:border-gray-600 dark:text-gray-500',
+                : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500',
             )}
           >
             <input
               type="checkbox"
               className="sr-only"
               checked={selected}
-              disabled={!selectable}
               onChange={() => onToggle(option.code)}
               aria-label={codeChipLabel(option)}
             />
@@ -619,16 +611,6 @@ export function SponsorDiscountCodePicker({
             {option.linked && (
               <span className="rounded-sm bg-white/70 px-1 text-[10px] font-semibold tracking-wide text-brand-cloud-blue uppercase dark:bg-indigo-950/60 dark:text-indigo-300">
                 Linked
-              </span>
-            )}
-            {option.linkedTo && (
-              <span className="min-w-0 truncate text-xs italic">
-                {option.linkedTo}
-              </span>
-            )}
-            {hinted && (
-              <span className="basis-full pl-5.5 text-xs text-amber-700 dark:text-amber-300">
-                counted for {option.attributedTo} · sending moves it
               </span>
             )}
           </label>
@@ -1038,8 +1020,11 @@ export function SponsorSendModal({
       staleTime: 0,
     },
   )
-  const codeOptions = useMemo(
-    () => codesQuery.data?.codes ?? [],
+  const sponsorCodeOptions = useMemo(
+    () =>
+      (codesQuery.data?.codes ?? []).filter(
+        (c) => !c.linkedTo && !c.attributedTo,
+      ),
     [codesQuery.data],
   )
   const [selectedCodes, setSelectedCodes] = useState<ReadonlySet<string>>(
@@ -1070,11 +1055,7 @@ export function SponsorSendModal({
       return
     setCodesSeededFor(sponsorForConference._id)
     setSelectedCodes(
-      new Set(
-        codesQuery.data.codes
-          .filter((c) => c.selected && !c.linkedTo)
-          .map((c) => c.code),
-      ),
+      new Set(sponsorCodeOptions.filter((c) => c.selected).map((c) => c.code)),
     )
   }, [
     isOpen,
@@ -1083,6 +1064,7 @@ export function SponsorSendModal({
     codesQuery.isError,
     codesSeeded,
     sponsorForConference._id,
+    sponsorCodeOptions,
   ])
   const toggleCode = (code: string) =>
     setSelectedCodes((prev) => {
@@ -1092,7 +1074,7 @@ export function SponsorSendModal({
       return next
     })
   // Option order, not click order: the email lists codes as the picker does.
-  const chosenCodes = codeOptions
+  const chosenCodes = sponsorCodeOptions
     .map((c) => c.code)
     .filter((code) => selectedCodes.has(code))
 
@@ -1340,7 +1322,7 @@ export function SponsorSendModal({
       />
     ) : null
   const noCodeHint =
-    isDiscount && codeOptions.length > 0 && chosenCodes.length === 0 ? (
+    isDiscount && sponsorCodeOptions.length > 0 && chosenCodes.length === 0 ? (
       <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
         Choose at least one discount code before sending.
       </p>
@@ -1527,9 +1509,10 @@ export function SponsorSendModal({
                 label: 'Codes:',
                 content: (
                   <SponsorDiscountCodePicker
-                    options={codeOptions}
+                    options={sponsorCodeOptions}
                     selectedCodes={selectedCodes}
                     onToggle={toggleCode}
+                    sponsorName={sponsorForConference.sponsor.name}
                     state={
                       codesQuery.isError
                         ? 'error'

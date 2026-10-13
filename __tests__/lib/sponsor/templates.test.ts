@@ -54,6 +54,24 @@ describe('processTemplateVariables', () => {
   it('handles empty string', () => {
     expect(processTemplateVariables('', { A: 'B' })).toBe('')
   })
+
+  it("preserves special regex replacement tokens ($&, $`, $', $$, $1)", () => {
+    expect(
+      processTemplateVariables('Price is {{{AMOUNT}}}', { AMOUNT: '$100' }),
+    ).toBe('Price is $100')
+    expect(
+      processTemplateVariables('Value: {{{TOKEN}}}', { TOKEN: '$&' }),
+    ).toBe('Value: $&')
+    expect(
+      processTemplateVariables('Value: {{{TOKEN}}}', { TOKEN: "$'" }),
+    ).toBe("Value: $'")
+    expect(
+      processTemplateVariables('Value: {{{TOKEN}}}', { TOKEN: '$`' }),
+    ).toBe('Value: $`')
+    expect(
+      processTemplateVariables('Value: {{{TOKEN}}}', { TOKEN: '$$' }),
+    ).toBe('Value: $$')
+  })
 })
 
 describe('processPortableTextVariables', () => {
