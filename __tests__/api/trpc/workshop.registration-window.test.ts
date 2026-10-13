@@ -617,39 +617,53 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
       })
     })
 
+    // A REFUSAL NAMES THE STORED TIME IT WAS JUDGED AGAINST when the save did
+    // not send it: the form that sent the save may not be showing it.
+    const STORED_SPONSOR_START =
+      ' Sponsor Early Access Opens is set to 2. mai 2026 kl. 08:00.'
+    const STORED_OPENING =
+      ' Registration Opens is set to 10. mai 2026 kl. 08:00.'
+    const STORED_END = ' Registration Closes is set to 20. mai 2026 kl. 08:00.'
+
+    it('from a client that knows two times, names the stored sponsor start time it broke', async () => {
+      expect(
+        await save({ startDate: '2026-05-01T06:00:00.000Z', endDate: END }),
+      ).toEqual(refused(`${NOT_EARLIER}.${STORED_SPONSOR_START}`))
+    })
+
     it('refuses clearing the official opening while a sponsor start time is STORED and not sent', async () => {
       expect(await save({ startDate: null })).toEqual(
-        refused(NO_OFFICIAL_OPENING),
+        refused(`${NO_OFFICIAL_OPENING}.${STORED_SPONSOR_START}`),
       )
     })
 
     it('refuses moving the official opening to before a sponsor start time that is STORED and not sent', async () => {
       expect(await save({ startDate: '2026-05-01T06:00:00.000Z' })).toEqual(
-        refused(NOT_EARLIER),
+        refused(`${NOT_EARLIER}.${STORED_SPONSOR_START}`),
       )
     })
 
     it('refuses moving the official opening to the very instant of the stored sponsor start time', async () => {
       expect(await save({ startDate: '2026-05-02T06:00:00.000Z' })).toEqual(
-        refused(NOT_EARLIER),
+        refused(`${NOT_EARLIER}.${STORED_SPONSOR_START}`),
       )
     })
 
     it('refuses a sponsor start time later than the STORED official opening', async () => {
       expect(
         await save({ sponsorStartDate: '2026-05-11T06:00:00.000Z' }),
-      ).toEqual(refused(NOT_EARLIER))
+      ).toEqual(refused(`${NOT_EARLIER}.${STORED_OPENING}`))
     })
 
     it('refuses an end that is not after the STORED start', async () => {
       expect(await save({ endDate: '2026-05-09T06:00:00.000Z' })).toEqual(
-        refused('End date must be after start date'),
+        refused(`End date must be after start date.${STORED_OPENING}`),
       )
     })
 
     it('refuses a start that is not before the STORED end', async () => {
       expect(await save({ startDate: '2026-05-21T06:00:00.000Z' })).toEqual(
-        refused('End date must be after start date'),
+        refused(`End date must be after start date.${STORED_END}`),
       )
     })
 

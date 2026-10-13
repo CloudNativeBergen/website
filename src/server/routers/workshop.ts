@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { formatRegistrationInstant } from '@/lib/time'
+import { formatDateTimeSafe, formatRegistrationInstant } from '@/lib/time'
 import {
   router,
   publicProcedure,
@@ -211,6 +211,16 @@ const workshopAdminProcedure = adminProcedure.use(async ({ next }) => {
   }
   return next()
 })
+
+/**
+ * The names `WorkshopRegistrationSettings` gives the three registration
+ * times, for a refusal that has to point an organizer at one of them.
+ */
+const REGISTRATION_TIME_LABELS = {
+  workshopRegistrationSponsorStart: 'Sponsor Early Access Opens',
+  workshopRegistrationStart: 'Registration Opens',
+  workshopRegistrationEnd: 'Registration Closes',
+} as const
 
 export const workshopRouter = router({
   list: publicProcedure.input(workshopListInputSchema).query(async () => {
@@ -1317,16 +1327,41 @@ export const workshopRouter = router({
             ...changes,
           }
 
+          // A REFUSAL NAMES EVERY STORED TIME IT WAS JUDGED AGAINST THAT THE
+          // SAVE DID NOT SEND, by the name the card gives it and as the card
+          // shows it: the form that sent the save may not be showing it, and
+          // its organizer could not otherwise tell what to change.
+          const refusal = (
+            message: string,
+            ...judgedOn: (keyof typeof REGISTRATION_TIME_LABELS)[]
+          ) => {
+            const unseen = judgedOn.flatMap((field) => {
+              const time = storedTimes[field]
+              return field in changes || !time
+                ? []
+                : [
+                    `${REGISTRATION_TIME_LABELS[field]} is set to ${formatDateTimeSafe(time)}.`,
+                  ]
+            })
+            return new TRPCError({
+              code: 'BAD_REQUEST',
+              message: unseen.length
+                ? `${message}. ${unseen.join(' ')}`
+                : message,
+            })
+          }
+
           if (
             merged.workshopRegistrationStart &&
             merged.workshopRegistrationEnd &&
             new Date(merged.workshopRegistrationStart) >=
               new Date(merged.workshopRegistrationEnd)
           ) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: 'End date must be after start date',
-            })
+            throw refusal(
+              'End date must be after start date',
+              'workshopRegistrationStart',
+              'workshopRegistrationEnd',
+            )
           }
 
           // A sponsor start time needs an official opening and must be
@@ -1334,10 +1369,11 @@ export const workshopRouter = router({
           // validates with.
           const sponsorStartProblem = sponsorStartTimeProblem(merged)
           if (sponsorStartProblem) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: sponsorStartProblem,
-            })
+            throw refusal(
+              sponsorStartProblem,
+              'workshopRegistrationSponsorStart',
+              'workshopRegistrationStart',
+            )
           }
 
           // Only the fields that were sent: the others are not touched. And
