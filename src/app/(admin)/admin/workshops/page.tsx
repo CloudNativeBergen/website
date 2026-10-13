@@ -33,6 +33,18 @@ export default async function WorkshopAdminPage() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({ uncached: true })
 
+  const loadError = conferenceError ? (
+    <ErrorDisplay
+      title="Error Loading Conference"
+      message={conferenceError.message}
+    />
+  ) : null
+  // A LIVE READ THAT FAILED IS NOT A REFUSAL. It names no conference, so the
+  // check below would answer "Access Denied" to an organizer the guard let
+  // through. Nothing of any conference was read, so there is nothing to
+  // withhold from them.
+  if (loadError && !conference?._id) return loadError
+
   // THE CONFERENCE READ LIVE MUST BE THE AUTHORIZED ONE. The read above
   // resolves the host LIVE. Right after a host moves to another conference the
   // two differ, and an organizer of the first would be handed the second's
@@ -57,14 +69,7 @@ export default async function WorkshopAdminPage() {
     notFound()
   }
 
-  if (conferenceError) {
-    return (
-      <ErrorDisplay
-        title="Error Loading Conference"
-        message={conferenceError.message}
-      />
-    )
-  }
+  if (loadError) return loadError
 
   const workshops = await getWorkshopsByConference(conference._id)
   // The resend action (#1298), refused for the reasons the server refuses it.

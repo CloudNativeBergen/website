@@ -494,6 +494,45 @@ describe('/admin/workshops — the live conference is the authorized one', () =>
     expect(await view()).toEqual(DENIED_BEFORE_ANY_FETCH)
   })
 
+  it('is refused when neither read names a conference, whatever org they carry', async () => {
+    const NAMELESS = { organization: OURS.organization }
+    host(NAMELESS, NAMELESS)
+    expect(await view()).toEqual(DENIED_BEFORE_ANY_FETCH)
+  })
+
+  // A live read that FAILED is not a refusal: the organizer the guard let
+  // through is told the conference could not be loaded, not that they have no
+  // access. (What `getConferenceForCurrentDomain` answers when its read
+  // throws: an empty conference, the error, and `unavailable`.)
+  it('a live read that failed says so, and fetches nothing', async () => {
+    mockGetConference.mockImplementation(
+      async (options?: { uncached?: boolean }) =>
+        options?.uncached
+          ? {
+              conference: {},
+              error: new Error('The live read failed'),
+              status: 'unavailable',
+            }
+          : { conference: OURS, error: null },
+    )
+
+    const page = (await WorkshopAdminPage()) as React.ReactElement<{
+      title?: string
+      message?: string
+    }>
+    expect({
+      title: page.props.title,
+      message: page.props.message,
+      workshopReads: mockGetWorkshops.mock.calls,
+      organizationReads: mockGetOrganizationById.mock.calls,
+    }).toEqual({
+      title: 'Error Loading Conference',
+      message: 'The live read failed',
+      workshopReads: [],
+      organizationReads: [],
+    })
+  })
+
   it('is refused when both reads name a conference of an org the organizer does not organize', async () => {
     // The guard above is mocked at `getOrganizationRefForCurrentConference`
     // ('org-A'), as if it had resolved the host a moment before the cache
