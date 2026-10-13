@@ -18,9 +18,15 @@ import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 export async function denyNonOrganizer(): Promise<React.ReactNode | null> {
   const session = await getAuthSession()
   if (await isOrganizerForCurrentOrg(session?.speaker)) return null
-  return (
-    <div className="flex h-screen items-center justify-center">
-      <p className="text-lg text-gray-500 dark:text-gray-400">Access Denied</p>
-    </div>
-  )
+  return ACCESS_DENIED
 }
+
+/**
+ * What a refused page shows. Exported for a page that has to refuse AFTER
+ * this guard let it through, on something only its own read can know.
+ */
+export const ACCESS_DENIED: React.ReactNode = (
+  <div className="flex h-screen items-center justify-center">
+    <p className="text-lg text-gray-500 dark:text-gray-400">Access Denied</p>
+  </div>
+)

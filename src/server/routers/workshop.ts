@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { formatDate } from '@/lib/time'
+import { formatDateTimeSafe, formatRegistrationInstant } from '@/lib/time'
 import {
   router,
   publicProcedure,
@@ -13,7 +13,7 @@ import { TRPCError } from '@trpc/server'
 import { resendWorkshopSignupInstructions } from '@/lib/workshop/resend-instructions'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import {
   workshopListInputSchema,
   workshopAvailabilitySchema,
@@ -52,6 +52,11 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
+import {
+  sponsorStartTimeProblem,
+  workshopRegistrationWindow,
+  type WorkshopRegistrationTimes,
+} from '@/lib/workshop/registration-window'
 import {
   isOrganizerForCurrentOrg,
   type OrganizerSpeaker,
@@ -206,6 +211,16 @@ const workshopAdminProcedure = adminProcedure.use(async ({ next }) => {
   }
   return next()
 })
+
+/**
+ * The names `WorkshopRegistrationSettings` gives the three registration
+ * times, for a refusal that has to point an organizer at one of them.
+ */
+const REGISTRATION_TIME_LABELS = {
+  workshopRegistrationSponsorStart: 'Sponsor Early Access Opens',
+  workshopRegistrationStart: 'Registration Opens',
+  workshopRegistrationEnd: 'Registration Closes',
+} as const
 
 export const workshopRouter = router({
   list: publicProcedure.input(workshopListInputSchema).query(async () => {
@@ -531,21 +546,22 @@ export const workshopRouter = router({
         const userEmail = actor.email
         const userName = workshopUserName(actor)
 
-        const now = new Date()
-        if (
-          conference.workshopRegistrationStart &&
-          new Date(conference.workshopRegistrationStart) > now
-        ) {
+        // THE ONE WINDOW RULE (#1345), the same call the portal page and its
+        // list make. Nobody has early access yet (#1346).
+        const registration = workshopRegistrationWindow(conference, {
+          now: new Date(),
+          earlyAccess: false,
+        })
+        if (registration.status === 'not-open-yet') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: `Workshop registration opens on ${formatDate(conference.workshopRegistrationStart)}`,
+            // The day AND the time of day, as the portal's banner names it:
+            // two start times can fall on one day (spec §6).
+            message: `Workshop registration opens on ${formatRegistrationInstant(registration.opensAt)}`,
           })
         }
 
-        if (
-          conference.workshopRegistrationEnd &&
-          new Date(conference.workshopRegistrationEnd) < now
-        ) {
+        if (registration.status === 'closed') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             message: 'Workshop registration has closed',
@@ -1244,38 +1260,143 @@ export const workshopRouter = router({
     updateRegistrationTimes: workshopAdminProcedure
       .input(
         z.object({
-          startDate: z.string().nullable(),
-          endDate: z.string().nullable(),
+          // OMITTED MEANS UNCHANGED, `null` means cleared. A form sends only
+          // the times its organizer changed, so a form seeded before a
+          // colleague's save cannot erase a time it never showed.
+          sponsorStartDate: z.string().nullable().optional(),
+          startDate: z.string().nullable().optional(),
+          endDate: z.string().nullable().optional(),
         }),
       )
       .mutation(async ({ input }) => {
         try {
           const conferenceId = await resolveConferenceId()
-          const { startDate, endDate } = input
 
-          // Validate dates
-          if (
-            startDate &&
-            endDate &&
-            new Date(startDate) >= new Date(endDate)
-          ) {
+          // What this save sets: only the times it was sent, as instants.
+          const changes: WorkshopRegistrationTimes = {}
+          const sent = (value: string | null) =>
+            value ? new Date(value).toISOString() : null
+          if (input.sponsorStartDate !== undefined) {
+            changes.workshopRegistrationSponsorStart = sent(
+              input.sponsorStartDate,
+            )
+          }
+          if (input.startDate !== undefined) {
+            changes.workshopRegistrationStart = sent(input.startDate)
+          }
+          if (input.endDate !== undefined) {
+            changes.workshopRegistrationEnd = sent(input.endDate)
+          }
+          if (Object.keys(changes).length === 0) {
+            return {
+              success: true,
+              message: 'Workshop registration times updated successfully',
+            }
+          }
+
+          // THE RULES ARE APPLIED TO WHAT WILL BE STORED: the sent times over
+          // the stored ones, read live. A save that moves or clears the
+          // official opening is judged against the sponsor start time that is
+          // stored, whether or not the form that sent it knew of one.
+          //
+          // `_rev` comes from the SAME read as the times, and the patch below
+          // is conditioned on it: two saves of different fields at once would
+          // otherwise each pass against the same stored pair and together
+          // store a combination neither was judged on.
+          const stored = await clientReadUncached.fetch<
+            (WorkshopRegistrationTimes & { _rev?: string }) | null
+          >(
+            // groq-global-scoped: keyed by `resolveConferenceId()`'s id, the request's own conference and the one patched below; never client input.
+            `*[_type == "conference" && _id == $id][0]{ _rev, workshopRegistrationSponsorStart, workshopRegistrationStart, workshopRegistrationEnd }`,
+            { id: conferenceId },
+            { cache: 'no-store' },
+          )
+          // No document, or none that a write can be conditioned on: judging
+          // the sent times alone would let through what the stored ones
+          // forbid. Refused before anything is written.
+          if (!stored?._rev) {
             throw new TRPCError({
+              code: 'NOT_FOUND',
+              message:
+                'This conference could not be read, so nothing was saved. Reload the page and try again.',
+            })
+          }
+          const { _rev: readAt, ...storedTimes } = stored
+          const merged: WorkshopRegistrationTimes = {
+            ...storedTimes,
+            ...changes,
+          }
+
+          // A REFUSAL NAMES EVERY STORED TIME IT WAS JUDGED AGAINST THAT THE
+          // SAVE DID NOT SEND, by the name the card gives it and as the card
+          // shows it: the form that sent the save may not be showing it, and
+          // its organizer could not otherwise tell what to change.
+          const refusal = (
+            message: string,
+            ...judgedOn: (keyof typeof REGISTRATION_TIME_LABELS)[]
+          ) => {
+            const unseen = judgedOn.flatMap((field) => {
+              const time = storedTimes[field]
+              return field in changes || !time
+                ? []
+                : [
+                    `${REGISTRATION_TIME_LABELS[field]} is set to ${formatDateTimeSafe(time)}.`,
+                  ]
+            })
+            return new TRPCError({
               code: 'BAD_REQUEST',
-              message: 'End date must be after start date',
+              message: unseen.length
+                ? `${message}. ${unseen.join(' ')}`
+                : message,
             })
           }
 
-          await clientWrite
-            .patch(conferenceId)
-            .set({
-              workshopRegistrationStart: startDate
-                ? new Date(startDate).toISOString()
-                : null,
-              workshopRegistrationEnd: endDate
-                ? new Date(endDate).toISOString()
-                : null,
+          if (
+            merged.workshopRegistrationStart &&
+            merged.workshopRegistrationEnd &&
+            new Date(merged.workshopRegistrationStart) >=
+              new Date(merged.workshopRegistrationEnd)
+          ) {
+            throw refusal(
+              // By the names the form gives the two fields.
+              'Registration Closes must be later than Registration Opens',
+              'workshopRegistrationStart',
+              'workshopRegistrationEnd',
+            )
+          }
+
+          // A sponsor start time needs an official opening and must be
+          // earlier than it (#1345): the rule the `conference` schema
+          // validates with.
+          const sponsorStartProblem = sponsorStartTimeProblem(merged)
+          if (sponsorStartProblem) {
+            throw refusal(
+              sponsorStartProblem,
+              'workshopRegistrationSponsorStart',
+              'workshopRegistrationStart',
+            )
+          }
+
+          // Only the fields that were sent: the others are not touched. And
+          // only if the document is still the one that was read. No retry: a
+          // second pass would judge the organizer's change against times they
+          // have not seen.
+          try {
+            await clientWrite
+              .patch(conferenceId)
+              .ifRevisionId(readAt)
+              .set(changes)
+              .commit()
+          } catch (error) {
+            if ((error as { statusCode?: number } | null)?.statusCode !== 409) {
+              throw error
+            }
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'The registration times were changed while you were saving, so nothing was saved. Review the times and try again.',
             })
-            .commit()
+          }
 
           revalidateTag('admin:settings', 'default')
           revalidateTag(conferenceTag(conferenceId), 'default')

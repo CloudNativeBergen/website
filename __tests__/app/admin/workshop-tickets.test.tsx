@@ -40,6 +40,10 @@ const h = vi.hoisted(() => ({
   save: null as null | ((input: unknown) => Promise<unknown>),
   /** The organization the request resolves to. */
   org: {} as Record<string, unknown>,
+  /** Who is signed in, for the page's own organizer check. Nobody, unless set. */
+  session: null as null | {
+    speaker: { _id: string; organizerOrgIds: string[] }
+  },
   /** Thrown while the ticketing provider is being resolved, when set. */
   resolveError: null as Error | null,
   refresh: vi.fn(),
@@ -127,7 +131,10 @@ vi.mock('@/lib/tickets/provider/checkin', () => ({
 
 vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationById: async () => h.org,
-  getOrganizationRefForCurrentConference: () => null,
+  // Resolved only for the page's organizer check, and only once someone is
+  // signed in: every other case keeps the `null` it always had.
+  getOrganizationRefForCurrentConference: () =>
+    h.session ? (h.org._id as string) : null,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: async () => ({
@@ -137,7 +144,7 @@ vi.mock('@/lib/conference/sanity', () => ({
   }),
 }))
 vi.mock('@/lib/auth', () => ({
-  getAuthSession: vi.fn().mockResolvedValue(null),
+  getAuthSession: vi.fn(async () => h.session),
 }))
 vi.mock('@/lib/events/registry', () => ({}))
 vi.mock('@/lib/tickets/summary', () => ({ buildTicketSummary: vi.fn() }))
@@ -227,6 +234,7 @@ function seed(roles: Role[] | undefined, types: string[] | Error) {
   h.rolesReadFails = false
   h.resolveError = null
   h.org = { _id: ORG_A, name: 'Tenant A', slug: 'tenant-a', plan: 'pro' }
+  h.session = null
   h.saves = []
   h.types = types
   h.dataset = [
@@ -1236,6 +1244,8 @@ describe('/admin/workshops', () => {
       [{ typeName: 'Two-day pass', grantsWorkshop: true }],
       ['Two-day pass', 'Student'],
     )
+    // The page refuses anyone who is not an organizer of this org (#1345).
+    h.session = { speaker: { _id: 'organizer-1', organizerOrgIds: [ORG_A] } }
 
     const page = (await WorkshopAdminPage()) as {
       props: { ticketsSection: React.ReactElement }

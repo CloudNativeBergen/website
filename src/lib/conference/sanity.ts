@@ -214,8 +214,9 @@ export async function getConferenceForDomain(
      * Skip BOTH cache layers for this read: Next's `'use cache'` wrapper
      * ({@link CONFERENCE_CACHE_LIFE}) and the Sanity CDN. Reserved for admin surfaces
      * that must reflect a write the organizer just made — the homepage
-     * composer preview is the only caller. Public pages must never pass this:
-     * every request would hit the origin dataset.
+     * composer preview and `/admin/workshops` (whose registration card is the
+     * baseline its saves are diffed against) are among the callers. Public
+     * pages must never pass this: every request would hit the origin dataset.
      */
     uncached?: boolean
     /**
@@ -328,8 +329,8 @@ export async function getConferenceForDomain(
       if (sponsors && conference._id) {
         // `{ useCache: !uncached }` exactly as the gallery reads below do: the
         // public path takes the CDN, and the homepage composer preview — the
-        // only `uncached: true` caller repo-wide — keeps its read-your-writes
-        // guarantee on the live API.
+        // only `uncached: true` caller that asks for sponsors — keeps its
+        // read-your-writes guarantee on the live API.
         conference.sponsors = await getPublicSponsorsForConference(
           conference._id,
           { useCache: !uncached },

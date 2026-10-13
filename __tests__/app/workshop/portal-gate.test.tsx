@@ -800,6 +800,24 @@ describe('workshop portal — on a host that cannot sign in', () => {
     expect(elementsOf(page)[0].props.registrationClosed).toBe(true)
   })
 
+  it('says registration has closed when the end has passed and the start is still ahead (#1345)', async () => {
+    mockGetConference.mockResolvedValue({
+      conference: {
+        ...conference('org-tenant2'),
+        contactEmail: 'hello@cndn.example.org',
+        domains: ['unregistered.example.org'],
+        workshopRegistrationStart: '2999-01-01T00:00:00.000Z',
+        workshopRegistrationEnd: '2020-01-01T00:00:00.000Z',
+      },
+      error: null,
+    })
+    MARKED()
+    const page = await renderPage()
+
+    expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    expect(elementsOf(page)[0].props.registrationClosed).toBe(true)
+  })
+
   it('CONTROL: on a proven host the same tenant gets the signed-out view', async () => {
     const page = await renderPage()
     expect(elementsOf(page)[0].type).toBe(WorkshopSignedOut)
@@ -935,5 +953,174 @@ describe('workshop portal — a refused secondary host', () => {
       const page = await renderPage()
       expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
     }
+  })
+})
+
+/**
+ * THE REGISTRATION WINDOW on the portal page (#1345, spec
+ * `docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md` §3), for a signed-in attendee
+ * with a workshop ticket. The clock is pinned and every time is a literal
+ * around it. What the page chose is read as a value: the headings of the
+ * banners it shows, their text, and the times it hands the list.
+ */
+describe('workshop portal: the registration window', () => {
+  /** The pinned clock: 14:00 in Oslo on Wednesday 10 June 2026. */
+  const NOW = '2026-06-10T12:00:00.000Z'
+  const A_SECOND_BEFORE = '2026-06-10T11:59:59.000Z'
+  const A_SECOND_AFTER = '2026-06-10T12:00:01.000Z'
+  const LONG_BEFORE = '2026-05-01T07:00:00.000Z'
+  const LONG_AFTER = '2026-07-01T07:00:00.000Z'
+
+  const NOT_YET_OPEN = 'Workshop registration is not yet open'
+  const CLOSED = 'Workshop registration has closed'
+
+  /** The signup page with these registration times, at `now`. */
+  async function portalWith(
+    times: Record<string, string | null | undefined>,
+    now = NOW,
+  ) {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(now) })
+    proven(HOST)
+    vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+    mockGetConference.mockResolvedValue({
+      conference: { ...conference('org-platform'), ...times },
+      error: null,
+    })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-platform',
+      name: 'Platform',
+      slug: PLATFORM_SLUG,
+      plan: 'pro',
+    })
+    await signedInAs({
+      id: 'workos-ada',
+      email: 'ada@example.com',
+      emailVerified: true,
+      name: 'Ada Lovelace',
+    })
+    const page = await renderPage()
+    const elements = elementsOf(page)
+    return {
+      // CONTROL for every case: this is the signed-in signup page.
+      heading: textOf(elements.find((el) => el.type === 'h1')),
+      banners: elements.filter((el) => el.type === 'h3').map(textOf),
+      text: textOf(page).replace(/\s+/g, ' '),
+      list: elements.find((el) => 'userWorkOSId' in el.props)?.props,
+      /** Every ISO instant among the props of every element, in order. */
+      timesSent: elements
+        .flatMap((el) => Object.values(el.props))
+        .filter(
+          (value): value is string =>
+            typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value),
+        ),
+    }
+  }
+
+  it('with neither time set, shows no banner', async () => {
+    const portal = await portalWith({})
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([])
+  })
+
+  it('with no start set, is open from the beginning: no banner long before the end', async () => {
+    const portal = await portalWith(
+      { workshopRegistrationEnd: LONG_AFTER },
+      '2020-01-01T00:00:00.000Z',
+    )
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([])
+  })
+
+  it('with no end set, never closes: no banner long after the start', async () => {
+    const portal = await portalWith(
+      { workshopRegistrationStart: LONG_BEFORE },
+      '2099-01-01T00:00:00.000Z',
+    )
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([])
+  })
+
+  it('at the very instant of the start and of the end, shows no banner', async () => {
+    const portal = await portalWith({
+      workshopRegistrationStart: NOW,
+      workshopRegistrationEnd: NOW,
+    })
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([])
+  })
+
+  it('a second before the start, says it is not open yet and when it opens', async () => {
+    const portal = await portalWith({
+      workshopRegistrationStart: A_SECOND_AFTER,
+      workshopRegistrationEnd: LONG_AFTER,
+    })
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([NOT_YET_OPEN])
+    expect(portal.text).toContain(
+      'Registration will open on Wednesday, June 10, 2026 at 2:00 PM',
+    )
+  })
+
+  it('a second after the end, says it has closed and when it closed', async () => {
+    const portal = await portalWith({
+      workshopRegistrationStart: LONG_BEFORE,
+      workshopRegistrationEnd: A_SECOND_BEFORE,
+    })
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([CLOSED])
+    expect(portal.text).toContain(
+      'Registration closed on Wednesday, June 10, 2026 at 1:59 PM',
+    )
+  })
+
+  it('with an end that lies before a start still ahead, says it has closed and nothing else (#1345)', async () => {
+    const portal = await portalWith({
+      workshopRegistrationStart: LONG_AFTER,
+      workshopRegistrationEnd: LONG_BEFORE,
+    })
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([CLOSED])
+    expect(portal.text).toContain(
+      'Registration closed on Friday, May 1, 2026 at 9:00 AM',
+    )
+  })
+
+  it('hands the list the conference’s start and end', async () => {
+    const portal = await portalWith({
+      workshopRegistrationStart: LONG_BEFORE,
+      workshopRegistrationEnd: LONG_AFTER,
+    })
+    expect(portal.list).toMatchObject({
+      workshopRegistrationStart: LONG_BEFORE,
+      workshopRegistrationEnd: LONG_AFTER,
+    })
+  })
+
+  it('sends the browser the official opening and the end, and not the sponsor start time (#1345)', async () => {
+    // The list is a client component: every prop the page hands it is sent to
+    // the attendee's browser. Nobody has early access in this slice, so the
+    // sponsor start time is nobody's to see.
+    const SPONSOR_START = '2026-04-20T07:00:00.000Z'
+    const portal = await portalWith({
+      workshopRegistrationSponsorStart: SPONSOR_START,
+      workshopRegistrationStart: LONG_BEFORE,
+      workshopRegistrationEnd: LONG_AFTER,
+    })
+    expect(portal.heading).toBe('Workshop Signup')
+    // Every registration time anywhere in what the page returned.
+    expect(portal.timesSent).toEqual([LONG_BEFORE, LONG_AFTER])
+  })
+
+  it('names the official opening inside the early-access window: nobody has early access yet (#1345)', async () => {
+    const portal = await portalWith({
+      workshopRegistrationSponsorStart: LONG_BEFORE,
+      workshopRegistrationStart: A_SECOND_AFTER,
+      workshopRegistrationEnd: LONG_AFTER,
+    })
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([NOT_YET_OPEN])
+    expect(portal.text).toContain(
+      'Registration will open on Wednesday, June 10, 2026 at 2:00 PM',
+    )
   })
 })

@@ -18,6 +18,10 @@ import {
   VARIANT_LABELS,
   VARIANT_DESCRIPTIONS,
 } from '../../src/lib/homepage/variants'
+// Same reason again: `registration-window.ts` is dependency-free, so the Studio
+// validates the sponsor start time with THE rule the organizer's save refuses
+// with (`workshop.admin.updateRegistrationTimes`), not a second copy of it.
+import { sponsorStartTimeProblem } from '../../src/lib/workshop/registration-window'
 import { defineField, defineType, type FieldDefinition } from 'sanity'
 import { HEROICON_OPTIONS } from './constants'
 
@@ -614,12 +618,36 @@ export default defineType({
         layout: 'checkbox',
       },
     }),
+    // The sponsor start time (#1345, docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md
+    // §3). It counts only when it is earlier than the official opening below;
+    // the rule is the one the admin save applies, and it reads the OTHER field
+    // off the document, so clearing or moving the official opening while this
+    // is set marks this field.
+    defineField({
+      name: 'workshopRegistrationSponsorStart',
+      title: 'Workshop Registration Sponsor Start',
+      type: 'datetime',
+      fieldset: 'registration',
+      description:
+        'Optional. When workshop registration opens for people with a sponsor’s early-access link. Must be earlier than Workshop Registration Start.',
+      validation: (rule) =>
+        rule.custom(
+          (value: string | undefined, context) =>
+            sponsorStartTimeProblem({
+              workshopRegistrationSponsorStart: value,
+              workshopRegistrationStart: (
+                context.document as
+                  { workshopRegistrationStart?: string } | undefined
+              )?.workshopRegistrationStart,
+            }) ?? true,
+        ),
+    }),
     defineField({
       name: 'workshopRegistrationStart',
       title: 'Workshop Registration Start',
       type: 'datetime',
       fieldset: 'registration',
-      description: 'When workshop registration opens',
+      description: 'When workshop registration opens for everyone',
     }),
     defineField({
       name: 'workshopRegistrationEnd',

@@ -17,6 +17,7 @@ import {
 const mockGetConference = vi.fn()
 const mockGetOrganizationById = vi.fn()
 const mockGetWorkshops = vi.fn()
+const mockGetAuthSession = vi.fn()
 
 class NotFoundError extends Error {
   digest = 'NEXT_NOT_FOUND'
@@ -35,7 +36,15 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationById: (...args: unknown[]) => mockGetOrganizationById(...args),
-  getOrganizationRefForCurrentConference: () => null,
+  // The org this request is for, as the page's own organizer check resolves
+  // it. (The feature gate reads the org off the conference, not from here.)
+  getOrganizationRefForCurrentConference: () => 'org-A',
+}))
+
+// The session is the mocked boundary; the page's guard (`denyNonOrganizer`)
+// and the organizer rule behind it run for real.
+vi.mock('@/lib/auth', () => ({
+  getAuthSession: (...args: unknown[]) => mockGetAuthSession(...args),
 }))
 
 vi.mock('@/lib/workshop/sanity', () => ({
@@ -77,6 +86,10 @@ beforeEach(() => {
   vi.stubEnv('PLATFORM_ORG_ID', OTHER_PLATFORM_ORG_ID)
   stubPlatformTicketingAccount()
   mockGetWorkshops.mockResolvedValue([])
+  // Every case is an organizer of this request's org unless it says otherwise.
+  mockGetAuthSession.mockResolvedValue({
+    speaker: { _id: 'organizer-1', organizerOrgIds: ['org-A'] },
+  })
   mockWorkshopPortalUrl.mockResolvedValue(null)
   mockGetConference.mockResolvedValue({
     conference: {
@@ -104,14 +117,21 @@ describe('/admin/workshops — feature gate', () => {
     expect(mockGetWorkshops).not.toHaveBeenCalled()
   })
 
-  it('404s when the organization cannot be resolved (fail closed)', async () => {
+  // Was a 404 from the feature gate. The page now refuses for itself before
+  // that gate (#1345), and nobody organizes an org that cannot be resolved:
+  // still closed, and still without an organization read.
+  it('refuses when the organization cannot be resolved (fail closed)', async () => {
     mockGetConference.mockResolvedValue({
       conference: { _id: 'conf-1' },
       error: null,
     })
 
-    await expect(WorkshopAdminPage()).rejects.toBeInstanceOf(NotFoundError)
+    const page = (await WorkshopAdminPage()) as React.ReactElement<{
+      children: React.ReactElement<{ children: string }>
+    }>
+    expect(page.props.children.props.children).toBe('Access Denied')
     expect(mockGetOrganizationById).not.toHaveBeenCalled()
+    expect(mockGetWorkshops).not.toHaveBeenCalled()
   })
 
   it('renders for a pro tenant with its own ticketing credentials (#1295)', async () => {
@@ -217,5 +237,315 @@ describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
       'Workshop registration has closed.',
     )
     expect(mockWorkshopPortalUrl).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * THE CARD IS READ LIVE (#1345, review round 2). The registration card is the
+ * baseline of every save: the form sends only what differs from it. The
+ * cached conference read can serve the times from before a save for a while
+ * (`revalidateTag(tag, 'default')` serves stale content to the next request),
+ * so an organizer who set a time back to what the stale card showed would send
+ * nothing. This page therefore asks for the read that skips both cache layers.
+ */
+describe('/admin/workshops — the registration times are read live', () => {
+  const STALE = {
+    workshopRegistrationSponsorStart: '2026-05-02T06:00:00.000Z',
+    workshopRegistrationStart: '2026-05-10T06:00:00.000Z',
+    workshopRegistrationEnd: '2026-05-20T06:00:00.000Z',
+  }
+  const STORED = {
+    workshopRegistrationSponsorStart: '2026-06-01T06:00:00.000Z',
+    workshopRegistrationStart: '2026-06-15T06:30:00.000Z',
+    workshopRegistrationEnd: '2026-07-01T07:00:00.000Z',
+  }
+
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+    // The cached read still has the times from before the last save; only
+    // the read that skips the caches has what is stored.
+    mockGetConference.mockImplementation(
+      async (options?: { uncached?: boolean }) => ({
+        conference: {
+          _id: 'conf-1',
+          organization: { _ref: 'org-A', _type: 'reference' },
+          ...(options?.uncached ? STORED : STALE),
+        },
+        error: null,
+      }),
+    )
+  })
+
+  it('hands the card the stored times, from one read that skips the caches', async () => {
+    const page = (await WorkshopAdminPage()) as React.ReactElement<
+      Record<string, unknown>
+    >
+
+    expect(page.props).toMatchObject(STORED)
+    // The cached read names the conference the guard authorized; the card's
+    // times come from the one read that skips the caches.
+    expect(mockGetConference.mock.calls).toEqual([[], [{ uncached: true }]])
+  })
+})
+
+/**
+ * THE PAGE REFUSES FOR ITSELF, BEFORE IT READS (#1345, review round 3).
+ *
+ * `src/proxy.ts` lets any signed-in session reach /admin, and the admin
+ * layout's organizer check does not stop a page from running (Next's own
+ * authentication guide: "a layout that hides or swaps them does not stop them
+ * from running or from appearing in the RSC Payload"). This page now makes a
+ * live conference read on every view, so the guard comes first: a request
+ * from someone who is not an organizer of this org causes no read at all.
+ */
+describe('/admin/workshops — refuses a non-organizer before any read', () => {
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+  })
+
+  /** Every string in the element tree the page returned. */
+  function textOf(node: React.ReactNode): string {
+    if (typeof node === 'string') return node
+    if (Array.isArray(node)) return node.map(textOf).join('')
+    if (node && typeof node === 'object' && 'props' in node) {
+      return textOf(
+        (node as React.ReactElement<{ children?: React.ReactNode }>).props
+          .children,
+      )
+    }
+    return ''
+  }
+
+  /**
+   * What one view of the page did, as a value. Every Sanity module is mocked
+   * in this file, so the probes are the mocked reads themselves: the
+   * conference reads (the one with `uncached` is the live one), the workshop
+   * read and the organization read of the feature gate. The CONTROL at the
+   * end shows each of them non-empty when the page does read.
+   */
+  async function view() {
+    const page = await WorkshopAdminPage()
+    return {
+      shown:
+        textOf(page) === 'Access Denied' ? 'Access Denied' : 'the workshops',
+      conferenceReads: mockGetConference.mock.calls,
+      workshopReads: mockGetWorkshops.mock.calls,
+      organizationReads: mockGetOrganizationById.mock.calls,
+    }
+  }
+
+  const DENIED_WITHOUT_A_READ = {
+    shown: 'Access Denied',
+    conferenceReads: [],
+    workshopReads: [],
+    organizationReads: [],
+  }
+
+  it('a signed-in speaker who organizes nothing', async () => {
+    mockGetAuthSession.mockResolvedValue({
+      speaker: { _id: 'speaker-9', organizerOrgIds: [] },
+    })
+    expect(await view()).toEqual(DENIED_WITHOUT_A_READ)
+  })
+
+  it('an organizer of another org', async () => {
+    mockGetAuthSession.mockResolvedValue({
+      speaker: { _id: 'organizer-2', organizerOrgIds: ['org-B'] },
+    })
+    expect(await view()).toEqual(DENIED_WITHOUT_A_READ)
+  })
+
+  it('nobody signed in', async () => {
+    mockGetAuthSession.mockResolvedValue(null)
+    expect(await view()).toEqual(DENIED_WITHOUT_A_READ)
+  })
+
+  it('CONTROL: an organizer of this org gets the page, and every probe above sees its reads', async () => {
+    expect(await view()).toEqual({
+      shown: 'the workshops',
+      conferenceReads: [[], [{ uncached: true }]],
+      workshopReads: [['conf-1']],
+      // Twice: the page's feature gate, and the resend action's own.
+      organizationReads: [['org-A'], ['org-A']],
+    })
+  })
+})
+
+/**
+ * THE CONFERENCE THAT IS READ LIVE MUST BE THE ONE THAT WAS AUTHORIZED (#1345,
+ * adversarial round 2). The guard resolves the request's conference through
+ * the CACHED host mapping; the live read resolves the host LIVE. Right after a
+ * host moves from one conference to another the two differ, and an organizer
+ * of the first would be handed the second's workshops, speaker emails
+ * included. A mismatch is refused before anything is fetched for the
+ * conference the live read named.
+ */
+describe('/admin/workshops — the live conference is the authorized one', () => {
+  const OURS = {
+    _id: 'conf-1',
+    organization: { _ref: 'org-A', _type: 'reference' },
+  }
+  const THEIRS = {
+    _id: 'conf-2',
+    organization: { _ref: 'org-B', _type: 'reference' },
+  }
+
+  beforeEach(() => {
+    // BOTH orgs have the workshop feature (pro, with ticketing of their own):
+    // nothing but the page's own check stands between this organizer and the
+    // other conference's workshops, so a missing check shows them.
+    const ticketing = { apiKey: 'tenant-key', apiSecret: 'tenant-secret' }
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-A': { ticketing }, 'org-B': { ticketing } }),
+    )
+    mockGetOrganizationById.mockImplementation(async (id: string) => ({
+      _id: id,
+      name: `Tenant ${id}`,
+      slug: id,
+      plan: 'pro',
+    }))
+  })
+
+  /** The host as the cache still has it, and as it is stored now. */
+  function host(cached: object, live: object) {
+    mockGetConference.mockImplementation(
+      async (options?: { uncached?: boolean }) => ({
+        conference: options?.uncached ? live : cached,
+        error: null,
+      }),
+    )
+  }
+
+  function textOf(node: React.ReactNode): string {
+    if (typeof node === 'string') return node
+    if (Array.isArray(node)) return node.map(textOf).join('')
+    if (node && typeof node === 'object' && 'props' in node) {
+      return textOf(
+        (node as React.ReactElement<{ children?: React.ReactNode }>).props
+          .children,
+      )
+    }
+    return ''
+  }
+
+  /** What one view did: what it showed, and what it fetched for a conference. */
+  async function view() {
+    let shown: string
+    try {
+      const page = (await WorkshopAdminPage()) as React.ReactElement<{
+        conferenceId?: string
+      }>
+      shown =
+        textOf(page) === 'Access Denied'
+          ? 'Access Denied'
+          : `the workshops of ${page.props.conferenceId}`
+    } catch (error) {
+      if (!(error instanceof NotFoundError)) throw error
+      shown = 'Not Found'
+    }
+    return {
+      shown,
+      workshopReads: mockGetWorkshops.mock.calls,
+      organizationReads: mockGetOrganizationById.mock.calls,
+    }
+  }
+
+  const DENIED_BEFORE_ANY_FETCH = {
+    shown: 'Access Denied',
+    workshopReads: [],
+    organizationReads: [],
+  }
+
+  it('CONTROL: the same conference cached and live is shown, from its own reads', async () => {
+    host(OURS, OURS)
+    expect(await view()).toEqual({
+      shown: 'the workshops of conf-1',
+      workshopReads: [['conf-1']],
+      // Twice: the page's feature gate, and the resend action's own.
+      organizationReads: [['org-A'], ['org-A']],
+    })
+  })
+
+  it('a host that has moved to another org’s conference is refused, and nothing is fetched for that conference', async () => {
+    host(OURS, THEIRS)
+    expect(await view()).toEqual(DENIED_BEFORE_ANY_FETCH)
+  })
+
+  it('a host that has moved to another conference of the SAME org is refused too: the saves would still go to the cached one', async () => {
+    host(OURS, { ...OURS, _id: 'conf-3' })
+    expect(await view()).toEqual(DENIED_BEFORE_ANY_FETCH)
+  })
+
+  it('a live read that finds no conference is refused', async () => {
+    host(OURS, {})
+    expect(await view()).toEqual(DENIED_BEFORE_ANY_FETCH)
+  })
+
+  it('is refused when neither read names a conference, whatever org they carry', async () => {
+    const NAMELESS = { organization: OURS.organization }
+    host(NAMELESS, NAMELESS)
+    expect(await view()).toEqual(DENIED_BEFORE_ANY_FETCH)
+  })
+
+  // A live read that FAILED is not a refusal: the organizer the guard let
+  // through is told the conference could not be loaded, not that they have no
+  // access. (What `getConferenceForCurrentDomain` answers when its read
+  // throws: an empty conference, the error, and `unavailable`.)
+  it('a live read that failed says so, and fetches nothing', async () => {
+    mockGetConference.mockImplementation(
+      async (options?: { uncached?: boolean }) =>
+        options?.uncached
+          ? {
+              conference: {},
+              error: new Error('The live read failed'),
+              status: 'unavailable',
+            }
+          : { conference: OURS, error: null },
+    )
+
+    const page = (await WorkshopAdminPage()) as React.ReactElement<{
+      title?: string
+      message?: string
+    }>
+    expect({
+      title: page.props.title,
+      message: page.props.message,
+      workshopReads: mockGetWorkshops.mock.calls,
+      organizationReads: mockGetOrganizationById.mock.calls,
+    }).toEqual({
+      title: 'Error Loading Conference',
+      message: 'The live read failed',
+      workshopReads: [],
+      organizationReads: [],
+    })
+  })
+
+  it('is refused when both reads name a conference of an org the organizer does not organize', async () => {
+    // The guard above is mocked at `getOrganizationRefForCurrentConference`
+    // ('org-A'), as if it had resolved the host a moment before the cache
+    // caught up. The page's own two reads agree with each other on conf-2.
+    host(THEIRS, THEIRS)
+    expect(await view()).toEqual(DENIED_BEFORE_ANY_FETCH)
+  })
+
+  it('CONTROL: an organizer of both orgs is still refused the moved host, by the mismatch alone', async () => {
+    mockGetAuthSession.mockResolvedValue({
+      speaker: { _id: 'organizer-1', organizerOrgIds: ['org-A', 'org-B'] },
+    })
+    host(OURS, THEIRS)
+    expect(await view()).toEqual(DENIED_BEFORE_ANY_FETCH)
   })
 })
