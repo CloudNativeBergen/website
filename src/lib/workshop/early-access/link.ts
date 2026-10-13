@@ -216,28 +216,55 @@ const isReleaseCopy = (id: string) => id.startsWith('versions.')
 const isRevisionConflict = (error: unknown) =>
   (error as { statusCode?: unknown } | null)?.statusCode === 409
 
+/** A Studio draft or a copy in a content release: not what is live. */
+const isUnpublished = (id: string) =>
+  id.startsWith('drafts.') || isReleaseCopy(id)
+
+/**
+ * Every document of the conference that holds one of `tokens`, in any stored
+ * form and UNDER ANY ID: the sponsor's own versions, and any other document a
+ * token was copied to (a sponsor duplicated in Studio, a script).
+ */
+async function readHolders(conferenceId: string, tokens: string[]) {
+  const query = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && workshopEarlyAccessToken in $tokens]{ _id, _rev, "token": workshopEarlyAccessToken }`
+  return (
+    (await clientReadUncached
+      .withConfig({ apiVersion: RELEASES_API_VERSION })
+      .fetch<Version[]>(
+        query,
+        { conferenceId, tokens },
+        { cache: 'no-store', perspective: 'raw' },
+      )) ?? []
+  )
+}
+
 /**
  * Remove the sponsor's link. The link and every cookie set from it stop being
  * live; a later create stores a new token.
  *
- *  1. THE PUBLISHED DOCUMENT AND ITS DRAFT, in a transaction of their own.
- *     Nothing about a release copy can keep the link live. Each is cleared
- *     only as the revision that was read: when another revoke and a create
- *     got in between, what is stored is a NEW link, and this write is
- *     refused. So is it when the draft is gone by then. Either way step 2
- *     reads again and decides.
- *  2. EVERY VERSION THAT STILL HOLDS A REVOKED TOKEN, the published document
- *     included: all of them are read again once per round, for at most
- *     {@link REVOKE_ROUNDS} rounds, until none does.
- *     A copy made while the revoke ran is found, and so is a copy that was
- *     PUBLISHED while it ran, which would otherwise bring the link back. Each
- *     is cleared on its own, and only as the revision that was read. A token
- *     stored by a later create is not a revoked one, and is left alone.
+ * WHAT IS REVOKED IS THE TOKEN, wherever the conference holds it: the tokens
+ * on the sponsor's own versions are read first, and then every document of
+ * the conference that holds one of them is cleared, under any id. A token
+ * that was copied to another document does not survive the revoke there.
+ *
+ *  1. EVERYTHING THAT IS NOT A RELEASE COPY, in a transaction of its own.
+ *     Nothing about a release copy can keep the link live. Each document is
+ *     cleared only as the revision that was read: when another revoke and a
+ *     create got in between, what is stored is a NEW link, and this write is
+ *     refused. So is it when a draft is gone by then. Either way step 2 reads
+ *     again and decides.
+ *  2. EVERY DOCUMENT THAT STILL HOLDS A REVOKED TOKEN: all of them are read
+ *     again once per round, for at most {@link REVOKE_ROUNDS} rounds, until
+ *     none does. A copy made while the revoke ran is found, and so is a copy
+ *     that was PUBLISHED while it ran, which would otherwise bring the link
+ *     back. Each is cleared on its own, and only as the revision that was
+ *     read. A token stored by a later create is not a revoked one, and is
+ *     left alone.
  *
  * Answers the unpublished copies that still hold a revoked token after
  * {@link REVOKE_ROUNDS} rounds: publishing one of those would bring the link
- * back. THROWS when the published document itself still holds one: then the
- * link is live, and nothing may report it revoked.
+ * back. THROWS when a published document still holds one: then the link is
+ * live, and nothing may report it revoked.
  *
  * Acts within `conferenceId` only.
  */
@@ -245,17 +272,22 @@ export async function revokeEarlyAccessLink(
   conferenceId: string,
   sponsorForConferenceId: string,
 ): Promise<{ notCleared: string[] }> {
-  const read = () => readVersions(conferenceId, sponsorForConferenceId)
-  const linked = (await read()).filter((version) => version.token)
-  if (linked.length === 0) return { notCleared: [] }
-  const revoked = new Set(linked.map((version) => version.token))
+  const revoked = [
+    ...new Set(
+      (await readVersions(conferenceId, sponsorForConferenceId)).flatMap(
+        (version) => (version.token ? [version.token] : []),
+      ),
+    ),
+  ]
+  if (revoked.length === 0) return { notCleared: [] }
+  const read = () => readHolders(conferenceId, revoked)
 
-  const own = linked.filter((version) => !isReleaseCopy(version._id))
-  if (own.length > 0) {
+  const first = (await read()).filter((holder) => !isReleaseCopy(holder._id))
+  if (first.length > 0) {
     const transaction = clientWrite.transaction()
-    for (const version of own) {
-      transaction.patch(version._id, {
-        ifRevisionID: version._rev,
+    for (const holder of first) {
+      transaction.patch(holder._id, {
+        ifRevisionID: holder._rev,
         unset: [EARLY_ACCESS_TOKEN_FIELD],
       })
     }
@@ -267,22 +299,22 @@ export async function revokeEarlyAccessLink(
   }
 
   for (let round = 1; ; round++) {
-    const stale = (await read()).filter((version) => revoked.has(version.token))
+    const stale = await read()
     if (stale.length === 0) return { notCleared: [] }
     if (round > REVOKE_ROUNDS) {
-      if (stale.some((version) => version._id === sponsorForConferenceId)) {
+      if (stale.some((holder) => !isUnpublished(holder._id))) {
         throw new Error(
-          'Could not revoke the early-access link: the sponsor still holds it. Revoke again.',
+          'Could not revoke the early-access link: a sponsor of this conference still holds it. Revoke again.',
         )
       }
-      return { notCleared: stale.map((version) => version._id) }
+      return { notCleared: stale.map((holder) => holder._id) }
     }
-    for (const version of stale) {
+    for (const holder of stale) {
       try {
         await releaseWriter()
           .transaction()
-          .patch(version._id, {
-            ifRevisionID: version._rev,
+          .patch(holder._id, {
+            ifRevisionID: holder._rev,
             unset: [EARLY_ACCESS_TOKEN_FIELD],
           })
           .commit()

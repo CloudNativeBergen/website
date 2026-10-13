@@ -38,7 +38,7 @@ vi.mock('next/cache', () => ({
 
 import { cacheLife, cacheTag } from 'next/cache'
 import { earlyAccessLinksTag } from '@/lib/cache/tags'
-import { findEarlyAccessSponsor } from './link'
+import { findEarlyAccessSponsor, revokeEarlyAccessLink } from './link'
 import { conferenceEarlyAccessLinks, resolveEarlyAccess } from './links'
 
 const store = () => h.store!
@@ -234,6 +234,67 @@ describe('the cached read of a conference', () => {
     expect(await resolveEarlyAccess(CONF, undefined)).toBeNull()
     expect(await resolveEarlyAccess(CONF, '')).toBeNull()
     expect(store().reads).toEqual([])
+  })
+})
+
+describe('a token that another document of the conference holds too', () => {
+  // A sponsor duplicated in Sanity Studio (before Duplicate was removed for
+  // the type), or copied by a script: the same token under an id of its own.
+  const duplicated = [
+    ACME,
+    sponsor({ workshopEarlyAccessToken: TOKEN }),
+    sponsor({ _id: 'sfc-acme-copy', workshopEarlyAccessToken: TOKEN }),
+    sponsor({ _id: 'drafts.sfc-acme-copy-2', workshopEarlyAccessToken: TOKEN }),
+    sponsor({
+      _id: 'versions.rSpring.sfc-acme-copy',
+      workshopEarlyAccessToken: TOKEN,
+    }),
+    // Another conference's sponsor with a token of its own: not touched.
+    sponsor({
+      _id: 'sfc-elsewhere',
+      conference: ref(OTHER_CONF),
+      workshopEarlyAccessToken: REVOKED,
+    }),
+  ]
+  const holds = (id: string) => store().doc(id)?.workshopEarlyAccessToken
+
+  it('before the revoke, the link is live through the duplicate too', async () => {
+    store().reset(duplicated.filter((doc) => doc._id !== SFC))
+
+    expect(await findEarlyAccessSponsor(CONF, TOKEN)).toEqual({
+      _id: 'sfc-acme-copy',
+    })
+  })
+
+  it('a revoke clears it from every document of the conference, under any id, with its copies', async () => {
+    store().reset(duplicated)
+
+    expect(await revokeEarlyAccessLink(CONF, SFC)).toEqual({ notCleared: [] })
+
+    for (const id of [
+      SFC,
+      'sfc-acme-copy',
+      'drafts.sfc-acme-copy-2',
+      'versions.rSpring.sfc-acme-copy',
+    ]) {
+      expect(holds(id), id).toBeUndefined()
+    }
+    expect(holds('sfc-elsewhere')).toBe(REVOKED)
+    expect(await findEarlyAccessSponsor(CONF, TOKEN)).toBeNull()
+    expect(await conferenceEarlyAccessLinks(CONF)).toEqual([])
+    expect(await resolveEarlyAccess(CONF, TOKEN)).toBeNull()
+  })
+
+  it('a duplicate that cannot be cleared keeps the link live: the revoke fails, and says so', async () => {
+    store().reset(duplicated)
+    store().failPatchesOf('sfc-acme-copy')
+
+    await expect(revokeEarlyAccessLink(CONF, SFC)).rejects.toThrow(
+      'Could not revoke the early-access link',
+    )
+    expect(await findEarlyAccessSponsor(CONF, TOKEN)).toEqual({
+      _id: 'sfc-acme-copy',
+    })
   })
 })
 
