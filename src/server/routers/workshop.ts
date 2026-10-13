@@ -58,6 +58,11 @@ import {
   type WorkshopRegistrationTimes,
 } from '@/lib/workshop/registration-window'
 import {
+  earlyAccessTokenOf,
+  findEarlyAccessSponsor,
+  registrationWindowFor,
+} from '@/lib/workshop/early-access'
+import {
   isOrganizerForCurrentOrg,
   type OrganizerSpeaker,
 } from '@/lib/authz/organizer'
@@ -536,17 +541,26 @@ export const workshopRouter = router({
         const userEmail = actor.email
         const userName = workshopUserName(actor)
 
-        // THE ONE WINDOW RULE (#1345), the same call the portal page and its
-        // list make. Nobody has early access yet (#1346).
-        const registration = workshopRegistrationWindow(conference, {
-          now: new Date(),
-          earlyAccess: false,
-        })
+        // THE ONE WINDOW RULE (#1345), the same one the portal page and its
+        // list ask, with this caller's early access (#1346). The gate above
+        // has passed. The link is looked up LIVE, within this conference, and
+        // only when it can matter: the request carries the cookie, the
+        // conference has an early-access window and the official opening has
+        // not passed. A revoke takes effect on the next attempt.
+        const { registration, access: sponsor } = await registrationWindowFor(
+          conference,
+          new Date(),
+          async () => {
+            const token = earlyAccessTokenOf(ctx.req.cookies)
+            return token ? findEarlyAccessSponsor(conference._id, token) : null
+          },
+        )
         if (registration.status === 'not-open-yet') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             // The day AND the time of day, as the portal's banner names it:
-            // two start times can fall on one day (spec §6).
+            // two start times can fall on one day (spec §6). For a caller
+            // with early access this is the sponsor start time.
             message: `Workshop registration opens on ${formatRegistrationInstant(registration.opensAt)}`,
           })
         }
@@ -593,19 +607,27 @@ export const workshopRouter = router({
         const capacity = await checkWorkshopCapacity(input.workshop._ref)
         const isWaitlist = !capacity || capacity.available <= 0
 
-        const signup = await createWorkshopSignup({
-          userWorkOSId,
-          userEmail,
-          userName,
-          experienceLevel: input.experienceLevel,
-          operatingSystem: input.operatingSystem,
-          workshop: input.workshop,
-          conference: { _type: 'reference' as const, _ref: conference._id },
-          notes: input.notes,
-          status: isWaitlist
-            ? WorkshopSignupStatus.WAITLIST
-            : WorkshopSignupStatus.CONFIRMED,
-        })
+        const signup = await createWorkshopSignup(
+          {
+            userWorkOSId,
+            userEmail,
+            userName,
+            experienceLevel: input.experienceLevel,
+            operatingSystem: input.operatingSystem,
+            workshop: input.workshop,
+            conference: { _type: 'reference' as const, _ref: conference._id },
+            notes: input.notes,
+            status: isWaitlist
+              ? WorkshopSignupStatus.WAITLIST
+              : WorkshopSignupStatus.CONFIRMED,
+          },
+          // AN EARLY SIGN-UP records the sponsor whose link admitted it: one
+          // made inside the early-access window. A sign-up after the official
+          // opening records nothing, cookie or not.
+          registration.early && sponsor
+            ? { earlyAccessSponsorId: sponsor._id }
+            : {},
+        )
 
         await sendBasicWorkshopConfirmation({
           userEmail: signup.userEmail,

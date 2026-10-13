@@ -7,3 +7,10 @@ import { hostCookie } from '../central-sign-in/cookies'
  * only while the link is live, which is checked when it is used.
  */
 export const earlyAccessCookie = () => hostCookie('workshop-early-access')
+
+/** The token the request's browser holds, or `undefined`. */
+export function earlyAccessTokenOf(cookies: {
+  get(name: string): { value: string } | undefined
+}): string | undefined {
+  return cookies.get(earlyAccessCookie().name)?.value || undefined
+}

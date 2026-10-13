@@ -183,6 +183,8 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       }
       if (!('patch' in mutation)) {
         const [body] = Object.values(mutation) as Doc[]
+        // A document created without an id is given one, as Sanity does.
+        if (!body._id) body._id = `created-${++revCounter}`
         const at = next.findIndex((d) => d._id === body._id)
         const after = new Mutation({ mutations: [mutation] }).apply(
           at === -1 ? null : next[at],
@@ -231,8 +233,14 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     transaction: () => {
       const tx = real.transaction()
       tx.commit = (async () => {
-        await apply(apiVersion, tx.serialize() as SerializedMutation[])
-        return { transactionId: `tx-${commits.length}` }
+        const touched = await apply(
+          apiVersion,
+          tx.serialize() as SerializedMutation[],
+        )
+        return {
+          transactionId: `tx-${commits.length}`,
+          documentIds: touched.map((doc) => doc._id),
+        }
       }) as typeof tx.commit
       return tx
     },
