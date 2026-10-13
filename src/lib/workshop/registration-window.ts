@@ -13,9 +13,9 @@
 export interface WorkshopRegistrationTimes {
   /** The sponsor start time: when sign-up opens for a caller with early access. */
   workshopRegistrationSponsorStart?: string | null
-  /** The official opening: when sign-up opens for everyone. */
+  /** The official opening: when registration opens for everyone. */
   workshopRegistrationStart?: string | null
-  /** When sign-up closes, for everyone. */
+  /** When registration closes, for everyone. */
   workshopRegistrationEnd?: string | null
 }
 

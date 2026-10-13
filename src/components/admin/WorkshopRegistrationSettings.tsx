@@ -199,15 +199,14 @@ export function WorkshopRegistrationSettings({
     // not read as "Not configured".
     if (workshopRegistrationStart) {
       const opens = formatDateTimeSafe(workshopRegistrationStart)
-      const neverCloses = 'No close date is set, so once open they never close.'
       return {
         label: 'Partially configured',
         color: 'yellow',
         note:
           registration.status === 'not-open-yet'
-            ? `Signups open ${opens}. ${neverCloses}`
+            ? `Signups open ${opens}. No close date is set, so once open they never close.`
             : earlyAccessOpen
-              ? `Early access is open. Signups open for everyone ${opens}. ${neverCloses}`
+              ? `Early access is open. Registration opens for everyone ${opens}. No close date is set, so once open it never closes.`
               : 'Signups are open. No close date is set, so they never close.',
       }
     }
