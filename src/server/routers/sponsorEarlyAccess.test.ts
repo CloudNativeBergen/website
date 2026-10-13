@@ -32,13 +32,33 @@ const h = vi.hoisted(() => ({
   workshopsEnabled: vi.fn<(c: unknown) => Promise<boolean>>(),
   getDomainClaim: vi.fn<(id: string) => Promise<DomainClaim | null>>(),
   revalidateTag: vi.fn(),
+  /**
+   * What the CACHED read of the conference's links still holds, when that is
+   * not what is stored now: the documents its query is answered from. `null`:
+   * the cache agrees with what is stored.
+   */
+  cacheHolds: null as null | Record<string, unknown>[],
 }))
 
 vi.mock('@/lib/sanity/client', async () => {
   const { createVersionedSanityStore } =
     await import('../../../__tests__/helpers/versionedSanityStore')
+  const { runGroq } = await import('../../../__tests__/helpers/sanityStore')
   h.store = createVersionedSanityStore()
-  return h.store.clients
+  type Fetch = (
+    query: string,
+    params?: Record<string, unknown>,
+    options?: unknown,
+  ) => Promise<unknown>
+  const reader = h.store.clients.clientReadUncached as { fetch: Fetch }
+  // The one read `'use cache: remote'` holds per conference. The directive is
+  // inert here, so a stale entry is modelled at this boundary: the query
+  // answered from the documents as they were when it was filled.
+  const fetch: Fetch = (query, params, options) =>
+    h.cacheHolds && query.includes('defined(workshopEarlyAccessToken)')
+      ? runGroq(h.cacheHolds as never, query, params)
+      : reader.fetch(query, params, options)
+  return { ...h.store.clients, clientReadUncached: { ...reader, fetch } }
 })
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
@@ -68,6 +88,8 @@ const FIELD = 'workshopEarlyAccessToken'
 const UUID =
   '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
 const TAG = `sanity:workshop-early-access-${CONF}`
+/** A stored token, in the shape of the ones this issues. */
+const STORED = '4b1c9d2e-7a55-4f0a-9c3e-1f2a3b4c5d6e'
 
 const store = () => h.store!
 const stored = (id: string) => store().doc(id)?.[FIELD]
@@ -126,6 +148,7 @@ const isOwnershipProbe = (query: string) => query.includes('"memberOrgIds"')
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.cacheHolds = null
   store().reset([...DATASET, sponsor(), foreignSponsor()])
   h.getConference.mockResolvedValue({
     conference: {
@@ -298,6 +321,37 @@ describe('getAddress', () => {
       message: expect.stringContaining('no working workshop portal'),
     })
     expect(h.getDomainClaim).toHaveBeenCalledTimes(1)
+  })
+
+  it('expires the cached links when they do not hold the stored link yet', async () => {
+    // A create whose expiry did not land: the cache was filled before it.
+    store().reset([...DATASET, sponsor({ [FIELD]: STORED })])
+    h.cacheHolds = [...DATASET, sponsor()]
+
+    expect(await caller().getAddress({ sponsorForConferenceId: SFC })).toEqual({
+      url: `https://${MAIN_HOST}/workshop/early-access/${STORED}`,
+    })
+    expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
+  })
+
+  it('expires nothing when the cached links hold it', async () => {
+    store().reset([...DATASET, sponsor({ [FIELD]: STORED })])
+
+    await caller().getAddress({ sponsorForConferenceId: SFC })
+
+    expect(h.revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('still answers the address when the cached links cannot be read', async () => {
+    store().reset([...DATASET, sponsor({ [FIELD]: STORED })])
+    store().failReadsThat((read) =>
+      read.query.includes('defined(workshopEarlyAccessToken)'),
+    )
+
+    expect(await caller().getAddress({ sponsorForConferenceId: SFC })).toEqual({
+      url: `https://${MAIN_HOST}/workshop/early-access/${STORED}`,
+    })
+    expect(h.revalidateTag).not.toHaveBeenCalled()
   })
 
   it('never creates a link: a sponsor without one is refused and nothing is written', async () => {

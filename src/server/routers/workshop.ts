@@ -57,7 +57,7 @@ import {
 } from '@/lib/workshop/registration-window'
 import {
   earlyAccessTokenOf,
-  expireEarlyAccessLinksIfStale,
+  expireEarlyAccessLinksIfTheyDisagree,
   findEarlyAccessSponsor,
   registrationWindowFor,
 } from '@/lib/workshop/early-access'
@@ -554,8 +554,15 @@ export const workshopRouter = router({
             // The link is not live. If the portal page's cached links still
             // say it is, the page is showing this person an early access
             // they do not have: make its next view read them again.
-            if (!found)
-              await expireEarlyAccessLinksIfStale(conference._id, token)
+            if (!found) {
+              await expireEarlyAccessLinksIfTheyDisagree(
+                conference._id,
+                token,
+                {
+                  live: false,
+                },
+              )
+            }
             return found
           },
         )

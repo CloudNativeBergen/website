@@ -103,24 +103,27 @@ export function expireEarlyAccessLinks(conferenceId: string): void {
 }
 
 /**
- * A SIGN-UP FOUND `token` DEAD: the live lookup knows no sponsor for it. When
- * the cached links still resolve it, they are stale (an expiry that did not
- * land, a change made around the procedures), and the page keeps showing an
- * early access every attempt will be refused for. Expire them, so the next
- * view reads them again.
+ * A LIVE READ JUST SAID WHETHER `token` IS A LIVE LINK. When the cached links
+ * say otherwise they are stale (an expiry that did not land, a change made
+ * around the procedures): expire them, so the next view reads them again.
+ *
+ *  - `live: false`, from a sign-up: the page keeps showing an early access
+ *    every attempt will be refused for.
+ *  - `live: true`, from an organizer asking for the address: a person opening
+ *    the link would be told it is no longer valid.
  *
  * ONLY ON THAT DISAGREEMENT, never on a plain miss: a dead or made-up token
  * the cache does not hold expires nothing, so it cannot be used to force
- * refills. It never throws: the sign-up it rides on has its own answer.
+ * refills. It never throws: what it rides on has its own answer.
  */
-export async function expireEarlyAccessLinksIfStale(
+export async function expireEarlyAccessLinksIfTheyDisagree(
   conferenceId: string,
-  deadToken: string,
+  token: string,
+  { live }: { live: boolean },
 ): Promise<void> {
   try {
-    if (await resolveEarlyAccess(conferenceId, deadToken)) {
-      expireEarlyAccessLinks(conferenceId)
-    }
+    const cached = (await resolveEarlyAccess(conferenceId, token)) !== null
+    if (cached !== live) expireEarlyAccessLinks(conferenceId)
   } catch (error) {
     console.error(
       `[workshop] could not compare the early-access links of ${conferenceId}`,

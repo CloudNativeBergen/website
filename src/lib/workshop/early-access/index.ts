@@ -11,7 +11,7 @@ export {
 } from './link'
 export {
   expireEarlyAccessLinks,
-  expireEarlyAccessLinksIfStale,
+  expireEarlyAccessLinksIfTheyDisagree,
   resolveEarlyAccess,
 } from './links'
 export { earlyAccessCookie, earlyAccessTokenOf } from './cookie'

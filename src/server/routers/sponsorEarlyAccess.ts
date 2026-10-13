@@ -11,6 +11,7 @@ import {
   earlyAccessPortalUrl,
   earlyAccessUrl,
   expireEarlyAccessLinks,
+  expireEarlyAccessLinksIfTheyDisagree,
   readEarlyAccessToken,
   revokeEarlyAccessLink,
 } from '@/lib/workshop/early-access'
@@ -23,6 +24,9 @@ import {
  * `requireSponsor` proves it names a sponsor of the request's conference
  * before anything about that sponsor is read or written. A foreign id is
  * refused exactly as a missing one.
+ *
+ * `getAddress` writes nothing, and expires the cached links only when they
+ * turn out not to hold the link it is answering.
  *
  * THE CACHED LINKS ARE EXPIRED WHENEVER A WRITE MAY HAVE LANDED, also when
  * the procedure then fails: a commit can land and still throw, and a revoke
@@ -131,6 +135,12 @@ export const sponsorEarlyAccessRouter = router({
           message: 'This sponsor has no early-access link.',
         })
       }
+      // The link is live. If the cached links do not hold it (a create
+      // whose expiry did not land), a person opening this address would be
+      // told it is no longer valid: make the next read fill them again.
+      await expireEarlyAccessLinksIfTheyDisagree(conferenceId, token, {
+        live: true,
+      })
       return { url: earlyAccessUrl(portalUrl, token) }
     }),
 
