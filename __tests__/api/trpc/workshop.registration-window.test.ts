@@ -25,6 +25,12 @@ const h = vi.hoisted(() => ({
   stored: { _id: 'conf-1', _type: 'conference' } as Record<string, unknown>,
   /** Every write issued, in order: `patch:<id>`. */
   writes: [] as string[],
+  /** What each of those patches set, as serialised by the real client. */
+  sets: [] as unknown[],
+  /** Other tenants' conferences in the same dataset. */
+  others: [] as Record<string, unknown>[],
+  /** The parameters of every live read of the organizer's save. */
+  reads: [] as unknown[],
 }))
 
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
@@ -54,6 +60,7 @@ vi.mock('@/lib/organization/sanity', () => ({
 
 vi.mock('@/lib/sanity/client', async () => {
   const { createClient } = await import('@sanity/client')
+  const { parse, evaluate } = await import('groq-js')
   const { createRequire: req } = await import('node:module')
   const { Mutation } = req(req(import.meta.url).resolve('sanity/package.json'))(
     '@sanity/mutator',
@@ -70,9 +77,17 @@ vi.mock('@/lib/sanity/client', async () => {
   })
 
   return {
-    // The live conference document (ticket-type roles): none, so the built-in
-    // list decides who holds a workshop ticket.
-    clientReadUncached: { fetch: async () => null },
+    // LIVE READS ARE REAL GROQ, evaluated by `groq-js` over the stored
+    // conference and the other tenants' ones. (The ticket-type roles of the
+    // sign-up's access decision are read here too: none are stored, so the
+    // built-in list decides who holds a workshop ticket.)
+    clientReadUncached: {
+      fetch: async (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('workshopRegistration')) h.reads.push(params)
+        const dataset = [h.stored, ...h.others]
+        return await (await evaluate(parse(query), { dataset, params })).get()
+      },
+    },
     clientWrite: {
       // A REAL patch: built by the real `@sanity/client`, serialised, and
       // applied to the stored document by Sanity's own `@sanity/mutator`.
@@ -80,6 +95,7 @@ vi.mock('@/lib/sanity/client', async () => {
         const patch = client.patch(id)
         patch.commit = (async () => {
           h.writes.push(`patch:${id}`)
+          h.sets.push(patch.serialize().set)
           if (id !== h.stored._id) throw new Error(`no such document: ${id}`)
           const next = new Mutation({
             mutations: [{ patch: patch.serialize() }],
@@ -133,12 +149,14 @@ import {
   verifyWorkshopBelongsToConference,
 } from '@/lib/workshop/sanity'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
+import { revalidateTag } from 'next/cache'
 
 type LooseMock = ReturnType<typeof vi.fn>
 const createSignupMock = createWorkshopSignup as unknown as LooseMock
 const getSignupsMock = getWorkshopSignups as unknown as LooseMock
 const capacityMock = checkWorkshopCapacity as unknown as LooseMock
 const belongsMock = verifyWorkshopBelongsToConference as unknown as LooseMock
+const revalidateMock = revalidateTag as unknown as LooseMock
 
 const signupInput = {
   experienceLevel: 'beginner' as const,
@@ -188,6 +206,9 @@ beforeEach(() => {
   h.times = {}
   h.stored = { _id: 'conf-1', _type: 'conference', title: 'CNDN' }
   h.writes = []
+  h.sets = []
+  h.others = []
+  h.reads = []
   ticketing.fetchEventTickets.mockResolvedValue([
     {
       id: 1,
@@ -354,6 +375,8 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
       await createAdminCaller().workshop.admin.updateRegistrationTimes(input)
     } catch (error) {
       const { code, message } = error as { code: string; message: string }
+      // A refused save invalidates nothing: there is nothing new to show.
+      expect(revalidateMock.mock.calls).toEqual([])
       return { refused: { code, message }, writes: h.writes, stored: h.stored }
     }
     return { writes: h.writes, stored: h.stored }
@@ -386,6 +409,14 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
         workshopRegistrationEnd: END,
       },
     })
+  })
+
+  it('invalidates what a save invalidated before: the settings and this conference', async () => {
+    await save({ sponsorStartDate: SPONSOR, startDate: OFFICIAL, endDate: END })
+    expect(revalidateMock.mock.calls).toEqual([
+      ['admin:settings', 'default'],
+      ['sanity:conference-conf-1', 'default'],
+    ])
   })
 
   it('stores a sponsor start time given in another offset as the same instant', async () => {
@@ -475,20 +506,135 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
     ).toEqual(refusedWith(NO_OFFICIAL_OPENING))
   })
 
-  it('refuses a save that does not say what the sponsor start time is', async () => {
-    // A page loaded before this change knows two times. Accepting its save
-    // would let it move or clear the official opening unchecked.
-    const outcome = await save({ startDate: null, endDate: null } as Save)
-    expect(outcome).toMatchObject({
-      refused: { code: 'BAD_REQUEST' },
-      writes: [],
-      stored: BEFORE,
-    })
-  })
-
   it('still refuses an end that is not after the start', async () => {
     expect(
       await save({ sponsorStartDate: null, startDate: END, endDate: OFFICIAL }),
     ).toEqual(refusedWith('End date must be after start date'))
+  })
+
+  /**
+   * OMITTED MEANS UNCHANGED (review round 1). A form seeded before a colleague
+   * saved sends only what its organizer changed, so it can neither erase a
+   * time it never showed nor be judged against the times it believed in: the
+   * rule is applied to what WILL be stored, the sent times over the stored
+   * ones, read live.
+   */
+  describe('a save that sends only some of the times', () => {
+    /** As `BEFORE`, with the sponsor start time in a spelling no save of ours writes. */
+    const STORED = {
+      ...BEFORE,
+      workshopRegistrationSponsorStart: '2026-05-02T08:00:00+02:00',
+    }
+
+    beforeEach(() => {
+      h.stored = structuredClone(STORED)
+    })
+
+    const refused = (message: string) => ({
+      ...refusedWith(message),
+      stored: STORED,
+    })
+
+    it('of only the end, leaves the stored sponsor start time and official opening as they are', async () => {
+      expect(await save({ endDate: END })).toEqual({
+        writes: ['patch:conf-1'],
+        stored: { ...STORED, workshopRegistrationEnd: END },
+      })
+      // The patch names the one field it was sent, and no other.
+      expect(h.sets).toEqual([{ workshopRegistrationEnd: END }])
+    })
+
+    it('from a client that knows two times, is accepted and leaves the sponsor start time alone', async () => {
+      expect(await save({ startDate: OFFICIAL, endDate: END })).toEqual({
+        writes: ['patch:conf-1'],
+        stored: {
+          ...STORED,
+          workshopRegistrationStart: OFFICIAL,
+          workshopRegistrationEnd: END,
+        },
+      })
+      expect(h.sets).toEqual([
+        { workshopRegistrationStart: OFFICIAL, workshopRegistrationEnd: END },
+      ])
+    })
+
+    it('of only the sponsor start time, earlier than the stored official opening, stores it', async () => {
+      expect(
+        await save({ sponsorStartDate: '2026-05-05T06:00:00.000Z' }),
+      ).toEqual({
+        writes: ['patch:conf-1'],
+        stored: {
+          ...STORED,
+          workshopRegistrationSponsorStart: '2026-05-05T06:00:00.000Z',
+        },
+      })
+    })
+
+    it('refuses clearing the official opening while a sponsor start time is STORED and not sent', async () => {
+      expect(await save({ startDate: null })).toEqual(
+        refused(NO_OFFICIAL_OPENING),
+      )
+    })
+
+    it('refuses moving the official opening to before a sponsor start time that is STORED and not sent', async () => {
+      expect(await save({ startDate: '2026-05-01T06:00:00.000Z' })).toEqual(
+        refused(NOT_EARLIER),
+      )
+    })
+
+    it('refuses moving the official opening to the very instant of the stored sponsor start time', async () => {
+      expect(await save({ startDate: '2026-05-02T06:00:00.000Z' })).toEqual(
+        refused(NOT_EARLIER),
+      )
+    })
+
+    it('refuses a sponsor start time later than the STORED official opening', async () => {
+      expect(
+        await save({ sponsorStartDate: '2026-05-11T06:00:00.000Z' }),
+      ).toEqual(refused(NOT_EARLIER))
+    })
+
+    it('refuses an end that is not after the STORED start', async () => {
+      expect(await save({ endDate: '2026-05-09T06:00:00.000Z' })).toEqual(
+        refused('End date must be after start date'),
+      )
+    })
+
+    it('refuses a start that is not before the STORED end', async () => {
+      expect(await save({ startDate: '2026-05-21T06:00:00.000Z' })).toEqual(
+        refused('End date must be after start date'),
+      )
+    })
+
+    it('judges against THIS conference’s stored times, with one live read of it', async () => {
+      // Another tenant has a sponsor start time; this one has none, so its
+      // official opening can be cleared.
+      h.stored = {
+        _id: 'conf-1',
+        _type: 'conference',
+        title: 'CNDN',
+        workshopRegistrationStart: BEFORE.workshopRegistrationStart,
+      }
+      const OTHER = { ...BEFORE, _id: 'conf-2', title: 'Another tenant' }
+      h.others = [structuredClone(OTHER)]
+
+      expect(await save({ startDate: null })).toEqual({
+        writes: ['patch:conf-1'],
+        stored: {
+          _id: 'conf-1',
+          _type: 'conference',
+          title: 'CNDN',
+          workshopRegistrationStart: null,
+        },
+      })
+      expect(h.reads).toEqual([{ id: 'conf-1' }])
+      expect(h.others).toEqual([OTHER])
+    })
+
+    it('that sends nothing reads nothing and writes nothing', async () => {
+      expect(await save({})).toEqual({ writes: [], stored: STORED })
+      expect(h.reads).toEqual([])
+      expect(revalidateMock.mock.calls).toEqual([])
+    })
   })
 })

@@ -13,7 +13,7 @@ import { TRPCError } from '@trpc/server'
 import { resendWorkshopSignupInstructions } from '@/lib/workshop/resend-instructions'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import {
   workshopListInputSchema,
   workshopAvailabilitySchema,
@@ -55,6 +55,7 @@ import { WorkshopSignupStatus } from '@/lib/workshop/types'
 import {
   sponsorStartTimeProblem,
   workshopRegistrationWindow,
+  type WorkshopRegistrationTimes,
 } from '@/lib/workshop/registration-window'
 import {
   isOrganizerForCurrentOrg,
@@ -1249,24 +1250,58 @@ export const workshopRouter = router({
     updateRegistrationTimes: workshopAdminProcedure
       .input(
         z.object({
-          // REQUIRED, like the other two: a save always says all three, so
-          // the rule below is checked on what will be stored and never on a
-          // stored value this request has not seen.
-          sponsorStartDate: z.string().nullable(),
-          startDate: z.string().nullable(),
-          endDate: z.string().nullable(),
+          // OMITTED MEANS UNCHANGED, `null` means cleared. A form sends only
+          // the times its organizer changed, so a form seeded before a
+          // colleague's save cannot erase a time it never showed.
+          sponsorStartDate: z.string().nullable().optional(),
+          startDate: z.string().nullable().optional(),
+          endDate: z.string().nullable().optional(),
         }),
       )
       .mutation(async ({ input }) => {
         try {
           const conferenceId = await resolveConferenceId()
-          const { sponsorStartDate, startDate, endDate } = input
 
-          // Validate dates
+          // What this save sets: only the times it was sent, as instants.
+          const changes: WorkshopRegistrationTimes = {}
+          const sent = (value: string | null) =>
+            value ? new Date(value).toISOString() : null
+          if (input.sponsorStartDate !== undefined) {
+            changes.workshopRegistrationSponsorStart = sent(
+              input.sponsorStartDate,
+            )
+          }
+          if (input.startDate !== undefined) {
+            changes.workshopRegistrationStart = sent(input.startDate)
+          }
+          if (input.endDate !== undefined) {
+            changes.workshopRegistrationEnd = sent(input.endDate)
+          }
+          if (Object.keys(changes).length === 0) {
+            return {
+              success: true,
+              message: 'Workshop registration times updated successfully',
+            }
+          }
+
+          // THE RULES ARE APPLIED TO WHAT WILL BE STORED: the sent times over
+          // the stored ones, read live. A save that moves or clears the
+          // official opening is judged against the sponsor start time that is
+          // stored, whether or not the form that sent it knew of one.
+          const stored =
+            await clientReadUncached.fetch<WorkshopRegistrationTimes | null>(
+              // groq-global-scoped: keyed by `resolveConferenceId()`'s id, the request's own conference and the one patched below; never client input.
+              `*[_type == "conference" && _id == $id][0]{ workshopRegistrationSponsorStart, workshopRegistrationStart, workshopRegistrationEnd }`,
+              { id: conferenceId },
+              { cache: 'no-store' },
+            )
+          const merged: WorkshopRegistrationTimes = { ...stored, ...changes }
+
           if (
-            startDate &&
-            endDate &&
-            new Date(startDate) >= new Date(endDate)
+            merged.workshopRegistrationStart &&
+            merged.workshopRegistrationEnd &&
+            new Date(merged.workshopRegistrationStart) >=
+              new Date(merged.workshopRegistrationEnd)
           ) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
@@ -1277,10 +1312,7 @@ export const workshopRouter = router({
           // A sponsor start time needs an official opening and must be
           // earlier than it (#1345): the rule the `conference` schema
           // validates with.
-          const sponsorStartProblem = sponsorStartTimeProblem({
-            workshopRegistrationSponsorStart: sponsorStartDate,
-            workshopRegistrationStart: startDate,
-          })
+          const sponsorStartProblem = sponsorStartTimeProblem(merged)
           if (sponsorStartProblem) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
@@ -1288,20 +1320,8 @@ export const workshopRouter = router({
             })
           }
 
-          await clientWrite
-            .patch(conferenceId)
-            .set({
-              workshopRegistrationSponsorStart: sponsorStartDate
-                ? new Date(sponsorStartDate).toISOString()
-                : null,
-              workshopRegistrationStart: startDate
-                ? new Date(startDate).toISOString()
-                : null,
-              workshopRegistrationEnd: endDate
-                ? new Date(endDate).toISOString()
-                : null,
-            })
-            .commit()
+          // Only the fields that were sent: the others are not touched.
+          await clientWrite.patch(conferenceId).set(changes).commit()
 
           revalidateTag('admin:settings', 'default')
           revalidateTag(conferenceTag(conferenceId), 'default')
