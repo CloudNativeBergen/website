@@ -573,6 +573,37 @@ describe('revoking a link', () => {
     expect(stored(RELEASE_COPY)).toBeUndefined()
   })
 
+  // The sponsor's versions can hold DIFFERENT tokens: a release copy made
+  // from an earlier link that a failed revoke left behind. Every one of them
+  // is revoked, or publishing that copy brings a link back.
+  it('two different tokens on the sponsor’s versions: neither is left on any of them', async () => {
+    store().reset([
+      sponsor({ [FIELD]: 'current-token' }),
+      sponsor({ _id: DRAFT, [FIELD]: 'current-token' }),
+      sponsor({ _id: RELEASE_COPY, [FIELD]: 'older-token' }),
+    ])
+
+    const result = await revokeEarlyAccessLink(CONF, SFC)
+
+    expect({
+      published: stored(SFC),
+      draft: stored(DRAFT),
+      releaseCopy: stored(RELEASE_COPY),
+      result,
+    }).toEqual({
+      published: undefined,
+      draft: undefined,
+      releaseCopy: undefined,
+      result: { notCleared: [] },
+    })
+    // Not by deleting anything: all three are still there.
+    expect(
+      store()
+        .all()
+        .map((each) => each._id),
+    ).toEqual([SFC, DRAFT, RELEASE_COPY])
+  })
+
   it('a create after a revoke stores a different token', async () => {
     const first = (await createEarlyAccessLink(CONF, SFC)) as { token: string }
     await revokeEarlyAccessLink(CONF, SFC)

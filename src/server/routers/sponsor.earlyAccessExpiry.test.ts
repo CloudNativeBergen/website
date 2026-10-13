@@ -116,6 +116,7 @@ const expired = () =>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.revalidateTag.mockReset()
   store().reset(DATASET)
   h.getConference.mockResolvedValue({
     conference: { _id: CONF, organization: { _ref: ORG } },
@@ -181,6 +182,58 @@ describe('removing a sponsor expires the cached links at once', () => {
 
     expect(store().doc('sfc-theirs')).toBeDefined()
     expect(expired()).toEqual([])
+  })
+})
+
+/**
+ * Next stamps an expiry at the call. One made BEFORE the removal is stored
+ * lets a refill in between read the sponsor that is about to go, and keep its
+ * link live for the cache's life.
+ */
+describe('the cached links are expired AFTER the removal is stored', () => {
+  /** The sponsors of any conference that are stored at each expiry, in order. */
+  function sponsorsStoredAtEachExpiry() {
+    const seen: string[][] = []
+    h.revalidateTag.mockImplementation((name: unknown) => {
+      if (!String(name).includes('workshop-early-access')) return
+      seen.push(
+        store()
+          .all()
+          .filter((doc) => doc._type === 'sponsorForConference')
+          .map((doc) => doc._id)
+          .sort(),
+      )
+    })
+    return seen
+  }
+
+  it('one sponsor (sponsor.crm.delete)', async () => {
+    const seen = sponsorsStoredAtEachExpiry()
+
+    await caller().crm.delete({ id: 'sfc-acme' })
+
+    expect(seen).toEqual([['sfc-acme-2025', 'sfc-other']])
+  })
+
+  it('several sponsors (sponsor.crm.bulkDelete)', async () => {
+    const seen = sponsorsStoredAtEachExpiry()
+
+    await caller().crm.bulkDelete({ ids: ['sfc-acme', 'sfc-other'] })
+
+    expect(seen).toEqual([['sfc-acme-2025']])
+  })
+
+  it('the sponsor itself, in every conference it is in (sponsor.delete)', async () => {
+    store().reset(DATASET.filter((doc) => doc._id !== 'sfc-other'))
+    // A sponsor of another company stays: what is left at each expiry.
+    store().put(
+      sponsorIn(CONF, 'sfc-globex', { sponsor: ref('sponsor-globex') }),
+    )
+    const seen = sponsorsStoredAtEachExpiry()
+
+    await caller().delete({ id: 'sponsor-acme' })
+
+    expect(seen).toEqual([['sfc-globex'], ['sfc-globex']])
   })
 })
 

@@ -13,7 +13,7 @@
  * verification record (`getDomainClaim`) and `next/cache`.
  * MODELLED: see `__tests__/helpers/versionedSanityStore.ts`.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
 import type { DomainClaim } from '@/lib/domain-verification/types'
@@ -38,6 +38,8 @@ const h = vi.hoisted(() => ({
    * the cache agrees with what is stored.
    */
   cacheHolds: null as null | Record<string, unknown>[],
+  /** The exact text of the cached links' read (`cachedLinksQueryText`). */
+  linksQuery: null as null | string,
 }))
 
 vi.mock('@/lib/sanity/client', async () => {
@@ -55,7 +57,7 @@ vi.mock('@/lib/sanity/client', async () => {
   // inert here, so a stale entry is modelled at this boundary: the query
   // answered from the documents as they were when it was filled.
   const fetch: Fetch = (query, params, options) =>
-    h.cacheHolds && query.includes('defined(workshopEarlyAccessToken)')
+    h.cacheHolds && query === h.linksQuery
       ? runGroq(h.cacheHolds as never, query, params)
       : reader.fetch(query, params, options)
   return { ...h.store.clients, clientReadUncached: { ...reader, fetch } }
@@ -76,7 +78,12 @@ vi.mock('next/cache', () => ({
 }))
 
 import type { Context } from '@/server/trpc'
+import { cachedLinksQueryText } from '../../../__tests__/helpers/cachedLinksRead'
 import { sponsorEarlyAccessRouter } from './sponsorEarlyAccess'
+
+beforeAll(async () => {
+  h.linksQuery = await cachedLinksQueryText(h.store!)
+})
 
 const t = initTRPC.context<Context>().create()
 const ORG = 'org-a'
@@ -148,6 +155,7 @@ const isOwnershipProbe = (query: string) => query.includes('"memberOrgIds"')
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.revalidateTag.mockReset()
   h.cacheHolds = null
   store().reset([...DATASET, sponsor(), foreignSponsor()])
   h.getConference.mockResolvedValue({
@@ -191,6 +199,21 @@ describe('create', () => {
     await caller().create({ sponsorForConferenceId: SFC })
 
     expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
+  })
+
+  // Next stamps an expiry at the call. One made BEFORE the write lets a
+  // refill in between read the old state and keep it for the cache's life:
+  // the new link would be answered "no longer valid".
+  it('expires them AFTER the token is stored: what a refill reads is the new link', async () => {
+    const storedAtExpiry: unknown[] = []
+    h.revalidateTag.mockImplementation(() => {
+      storedAtExpiry.push(stored(SFC))
+    })
+
+    const { url } = await caller().create({ sponsorForConferenceId: SFC })
+
+    expect(storedAtExpiry).toEqual([url.split('/').at(-1)])
+    expect(storedAtExpiry[0]).toMatch(new RegExp(`^${UUID}$`))
   })
 
   it('is refused for a sponsor without a won deal, and writes nothing', async () => {
@@ -344,9 +367,7 @@ describe('getAddress', () => {
 
   it('still answers the address when the cached links cannot be read', async () => {
     store().reset([...DATASET, sponsor({ [FIELD]: STORED })])
-    store().failReadsThat((read) =>
-      read.query.includes('defined(workshopEarlyAccessToken)'),
-    )
+    store().failReadsThat((read) => read.query === h.linksQuery)
 
     expect(await caller().getAddress({ sponsorForConferenceId: SFC })).toEqual({
       url: `https://${MAIN_HOST}/workshop/early-access/${STORED}`,
@@ -406,6 +427,20 @@ describe('revoke', () => {
     expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
   })
 
+  // As for create: expired before the write, a refill in between would keep
+  // the revoked link live for the cache's life.
+  it('expires them AFTER the token is removed: what a refill reads has no link', async () => {
+    store().reset([...DATASET, sponsor({ [FIELD]: 'stored-token' })])
+    const storedAtExpiry: unknown[] = []
+    h.revalidateTag.mockImplementation(() => {
+      storedAtExpiry.push(stored(SFC) ?? 'no token')
+    })
+
+    await caller().revoke({ sponsorForConferenceId: SFC })
+
+    expect(storedAtExpiry).toEqual(['no token'])
+  })
+
   it('works for a conference that has turned workshops off', async () => {
     store().reset([...DATASET, sponsor({ [FIELD]: 'stored-token' })])
     h.workshopsEnabled.mockResolvedValue(false)
@@ -438,8 +473,12 @@ describe('an id of an unpublished copy', () => {
       [DRAFT, RELEASE_COPY].map((id) => [procedure, id] as const),
     ),
   )('%s refuses %s before anything is read', async (procedure, id) => {
-    // The copies exist, are the conference's and are won: the ownership
-    // guard would accept them.
+    // The copies exist, are the conference's and are won. The ownership
+    // guard would accept the DRAFT. The RELEASE COPY it would not find: in
+    // this model, as at the API version the guard reads with, a release copy
+    // is hidden from it, so without the check on the id that case would be
+    // refused as not found. What tells the refusals apart here is the code,
+    // the message, and that nothing at all was read.
     store().reset([
       ...DATASET,
       sponsor({ [FIELD]: 'stored-token' }),

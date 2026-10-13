@@ -64,6 +64,13 @@ export interface RecordedRead {
   params: Record<string, unknown>
   apiVersion: string
   perspective: unknown
+  /**
+   * The `cache` option the read was sent with. The store answers every read
+   * from what is stored now, so this option changes nothing here: it is
+   * recorded for a test to pin, where the real client would otherwise serve
+   * a remembered answer.
+   */
+  cache: unknown
 }
 
 export interface VersionedSanityStore {
@@ -145,7 +152,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     async (
       query: string,
       params: Record<string, unknown> = {},
-      options: { perspective?: unknown } = {},
+      options: { perspective?: unknown; cache?: unknown } = {},
     ) => {
       reads.push({
         client,
@@ -153,6 +160,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         params,
         apiVersion,
         perspective: options.perspective,
+        cache: options.cache,
       })
       events.push('read')
       const read = reads[reads.length - 1]

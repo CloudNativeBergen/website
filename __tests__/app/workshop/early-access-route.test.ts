@@ -15,7 +15,15 @@
  * deployment repeats that read is not observable here.
  */
 import '../../helpers/workosEnv'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import { NextRequest } from 'next/server'
 import type { DomainClaim } from '@/lib/domain-verification/types'
 import { claimsById, provenClaim } from '../../helpers/domainClaims'
@@ -26,6 +34,8 @@ const h = vi.hoisted(() => ({
   getConference: vi.fn(),
   workshopsEnabled: vi.fn<(c: unknown) => Promise<boolean>>(),
   getDomainClaim: vi.fn<(id: string) => Promise<DomainClaim | null>>(),
+  /** The exact text of the cached links' read (`cachedLinksQueryText`). */
+  linksQuery: null as null | string,
 }))
 
 vi.mock('@/lib/sanity/client', async () => {
@@ -50,6 +60,11 @@ vi.mock('next/cache', () => ({
 }))
 
 import { GET } from '@/app/(workshop)/workshop/early-access/[token]/route'
+import { cachedLinksQueryText } from '../../helpers/cachedLinksRead'
+
+beforeAll(async () => {
+  h.linksQuery = await cachedLinksQueryText(h.store!)
+})
 
 const AUTH = 'auth.example.org'
 const MAIN = 'conf.example.org'
@@ -184,6 +199,29 @@ describe('a live link', () => {
     expectUncachedAndNoReferrer(response)
     expect(console.error).not.toHaveBeenCalled()
   })
+
+  // The cookie matters only for a conference WITH a sponsor start time, and
+  // it must last through the whole early-access window: to the official
+  // opening, not to the time the window starts.
+  it.each([
+    ['still ahead', '2026-10-15T08:00:00.000Z'],
+    ['already passed', '2026-10-12T08:00:00.000Z'],
+  ])(
+    'with a sponsor start time %s, the cookie still expires at the official opening',
+    async (_case, workshopRegistrationSponsorStart) => {
+      h.getConference.mockResolvedValue({
+        conference: conference({ workshopRegistrationSponsorStart }),
+        domain: MAIN,
+        error: null,
+      })
+
+      const response = await open(LIVE)
+
+      expect(response.headers.getSetCookie()).toEqual([
+        `${COOKIE}=${LIVE}; Path=/; Expires=Tue, 20 Oct 2026 08:00:00 GMT; Secure; HttpOnly; SameSite=lax`,
+      ])
+    },
+  )
 
   it("opening a second sponsor's link replaces the cookie", async () => {
     const response = await open(OTHER_LIVE, MAIN, `${COOKIE}=${LIVE}`)
@@ -338,6 +376,35 @@ describe('a host that cannot sign in', () => {
     expect(reads().sanity).toEqual([])
   })
 
+  // The token is whatever the address held: it is not checked before the
+  // forward, since nothing may be read about it here. It travels as ONE path
+  // segment, so it cannot name another path or a query on the main host.
+  it.each([
+    ['../../admin', '..%2F..%2Fadmin'],
+    ['x?next=//evil.example', 'x%3Fnext%3D%2F%2Fevil.example'],
+    ['a#b', 'a%23b'],
+  ])(
+    'a token of %s is forwarded as one path segment under the early-access address',
+    async (token, segment) => {
+      const response = await open(token, SECONDARY)
+
+      const location = response.headers.get('location') ?? ''
+      expect(location).toBe(`https://${MAIN}/workshop/early-access/${segment}`)
+      const forwarded = new URL(location)
+      expect({
+        host: forwarded.host,
+        path: forwarded.pathname,
+        search: forwarded.search,
+        hash: forwarded.hash,
+      }).toEqual({
+        host: MAIN,
+        path: `/workshop/early-access/${segment}`,
+        search: '',
+        hash: '',
+      })
+    },
+  )
+
   it('does not forward the token to a main host that another conference claims now', async () => {
     // The conference is read through a cache: its main domain has since
     // changed hands, and can sign people in to ANOTHER conference.
@@ -394,6 +461,7 @@ describe('a host that cannot sign in', () => {
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toBe('/workshop')
     expect(response.headers.getSetCookie()).toEqual([])
+    expectUncachedAndNoReferrer(response)
     expect(reads().sanity).toEqual([])
   })
 
@@ -404,8 +472,12 @@ describe('a host that cannot sign in', () => {
 
     const response = await open(LIVE)
 
+    expect(response.status).toBe(307)
     expect(response.headers.get('location')).toBe('/workshop')
     expect(response.headers.getSetCookie()).toEqual([])
+    // Still an answer to an address that holds a token: never stored, and
+    // the address is not sent on as a referrer.
+    expectUncachedAndNoReferrer(response)
     expect(reads().sanity).toEqual([])
   })
 })
@@ -417,9 +489,7 @@ describe('when the links cannot be read', () => {
   ])(
     'goes to the portal page, sets nothing and shows no notice: %s',
     async (_case, token) => {
-      store().failReadsThat((read) =>
-        read.query.includes('defined(workshopEarlyAccessToken)'),
-      )
+      store().failReadsThat((read) => read.query === h.linksQuery)
 
       const response = await open(token)
 
@@ -450,7 +520,7 @@ describe('the reads the route makes', () => {
       sanity: [
         {
           client: 'uncached',
-          query: expect.stringContaining('defined(workshopEarlyAccessToken)'),
+          query: h.linksQuery,
           params: { conferenceId: CONF },
         },
       ],

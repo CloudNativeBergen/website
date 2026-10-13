@@ -17,7 +17,15 @@
  * nothing else on the way.
  */
 import '../../helpers/workosEnv'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import { NextRequest } from 'next/server'
 import { stubPlatformTicketingAccount } from '../../helpers/ticketingSecrets'
 import { createWorkshopCaller } from '../../helpers/trpc'
@@ -35,6 +43,8 @@ const h = vi.hoisted(() => ({
   cacheHolds: null as null | Record<string, unknown>[],
   /** How often the cached read of the links was asked. */
   linksReads: 0,
+  /** The exact text of the cached links' read (`cachedLinksQueryText`). */
+  linksQuery: null as null | string,
   revalidateTag: vi.fn(),
 }))
 
@@ -82,7 +92,7 @@ vi.mock('@/lib/sanity/client', async () => {
     // The one read `'use cache: remote'` holds per conference. The directive
     // is inert here, so a stale entry is modelled at this boundary: the
     // query answered from the documents as they were when it was filled.
-    if (query.includes('defined(workshopEarlyAccessToken)')) {
+    if (query === h.linksQuery) {
       h.linksReads++
       if (h.cacheHolds) {
         return runGroq(h.cacheHolds as never, query, params)
@@ -109,6 +119,11 @@ vi.mock('@/lib/email/workshop', () => ({
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 import { deleteSponsorForConference } from '@/lib/sponsor-crm/sanity'
 import { revokeEarlyAccessLink } from '@/lib/workshop/early-access'
+import { cachedLinksQueryText } from '../../helpers/cachedLinksRead'
+
+beforeAll(async () => {
+  h.linksQuery = await cachedLinksQueryText(h.store!)
+})
 
 const store = () => h.store!
 const CONF = 'conf-1'
@@ -144,6 +159,7 @@ const OPENS_FOR_SPONSORS = {
 }
 
 const LIVE = '4b1c9d2e-7a55-4f0a-9c3e-1f2a3b4c5d6e'
+const OTHER_LIVE = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
 const REVOKED = '9f8e7d6c-5b4a-4321-8fed-cba987654321'
 const OTHER_CONFERENCE = '11111111-2222-4333-8444-555555555555'
 const MADE_UP = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
@@ -318,6 +334,30 @@ describe('inside the early-access window', () => {
     expect(await attempt(LIVE)).toEqual(EARLY())
   })
 
+  // Two sponsors of the conference with a live link each: the sign-up records
+  // the sponsor whose link the cookie holds, whichever comes first by id.
+  it.each([
+    ['the sponsor that sorts first', 'sfc-aardvark', OTHER_LIVE],
+    ['the sponsor that sorts last', SFC, LIVE],
+  ])(
+    'with two live sponsors, a cookie of %s records that sponsor',
+    async (_case, sponsorId, token) => {
+      store().reset([...DATASET, sponsor('sfc-aardvark', OTHER_LIVE)])
+
+      expect(await attempt(token)).toEqual({
+        stored: {
+          status: 'confirmed',
+          workshop: 'workshop-1',
+          earlyAccessSponsor: {
+            _type: 'reference',
+            _ref: sponsorId,
+            _weak: true,
+          },
+        },
+      })
+    },
+  )
+
   it('a full workshop gives a waitlisted sign-up with the sponsor recorded', async () => {
     store().reset([
       ...DATASET.filter((doc) => doc._id !== 'workshop-1'),
@@ -425,9 +465,7 @@ describe('the cached links still hold a link that is no longer live', () => {
 
   it('a cached read that fails does not fail the sign-up path: the window still answers', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    store().failReadsThat((read) =>
-      read.query.includes('defined(workshopEarlyAccessToken)'),
-    )
+    store().failReadsThat((read) => read.query === h.linksQuery)
 
     expect(await attempt(REVOKED)).toEqual(OPENS_OFFICIALLY)
     expect(h.linksReads).toBe(1)

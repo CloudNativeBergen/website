@@ -17,7 +17,15 @@
  * keyed by the conference alone, whatever the cookie holds.
  */
 import '../../helpers/workosEnv'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  beforeEach,
+  afterEach,
+} from 'vitest'
 import {
   beginRequest,
   cookies,
@@ -91,6 +99,8 @@ const h = vi.hoisted(() => ({
       ) => Promise<unknown>),
   revalidateTag: vi.fn(),
   refresh: vi.fn(),
+  /** The exact text of the cached links' read (`cachedLinksQueryText`). */
+  linksQuery: null as null | string,
 }))
 vi.mock('@/lib/sanity/client', async () => {
   const { createVersionedSanityStore } =
@@ -133,6 +143,14 @@ import {
 } from '@/components/workshop/WorkshopEarlyAccess'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 import { seal } from '@/lib/workshop/central-sign-in/seal'
+import { cachedLinksQueryText } from '../../helpers/cachedLinksRead'
+
+beforeAll(async () => {
+  h.fetch.mockImplementation((query, params, options) =>
+    h.readStore!(query, params, options),
+  )
+  h.linksQuery = await cachedLinksQueryText(h.store!)
+})
 
 const HOST = 'conf.example.org'
 const SESSION_COOKIE = '__Host-workshop-session'
@@ -412,6 +430,19 @@ describe('a person with early access', () => {
       workshopRegistrationStart: OFFICIAL_OPENING,
       workshopRegistrationEnd: END,
     })
+  })
+
+  // The conference has two sponsors with a live link each: the page names
+  // the sponsor whose link the cookie holds, not whichever link comes first.
+  it.each([
+    ['Acme AS', LIVE],
+    ['Globex', OTHER_LIVE],
+  ])('names %s for a cookie of that sponsor’s link', async (name, token) => {
+    await request({ earlyAccess: token })
+
+    const portal = await view()
+
+    expect(portal.status).toEqual([`You have early access through ${name}`])
   })
 
   it('after the official opening: the portal as everyone sees it, and nothing is looked up', async () => {
@@ -745,9 +776,7 @@ describe('after an organizer revokes the link', () => {
 describe('when the links cannot be read', () => {
   it('the portal is shown as everyone sees it, and the failure is logged', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
-    h.store!.failReadsThat((read) =>
-      read.query.includes('defined(workshopEarlyAccessToken)'),
-    )
+    h.store!.failReadsThat((read) => read.query === h.linksQuery)
     await request({ earlyAccess: LIVE })
 
     const portal = await view()

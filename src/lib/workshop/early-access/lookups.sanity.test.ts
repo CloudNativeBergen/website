@@ -38,7 +38,11 @@ vi.mock('next/cache', () => ({
 
 import { cacheLife, cacheTag } from 'next/cache'
 import { earlyAccessLinksTag } from '@/lib/cache/tags'
-import { findEarlyAccessSponsor, revokeEarlyAccessLink } from './link'
+import {
+  findEarlyAccessSponsor,
+  readEarlyAccessToken,
+  revokeEarlyAccessLink,
+} from './link'
 import { conferenceEarlyAccessLinks, resolveEarlyAccess } from './links'
 
 const store = () => h.store!
@@ -298,6 +302,32 @@ describe('a token that another document of the conference holds too', () => {
   })
 })
 
+describe('the stored token, read for a link’s address', () => {
+  // The procedure's own guard refuses a foreign sponsor first. This is the
+  // read's own scope, on the query as it is executed: without it the read
+  // would answer any sponsor's token to whoever got past (or around) that.
+  it('answers a token only for a sponsor of the conference it is asked in', async () => {
+    store().reset([
+      sponsor({ workshopEarlyAccessToken: TOKEN }),
+      sponsor({
+        _id: 'sfc-theirs',
+        conference: ref(OTHER_CONF),
+        workshopEarlyAccessToken: 'their-token',
+      }),
+    ])
+
+    expect({
+      ours: await readEarlyAccessToken(CONF, SFC),
+      theirsAskedHere: await readEarlyAccessToken(CONF, 'sfc-theirs'),
+      theirsAskedThere: await readEarlyAccessToken(OTHER_CONF, 'sfc-theirs'),
+    }).toEqual({
+      ours: TOKEN,
+      theirsAskedHere: null,
+      theirsAskedThere: 'their-token',
+    })
+  })
+})
+
 describe('the cached read is a cached function', () => {
   // The directive is inert under Vitest, so nothing here can run it. Without
   // it every view and every opened link would read Sanity, and "a made-up
@@ -321,6 +351,15 @@ describe('the live read', () => {
     expect(store().reads).toHaveLength(1)
     expect(store().reads[0].client).toBe('uncached')
     expect(store().reads[0].params).toMatchObject({ conferenceId: CONF })
+  })
+
+  // "Uncached" names the client (no CDN). Next's own fetch cache is a second
+  // one, and this option is what keeps the lookup out of it: a remembered
+  // answer would keep a revoked link signing people up.
+  it('is sent with no-store, so no remembered answer is served', async () => {
+    await findEarlyAccessSponsor(CONF, TOKEN)
+
+    expect(store().reads.map((read) => read.cache)).toEqual(['no-store'])
   })
 
   it.each([
