@@ -187,7 +187,7 @@ describe('the unpublished copies of the sponsor are kept in step', () => {
     store().beforeNextCommit(() => {})
     store().beforeNextCommit(async () => {
       revoked = stored(SFC) as string
-      await revokeEarlyAccessLink(SFC)
+      await revokeEarlyAccessLink(CONF, SFC)
     })
 
     const { token } = (await createEarlyAccessLink(CONF, SFC)) as {
@@ -202,11 +202,149 @@ describe('the unpublished copies of the sponsor are kept in step', () => {
   })
 })
 
+describe('a create never answers a link that is no longer stored', () => {
+  it('a revoke that lands right after the token is stored: the create starts over', async () => {
+    let revoked: string | undefined
+    store().afterNextCommit(async () => {
+      revoked = stored(SFC) as string
+      await revokeEarlyAccessLink(CONF, SFC)
+    })
+
+    const { token } = (await createEarlyAccessLink(CONF, SFC)) as {
+      token: string
+    }
+
+    expect(revoked).toMatch(UUID)
+    expect(token).not.toBe(revoked)
+    expect(stored(SFC)).toBe(token)
+  })
+
+  it('a copy without the token is published right after it is stored: the create starts over', async () => {
+    let lost: string | undefined
+    store().afterNextCommit(() => {
+      lost = stored(SFC) as string
+      // Publishing replaces the published document with the copy.
+      store().put(sponsor({ _rev: 'published-from-draft' }))
+    })
+
+    const { token } = (await createEarlyAccessLink(CONF, SFC)) as {
+      token: string
+    }
+
+    expect(lost).toMatch(UUID)
+    expect(token).not.toBe(lost)
+    expect(stored(SFC)).toBe(token)
+  })
+
+  it('refuses, rather than answer a dead address, when it keeps losing', async () => {
+    const revoke = () => revokeEarlyAccessLink(CONF, SFC)
+    // The hooks run after the first, third and fifth commit: each attempt's
+    // store. (The second and fourth are the revokes' own.)
+    store().afterNextCommit(async () => {
+      await revoke()
+      store().afterNextCommit(async () => {
+        await revoke()
+        store().afterNextCommit(revoke)
+      })
+    })
+
+    await expect(createEarlyAccessLink(CONF, SFC)).rejects.toThrow(
+      'early-access link',
+    )
+    expect(stored(SFC)).toBeUndefined()
+  })
+})
+
 describe('revoking a link', () => {
+  it('answers that nothing was left behind', async () => {
+    store().reset(withCopies({ [FIELD]: 'stored-token' }))
+
+    expect(await revokeEarlyAccessLink(CONF, SFC)).toEqual({ notCleared: [] })
+  })
+
+  it('a release copy that cannot be changed does not keep the link live, and is reported', async () => {
+    store().reset(withCopies({ [FIELD]: 'stored-token' }))
+    store().failPatchesOf(RELEASE_COPY)
+
+    const result = await revokeEarlyAccessLink(CONF, SFC)
+
+    expect(stored(SFC)).toBeUndefined()
+    expect(stored(DRAFT)).toBeUndefined()
+    expect(stored(RELEASE_COPY)).toBe('stored-token')
+    expect(result).toEqual({ notCleared: [RELEASE_COPY] })
+  })
+
+  it('a draft made from the still-linked sponsor while the revoke runs ends without the token', async () => {
+    store().reset([sponsor({ [FIELD]: 'stored-token' })])
+    // Between the revoke's read and its commit, Studio makes a draft: a copy
+    // of the published document as it is, token and all.
+    store().beforeNextCommit(() => {
+      store().put(sponsor({ _id: DRAFT, [FIELD]: 'stored-token' }))
+    })
+
+    const result = await revokeEarlyAccessLink(CONF, SFC)
+
+    expect(store().doc(DRAFT)).toBeDefined()
+    expect(stored(DRAFT)).toBeUndefined()
+    expect(stored(SFC)).toBeUndefined()
+    expect(result).toEqual({ notCleared: [] })
+  })
+
+  it('leaves the copies of a link created right after it in step', async () => {
+    store().reset(withCopies({ [FIELD]: 'stored-token' }))
+    let created: string | undefined
+    // The revoke's first commit clears the sponsor and its draft. A create
+    // lands right after it.
+    store().afterNextCommit(async () => {
+      created = ((await createEarlyAccessLink(CONF, SFC)) as { token: string })
+        .token
+    })
+
+    await revokeEarlyAccessLink(CONF, SFC)
+
+    expect(created).toMatch(UUID)
+    expect(stored(SFC)).toBe(created)
+    expect(stored(DRAFT)).toBe(created)
+    expect(stored(RELEASE_COPY)).toBe(created)
+  })
+
+  it('does not strip a copy that a create wrote after the revoke read it', async () => {
+    store().reset([
+      sponsor({ [FIELD]: 'stored-token' }),
+      sponsor({ _id: RELEASE_COPY, [FIELD]: 'stored-token' }),
+    ])
+    store().beforeNextCommit(() => {})
+    // Before the commit that clears the release copy: a create has stored a
+    // new token and written it to the copy.
+    store().beforeNextCommit(() => {
+      store().put(sponsor({ _rev: 'r-new', [FIELD]: 'new-token' }))
+      store().put(
+        sponsor({ _id: RELEASE_COPY, _rev: 'r-new', [FIELD]: 'new-token' }),
+      )
+    })
+
+    await revokeEarlyAccessLink(CONF, SFC)
+
+    expect(stored(SFC)).toBe('new-token')
+    expect(stored(RELEASE_COPY)).toBe('new-token')
+  })
+
+  it('acts only within the conference it is given', async () => {
+    store().reset(
+      withCopies({ conference: ref('conf-b'), [FIELD]: 'their-token' }),
+    )
+
+    expect(await revokeEarlyAccessLink(CONF, SFC)).toEqual({ notCleared: [] })
+
+    expect(store().commits).toEqual([])
+    expect(stored(SFC)).toBe('their-token')
+    expect(stored(DRAFT)).toBe('their-token')
+  })
+
   it('removes the token from the sponsor and from every unpublished copy', async () => {
     store().reset(withCopies({ [FIELD]: 'stored-token' }))
 
-    await revokeEarlyAccessLink(SFC)
+    await revokeEarlyAccessLink(CONF, SFC)
 
     expect(store().doc(SFC)).toBeDefined()
     expect(stored(SFC)).toBeUndefined()
@@ -216,7 +354,7 @@ describe('revoking a link', () => {
 
   it('a create after a revoke stores a different token', async () => {
     const first = (await createEarlyAccessLink(CONF, SFC)) as { token: string }
-    await revokeEarlyAccessLink(SFC)
+    await revokeEarlyAccessLink(CONF, SFC)
     const second = (await createEarlyAccessLink(CONF, SFC)) as { token: string }
 
     expect(second.token).toMatch(UUID)
@@ -225,7 +363,7 @@ describe('revoking a link', () => {
   })
 
   it('writes nothing for a sponsor that has no link', async () => {
-    await revokeEarlyAccessLink(SFC)
+    await revokeEarlyAccessLink(CONF, SFC)
 
     expect(store().commits).toEqual([])
   })

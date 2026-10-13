@@ -87,8 +87,14 @@ export interface VersionedSanityStore {
   readonly commits: SerializedMutation[][]
   /** What happened, in order: `read` and `commit`, for asserting a race ran. */
   readonly events: string[]
+  /** Store a document as it is, replacing one with the same id. No commit. */
+  put(document: Doc): void
   /** Run once, just before the next commit is applied. */
-  beforeNextCommit(hook: () => void | Promise<void>): void
+  beforeNextCommit(hook: () => unknown): void
+  /** Run once, right after the next commit has been applied. */
+  afterNextCommit(hook: () => unknown): void
+  /** Refuse every patch of this document until the next `reset()`. */
+  failPatchesOf(id: string): void
   /** Make every commit reject until the next `reset()`. */
   failWrites(error?: Error): void
   /** The module shape of `@/lib/sanity/client` the code under test imports. */
@@ -121,7 +127,9 @@ export function createVersionedSanityStore(): VersionedSanityStore {
   let reads: RecordedRead[] = []
   let commits: SerializedMutation[][] = []
   let events: string[] = []
-  let hooks: Array<() => void | Promise<void>> = []
+  let hooks: Array<() => unknown> = []
+  let afterHooks: Array<() => unknown> = []
+  let unpatchable = new Set<string>()
   let writeFailure: Error | null = null
   let revCounter = 0
 
@@ -185,6 +193,9 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         continue
       }
       const { id, ifRevisionID } = mutation.patch
+      if (unpatchable.has(id)) {
+        throw new Error(`409: ${id} cannot be patched (test)`)
+      }
       if (isVersion(id) && !knowsReleases(apiVersion)) {
         throw new Error(`400: ${id} needs API 2025-02-19 (modelled)`)
       }
@@ -210,6 +221,8 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     documents = next
     commits.push(mutations)
     events.push('commit')
+    const after = afterHooks.shift()
+    if (after) await after()
     return touched.flatMap((id) => next.filter((d) => d._id === id))
   }
 
@@ -249,7 +262,15 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       commits = []
       events = []
       hooks = []
+      afterHooks = []
+      unpatchable = new Set()
       writeFailure = null
+    },
+    put(document) {
+      documents = [
+        ...documents.filter((d) => d._id !== document._id),
+        structuredClone(document),
+      ]
     },
     doc: (id) => documents.find((d) => d._id === id),
     all: () => documents,
@@ -264,6 +285,12 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     },
     beforeNextCommit(hook) {
       hooks.push(hook)
+    },
+    afterNextCommit(hook) {
+      afterHooks.push(hook)
+    },
+    failPatchesOf(id) {
+      unpatchable.add(id)
     },
     failWrites(error = new Error('versionedSanityStore: write refused')) {
       writeFailure = error

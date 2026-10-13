@@ -34,7 +34,7 @@ vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
 }))
 
-import { cacheTag } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { earlyAccessLinksTag } from '@/lib/cache/tags'
 import { findEarlyAccessSponsor } from './link'
 import { conferenceEarlyAccessLinks, resolveEarlyAccess } from './links'
@@ -211,6 +211,14 @@ describe('the cached read of a conference', () => {
     expect(forOne[0].params).toEqual({ conferenceId: CONF })
     // Whatever the token, the read is the same one.
     expect(forAnother).toEqual(forOne)
+  })
+
+  it('lives an hour before it is read again and two before it is dropped', async () => {
+    await conferenceEarlyAccessLinks(CONF)
+
+    expect(vi.mocked(cacheLife).mock.calls).toEqual([
+      [{ stale: 60, revalidate: 3600, expire: 7200 }],
+    ])
   })
 
   it('is tagged for its conference', async () => {

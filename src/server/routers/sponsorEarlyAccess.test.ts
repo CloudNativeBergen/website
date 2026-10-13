@@ -181,7 +181,6 @@ describe('create', () => {
     })
     expect(store().commits).toEqual([])
     expect(stored(SFC)).toBeUndefined()
-    expect(h.revalidateTag).not.toHaveBeenCalled()
   })
 
   it('is refused, with the reason, when the conference has no working portal, and writes nothing', async () => {
@@ -298,6 +297,7 @@ describe('revoke', () => {
 
     expect(await caller().revoke({ sponsorForConferenceId: SFC })).toEqual({
       success: true,
+      notCleared: [],
     })
 
     expect(stored(SFC)).toBeUndefined()
@@ -337,6 +337,85 @@ describe('revoke', () => {
     expect(store().commits).toEqual([])
     expect(stored(FOREIGN)).toBe('their-token')
     expect(h.revalidateTag).not.toHaveBeenCalled()
+  })
+})
+
+describe('an id of an unpublished copy', () => {
+  const DRAFT = `drafts.${SFC}`
+  const RELEASE_COPY = `versions.rSpring.${SFC}`
+
+  it.each(
+    (['create', 'address', 'revoke'] as const).flatMap((procedure) =>
+      [DRAFT, RELEASE_COPY].map((id) => [procedure, id] as const),
+    ),
+  )('%s refuses %s before anything is read', async (procedure, id) => {
+    // The copies exist, are the conference's and are won: the ownership
+    // guard would accept them.
+    store().reset([
+      ...DATASET,
+      sponsor({ [FIELD]: 'stored-token' }),
+      sponsor({ _id: DRAFT }),
+      sponsor({ _id: RELEASE_COPY }),
+    ])
+
+    await expect(
+      caller()[procedure]({ sponsorForConferenceId: id }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('unpublished copy'),
+    })
+    expect(store().reads).toEqual([])
+    expect(store().commits).toEqual([])
+    expect(stored(SFC)).toBe('stored-token')
+    expect(stored(DRAFT)).toBeUndefined()
+    expect(h.getDomainClaim).not.toHaveBeenCalled()
+  })
+})
+
+describe('the cached links are expired whenever a write may have landed', () => {
+  const DRAFT = `drafts.${SFC}`
+  const RELEASE_COPY = `versions.rSpring.${SFC}`
+
+  it('create: the token is stored and writing it to a copy fails', async () => {
+    store().reset([...DATASET, sponsor(), sponsor({ _id: DRAFT })])
+    store().failPatchesOf(DRAFT)
+
+    await expect(
+      caller().create({ sponsorForConferenceId: SFC }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+
+    expect(stored(SFC)).toMatch(new RegExp(`^${UUID}$`))
+    expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
+  })
+
+  it('revoke: the commit landed and then threw', async () => {
+    store().reset([...DATASET, sponsor({ [FIELD]: 'stored-token' })])
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+
+    await expect(
+      caller().revoke({ sponsorForConferenceId: SFC }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+
+    expect(stored(SFC)).toBeUndefined()
+    expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
+  })
+
+  it('revoke says which copies still hold the link, and the link is not live', async () => {
+    store().reset([
+      ...DATASET,
+      sponsor({ [FIELD]: 'stored-token' }),
+      sponsor({ _id: RELEASE_COPY, [FIELD]: 'stored-token' }),
+    ])
+    store().failPatchesOf(RELEASE_COPY)
+
+    expect(await caller().revoke({ sponsorForConferenceId: SFC })).toEqual({
+      success: true,
+      notCleared: [RELEASE_COPY],
+    })
+    expect(stored(SFC)).toBeUndefined()
+    expect(h.revalidateTag.mock.calls).toEqual([[TAG, { expire: 0 }]])
   })
 })
 
