@@ -676,7 +676,7 @@ describe('/privacy describes early access to workshop sign-up (#1346)', () => {
     const html = await renderPrivacy()
 
     expect(html).toContain(
-      'If you sign up through a sponsor&#x27;s early-access link before sign-up opens for everyone: which sponsor&#x27;s link you used. This usually says who you work for.',
+      'If you sign up through a sponsor&#x27;s early-access link before registration opens for everyone: which sponsor&#x27;s link you used. This usually says who you work for.',
     )
   })
 
@@ -690,7 +690,7 @@ describe('/privacy describes early access to workshop sign-up (#1346)', () => {
     )
     expect(passage).toContain('It is set only by opening such a link')
     expect(passage).toContain(
-      'It expires when workshop sign-up opens for everyone, as that time stood when you opened the link',
+      'It expires when registration opens for everyone, as that time stood when you opened the link',
     )
     expect(passage).toContain('Signing out does not remove it')
   })

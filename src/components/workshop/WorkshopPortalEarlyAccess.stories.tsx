@@ -245,7 +245,7 @@ export const LinkNotLive: Story = {
   args: { ...portal(SPONSOR_START, null), earlyAccessInvalid: true },
   play: async ({ canvasElement }) => {
     await expect(statuses(canvasElement)).toEqual([
-      'This early access link is no longer valid',
+      'This early access link is no longer valid. Ask whoever sent it to you for a new one.',
     ])
     await expect(banners(canvasElement)).toEqual([
       'Workshop registration is not yet open',
@@ -269,7 +269,7 @@ export const LinkNotLiveWithEarlyAccess: Story = {
   args: { ...portal(SPONSOR_START, ACME), earlyAccessInvalid: true },
   play: async ({ canvasElement }) => {
     await expect(statuses(canvasElement)).toEqual([
-      'This early access link is no longer valid',
+      'This early access link is no longer valid. Ask whoever sent it to you for a new one.',
       'You have early access through Acme AS',
     ])
   },
@@ -328,7 +328,7 @@ export const NoTicketLinkNotLive: NoTicketStory = {
   render: () => <WorkshopNoTicket {...noTicketArgs} earlyAccessInvalid />,
   play: async ({ canvasElement }) => {
     await expect(statuses(canvasElement)).toEqual([
-      'This early access link is no longer valid',
+      'This early access link is no longer valid. Ask whoever sent it to you for a new one.',
     ])
     await expect(banners(canvasElement)).toEqual(['Workshop Ticket Required'])
   },

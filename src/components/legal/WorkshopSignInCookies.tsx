@@ -68,9 +68,9 @@ export function WorkshopSignInCookieNote({ signInHost }: Props) {
 export function WorkshopEarlyAccessSponsorItem() {
   return (
     <li>
-      • If you sign up through a sponsor&apos;s early-access link before sign-up
-      opens for everyone: which sponsor&apos;s link you used. This usually says
-      who you work for.
+      • If you sign up through a sponsor&apos;s early-access link before
+      registration opens for everyone: which sponsor&apos;s link you used. This
+      usually says who you work for.
     </li>
   )
 }
@@ -87,10 +87,11 @@ export function WorkshopEarlyAccessCookieNote() {
       <strong>Workshop early access:</strong> If you open a sponsor&apos;s
       early-access link to this event&apos;s workshop portal, this site sets one
       cookie that holds the code of that link and nothing else. It is set only
-      by opening such a link, and it is how the portal knows you may sign up
-      before sign-up opens for everyone. It expires when workshop sign-up opens
-      for everyone, as that time stood when you opened the link. Signing out
-      does not remove it; clearing this site&apos;s cookies does.
+      by opening such a link, and it is how the portal knows you may sign up for
+      workshops before registration opens for everyone. It expires when
+      registration opens for everyone, as that time stood when you opened the
+      link. Signing out does not remove it; clearing this site&apos;s cookies
+      does.
     </p>
   )
 }

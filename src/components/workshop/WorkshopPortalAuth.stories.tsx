@@ -83,7 +83,7 @@ export const EarlyAccessLinkNotLive: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getByRole('status')).toHaveTextContent(
-      'This early access link is no longer valid',
+      'This early access link is no longer valid. Ask whoever sent it to you for a new one.',
     )
     await expect(
       canvas.getByRole('button', { name: 'Sign In' }),

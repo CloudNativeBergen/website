@@ -28,7 +28,9 @@ export function WorkshopEarlyAccessBanner({
             aria-hidden="true"
             className="size-5 shrink-0 text-blue-500 dark:text-blue-300"
           />
-          <div className="ml-3">
+          {/* A sponsor's name can be one long word: it wraps, it does not
+              push the page wide. */}
+          <div className="ml-3 min-w-0 break-words">
             <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
               Early access through {sponsor} opens{' '}
               {formatRegistrationInstant(opensAt)}
@@ -50,7 +52,7 @@ export function WorkshopEarlyAccessBanner({
       />
       <p
         role="status"
-        className="ml-3 text-sm font-medium text-green-800 dark:text-green-200"
+        className="ml-3 min-w-0 text-sm font-medium break-words text-green-800 dark:text-green-200"
       >
         You have early access through {sponsor}
       </p>
@@ -59,7 +61,7 @@ export function WorkshopEarlyAccessBanner({
 }
 
 /**
- * The one line for a person who just opened an early-access link that is not
+ * The notice for a person who just opened an early-access link that is not
  * live (spec §5): the same whether the link was revoked, never existed or is
  * another conference's.
  */
@@ -69,7 +71,8 @@ export function WorkshopEarlyAccessInvalidNotice() {
       role="status"
       className="mt-8 rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
     >
-      This early access link is no longer valid
+      This early access link is no longer valid. Ask whoever sent it to you for
+      a new one.
     </p>
   )
 }

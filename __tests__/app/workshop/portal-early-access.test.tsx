@@ -160,7 +160,8 @@ const BEFORE_THE_SPONSOR_START = {
 const NOT_YET_OPEN = 'Workshop registration is not yet open'
 const OPENS_OFFICIALLY =
   'Registration will open on Monday, June 15, 2026 at 12:30 AM'
-const NOTICE = 'This early access link is no longer valid'
+const NOTICE =
+  'This early access link is no longer valid. Ask whoever sent it to you for a new one.'
 
 const LIVE = '4b1c9d2e-7a55-4f0a-9c3e-1f2a3b4c5d6e'
 const OTHER_LIVE = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'

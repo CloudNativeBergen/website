@@ -120,6 +120,9 @@ describe('the banner of the signed-in portal', () => {
         null,
         true,
       ),
-    ).toEqual(['This early access link is no longer valid', OFFICIAL])
+    ).toEqual([
+      'This early access link is no longer valid. Ask whoever sent it to you for a new one.',
+      OFFICIAL,
+    ])
   })
 })
