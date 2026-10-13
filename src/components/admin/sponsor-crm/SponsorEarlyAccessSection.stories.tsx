@@ -102,7 +102,8 @@ export const Created: Story = {
 
 /**
  * Created, but a copy of the sponsor in Sanity Studio could not be given the
- * link: the address is shown, and the organizer is told what to do.
+ * link: the address is shown, and the organizer is told what to do. "Try
+ * again" creates once more, which writes the SAME link to the copies.
  */
 export const CreatedWithCopyBehind: Story = {
   parameters: {
@@ -119,8 +120,11 @@ export const CreatedWithCopyBehind: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Create link' }))
     await expect(await canvas.findByDisplayValue(LINK)).toBeInTheDocument()
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      'The link works, but 1 unpublished copy of this sponsor in Sanity Studio did not get it.',
+      'The link works, but 1 unpublished copy of this sponsor in Sanity Studio did not get it. Publishing it would remove the link. Try again, or discard it in Studio.',
     )
+    await expect(
+      canvas.getByRole('button', { name: 'Try again' }),
+    ).toBeInTheDocument()
     await expectNoSidewaysScroll(canvasElement)
   },
 }

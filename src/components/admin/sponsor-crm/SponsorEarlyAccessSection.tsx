@@ -52,8 +52,9 @@ export function SponsorEarlyAccessSection({
     /** The address the server last answered. */
     url: string | null
     /**
-     * Unpublished copies the last create or revoke could not bring in step:
-     * after a create they lack the link, after a revoke they still hold it.
+     * Unpublished copies this section's last create or revoke could not
+     * bring in step: after a create they lack the link, after a revoke they
+     * still hold it.
      */
     outOfStep: number
   }>({ recordHasLink: hasLink, linked: null, url: null, outOfStep: 0 })
@@ -65,7 +66,10 @@ export function SponsorEarlyAccessSection({
       recordHasLink: hasLink,
       linked: null,
       url: done.linked === hasLink ? done.url : null,
-      outOfStep: done.outOfStep,
+      // A warning about copies is about what THIS section's create or revoke
+      // left behind. Once the record says something else, a colleague acted,
+      // and it is no longer true of the link as it is now.
+      outOfStep: done.linked === hasLink ? done.outOfStep : 0,
     })
   }
   const linked = done.linked ?? hasLink
@@ -123,8 +127,9 @@ export function SponsorEarlyAccessSection({
     await copying
   }
   const { copied } = clipboard
-  // No address arrived: that is the error above, not a failed copy.
-  const copyFailed = clipboard.failed && !error
+  // Not while an address is being asked for, and not when none arrived: that
+  // is the error above, not a failed copy.
+  const copyFailed = clipboard.failed && !fetching && !error
 
   const busy = create.isPending || revoke.isPending || fetching
 
@@ -242,29 +247,41 @@ export function SponsorEarlyAccessSection({
         </p>
       )}
       {outOfStep > 0 && (
-        <p
+        <div
           role="alert"
           className="mt-2 text-xs text-amber-700 dark:text-amber-400"
         >
           {linked ? (
             <>
-              The link works, but {outOfStep} unpublished{' '}
-              {outOfStep === 1 ? 'copy' : 'copies'} of this sponsor in Sanity
-              Studio did not get it. Publishing{' '}
-              {outOfStep === 1 ? 'it' : 'one of them'} would remove the link:
-              discard {outOfStep === 1 ? 'it' : 'them'} in Studio, or create the
-              link again.
+              <p>
+                The link works, but {outOfStep} unpublished{' '}
+                {outOfStep === 1 ? 'copy' : 'copies'} of this sponsor in Sanity
+                Studio did not get it. Publishing{' '}
+                {outOfStep === 1 ? 'it' : 'one of them'} would remove the link.
+                Try again, or discard {outOfStep === 1 ? 'it' : 'them'} in
+                Studio.
+              </p>
+              {/* Create writes the STORED link to every copy: the address
+                  that was handed out stays the same. */}
+              <button
+                type="button"
+                onClick={() => create.mutate({ sponsorForConferenceId })}
+                disabled={busy}
+                className={`${quietButton} mt-2`}
+              >
+                {create.isPending ? 'Trying\u2026' : 'Try again'}
+              </button>
             </>
           ) : (
-            <>
+            <p>
               The link is revoked, but {outOfStep} unpublished{' '}
               {outOfStep === 1 ? 'copy' : 'copies'} of this sponsor in Sanity
               Studio still {outOfStep === 1 ? 'holds' : 'hold'} it. Publishing{' '}
               {outOfStep === 1 ? 'it' : 'one of them'} would make the link work
               again: discard {outOfStep === 1 ? 'it' : 'them'} in Studio.
-            </>
+            </p>
           )}
-        </p>
+        </div>
       )}
       {error && (
         <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">

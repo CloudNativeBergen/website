@@ -209,7 +209,8 @@ const isReleaseCopy = (id: string) => id.startsWith('versions.')
  *     refused. So is it when the draft is gone by then. Either way step 2
  *     reads again and decides.
  *  2. EVERY VERSION THAT STILL HOLDS A REVOKED TOKEN, the published document
- *     included, until none does: all of them are read again after each write.
+ *     included: all of them are read again once per round, for at most
+ *     {@link REVOKE_ROUNDS} rounds, until none does.
  *     A copy made while the revoke ran is found, and so is a copy that was
  *     PUBLISHED while it ran, which would otherwise bring the link back. Each
  *     is cleared on its own, and only as the revision that was read. A token

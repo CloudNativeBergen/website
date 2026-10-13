@@ -25,8 +25,8 @@ import {
  * refused exactly as a missing one.
  *
  * THE CACHED LINKS ARE EXPIRED WHENEVER A WRITE MAY HAVE LANDED, also when
- * the procedure then fails: a commit can land and still throw, and a create
- * can store the token and fail on a copy.
+ * the procedure then fails: a commit can land and still throw, and a revoke
+ * can clear some versions and fail on the published document.
  */
 
 /**

@@ -127,8 +127,52 @@ describe('a sponsor without a link', () => {
 
     expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The link works, but 2 unpublished copies of this sponsor in Sanity Studio did not get it. Publishing one of them would remove the link: discard them in Studio, or create the link again.',
+      'The link works, but 2 unpublished copies of this sponsor in Sanity Studio did not get it. Publishing one of them would remove the link. Try again, or discard them in Studio.',
     )
+  })
+
+  it('trying again writes the same link to the copies, and the warning goes when none is left behind', () => {
+    h.create.mockImplementationOnce((_input, options: Options) =>
+      options.onSuccess?.({
+        url: URL_OF_LINK,
+        notWritten: ['drafts.sfc-1'],
+      } as never),
+    )
+    render(section({ hasLink: false }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('1 unpublished copy')
+
+    // The next create answers the same address, with every copy written.
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(h.create).toHaveBeenCalledTimes(2)
+    expect(h.create.mock.calls[1][0]).toEqual({
+      sponsorForConferenceId: 'sfc-1',
+    })
+    expect(h.revoke).not.toHaveBeenCalled()
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+
+  it('trying again keeps the warning, with the new count, while a copy is still behind', () => {
+    h.create.mockImplementation((_input, options: Options) =>
+      options.onSuccess?.({
+        url: URL_OF_LINK,
+        notWritten:
+          h.create.mock.calls.length === 1
+            ? ['drafts.sfc-1', 'versions.rSpring.sfc-1']
+            : ['versions.rSpring.sfc-1'],
+      } as never),
+    )
+    render(section({ hasLink: false }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('2 unpublished copies')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('1 unpublished copy')
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible()
   })
 
   it('says why no link can be created when the server refuses', () => {
@@ -355,6 +399,79 @@ describe('the record is refreshed', () => {
     rerender(section({ hasLink: true }))
 
     expect(screen.queryByRole('textbox')).toBeNull()
+  })
+})
+
+describe('a warning about copies belongs to what this section did', () => {
+  it('a create that left a copy behind, then a colleague revokes: nothing is said about copies', () => {
+    h.create.mockImplementation((_input, options: Options) =>
+      options.onSuccess?.({
+        url: URL_OF_LINK,
+        notWritten: ['drafts.sfc-1'],
+      } as never),
+    )
+    const { rerender } = render(section({ hasLink: false }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+    // The record confirms the create: the warning stays.
+    rerender(section({ hasLink: true }))
+    expect(screen.getByRole('alert')).toHaveTextContent('did not get it')
+
+    // A colleague revokes, cleanly.
+    rerender(section({ hasLink: false }))
+
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Create link' })).toBeVisible()
+  })
+
+  it('a revoke that left a copy holding the link, then a colleague creates: nothing is said about copies', () => {
+    h.revoke.mockImplementation((_input, options: Options) =>
+      options.onSuccess?.({
+        success: true,
+        notCleared: ['versions.rSpring.sfc-1'],
+      } as never),
+    )
+    const { rerender } = render(section({ hasLink: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke link' }))
+    // The record confirms the revoke: the warning stays.
+    rerender(section({ hasLink: false }))
+    expect(screen.getByRole('alert')).toHaveTextContent('still holds it')
+
+    // A colleague creates a link.
+    rerender(section({ hasLink: true }))
+
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeVisible()
+  })
+})
+
+describe('a copy while an earlier one has failed', () => {
+  it('says nothing about a failed copy while the address is being asked for again', async () => {
+    h.address.mockRejectedValueOnce(new Error('No such link'))
+    render(section({ hasLink: true }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+    // The address did not arrive: that error, and no word about copying.
+    expect(screen.getByRole('alert')).toHaveTextContent('No such link')
+
+    let arrive: (answer: { url: string }) => void = () => {}
+    h.address.mockReturnValue(
+      new Promise((resolve) => {
+        arrive = resolve
+      }),
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    })
+
+    // Still waiting for the server.
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByText(/Could not copy/)).toBeNull()
+
+    await act(async () => arrive({ url: URL_OF_LINK }))
+    expect(screen.getByDisplayValue(URL_OF_LINK)).toBeVisible()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
 
