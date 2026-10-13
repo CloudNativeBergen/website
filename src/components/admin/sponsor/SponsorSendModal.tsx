@@ -716,10 +716,14 @@ function EarlyAccessSendModal(props: SponsorSendModalProps) {
     <SponsorSendComposer
       {...props}
       earlyAccess={earlyAccess}
-      // A modal left open can be behind the server: the official opening
-      // passed, the deal moved, the times were changed. A send that fails is
-      // the moment to find out, so the hold shown is the server's again.
-      onEarlyAccessSendFailed={() => void readiness.refetch()}
+      // ASK AGAIN. After a send that failed: a modal left open can be behind
+      // the server (the official opening passed, the deal moved, the times
+      // were changed), so the hold shown is the server's again. And from
+      // "Check again" on a held send: the question is otherwise asked once
+      // per open, so a refusal the organizer has since fixed, or an answer
+      // that could not be fetched, would hold Send until the modal is
+      // closed and opened again.
+      recheckEarlyAccess={() => void readiness.refetch()}
     />
   )
 }
@@ -736,12 +740,12 @@ function SponsorSendComposer({
   senderName,
   conference,
   earlyAccess,
-  onEarlyAccessSendFailed,
+  recheckEarlyAccess,
 }: SponsorSendModalProps & {
   /** Set on the workshop early-access kind, by {@link EarlyAccessSendModal}. */
   earlyAccess?: EarlyAccessSend
-  /** The server did not send: its answer may have changed since the modal opened. */
-  onEarlyAccessSendFailed?: () => void
+  /** Ask the server again whether the send may go ahead. */
+  recheckEarlyAccess?: () => void
 }) {
   const { showNotification } = useNotification()
   const sendMutation = api.sponsor.crm.sendCommunication.useMutation()
@@ -1289,13 +1293,13 @@ function SponsorSendComposer({
         try {
           result = await sendMutation.mutateAsync(base)
         } catch (retryError) {
-          onEarlyAccessSendFailed?.()
+          recheckEarlyAccess?.()
           throw retryError
         } finally {
           invalidateRecords()
         }
       } else {
-        onEarlyAccessSendFailed?.()
+        recheckEarlyAccess?.()
         throw error
       }
     }
@@ -1559,12 +1563,24 @@ function SponsorSendComposer({
       </p>
     )
   ) : (
-    <p
-      role="alert"
-      className="font-inter rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-900/20 dark:text-red-200"
-    >
-      {earlyAccess.message}
-    </p>
+    // Refused, or the server could not be asked. Send is held either way,
+    // so the way out is here: ask again. The button sits beside the alert,
+    // not inside it: it is not part of what is announced.
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-900/20">
+      <p
+        role="alert"
+        className="font-inter min-w-0 flex-1 basis-64 text-sm text-red-800 dark:text-red-200"
+      >
+        {earlyAccess.message}
+      </p>
+      <button
+        type="button"
+        onClick={recheckEarlyAccess}
+        className="font-space-grotesk shrink-0 cursor-pointer rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-800 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:border-red-700 dark:bg-transparent dark:text-red-200 dark:hover:bg-red-900/40"
+      >
+        Check again
+      </button>
+    </div>
   )
   const portalLinkHint = !isRegistration ? null : portalLinkError ? (
     <p

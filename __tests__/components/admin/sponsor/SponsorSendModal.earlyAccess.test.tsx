@@ -109,8 +109,31 @@ vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: h.showNotification }),
 }))
 vi.mock('@/components/admin/sponsor/SponsorTemplatePicker', () => ({
-  SponsorTemplatePicker: ({ selectedId }: { selectedId: string }) => (
-    <p data-testid="template">{selectedId || 'no template'}</p>
+  SponsorTemplatePicker: ({
+    selectedId,
+    onApply,
+  }: {
+    selectedId: string
+    onApply: (
+      subject: string,
+      body: PortableTextBlock[],
+      template: { _id: string; subject: string },
+    ) => void
+  }) => (
+    <div>
+      <p data-testid="template">{selectedId || 'no template'}</p>
+      <button
+        type="button"
+        onClick={() =>
+          onApply('Sponsor news', [], {
+            _id: 'tpl-default',
+            subject: 'Sponsor news',
+          })
+        }
+      >
+        apply template
+      </button>
+    </div>
   ),
 }))
 
@@ -485,7 +508,7 @@ describe('a send that is refused', () => {
       renderModal()
 
       expect(screen.getByRole('alert')).toHaveTextContent(message)
-      expect(refusalShown()).toBe(message)
+      expect(refusalShown()).toBe(`${message}Check again`)
       expect(screen.queryByTestId('allow-empty-body')).toBeNull()
       // No block is previewed for an email that cannot be sent.
       expect(screen.getByTestId('preview')).not.toHaveTextContent(
@@ -562,6 +585,83 @@ describe('a send that is refused', () => {
   })
 })
 
+describe('"Check again"', () => {
+  const UNKNOWN =
+    'Could not check whether early access can be sent: Failed to fetch'
+
+  it.each([
+    [
+      'the server could not be asked',
+      {
+        data: undefined,
+        isFetching: false,
+        isError: true,
+        error: { message: 'Failed to fetch' },
+      },
+      UNKNOWN,
+    ],
+    [
+      'the server refuses the send',
+      {
+        data: { refusal: { reason: 'no-window', message: REFUSALS[1][1] } },
+        isFetching: false,
+      },
+      REFUSALS[1][1],
+    ],
+  ])(
+    'asks the server again when %s, and posts nothing by itself',
+    (_case, readiness, said) => {
+      h.readiness = readiness
+      renderModal()
+      expect(screen.getByRole('alert')).toHaveTextContent(said)
+      expect(h.refetch).not.toHaveBeenCalled()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+
+      expect(h.refetch).toHaveBeenCalledTimes(1)
+      expect(h.mutateAsync).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each([
+    ['may go ahead', { data: READY, isFetching: false }],
+    ['is being checked', { data: undefined, isFetching: true }],
+  ])('is not offered while the send %s', (_case, readiness) => {
+    h.readiness = readiness
+    renderModal()
+
+    expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
+  })
+
+  // What a re-ask that FAILED leaves behind: the old answer, and an error.
+  // The old answer is not the answer.
+  it('is offered, and Send is held, when asking again failed though an older answer said ready', async () => {
+    h.readiness = {
+      data: READY,
+      isFetching: false,
+      isError: true,
+      error: { message: 'Failed to fetch' },
+    }
+    renderModal()
+
+    expect(screen.getByRole('alert')).toHaveTextContent(UNKNOWN)
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeVisible()
+    expect(screen.queryByTestId('allow-empty-body')).toBeNull()
+    expect(screen.getByTestId('preview')).not.toHaveTextContent(
+      'Early access to workshop sign-up',
+    )
+    pressSend()
+
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith({
+        type: 'error',
+        title: UNKNOWN,
+      }),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+})
+
 describe('a modal left open while the answer changed', () => {
   const OPENING_PASSED = REFUSALS[2][1]
 
@@ -602,6 +702,50 @@ describe('a modal left open while the answer changed', () => {
     )
     // Held: nothing was posted a second time.
     expect(h.mutateAsync).toHaveBeenCalledTimes(1)
+  })
+
+  // A draft that started from a template since deleted is sent again without
+  // it. When THAT send is refused, the modal is as far behind as after any
+  // other refusal.
+  it('asks the server again when the send without a deleted template is refused too', async () => {
+    h.mutateAsync
+      .mockRejectedValueOnce(new Error('Template not found'))
+      .mockRejectedValueOnce(new Error(OPENING_PASSED))
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'apply template' }))
+
+    pressSend()
+
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith({
+        type: 'error',
+        title: OPENING_PASSED,
+      }),
+    )
+    expect(h.mutateAsync).toHaveBeenCalledTimes(2)
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      template: { id: 'tpl-default' },
+    })
+    expect(h.mutateAsync.mock.calls[1][0]).not.toHaveProperty('template')
+    expect(h.refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not ask again when the send without a deleted template goes out', async () => {
+    h.mutateAsync
+      .mockRejectedValueOnce(new Error('Template not found'))
+      .mockResolvedValueOnce({ success: true, recipientCount: 1 })
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'apply template' }))
+
+    pressSend()
+
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'success' }),
+      ),
+    )
+    expect(h.mutateAsync).toHaveBeenCalledTimes(2)
+    expect(h.refetch).not.toHaveBeenCalled()
   })
 
   it('does not ask again after a send that went out', async () => {
