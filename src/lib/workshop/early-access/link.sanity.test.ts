@@ -249,6 +249,29 @@ describe('the unpublished copies of the sponsor are kept in step', () => {
     expect(stored(`versions.rSpring.${id}`)).toBe(token)
   })
 
+  it('a draft moved to another conference before the copies are written does not get the token', async () => {
+    store().reset(withCopies())
+    // The first commit stores the token. Before the second, which writes the
+    // copies, the draft is edited in Studio: it now names another conference.
+    store().beforeNextCommit(() => {})
+    store().beforeNextCommit(() => {
+      store().put(
+        sponsor({ _id: DRAFT, _rev: 'moved', conference: ref('conf-b') }),
+      )
+    })
+
+    const result = (await createEarlyAccessLink(CONF, SFC)) as {
+      token: string
+      notWritten: string[]
+    }
+
+    expect(stored(SFC)).toBe(result.token)
+    expect(stored(DRAFT)).toBeUndefined()
+    // The release copy, still this conference's, got it.
+    expect(stored(RELEASE_COPY)).toBe(result.token)
+    expect(result.notWritten).toEqual([])
+  })
+
   it('a revoke that lands before the copies are written leaves no copy holding the revoked token', async () => {
     store().reset(withCopies())
     // The first commit stores the token. The revoke runs just before the
@@ -504,6 +527,27 @@ describe('revoking a link', () => {
 
     expect(await revokeEarlyAccessLink(CONF, SFC)).toEqual({ notCleared: [] })
     expect(stored(SFC)).toBeUndefined()
+  })
+
+  it('does not write to a copy that was moved to another conference while it ran', async () => {
+    store().reset(withCopies({ [FIELD]: TOKEN }))
+    store().beforeNextCommit(() => {
+      store().put(
+        sponsor({
+          _id: DRAFT,
+          _rev: 'moved',
+          conference: ref('conf-b'),
+          [FIELD]: TOKEN,
+        }),
+      )
+    })
+
+    expect(await revokeEarlyAccessLink(CONF, SFC)).toEqual({ notCleared: [] })
+
+    expect(stored(SFC)).toBeUndefined()
+    expect(stored(RELEASE_COPY)).toBeUndefined()
+    // No longer this conference's copy: left exactly as it was.
+    expect(store().doc(DRAFT)).toMatchObject({ _rev: 'moved', [FIELD]: TOKEN })
   })
 
   it('acts only within the conference it is given', async () => {

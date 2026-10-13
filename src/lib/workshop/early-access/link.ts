@@ -171,7 +171,11 @@ export async function createEarlyAccessLink(
         setIfMissing: { [EARLY_ACCESS_TOKEN_FIELD]: token },
       })
     for (const copy of behind) {
+      // Each copy too only as the revision that was read, within this
+      // conference: one edited in between (moved to another conference in
+      // Studio, say) refuses the write, and the versions are read again.
       transaction.patch(copy._id, {
+        ifRevisionID: copy._rev,
         set: { [EARLY_ACCESS_TOKEN_FIELD]: token },
       })
     }
