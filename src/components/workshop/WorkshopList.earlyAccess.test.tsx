@@ -247,9 +247,51 @@ describe('a sign-up the server refuses while the list shows early access', () =>
       onEarlyAccessRefused,
     })
 
+    const timers = vi.spyOn(globalThis, 'setTimeout')
     await signUpAndBeRefused(OPENS_OFFICIALLY)
 
     await waitFor(() => expect(onEarlyAccessRefused).toHaveBeenCalledTimes(1))
+    // What happened is said, announced, and stays: no timer takes it away.
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `Your early access is no longer valid. ${OPENS_OFFICIALLY}`,
+    )
+    expect(timers.mock.calls.filter(([, delay]) => delay === 5000)).toEqual([])
+  })
+
+  it('keeps saying so after the page has rendered again without early access', async () => {
+    signupAnswer = refusal('PRECONDITION_FAILED', OPENS_OFFICIALLY)
+    const props = {
+      userWorkOSId: 'workos-1',
+      userEmail: 'attendee@example.com',
+      userName: 'Attendee One',
+      workshopRegistrationStart: OFFICIAL_OPENING,
+      workshopRegistrationEnd: END,
+    }
+    const { rerender } = render(
+      <Providers>
+        <WorkshopList
+          {...props}
+          earlyAccess
+          workshopRegistrationSponsorStart={SPONSOR_START}
+        />
+      </Providers>,
+    )
+    await screen.findByRole('heading', { level: 2, name: 'Your Workshops' })
+    await signUpAndBeRefused(OPENS_OFFICIALLY)
+
+    // The refresh: the page no longer resolves early access.
+    rerender(
+      <Providers>
+        <WorkshopList {...props} />
+      </Providers>,
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `Your early access is no longer valid. ${OPENS_OFFICIALLY}`,
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Register for Workshop' }),
+    ).toBeNull()
   })
 
   it('does not for any other refusal', async () => {
@@ -267,6 +309,7 @@ describe('a sign-up the server refuses while the list shows early access', () =>
     await signUpAndBeRefused('You are already signed up for this workshop')
 
     expect(onEarlyAccessRefused).not.toHaveBeenCalled()
+    expect(screen.queryByText(/early access is no longer valid/)).toBeNull()
   })
 
   it('does not once sign-up is open for everyone: the list was not showing early access', async () => {

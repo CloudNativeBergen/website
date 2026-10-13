@@ -52,6 +52,9 @@ export default function WorkshopList({
 }: WorkshopListProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // The server's refusal of a sign-up this list offered because of early
+  // access: the link was revoked while the page was open.
+  const [earlyAccessEnded, setEarlyAccessEnded] = useState<string | null>(null)
   // Sign-ups whose cancel the server has answered. The cancel DELETED the
   // sign-up, so a second one is refused with "Signup not found"; while such a
   // sign-up is still on the page (the list has not been read again yet, or the
@@ -86,14 +89,13 @@ export default function WorkshopList({
         data.message || 'Successfully signed up for the workshop!',
       )
       setErrorMessage(null)
+      setEarlyAccessEnded(null)
       setTimeout(() => setSuccessMessage(null), 5000)
       refetchWorkshops()
       refetchSignups()
     },
     onError: (error) => {
-      setErrorMessage(error.message)
       setSuccessMessage(null)
-      setTimeout(() => setErrorMessage(null), 5000)
       // The server refused for the window while this list was offering
       // sign-up BECAUSE OF early access: the one case where a refusal
       // contradicts what is on screen. (Once sign-up is open for everyone a
@@ -112,8 +114,16 @@ export default function WorkshopList({
         shown.early &&
         error.data?.code === 'PRECONDITION_FAILED'
       ) {
+        // The page is about to change under the person: the banner goes, and
+        // so do the workshops they were choosing from. Say what happened, and
+        // leave it standing: no timer takes it away.
+        setErrorMessage(null)
+        setEarlyAccessEnded(error.message)
         void onEarlyAccessRefused?.()
+        return
       }
+      setErrorMessage(error.message)
+      setTimeout(() => setErrorMessage(null), 5000)
     },
   })
 
@@ -264,6 +274,15 @@ export default function WorkshopList({
       {errorMessage && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
           {errorMessage}
+        </div>
+      )}
+
+      {earlyAccessEnded && (
+        <div
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200"
+        >
+          Your early access is no longer valid. {earlyAccessEnded}
         </div>
       )}
 
