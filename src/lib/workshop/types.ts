@@ -1,5 +1,6 @@
 import type { SanityDocument } from 'sanity'
 import type { ProposalExisting, Level } from '@/lib/proposal/types'
+import type { SignupEarlyAccess } from './early-access/signups'
 
 export enum WorkshopSignupStatus {
   CONFIRMED = 'confirmed',
@@ -71,6 +72,11 @@ export interface WorkshopSignup {
   confirmedAt?: string
   confirmationEmailSent?: boolean
   notes?: string
+  /**
+   * The sponsor whose early-access link admitted this sign-up (#1348). Set by
+   * the organizer reads that show it; `null` on a sign-up that is not early.
+   */
+  earlyAccess?: SignupEarlyAccess
 }
 
 export type { WorkshopSignupInput } from '@/server/schemas/workshop'

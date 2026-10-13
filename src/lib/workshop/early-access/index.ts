@@ -18,3 +18,9 @@ export { earlyAccessCookie, earlyAccessTokenOf } from './cookie'
 export { registrationWindowFor } from './window'
 export { openEarlyAccessLink } from './open'
 export { earlyAccessPortalUrl } from './portal'
+export {
+  listEarlySignups,
+  type EarlySignupRow,
+  type EarlySignups,
+  type SignupEarlyAccess,
+} from './signups'
