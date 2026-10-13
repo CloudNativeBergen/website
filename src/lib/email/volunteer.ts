@@ -35,6 +35,8 @@ interface ConferenceForEmail {
    * the colour had no way to reach the template.
    */
   theme?: ConferenceTheme | null
+  volunteerRegistrationLink?: string
+  volunteerSlackInviteUrl?: string
 }
 
 export async function sendVolunteerApprovalEmail(
@@ -42,6 +44,10 @@ export async function sendVolunteerApprovalEmail(
   conference: ConferenceForEmail,
   subject: string,
   message: string,
+  options?: {
+    registrationUrl?: string | null
+    slackInviteUrl?: string | null
+  },
 ): Promise<EmailResult<{ emailId: string }>> {
   try {
     if (!volunteer.email) {
@@ -69,9 +75,41 @@ export async function sendVolunteerApprovalEmail(
       ? formatConferenceDateLong(conference.startDate)
       : 'TBD'
     const eventUrl = conferenceBaseUrl(conference)
-    const socialLinks = conference.socialLinks?.map((link) => link.url) || []
+    const toSafeHttpsUrl = (url?: string | null): string | undefined => {
+      if (!url) return undefined
+      try {
+        const parsed = new URL(url.trim())
+        return parsed.protocol === 'https:' ? parsed.href : undefined
+      } catch {
+        return undefined
+      }
+    }
+
+    const socialLinks =
+      conference.socialLinks
+        ?.map((link) =>
+          typeof link === 'string' ? link : (link as { url?: string })?.url,
+        )
+        .filter((l): l is string => typeof l === 'string' && Boolean(l)) || []
 
     const { client } = await resolveEmailSender(conference.organization?._ref)
+
+    const registrationUrl =
+      options?.registrationUrl === null
+        ? undefined
+        : toSafeHttpsUrl(
+            options?.registrationUrl !== undefined
+              ? options.registrationUrl
+              : conference.volunteerRegistrationLink,
+          )
+    const slackInviteUrl =
+      options?.slackInviteUrl === null
+        ? undefined
+        : toSafeHttpsUrl(
+            options?.slackInviteUrl !== undefined
+              ? options.slackInviteUrl
+              : conference.volunteerSlackInviteUrl,
+          )
 
     const result = await retryWithBackoff(async () => {
       const response = await client.emails.send({
@@ -87,6 +125,8 @@ export async function sendVolunteerApprovalEmail(
           message,
           socialLinks,
           brandColor: emailBrandColor(conference.theme),
+          registrationUrl,
+          slackInviteUrl,
         }) as React.ReactElement,
       })
 

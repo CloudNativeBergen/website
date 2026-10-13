@@ -11,10 +11,45 @@ export const UpdateVolunteerStatusSchema = z.object({
   reviewNotes: z.string().optional(),
 })
 
+const isHttpsUrl = (val: string) => {
+  try {
+    const url = new URL(val)
+    return url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export const SendVolunteerEmailSchema = z.object({
   volunteerId: z.string(),
-  subject: z.string().min(1),
-  message: z.string().min(1),
+  subject: z
+    .string()
+    .trim()
+    .min(1, 'Subject is required')
+    .max(200, 'Subject must be less than 200 characters')
+    .refine((val) => !/[\r\n]/.test(val), {
+      message: 'Subject cannot contain newline characters',
+    }),
+  message: z
+    .string()
+    .min(1, 'Message is required')
+    .max(20000, 'Message is too long'),
+  ticketUrl: z
+    .string()
+    .trim()
+    .refine((val) => !val || isHttpsUrl(val), {
+      message: 'Ticket URL must be an absolute HTTPS URL',
+    })
+    .nullish()
+    .transform((val) => (val === '' ? null : val)),
+  slackInviteUrl: z
+    .string()
+    .trim()
+    .refine((val) => !val || isHttpsUrl(val), {
+      message: 'Slack invite URL must be an absolute HTTPS URL',
+    })
+    .nullish()
+    .transform((val) => (val === '' ? null : val)),
 })
 
 export const DeleteVolunteerSchema = z.object({
@@ -40,8 +75,10 @@ export const UpdateVolunteerDetailsSchema = z.object({
     .min(1, 'Email is required'),
   phone: z
     .string()
+    .trim()
     .min(1, 'Phone number is required')
-    .max(50, 'Phone number must be less than 50 characters'),
+    .max(50, 'Phone number must be less than 50 characters')
+    .regex(/^[0-9+\s()./-]+$/, 'Please enter a valid phone number'),
   occupation: z.nativeEnum(Occupation),
   availability: z
     .string()
@@ -77,8 +114,10 @@ export const CreateVolunteerSchema = z.object({
     .min(1, 'Email is required'),
   phone: z
     .string()
+    .trim()
     .min(1, 'Phone number is required')
-    .max(50, 'Phone number must be less than 50 characters'),
+    .max(50, 'Phone number must be less than 50 characters')
+    .regex(/^[0-9+\s()./-]+$/, 'Please enter a valid phone number'),
   occupation: z.nativeEnum(Occupation, {
     message: 'Please select an occupation',
   }),
