@@ -17,6 +17,7 @@ import {
 const mockGetConference = vi.fn()
 const mockGetOrganizationById = vi.fn()
 const mockGetWorkshops = vi.fn()
+const mockGetAuthSession = vi.fn()
 
 class NotFoundError extends Error {
   digest = 'NEXT_NOT_FOUND'
@@ -35,7 +36,15 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationById: (...args: unknown[]) => mockGetOrganizationById(...args),
-  getOrganizationRefForCurrentConference: () => null,
+  // The org this request is for, as the page's own organizer check resolves
+  // it. (The feature gate reads the org off the conference, not from here.)
+  getOrganizationRefForCurrentConference: () => 'org-A',
+}))
+
+// The session is the mocked boundary; the page's guard (`denyNonOrganizer`)
+// and the organizer rule behind it run for real.
+vi.mock('@/lib/auth', () => ({
+  getAuthSession: (...args: unknown[]) => mockGetAuthSession(...args),
 }))
 
 vi.mock('@/lib/workshop/sanity', () => ({
@@ -77,6 +86,10 @@ beforeEach(() => {
   vi.stubEnv('PLATFORM_ORG_ID', OTHER_PLATFORM_ORG_ID)
   stubPlatformTicketingAccount()
   mockGetWorkshops.mockResolvedValue([])
+  // Every case is an organizer of this request's org unless it says otherwise.
+  mockGetAuthSession.mockResolvedValue({
+    speaker: { _id: 'organizer-1', organizerOrgIds: ['org-A'] },
+  })
   mockWorkshopPortalUrl.mockResolvedValue(null)
   mockGetConference.mockResolvedValue({
     conference: {
@@ -269,5 +282,86 @@ describe('/admin/workshops — the registration times are read live', () => {
 
     expect(page.props).toMatchObject(STORED)
     expect(mockGetConference.mock.calls).toEqual([[{ uncached: true }]])
+  })
+})
+
+/**
+ * THE PAGE REFUSES FOR ITSELF, BEFORE IT READS (#1345, review round 3).
+ *
+ * `src/proxy.ts` lets any signed-in session reach /admin, and the admin
+ * layout's organizer check does not stop a page from running (Next's own
+ * authentication guide: "a layout that hides or swaps them does not stop them
+ * from running or from appearing in the RSC Payload"). This page now makes a
+ * live conference read on every view, so the guard comes first: a request
+ * from someone who is not an organizer of this org causes no read at all.
+ */
+describe('/admin/workshops — refuses a non-organizer before any read', () => {
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+  })
+
+  /** Every string in the element tree the page returned. */
+  function textOf(node: React.ReactNode): string {
+    if (typeof node === 'string') return node
+    if (Array.isArray(node)) return node.map(textOf).join('')
+    if (node && typeof node === 'object' && 'props' in node) {
+      return textOf(
+        (node as React.ReactElement<{ children?: React.ReactNode }>).props
+          .children,
+      )
+    }
+    return ''
+  }
+
+  /** What one view of the page did, as a value. */
+  async function view() {
+    const page = await WorkshopAdminPage()
+    return {
+      shown:
+        textOf(page) === 'Access Denied' ? 'Access Denied' : 'the workshops',
+      conferenceReads: mockGetConference.mock.calls,
+      workshopReads: mockGetWorkshops.mock.calls,
+      liveReads: h.fetch.mock.calls,
+    }
+  }
+
+  const DENIED_WITHOUT_A_READ = {
+    shown: 'Access Denied',
+    conferenceReads: [],
+    workshopReads: [],
+    liveReads: [],
+  }
+
+  it('a signed-in speaker who organizes nothing', async () => {
+    mockGetAuthSession.mockResolvedValue({
+      speaker: { _id: 'speaker-9', organizerOrgIds: [] },
+    })
+    expect(await view()).toEqual(DENIED_WITHOUT_A_READ)
+  })
+
+  it('an organizer of another org', async () => {
+    mockGetAuthSession.mockResolvedValue({
+      speaker: { _id: 'organizer-2', organizerOrgIds: ['org-B'] },
+    })
+    expect(await view()).toEqual(DENIED_WITHOUT_A_READ)
+  })
+
+  it('nobody signed in', async () => {
+    mockGetAuthSession.mockResolvedValue(null)
+    expect(await view()).toEqual(DENIED_WITHOUT_A_READ)
+  })
+
+  it('CONTROL: an organizer of this org gets the page, from its reads', async () => {
+    expect(await view()).toMatchObject({
+      shown: 'the workshops',
+      conferenceReads: [[{ uncached: true }]],
+      workshopReads: [['conf-1']],
+    })
   })
 })
