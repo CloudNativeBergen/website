@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import {
   CheckIcon,
   ClipboardDocumentIcon,
@@ -26,39 +27,6 @@ const quietButton =
   'inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:hover:bg-white/10'
 
 /**
- * Put the text `pending` resolves to on the clipboard. `false` when it could
- * not be done; it never throws.
- *
- * WRITTEN INSIDE THE CLICK where the browser can: a `ClipboardItem` takes the
- * pending text, so the write is made now and filled in when the text arrives.
- * Safari refuses a write that comes after an awaited request. Otherwise, and
- * when that write is refused, a plain write once the text is there.
- */
-async function writeToClipboard(pending: Promise<string>): Promise<boolean> {
-  const clipboard = navigator.clipboard
-  try {
-    if (typeof ClipboardItem !== 'undefined' && clipboard?.write) {
-      try {
-        await clipboard.write([
-          new ClipboardItem({
-            'text/plain': pending.then(
-              (text) => new Blob([text], { type: 'text/plain' }),
-            ),
-          }),
-        ])
-        return true
-      } catch {
-        // Refused, or this browser's ClipboardItem takes no pending text.
-      }
-    }
-    await clipboard.writeText(await pending)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
  * The sponsor's workshop early-access link (#1346, spec §8): create, copy and
  * revoke. THE ADDRESS IS ASKED FOR, on create and on copy, never while the
  * record is only being viewed: finding the portal's working host is a live
@@ -71,31 +39,43 @@ export function SponsorEarlyAccessSection({
   onChanged,
 }: SponsorEarlyAccessSectionProps) {
   const utils = api.useUtils()
-  // What this section did since the record was read. The host's next refresh
-  // of the record is the truth again, whoever changed the link.
-  const [changedTo, setChangedTo] = useState<boolean | null>(null)
-  const [seenHasLink, setSeenHasLink] = useState(hasLink)
-  const [url, setUrl] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [copyFailed, setCopyFailed] = useState(false)
-  const [notCleared, setNotCleared] = useState(0)
+  const clipboard = useCopyToClipboard()
+  // WHAT THIS SECTION DID since the record was read, until the record says
+  // something new. `recordHasLink` is the record as it stood then. When the
+  // host hands over a record that says otherwise (its own refresh after this
+  // section's change, or a colleague's create or revoke), the record is the
+  // truth again, and an address from before the link went away is dropped.
+  const [done, setDone] = useState<{
+    recordHasLink: boolean
+    /** The link this section created (`true`) or revoked (`false`). */
+    linked: boolean | null
+    /** The address the server last answered. */
+    url: string | null
+    /** Unpublished copies the last revoke could not clear. */
+    notCleared: number
+  }>({ recordHasLink: hasLink, linked: null, url: null, notCleared: 0 })
   const [confirming, setConfirming] = useState(false)
   const [fetching, setFetching] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  if (hasLink !== seenHasLink) {
-    setSeenHasLink(hasLink)
-    // Confirmed by the record, or changed by a colleague. An address shown
-    // from before a link went away is no longer this link's.
-    if (changedTo !== hasLink) setUrl(null)
-    setChangedTo(null)
+  if (done.recordHasLink !== hasLink) {
+    setDone({
+      recordHasLink: hasLink,
+      linked: null,
+      url: done.linked === hasLink ? done.url : null,
+      notCleared: done.notCleared,
+    })
   }
-  const linked = changedTo ?? hasLink
+  const linked = done.linked ?? hasLink
+  const { url, notCleared } = done
 
   const create = api.sponsor.crm.earlyAccess.create.useMutation({
     onSuccess: (data) => {
-      setUrl(data.url)
-      setChangedTo(true)
-      setNotCleared(0)
+      setDone((was) => ({
+        ...was,
+        linked: true,
+        url: data.url,
+        notCleared: 0,
+      }))
       setError(null)
       onChanged?.()
     },
@@ -103,12 +83,14 @@ export function SponsorEarlyAccessSection({
   })
   const revoke = api.sponsor.crm.earlyAccess.revoke.useMutation({
     onSuccess: (data) => {
-      setUrl(null)
-      setChangedTo(false)
+      setDone((was) => ({
+        ...was,
+        linked: false,
+        url: null,
+        notCleared: data.notCleared.length,
+      }))
       setConfirming(false)
-      setCopied(false)
-      setCopyFailed(false)
-      setNotCleared(data.notCleared.length)
+      clipboard.reset()
       setError(null)
       onChanged?.()
     },
@@ -117,31 +99,29 @@ export function SponsorEarlyAccessSection({
 
   const copy = async () => {
     setError(null)
-    setCopyFailed(false)
     setFetching(true)
     // ASKED FOR ON EVERY COPY, never reused: a colleague may have revoked the
     // link and created a new one since the last answer.
     const address = utils.sponsor.crm.earlyAccess.getAddress
       .fetch({ sponsorForConferenceId }, { staleTime: 0 })
       .then((answer) => answer.url)
-    const written = writeToClipboard(address)
+    // Handed over PENDING, so the write is made inside this click.
+    const copying = clipboard.copyToClipboard(address)
     try {
-      setUrl(await address)
+      const answered = await address
+      setDone((was) => ({ ...was, url: answered }))
     } catch (failure) {
       setError(
         failure instanceof Error ? failure.message : 'Could not get the link',
       )
-      return
     } finally {
       setFetching(false)
     }
-    if (await written) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } else {
-      setCopyFailed(true)
-    }
+    await copying
   }
+  const { copied } = clipboard
+  // No address arrived: that is the error above, not a failed copy.
+  const copyFailed = clipboard.failed && !error
 
   const busy = create.isPending || revoke.isPending || fetching
 
