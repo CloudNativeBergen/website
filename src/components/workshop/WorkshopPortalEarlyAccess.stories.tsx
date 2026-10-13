@@ -37,13 +37,18 @@ interface PortalProps {
   earlyAccess?: { sponsorName: string | null }
   /** The sponsor start time, handed over only with early access. */
   sponsorStart?: string
+  /** The sponsor start time is still ahead: the banner names it. */
+  beforeSponsorStart?: boolean
   /** They just opened a link that is not live. */
   linkNotLive?: boolean
 }
 
-function Portal({ earlyAccess, sponsorStart, linkNotLive }: PortalProps) {
-  const beforeSponsorStart =
-    !!sponsorStart && new Date(sponsorStart).getTime() > Date.now()
+function Portal({
+  earlyAccess,
+  sponsorStart,
+  beforeSponsorStart,
+  linkNotLive,
+}: PortalProps) {
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 lg:max-w-4xl lg:px-12">
       <h1 className="font-display text-4xl font-bold tracking-tighter text-blue-600 sm:text-5xl dark:text-blue-400">
@@ -180,6 +185,7 @@ export const BeforeSponsorStart: Story = {
   args: {
     earlyAccess: { sponsorName: 'Acme AS' },
     sponsorStart: SPONSOR_START_AHEAD,
+    beforeSponsorStart: true,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
