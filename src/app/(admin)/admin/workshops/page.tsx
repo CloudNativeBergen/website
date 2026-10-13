@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { denyNonOrganizer } from '@/lib/authz/page-guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay } from '@/components/admin'
 import { WorkshopsClientPage } from '@/components/admin/workshop/WorkshopsClientPage'
@@ -9,6 +10,13 @@ import { resendPortal } from '@/lib/workshop/resend-instructions'
 import { WorkshopTickets } from '@/components/admin/workshop/tickets'
 
 export default async function WorkshopAdminPage() {
+  // GUARDED BEFORE THE READ: the read below is live on every view, and the
+  // admin layout's organizer check does not stop this page from running (see
+  // denyNonOrganizer). A request from someone who is not an organizer of this
+  // org causes no read here.
+  const denied = await denyNonOrganizer()
+  if (denied) return denied
+
   // READ LIVE, past both cache layers (#1345): the registration card below is
   // the baseline of every save, which sends only what differs from it. The
   // cached read serves the times from before a save to the request that

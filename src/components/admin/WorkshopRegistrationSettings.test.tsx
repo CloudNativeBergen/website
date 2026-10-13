@@ -157,7 +157,7 @@ describe('the status note when no close date is set', () => {
   it('inside the early-access window, says early access is open and when everyone can sign up', () => {
     expect(statusAt(NO_END, IN_EARLY_ACCESS)).toBe('Partially configured')
     expect(note()).toBe(
-      'Early access is open. Signups open for everyone 15. juni 2026 kl. 08:30. No close date is set, so once open they never close.',
+      'Early access is open. Registration opens for everyone 15. juni 2026 kl. 08:30. No close date is set, so once open it never closes.',
     )
   })
 

@@ -1379,7 +1379,8 @@ export const workshopRouter = router({
               new Date(merged.workshopRegistrationEnd)
           ) {
             throw refusal(
-              'End date must be after start date',
+              // By the names the form gives the two fields.
+              'Registration Closes must be later than Registration Opens',
               'workshopRegistrationStart',
               'workshopRegistrationEnd',
             )

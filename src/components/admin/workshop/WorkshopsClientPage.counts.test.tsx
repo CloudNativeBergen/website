@@ -364,3 +364,39 @@ describe('the sign-up lists after "Move to waitlist"', () => {
     ).not.toHaveLength(0)
   })
 })
+
+/**
+ * The page is the only way the registration card gets its times (#1345): a
+ * time the page does not hand on reads "Not set" on the card, whatever is
+ * stored.
+ */
+describe('the registration card on the page', () => {
+  it('shows the three registration times the page was given', async () => {
+    render(
+      <Providers>
+        <WorkshopsClientPage
+          conferenceId="conf-1"
+          initialWorkshops={SERVER_RENDER}
+          resendDisabledReason={null}
+          workshopRegistrationSponsorStart="2026-06-01T06:00:00.000Z"
+          workshopRegistrationStart="2026-06-15T06:30:00.000Z"
+          workshopRegistrationEnd="2026-07-01T07:00:00.000Z"
+        />
+      </Providers>,
+    )
+
+    const row = (name: string) =>
+      screen.getByText(name).nextElementSibling?.textContent
+    expect({
+      sponsorStart: row('Sponsor Early Access Opens'),
+      start: row('Registration Opens'),
+      end: row('Registration Closes'),
+    }).toEqual({
+      sponsorStart: '1. juni 2026 kl. 08:00',
+      start: '15. juni 2026 kl. 08:30',
+      end: '1. juli 2026 kl. 09:00',
+    })
+    // The page's own reads have settled before the test ends.
+    await cardButton(/^Confirmed\s*120$/)
+  })
+})

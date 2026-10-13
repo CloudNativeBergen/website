@@ -105,15 +105,13 @@ export function WorkshopRegistrationSettings({
         // A REFUSAL IS JUDGED ON WHAT IS STORED, which this card may not be
         // showing: read the card again, so the form above takes it in.
         router.refresh()
+        // SAID ONCE, in the form, where it stays while the organizer acts
+        // on it. A toast as well said it twice, and on a phone it covered
+        // the fields and Save.
         setError(
           err.message ||
             'Failed to update the workshop registration window. Please try again.',
         )
-        showNotification({
-          type: 'error',
-          title: 'Could not save',
-          message: err.message || 'Failed to update workshop registration.',
-        })
       },
     })
 
@@ -146,6 +144,9 @@ export function WorkshopRegistrationSettings({
       ...(endDate !== opened.endDate && { endDate: toIso(endDate) }),
     }
     if (Object.keys(changes).length === 0) {
+      // Nothing to send, but the card may be out of date: read it again, so
+      // what the organizer leaves behind is what is stored.
+      router.refresh()
       closeModal()
       return
     }
@@ -199,15 +200,14 @@ export function WorkshopRegistrationSettings({
     // not read as "Not configured".
     if (workshopRegistrationStart) {
       const opens = formatDateTimeSafe(workshopRegistrationStart)
-      const neverCloses = 'No close date is set, so once open they never close.'
       return {
         label: 'Partially configured',
         color: 'yellow',
         note:
           registration.status === 'not-open-yet'
-            ? `Signups open ${opens}. ${neverCloses}`
+            ? `Signups open ${opens}. No close date is set, so once open they never close.`
             : earlyAccessOpen
-              ? `Early access is open. Signups open for everyone ${opens}. ${neverCloses}`
+              ? `Early access is open. Registration opens for everyone ${opens}. No close date is set, so once open it never closes.`
               : 'Signups are open. No close date is set, so they never close.',
       }
     }
