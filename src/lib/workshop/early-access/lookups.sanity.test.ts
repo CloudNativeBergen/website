@@ -296,8 +296,204 @@ describe('a token that another document of the conference holds too', () => {
     await expect(revokeEarlyAccessLink(CONF, SFC)).rejects.toThrow(
       'Could not revoke the early-access link',
     )
-    expect(await findEarlyAccessSponsor(CONF, TOKEN)).toEqual({
-      _id: 'sfc-acme-copy',
+    // Still live, and still on the sponsor: the next revoke finds it there.
+    expect(await findEarlyAccessSponsor(CONF, TOKEN)).toEqual({ _id: SFC })
+    expect(holds('sfc-acme-copy')).toBe(TOKEN)
+  })
+})
+
+/**
+ * "REVOKE AGAIN" MUST HAVE SOMETHING TO FIND. The tokens to revoke are read
+ * from the sponsor's own versions, so the sponsor's own PUBLISHED document is
+ * cleared last, and only once no other published document of the conference
+ * holds one of them. A revoke that could not finish leaves that document as
+ * it was, and the next one starts from the same place.
+ */
+describe('a revoke that could not clear another published holder, and the next one', () => {
+  const duplicated = [
+    ACME,
+    sponsor({ workshopEarlyAccessToken: TOKEN }),
+    sponsor({ _id: 'drafts.' + SFC, workshopEarlyAccessToken: TOKEN }),
+    sponsor({ _id: 'sfc-acme-copy', workshopEarlyAccessToken: TOKEN }),
+  ]
+  const holds = (id: string) => store().doc(id)?.workshopEarlyAccessToken
+  const failed = async () => {
+    store().reset(duplicated)
+    store().failPatchesOf('sfc-acme-copy')
+    await expect(revokeEarlyAccessLink(CONF, SFC)).rejects.toThrow(
+      'Could not revoke the early-access link',
+    )
+  }
+
+  it('the failed revoke leaves the token on the sponsor it was asked for', async () => {
+    await failed()
+
+    expect({ sponsor: holds(SFC), other: holds('sfc-acme-copy') }).toEqual({
+      sponsor: TOKEN,
+      other: TOKEN,
+    })
+  })
+
+  it('revoking again while the other holder still cannot be cleared fails again: it never reports a live link revoked', async () => {
+    await failed()
+
+    await expect(revokeEarlyAccessLink(CONF, SFC)).rejects.toThrow(
+      'Could not revoke the early-access link',
+    )
+    expect({
+      sponsor: holds(SFC),
+      other: holds('sfc-acme-copy'),
+      live: await findEarlyAccessSponsor(CONF, TOKEN),
+    }).toEqual({ sponsor: TOKEN, other: TOKEN, live: { _id: SFC } })
+  })
+
+  it('revoking again once it can be cleared clears both, and the link is not live', async () => {
+    await failed()
+    store().allowPatchesOf('sfc-acme-copy')
+
+    expect(await revokeEarlyAccessLink(CONF, SFC)).toEqual({ notCleared: [] })
+
+    expect({
+      sponsor: holds(SFC),
+      draft: holds('drafts.' + SFC),
+      other: holds('sfc-acme-copy'),
+      live: await findEarlyAccessSponsor(CONF, TOKEN),
+      cached: await resolveEarlyAccess(CONF, TOKEN),
+    }).toEqual({
+      sponsor: undefined,
+      draft: undefined,
+      other: undefined,
+      live: null,
+      cached: null,
+    })
+  })
+
+  // The other holder turns up only after the revoke has read who holds the
+  // token: found in a later round, and still cleared before the sponsor.
+  it('a published holder that appears while the revoke runs is cleared before the sponsor is', async () => {
+    store().reset([ACME, sponsor({ workshopEarlyAccessToken: TOKEN })])
+    store().failPatchesOf('sfc-late-copy')
+    // Just before the first write, which holds the sponsor alone: the copy
+    // arrives, and the sponsor is edited, so that write is refused for its
+    // revision and the rounds take over.
+    store().beforeNextCommit(() => {
+      store().put(
+        sponsor({ _id: 'sfc-late-copy', workshopEarlyAccessToken: TOKEN }),
+      )
+      store().put(sponsor({ _rev: 'edited', workshopEarlyAccessToken: TOKEN }))
+    })
+
+    await expect(revokeEarlyAccessLink(CONF, SFC)).rejects.toThrow(
+      'Could not revoke the early-access link',
+    )
+
+    expect({ sponsor: holds(SFC), late: holds('sfc-late-copy') }).toEqual({
+      sponsor: TOKEN,
+      late: TOKEN,
+    })
+  })
+})
+
+/**
+ * AN UNPUBLISHED COPY OF ANOTHER DOCUMENT that still holds a revoked token
+ * does not keep the link live, and must not keep the revoke from finishing:
+ * the sponsor is cleared and the copy is named. A later revoke cannot find
+ * that copy from the sponsor, which holds no token by then, so it is handed
+ * the ids the first one answered, and clears a token there only when it is
+ * a dead one: on an unpublished copy, of this conference, that no published
+ * document of the conference holds.
+ */
+describe('a revoke that left an unpublished copy of another document, and the next one', () => {
+  const OTHERS_COPY = 'versions.rSpring.sfc-acme-copy'
+  const holds = (id: string) => store().doc(id)?.workshopEarlyAccessToken
+  const left = async () => {
+    store().reset([
+      ACME,
+      sponsor({ workshopEarlyAccessToken: TOKEN }),
+      sponsor({ _id: OTHERS_COPY, workshopEarlyAccessToken: TOKEN }),
+    ])
+    store().failPatchesOf(OTHERS_COPY)
+    expect(await revokeEarlyAccessLink(CONF, SFC)).toEqual({
+      notCleared: [OTHERS_COPY],
+    })
+    expect({ sponsor: holds(SFC), copy: holds(OTHERS_COPY) }).toEqual({
+      sponsor: undefined,
+      copy: TOKEN,
+    })
+  }
+
+  it('the link is not live, and the copy is named', async () => {
+    await left()
+
+    expect(await findEarlyAccessSponsor(CONF, TOKEN)).toBeNull()
+  })
+
+  it('the next revoke, handed that copy, clears it', async () => {
+    await left()
+    store().allowPatchesOf(OTHERS_COPY)
+
+    expect(
+      await revokeEarlyAccessLink(CONF, SFC, { leftCopies: [OTHERS_COPY] }),
+    ).toEqual({ notCleared: [] })
+
+    expect(store().doc(OTHERS_COPY)).toMatchObject({ _id: OTHERS_COPY })
+    expect(holds(OTHERS_COPY)).toBeUndefined()
+  })
+
+  it('the next revoke names it again while it still cannot be cleared', async () => {
+    await left()
+
+    expect(
+      await revokeEarlyAccessLink(CONF, SFC, { leftCopies: [OTHERS_COPY] }),
+    ).toEqual({ notCleared: [OTHERS_COPY] })
+    expect(holds(OTHERS_COPY)).toBe(TOKEN)
+  })
+
+  it('clears nothing but a dead token on an unpublished copy of this conference', async () => {
+    const LIVE_ELSEWHERE = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+    store().reset([
+      ACME,
+      sponsor(),
+      // A published document, named by a caller that should not have.
+      sponsor({ _id: 'sfc-published', workshopEarlyAccessToken: REVOKED }),
+      // A copy in step with a link that is live: its token is not dead.
+      sponsor({ _id: 'sfc-linked', workshopEarlyAccessToken: LIVE_ELSEWHERE }),
+      sponsor({
+        _id: 'drafts.sfc-linked',
+        workshopEarlyAccessToken: LIVE_ELSEWHERE,
+      }),
+      // Another conference's copy.
+      sponsor({
+        _id: 'drafts.sfc-theirs',
+        conference: ref(OTHER_CONF),
+        workshopEarlyAccessToken: 'their-token',
+      }),
+      // The one that qualifies.
+      sponsor({ _id: 'drafts.sfc-dead', workshopEarlyAccessToken: TOKEN }),
+    ])
+
+    expect(
+      await revokeEarlyAccessLink(CONF, SFC, {
+        leftCopies: [
+          'sfc-published',
+          'drafts.sfc-linked',
+          'drafts.sfc-theirs',
+          'drafts.sfc-dead',
+          'drafts.no-such-document',
+        ],
+      }),
+    ).toEqual({ notCleared: [] })
+
+    expect({
+      published: holds('sfc-published'),
+      inStep: holds('drafts.sfc-linked'),
+      theirs: holds('drafts.sfc-theirs'),
+      dead: holds('drafts.sfc-dead'),
+    }).toEqual({
+      published: REVOKED,
+      inStep: LIVE_ELSEWHERE,
+      theirs: 'their-token',
+      dead: undefined,
     })
   })
 })

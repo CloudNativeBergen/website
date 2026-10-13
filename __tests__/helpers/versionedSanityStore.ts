@@ -94,6 +94,8 @@ export interface VersionedSanityStore {
   afterNextCommit(hook: () => unknown): void
   /** Refuse every patch of this document until the next `reset()`. */
   failPatchesOf(id: string): void
+  /** Let patches of this document through again. */
+  allowPatchesOf(id: string): void
   /** Make the reads this picks reject until the next `reset()`. */
   failReadsThat(pick: (read: RecordedRead) => boolean): void
   /** Run before every read, until the next `reset()`: for a write that lands in between. */
@@ -308,6 +310,9 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     },
     failPatchesOf(id) {
       unpatchable.add(id)
+    },
+    allowPatchesOf(id) {
+      unpatchable.delete(id)
     },
     failReadsThat(pick) {
       unreadable = pick

@@ -247,30 +247,44 @@ async function readHolders(conferenceId: string, tokens: string[]) {
  * the conference that holds one of them is cleared, under any id. A token
  * that was copied to another document does not survive the revoke there.
  *
- *  1. EVERYTHING THAT IS NOT A RELEASE COPY, in a transaction of its own.
- *     Nothing about a release copy can keep the link live. Each document is
- *     cleared only as the revision that was read: when another revoke and a
- *     create got in between, what is stored is a NEW link, and this write is
- *     refused. So is it when a draft is gone by then. Either way step 2 reads
- *     again and decides.
+ * THE SPONSOR'S OWN PUBLISHED DOCUMENT IS CLEARED LAST, and only once no
+ * other published document of the conference holds a token being revoked.
+ * It is where the next revoke reads what to revoke: cleared earlier, a
+ * revoke that could not finish would leave nothing to find, and "revoke
+ * again" would report a link revoked that is still live through the other
+ * document.
+ *
+ *  1. EVERYTHING THAT IS NOT A RELEASE COPY, in ONE transaction: all of it
+ *     is cleared or none is, so the sponsor is never cleared without the
+ *     other published holders that were read. Nothing about a release copy
+ *     can keep the link live. Each document is cleared only as the revision
+ *     that was read: when another revoke and a create got in between, what
+ *     is stored is a NEW link, and this write is refused. So is it when a
+ *     draft is gone by then. Either way step 2 reads again and decides.
  *  2. EVERY DOCUMENT THAT STILL HOLDS A REVOKED TOKEN: all of them are read
  *     again once per round, for at most {@link REVOKE_ROUNDS} rounds, until
  *     none does. A copy made while the revoke ran is found, and so is a copy
  *     that was PUBLISHED while it ran, which would otherwise bring the link
  *     back. Each is cleared on its own, and only as the revision that was
- *     read. A token stored by a later create is not a revoked one, and is
- *     left alone.
+ *     read; the sponsor's own published document only in a round whose read
+ *     shows no other published holder. A token stored by a later create is
+ *     not a revoked one, and is left alone.
  *
  * Answers the unpublished copies that still hold a revoked token after
  * {@link REVOKE_ROUNDS} rounds: publishing one of those would bring the link
  * back. THROWS when a published document still holds one: then the link is
  * live, and nothing may report it revoked.
  *
+ * `leftCopies`: the ids an earlier revoke answered. A copy OF ANOTHER
+ * DOCUMENT cannot be found from the sponsor once the sponsor holds no token,
+ * so the next revoke is handed them ({@link clearDeadCopies}).
+ *
  * Acts within `conferenceId` only.
  */
 export async function revokeEarlyAccessLink(
   conferenceId: string,
   sponsorForConferenceId: string,
+  { leftCopies = [] }: { leftCopies?: readonly string[] } = {},
 ): Promise<{ notCleared: string[] }> {
   const revoked = [
     ...new Set(
@@ -279,7 +293,22 @@ export async function revokeEarlyAccessLink(
       ),
     ),
   ]
-  if (revoked.length === 0) return { notCleared: [] }
+  const notCleared =
+    revoked.length > 0
+      ? await clearRevoked(conferenceId, sponsorForConferenceId, revoked)
+      : []
+  const stillLeft = await clearDeadCopies(
+    conferenceId,
+    leftCopies.filter((id) => !notCleared.includes(id)),
+  )
+  return { notCleared: [...notCleared, ...stillLeft] }
+}
+
+async function clearRevoked(
+  conferenceId: string,
+  sponsorForConferenceId: string,
+  revoked: string[],
+): Promise<string[]> {
   const read = () => readHolders(conferenceId, revoked)
 
   const first = (await read()).filter((holder) => !isReleaseCopy(holder._id))
@@ -300,29 +329,82 @@ export async function revokeEarlyAccessLink(
 
   for (let round = 1; ; round++) {
     const stale = await read()
-    if (stale.length === 0) return { notCleared: [] }
+    if (stale.length === 0) return []
     if (round > REVOKE_ROUNDS) {
       if (stale.some((holder) => !isUnpublished(holder._id))) {
         throw new Error(
           'Could not revoke the early-access link: a sponsor of this conference still holds it. Revoke again.',
         )
       }
-      return { notCleared: stale.map((holder) => holder._id) }
+      return stale.map((holder) => holder._id)
     }
+    // While another published document holds a revoked token, the sponsor's
+    // own published document keeps its own: see the note above.
+    const heldElsewhere = stale.some(
+      (holder) =>
+        holder._id !== sponsorForConferenceId && !isUnpublished(holder._id),
+    )
     for (const holder of stale) {
-      try {
-        await releaseWriter()
-          .transaction()
-          .patch(holder._id, {
-            ifRevisionID: holder._rev,
-            unset: [EARLY_ACCESS_TOKEN_FIELD],
-          })
-          .commit()
-      } catch {
-        // Read again in the next round: it changed, or it cannot be written.
-      }
+      if (heldElsewhere && holder._id === sponsorForConferenceId) continue
+      await clearOne(holder)
     }
   }
+}
+
+/** Clear the token from one document, only as the revision that was read. */
+async function clearOne(holder: Version): Promise<void> {
+  try {
+    await releaseWriter()
+      .transaction()
+      .patch(holder._id, {
+        ifRevisionID: holder._rev,
+        unset: [EARLY_ACCESS_TOKEN_FIELD],
+      })
+      .commit()
+  } catch {
+    // It changed, or it cannot be written: the caller reads again.
+  }
+}
+
+/**
+ * Clear a DEAD token from the unpublished copies an earlier revoke named, and
+ * answer the ones that still hold one.
+ *
+ * THE IDS COME FROM THE CALLER, so nothing is taken from them but where to
+ * look. A token is cleared only from a document that is an unpublished copy
+ * (a draft or a release copy), of this conference, whose token NO PUBLISHED
+ * document of the conference holds. A published document, another
+ * conference's copy and a copy in step with a link that is live are left as
+ * they are, whatever was asked.
+ */
+async function clearDeadCopies(
+  conferenceId: string,
+  ids: readonly string[],
+): Promise<string[]> {
+  const unpublished = ids.filter(isUnpublished)
+  if (unpublished.length === 0) return []
+  const reader = clientReadUncached.withConfig({
+    apiVersion: RELEASES_API_VERSION,
+  })
+  const readDead = async () => {
+    const copies =
+      (await reader.fetch<Version[]>(
+        `*[_type == "sponsorForConference" && conference._ref == $conferenceId && _id in $ids && defined(workshopEarlyAccessToken)]{ _id, _rev, "token": workshopEarlyAccessToken }`,
+        { conferenceId, ids: unpublished },
+        { cache: 'no-store', perspective: 'raw' },
+      )) ?? []
+    if (copies.length === 0) return []
+    const live = new Set(
+      (await reader.fetch<string[]>(
+        `*[_type == "sponsorForConference" && conference._ref == $conferenceId && workshopEarlyAccessToken in $tokens && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].workshopEarlyAccessToken`,
+        { conferenceId, tokens: copies.map((copy) => copy.token) },
+        { cache: 'no-store', perspective: 'raw' },
+      )) ?? [],
+    )
+    return copies.filter((copy) => copy.token && !live.has(copy.token))
+  }
+  for (const copy of await readDead()) await clearOne(copy)
+  return (await readDead()).map((copy) => copy._id)
 }
 
 /**
