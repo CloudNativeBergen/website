@@ -3,7 +3,7 @@
  *
  * The organizer procedures of a sponsor's workshop early-access link (#1346,
  * spec §4, §8), through the tRPC caller: `sponsor.crm.earlyAccess.create`,
- * `.address` and `.revoke`.
+ * `.getAddress` and `.revoke`.
  *
  * REAL: the procedures, the tenancy guard (`requireDocumentInCurrentConference`
  * and its probe), the link module with its query text (`groq-js`) and its
@@ -244,11 +244,11 @@ describe('create', () => {
   })
 })
 
-describe('address', () => {
+describe('getAddress', () => {
   it("answers the stored link's address, and writes nothing", async () => {
     store().reset([...DATASET, sponsor({ [FIELD]: 'stored-token' })])
 
-    expect(await caller().address({ sponsorForConferenceId: SFC })).toEqual({
+    expect(await caller().getAddress({ sponsorForConferenceId: SFC })).toEqual({
       url: `https://${MAIN_HOST}/workshop/early-access/stored-token`,
     })
     expect(store().commits).toEqual([])
@@ -260,14 +260,14 @@ describe('address', () => {
       sponsor({ status: 'closed-lost', [FIELD]: 'stored-token' }),
     ])
 
-    expect(await caller().address({ sponsorForConferenceId: SFC })).toEqual({
+    expect(await caller().getAddress({ sponsorForConferenceId: SFC })).toEqual({
       url: `https://${MAIN_HOST}/workshop/early-access/stored-token`,
     })
   })
 
   it('never creates a link: a sponsor without one is refused and nothing is written', async () => {
     await expect(
-      caller().address({ sponsorForConferenceId: SFC }),
+      caller().getAddress({ sponsorForConferenceId: SFC }),
     ).rejects.toMatchObject({
       code: 'NOT_FOUND',
       message: expect.stringContaining('no early-access link'),
@@ -278,7 +278,7 @@ describe('address', () => {
 
   it("is refused for another conference's sponsor, which is not read", async () => {
     await expect(
-      caller().address({ sponsorForConferenceId: FOREIGN }),
+      caller().getAddress({ sponsorForConferenceId: FOREIGN }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
 
     expect(queries()).toHaveLength(1)
@@ -345,7 +345,7 @@ describe('an id of an unpublished copy', () => {
   const RELEASE_COPY = `versions.rSpring.${SFC}`
 
   it.each(
-    (['create', 'address', 'revoke'] as const).flatMap((procedure) =>
+    (['create', 'getAddress', 'revoke'] as const).flatMap((procedure) =>
       [DRAFT, RELEASE_COPY].map((id) => [procedure, id] as const),
     ),
   )('%s refuses %s before anything is read', async (procedure, id) => {
@@ -420,7 +420,7 @@ describe('the cached links are expired whenever a write may have landed', () => 
 })
 
 describe('who may call', () => {
-  it.each(['create', 'address', 'revoke'] as const)(
+  it.each(['create', 'getAddress', 'revoke'] as const)(
     '%s is refused for a caller who is not an organizer of this organization',
     async (procedure) => {
       const speaker = { _id: 'sp-x', organizerOrgIds: ['org-b'] }

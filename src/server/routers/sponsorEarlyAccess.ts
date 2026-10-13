@@ -1,9 +1,11 @@
 import { TRPCError } from '@trpc/server'
-import { z } from 'zod'
 import { adminProcedure, router } from '../trpc'
+import { workshopAdminProcedure } from '../workshopAdmin'
+// One sponsor by `sponsorForConferenceId`: the schema the discount-code picker
+// defined first, under the name of what it was first used for.
+import { SponsorDiscountCodeOptionsSchema as SponsorOfConferenceSchema } from '../schemas/sponsorForConference'
 import { notFoundMessage, requireDocumentInCurrentConference } from '../tenancy'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopPortalUrl } from '@/lib/workshop/sign-in'
 import {
   createEarlyAccessLink,
@@ -27,8 +29,6 @@ import {
  * can store the token and fail on a copy.
  */
 
-const SponsorInput = z.object({ sponsorForConferenceId: z.string().min(1) })
-
 /**
  * The id names the PUBLISHED sponsor of the request's conference, or the
  * request is refused. Answers the conference.
@@ -50,21 +50,6 @@ async function requireSponsor(sponsorForConferenceId: string): Promise<string> {
     'sponsorForConference',
   )
 }
-
-/**
- * Organizer of this organization AND the conference has workshops: the gate of
- * `workshop.admin`, asked with the domain conference, before anything is read.
- */
-const workshopOrganizerProcedure = adminProcedure.use(async ({ next }) => {
-  const { conference, error } = await getConferenceForCurrentDomain()
-  if (!(await isWorkshopsEnabledForConference(error ? null : conference))) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'The "workshops" feature is not enabled for this organization',
-    })
-  }
-  return next()
-})
 
 /**
  * Where the portal is, for a link that leaves the request: the conference's
@@ -91,8 +76,8 @@ export const sponsorEarlyAccessRouter = router({
    * Create the sponsor's link, or answer the one it has: written only if none
    * is stored. Only for a sponsor with a won deal.
    */
-  create: workshopOrganizerProcedure
-    .input(SponsorInput)
+  create: workshopAdminProcedure
+    .input(SponsorOfConferenceSchema)
     .mutation(async ({ input }) => {
       const conferenceId = await requireSponsor(input.sponsorForConferenceId)
       const portalUrl = await requirePortalUrl()
@@ -125,8 +110,8 @@ export const sponsorEarlyAccessRouter = router({
    * one, so a copy cannot undo a revoke, and it does not ask about the deal: a
    * link that exists keeps working.
    */
-  address: workshopOrganizerProcedure
-    .input(SponsorInput)
+  getAddress: workshopAdminProcedure
+    .input(SponsorOfConferenceSchema)
     .query(async ({ input }) => {
       const conferenceId = await requireSponsor(input.sponsorForConferenceId)
       const portalUrl = await requirePortalUrl()
@@ -150,16 +135,18 @@ export const sponsorEarlyAccessRouter = router({
    * `notCleared`: the unpublished copies that still hold the revoked token.
    * The link is not live; publishing one of them would bring it back.
    */
-  revoke: adminProcedure.input(SponsorInput).mutation(async ({ input }) => {
-    const conferenceId = await requireSponsor(input.sponsorForConferenceId)
-    try {
-      const { notCleared } = await revokeEarlyAccessLink(
-        conferenceId,
-        input.sponsorForConferenceId,
-      )
-      return { success: true as const, notCleared }
-    } finally {
-      expireEarlyAccessLinks(conferenceId)
-    }
-  }),
+  revoke: adminProcedure
+    .input(SponsorOfConferenceSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await requireSponsor(input.sponsorForConferenceId)
+      try {
+        const { notCleared } = await revokeEarlyAccessLink(
+          conferenceId,
+          input.sponsorForConferenceId,
+        )
+        return { success: true as const, notCleared }
+      } finally {
+        expireEarlyAccessLinks(conferenceId)
+      }
+    }),
 })

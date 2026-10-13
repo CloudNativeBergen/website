@@ -33,7 +33,7 @@ const h = vi.hoisted(() => ({
 vi.mock('@/lib/trpc/client', () => ({
   api: {
     useUtils: () => ({
-      sponsor: { crm: { earlyAccess: { address: { fetch: h.address } } } },
+      sponsor: { crm: { earlyAccess: { getAddress: { fetch: h.address } } } },
     }),
     sponsor: {
       crm: {

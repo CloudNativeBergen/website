@@ -121,7 +121,7 @@ export function SponsorEarlyAccessSection({
     setFetching(true)
     // ASKED FOR ON EVERY COPY, never reused: a colleague may have revoked the
     // link and created a new one since the last answer.
-    const address = utils.sponsor.crm.earlyAccess.address
+    const address = utils.sponsor.crm.earlyAccess.getAddress
       .fetch({ sponsorForConferenceId }, { staleTime: 0 })
       .then((answer) => answer.url)
     const written = writeToClipboard(address)

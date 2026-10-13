@@ -11,7 +11,7 @@ const handlers = [
   http.post('/api/trpc/sponsor.crm.earlyAccess.create', () =>
     answer({ url: LINK }),
   ),
-  http.get('/api/trpc/sponsor.crm.earlyAccess.address', () =>
+  http.get('/api/trpc/sponsor.crm.earlyAccess.getAddress', () =>
     answer({ url: LINK }),
   ),
   http.post('/api/trpc/sponsor.crm.earlyAccess.revoke', () =>
