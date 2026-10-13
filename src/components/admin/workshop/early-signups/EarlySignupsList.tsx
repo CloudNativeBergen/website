@@ -40,7 +40,7 @@ const columns: Column<EarlySignupRow>[] = [
         <div className="text-sm font-medium text-gray-900 dark:text-white">
           {signup.userName}
         </div>
-        <div className="text-sm font-normal break-all text-gray-500 dark:text-gray-400">
+        <div className="text-sm font-normal break-words text-gray-500 dark:text-gray-400">
           {signup.userEmail}
         </div>
       </div>
@@ -50,7 +50,7 @@ const columns: Column<EarlySignupRow>[] = [
     key: 'workshop',
     header: 'Workshop',
     render: (signup) => (
-      <span className="text-gray-900 dark:text-gray-200">
+      <span className="text-sm text-gray-900 dark:text-gray-200">
         {signup.workshop?.title ?? 'Unknown workshop'}
       </span>
     ),
@@ -70,7 +70,7 @@ const columns: Column<EarlySignupRow>[] = [
     header: 'Sponsor',
     render: (signup) =>
       signup.earlyAccess.sponsor?.name ? (
-        <span className="text-gray-900 dark:text-gray-200">
+        <span className="text-sm text-gray-900 dark:text-gray-200">
           {signup.earlyAccess.sponsor.name}
         </span>
       ) : (
@@ -82,7 +82,7 @@ const columns: Column<EarlySignupRow>[] = [
     key: 'signedUpAt',
     header: 'Signed up',
     render: (signup) => (
-      <span className="text-gray-900 dark:text-gray-200">
+      <span className="text-sm whitespace-nowrap text-gray-900 dark:text-gray-200">
         {formatDateSafe(signup.signedUpAt)}
       </span>
     ),
@@ -200,7 +200,7 @@ export function EarlySignupsList({
               <button
                 type="button"
                 onClick={() => onSponsorChange(null)}
-                className="mt-2 inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                className="mt-2 inline-flex min-h-11 cursor-pointer items-center rounded-md px-3 text-sm font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
               >
                 Show all sponsors
               </button>
