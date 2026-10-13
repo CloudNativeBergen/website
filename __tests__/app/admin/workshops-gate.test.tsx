@@ -219,3 +219,55 @@ describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
     expect(mockWorkshopPortalUrl).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * THE CARD IS READ LIVE (#1345, review round 2). The registration card is the
+ * baseline of every save: the form sends only what differs from it. The
+ * cached conference read can serve the times from before a save for a while
+ * (`revalidateTag(tag, 'default')` serves stale content to the next request),
+ * so an organizer who set a time back to what the stale card showed would send
+ * nothing. This page therefore asks for the read that skips both cache layers.
+ */
+describe('/admin/workshops — the registration times are read live', () => {
+  const STALE = {
+    workshopRegistrationSponsorStart: '2026-05-02T06:00:00.000Z',
+    workshopRegistrationStart: '2026-05-10T06:00:00.000Z',
+    workshopRegistrationEnd: '2026-05-20T06:00:00.000Z',
+  }
+  const STORED = {
+    workshopRegistrationSponsorStart: '2026-06-01T06:00:00.000Z',
+    workshopRegistrationStart: '2026-06-15T06:30:00.000Z',
+    workshopRegistrationEnd: '2026-07-01T07:00:00.000Z',
+  }
+
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+    // The cached read still has the times from before the last save; only
+    // the read that skips the caches has what is stored.
+    mockGetConference.mockImplementation(
+      async (options?: { uncached?: boolean }) => ({
+        conference: {
+          _id: 'conf-1',
+          organization: { _ref: 'org-A', _type: 'reference' },
+          ...(options?.uncached ? STORED : STALE),
+        },
+        error: null,
+      }),
+    )
+  })
+
+  it('hands the card the stored times, from one read that skips the caches', async () => {
+    const page = (await WorkshopAdminPage()) as React.ReactElement<
+      Record<string, unknown>
+    >
+
+    expect(page.props).toMatchObject(STORED)
+    expect(mockGetConference.mock.calls).toEqual([[{ uncached: true }]])
+  })
+})

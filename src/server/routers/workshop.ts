@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { formatRegistrationInstant } from '@/lib/time'
+import { formatDateTimeSafe, formatRegistrationInstant } from '@/lib/time'
 import {
   router,
   publicProcedure,
@@ -215,6 +215,16 @@ const workshopAdminProcedure = adminProcedure.use(async ({ next }) => {
   }
   return next()
 })
+
+/**
+ * The names `WorkshopRegistrationSettings` gives the three registration
+ * times, for a refusal that has to point an organizer at one of them.
+ */
+const REGISTRATION_TIME_LABELS = {
+  workshopRegistrationSponsorStart: 'Sponsor Early Access Opens',
+  workshopRegistrationStart: 'Registration Opens',
+  workshopRegistrationEnd: 'Registration Closes',
+} as const
 
 export const workshopRouter = router({
   list: publicProcedure.input(workshopListInputSchema).query(async () => {
@@ -1307,14 +1317,58 @@ export const workshopRouter = router({
           // the stored ones, read live. A save that moves or clears the
           // official opening is judged against the sponsor start time that is
           // stored, whether or not the form that sent it knew of one.
-          const stored =
-            await clientReadUncached.fetch<WorkshopRegistrationTimes | null>(
-              // groq-global-scoped: keyed by `resolveConferenceId()`'s id, the request's own conference and the one patched below; never client input.
-              `*[_type == "conference" && _id == $id][0]{ workshopRegistrationSponsorStart, workshopRegistrationStart, workshopRegistrationEnd }`,
-              { id: conferenceId },
-              { cache: 'no-store' },
-            )
-          const merged: WorkshopRegistrationTimes = { ...stored, ...changes }
+          //
+          // `_rev` comes from the SAME read as the times, and the patch below
+          // is conditioned on it: two saves of different fields at once would
+          // otherwise each pass against the same stored pair and together
+          // store a combination neither was judged on.
+          const stored = await clientReadUncached.fetch<
+            (WorkshopRegistrationTimes & { _rev?: string }) | null
+          >(
+            // groq-global-scoped: keyed by `resolveConferenceId()`'s id, the request's own conference and the one patched below; never client input.
+            `*[_type == "conference" && _id == $id][0]{ _rev, workshopRegistrationSponsorStart, workshopRegistrationStart, workshopRegistrationEnd }`,
+            { id: conferenceId },
+            { cache: 'no-store' },
+          )
+          // No document, or none that a write can be conditioned on: judging
+          // the sent times alone would let through what the stored ones
+          // forbid. Refused before anything is written.
+          if (!stored?._rev) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message:
+                'This conference could not be read, so nothing was saved. Reload the page and try again.',
+            })
+          }
+          const { _rev: readAt, ...storedTimes } = stored
+          const merged: WorkshopRegistrationTimes = {
+            ...storedTimes,
+            ...changes,
+          }
+
+          // A REFUSAL NAMES EVERY STORED TIME IT WAS JUDGED AGAINST THAT THE
+          // SAVE DID NOT SEND, by the name the card gives it and as the card
+          // shows it: the form that sent the save may not be showing it, and
+          // its organizer could not otherwise tell what to change.
+          const refusal = (
+            message: string,
+            ...judgedOn: (keyof typeof REGISTRATION_TIME_LABELS)[]
+          ) => {
+            const unseen = judgedOn.flatMap((field) => {
+              const time = storedTimes[field]
+              return field in changes || !time
+                ? []
+                : [
+                    `${REGISTRATION_TIME_LABELS[field]} is set to ${formatDateTimeSafe(time)}.`,
+                  ]
+            })
+            return new TRPCError({
+              code: 'BAD_REQUEST',
+              message: unseen.length
+                ? `${message}. ${unseen.join(' ')}`
+                : message,
+            })
+          }
 
           if (
             merged.workshopRegistrationStart &&
@@ -1322,10 +1376,11 @@ export const workshopRouter = router({
             new Date(merged.workshopRegistrationStart) >=
               new Date(merged.workshopRegistrationEnd)
           ) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: 'End date must be after start date',
-            })
+            throw refusal(
+              'End date must be after start date',
+              'workshopRegistrationStart',
+              'workshopRegistrationEnd',
+            )
           }
 
           // A sponsor start time needs an official opening and must be
@@ -1333,14 +1388,33 @@ export const workshopRouter = router({
           // validates with.
           const sponsorStartProblem = sponsorStartTimeProblem(merged)
           if (sponsorStartProblem) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: sponsorStartProblem,
-            })
+            throw refusal(
+              sponsorStartProblem,
+              'workshopRegistrationSponsorStart',
+              'workshopRegistrationStart',
+            )
           }
 
-          // Only the fields that were sent: the others are not touched.
-          await clientWrite.patch(conferenceId).set(changes).commit()
+          // Only the fields that were sent: the others are not touched. And
+          // only if the document is still the one that was read. No retry: a
+          // second pass would judge the organizer's change against times they
+          // have not seen.
+          try {
+            await clientWrite
+              .patch(conferenceId)
+              .ifRevisionId(readAt)
+              .set(changes)
+              .commit()
+          } catch (error) {
+            if ((error as { statusCode?: number } | null)?.statusCode !== 409) {
+              throw error
+            }
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'The registration times were changed while you were saving, so nothing was saved. Check the times now shown and try again.',
+            })
+          }
 
           revalidateTag('admin:settings', 'default')
           revalidateTag(conferenceTag(conferenceId), 'default')

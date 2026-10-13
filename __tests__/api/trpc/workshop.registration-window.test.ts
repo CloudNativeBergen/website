@@ -23,8 +23,19 @@ const h = vi.hoisted(() => ({
   times: {} as Record<string, string | null | undefined>,
   /** The conference document as stored, for the organizer's save. */
   stored: { _id: 'conf-1', _type: 'conference' } as Record<string, unknown>,
-  /** Every write issued, in order: `patch:<id>`. */
+  /** Its revision, kept beside it. `null`: a document a read gets no `_rev` of. */
+  rev: 'rev-1' as string | null,
+  revs: 1,
+  /** Every write that was APPLIED, in order: `patch:<id>`. */
   writes: [] as string[],
+  /** The revision every ATTEMPTED patch was conditioned on, applied or not. */
+  attempts: [] as (string | null)[],
+  /** The save's live read throws. */
+  failRead: false,
+  /** Runs once, right after the save's live read took its answer. */
+  afterRead: null as (() => void) | null,
+  /** While set, the save's live read hands its answer back only after it. */
+  readGate: null as Promise<void> | null,
   /** What each of those patches set, as serialised by the real client. */
   sets: [] as unknown[],
   /** Other tenants' conferences in the same dataset. */
@@ -83,24 +94,54 @@ vi.mock('@/lib/sanity/client', async () => {
     // built-in list decides who holds a workshop ticket.)
     clientReadUncached: {
       fetch: async (query: string, params: Record<string, unknown> = {}) => {
-        if (query.includes('workshopRegistration')) h.reads.push(params)
-        const dataset = [h.stored, ...h.others]
-        return await (await evaluate(parse(query), { dataset, params })).get()
+        const savesRead = query.includes('workshopRegistration')
+        if (savesRead) {
+          h.reads.push(params)
+          if (h.failRead) throw new Error('Sanity down')
+        }
+        const stored = h.rev ? { ...h.stored, _rev: h.rev } : h.stored
+        const dataset = [stored, ...h.others]
+        const answer = await (
+          await evaluate(parse(query), { dataset, params })
+        ).get()
+        if (savesRead) {
+          const race = h.afterRead
+          h.afterRead = null
+          race?.()
+          await h.readGate
+        }
+        return answer
       },
     },
     clientWrite: {
       // A REAL patch: built by the real `@sanity/client`, serialised, and
       // applied to the stored document by Sanity's own `@sanity/mutator`.
+      //
+      // THE REVISION CHECK IS HAND-WRITTEN, as in the repo's other stores
+      // (`src/lib/marketing-asset/task-render.test.ts`): the mutator ignores
+      // `ifRevisionID`. That the patch CARRIES one is the real client's own
+      // serialisation; that Sanity answers a stale one with a 409 is this
+      // repo's reading of it, not something this file can show.
       patch: (id: string) => {
         const patch = client.patch(id)
         patch.commit = (async () => {
+          const mutation = patch.serialize()
+          h.attempts.push(mutation.ifRevisionID ?? null)
+          if (id !== h.stored._id) {
+            throw Object.assign(new Error('missing'), { statusCode: 404 })
+          }
+          if (mutation.ifRevisionID && mutation.ifRevisionID !== h.rev) {
+            throw Object.assign(new Error('Revision mismatch'), {
+              statusCode: 409,
+            })
+          }
           h.writes.push(`patch:${id}`)
-          h.sets.push(patch.serialize().set)
-          if (id !== h.stored._id) throw new Error(`no such document: ${id}`)
+          h.sets.push(mutation.set)
           const next = new Mutation({
-            mutations: [{ patch: patch.serialize() }],
+            mutations: [{ patch: mutation }],
           }).apply(structuredClone(h.stored))
           if (next) h.stored = next
+          h.rev = `rev-${++h.revs}`
           return {}
         }) as typeof patch.commit
         return patch
@@ -205,7 +246,13 @@ beforeEach(() => {
   __resetRedeemedCache()
   h.times = {}
   h.stored = { _id: 'conf-1', _type: 'conference', title: 'CNDN' }
+  h.rev = 'rev-1'
+  h.revs = 1
   h.writes = []
+  h.attempts = []
+  h.failRead = false
+  h.afterRead = null
+  h.readGate = null
   h.sets = []
   h.others = []
   h.reads = []
@@ -570,39 +617,53 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
       })
     })
 
+    // A REFUSAL NAMES THE STORED TIME IT WAS JUDGED AGAINST when the save did
+    // not send it: the form that sent the save may not be showing it.
+    const STORED_SPONSOR_START =
+      ' Sponsor Early Access Opens is set to 2. mai 2026 kl. 08:00.'
+    const STORED_OPENING =
+      ' Registration Opens is set to 10. mai 2026 kl. 08:00.'
+    const STORED_END = ' Registration Closes is set to 20. mai 2026 kl. 08:00.'
+
+    it('from a client that knows two times, names the stored sponsor start time it broke', async () => {
+      expect(
+        await save({ startDate: '2026-05-01T06:00:00.000Z', endDate: END }),
+      ).toEqual(refused(`${NOT_EARLIER}.${STORED_SPONSOR_START}`))
+    })
+
     it('refuses clearing the official opening while a sponsor start time is STORED and not sent', async () => {
       expect(await save({ startDate: null })).toEqual(
-        refused(NO_OFFICIAL_OPENING),
+        refused(`${NO_OFFICIAL_OPENING}.${STORED_SPONSOR_START}`),
       )
     })
 
     it('refuses moving the official opening to before a sponsor start time that is STORED and not sent', async () => {
       expect(await save({ startDate: '2026-05-01T06:00:00.000Z' })).toEqual(
-        refused(NOT_EARLIER),
+        refused(`${NOT_EARLIER}.${STORED_SPONSOR_START}`),
       )
     })
 
     it('refuses moving the official opening to the very instant of the stored sponsor start time', async () => {
       expect(await save({ startDate: '2026-05-02T06:00:00.000Z' })).toEqual(
-        refused(NOT_EARLIER),
+        refused(`${NOT_EARLIER}.${STORED_SPONSOR_START}`),
       )
     })
 
     it('refuses a sponsor start time later than the STORED official opening', async () => {
       expect(
         await save({ sponsorStartDate: '2026-05-11T06:00:00.000Z' }),
-      ).toEqual(refused(NOT_EARLIER))
+      ).toEqual(refused(`${NOT_EARLIER}.${STORED_OPENING}`))
     })
 
     it('refuses an end that is not after the STORED start', async () => {
       expect(await save({ endDate: '2026-05-09T06:00:00.000Z' })).toEqual(
-        refused('End date must be after start date'),
+        refused(`End date must be after start date.${STORED_OPENING}`),
       )
     })
 
     it('refuses a start that is not before the STORED end', async () => {
       expect(await save({ startDate: '2026-05-21T06:00:00.000Z' })).toEqual(
-        refused('End date must be after start date'),
+        refused(`End date must be after start date.${STORED_END}`),
       )
     })
 
@@ -635,6 +696,153 @@ describe('workshop.admin.updateRegistrationTimes and the sponsor start time', ()
       expect(await save({})).toEqual({ writes: [], stored: STORED })
       expect(h.reads).toEqual([])
       expect(revalidateMock.mock.calls).toEqual([])
+    })
+  })
+
+  /**
+   * THE READ AND THE WRITE ARE ONE STEP (review round 2). A partial save is
+   * judged against the stored times, so two organizers saving different
+   * fields at once would each pass against the same stored pair and store a
+   * combination neither was shown. The patch is conditioned on the revision
+   * the read saw: the second one loses, is told so, and writes nothing.
+   */
+  describe('a save and the revision it read', () => {
+    const CHANGED_MEANWHILE = {
+      code: 'CONFLICT',
+      message:
+        'The registration times were changed while you were saving, so nothing was saved. Check the times now shown and try again.',
+    }
+
+    it('conditions its patch on the revision the times were read at', async () => {
+      await save({ endDate: END })
+      expect(h.attempts).toEqual(['rev-1'])
+    })
+
+    /** Two saves that have both read before either writes. */
+    async function together(first: Save, second: Save) {
+      let release = () => {}
+      h.readGate = new Promise<void>((resolve) => (release = resolve))
+      const outcomes = Promise.all([
+        createAdminCaller()
+          .workshop.admin.updateRegistrationTimes(first)
+          .then(
+            () => 'stored',
+            ({ code, message }) => ({ code, message }),
+          ),
+        createAdminCaller()
+          .workshop.admin.updateRegistrationTimes(second)
+          .then(
+            () => 'stored',
+            ({ code, message }) => ({ code, message }),
+          ),
+      ])
+      await vi.waitFor(() => expect(h.reads).toHaveLength(2))
+      release()
+      return await outcomes
+    }
+
+    it('of the end and of the start at once: one is stored, and the end stays after the start', async () => {
+      // Each is valid against the stored pair (start 10 May, end 20 May).
+      // Both together would store an end of 12 May before a start of 15 May.
+      expect(
+        await together(
+          { endDate: '2026-05-12T06:00:00.000Z' },
+          { startDate: '2026-05-15T06:00:00.000Z' },
+        ),
+      ).toEqual(['stored', CHANGED_MEANWHILE])
+
+      expect(h.stored).toEqual({
+        ...BEFORE,
+        workshopRegistrationEnd: '2026-05-12T06:00:00.000Z',
+      })
+      expect(h.writes).toEqual(['patch:conf-1'])
+      // Both were conditioned on the revision both had read.
+      expect(h.attempts).toEqual(['rev-1', 'rev-1'])
+      // Only the save that was stored invalidates anything.
+      expect(revalidateMock.mock.calls).toEqual([
+        ['admin:settings', 'default'],
+        ['sanity:conference-conf-1', 'default'],
+      ])
+    })
+
+    it('of the sponsor start time and of the official opening at once: one is stored, and the sponsor start stays the earlier', async () => {
+      // Each is valid against the stored pair (sponsor 2 May, opening 10 May).
+      // Both together would store a sponsor start of 8 May after an opening
+      // of 7 May.
+      expect(
+        await together(
+          { sponsorStartDate: '2026-05-08T06:00:00.000Z' },
+          { startDate: '2026-05-07T06:00:00.000Z' },
+        ),
+      ).toEqual(['stored', CHANGED_MEANWHILE])
+
+      expect(h.stored).toEqual({
+        ...BEFORE,
+        workshopRegistrationSponsorStart: '2026-05-08T06:00:00.000Z',
+      })
+      expect(h.writes).toEqual(['patch:conf-1'])
+    })
+
+    it('refuses when the document was changed by anyone between its read and its write', async () => {
+      // A change in Sanity Studio, to a field this save does not touch.
+      const EDITED = { ...BEFORE, title: 'CNDN 2026' }
+      h.afterRead = () => {
+        h.stored = structuredClone(EDITED)
+        h.rev = 'rev-studio'
+      }
+
+      expect(await save({ endDate: END })).toEqual({
+        refused: CHANGED_MEANWHILE,
+        writes: [],
+        stored: EDITED,
+      })
+    })
+  })
+
+  /** A save must never be judged against nothing (review round 2). */
+  describe('a save whose read of the stored times does not answer', () => {
+    it('refuses when there is no such conference, and attempts no write', async () => {
+      // Nothing is stored under the id this request resolves to.
+      const ELSEWHERE = { ...BEFORE, _id: 'conf-gone' }
+      h.stored = structuredClone(ELSEWHERE)
+
+      // Sent alone these times are fine: only the stored ones could object.
+      expect(await save({ startDate: OFFICIAL, endDate: END })).toEqual({
+        refused: {
+          code: 'NOT_FOUND',
+          message:
+            'This conference could not be read, so nothing was saved. Reload the page and try again.',
+        },
+        writes: [],
+        stored: ELSEWHERE,
+      })
+      expect(h.attempts).toEqual([])
+    })
+
+    it('refuses when the document comes back without a revision to condition on', async () => {
+      h.rev = null
+
+      expect(await save({ endDate: END })).toMatchObject({
+        refused: { code: 'NOT_FOUND' },
+        writes: [],
+        stored: BEFORE,
+      })
+      expect(h.attempts).toEqual([])
+    })
+
+    it('refuses when the read fails, and attempts no write', async () => {
+      h.failRead = true
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      expect(await save({ endDate: END })).toEqual({
+        refused: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update workshop registration times',
+        },
+        writes: [],
+        stored: BEFORE,
+      })
+      expect(h.attempts).toEqual([])
     })
   })
 })

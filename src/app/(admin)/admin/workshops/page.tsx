@@ -9,8 +9,14 @@ import { resendPortal } from '@/lib/workshop/resend-instructions'
 import { WorkshopTickets } from '@/components/admin/workshop/tickets'
 
 export default async function WorkshopAdminPage() {
+  // READ LIVE, past both cache layers (#1345): the registration card below is
+  // the baseline of every save, which sends only what differs from it. The
+  // cached read serves the times from before a save to the request that
+  // follows it (`revalidateTag(tag, 'default')` is stale-while-revalidate),
+  // so an organizer who set a time back to what a stale card showed would
+  // send nothing. One live read per view of this admin page.
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({})
+    await getConferenceForCurrentDomain({ uncached: true })
 
   // FEATURE GATE (#689): organizers of a tenant without the workshop feature
   // get no workshop management surface — the nav entry is hidden (see the
