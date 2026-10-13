@@ -144,18 +144,33 @@ function sendRefusal(reason: EarlyAccessSendRefusal) {
  * the same reason: `updateRegistrationTimes` expires the cached conference
  * with a profile that still serves the old answer to the next request.
  *
- * A read that fails is refused: the cached times are not a fallback. When it
- * answers ANOTHER conference than the cached read did (the host has changed
- * hands), the decision looks the sponsor up in that one and does not find it.
+ * A read that fails is refused: the cached times are not a fallback.
+ *
+ * THE LIVE CONFERENCE MUST BE THE ONE THE SPONSOR WAS CHECKED AGAINST
+ * (`expected`), the rule `/admin/workshops` applies to the same read. Right
+ * after a main domain changes hands the live read answers the OTHER
+ * conference. Its times say nothing about this sponsor, so the request is
+ * refused here, before the window is looked at, in words of its own: the
+ * organizer would otherwise be told that conference's "no early-access
+ * period". Also what refuses a read that answered no conference at all.
  */
-async function readConferenceLive(): Promise<EarlyAccessSendConference> {
+async function readConferenceLive(
+  expected: string,
+): Promise<EarlyAccessSendConference> {
   const { conference, error } = await getConferenceForCurrentDomain({
     uncached: true,
   })
-  if (error || !conference) {
+  if (error) {
     throw new TRPCError({
       code: 'INTERNAL_SERVER_ERROR',
       message: 'Failed to fetch conference',
+    })
+  }
+  if (conference?._id !== expected) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message:
+        'This conference could not be read, so nothing was sent. Reload the page and try again.',
     })
   }
   return conference
@@ -165,9 +180,10 @@ async function readConferenceLive(): Promise<EarlyAccessSendConference> {
  * {@link decideEarlyAccessSend} for the request's conference, asked now. A
  * sponsor that is not there is refused as a missing one; every other answer
  * is handed back, for the Send action to refuse with and for the Send modal
- * to show.
+ * to show. `conferenceId`: the conference the sponsor was proven to be in.
  */
 async function decideSendForRequest(
+  conferenceId: string,
   domain: string | undefined,
   sponsorForConferenceId: string,
 ): Promise<
@@ -175,7 +191,7 @@ async function decideSendForRequest(
   | { refusal: null; plan: EarlyAccessSendPlan }
 > {
   const decision = await decideEarlyAccessSend({
-    readConference: readConferenceLive,
+    readConference: () => readConferenceLive(conferenceId),
     domain,
     sponsorForConferenceId,
     now: new Date(),
@@ -211,6 +227,7 @@ export async function prepareEarlyAccessSend(
   sponsorForConferenceId: string,
 ) {
   const { refusal, plan } = await decideSendForRequest(
+    conference._id,
     domain,
     sponsorForConferenceId,
   )
@@ -286,10 +303,11 @@ export const sponsorEarlyAccessRouter = router({
   getSendReadiness: workshopAdminProcedure
     .input(SponsorOfConferenceSchema)
     .query(async ({ input }) => {
-      await requireSponsor(input.sponsorForConferenceId)
+      const conferenceId = await requireSponsor(input.sponsorForConferenceId)
       // The host only: the times are read live by the decision.
       const { domain } = await getConferenceForCurrentDomain()
       const { refusal, plan } = await decideSendForRequest(
+        conferenceId,
         domain,
         input.sponsorForConferenceId,
       )

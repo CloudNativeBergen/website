@@ -211,6 +211,10 @@ const INPUT = {
 const send = (overrides: Record<string, unknown> = {}) =>
   caller().crm.sendCommunication({ ...INPUT, ...overrides } as typeof INPUT)
 
+/** The reads of the request's conference that were made WITHOUT a cache. */
+const liveReads = () =>
+  h.getConference.mock.calls.filter(([options]) => options?.uncached)
+
 /** Every audit record of a sent or failed email, as stored. */
 const records = () =>
   store()
@@ -475,8 +479,6 @@ describe('the times are the stored ones, not the cached ones', () => {
       )
     },
   })
-  const liveReads = () =>
-    h.getConference.mock.calls.filter(([options]) => options?.uncached)
   const readiness = () =>
     caller().crm.earlyAccess.getSendReadiness({ sponsorForConferenceId: SFC })
 
@@ -589,20 +591,114 @@ describe('the times are the stored ones, not the cached ones', () => {
       code: 'INTERNAL_SERVER_ERROR',
     })
   })
+})
 
-  // No guard of its own: the sponsor is looked up within the conference the
-  // live read answers, and is not one of that conference's.
-  it('refuses a sponsor as missing when the host is another conference\u2019s by now', async () => {
+/**
+ * THE LIVE CONFERENCE MUST BE THE ONE THE SPONSOR WAS CHECKED AGAINST. Right
+ * after a main domain changes hands, the cached read still answers this
+ * conference and the live one answers the other. The other conference's
+ * times say nothing about this sponsor: refused before the window is looked
+ * at, in words of its own.
+ */
+describe('the host is another conference\u2019s by now', () => {
+  const NOT_THIS_CONFERENCE =
+    'This conference could not be read, so nothing was sent. Reload the page and try again.'
+  /** The cached read still answers conf-a; the live one answers conf-b. */
+  const liveIsConfB = (times: Record<string, unknown>) =>
     h.getConference.mockImplementation(
       async (options?: { uncached?: boolean }) => ({
-        conference: conference(options?.uncached ? { _id: 'conf-b' } : {}),
+        conference: conference(
+          options?.uncached ? { _id: 'conf-b', ...times } : {},
+        ),
         domain: MAIN_HOST,
         error: null,
       }),
     )
+  const readiness = () =>
+    caller().crm.earlyAccess.getSendReadiness({ sponsorForConferenceId: SFC })
 
-    await expect(send()).rejects.toMatchObject({ code: 'NOT_FOUND' })
-    expectNothingHappened()
+  it.each([
+    [
+      'has no early-access window',
+      { workshopRegistrationSponsorStart: undefined },
+    ],
+    [
+      'has an official opening that passed',
+      {
+        workshopRegistrationSponsorStart: '2026-09-10T08:00:00.000Z',
+        workshopRegistrationStart: '2026-09-15T08:00:00.000Z',
+      },
+    ],
+    ['has an early-access window ahead', {}],
+  ])(
+    'is refused as that, not in the other conference\u2019s words, when it %s',
+    async (_case, times) => {
+      liveIsConfB(times)
+
+      await expect(send()).rejects.toMatchObject({
+        code: 'CONFLICT',
+        message: NOT_THIS_CONFERENCE,
+      })
+      expectNothingHappened()
+      await expect(readiness()).rejects.toMatchObject({
+        code: 'CONFLICT',
+        message: NOT_THIS_CONFERENCE,
+      })
+      // Nothing was read about the sponsor, in either conference.
+      expect(
+        store().reads.filter((read) => !read.query.includes('"memberOrgIds"')),
+      ).toEqual([])
+      expect(h.getDomainClaim).not.toHaveBeenCalled()
+    },
+  )
+})
+
+/**
+ * THE GUARD COMES BEFORE THE LIVE READS. A sponsor that is not this
+ * conference's (or does not exist, or is named by an unpublished copy's id)
+ * is refused before the conference is read live, on the send and on the
+ * modal's question: nothing is spent, and nothing is learned, on an id the
+ * caller may not act on.
+ */
+describe('a sponsor the caller may not act on', () => {
+  const CASES = [
+    ['a sponsor of another conference', 'sfc-theirs', 'NOT_FOUND'],
+    ['a sponsor that does not exist', 'sfc-nobody', 'NOT_FOUND'],
+    ['an unpublished copy of the sponsor', `drafts.${SFC}`, 'BAD_REQUEST'],
+  ] as const
+
+  it.each(CASES)(
+    'is refused before the conference is read live, on the send: %s',
+    async (_case, sponsorForConferenceId, code) => {
+      await expect(send({ sponsorForConferenceId })).rejects.toMatchObject({
+        code,
+      })
+
+      expect(liveReads()).toEqual([])
+      expect(h.getDomainClaim).not.toHaveBeenCalled()
+      expect(h.send).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(CASES)(
+    'is refused before the conference is read live, on the modal\u2019s question: %s',
+    async (_case, sponsorForConferenceId, code) => {
+      await expect(
+        caller().crm.earlyAccess.getSendReadiness({ sponsorForConferenceId }),
+      ).rejects.toMatchObject({ code })
+
+      expect(liveReads()).toEqual([])
+      expect(h.getDomainClaim).not.toHaveBeenCalled()
+    },
+  )
+
+  it('the same requests for this conference\u2019s own sponsor do read it live', async () => {
+    await send()
+    await caller().crm.earlyAccess.getSendReadiness({
+      sponsorForConferenceId: SFC,
+    })
+
+    expect(liveReads()).toHaveLength(2)
   })
 })
 
