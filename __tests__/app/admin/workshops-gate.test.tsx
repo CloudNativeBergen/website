@@ -162,6 +162,50 @@ describe('/admin/workshops — feature gate', () => {
   })
 })
 
+/**
+ * The link on a sponsor's record opens the "Early sign-ups" list narrowed to
+ * that sponsor (#1348): the address's `earlySponsor` reaches the list. The
+ * page reads NOTHING for it: the list's own read scopes the id to the
+ * conference (`src/server/routers/workshop.earlySignups.test.ts`).
+ */
+describe('/admin/workshops — the sponsor the early sign-ups open narrowed to (#1348)', () => {
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+  })
+
+  async function narrowedTo(
+    searchParams?: Record<string, string | string[] | undefined>,
+  ) {
+    const page = (await WorkshopAdminPage(
+      searchParams && { searchParams: Promise.resolve(searchParams) },
+    )) as { props: { conferenceId: string; initialEarlySponsorId?: string } }
+    // The workshops page itself, not a refusal.
+    expect(page.props.conferenceId).toBe('conf-1')
+    return page.props.initialEarlySponsorId
+  }
+
+  it('hands the sponsor in the address to the list', async () => {
+    expect(await narrowedTo({ earlySponsor: 'sfc-acme' })).toBe('sfc-acme')
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['no address parameters at all', undefined],
+    ['no sponsor in the address', {}],
+    ['an empty one', { earlySponsor: '' }],
+    ['one given twice', { earlySponsor: ['sfc-acme', 'sfc-globex'] }],
+    ['one longer than an id', { earlySponsor: 'x'.repeat(201) }],
+  ])('opens the list on every sponsor for %s', async (_case, searchParams) => {
+    expect(await narrowedTo(searchParams)).toBeUndefined()
+  })
+})
+
 describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
   beforeEach(() => {
     stubOwnTicketingSecret('org-A')
