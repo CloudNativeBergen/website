@@ -31,6 +31,7 @@ import {
   EarlySignupsList,
   EARLY_SIGNUPS_ANCHOR,
   EARLY_SPONSOR_PARAM,
+  earlySignupsShownState,
   useBringEarlySignupsIntoView,
 } from './early-signups'
 import { workshopEarlySignupsSchema } from '@/server/schemas/workshop'
@@ -166,16 +167,15 @@ export function WorkshopsClientPage({
     },
   )
   // The count's link carries the list's fragment, and the list is the last
-  // section of the page: it is brought into view (see the hook for why Next
-  // does not).
-  const { narrowedHere } = useBringEarlySignupsIntoView(earlySponsorId)
+  // section of the page: it is brought into view, once per history entry
+  // (see the hook for why Next does not, and why once).
+  useBringEarlySignupsIntoView(earlySponsorId)
   const narrowEarlySignups = (sponsorId: string | null) => {
-    narrowedHere()
     // Written to the address, which `useSearchParams` above follows. Through
     // the History API, not the router: a navigation would render this page on
     // the server again, and its reads are live. Narrowed, the address is the
-    // one the count's link has, anchor included, so a reload shows the same
-    // list and brings it into view. Everything else in the address is kept.
+    // one the count's link has, anchor included, so the same address opened
+    // anew shows the same list in view. Everything else in it is kept.
     const url = new URL(window.location.href)
     if (sponsorId) {
       url.searchParams.set(EARLY_SPONSOR_PARAM, sponsorId)
@@ -183,8 +183,10 @@ export function WorkshopsClientPage({
     } else {
       url.searchParams.delete(EARLY_SPONSOR_PARAM)
     }
+    // The entry is marked as one that needs no bringing into view: the
+    // organizer is at the list, now and when they come back to this entry.
     window.history.replaceState(
-      null,
+      earlySignupsShownState(),
       '',
       `${url.pathname}${url.search}${url.hash}`,
     )

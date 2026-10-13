@@ -38,7 +38,7 @@ import {
   within,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useState, type ReactNode } from 'react'
+import { Activity, useState, type ReactNode } from 'react'
 import { api, getTRPCClient } from '@/lib/trpc/client'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
@@ -73,15 +73,38 @@ vi.mock('next/navigation', async () => {
  * navigation does, and what Next's patched `history.replaceState` does.
  */
 const realReplaceState = window.history.replaceState.bind(window.history)
-function setAddress(address: string) {
-  realReplaceState(null, '', address)
+const realPushState = window.history.pushState.bind(window.history)
+const addressChanged = () => {
   for (const listener of [...router.addressChanged]) listener()
 }
+/** Whether Next is showing the page, or keeping it mounted and hidden. */
+let setShown: (shown: boolean) => void = () => {}
+const WORKSHOPS = '/admin/workshops'
+const showIfOnThePage = () => setShown(window.location.pathname === WORKSHOPS)
 /**
- * The organizer arrives at this route again while the page is still mounted:
- * the link on a sponsor's record, with Next showing the page it kept.
+ * The organizer arrives at this route by a link (the count on a sponsor's
+ * record) while the page is still mounted: A NEW HISTORY ENTRY, as a
+ * navigation makes, with Next showing the page it kept.
  */
-const arriveAt = (address: string) => act(() => setAddress(address))
+const arriveAt = (address: string) =>
+  act(() => {
+    realPushState(null, '', address)
+    addressChanged()
+    showIfOnThePage()
+  })
+/** A navigation to another route: a new entry, and this page is kept hidden. */
+const leaveTo = (address: string) => arriveAt(address)
+/** Back or Forward: an EXISTING entry is shown again, with its own state. */
+const traverse = (direction: 'back' | 'forward') =>
+  act(async () => {
+    const arrived = new Promise((resolve) =>
+      window.addEventListener('popstate', resolve, { once: true }),
+    )
+    window.history[direction]()
+    await arrived
+    addressChanged()
+    showIfOnThePage()
+  })
 
 const SERVER_RENDER = [
   {
@@ -244,8 +267,13 @@ beforeEach(() => {
   scrollIntoView.mockReset()
   Element.prototype.scrollIntoView = scrollIntoView
   realReplaceState(null, '', '/admin/workshops')
+  // As Next's patched `replaceState`: the entry keeps the state it is given,
+  // and whoever reads the address is told when it changed.
   vi.spyOn(window.history, 'replaceState').mockImplementation(
-    (_state, _unused, address) => setAddress(String(address)),
+    (state, _unused, address) => {
+      realReplaceState(state, '', address ?? undefined)
+      if (address != null) addressChanged()
+    },
   )
   vi.stubGlobal(
     'fetch',
@@ -294,16 +322,28 @@ function Providers({ children }: { children: ReactNode }) {
 }
 
 /** The page, opened at this address. */
-function renderPage(address = '/admin/workshops') {
-  realReplaceState(null, '', address)
-  render(
+function renderPage(address = '/admin/workshops', state: unknown = null) {
+  realReplaceState(state, '', address)
+  render(<KeptRoute />)
+}
+
+/**
+ * The page as Next holds it with Cache Components: inside an `<Activity>`
+ * that is hidden, not unmounted, while the organizer is on another route.
+ */
+function KeptRoute() {
+  const [shown, set] = useState(true)
+  setShown = set
+  return (
     <Providers>
-      <WorkshopsClientPage
-        conferenceId="conf-1"
-        initialWorkshops={SERVER_RENDER}
-        resendDisabledReason={null}
-      />
-    </Providers>,
+      <Activity mode={shown ? 'visible' : 'hidden'}>
+        <WorkshopsClientPage
+          conferenceId="conf-1"
+          initialWorkshops={SERVER_RENDER}
+          resendDisabledReason={null}
+        />
+      </Activity>
+    </Providers>
   )
 }
 
@@ -631,6 +671,94 @@ describe('arriving with the list’s fragment in the address', () => {
     arriveAt('/admin/workshops?earlySponsor=sfc-globex#early-sign-ups')
     await waitFor(() => expect(rows()).toHaveLength(1))
 
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
+  })
+})
+
+/**
+ * ONCE PER HISTORY ENTRY (#1348, review round 3). Next shows a kept page
+ * again by reactivating it, which runs its effects again, and the fragment is
+ * still in the address: without a rule, Back to the page would throw the
+ * organizer from wherever they had scrolled to down to the list. An ARRIVAL
+ * (a link, a hard load) is a new entry and brings the list into view; a
+ * RETURN to an entry that was already shown the list (Back, Forward) moves
+ * nothing, and the position is the browser's and Next's to restore.
+ */
+describe('returning to a history entry that was already shown the list', () => {
+  const LINK = '/admin/workshops?earlySponsor=sfc-acme#early-sign-ups'
+
+  it('Back to it moves nothing', async () => {
+    renderPage(LINK)
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
+
+    leaveTo('/admin/sponsors/crm')
+    await traverse('back')
+
+    expect(
+      window.location.pathname + window.location.search + window.location.hash,
+    ).toBe(LINK)
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
+  })
+
+  it('Back away from it, then Forward to it, moves nothing', async () => {
+    renderPage('/admin/sponsors/crm')
+    arriveAt(LINK)
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
+
+    await traverse('back')
+    expect(window.location.pathname).toBe('/admin/sponsors/crm')
+    await traverse('forward')
+
+    expect(
+      window.location.pathname + window.location.search + window.location.hash,
+    ).toBe(LINK)
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
+  })
+
+  it('a NEW arrival by the same link brings the list into view again', async () => {
+    renderPage(LINK)
+    await waitFor(() => expect(rows()).toHaveLength(2))
+
+    leaveTo('/admin/sponsors/crm')
+    arriveAt(LINK)
+    await waitFor(() => expect(rows()).toHaveLength(2))
+
+    expect(broughtIntoView()).toEqual(['early-sign-ups', 'early-sign-ups'])
+  })
+
+  it('Back to an entry the organizer narrowed with the control moves nothing', async () => {
+    renderPage()
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    narrowTo('sfc-acme')
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(window.location.hash).toBe('#early-sign-ups')
+
+    leaveTo('/admin/sponsors/crm')
+    await traverse('back')
+
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(broughtIntoView()).toEqual([])
+  })
+
+  it('marks the entry beside what Next keeps in its state, and loses none of it', async () => {
+    // The entry as Next wrote it before the page's effects ran.
+    renderPage(LINK, { __NA: true, kept: 'by Next' })
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(broughtIntoView()).toEqual(['early-sign-ups'])
+
+    expect(window.history.state).toEqual({
+      __NA: true,
+      kept: 'by Next',
+      earlySignupsShown: true,
+    })
+
+    // Shown again, as after Back: the entry carries the mark.
+    act(() => setShown(false))
+    act(() => setShown(true))
     expect(broughtIntoView()).toEqual(['early-sign-ups'])
   })
 })

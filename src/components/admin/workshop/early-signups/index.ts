@@ -5,4 +5,7 @@ export {
   EARLY_SPONSOR_PARAM,
   earlySignupsHref,
 } from './anchor'
-export { useBringEarlySignupsIntoView } from './useBringEarlySignupsIntoView'
+export {
+  earlySignupsShownState,
+  useBringEarlySignupsIntoView,
+} from './useBringEarlySignupsIntoView'

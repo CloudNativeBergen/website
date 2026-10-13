@@ -1,7 +1,21 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { EARLY_SIGNUPS_ANCHOR } from './anchor'
+
+/**
+ * The mark on a history entry that has been shown the list: a key in the
+ * entry's own `history.state`, beside the ones Next keeps there.
+ */
+const SHOWN = 'earlySignupsShown'
+
+/**
+ * The state for a History API write made AT the list (its narrowing
+ * control): the entry it writes needs no bringing into view, now or when the
+ * organizer comes back to it. A new object each time: Next adds its own keys
+ * to the one it is handed.
+ */
+export const earlySignupsShownState = () => ({ [SHOWN]: true })
 
 /**
  * BRINGS THE "EARLY SIGN-UPS" LIST INTO VIEW WHEN THE ADDRESS ASKS FOR IT
@@ -12,35 +26,40 @@ import { EARLY_SIGNUPS_ANCHOR } from './anchor'
  * Next does not do this for that link. It applies a navigation's fragment
  * once, at the first commit, which is the route's loading state: the section
  * is not on the page yet, or is hidden on a page Next kept mounted, and the
- * intent is dropped. So the page does it, once the list is mounted:
+ * intent is dropped. So the page does it, once the list is mounted.
  *
- *  - when it is shown with the list's fragment in the address. That covers a
- *    first visit, a reload, and a page Next kept and shows again (its effects
- *    are run again when it is shown);
- *  - and again when the address changes to another sponsor, still with the
- *    fragment, on a page that stayed on screen.
+ * ONCE PER HISTORY ENTRY. The effect runs when the page is shown (a first
+ * visit, a hard load, and a page Next kept and shows again, whose effects are
+ * run again) and when the address changes to another sponsor. It scrolls only
+ * if the address carries the list's fragment AND the entry has not been shown
+ * the list before, and then marks the entry.
  *
- * NOTHING MOVES on a view without the fragment, nor when the organizer
- * narrows with the list's own control (`narrowedHere`): that writes the
- * fragment too, and they are at the list already.
+ *  - An ARRIVAL by the link is a new entry, so it has no mark: the list is
+ *    brought into view, also on a kept page and for the same sponsor again.
+ *  - A RETURN to an entry (Back, Forward, a reload) finds the mark: nothing
+ *    moves, and the position is the browser's and Next's to restore. Without
+ *    this, Back would throw the organizer from the workshop cards they had
+ *    scrolled up to back down to the list.
+ *  - The list's own control writes its entry with the mark
+ *    (`earlySignupsShownState`): the organizer is at the list already.
+ *
+ * NOTHING MOVES on a view without the fragment.
  */
 export function useBringEarlySignupsIntoView(earlySponsorId: string | null) {
-  const writtenByTheControl = useRef(false)
   useEffect(() => {
-    if (writtenByTheControl.current) {
-      writtenByTheControl.current = false
-      return
-    }
     if (window.location.hash !== `#${EARLY_SIGNUPS_ANCHOR}`) return
+    const state: unknown = window.history.state
+    const entry =
+      state && typeof state === 'object'
+        ? (state as Record<string, unknown>)
+        : {}
+    if (entry[SHOWN]) return
+    const section = document.getElementById(EARLY_SIGNUPS_ANCHOR)
+    if (!section) return
     // The section's `scroll-mt-*` keeps it clear of the admin's fixed header.
-    document
-      .getElementById(EARLY_SIGNUPS_ANCHOR)
-      ?.scrollIntoView({ block: 'start', behavior: 'instant' })
+    section.scrollIntoView({ block: 'start', behavior: 'instant' })
+    // The entry's other state is kept as it is: Next's own keys are in it,
+    // and with them there Next passes this write straight through.
+    window.history.replaceState({ ...entry, [SHOWN]: true }, '')
   }, [earlySponsorId])
-
-  /** Call before the control writes a new narrowing to the address. */
-  const narrowedHere = useCallback(() => {
-    writtenByTheControl.current = true
-  }, [])
-  return { narrowedHere }
 }
