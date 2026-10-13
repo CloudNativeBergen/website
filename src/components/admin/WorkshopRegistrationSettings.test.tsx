@@ -277,7 +277,7 @@ describe('saving the registration times', () => {
     ])
   })
 
-  it('does not send a time that changed behind the open form: it compares with what it was opened with', () => {
+  it('takes in a time that changed behind the open form, and does not send it', () => {
     // Opened when no sponsor start time was stored. A colleague sets one, and
     // the card is drawn again with it while the form is still open.
     const { rerender } = renderCard(
@@ -285,20 +285,46 @@ describe('saving the registration times', () => {
       BEFORE_SPONSOR,
     )
     edit()
+    expect(field(/Sponsor Early Access Opens/).value).toBe('')
     rerender(
       <NotificationProvider>
         <WorkshopRegistrationSettings {...ALL_THREE} />
       </NotificationProvider>,
     )
-    expect(field(/Sponsor Early Access Opens/).value).toBe('')
+    // A field the organizer has not touched shows what is stored.
+    expect(field(/Sponsor Early Access Opens/).value).toBe('2026-06-01T08:00')
 
     fireEvent.change(field(/Registration Closes/), {
       target: { value: '2026-07-02T10:00' },
     })
     save()
 
-    // The empty sponsor field is what the form was opened with, so it is no
-    // change: sending `null` for it would erase the colleague's time.
+    // The sponsor field is what is stored, so it is no change: sending the
+    // empty value the form was opened with would erase the colleague's time.
+    expect(mutate.mock.calls).toEqual([
+      [{ endDate: '2026-07-02T08:00:00.000Z' }],
+    ])
+  })
+
+  it('keeps a field the organizer changed when the card is drawn again, and still sends it', () => {
+    const { rerender } = renderCard(ALL_THREE, BEFORE_SPONSOR)
+    edit()
+    fireEvent.change(field(/Registration Closes/), {
+      target: { value: '2026-07-02T10:00' },
+    })
+    // A colleague moves the end to 5 July meanwhile.
+    rerender(
+      <NotificationProvider>
+        <WorkshopRegistrationSettings
+          {...ALL_THREE}
+          workshopRegistrationEnd="2026-07-05T07:00:00.000Z"
+        />
+      </NotificationProvider>,
+    )
+    expect(field(/Registration Closes/).value).toBe('2026-07-02T10:00')
+
+    save()
+
     expect(mutate.mock.calls).toEqual([
       [{ endDate: '2026-07-02T08:00:00.000Z' }],
     ])

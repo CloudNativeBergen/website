@@ -60,7 +60,7 @@ export function WorkshopRegistrationSettings({
     startDate: toLocalInput(workshopRegistrationStart),
     endDate: toLocalInput(workshopRegistrationEnd),
   })
-  // WHAT THE FORM WAS OPENED WITH. A save sends only the fields that differ
+  // WHAT THE FORM TAKES AS STORED. A save sends only the fields that differ
   // from it (the server leaves the others alone), so a form opened before a
   // colleague's save cannot erase a time it never showed.
   const [opened, setOpened] = useState(stored)
@@ -69,6 +69,25 @@ export function WorkshopRegistrationSettings({
   )
   const [startDate, setStartDate] = useState(opened.startDate)
   const [endDate, setEndDate] = useState(opened.endDate)
+
+  // THE CARD WAS READ AGAIN (after a save, accepted or refused) and a stored
+  // time is not what the form took it to be. A field the organizer has not
+  // touched follows the stored time; one they have changed keeps what they
+  // typed, and is still a change. This is what makes a refusal about a time
+  // the form did not show recoverable: the time appears, and can be cleared.
+  const current = stored()
+  if (
+    current.sponsorStartDate !== opened.sponsorStartDate ||
+    current.startDate !== opened.startDate ||
+    current.endDate !== opened.endDate
+  ) {
+    if (sponsorStartDate === opened.sponsorStartDate) {
+      setSponsorStartDate(current.sponsorStartDate)
+    }
+    if (startDate === opened.startDate) setStartDate(current.startDate)
+    if (endDate === opened.endDate) setEndDate(current.endDate)
+    setOpened(current)
+  }
 
   const updateRegistrationTimes =
     api.workshop.admin.updateRegistrationTimes.useMutation({
@@ -83,6 +102,9 @@ export function WorkshopRegistrationSettings({
         router.refresh()
       },
       onError: (err) => {
+        // A REFUSAL IS JUDGED ON WHAT IS STORED, which this card may not be
+        // showing: read the card again, so the form above takes it in.
+        router.refresh()
         setError(
           err.message ||
             'Failed to update the workshop registration window. Please try again.',
