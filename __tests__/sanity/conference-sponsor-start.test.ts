@@ -33,18 +33,13 @@ async function sponsorStartMarkers(times: Record<string, string | undefined>) {
       },
     },
     getDocumentExists: async () => true,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any)
+    // A stand-in for a workspace is not a workspace: the cast says so once,
+    // and what comes back keeps Sanity's own marker type.
+  } as unknown as Parameters<typeof validateDocument>[0])
 
   return markers
-    .filter(
-      (m: { path?: unknown[] }) =>
-        m.path?.[0] === 'workshopRegistrationSponsorStart',
-    )
-    .map(({ level, message }: { level: string; message: string }) => ({
-      level,
-      message,
-    }))
+    .filter((m) => m.path?.[0] === 'workshopRegistrationSponsorStart')
+    .map(({ level, message }) => ({ level, message }))
 }
 
 const NOT_EARLIER = [
