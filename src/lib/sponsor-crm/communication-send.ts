@@ -70,6 +70,19 @@ export interface SendSponsorCommunicationArgs {
    */
   appendHtml?: string
   /**
+   * A block that can only be built by WRITING something (the workshop
+   * early-access link, created on send when the sponsor has none, #1347).
+   * Called once, AFTER every refusal this function can make (the sponsor, the
+   * recipients, the message) and before the provider is asked, so no refusal
+   * can follow the write. What it answers is appended after `appendHtml` and
+   * listed after `attachments`. A throw is the caller's own refusal: nothing
+   * is sent and nothing is recorded.
+   */
+  appendLate?: () => Promise<{
+    html: string
+    attachments?: CommunicationAttachment[]
+  }>
+  /**
    * The sponsor's registration (portal) link (#1263) — merged as
    * `SPONSOR_PORTAL_URL` when the template is re-merged for `templateEdited`.
    */
@@ -233,20 +246,25 @@ export async function sendSponsorCommunication(
   )
   // A body-less template is fine when the send appends its own card (a
   // reminder's signing button, a signed copy's link): the card IS the email.
-  if (htmlError || (!htmlContent && !args.appendHtml)) {
+  if (htmlError || (!htmlContent && !args.appendHtml && !args.appendLate)) {
     return {
       ok: false,
       reason: 'render-failed',
       message: 'Failed to convert message to HTML',
     }
   }
+  // Nothing above can refuse any more: only now may a send write.
+  const late = await args.appendLate?.()
+  const attachments = late?.attachments?.length
+    ? [...(args.attachments ?? []), ...late.attachments]
+    : args.attachments
   // Rendered ONCE to a string: the same bytes go to the provider and into the
   // audit record, so "body as sent" is literally true.
   const html = await render(
     renderEmailTemplate({
       conference,
       subject: args.subject,
-      htmlContent: `${htmlContent ?? ''}${args.appendHtml ?? ''}`,
+      htmlContent: `${htmlContent ?? ''}${args.appendHtml ?? ''}${late?.html ?? ''}`,
       // A one-to-one transactional email: NO unsubscribe link. `undefined`
       // would select the template's default — Resend's `{{{RESEND_UNSUBSCRIBE_URL}}}`
       // merge tag, which only Broadcasts resolve — and the literal tag would
@@ -281,7 +299,7 @@ export async function sendSponsorCommunication(
           ),
         }
       : undefined,
-    attachments: args.attachments,
+    attachments,
     createdBy: args.actorId,
   }
 

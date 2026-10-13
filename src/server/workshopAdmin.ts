@@ -20,6 +20,17 @@ import { adminProcedure } from './trpc'
  * sponsor's early-access link (#1346): neither router imports the other.
  */
 export const workshopAdminProcedure = adminProcedure.use(async ({ next }) => {
+  await requireWorkshopsEnabled()
+  return next()
+})
+
+/**
+ * The gate itself, for a procedure that is an organizer workshop action for
+ * ONE of its inputs only: `sponsor.crm.sendCommunication` creates a sponsor's
+ * early-access link when it sends the "Workshop early access" kind (#1347),
+ * and must refuse where creating the link on the sponsor's record is refused.
+ */
+export async function requireWorkshopsEnabled(): Promise<void> {
   const { conference, error } = await getConferenceForCurrentDomain()
   if (!(await isWorkshopsEnabledForConference(error ? null : conference))) {
     throw new TRPCError({
@@ -27,5 +38,4 @@ export const workshopAdminProcedure = adminProcedure.use(async ({ next }) => {
       message: 'The "workshops" feature is not enabled for this organization',
     })
   }
-  return next()
-})
+}

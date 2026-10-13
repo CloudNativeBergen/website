@@ -9,6 +9,7 @@ export {
   readEarlyAccessToken,
   revokeEarlyAccessLink,
 } from './link'
+export { decideEarlyAccessSend, type EarlyAccessSendDecision } from './send'
 export {
   expireEarlyAccessLinks,
   expireEarlyAccessLinksIfTheyDisagree,

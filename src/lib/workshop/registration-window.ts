@@ -62,6 +62,23 @@ function earlyAccessStart(times: WorkshopRegistrationTimes): number | null {
 }
 
 /**
+ * The two times of the early-access window (spec §2), as stored, or null when
+ * the conference has none. For what names the window to a person (the email
+ * that carries a sponsor's link, #1347); whether a caller can sign up is
+ * `workshopRegistrationWindow`'s to say.
+ */
+export function earlyAccessWindow(
+  times: WorkshopRegistrationTimes,
+): { sponsorStart: string; officialOpening: string } | null {
+  return earlyAccessStart(times) === null
+    ? null
+    : {
+        sponsorStart: times.workshopRegistrationSponsorStart!,
+        officialOpening: times.workshopRegistrationStart!,
+      }
+}
+
+/**
  * THE SAVE RULE (spec §3): why these times cannot be stored together, or null
  * when they can. A sponsor start time needs an official opening, and must be
  * earlier than it. `workshop.admin.updateRegistrationTimes` refuses with this

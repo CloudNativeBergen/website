@@ -40,7 +40,11 @@ export type ActivityType =
  * shape is shared so the audit view never has to change.
  */
 export type CommunicationKind =
-  'information' | 'contract' | 'registration' | 'discount'
+  | 'information'
+  | 'contract'
+  | 'registration'
+  | 'discount'
+  | 'workshop-early-access'
 
 export type CommunicationDeliveryStatus = 'sent' | 'failed'
 

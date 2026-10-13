@@ -208,19 +208,23 @@ export const ImportAllHistoricSponsorsSchema = z.object({
  * KEYS — the server resolves addresses from the sponsor's own contacts and
  * refuses anything else — and the body is PortableText JSON as the editor
  * produces it. Slice 1 accepted `information`; #1262 added `discount`, #1263
- * `registration`, #1264 `contract`.
+ * `registration`, #1264 `contract`, #1347 `workshop-early-access`.
+ *
+ * ONE LIST for what can be sent and what the Communications tab filters by:
+ * a kind added here is accepted by both.
  */
 export const CommunicationKindSchema = z.enum([
   'information',
   'contract',
   'registration',
   'discount',
+  'workshop-early-access',
 ])
 
 export const SendCommunicationSchema = z
   .object({
     sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
-    kind: z.enum(['information', 'discount', 'registration', 'contract']),
+    kind: CommunicationKindSchema,
     /**
      * At least one — except for a contract reminder or signed copy, which
      * the server addresses to the signer on record even with no contact

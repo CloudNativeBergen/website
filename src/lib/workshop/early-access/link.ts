@@ -425,6 +425,24 @@ export async function readEarlyAccessToken(
 }
 
 /**
+ * What a send of the link asks about the sponsor before anything is written
+ * (#1347): the deal's status and the token the PUBLISHED document stores.
+ * `null`: no such sponsor in this conference.
+ */
+export async function readEarlyAccessSponsor(
+  conferenceId: string,
+  sponsorForConferenceId: string,
+): Promise<{ status: string | null; token: string | null } | null> {
+  return scopedFetch<{ status: string | null; token: string | null } | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "sponsorForConference" && _id == $id][0]{ status, "token": workshopEarlyAccessToken }`,
+    { id: sponsorForConferenceId },
+    { cache: 'no-store' },
+  )
+}
+
+/**
  * The address of a link: on the portal's working host, with the token in the
  * path. `portalUrl` is what `workshopPortalUrl` answered, never the host an
  * organizer happens to be on: the cookie is bound to the host that sets it.
