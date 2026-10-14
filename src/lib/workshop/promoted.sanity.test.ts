@@ -701,3 +701,30 @@ describe('a workshop withdrawn while a run is sending', () => {
     expect(store().doc('signup-3')).not.toHaveProperty('promotionEmailClaim')
   })
 })
+
+describe('the order of the sweep', () => {
+  it('pays the longest-owed first, by the promotion time (confirmedAt): a later edit of a sign-up (its _updatedAt) does not move its debt back', async () => {
+    store().reset([
+      conference(),
+      workshop(),
+      // Promoted first, edited last (notes in Studio): still first in line.
+      signup(2, 'confirmed', {
+        promotionEmailDue: true,
+        confirmedAt: '2026-10-01T10:00:00Z',
+        _updatedAt: '2026-10-03T10:00:00Z',
+      }),
+      signup(3, 'confirmed', {
+        promotionEmailDue: true,
+        confirmedAt: '2026-10-02T10:00:00Z',
+        _updatedAt: '2026-10-02T10:00:00Z',
+      }),
+    ])
+
+    expect(await deliverDuePromotionEmails({ limit: 1 })).toMatchObject({
+      found: 1,
+      emailed: 1,
+    })
+
+    expect(emailed()).toEqual(['person2@example.com'])
+  })
+})

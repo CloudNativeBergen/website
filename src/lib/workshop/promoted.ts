@@ -265,7 +265,9 @@ const BACKSTOP_LIMIT = 100
 
 /**
  * The hourly backstop: pays the promotion emails still owed anywhere, the
- * longest-owed first, up to `limit`, each in the name of the sign-up's own
+ * longest-owed first (by `confirmedAt`, set in the write that promoted and
+ * owed: a later edit of the sign-up moves `_updatedAt`, not its place in
+ * line), up to `limit`, each in the name of the sign-up's own
  * conference. Finds them with a query (one that may lag can only find a debt
  * late, never pay one twice: the claim decides). Throws only if the query
  * itself fails; the sends never do.
@@ -289,7 +291,7 @@ export async function deliverDuePromotionEmails({
   // moved stays owed, but takes no place in the window every hour.
   const query = `*[_type == "workshopSignup" && promotionEmailDue == true && defined(conference->_id) && !(_id in path("drafts.**"))
     && workshop->status == $confirmed && workshop->format in $workshopFormats && workshop->conference._ref == conference._ref]
-    | order(_updatedAt asc) [0...${take}]{ _id, "conferenceId": conference._ref }`
+    | order(confirmedAt asc) [0...${take}]{ _id, "conferenceId": conference._ref }`
   const due = await clientWrite.fetch<
     { _id: string; conferenceId: string | null }[] | null
   >(
