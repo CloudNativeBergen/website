@@ -6,7 +6,7 @@
  *
  * Currently used in:
  * - WorkshopCard (public): getCapacityStatusMessage
- * - admin/workshop/utils: calculateCapacityPercentage, getCapacityStatusColor
+ * - admin/TicketSalesChartDisplay: calculateCapacityPercentage
  * - Internal: calculateAvailableSpots, isWorkshopFull (used by other functions)
  */
 

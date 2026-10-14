@@ -1,5 +1,4 @@
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
-import { calculateCapacityPercentage } from '@/lib/workshop/capacity'
 
 export interface WorkshopStats {
   confirmedCount: number
@@ -27,16 +26,13 @@ export function calculateWorkshopStats(
   waitlistCount: number,
 ): WorkshopStats {
   const capacity = workshop.capacity || 30
-  const capacityPercentage = calculateCapacityPercentage(
-    capacity,
-    confirmedCount,
-  )
+  const utilizationPercentage = Math.round((confirmedCount / capacity) * 100)
 
   return {
     confirmedCount,
     waitlistCount,
-    capacityPercentage,
-    utilizationPercentage: Math.round((confirmedCount / capacity) * 100),
+    capacityPercentage: Math.min(100, utilizationPercentage),
+    utilizationPercentage,
     overCapacityBy: Math.max(0, confirmedCount - capacity),
   }
 }
