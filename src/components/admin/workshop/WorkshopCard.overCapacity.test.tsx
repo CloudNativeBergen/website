@@ -36,6 +36,13 @@ const renderCard = (capacity: number, confirmedCount: number) =>
     />,
   )
 
+/** The utilization bar's fill: the child of the track the card labels as a progressbar. */
+const bar = () => {
+  const fill = screen.getByRole('progressbar').firstElementChild
+  if (!(fill instanceof HTMLElement)) throw new Error('no bar fill')
+  return fill
+}
+
 afterEach(cleanup)
 
 describe('WorkshopCard over-capacity marker', () => {
@@ -44,6 +51,11 @@ describe('WorkshopCard over-capacity marker', () => {
     expect(screen.getByText('Over capacity by 2')).toBeInTheDocument()
     // The percentage is the real ratio, not the bar's capped 100.
     expect(screen.getByText('(107%)')).toBeInTheDocument()
+    // The bar is full and red, not the orange of a merely full workshop.
+    const fill = bar()
+    expect(fill.className).toContain('bg-red-500')
+    expect(fill.className).not.toContain('bg-orange-500')
+    expect(fill.style.width).toBe('100%')
   })
 
   it('shows no marker at exactly capacity', () => {
@@ -51,6 +63,12 @@ describe('WorkshopCard over-capacity marker', () => {
     expect(screen.queryByText(/over capacity/i)).not.toBeInTheDocument()
     // The card still shows the counts it always did.
     expect(screen.getByText('30/30')).toBeInTheDocument()
+    expect(screen.getByText('(100%)')).toBeInTheDocument()
+    // A full workshop keeps the full-workshop orange bar.
+    const fill = bar()
+    expect(fill.className).toContain('bg-orange-500')
+    expect(fill.className).not.toContain('bg-red-500')
+    expect(fill.style.width).toBe('100%')
   })
 
   it('shows no marker below capacity', () => {

@@ -62,7 +62,15 @@ export function WorkshopCard({
               <span>({utilizationPercentage}%)</span>
             </div>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+          <div
+            role="progressbar"
+            aria-label="Capacity used"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={capacityPercentage}
+            aria-valuetext={`${utilizationPercentage}%`}
+            className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
+          >
             <div
               className={`h-full transition-all ${
                 overCapacity
