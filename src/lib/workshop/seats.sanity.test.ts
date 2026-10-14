@@ -100,4 +100,98 @@ describe('sign-ups arriving together', () => {
     expect(withStatus('confirmed')).toHaveLength(3)
     expect(withStatus('waitlist')).toHaveLength(3)
   })
+
+  it('the same holds when each request is handled by a separate instance of the server code', async () => {
+    // Five module graphs, as five server instances would load them: nothing
+    // in memory is shared between the competing requests, only the dataset.
+    const instances = []
+    for (let i = 0; i < 5; i++) {
+      vi.resetModules()
+      instances.push(await import('./seats'))
+    }
+    expect(new Set(instances.map((m) => m.signUpForWorkshop)).size).toBe(5)
+
+    await Promise.all(
+      instances.map((m, i) =>
+        m.signUpForWorkshop(attendee(i + 1), { whenFull: 'waitlist' }),
+      ),
+    )
+
+    expect(store().events.slice(0, 6)).toEqual([
+      'read',
+      'read',
+      'read',
+      'read',
+      'read',
+      'commit',
+    ])
+    expect(withStatus('confirmed')).toHaveLength(3)
+    expect(withStatus('waitlist')).toHaveLength(3)
+  })
+
+  it('with no seat left, all of them wait and none is confirmed', async () => {
+    store().reset([workshop({ capacity: 1 }), signup(1, 'confirmed')])
+
+    await Promise.all(
+      [1, 2, 3].map((n) =>
+        signUpForWorkshop(attendee(n), { whenFull: 'waitlist' }),
+      ),
+    )
+
+    expect(withStatus('confirmed')).toHaveLength(1)
+    expect(withStatus('waitlist')).toHaveLength(3)
+  })
+})
+
+describe('one person, one sign-up per workshop', () => {
+  it('the same sign-up sent twice at once ends with one sign-up, and the second is told so', async () => {
+    const outcomes = await Promise.all([
+      signUpForWorkshop(attendee(7), { whenFull: 'waitlist' }),
+      signUpForWorkshop(attendee(7), { whenFull: 'waitlist' }),
+    ])
+
+    expect(store().events.slice(0, 3)).toEqual(['read', 'read', 'commit'])
+    const mine = storedSignups().filter((d) => d.userWorkOSId === 'user_7')
+    expect(mine).toHaveLength(1)
+    expect(mine[0].status).toBe('confirmed')
+    expect(outcomes).toContainEqual({ refused: 'already-signed-up' })
+  })
+
+  it('also when the workshop is full and both would wait', async () => {
+    store().reset([workshop({ capacity: 1 }), signup(1, 'confirmed')])
+
+    await Promise.all([
+      signUpForWorkshop(attendee(7), { whenFull: 'waitlist' }),
+      signUpForWorkshop(attendee(7), { whenFull: 'waitlist' }),
+    ])
+
+    const mine = storedSignups().filter((d) => d.userWorkOSId === 'user_7')
+    expect(mine).toHaveLength(1)
+    expect(mine[0].status).toBe('waitlist')
+  })
+
+  it('a sign-up stored before #1344, under a random id, is found', async () => {
+    store().reset([
+      workshop(),
+      { ...signup(1, 'waitlist'), userWorkOSId: 'user_7' },
+    ])
+
+    expect(
+      await signUpForWorkshop(attendee(7), { whenFull: 'waitlist' }),
+    ).toEqual({ refused: 'already-signed-up' })
+    expect(storedSignups()).toHaveLength(1)
+  })
+
+  it('a person who cancelled (the sign-up was deleted) can sign up again', async () => {
+    const first = await signUpForWorkshop(attendee(7), { whenFull: 'waitlist' })
+    const id = (first as { signup: { _id: string } }).signup._id
+    // An attendee's cancel deletes the sign-up (#1331).
+    store().reset(store().all().filter((d) => d._id !== id))
+
+    const again = await signUpForWorkshop(attendee(7), {
+      whenFull: 'waitlist',
+    })
+
+    expect(again).toMatchObject({ signup: { _id: id, status: 'confirmed' } })
+  })
 })
