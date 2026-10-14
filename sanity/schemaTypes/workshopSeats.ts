@@ -49,16 +49,6 @@ export default defineType({
       ],
     }),
     defineField({
-      name: 'capacity',
-      title: 'Capacity set a moment ago',
-      type: 'number',
-    }),
-    defineField({
-      name: 'capacitySetAt',
-      title: 'Capacity set at',
-      type: 'datetime',
-    }),
-    defineField({
       name: 'writes',
       title: 'Writes',
       type: 'number',

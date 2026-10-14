@@ -976,6 +976,25 @@ describe('changing the capacity', () => {
     },
   )
 
+  it('of a workshop withdrawn between its read and its write: decided again, confirms no one', async () => {
+    store().reset([
+      workshop({ capacity: 1 }),
+      signup(1, 'confirmed'),
+      waiting(2),
+    ])
+    store().beforeNextCommit(() =>
+      store().put({
+        ...store().doc(WORKSHOP)!,
+        status: 'withdrawn',
+        _rev: 'withdrawn-meanwhile',
+      }),
+    )
+
+    expect(await changeCapacity(WORKSHOP, CONF, 3)).toEqual({ promoted: [] })
+    expect(store().doc('signup-2')?.status).toBe('waitlist')
+    expect(store().doc(WORKSHOP)?.capacity).toBe(3)
+  })
+
   it('is refused below the seats taken, and writes nothing', async () => {
     store().reset([workshop(), signup(1, 'confirmed'), signup(2, 'confirmed')])
 
