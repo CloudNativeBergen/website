@@ -55,6 +55,25 @@ interface StoredWorkshop {
   title?: string
 }
 
+/**
+ * How many of a promotion's emails the request that made it sends itself
+ * (#1357): at 500 ms apart, 20 is ten seconds of a request that has already
+ * written the capacity, well under the function's 300 s. The rest stay owed,
+ * and the hourly cron pays them: a promotion of hundreds hears within the
+ * hour, not within the request.
+ */
+const INLINE_LIMIT = 20
+
+/**
+ * The pace of one run's sends, carried across however many conferences it
+ * serves: a pause before every send but the run's first (Resend allows about
+ * two requests a second).
+ */
+export interface Pacing {
+  sends: number
+}
+export const startPacing = (): Pacing => ({ sends: 0 })
+
 const notSent = (ids: string[], why: unknown) =>
   console.error(
     '[workshop] promotion emails not sent, promoted sign-ups:',
@@ -71,11 +90,23 @@ const notSent = (ids: string[], why: unknown) =>
 export async function deliverPromotionEmails(
   conferenceId: string,
   signupIds: string[],
+  {
+    limit = INLINE_LIMIT,
+    pacing = startPacing(),
+  }: {
+    /** At most this many claimed and sent; the rest stay owed. */
+    limit?: number
+    /** The run's pace so far, when this call is one of several. */
+    pacing?: Pacing
+  } = {},
 ): Promise<{ emailed: string[] }> {
   const emailed: string[] = []
   if (signupIds.length === 0) return { emailed }
   try {
-    const due = (await clientWrite.getDocuments<DueSignup>(signupIds)).filter(
+    // Only the prefix is read: nothing past the bound is claimed, or touched.
+    const prefix = signupIds.slice(0, Math.max(0, Math.floor(limit)))
+    if (prefix.length === 0) return { emailed }
+    const due = (await clientWrite.getDocuments<DueSignup>(prefix)).filter(
       (d): d is NonNullable<typeof d> =>
         d !== null &&
         d._type === 'workshopSignup' &&
@@ -117,9 +148,8 @@ export async function deliverPromotionEmails(
       // Owed, but no longer confirmed (moved back outside the app): settled
       // by the claim, told nothing.
       if (!signup || signup.status !== 'confirmed') continue
-      if (emailed.length + failed.length > 0) {
-        await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
-      }
+      if (pacing.sends > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+      pacing.sends += 1
       const workshop = signup.workshop && workshopById.get(signup.workshop._ref)
       // A send that fails answers with an `error`; it does not throw. Each
       // one is logged with the sign-up it was for.
@@ -231,9 +261,16 @@ export async function deliverDuePromotionEmails({
       _id,
     ])
   }
+  // One pace for the whole run, across conferences; the window is the bound.
+  const pacing = startPacing()
   let emailed = 0
   for (const [conferenceId, ids] of byConference) {
-    emailed += (await deliverPromotionEmails(conferenceId, ids)).emailed.length
+    emailed += (
+      await deliverPromotionEmails(conferenceId, ids, {
+        limit: ids.length,
+        pacing,
+      })
+    ).emailed.length
   }
   return {
     found: due?.length ?? 0,

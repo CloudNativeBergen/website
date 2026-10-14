@@ -512,3 +512,77 @@ describe('the pace of the sends (Resend allows about two requests a second)', ()
     expect(emailed()).toEqual(['person2@example.com', 'person3@example.com'])
   })
 })
+
+describe('the pace across a whole sweep, and the bound of an inline delivery', () => {
+  const dueSignup = (n: number, conf: string) =>
+    signup(n, 'confirmed', {
+      conference: ref(conf),
+      workshop: ref(`talk-${conf}`),
+      promotionEmailDue: true,
+    })
+  const anotherConference = (id: string) => {
+    store().put(conference(id))
+    store().put(workshop({ _id: `talk-${id}`, conference: ref(id) }))
+  }
+
+  it('a sweep over three conferences with one sign-up each: every send after the first is preceded by the pause', async () => {
+    store().reset([conference(), workshop()])
+    for (const [n, conf] of [
+      [1, CONF],
+      [2, 'conf-b'],
+      [3, 'conf-c'],
+    ] as const) {
+      if (conf !== CONF) anotherConference(conf)
+      store().put(dueSignup(n, conf))
+    }
+
+    const outcome = await deliverDuePromotionEmails()
+
+    expect(outcome).toMatchObject({ found: 3, emailed: 3, conferences: 3 })
+    expect(pacing.delay).toHaveBeenCalledTimes(2)
+    expect(pacing.delay).toHaveBeenCalledWith(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+  })
+
+  it('an inline delivery (after a capacity change) claims and sends at most 20; the rest stay owed, and the cron pays them once', async () => {
+    store().reset([
+      conference(),
+      workshop(),
+      ...Array.from({ length: 22 }, (_, i) => signup(i + 10, 'waitlist')),
+    ])
+    const outcome = await changeCapacity(WORKSHOP, CONF, 22)
+    expect(outcome).toMatchObject({ promoted: expect.any(Array) })
+    const promoted = (outcome as { promoted: string[] }).promoted
+    expect(promoted).toHaveLength(22)
+
+    await deliverPromotionEmails(CONF, promoted)
+
+    expect(emailed()).toHaveLength(20)
+    const stillDue = promoted.filter(
+      (id) => store().doc(id)?.promotionEmailDue === true,
+    )
+    expect(stillDue).toHaveLength(2)
+    for (const id of stillDue) {
+      expect(store().doc(id)).not.toHaveProperty('promotionEmailClaim')
+    }
+
+    expect(await deliverDuePromotionEmails()).toMatchObject({
+      found: 2,
+      emailed: 2,
+    })
+    expect(new Set(emailed()).size).toBe(22)
+    expect(emailed()).toHaveLength(22)
+  })
+
+  it('the sweep itself is bounded by its own window, not by the inline bound: 25 owed in one conference are all paid', async () => {
+    store().reset([
+      conference(),
+      workshop(),
+      ...Array.from({ length: 25 }, (_, i) => dueSignup(i + 10, CONF)),
+    ])
+
+    expect(await deliverDuePromotionEmails()).toMatchObject({
+      found: 25,
+      emailed: 25,
+    })
+  })
+})
