@@ -1,80 +1,232 @@
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+/**
+ * The promotion emails (#1357): told to each sign-up that a capacity change
+ * confirmed from the waitlist (#1344) that it has a seat.
+ *
+ * THE DEBT IS STORED. `changeCapacity` (`./seats.ts`) sets
+ * `promotionEmailDue: true` on each sign-up it promotes, in the write that
+ * promotes it. So the list of who to email is in the dataset, not only in the
+ * reply to that write: a reply lost after the write landed leaves the debt for
+ * the next run (the caller's own, or the hourly cron
+ * `/api/cron/workshop-promotion-emails`) to pay.
+ *
+ * PAID AT MOST ONCE. A run CLAIMS a sign-up before it emails it: a patch
+ * `ifRevisionID` the revision it read, unsetting `promotionEmailDue` and
+ * setting `promotionEmailClaim` to a token of its own. Two runs over the same
+ * sign-up (the inline send and the cron, racing) cannot both claim it: Sanity
+ * refuses the second (a 409), which then leaves it alone. A claim whose own
+ * reply is lost is read back: it is this run's only if the token stored is
+ * this run's.
+ *
+ * READ FROM THE DOCUMENT STORE. Who owes, and whether it is still confirmed,
+ * is asked of the doc endpoint (`getDocuments`), never of a query that may
+ * lag behind the write that promoted (or moved back) a moment ago.
+ *
+ * NOTHING HERE FAILS THE CAPACITY CHANGE: it is already written. An email,
+ * or the read it needs, that fails is logged with the sign-up ids so the
+ * emails can be sent by hand; a read that fails BEFORE anything is claimed
+ * leaves the debt for the next run.
+ */
+import { randomUUID } from 'node:crypto'
+import type { Conference } from '@/lib/conference/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { clientWrite } from '@/lib/sanity/client'
-import { getAllWorkshopSignups } from './sanity'
+
+interface DueSignup {
+  _id: string
+  _type: string
+  _rev: string
+  userEmail: string
+  userName: string
+  status?: string
+  promotionEmailDue?: boolean
+  promotionEmailClaim?: string
+  workshop?: { _ref: string }
+  conference?: { _ref: string }
+}
+
+interface WorkshopDetails {
+  _type: string
+  title?: string
+  date?: string
+  startTime?: string
+}
+
+const notSent = (ids: string[], why: unknown) =>
+  console.error(
+    '[workshop] promotion emails not sent, promoted sign-ups:',
+    ids,
+    why,
+  )
 
 /**
- * Tells each sign-up a capacity change confirmed from the waitlist (#1344)
- * that it has a seat. The capacity change is already written: nothing here
- * fails it. An email, or the read it needs, that fails is not retried; the
- * ids are logged so the emails can be sent by hand.
+ * Emails, once, each of `signupIds` of `conferenceId` that still owes a
+ * promotion email and is still confirmed, in the name of that conference.
+ * Settles the debt of one that owes but is no longer confirmed (moved back
+ * outside the app) without an email. Never throws.
  */
-export async function emailPromotedSignups(
+export async function deliverPromotionEmails(
   conferenceId: string,
   signupIds: string[],
-): Promise<void> {
-  if (signupIds.length === 0) return
-  const notSent = (ids: string[], why: unknown) =>
-    console.error(
-      '[workshop] promotion emails not sent, promoted sign-ups:',
-      ids,
-      why,
+): Promise<{ emailed: string[] }> {
+  const emailed: string[] = []
+  if (signupIds.length === 0) return { emailed }
+  try {
+    const due = (await clientWrite.getDocuments<DueSignup>(signupIds)).filter(
+      (d): d is NonNullable<typeof d> =>
+        d !== null &&
+        d._type === 'workshopSignup' &&
+        d.conference?._ref === conferenceId &&
+        d.promotionEmailDue === true,
     )
-  const read = await Promise.all([
-    getAllWorkshopSignups({
-      conferenceId,
-      signupIds,
-      pageSize: signupIds.length,
-    }),
-    getConferenceForCurrentDomain({}),
-  ]).catch((error: unknown) => {
-    notSent(signupIds, error)
-    return null
-  })
-  if (!read) return
-  const [promoted, { conference, error }] = read
-  // A conference that could not be read comes back as a fallback, not a
-  // failure: no email goes out in a name that is not the conference's.
-  if (!conference || error) return notSent(signupIds, error)
-  // One moved back to the waitlist since is not told it has a seat: asked of
-  // the document store, past a query that may lag.
-  const now = await clientWrite
-    .getDocuments<{ status?: string }>(promoted.map((s) => s._id))
-    .catch((error: unknown) => {
-      notSent(signupIds, error)
-      return null
-    })
-  if (!now) return
-  const stillConfirmed = promoted.filter(
-    (_, i) => now[i]?.status === 'confirmed',
-  )
-  const sent = await Promise.allSettled(
-    stillConfirmed.map((signup) =>
-      sendBasicWorkshopConfirmation({
-        userEmail: signup.userEmail,
-        userName: signup.userName,
-        status: 'confirmed',
-        conference,
-        workshopTitle: signup.workshop?.title ?? 'Workshop',
-        workshopDate: (signup.workshop as { date?: string })?.date,
-        workshopTime: (signup.workshop as { startTime?: string })?.startTime,
+    if (due.length === 0) return { emailed }
+
+    // Everything the emails need, BEFORE anything is claimed: a read that
+    // fails here costs nothing, the debt stays for the next run.
+    const workshopIds = [
+      ...new Set(due.flatMap((d) => (d.workshop ? [d.workshop._ref] : []))),
+    ]
+    const [conference, ...workshops] = await clientWrite.getDocuments<
+      Record<string, unknown>
+    >([conferenceId, ...workshopIds])
+    // In the conference's own name or not at all: a cron has no request
+    // domain, so the conference is read by the id the sign-up names.
+    if (conference?._type !== 'conference') {
+      notSent(
+        due.map((d) => d._id),
+        new Error(`conference ${conferenceId} could not be read`),
+      )
+      return { emailed }
+    }
+    const workshopById = new Map(
+      workshops.flatMap((w, i) =>
+        w?._type === 'talk'
+          ? [[workshopIds[i], w as unknown as WorkshopDetails] as const]
+          : [],
+      ),
+    )
+
+    const claimed = (
+      await Promise.all(due.map((signup) => claim(signup)))
+    ).flatMap((signup) => (signup ? [signup] : []))
+    // Owed, but no longer confirmed (moved back outside the app): settled
+    // by the claim, told nothing.
+    const toEmail = claimed.filter((s) => s.status === 'confirmed')
+
+    const sent = await Promise.allSettled(
+      toEmail.map((signup) => {
+        const workshop =
+          signup.workshop && workshopById.get(signup.workshop._ref)
+        return sendBasicWorkshopConfirmation({
+          userEmail: signup.userEmail,
+          userName: signup.userName,
+          status: 'confirmed',
+          conference: conference as unknown as Conference,
+          workshopTitle: workshop?.title ?? 'Workshop',
+          workshopDate: workshop?.date,
+          workshopTime: workshop?.startTime,
+        })
       }),
-    ),
-  )
-  // A send that fails answers with an `error`; it does not throw. Each one
-  // is logged with the sign-up it was for.
-  const failed = stillConfirmed.flatMap((signup, i) => {
-    const result = sent[i]
-    const why =
-      result.status === 'rejected' ? result.reason : result.value?.error
-    return result.status === 'rejected' || why !== undefined
-      ? [{ id: signup._id, why }]
-      : []
-  })
-  if (failed.length > 0) {
-    notSent(
-      failed.map((f) => f.id),
-      failed.map((f) => f.why),
     )
+    // A send that fails answers with an `error`; it does not throw. Each one
+    // is logged with the sign-up it was for.
+    const failed: { id: string; why: unknown }[] = []
+    toEmail.forEach((signup, i) => {
+      const result = sent[i]
+      const why =
+        result.status === 'rejected' ? result.reason : result.value?.error
+      if (result.status === 'rejected' || why !== undefined) {
+        failed.push({ id: signup._id, why })
+      } else {
+        emailed.push(signup._id)
+      }
+    })
+    if (failed.length > 0) {
+      notSent(
+        failed.map((f) => f.id),
+        failed.map((f) => f.why),
+      )
+    }
+  } catch (error) {
+    notSent(signupIds, error)
+  }
+  return { emailed }
+}
+
+/**
+ * Takes the debt of `signup` for this run: on the revision read, so a run
+ * that got there first (or a free, or a cancel) makes this one leave it be.
+ * `null` when it is not this run's.
+ */
+async function claim(signup: DueSignup): Promise<DueSignup | null> {
+  const token = randomUUID()
+  try {
+    await clientWrite
+      .patch(signup._id)
+      .ifRevisionId(signup._rev)
+      .unset(['promotionEmailDue'])
+      .set({ promotionEmailClaim: token })
+      .commit()
+    return signup
+  } catch (error) {
+    // Refused on the revision (another run's claim, a free) or gone (a
+    // cancel): someone else's, or nobody's, now.
+    const status = (error as { statusCode?: unknown } | null)?.statusCode
+    if (status === 409 || status === 404) return null
+    // Anything else, the reply lost among them: the claim may have landed.
+    // It is this run's only if the token stored is this run's.
+    const now = await clientWrite
+      .getDocument<DueSignup>(signup._id)
+      .catch(() => null)
+    return now?.promotionEmailClaim === token ? signup : null
+  }
+}
+
+/**
+ * How many owed emails one run of the backstop pays, at most: like the other
+ * crons, bounded so one run stays well within a function's time, and a
+ * burst (a capacity raised by hundreds) is paid over a few hours instead of
+ * timing out and paying nothing.
+ */
+const BACKSTOP_LIMIT = 100
+
+/**
+ * The hourly backstop: pays the promotion emails still owed anywhere, the
+ * longest-owed first, up to `limit`, each in the name of the sign-up's own
+ * conference. Finds them with a query (one that may lag can only find a debt
+ * late, never pay one twice: the claim decides). Throws only if the query
+ * itself fails; the sends never do.
+ */
+export async function deliverDuePromotionEmails({
+  limit = BACKSTOP_LIMIT,
+}: { limit?: number } = {}): Promise<{
+  found: number
+  emailed: number
+  conferences: number
+}> {
+  const take = Math.max(1, Math.floor(limit))
+  // groq-global: the backstop sweeps EVERY tenant's sign-ups that still owe
+  // a promotion email; each is then emailed by `deliverPromotionEmails`,
+  // scoped to, and in the name of, the conference the sign-up itself names.
+  const query = `*[_type == "workshopSignup" && promotionEmailDue == true && !(_id in path("drafts.**"))]
+    | order(_updatedAt asc) [0...${take}]{ _id, "conferenceId": conference._ref }`
+  const due = await clientWrite.fetch<
+    { _id: string; conferenceId: string | null }[] | null
+  >(query, {}, { cache: 'no-store' })
+  const byConference = new Map<string, string[]>()
+  for (const { _id, conferenceId } of due ?? []) {
+    if (!conferenceId) continue
+    byConference.set(conferenceId, [
+      ...(byConference.get(conferenceId) ?? []),
+      _id,
+    ])
+  }
+  let emailed = 0
+  for (const [conferenceId, ids] of byConference) {
+    emailed += (await deliverPromotionEmails(conferenceId, ids)).emailed.length
+  }
+  return {
+    found: due?.length ?? 0,
+    emailed,
+    conferences: byConference.size,
   }
 }

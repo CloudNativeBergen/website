@@ -49,7 +49,7 @@ import {
   signUpForWorkshop,
   type SignUpOutcome,
 } from '@/lib/workshop/seats'
-import { emailPromotedSignups } from '@/lib/workshop/promoted'
+import { deliverPromotionEmails } from '@/lib/workshop/promoted'
 import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
@@ -959,9 +959,11 @@ export const workshopRouter = router({
           }
 
           // Written: the emails go first, and the read for the answer can
-          // fail without failing what is saved.
+          // fail without failing what is saved. The write itself stored who
+          // is owed an email (#1357); a reply lost before this line leaves
+          // them for the hourly cron.
           const promotedCount = outcome.promoted.length
-          await emailPromotedSignups(conferenceId, outcome.promoted)
+          await deliverPromotionEmails(conferenceId, outcome.promoted)
           const updatedWorkshop = await getWorkshopById(input.workshopId).catch(
             () => null,
           )

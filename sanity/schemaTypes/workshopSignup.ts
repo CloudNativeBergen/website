@@ -136,6 +136,26 @@ export default defineType({
       description: 'The sponsor whose early-access link admitted this sign-up',
     }),
     defineField({
+      // #1357: set by the capacity change that promotes this sign-up from the
+      // waitlist, in the same write; cleared by the sender that emails it (or
+      // by a move back to the waitlist). Not edited by hand: it is the record
+      // of an email owed, which the hourly cron pays.
+      name: 'promotionEmailDue',
+      title: 'Promotion Email Due',
+      type: 'boolean',
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
+      // #1357: the token of the run that took the promotion email on itself,
+      // so two runs at once never both send it.
+      name: 'promotionEmailClaim',
+      title: 'Promotion Email Claim',
+      type: 'string',
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
       name: 'confirmationEmailSent',
       title: 'Confirmation Email Sent',
       type: 'boolean',

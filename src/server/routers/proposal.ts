@@ -74,7 +74,7 @@ import {
 import { clientWrite } from '@/lib/sanity/client'
 import { changeCapacity } from '@/lib/workshop/seats'
 import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
-import { emailPromotedSignups } from '@/lib/workshop/promoted'
+import { deliverPromotionEmails } from '@/lib/workshop/promoted'
 import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
 import {
   createNotifications,
@@ -241,7 +241,9 @@ async function changeTalkCapacity(
         })
     }
   }
-  await emailPromotedSignups(stored.conferenceId!, outcome.promoted)
+  // Who is owed an email is stored by the write (#1357): an early return
+  // above on a retry with the same capacity loses nothing, the cron pays it.
+  await deliverPromotionEmails(stored.conferenceId!, outcome.promoted)
 }
 
 /** The topic ids currently on a talk, for the grandfathering set above. */

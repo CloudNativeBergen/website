@@ -927,6 +927,46 @@ describe('changing the capacity', () => {
     expect(store().doc('signup-5')?.status).toBe('waitlist')
   })
 
+  it('owes each promoted sign-up a promotion email, in the write that promotes it (#1357)', async () => {
+    store().reset([
+      workshop({ capacity: 1 }),
+      signup(1, 'confirmed'),
+      waiting(2),
+    ])
+
+    await changeCapacity(WORKSHOP, CONF, 2)
+
+    // In the SAME commit as the status: a reply lost after this write still
+    // leaves the debt stored, for the sender to find.
+    const [, ...rest] = store().commits
+    expect(rest).toEqual([])
+    const promoted = store().doc('signup-2')
+    expect(promoted).toMatchObject({
+      status: 'confirmed',
+      promotionEmailDue: true,
+    })
+    expect(store().doc('signup-1')).not.toHaveProperty('promotionEmailDue')
+  })
+
+  it.each(['delete', 'waitlist'] as const)(
+    'a promoted sign-up freed by %s before its email went out no longer owes one',
+    async (how) => {
+      store().reset([
+        workshop({ capacity: 1 }),
+        signup(1, 'confirmed'),
+        waiting(2),
+      ])
+      await changeCapacity(WORKSHOP, CONF, 2)
+      expect(store().doc('signup-2')?.promotionEmailDue).toBe(true)
+
+      await freeSeat('signup-2', how)
+
+      const after = store().doc('signup-2')
+      if (how === 'delete') expect(after).toBeUndefined()
+      else expect(after).not.toHaveProperty('promotionEmailDue')
+    },
+  )
+
   it('promotes no one into a workshop that was already over capacity', async () => {
     store().reset([
       workshop({ capacity: 1 }),

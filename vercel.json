@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/marketing-reminders",
       "schedule": "20 6 * * *"
+    },
+    {
+      "path": "/api/cron/workshop-promotion-emails",
+      "schedule": "40 * * * *"
     }
   ]
 }

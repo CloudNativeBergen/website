@@ -109,7 +109,7 @@ vi.mock('@/lib/workshop/seats', () => ({
   changeCapacity: h.changeCapacity,
 }))
 vi.mock('@/lib/workshop/promoted', () => ({
-  emailPromotedSignups: h.emailPromoted,
+  deliverPromotionEmails: h.emailPromoted,
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'

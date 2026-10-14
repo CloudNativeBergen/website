@@ -63,6 +63,12 @@ const seats = vi.hoisted(() => ({
   changeCapacity: vi.fn(),
 }))
 vi.mock('@/lib/workshop/seats', () => seats)
+// The emails themselves are proven on stored documents in
+// `src/lib/workshop/promoted.sanity.test.ts`; here, that the router runs them.
+const promoted = vi.hoisted(() => ({
+  deliverPromotionEmails: vi.fn(async () => ({ emailed: [] as string[] })),
+}))
+vi.mock('@/lib/workshop/promoted', () => promoted)
 
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
@@ -398,27 +404,24 @@ describe('admin.updateCapacity', () => {
     ).rejects.toMatchObject({ code, message })
   })
 
-  it('a failed read of the promoted sign-ups does not fail the saved change', async () => {
-    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
-    ws.getAllWorkshopSignups.mockRejectedValue(new Error('503: unavailable'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('runs the promotion emails for the sign-ups it confirmed, and counts them', async () => {
+    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
 
     const result = await admin().updateCapacity({
       workshopId: 'w-1',
       capacity: 5,
     })
 
-    expect(result).toMatchObject({ success: true, promotedCount: 1 })
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('promotion emails not sent'),
-      ['s-1'],
-      expect.any(Error),
-    )
+    expect(seats.changeCapacity).toHaveBeenCalledWith('w-1', 'conf-A', 5)
+    expect(promoted.deliverPromotionEmails).toHaveBeenCalledWith('conf-A', [
+      's-1',
+      's-2',
+    ])
+    expect(result.promotedCount).toBe(2)
   })
 
-  it('a failed re-read of the workshop after the change still emails the promoted, and succeeds', async () => {
+  it('a failed re-read of the workshop after the change still runs the emails, and succeeds', async () => {
     seats.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
-    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1', 'confirmed')])
     ws.getWorkshopById.mockRejectedValue(new Error('503: unavailable'))
 
     const result = await admin().updateCapacity({
@@ -427,100 +430,6 @@ describe('admin.updateCapacity', () => {
     })
 
     expect(result).toMatchObject({ success: true, promotedCount: 1 })
-    expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(1)
-  })
-
-  it('a failed email is logged with the sign-up it was for, and only that one', async () => {
-    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
-    ws.getAllWorkshopSignups.mockResolvedValue([
-      row('s-1', 'w-1', 'confirmed'),
-      row('s-2', 'w-1', 'confirmed'),
-    ])
-    vi.mocked(sendBasicWorkshopConfirmation)
-      .mockResolvedValueOnce({ data: { emailId: 'e-1' } } as never)
-      .mockResolvedValueOnce({ error: { message: 'provider down' } } as never)
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await admin().updateCapacity({ workshopId: 'w-1', capacity: 5 })
-
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('promotion emails not sent'),
-      ['s-2'],
-      [{ message: 'provider down' }],
-    )
-  })
-
-  it('a conference that could not be read: no email in a fallback name, and the sign-ups are logged', async () => {
-    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
-    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1', 'confirmed')])
-    const { getConferenceForCurrentDomain } =
-      await import('@/lib/conference/sanity')
-    // The read's own fallback, for the emails' read (the admin check's read,
-    // made without options, goes through): a conference, with the error.
-    const read = vi.mocked(getConferenceForCurrentDomain)
-    const usual = read.getMockImplementation()!
-    read.mockImplementation(async (options?: unknown) =>
-      options
-        ? ({
-            conference: { _id: 'conf-A', organization: { _ref: 'org-A' } },
-            domain: 'localhost',
-            error: new Error('503'),
-          } as never)
-        : usual(),
-    )
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    try {
-      await admin().updateCapacity({ workshopId: 'w-1', capacity: 5 })
-    } finally {
-      read.mockImplementation(usual)
-    }
-
-    expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('promotion emails not sent'),
-      ['s-1'],
-      expect.anything(),
-    )
-  })
-
-  it('does not email a promoted sign-up moved back to the waitlist meanwhile, though a read still shows it confirmed', async () => {
-    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
-    ws.getAllWorkshopSignups.mockResolvedValue([
-      row('s-1', 'w-1', 'confirmed'),
-      row('s-2', 'w-1', 'confirmed'),
-    ])
-    current.status['s-2'] = 'waitlist'
-
-    await admin().updateCapacity({ workshopId: 'w-1', capacity: 5 })
-
-    expect(
-      vi
-        .mocked(sendBasicWorkshopConfirmation)
-        .mock.calls.map(([to]) => to.userEmail),
-    ).toEqual(['s-1@example.com'])
-  })
-
-  it('emails each promoted sign-up and counts them', async () => {
-    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
-    ws.getAllWorkshopSignups.mockResolvedValue([
-      row('s-1', 'w-1', 'confirmed'),
-      row('s-2', 'w-1', 'confirmed'),
-    ])
-
-    const result = await admin().updateCapacity({
-      workshopId: 'w-1',
-      capacity: 5,
-    })
-
-    expect(seats.changeCapacity).toHaveBeenCalledWith('w-1', 'conf-A', 5)
-    expect(ws.getAllWorkshopSignups).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conferenceId: 'conf-A',
-        signupIds: ['s-1', 's-2'],
-      }),
-    )
-    expect(result.promotedCount).toBe(2)
-    expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(2)
+    expect(promoted.deliverPromotionEmails).toHaveBeenCalledTimes(1)
   })
 })

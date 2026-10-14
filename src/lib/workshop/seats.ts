@@ -574,9 +574,13 @@ export async function changeCapacity(
     tx.patch(workshopId, { ifRevisionID: seats.talkRev, set: { capacity } })
     const confirmedAt = new Date().toISOString()
     for (const { _id, _rev } of promoted) {
+      // The debt of a promotion email is stored WITH the promotion (#1357):
+      // a reply lost after this write still leaves it for the sender
+      // (`./promoted.ts`) to find, and a retry that finds nobody newly
+      // promoted has not lost it.
       tx.patch(_id, {
         ifRevisionID: _rev,
-        set: { status: 'confirmed', confirmedAt },
+        set: { status: 'confirmed', confirmedAt, promotionEmailDue: true },
       })
     }
     return { done: promoted.map((s) => s._id) }
@@ -600,7 +604,14 @@ export async function freeSeat(
   }>(signupId)
   const tx = clientWrite.transaction()
   if (how === 'delete') tx.delete(signupId)
-  else tx.patch(signupId, { set: { status: 'waitlist' } })
+  // A promotion email still owed is owed no more (#1357): the sign-up waits
+  // again, and one confirmed by hand later is told so by hand.
+  else {
+    tx.patch(signupId, {
+      set: { status: 'waitlist' },
+      unset: ['promotionEmailDue'],
+    })
+  }
   const workshopId = signup?.workshop?._ref
   const conferenceId = signup?.conference?._ref
   if (workshopId && conferenceId) {
