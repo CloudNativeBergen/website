@@ -70,6 +70,15 @@ export const workshopSignupsByWorkshopSchema = z.object({
   includeUserDetails: z.boolean().optional().default(false),
 })
 
+/**
+ * The "Early sign-ups" list (#1348). `sponsorId` narrows it to one sponsor's
+ * links: a `sponsorForConference` id, which the read scopes to the request's
+ * conference. Omitted: every early sign-up.
+ */
+export const workshopEarlySignupsSchema = z.object({
+  sponsorId: z.string().min(1).max(200).optional(),
+})
+
 export const cancelWorkshopSignupSchema = z.object({
   signupId: z.string().min(1, 'Signup ID is required'),
   reason: z.string().max(500, 'Reason too long').optional(),

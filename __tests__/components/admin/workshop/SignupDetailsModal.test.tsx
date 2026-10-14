@@ -255,3 +255,97 @@ describe('SignupDetailsModal: a second tap does not answer the question', () => 
     expect(onMoveToWaitlist).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * The dialog's rows come from `workshop.admin.listSignups`, and from the
+ * page's general read until that answer arrives. Both carry `earlyAccess`
+ * (`src/server/routers/workshop.earlySignups.test.ts`); this is what the
+ * dialog makes of it.
+ */
+describe('SignupDetailsModal: the sponsor on an early sign-up (#1348)', () => {
+  const rows = [
+    {
+      ...signups[0],
+      earlyAccess: { sponsor: { _id: 'sfc-acme', name: 'Acme AS' } },
+    },
+    {
+      ...signups[0],
+      _id: 'signup-bob',
+      userName: 'Bob Smith',
+      earlyAccess: null,
+    },
+    // Read before the field existed.
+    { ...signups[0], _id: 'signup-old', userName: 'Old Row' },
+    // The sponsor is no longer in the conference.
+    {
+      ...signups[0],
+      _id: 'signup-cy',
+      userName: 'Cy Young',
+      earlyAccess: { sponsor: null },
+    },
+    // In the conference, and its sponsor document has no name.
+    {
+      ...signups[0],
+      _id: 'signup-dee',
+      userName: 'Dee Dee',
+      earlyAccess: { sponsor: { _id: 'sfc-x', name: null } },
+    },
+  ] as unknown as WorkshopSignupExisting[]
+
+  /** Name, then badge, of each row of one of the two layouts. */
+  const badgeOf = (row: HTMLElement) =>
+    within(row).queryByText(/^(via .+|early access)$/)?.textContent ?? null
+
+  it('says "via Sponsor" on an early row, "early access" when the sponsor is gone, and nothing on any other', () => {
+    renderModal({ signups: rows })
+
+    const tableRows = within(screen.getByRole('table'))
+      .getAllByRole('row')
+      .slice(1)
+    expect(
+      tableRows.map((row) => [
+        within(row).getAllByRole('cell')[0].firstElementChild?.firstElementChild
+          ?.textContent,
+        badgeOf(row),
+      ]),
+    ).toEqual([
+      ['Ada Lovelace', 'via Acme AS'],
+      ['Bob Smith', null],
+      ['Old Row', null],
+      ['Cy Young', 'early access'],
+      ['Dee Dee', 'early access'],
+    ])
+  })
+
+  // The visible text is "early access" for both; the tooltip says which.
+  it('tells in the tooltip a sponsor that left the conference from one that has no name', () => {
+    renderModal({ signups: rows })
+
+    const tableRows = within(screen.getByRole('table'))
+      .getAllByRole('row')
+      .slice(1)
+    expect(
+      tableRows.map(
+        (row) =>
+          within(row)
+            .queryByText(/^(via .+|early access)$/)
+            ?.getAttribute('title') ?? null,
+      ),
+    ).toEqual([
+      'Signed up through Acme AS’s early-access link',
+      null,
+      null,
+      'Signed up through the early-access link of a sponsor that is no longer in this conference',
+      'Signed up through the early-access link of a sponsor of this conference that has no name',
+    ])
+  })
+
+  it('says the same on the cards a phone shows', () => {
+    renderModal({ signups: rows })
+
+    // Each row is in the document twice: once as a card, once as a table row.
+    expect(screen.getAllByText('via Acme AS')).toHaveLength(2)
+    expect(screen.getAllByText('early access')).toHaveLength(4)
+    expect(screen.queryAllByText(/^via /)).toHaveLength(2)
+  })
+})

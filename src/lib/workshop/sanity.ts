@@ -9,6 +9,7 @@ import type {
 import { WorkshopSignupStatus } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
+import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
 
 const workshopSignupLocks = new Map<string, Promise<WorkshopSignupExisting>>()
 
@@ -363,7 +364,8 @@ export async function getWorkshopSignupsByWorkshop(
     signedUpAt,
     notes,
     _createdAt,
-    _updatedAt
+    _updatedAt,
+    "earlyAccess": ${EARLY_ACCESS_OF_SIGNUP}
   }`
 
   return await clientWrite.fetch(query, {
@@ -538,7 +540,8 @@ export async function getAllWorkshopSignups(filters: {
     signedUpAt,
     notes,
     _createdAt,
-    _updatedAt
+    _updatedAt,
+    "earlyAccess": ${EARLY_ACCESS_OF_SIGNUP}
   }`
 
   return await clientWrite.fetch(query, params)

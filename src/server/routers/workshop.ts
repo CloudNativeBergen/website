@@ -30,6 +30,7 @@ import {
   workshopUpdateAnnouncementSchema,
   workshopDeleteAnnouncementSchema,
   workshopAnnouncementsQuerySchema,
+  workshopEarlySignupsSchema,
 } from '@/server/schemas/workshop'
 import {
   checkWorkshopCapacity,
@@ -59,6 +60,7 @@ import {
   earlyAccessTokenOf,
   expireEarlyAccessLinksIfTheyDisagree,
   findEarlyAccessSponsor,
+  listEarlySignups,
   registrationWindowFor,
 } from '@/lib/workshop/early-access'
 import {
@@ -782,6 +784,31 @@ export const workshopRouter = router({
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch workshop signups',
+            cause: error,
+          })
+        }
+      }),
+
+    /**
+     * The "Early sign-ups" list (#1348, spec §9): every sign-up of the
+     * request's conference that a sponsor's early-access link admitted,
+     * narrowed to one sponsor when `sponsorId` is sent. THE NARROWING IS DONE
+     * HERE, over every match: the page's general read (`getAllSignups`) holds
+     * the first hundred sign-ups only. One read, see `listEarlySignups`.
+     */
+    listEarlySignups: workshopAdminProcedure
+      .input(workshopEarlySignupsSchema)
+      .query(async ({ input }) => {
+        try {
+          return await listEarlySignups(
+            await resolveConferenceId(),
+            input.sponsorId,
+          )
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch early sign-ups',
             cause: error,
           })
         }

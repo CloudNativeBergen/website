@@ -8,6 +8,7 @@ import { ContractReadinessIndicator } from './ContractReadinessIndicator'
 import { ContractFlowStep } from './ContractFlowStep'
 import { SponsorPortalSection } from './SponsorPortalSection'
 import { SponsorEarlyAccessSection } from './SponsorEarlyAccessSection'
+import { earlySignupsHref } from '@/components/admin/workshop/early-signups'
 import { OrganizerSignatureCapture } from '@/components/admin/OrganizerSignatureCapture'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { formatNumber } from '@/lib/format'
@@ -615,13 +616,23 @@ export function SponsorContractView({
       )}
 
       {/* Shown for a link that exists even after workshops were turned off,
-          so it can still be revoked. */}
-      {(workshopsEnabled || sponsor.hasWorkshopEarlyAccessLink) && (
+          so it can still be revoked. And for a sponsor people signed up
+          through, link or no link, workshops or not: those sign-ups stay,
+          and so does their count (#1348). With workshops off the section
+          offers no link to create and the count opens no list. */}
+      {(workshopsEnabled ||
+        sponsor.hasWorkshopEarlyAccessLink ||
+        (sponsor.workshopEarlySignupCount ?? 0) > 0) && (
         <SponsorEarlyAccessSection
           sponsorForConferenceId={sponsor._id}
           hasLink={!!sponsor.hasWorkshopEarlyAccessLink}
           recordUpdatedAt={sponsor._updatedAt}
           sponsorStartSet={sponsorStartSet}
+          earlySignupCount={sponsor.workshopEarlySignupCount}
+          // With workshops off there is no list to open.
+          earlySignupsHref={
+            workshopsEnabled ? earlySignupsHref(sponsor._id) : undefined
+          }
           // With workshops off the link opens nothing and its address cannot
           // be built: only revoking is left.
           copyRefusal={

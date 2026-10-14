@@ -70,6 +70,8 @@ vi.mock('@/components/admin/sponsor-crm/SponsorEarlyAccessSection', () => ({
     copyRefusal?: string
     recordUpdatedAt?: string
     sponsorStartSet?: boolean
+    earlySignupCount?: number
+    earlySignupsHref?: string
   }) => (
     <div data-testid="early-access-section">
       {props.hasLink ? 'has link' : 'no link'}
@@ -77,6 +79,7 @@ vi.mock('@/components/admin/sponsor-crm/SponsorEarlyAccessSection', () => ({
       {props.copyRefusal ? ` | no copy: ${props.copyRefusal}` : ''}
       {props.recordUpdatedAt ? ` | record of ${props.recordUpdatedAt}` : ''}
       {` | sponsor start set: ${String(props.sponsorStartSet)}`}
+      {` | early sign-ups: ${String(props.earlySignupCount)} at ${String(props.earlySignupsHref)}`}
     </div>
   ),
 }))
@@ -209,6 +212,38 @@ describe('SponsorContractView', () => {
         )
       },
     )
+
+    it('hands the section the record’s count of early sign-ups, and the list narrowed to this sponsor', () => {
+      view(
+        {
+          _id: 'sfc-acme',
+          status: 'closed-won',
+          hasWorkshopEarlyAccessLink: true,
+          workshopEarlySignupCount: 3,
+        },
+        true,
+      )
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'early sign-ups: 3 at /admin/workshops?earlySponsor=sfc-acme#early-sign-ups',
+      )
+    })
+
+    it('hands it no list to open for a conference that has turned workshops off', () => {
+      view(
+        {
+          _id: 'sfc-acme',
+          status: 'closed-won',
+          hasWorkshopEarlyAccessLink: true,
+          workshopEarlySignupCount: 3,
+        },
+        false,
+      )
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'early sign-ups: 3 at undefined',
+      )
+    })
 
     it('hands the section the record’s own change time', () => {
       view(

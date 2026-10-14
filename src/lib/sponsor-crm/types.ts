@@ -258,6 +258,11 @@ export interface SponsorForConferenceExpanded {
    * itself is not read with the record: its address is asked for when needed.
    */
   hasWorkshopEarlyAccessLink?: boolean
+  /**
+   * How many early sign-ups were made through this sponsor's early-access
+   * links, confirmed and waitlisted together (#1348). Sign-ups, not people.
+   */
+  workshopEarlySignupCount?: number
   nextFollowUpAt?: string
   outreachCount?: number
   lastActivity?: {

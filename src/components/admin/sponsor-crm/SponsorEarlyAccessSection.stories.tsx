@@ -515,3 +515,90 @@ export const NoWorkingPortalMobile: Story = {
   ...NoWorkingPortal,
   parameters: { ...NoWorkingPortal.parameters, ...mobile.parameters },
 }
+
+/**
+ * The count of early sign-ups made through this sponsor's links (#1348). It
+ * links to the "Early sign-ups" list on /admin/workshops, narrowed to this
+ * sponsor. The count is read with the sponsor's record: the section asks the
+ * server for nothing.
+ */
+const LIST = '/admin/workshops?earlySponsor=sfc-123#early-sign-ups'
+
+export const WithEarlySignups: Story = {
+  args: { hasLink: true, earlySignupCount: 12, earlySignupsHref: LIST },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('link', { name: '12 early sign-ups' }),
+    ).toHaveAttribute('href', LIST)
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const WithEarlySignupsDark: Story = { ...WithEarlySignups, ...dark }
+export const WithEarlySignupsMobile: Story = { ...WithEarlySignups, ...mobile }
+
+/** A link, and nobody has signed up through it yet. */
+export const NoEarlySignupsYet: Story = {
+  args: { hasLink: true, earlySignupCount: 0, earlySignupsHref: LIST },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByText('No early sign-ups through this sponsor’s links yet.'),
+    ).toBeInTheDocument()
+    await expect(canvas.queryByRole('link')).not.toBeInTheDocument()
+  },
+}
+export const NoEarlySignupsYetDark: Story = { ...NoEarlySignupsYet, ...dark }
+
+/**
+ * The link was revoked after people had signed up through it: their sign-ups
+ * stay, and are still counted.
+ */
+export const RevokedWithEarlySignups: Story = {
+  args: { hasLink: false, earlySignupCount: 1, earlySignupsHref: LIST },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('link', { name: '1 early sign-up' }),
+    ).toHaveAttribute('href', LIST)
+    await expect(
+      canvas.getByRole('button', { name: 'Create link' }),
+    ).toBeInTheDocument()
+  },
+}
+export const RevokedWithEarlySignupsDark: Story = {
+  ...RevokedWithEarlySignups,
+  ...dark,
+}
+export const RevokedWithEarlySignupsMobile: Story = {
+  ...RevokedWithEarlySignups,
+  ...mobile,
+}
+
+/**
+ * Workshops were turned off and the link revoked, after two people had signed
+ * up through it: the count is still said. It is text, since there is no list
+ * to open, and no link can be created.
+ */
+export const WorkshopsOffWithEarlySignups: Story = {
+  args: {
+    hasLink: false,
+    createRefusal: 'Workshops are not enabled for this conference.',
+    earlySignupCount: 2,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText('2 early sign-ups')).toBeInTheDocument()
+    await expect(canvas.queryByRole('link')).not.toBeInTheDocument()
+    await expect(canvas.queryByRole('button')).not.toBeInTheDocument()
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const WorkshopsOffWithEarlySignupsDark: Story = {
+  ...WorkshopsOffWithEarlySignups,
+  ...dark,
+}
+export const WorkshopsOffWithEarlySignupsMobile: Story = {
+  ...WorkshopsOffWithEarlySignups,
+  ...mobile,
+}

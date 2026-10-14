@@ -7,6 +7,7 @@ import { TrashIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { DataTable, type Column } from '@/components/DataTable'
+import { EarlyAccessBadge } from './early-signups'
 import type {
   WorkshopSignupExisting,
   WorkshopSignupStatus,
@@ -60,8 +61,11 @@ export function SignupDetailsModal({
       header: 'Name',
       primary: true,
       render: (signup) => (
-        <div className="text-sm font-medium text-gray-900 dark:text-white">
-          {signup.userName}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-gray-900 dark:text-white">
+          <span>{signup.userName}</span>
+          {/* An early sign-up: "via Sponsor", or "early access" when the
+              sponsor is no longer in the conference (#1348). */}
+          <EarlyAccessBadge earlyAccess={signup.earlyAccess} />
         </div>
       ),
     },
@@ -82,7 +86,7 @@ export function SignupDetailsModal({
         // An explicit colour: the cell otherwise inherits the page's, which is
         // black on this dark surface when the theme is dark and the OS is not.
         return (
-          <span className="text-gray-900 dark:text-gray-200">
+          <span className="whitespace-nowrap text-gray-900 dark:text-gray-200">
             {!dateStr || typeof dateStr !== 'string'
               ? 'N/A'
               : formatDateSafe(dateStr)}

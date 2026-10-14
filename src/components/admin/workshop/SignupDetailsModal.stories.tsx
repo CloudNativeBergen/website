@@ -265,6 +265,74 @@ export const MoveToWaitlistQuestionMobile: Story = {
   },
 }
 
+/**
+ * Early sign-ups (#1348): the row says which sponsor's early-access link
+ * admitted it, "via Sponsor", or "early access" when that sponsor is no longer
+ * in the conference. A sign-up that is not early carries nothing.
+ */
+const earlySignups = [
+  {
+    ...confirmedSignups[0],
+    earlyAccess: { sponsor: { _id: 'sfc-acme', name: 'Acme AS' } },
+  },
+  { ...confirmedSignups[1], earlyAccess: null },
+  { ...confirmedSignups[2], earlyAccess: { sponsor: null } },
+  {
+    ...confirmedSignups[2],
+    _id: 'signup-6',
+    userName: 'Charlotte Wilhelmsen-Anderssen',
+    userEmail: 'charlotte@example.com',
+    earlyAccess: {
+      sponsor: {
+        _id: 'sfc-globex',
+        name: 'Globex Cloud Infrastructure Norway AS',
+      },
+    },
+  },
+]
+
+export const EarlyAccess: Story = {
+  args: {
+    isOpen: true,
+    workshopTitle: 'Getting Started with Kubernetes',
+    status: WorkshopSignupStatus.CONFIRMED,
+    signups: earlySignups,
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body)
+    // Each row is in the document twice: as a card and as a table row.
+    await expect(page.getAllByText('via Acme AS')).toHaveLength(2)
+    await expect(page.getAllByText('early access')).toHaveLength(2)
+    await expect(page.getAllByText(/^via /)).toHaveLength(4)
+    const root = canvasElement.ownerDocument.documentElement
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth)
+  },
+}
+
+export const EarlyAccessDark: Story = {
+  ...EarlyAccess,
+  globals: { theme: 'dark' },
+}
+
+export const EarlyAccessMobile: Story = {
+  ...EarlyAccess,
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async (context) => {
+    await EarlyAccess.play!(context)
+    const page = within(context.canvasElement.ownerDocument.body)
+    // `waitFor`: the modal fades in, and a fading element is not visible yet.
+    await waitFor(() =>
+      expect(
+        page.getAllByText('via Acme AS').filter((badge) => {
+          const { width, height } = badge.getBoundingClientRect()
+          return width > 0 && height > 0
+        }),
+      ).toHaveLength(1),
+    )
+    await expectCards(context.canvasElement)
+  },
+}
+
 export const Empty: Story = {
   args: {
     isOpen: true,

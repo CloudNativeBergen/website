@@ -37,7 +37,11 @@ import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { WorkshopsClientPage } from './WorkshopsClientPage'
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }))
-vi.mock('next/navigation', () => ({ useRouter: () => router }))
+vi.mock('next/navigation', () => ({
+  useRouter: () => router,
+  // The page reads what its "Early sign-ups" list is narrowed to (#1348).
+  useSearchParams: () => new URLSearchParams(),
+}))
 
 /**
  * The stored state. The counts are the workshop's own and far above what one
@@ -94,6 +98,9 @@ async function answer(
       const data = server.signups.filter((s) => s.status === status).map(row)
       return [ok({ success: true, data, count: data.length }), 200]
     }
+    // The "Early sign-ups" list (#1348): this conference has none.
+    case 'workshop.admin.listEarlySignups':
+      return [ok({ signups: [], sponsors: [] }), 200]
     case 'workshop.admin.getSummary': {
       server.summaryReads += 1
       if (server.holdSummary) await server.holdSummary

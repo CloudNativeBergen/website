@@ -25,8 +25,17 @@ import type {
 import type { WorkshopAnnouncementView } from '@/lib/workshop/announcements'
 import { useRefreshAnnouncements } from './useRefreshAnnouncements'
 import { useSignupActions } from './useSignupActions'
-import { useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQueryClient } from '@tanstack/react-query'
 import { EmptyState } from '@/components/EmptyState'
+import {
+  EarlySignupsList,
+  EARLY_SIGNUPS_ANCHOR,
+  EARLY_SPONSOR_PARAM,
+  earlySignupsShownState,
+  useBringEarlySignupsIntoView,
+} from './early-signups'
+import { workshopEarlySignupsSchema } from '@/server/schemas/workshop'
+import { useSearchParams } from 'next/navigation'
 
 interface SignupModalState {
   isOpen: boolean
@@ -132,6 +141,57 @@ export function WorkshopsClientPage({
       enabled: !!conferenceId,
     })
 
+  // THE "EARLY SIGN-UPS" LIST (#1348). Narrowing it to a sponsor is a new
+  // read with the sponsor in its input: the server narrows, over every match.
+  // Nothing here filters, since `signups` above is the first hundred only.
+  //
+  // THE ADDRESS IS THE ONE SOURCE OF WHAT IT IS NARROWED TO (`earlySponsor`,
+  // as the count's link on a sponsor's record sets it). No state is kept for
+  // it: with Cache Components, Next keeps a visited route mounted and hidden,
+  // so state seeded from the address once would still hold the OLD narrowing
+  // when that link brings the organizer back with another sponsor. A value
+  // the read's schema would refuse is no narrowing.
+  const searchParams = useSearchParams()
+  const inAddress = workshopEarlySignupsSchema.shape.sponsorId.safeParse(
+    searchParams.get(EARLY_SPONSOR_PARAM) ?? undefined,
+  )
+  const earlySponsorId = (inAddress.success && inAddress.data) || null
+  const earlySignups = api.workshop.admin.listEarlySignups.useQuery(
+    earlySponsorId ? { sponsorId: earlySponsorId } : {},
+    {
+      enabled: !!conferenceId,
+      // The last answer's sponsors keep the control on the page while the
+      // next answer is on its way. Its ROWS are not shown meanwhile: they
+      // belong to another narrowing.
+      placeholderData: keepPreviousData,
+    },
+  )
+  // The count's link carries the list's fragment, and the list is the last
+  // section of the page: it is brought into view, once per history entry
+  // (see the hook for why Next does not, and why once).
+  useBringEarlySignupsIntoView(earlySponsorId)
+  const narrowEarlySignups = (sponsorId: string | null) => {
+    // Written to the address, which `useSearchParams` above follows. Through
+    // the History API, not the router: a navigation would render this page on
+    // the server again, and its reads are live. Narrowed, the address is the
+    // one the count's link has, anchor included, so the same address opened
+    // anew shows the same list in view. Everything else in it is kept.
+    const url = new URL(window.location.href)
+    if (sponsorId) {
+      url.searchParams.set(EARLY_SPONSOR_PARAM, sponsorId)
+      url.hash = EARLY_SIGNUPS_ANCHOR
+    } else {
+      url.searchParams.delete(EARLY_SPONSOR_PARAM)
+    }
+    // The entry is marked as one that needs no bringing into view: the
+    // organizer is at the list, now and when they come back to this entry.
+    window.history.replaceState(
+      earlySignupsShownState(),
+      '',
+      `${url.pathname}${url.search}${url.hash}`,
+    )
+  }
+
   const utils = api.useUtils()
 
   // Everything this page shows about sign-ups, read again. One function for
@@ -141,6 +201,8 @@ export function WorkshopsClientPage({
     // EVERY list of a workshop, not only the open one: a move changes two of
     // them, and one read a moment ago is otherwise shown again as it was.
     void utils.workshop.admin.listSignups.invalidate()
+    // A confirm, a move or a delete changes what the early list says too.
+    void utils.workshop.admin.listEarlySignups.invalidate()
     // The summary carries each workshop's own counts and capacity, which is
     // what the cards show (see `live` below). The server render is NOT asked
     // for again: `router.refresh()` re-runs the whole page for three numbers,
@@ -440,6 +502,21 @@ export function WorkshopsClientPage({
           })
         )}
       </div>
+
+      <EarlySignupsList
+        signups={
+          earlySignups.isPlaceholderData
+            ? undefined
+            : earlySignups.data?.signups
+        }
+        sponsors={earlySignups.data?.sponsors}
+        sponsorId={earlySponsorId}
+        onSponsorChange={narrowEarlySignups}
+        error={
+          earlySignups.error ? 'The early sign-ups could not be read.' : null
+        }
+        onRetry={() => void earlySignups.refetch()}
+      />
 
       <SignupDetailsModal
         isOpen={signupModal.isOpen}

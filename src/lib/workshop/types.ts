@@ -7,6 +7,21 @@ export enum WorkshopSignupStatus {
 }
 
 export type ExperienceLevel = Level
+
+/** A sponsor of the conference (`sponsorForConference`), as a sign-up names it. */
+export interface EarlyAccessSponsor {
+  _id: string
+  name: string | null
+}
+
+/**
+ * Whose early-access link admitted a sign-up (#1348), as the organizer reads
+ * answer it (`EARLY_ACCESS_OF_SIGNUP`). `null`: the sign-up is not early.
+ */
+export type SignupEarlyAccess = {
+  /** `null`: the sponsor is no longer in the conference. */
+  sponsor: EarlyAccessSponsor | null
+} | null
 export type OperatingSystem = 'windows' | 'macos' | 'linux'
 
 /** Individual workshop statistics returned by getWorkshopStatistics() */
@@ -71,6 +86,11 @@ export interface WorkshopSignup {
   confirmedAt?: string
   confirmationEmailSent?: boolean
   notes?: string
+  /**
+   * The sponsor whose early-access link admitted this sign-up (#1348). Set by
+   * the organizer reads that show it; `null` on a sign-up that is not early.
+   */
+  earlyAccess?: SignupEarlyAccess
 }
 
 export type { WorkshopSignupInput } from '@/server/schemas/workshop'
