@@ -4,22 +4,32 @@ import { getAllWorkshopSignups } from './sanity'
 
 /**
  * Tells each sign-up a capacity change confirmed from the waitlist (#1344)
- * that it has a seat. An email that fails is not retried, and never fails the
- * capacity change that is already written.
+ * that it has a seat. The capacity change is already written: nothing here
+ * fails it. An email, or the read it needs, that fails is not retried; the
+ * ids are logged so the emails can be sent by hand.
  */
 export async function emailPromotedSignups(
   conferenceId: string,
   signupIds: string[],
 ): Promise<void> {
   if (signupIds.length === 0) return
-  const [promoted, { conference }] = await Promise.all([
+  const read = await Promise.all([
     getAllWorkshopSignups({
       conferenceId,
       signupIds,
       pageSize: signupIds.length,
     }),
     getConferenceForCurrentDomain({}),
-  ])
+  ]).catch((error: unknown) => {
+    console.error(
+      '[workshop] promotion emails not sent, promoted sign-ups:',
+      signupIds,
+      error,
+    )
+    return null
+  })
+  if (!read) return
+  const [promoted, { conference }] = read
   if (!conference) return
   await Promise.allSettled(
     promoted.map((signup) =>

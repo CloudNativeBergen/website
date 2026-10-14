@@ -372,6 +372,24 @@ describe('admin.updateCapacity', () => {
     ).rejects.toMatchObject({ code, message })
   })
 
+  it('a failed read of the promoted sign-ups does not fail the saved change', async () => {
+    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
+    ws.getAllWorkshopSignups.mockRejectedValue(new Error('503: unavailable'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await admin().updateCapacity({
+      workshopId: 'w-1',
+      capacity: 5,
+    })
+
+    expect(result).toMatchObject({ success: true, promotedCount: 1 })
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('promotion emails not sent'),
+      ['s-1'],
+      expect.any(Error),
+    )
+  })
+
   it('emails each promoted sign-up and counts them', async () => {
     seats.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
     ws.getAllWorkshopSignups.mockResolvedValue([
