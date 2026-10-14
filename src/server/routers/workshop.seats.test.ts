@@ -345,7 +345,7 @@ describe('admin.batchConfirmSignups', () => {
       full: [
         {
           workshopId: 'w-2',
-          title: 'Workshop w-2',
+          workshopTitle: 'Workshop w-2',
           seatsTaken: 30,
           capacity: 30,
           after: 32,
@@ -385,7 +385,7 @@ describe('admin.batchConfirmSignups', () => {
       full: [
         {
           workshopId: 'w-2',
-          title: 'Workshop w-2',
+          workshopTitle: 'Workshop w-2',
           seatsTaken: 30,
           capacity: 30,
           after: 31,

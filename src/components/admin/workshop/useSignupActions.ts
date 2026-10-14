@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import type { FullSeats } from '@/lib/workshop/types'
 
 /**
  * A confirm refused because the workshop is full (#1358), waiting for the
@@ -8,14 +9,11 @@ import { useNotification } from '@/components/admin/NotificationProvider'
  * it. `changed`: refused again after they accepted a count, because a seat
  * changed hands meanwhile; the numbers are the new ones.
  */
-export interface FullRefusal {
+export interface FullRefusal extends FullSeats {
   signupId: string
   userName: string
   workshopId: string
   workshopTitle: string
-  seatsTaken: number
-  capacity: number
-  after: number
   changed: boolean
 }
 
@@ -131,7 +129,7 @@ export function useSignupActions(onSettled: () => void) {
             showNotification({
               type: 'warning',
               title: `${userName} was not confirmed`,
-              message: `${refusal.title} is full (${refusal.seatsTaken} of ${refusal.capacity} seats). Open its waitlist to confirm beyond capacity.`,
+              message: `${refusal.workshopTitle} is full (${refusal.seatsTaken} of ${refusal.capacity} seats). Open its waitlist to confirm beyond capacity.`,
             })
             return
           }
@@ -140,7 +138,7 @@ export function useSignupActions(onSettled: () => void) {
               signupId,
               userName,
               workshopId: refusal.workshopId,
-              workshopTitle: refusal.title,
+              workshopTitle: refusal.workshopTitle,
               seatsTaken: refusal.seatsTaken,
               capacity: refusal.capacity,
               after: refusal.after,

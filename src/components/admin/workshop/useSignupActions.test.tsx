@@ -42,7 +42,7 @@ const batch =
     }[] = [],
     full: {
       workshopId: string
-      title: string
+      workshopTitle: string
       seatsTaken: number
       capacity: number
       after: number
@@ -75,7 +75,7 @@ const fullAt = (seatsTaken: number, capacity: number) =>
     [
       {
         workshopId: 'ws-1',
-        title: 'Kubernetes 101',
+        workshopTitle: 'Kubernetes 101',
         seatsTaken,
         capacity,
         after: seatsTaken + 1,

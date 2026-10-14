@@ -37,7 +37,11 @@ import { createHash, randomUUID } from 'node:crypto'
 import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { Format, Status, isWorkshopFormat } from '@/lib/proposal/types'
-import type { WorkshopSignupExisting, WorkshopSignupInput } from './types'
+import type {
+  FullSeats,
+  WorkshopSignupExisting,
+  WorkshopSignupInput,
+} from './types'
 
 /**
  * How many times a write that lost a race reads again before giving up. Each
@@ -468,13 +472,10 @@ async function current(
  * anything is written (#1358): `seatsTaken` now, and `after` what the confirm
  * would make it.
  */
-export interface Full {
+export interface Full extends FullSeats {
   refused: 'full'
   /** Of the sign-ups asked for, those confirmed already: they take no seat. */
   confirmed: string[]
-  seatsTaken: number
-  capacity: number
-  after: number
 }
 
 /**

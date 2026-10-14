@@ -57,7 +57,7 @@ import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { workshopAdminProcedure } from '../workshopAdmin'
 import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
-import { WorkshopSignupStatus } from '@/lib/workshop/types'
+import { type FullSeats, WorkshopSignupStatus } from '@/lib/workshop/types'
 import {
   sponsorStartTimeProblem,
   type WorkshopRegistrationTimes,
@@ -145,23 +145,20 @@ const beyondCapacityText = (
     .map((b) => `${b.workshopTitle} (${b.seatsTaken} of ${b.capacity} seats)`)
     .join(', ')
 
-/**
- * "Workshop w-2 (30 of 30 seats; confirming 2 goes 2 past capacity)": a
- * workshop an organizer's batch confirm was refused on, as full (#1358).
- */
-const fullText = (
-  full: {
-    title: string
-    seatsTaken: number
-    capacity: number
-    after: number
-    signupIds: string[]
-  }[],
-) =>
+/** A workshop an organizer's batch confirm was refused on, as full (#1358). */
+interface FullWorkshop extends FullSeats {
+  workshopId: string
+  workshopTitle: string
+  /** The sign-ups to send again with the accepted count. */
+  signupIds: string[]
+}
+
+/** "Workshop w-2 (30 of 30 seats; confirming 2 goes 2 past capacity)". */
+const fullText = (full: FullWorkshop[]) =>
   full
     .map(
       (f) =>
-        `${f.title} (${f.seatsTaken} of ${f.capacity} seats; confirming ${f.signupIds.length} goes ${f.after - f.capacity} past capacity)`,
+        `${f.workshopTitle} (${f.seatsTaken} of ${f.capacity} seats; confirming ${f.signupIds.length} goes ${f.after - f.capacity} past capacity)`,
     )
     .join(', ')
 
@@ -904,14 +901,14 @@ export const workshopRouter = router({
           // Not an error: nothing is wrong, and the organizer is asked. The
           // answer carries what the dialog needs to ask with.
           if ('refused' in outcome && outcome.refused === 'full') {
-            const past = outcome.after - outcome.capacity
+            const { seatsTaken, capacity, after } = outcome
             return {
               success: false as const,
               refused: 'full' as const,
-              seatsTaken: outcome.seatsTaken,
-              capacity: outcome.capacity,
-              after: outcome.after,
-              message: `Full (${outcome.seatsTaken} of ${outcome.capacity}). Confirming goes ${past} past capacity.`,
+              seatsTaken,
+              capacity,
+              after,
+              message: `Full (${seatsTaken} of ${capacity}). Confirming goes ${after - capacity} past capacity.`,
             }
           }
           if ('refused' in outcome || !outcome.confirmed.includes(signup._id)) {
@@ -1081,14 +1078,7 @@ export const workshopRouter = router({
             seatsTaken: number
             capacity: number
           }[] = []
-          const full: {
-            workshopId: string
-            title: string
-            seatsTaken: number
-            capacity: number
-            after: number
-            signupIds: string[]
-          }[] = []
+          const full: FullWorkshop[] = []
           for (const [workshopId, group] of byWorkshop) {
             const outcome = await confirmSignups(
               workshopId,
@@ -1110,15 +1100,22 @@ export const workshopRouter = router({
             if (outcome && 'refused' in outcome && outcome.refused === 'busy') {
               busy.push(workshopTitle)
             }
-            if (outcome && 'refused' in outcome && outcome.refused === 'full') {
-              // A member confirmed already is confirmed, whatever the
-              // refusal: only the others are to be sent again.
-              confirmed.push(
-                ...group.filter((s) => outcome.confirmed.includes(s._id)),
-              )
+            if (
+              !outcome ||
+              ('refused' in outcome && outcome.refused !== 'full')
+            ) {
+              continue
+            }
+            // Confirmed now, as the write found them: also the members of a
+            // refused workshop that were confirmed already (they take no
+            // seat), which are then not among the ids to send again.
+            confirmed.push(
+              ...group.filter((s) => outcome.confirmed.includes(s._id)),
+            )
+            if ('refused' in outcome) {
               full.push({
                 workshopId,
-                title: workshopTitle,
+                workshopTitle,
                 seatsTaken: outcome.seatsTaken,
                 capacity: outcome.capacity,
                 after: outcome.after,
@@ -1126,11 +1123,8 @@ export const workshopRouter = router({
                   .filter((s) => !outcome.confirmed.includes(s._id))
                   .map((s) => s._id),
               })
+              continue
             }
-            if (!outcome || 'refused' in outcome) continue
-            confirmed.push(
-              ...group.filter((s) => outcome.confirmed.includes(s._id)),
-            )
             newlyConfirmed.push(
               ...group.filter((s) => outcome.newlyConfirmed.includes(s._id)),
             )

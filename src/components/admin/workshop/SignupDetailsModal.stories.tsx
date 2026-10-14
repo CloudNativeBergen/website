@@ -1,9 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { withPortalTheme } from '@/lib/storybook'
+import { useEffect, useState, type ComponentProps } from 'react'
 import { SignupDetailsModal } from './SignupDetailsModal'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
 import { Level } from '@/lib/proposal/types'
+
+type SignupDetailsModalProps = ComponentProps<typeof SignupDetailsModal>
 
 const baseSignup = {
   _rev: '1',
@@ -350,6 +353,67 @@ export const Confirming: Story = {
     signups: waitlistSignups,
     isConfirming: true,
   },
+}
+
+/**
+ * "Move to Confirmed" refused as full (#1358): the question is asked in this
+ * modal, nested, with the list behind it.
+ *
+ * OPENED AFTER THE LIST, as in the app (a server answer sets it; closing the
+ * list clears it). Two Headless UI dialogs that mount open at the same time
+ * land in the document in the wrong order, and the question sits behind the
+ * list: the capture shows the list alone and the test runner cannot reach the
+ * question's buttons.
+ */
+export const WaitlistFull: Story = {
+  render: function OpensTheQuestion(args) {
+    const [fullRefusal, setFullRefusal] =
+      useState<SignupDetailsModalProps['fullRefusal']>(null)
+    useEffect(() => {
+      const timer = setTimeout(() => setFullRefusal(args.fullRefusal), 50)
+      return () => clearTimeout(timer)
+    }, [args.fullRefusal])
+    return <SignupDetailsModal {...args} fullRefusal={fullRefusal} />
+  },
+  args: {
+    isOpen: true,
+    workshopTitle: 'Getting Started with Kubernetes',
+    status: WorkshopSignupStatus.WAITLIST,
+    signups: waitlistSignups,
+    fullRefusal: {
+      signupId: 'signup-4',
+      userName: 'Diana Prince',
+      workshopId: 'ws-1',
+      workshopTitle: 'Getting Started with Kubernetes',
+      seatsTaken: 30,
+      capacity: 30,
+      after: 31,
+      changed: false,
+    },
+    onConfirmBeyondCapacity: fn(),
+    onDismissFullRefusal: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await waitFor(() =>
+      expect(body.getByText('Workshop is full')).toBeVisible(),
+    )
+    await expect(
+      body.getByText(
+        'Getting Started with Kubernetes has 30 of 30 seats taken. Confirming Diana Prince goes 1 seat past capacity.',
+      ),
+    ).toBeVisible()
+    await userEvent.click(
+      body.getByRole('button', { name: 'Keep on waitlist' }),
+    )
+    await expect(args.onDismissFullRefusal).toHaveBeenCalledTimes(1)
+    await expect(args.onConfirmBeyondCapacity).not.toHaveBeenCalled()
+  },
+}
+
+export const WaitlistFullDark: Story = {
+  ...WaitlistFull,
+  globals: { theme: 'dark' },
 }
 
 /** While a move is on its way every action in the list is off. */
