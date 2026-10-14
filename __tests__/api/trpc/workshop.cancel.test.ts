@@ -68,6 +68,8 @@ vi.mock('@/lib/sanity/client', async () => {
     clientReadUncached: { fetch: async () => null },
     clientWrite: {
       fetch,
+      getDocument: async (id: string) =>
+        structuredClone(h.dataset.find((d) => d._id === id)) ?? null,
       delete: async (id: string) => {
         h.writes.push(`delete:${id}`)
         const index = h.dataset.findIndex((d) => d._id === id)
@@ -106,6 +108,14 @@ vi.mock('@/lib/sanity/client', async () => {
           >[]) {
             h.created += 1
             const rev = `rev-${h.created}`
+            if (mutation.createIfNotExists) {
+              const doc = mutation.createIfNotExists as Doc
+              if (!next.some((d) => d._id === doc._id)) {
+                next.push({ ...doc, _rev: rev })
+                written.push(`create:${doc._id}`)
+              }
+              continue
+            }
             if (mutation.delete) {
               const id = mutation.delete.id as string
               const index = next.findIndex((d) => d._id === id)

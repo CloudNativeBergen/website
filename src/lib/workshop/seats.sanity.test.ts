@@ -315,6 +315,23 @@ describe('a read that lags behind the writes (Sanity queries a search store that
     expect(withStatus('confirmed')).toHaveLength(1)
   })
 
+  it('a write that lands minutes after it was decided is remembered from when it was sent', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-20T09:00:00Z'))
+    store().reset([workshop({ capacity: 2 }), signup(1, 'confirmed')])
+    // The request hangs on its way to Sanity: it lands six minutes later.
+    store().beforeNextCommit(() =>
+      vi.setSystemTime(new Date('2026-10-20T09:06:00Z')),
+    )
+    const first = await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' })
+    store().readsLagFor((first as { signup: { _id: string } }).signup._id, null)
+
+    expect(
+      await signUpForWorkshop(attendee(2), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { status: 'waitlist' } })
+    expect(withStatus('confirmed')).toHaveLength(2)
+  })
+
   it('the guard counts a seat for a few minutes only: a seat freed by a cancel waits that long, then is taken again', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-20T09:00:00Z'))
@@ -327,7 +344,7 @@ describe('a read that lags behind the writes (Sanity queries a search store that
       await signUpForWorkshop(attendee(2), { whenFull: 'waitlist' }),
     ).toMatchObject({ signup: { status: 'waitlist' } })
 
-    vi.setSystemTime(new Date('2026-10-20T09:05:00Z'))
+    vi.setSystemTime(new Date('2026-10-20T09:16:00Z'))
     expect(
       await signUpForWorkshop(attendee(3), { whenFull: 'waitlist' }),
     ).toMatchObject({ signup: { status: 'confirmed' } })
@@ -362,6 +379,51 @@ describe('a read that shows waiting a sign-up the guard confirmed a moment ago',
     store().readsLagFor('signup-2', signup(2, 'waitlist'))
 
     expect(await changeCapacity(WORKSHOP, CONF, 3)).toEqual({ promoted: [] })
+  })
+})
+
+describe('a guard that the reads show late', () => {
+  const GUARD = 'workshopSeats-conf-a-talk-k8s'
+
+  it('a free still makes it forget: the sign-up confirmed again is stored confirmed', async () => {
+    store().reset([
+      workshop({ capacity: 3 }),
+      signup(1, 'confirmed'),
+      signup(2, 'waitlist'),
+    ])
+    await confirmSignups(WORKSHOP, CONF, ['signup-2'])
+    store().readsLagFor(GUARD, null)
+    await freeSeat('signup-2', 'waitlist')
+    store().readsLagFor(GUARD, store().doc(GUARD)!)
+
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-2'])).toMatchObject({
+      newlyConfirmed: ['signup-2'],
+    })
+    expect(store().doc('signup-2')?.status).toBe('confirmed')
+  })
+
+  it('a lone sign-up is not answered busy: the guard is read where it is current', async () => {
+    store().reset([workshop({ capacity: 3 }), signup(1, 'confirmed')])
+    await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' })
+    store().readsLagFor(GUARD, null)
+
+    expect(
+      await signUpForWorkshop(attendee(2), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { status: 'confirmed' } })
+  })
+
+  it('a sign-up moved to the waitlist outside the app, then confirmed again, is stored confirmed', async () => {
+    store().reset([
+      workshop({ capacity: 3 }),
+      signup(1, 'confirmed'),
+      signup(2, 'waitlist'),
+    ])
+    await confirmSignups(WORKSHOP, CONF, ['signup-2'])
+    store().put({ ...store().doc('signup-2')!, status: 'waitlist' })
+
+    await confirmSignups(WORKSHOP, CONF, ['signup-2'])
+
+    expect(store().doc('signup-2')?.status).toBe('confirmed')
   })
 })
 
@@ -441,7 +503,7 @@ describe('a sign-up of theirs that the read cannot see', () => {
     ).toEqual({ refused: 'already-signed-up' })
   })
 
-  it('(a status or a reference edited in Studio) is answered as already signed up, not as busy', async () => {
+  it('a status the app does not write (edited through the API) is answered as already signed up, not as busy', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)
     store().put({
       ...signup(10, 'confirmed'),
@@ -471,6 +533,17 @@ describe('a sign-up removed right after it was saved', () => {
 })
 
 describe('what is stored', () => {
+  it('records the notes the sign-up was sent with', async () => {
+    const outcome = await signUpForWorkshop(
+      { ...attendee(12), notes: 'Bringing my own laptop' },
+      { whenFull: 'waitlist' },
+    )
+
+    expect(
+      store().doc((outcome as { signup: { _id: string } }).signup._id),
+    ).toMatchObject({ notes: 'Bringing my own laptop' })
+  })
+
   it('records the sponsor of an early sign-up as a weak reference', async () => {
     const outcome = await signUpForWorkshop(
       { ...attendee(1), earlyAccessSponsorId: 'sfc-acme' },

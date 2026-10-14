@@ -653,6 +653,7 @@ export const workshopRouter = router({
             userName,
             experienceLevel: input.experienceLevel,
             operatingSystem: input.operatingSystem,
+            notes: input.notes,
             workshopId: input.workshop._ref,
             conferenceId: conference._id,
             // AN EARLY SIGN-UP records the sponsor whose link admitted it. A
@@ -1304,6 +1305,7 @@ export const workshopRouter = router({
               userName: input.userName,
               experienceLevel: input.experienceLevel,
               operatingSystem: input.operatingSystem,
+              notes: input.notes,
               workshopId: input.workshop._ref,
               conferenceId,
             },

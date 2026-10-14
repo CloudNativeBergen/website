@@ -105,6 +105,7 @@ const manualInput = {
   userName: 'Person',
   experienceLevel: 'beginner' as const,
   operatingSystem: 'linux' as const,
+  notes: 'Bringing my own laptop',
   workshop: { _type: 'reference' as const, _ref: 'w-1' },
 }
 
@@ -150,6 +151,7 @@ describe('admin.manualSignup', () => {
     expect(seats.signUpForWorkshop).toHaveBeenCalledWith(
       expect.objectContaining({
         userWorkOSId: 'user_1',
+        notes: 'Bringing my own laptop',
         workshopId: 'w-1',
         conferenceId: 'conf-A',
       }),

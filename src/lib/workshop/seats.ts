@@ -50,11 +50,13 @@ const MAX_ATTEMPTS = 25
 
 /**
  * How long the guard counts a seat it let through, or holds a capacity it
- * set, beside the read. Far longer than Sanity's search store takes to show a
- * write ("generally less than 1 second"). The price: a seat freed by a cancel
- * in this window is still counted until it ends.
+ * set, beside the read: from when the write was sent, until well after it can
+ * have landed (a request lives at most 300 s, Vercel's default, which the
+ * tRPC route keeps) and been shown by Sanity's search store ("generally less
+ * than 1 second"). The price: a seat freed outside the app (`freeSeat` makes
+ * the guard forget at once) is counted until it ends.
  */
-const RECENT_MS = 2 * 60_000
+const RECENT_MS = 15 * 60_000
 
 export interface SignUpRequest extends Pick<
   WorkshopSignupInput,
@@ -63,6 +65,7 @@ export interface SignUpRequest extends Pick<
   | 'userName'
   | 'experienceLevel'
   | 'operatingSystem'
+  | 'notes'
 > {
   workshopId: string
   conferenceId: string
@@ -81,14 +84,14 @@ export type SignUpOutcome =
       refused: 'not-found' | 'already-signed-up' | 'full' | 'busy' | 'removed'
     }
 
-/** As the read projects it: a field the document lacks is `null`. */
 interface Guard {
   _rev: string
+  conference?: { _ref: string }
   /** The seats it let through, with when. */
-  recent: { _key: string; signup: string; at: string }[] | null
+  recent?: { _key: string; signup: string; at: string }[] | null
   /** The capacity it last set, with when. */
-  capacity: number | null
-  capacitySetAt: string | null
+  capacity?: number | null
+  capacitySetAt?: string | null
 }
 
 interface Seats {
@@ -159,23 +162,28 @@ async function readSeats(
   workshopId: string,
   conferenceId: string,
 ): Promise<Seats | null> {
-  const seats = await clientWrite.fetch<Omit<Seats, 'now'> | null>(
-    groq`*[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId][0]{
-      "capacity": coalesce(capacity, 30),
-      "guard": *[_type == "workshopSeats" && _id == $seatsId && conference._ref == $conferenceId][0]{
-        _rev, recent, capacity, capacitySetAt
-      },
-      "signups": *[_type == "workshopSignup" && workshop._ref == ^._id && conference._ref == $conferenceId && status in ["confirmed", "waitlist"] && !(_id in path("drafts.**"))]{
-        _id, _createdAt, signedUpAt, status, userWorkOSId
-      }
-    }`,
-    {
-      workshopId,
-      conferenceId,
-      seatsId: seatsDocumentId(conferenceId, workshopId),
-    },
-  )
-  return seats && { ...seats, now: Date.now() }
+  const [seats, guard] = await Promise.all([
+    clientWrite.fetch<Omit<Seats, 'now' | 'guard'> | null>(
+      groq`*[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId][0]{
+        "capacity": coalesce(capacity, 30),
+        "signups": *[_type == "workshopSignup" && workshop._ref == ^._id && conference._ref == $conferenceId && status in ["confirmed", "waitlist"] && !(_id in path("drafts.**"))]{
+          _id, _createdAt, signedUpAt, status, userWorkOSId
+        }
+      }`,
+      { workshopId, conferenceId },
+    ),
+    // From the document store, where it is current: a 409 on it is then a
+    // race, never a read that has not caught up.
+    clientWrite.getDocument<Guard & { _id: string }>(
+      seatsDocumentId(conferenceId, workshopId),
+    ),
+  ])
+  if (!seats) return null
+  return {
+    ...seats,
+    guard: guard?.conference?._ref === conferenceId ? guard : null,
+    now: Date.now(),
+  }
 }
 
 type Transaction = ReturnType<typeof clientWrite.transaction>
@@ -192,7 +200,8 @@ function guard(
   { took, capacity }: { took: string[]; capacity?: number },
 ) {
   const _id = seatsDocumentId(conferenceId, workshopId)
-  const at = new Date(seats.now).toISOString()
+  // When the write is sent, not when it was read.
+  const at = new Date().toISOString()
   const remembered = {
     recent: [
       ...recentIn(seats),
@@ -308,6 +317,7 @@ export async function signUpForWorkshop(
       confirmationEmailSent: false,
       experienceLevel: request.experienceLevel,
       operatingSystem: request.operatingSystem,
+      ...(request.notes && { notes: request.notes }),
       // WEAK IN THE WRITE ITSELF: the schema's `weak` governs Studio only,
       // and a strong reference would keep the sponsor from being removed
       // from the conference.
@@ -333,12 +343,9 @@ export async function signUpForWorkshop(
   return signup ? { signup } : { refused: 'removed' }
 }
 
+/** From the document store: by an id derived from this conference's own. */
 async function isStored(id: string): Promise<boolean> {
-  return clientWrite.fetch<boolean>(
-    // groq-global-scoped: the id is derived from this conference's own id (`signupDocumentId`), so a document under it is this conference's, whatever its references say.
-    groq`defined(*[_id == $id][0]._id)`,
-    { id },
-  )
+  return Boolean(await clientWrite.getDocument(id))
 }
 
 async function readSignup(
@@ -392,16 +399,16 @@ export async function confirmSignups(
     (seats, tx) => {
       const taken = takenIn(seats)
       const wanted = seats.signups.filter((s) => signupIds.includes(s._id))
-      // Shown waiting, but the guard let it through a moment ago: confirmed.
-      const waiting = wanted.filter(
-        (s) => s.status === 'waitlist' && !taken.has(s._id),
-      )
-      if (waiting.length > 0) {
+      const shownWaiting = wanted.filter((s) => s.status === 'waitlist')
+      // Shown waiting, but holding a seat the guard let through a moment
+      // ago: written confirmed all the same, and not counted twice.
+      const waiting = shownWaiting.filter((s) => !taken.has(s._id))
+      if (shownWaiting.length > 0) {
         guard(tx, seats, workshopId, conferenceId, {
           took: waiting.map((s) => s._id),
         })
         const confirmedAt = new Date().toISOString()
-        for (const { _id } of waiting) {
+        for (const { _id } of shownWaiting) {
           tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
         }
       }
@@ -471,33 +478,23 @@ export async function freeSeat(
   signupId: string,
   how: 'delete' | 'waitlist',
 ): Promise<void> {
-  const of = await clientWrite.fetch<{
-    workshop: string
-    conference: string
-  } | null>(
-    // groq-global-scoped: keyed by a sign-up id the caller has ALREADY proved is this conference's.
-    groq`*[_type == "workshopSignup" && _id == $id][0]{"workshop": workshop._ref, "conference": conference._ref}`,
-    { id: signupId },
-  )
-  const guard =
-    of &&
-    (await clientWrite.fetch<{ _id: string; keys: string[] | null } | null>(
-      groq`*[_type == "workshopSeats" && _id == $guardId && conference._ref == $conferenceId][0]{
-        _id, "keys": recent[signup == $id]._key
-      }`,
-      {
-        id: signupId,
-        guardId: seatsDocumentId(of.conference, of.workshop),
-        conferenceId: of.conference,
-      },
-    ))
+  const signup = await clientWrite.getDocument<{
+    workshop?: { _ref: string }
+    conference?: { _ref: string }
+  }>(signupId)
   const tx = clientWrite.transaction()
   if (how === 'delete') tx.delete(signupId)
   else tx.patch(signupId, { set: { status: 'waitlist' } })
-  if (guard?.keys?.length) {
-    tx.patch(guard._id, {
-      unset: guard.keys.map((key) => `recent[_key=="${key}"]`),
-    })
+  const workshopId = signup?.workshop?._ref
+  const conferenceId = signup?.conference?._ref
+  if (workshopId && conferenceId) {
+    // Read where it is current, and forgotten by the sign-up's id in the
+    // document store itself, whichever entries hold it by then.
+    const _id = seatsDocumentId(conferenceId, workshopId)
+    const guard = await clientWrite.getDocument<Guard>(_id)
+    if (guard?.recent?.some((r) => r.signup === signupId)) {
+      tx.patch(_id, { unset: [`recent[signup=="${signupId}"]`] })
+    }
   }
   await tx.commit()
 }

@@ -6,7 +6,7 @@ import { defineField, defineType } from 'sanity'
  * (`workshopSeats-<conference id>-<workshop id>`). Every write that confirms
  * a sign-up or changes the capacity patches it `ifRevisionID` the revision it
  * read, so two of them cannot both commit on the same count. The sign-ups
- * hold the seats; the guard remembers only the last couple of minutes of what
+ * hold the seats; the guard remembers only the last fifteen minutes of what
  * it let through, for reads that do not show it yet. See
  * `src/lib/workshop/seats.ts`.
  */
@@ -35,7 +35,7 @@ export default defineType({
       name: 'recent',
       title: 'Seats taken a moment ago',
       description:
-        'Counted beside the sign-ups for a couple of minutes, while a read may not show them yet.',
+        'Counted beside the sign-ups for fifteen minutes, while a read may not show them yet.',
       type: 'array',
       of: [
         {

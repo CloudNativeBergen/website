@@ -96,7 +96,8 @@ export interface VersionedSanityStore {
   remove(id: string): void
   /**
    * Until the next `reset()`, reads see `seen` for this id (`null`: no such
-   * document) instead of what is stored; writes still see what is stored.
+   * document) instead of what is stored; writes, and `getDocument` (the doc
+   * endpoint), still see what is stored.
    * Sanity documents this: queries run against a search store that is synced
    * from the document store outside transactions, and may lag behind it.
    */
@@ -267,6 +268,10 @@ export function createVersionedSanityStore(): VersionedSanityStore {
 
   const writer = (apiVersion: string) => ({
     fetch: fetchAs('write', apiVersion),
+    // The doc endpoint reads the document store, past the search store's lag
+    // (Sanity: "the absolute latest possible version of a document").
+    getDocument: async (id: string) =>
+      structuredClone(documents.find((d) => d._id === id)) ?? null,
     transaction: () => {
       const tx = real.transaction()
       tx.commit = (async () => {
