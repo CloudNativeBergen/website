@@ -9,6 +9,7 @@ import {
   sponsorEarlyAccessRouter,
 } from './sponsorEarlyAccess'
 import { requireWorkshopsEnabled } from '../workshopAdmin'
+import { earlyAccessCopiesBehindNotice } from '@/lib/sponsor-crm/early-access-email'
 import { expireEarlyAccessLinks } from '@/lib/workshop/early-access'
 import {
   requireDocumentInCurrentConference,
@@ -2840,6 +2841,11 @@ export const sponsorRouter = router({
           throw error
         }
 
+        // Unpublished copies of the sponsor that did not get the early-access
+        // link's token. Known once the primitive has run, whether or not the
+        // email went out: the link is stored either way.
+        const copiesBehind = earlyAccess?.notWritten().length ?? 0
+
         if (!result.ok) {
           // Nothing went out, so the codes are nobody's again — and the
           // reserved agreement is undone. Unless the provider's ANSWER was
@@ -2883,7 +2889,11 @@ export const sponsorRouter = router({
                 message:
                   answerLost && kept
                     ? `${result.message}. The email provider did not confirm delivery, so ${kept}.`
-                    : result.message,
+                    : copiesBehind > 0
+                      ? // The organizer may not send again, and would then
+                        // never learn that publishing a copy drops the link.
+                        `${result.message}. The early-access link is stored, but ${earlyAccessCopiesBehindNotice(copiesBehind)}`
+                      : result.message,
               })
           }
         }
@@ -2966,7 +2976,6 @@ export const sponsorRouter = router({
           }
         }
 
-        const copiesBehind = earlyAccess?.notWritten().length ?? 0
         return {
           success: true as const,
           activityId: result.activityId,

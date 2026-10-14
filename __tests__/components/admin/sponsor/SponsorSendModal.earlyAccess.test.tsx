@@ -491,7 +491,7 @@ describe('a send that may go ahead', () => {
         type: 'warning',
         title: 'Unpublished copies without the link',
         message:
-          'The email went out and the link works, but 2 unpublished copies of this sponsor in Sanity Studio did not get the link. Publishing one of them would remove it. Discard them in Studio.',
+          'The email went out and the link works, but 2 unpublished copies of this sponsor in Sanity Studio did not get the link. Publishing one of them would remove the link. Discard them in Studio.',
       }),
     )
   })

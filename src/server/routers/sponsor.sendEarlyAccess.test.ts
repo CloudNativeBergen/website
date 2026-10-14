@@ -394,6 +394,33 @@ describe('the link', () => {
     expect(sentHtml()).toContain(`href="${linkOf(stored(SFC))}"`)
   })
 
+  // The email may be in an inbox (the provider did not answer) or not (it
+  // refused). Either way the link is stored and a copy lacks it: the
+  // organizer is told with the failure, not only on a send that succeeds.
+  it.each([
+    ['did not answer', { message: 'gateway timeout', statusCode: 504 }],
+    ['refused', { message: 'provider said no', statusCode: 422 }],
+  ])(
+    'tells the organizer about a copy without the link also when the provider %s',
+    async (_case, error) => {
+      store().reset([
+        ...DATASET,
+        sponsorDoc(),
+        sponsorDoc({ _id: `drafts.${SFC}` }),
+      ])
+      store().failPatchesOf(`drafts.${SFC}`)
+      h.send.mockResolvedValue({ data: null, error })
+
+      await expect(send()).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `${error.message}. The early-access link is stored, but 1 unpublished copy of this sponsor in Sanity Studio did not get the link. Publishing that copy would remove the link. Discard it in Studio.`,
+      })
+      expect(stored(SFC)).toMatch(new RegExp(`^${UUID}$`))
+      expect(stored(`drafts.${SFC}`)).toBeUndefined()
+      expect(records()[0]).toMatchObject({ deliveryStatus: 'failed' })
+    },
+  )
+
   it('reports no copy behind when every copy got it', async () => {
     store().reset([
       ...DATASET,
@@ -872,6 +899,55 @@ describe('a refused send', () => {
       expectNothingHappened()
     },
   )
+
+  // A dev server is not only `localhost:3000`. Each of these can be an entry
+  // of a conference's `domains[]`, and so a host a request resolves on.
+  it.each([
+    '[::1]:3000',
+    '127.0.0.1:3000',
+    '0.0.0.0:3000',
+    'dev.localhost:3000',
+  ])(
+    'is refused from a development server opened as %s, before anything is read live',
+    async (host) => {
+      h.getConference.mockResolvedValue({
+        conference: conference({ domains: [MAIN_HOST, host] }),
+        domain: host,
+        error: null,
+      })
+
+      await expect(send()).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message:
+          'Workshop early access cannot be sent from localhost. Deploy to a production domain first.',
+      })
+      expectNothingHappened()
+      await expect(
+        caller().crm.earlyAccess.getSendReadiness({
+          sponsorForConferenceId: SFC,
+        }),
+      ).resolves.toMatchObject({ refusal: { reason: 'localhost' } })
+      expect(liveReads()).toEqual([])
+    },
+  )
+
+  // The same shared check guards the registration send, whose link is built
+  // from the request's host.
+  it('a registration send is refused from [::1]:3000 too, and mints no token', async () => {
+    h.getConference.mockResolvedValue({
+      conference: conference({ domains: [MAIN_HOST, '[::1]:3000'] }),
+      domain: '[::1]:3000',
+      error: null,
+    })
+
+    await expect(send({ kind: 'registration' })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('cannot be sent from localhost'),
+    })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(store().doc(SFC)?.registrationToken).toBeUndefined()
+    expect(store().commits).toEqual([])
+  })
 
   it('still sends one millisecond before the official opening', async () => {
     vi.setSystemTime(new Date(new Date(OFFICIAL_OPENING).getTime() - 1))

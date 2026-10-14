@@ -37,6 +37,17 @@ export const EARLY_ACCESS_SEND_REFUSALS: Record<
     'This conference has no working workshop portal: its main domain cannot sign attendees in yet. Verify the domain under Settings, then try again.',
 }
 
+/**
+ * What an organizer is told when the link is stored and unpublished copies
+ * of the sponsor in Sanity Studio did not get it: publishing one would
+ * remove the link from the live document. Said after a send that went out,
+ * and with the failure of one that did not: the link is stored either way.
+ */
+export function earlyAccessCopiesBehindNotice(copies: number): string {
+  const one = copies === 1
+  return `${copies} unpublished ${one ? 'copy' : 'copies'} of this sponsor in Sanity Studio did not get the link. Publishing ${one ? 'that copy' : 'one of them'} would remove the link. Discard ${one ? 'it' : 'them'} in Studio.`
+}
+
 /** The one attachment row of an early-access send: the link itself. */
 export function earlyAccessAttachments(url: string): CommunicationAttachment[] {
   return [{ label: 'Workshop early-access link', url }]

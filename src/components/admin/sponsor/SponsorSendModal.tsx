@@ -48,6 +48,7 @@ import {
 } from '@/lib/sponsor-crm/registration-email'
 import {
   earlyAccessCardHtml,
+  earlyAccessCopiesBehindNotice,
   earlyAccessGreeting,
 } from '@/lib/sponsor-crm/early-access-email'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
@@ -1327,11 +1328,10 @@ function SponsorSendComposer({
     }
     if ('earlyAccessCopiesBehind' in result && result.earlyAccessCopiesBehind) {
       const behind = result.earlyAccessCopiesBehind
-      const one = behind === 1
       showNotification({
         type: 'warning',
-        title: `Unpublished ${one ? 'copy' : 'copies'} without the link`,
-        message: `The email went out and the link works, but ${behind} unpublished ${one ? 'copy' : 'copies'} of this sponsor in Sanity Studio did not get the link. Publishing ${one ? 'it' : 'one of them'} would remove it. Discard ${one ? 'it' : 'them'} in Studio.`,
+        title: `Unpublished ${behind === 1 ? 'copy' : 'copies'} without the link`,
+        message: `The email went out and the link works, but ${earlyAccessCopiesBehindNotice(behind)}`,
       })
     }
     if ('linkFailed' in result && result.linkFailed) {
