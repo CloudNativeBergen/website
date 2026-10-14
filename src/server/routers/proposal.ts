@@ -192,6 +192,7 @@ async function changeTalkCapacity(talkId: string, capacity: number) {
   // real change look like none. The caller has proved the talk is the org's.
   const talk = await clientWrite.getDocument<{
     capacity?: number
+    status?: string
     conference?: { _ref: string }
   }>(talkId)
   const stored = talk && {
@@ -212,7 +213,11 @@ async function changeTalkCapacity(talkId: string, capacity: number) {
     })
   }
   const outcome = stored.conferenceId
-    ? await changeCapacity(talkId, stored.conferenceId, capacity)
+    ? await changeCapacity(talkId, stored.conferenceId, capacity, {
+        // Waiting sign-ups are given seats, and told so, only while the
+        // workshop is on (a withdrawn one keeps them waiting).
+        promote: talk.status === Status.confirmed,
+      })
     : ({ refused: 'not-found' } as const)
   if ('refused' in outcome) {
     switch (outcome.refused) {

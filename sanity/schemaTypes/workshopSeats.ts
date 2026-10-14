@@ -3,7 +3,7 @@ import { defineField, defineType } from 'sanity'
 /**
  * The seats guard of a workshop (#1344): one document per workshop and
  * conference, with a deterministic id
- * (`workshopSeats-<conference id>-<workshop id>`). Every write that confirms
+ * (`workshopSeats-<hash of conference and workshop id>`). Every write that confirms
  * a sign-up or changes the capacity patches it `ifRevisionID` the revision it
  * read, so two of them cannot both commit on the same count. The sign-ups
  * hold the seats; the guard remembers only the last fifteen minutes of what

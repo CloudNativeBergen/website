@@ -29,6 +29,7 @@ const h = vi.hoisted(() => ({
   lagging: null as null | { capacity?: number; conferenceId: string },
   stored: { capacity: 10, conferenceId: 'conf-A' } as {
     capacity?: number
+    status?: string
     conferenceId: string
   },
   changeCapacity: vi.fn(),
@@ -87,6 +88,7 @@ vi.mock('@/lib/sanity/client', () => {
     getDocument: async (id: string) => ({
       _id: id,
       capacity: h.stored.capacity,
+      status: h.stored.status ?? 'confirmed',
       conference: { _ref: h.stored.conferenceId },
     }),
     transaction: () => ({ patch: vi.fn(), commit: vi.fn() }),
@@ -148,7 +150,9 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
   it("a changed capacity is written through the seats guard of the talk's conference, not by the plain patch", async () => {
     await update({ title: 'Kubernetes hands-on', capacity: 12 })
 
-    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12)
+    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
+      promote: true,
+    })
     expect(h.updateProposal).toHaveBeenCalledWith('talk-1', {
       title: 'Kubernetes hands-on',
     })
@@ -160,7 +164,19 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
 
     await update({ capacity: 20 })
 
-    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 20)
+    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 20, {
+      promote: true,
+    })
+  })
+
+  it('a workshop that is not confirmed (withdrawn) changes capacity without promoting anyone', async () => {
+    h.stored = { capacity: 10, status: 'withdrawn', conferenceId: 'conf-A' }
+
+    await update({ capacity: 12 })
+
+    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
+      promote: false,
+    })
   })
 
   it('emails the sign-ups it confirmed into the new seats', async () => {
@@ -255,7 +271,9 @@ describe('proposal.update by an organizer who speaks at the workshop (#1344)', (
       data: { title: 'Kubernetes hands-on', capacity: 12 },
     } as never)
 
-    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12)
+    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
+      promote: true,
+    })
     expect(h.updateProposal).toHaveBeenCalledTimes(1)
     expect(h.updateProposal.mock.calls[0][1]).toMatchObject({
       title: 'Kubernetes hands-on',

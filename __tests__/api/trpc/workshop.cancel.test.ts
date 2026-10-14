@@ -226,8 +226,11 @@ import {
   getWorkshopSignupsByWorkshop,
 } from '@/lib/workshop/sanity'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
+import { seatsDocumentId } from '@/lib/workshop/seats'
 
 const WORKSHOP = 'ws-1'
+/** The workshop's seats guard (#1344). */
+const GUARD = seatsDocumentId('conf-1', WORKSHOP)
 const FOREIGN_WORKSHOP = 'ws-foreign'
 
 const ADA = { id: 'workos-ada', email: 'ada@example.com', name: 'Ada' }
@@ -330,11 +333,8 @@ describe('an attendee cancels a workshop seat', () => {
     expect(result.success).toBe(true)
     // In the same write, the seats guard forgets it let this one through
     // (#1344), so the seat is free to the next sign-up at once.
-    expect(h.writes).toEqual([
-      `delete:${id}`,
-      'patch:workshopSeats-conf-1-ws-1',
-    ])
-    expect(stored('workshopSeats-conf-1-ws-1')?.recent).toEqual([])
+    expect(h.writes).toEqual([`delete:${id}`, `patch:${GUARD}`])
+    expect(stored(GUARD)?.recent).toEqual([])
     expect(stored(id)).toBeUndefined()
     expect(signupsOf(ADA)).toEqual([])
   })
@@ -414,10 +414,7 @@ describe('after an attendee’s cancel', () => {
     // Before #1331 this set `waitlist` on a waitlisted sign-up: nothing
     // happened, and nobody could leave a waitlist.
     // With the forget in the seats guard that every free carries (#1344).
-    expect(h.writes).toEqual([
-      `delete:${bob}`,
-      'patch:workshopSeats-conf-1-ws-1',
-    ])
+    expect(h.writes).toEqual([`delete:${bob}`, `patch:${GUARD}`])
     expect(stored(bob)).toBeUndefined()
     const mine = await createWorkshopCaller(BOB).workshop.getMySignups()
     expect(mine.data).toEqual([])
@@ -486,14 +483,9 @@ describe('an organizer moves a confirmed sign-up to the waitlist', () => {
     expect(result.results).toEqual({ succeeded: 1, failed: 0, total: 1 })
     // The procedure's name says cancel; nothing it tells an organizer does.
     expect(result.message).toBe('Moved 1 signup to the waitlist')
-    expect(h.writes).toEqual([
-      `patch:${ada}`,
-      'patch:workshopSeats-conf-1-ws-1',
-    ])
+    expect(h.writes).toEqual([`patch:${ada}`, `patch:${GUARD}`])
     expect(
-      (stored('workshopSeats-conf-1-ws-1')?.recent as { signup: string }[]).map(
-        (r) => r.signup,
-      ),
+      (stored(GUARD)?.recent as { signup: string }[]).map((r) => r.signup),
     ).not.toContain(ada)
     expect(stored(ada)).toMatchObject({
       status: 'waitlist',

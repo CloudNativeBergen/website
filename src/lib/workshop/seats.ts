@@ -112,10 +112,14 @@ interface Seats {
 /**
  * Within the conference: a workshop moved to another conference starts a new
  * guard there, instead of finding none (the read is scoped) and colliding
- * with the old one's id on every attempt.
+ * with the old one's id on every attempt. Hashed, like the sign-up's: two
+ * pairs of ids never share one, and it stays within Sanity's 128 characters.
  */
 export const seatsDocumentId = (conferenceId: string, workshopId: string) =>
-  `workshopSeats-${conferenceId}-${workshopId}`
+  `workshopSeats-${createHash('sha256')
+    .update(`${conferenceId}\n${workshopId}`)
+    .digest('hex')
+    .slice(0, 32)}`
 
 /**
  * The id of a person's sign-up for a workshop: the same for every attempt.
@@ -412,6 +416,8 @@ interface Confirmed {
 
 interface CurrentSignup {
   _id: string
+  /** The revision checked: the write is made on it, or not at all. */
+  _rev: string
   _createdAt: string
   signedUpAt?: string
   status: 'confirmed' | 'waitlist'
@@ -477,8 +483,11 @@ export async function confirmSignups(
           took: waitingNow.map((s) => s._id),
         })
         const confirmedAt = new Date().toISOString()
-        for (const { _id } of waitingNow) {
-          tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
+        for (const { _id, _rev } of waitingNow) {
+          tx.patch(_id, {
+            ifRevisionID: _rev,
+            set: { status: 'confirmed', confirmedAt },
+          })
         }
       }
       return {
@@ -496,13 +505,15 @@ export async function confirmSignups(
 
 /**
  * Sets the capacity, and confirms the longest-waiting sign-ups into the seats
- * that are then free, in the same write. Refused below the seats taken.
- * `promoted` names the sign-ups it confirmed, longest-waiting first.
+ * that are then free, in the same write (none with `promote: false`).
+ * Refused below the seats taken. `promoted` names the sign-ups it confirmed,
+ * longest-waiting first.
  */
 export async function changeCapacity(
   workshopId: string,
   conferenceId: string,
   capacity: number,
+  { promote = true }: { promote?: boolean } = {},
 ): Promise<
   | { promoted: string[] }
   | { refused: 'below-seats-taken'; seatsTaken: number }
@@ -519,9 +530,11 @@ export async function changeCapacity(
     }
     const since = (s: CurrentSignup) =>
       new Date(s.signedUpAt || s._createdAt).getTime()
-    const waitlisted = seats.signups.filter(
-      (s) => s.status === 'waitlist' && !taken.has(s._id),
-    )
+    const waitlisted = promote
+      ? seats.signups.filter(
+          (s) => s.status === 'waitlist' && !taken.has(s._id),
+        )
+      : []
     const promoted = (
       await current(
         waitlisted.map((s) => s._id),
@@ -538,8 +551,11 @@ export async function changeCapacity(
     })
     tx.patch(workshopId, { set: { capacity } })
     const confirmedAt = new Date().toISOString()
-    for (const { _id } of promoted) {
-      tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
+    for (const { _id, _rev } of promoted) {
+      tx.patch(_id, {
+        ifRevisionID: _rev,
+        set: { status: 'confirmed', confirmedAt },
+      })
     }
     return { done: promoted.map((s) => s._id) }
   })

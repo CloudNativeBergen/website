@@ -29,6 +29,7 @@ import {
   changeCapacity,
   confirmSignups,
   freeSeat,
+  seatsDocumentId,
   signUpForWorkshop,
   signupDocumentId,
 } from './seats'
@@ -154,6 +155,18 @@ describe('sign-ups arriving together', () => {
   })
 })
 
+describe("a workshop's guard id", () => {
+  it('is one per workshop and conference, never shared by another pair, and within Sanity’s 128 characters', () => {
+    expect(seatsDocumentId('a-b', 'c')).not.toBe(seatsDocumentId('a', 'b-c'))
+    expect(
+      seatsDocumentId('c'.repeat(128), 'w'.repeat(128)).length,
+    ).toBeLessThanOrEqual(128)
+    expect(seatsDocumentId(CONF, WORKSHOP)).toBe(
+      seatsDocumentId(CONF, WORKSHOP),
+    )
+  })
+})
+
 describe('one person, one sign-up per workshop', () => {
   it('the same sign-up sent twice at once ends with one sign-up, and the second is told so', async () => {
     const outcomes = await Promise.all([
@@ -235,7 +248,7 @@ describe('what a request that cannot take a seat is told', () => {
     for (let i = 0; i < 100; i++) {
       store().beforeNextCommit(() => {
         store().put({
-          _id: 'workshopSeats-conf-a-talk-k8s',
+          _id: seatsDocumentId(CONF, WORKSHOP),
           _type: 'workshopSeats',
           conference: ref(CONF),
           _rev: `other-${++rev}`,
@@ -397,7 +410,7 @@ describe('a read that shows waiting a sign-up the guard confirmed a moment ago',
 })
 
 describe('a guard that the reads show late', () => {
-  const GUARD = 'workshopSeats-conf-a-talk-k8s'
+  const GUARD = seatsDocumentId(CONF, WORKSHOP)
 
   it('a free still makes it forget: the sign-up confirmed again is stored confirmed', async () => {
     store().reset([
@@ -487,6 +500,38 @@ describe('a cancel, then the same person again while a read still shows the canc
       await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
     ).toMatchObject({ signup: { _id: id } })
     expect(store().doc(id)).toBeDefined()
+  })
+})
+
+describe('a sign-up moved to another workshop in Studio between the check and the write', () => {
+  const retarget = (id: string) => () =>
+    store().put({
+      ...store().doc(id)!,
+      workshop: ref('talk-other'),
+      _rev: 'studio-edit',
+    })
+
+  it('a confirm does not confirm it, nor charge its seat here', async () => {
+    store().reset([workshop(), signup(1, 'confirmed'), signup(2, 'waitlist')])
+    store().beforeNextCommit(retarget('signup-2'))
+
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-2'])).toMatchObject({
+      confirmed: [],
+      newlyConfirmed: [],
+    })
+    expect(store().doc('signup-2')?.status).toBe('waitlist')
+  })
+
+  it('a capacity change does not promote it', async () => {
+    store().reset([
+      workshop({ capacity: 1 }),
+      signup(1, 'confirmed'),
+      signup(2, 'waitlist'),
+    ])
+    store().beforeNextCommit(retarget('signup-2'))
+
+    expect(await changeCapacity(WORKSHOP, CONF, 2)).toEqual({ promoted: [] })
+    expect(store().doc('signup-2')?.status).toBe('waitlist')
   })
 })
 
@@ -601,8 +646,8 @@ describe('an opening with more seats than attempts', () => {
           userWorkOSId: `user_other_${i}`,
         })
         store().put({
-          ...(store().doc('workshopSeats-conf-a-talk-k8s') ?? {
-            _id: 'workshopSeats-conf-a-talk-k8s',
+          ...(store().doc(seatsDocumentId(CONF, WORKSHOP)) ?? {
+            _id: seatsDocumentId(CONF, WORKSHOP),
             _type: 'workshopSeats',
             conference: ref(CONF),
           }),
@@ -896,6 +941,20 @@ describe('changing the capacity', () => {
         .map((d) => d._id)
         .sort(),
     ).toEqual(['signup-1', 'signup-4', 'signup-5'])
+  })
+
+  it('without promotion (a workshop not confirmed): sets the capacity, confirms no one', async () => {
+    store().reset([
+      workshop({ capacity: 1 }),
+      signup(1, 'confirmed'),
+      waiting(2),
+    ])
+
+    expect(await changeCapacity(WORKSHOP, CONF, 3, { promote: false })).toEqual(
+      { promoted: [] },
+    )
+    expect(store().doc(WORKSHOP)?.capacity).toBe(3)
+    expect(store().doc('signup-2')?.status).toBe('waitlist')
   })
 
   it('is refused below the seats taken, and writes nothing', async () => {
