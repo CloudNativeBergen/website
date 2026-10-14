@@ -206,6 +206,21 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
     )
   })
 
+  it('the promoted are emailed LAST: after the conversation participants were synced for a speaker change', async () => {
+    h.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
+    const { syncProposalConversationParticipants } =
+      await import('@/lib/messaging/sanity')
+
+    await update({ capacity: 12, speakers: ['sp-1'] })
+
+    expect(syncProposalConversationParticipants).toHaveBeenCalledTimes(1)
+    expect(h.emailPromoted).toHaveBeenCalledTimes(1)
+    expect(
+      vi.mocked(syncProposalConversationParticipants).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(h.emailPromoted.mock.invocationCallOrder[0])
+  })
+
   it('a proposal patch that fails after the capacity write: nothing is sent now (the debts stay owed for the cron)', async () => {
     h.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
     h.updateProposal.mockResolvedValue({

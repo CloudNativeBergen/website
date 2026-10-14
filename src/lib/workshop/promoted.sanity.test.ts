@@ -622,26 +622,35 @@ describe('the order of a send, and a workshop no longer on', () => {
   it.each([
     ['withdrawn', { status: 'withdrawn' }],
     ['changed to a talk format', { format: 'lightning_10' }],
+    ['moved to another conference', { conference: ref('conf-b') }],
   ])(
-    'a workshop %s after the promotion (the status-only admin path clears no flag): the cron sends nothing, settles the debts, and logs the ids',
+    'a workshop %s after the promotion: the sweep leaves its sign-ups out (no slot taken, nothing claimed), and the inline sender skips them, owed',
     async (_how, change) => {
       store().put({ ...store().doc(WORKSHOP)!, ...change })
 
-      const outcome = await deliverDuePromotionEmails()
-
-      expect(outcome).toMatchObject({ found: 2, emailed: 0 })
-      expect(emailed()).toEqual([])
-      expect(store().doc('signup-2')).not.toHaveProperty('promotionEmailDue')
-      expect(store().doc('signup-3')).not.toHaveProperty('promotionEmailDue')
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('promotion emails not sent'),
-        ['signup-2', 'signup-3'],
-        expect.anything(),
-      )
-      // Settled: the next sweep finds nothing.
       expect(await deliverDuePromotionEmails()).toMatchObject({ found: 0 })
+      await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
+
+      expect(emailed()).toEqual([])
+      for (const id of ['signup-2', 'signup-3']) {
+        expect(store().doc(id)).toMatchObject({ promotionEmailDue: true })
+        expect(store().doc(id)).not.toHaveProperty('promotionEmailClaim')
+      }
     },
   )
+
+  it('a workshop withdrawn, then put back on: the owed emails are then sent, exactly once', async () => {
+    store().put({ ...store().doc(WORKSHOP)!, status: 'withdrawn' })
+    expect(await deliverDuePromotionEmails()).toMatchObject({ found: 0 })
+    store().put({ ...store().doc(WORKSHOP)!, status: 'confirmed' })
+
+    expect(await deliverDuePromotionEmails()).toMatchObject({
+      found: 2,
+      emailed: 2,
+    })
+    expect(await deliverDuePromotionEmails()).toMatchObject({ found: 0 })
+    expect(emailed()).toEqual(['person2@example.com', 'person3@example.com'])
+  })
 })
 
 describe('a workshop withdrawn while a run is sending', () => {
@@ -656,11 +665,39 @@ describe('a workshop withdrawn while a run is sending', () => {
     await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
 
     expect(emailed()).toEqual(['person2@example.com'])
-    expect(store().doc('signup-3')).not.toHaveProperty('promotionEmailDue')
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('promotion emails not sent'),
-      ['signup-3'],
-      expect.anything(),
-    )
+    expect(store().doc('signup-3')).toMatchObject({ promotionEmailDue: true })
+    expect(store().doc('signup-3')).not.toHaveProperty('promotionEmailClaim')
+  })
+
+  it('moved to another conference between two sends: the second is not sent under this conference, and stays owed', async () => {
+    email.sendBasicWorkshopConfirmation.mockImplementation(async (req) => {
+      if (req.userEmail === 'person2@example.com') {
+        store().put({ ...store().doc(WORKSHOP)!, conference: ref('conf-b') })
+      }
+      return { data: { emailId: 'e' } }
+    })
+
+    await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
+
+    expect(emailed()).toEqual(['person2@example.com'])
+    expect(store().doc('signup-3')).toMatchObject({ promotionEmailDue: true })
+  })
+
+  it('the re-read of the talk failing before a claim: that sign-up is skipped without a claim, owed for a later run (never the snapshot)', async () => {
+    const client = store().clients.clientWrite as {
+      getDocument: (id: string) => Promise<unknown>
+    }
+    const real = client.getDocument.bind(client)
+    let talkReads = 0
+    vi.spyOn(client, 'getDocument').mockImplementation(async (id) => {
+      if (id === WORKSHOP && ++talkReads === 2) throw new Error('503')
+      return real(id)
+    })
+
+    await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
+
+    expect(emailed()).toEqual(['person2@example.com'])
+    expect(store().doc('signup-3')).toMatchObject({ promotionEmailDue: true })
+    expect(store().doc('signup-3')).not.toHaveProperty('promotionEmailClaim')
   })
 })

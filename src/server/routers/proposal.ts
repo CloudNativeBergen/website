@@ -2021,13 +2021,6 @@ export const proposalRouter = router({
             })
           }
 
-          if (promotion) {
-            await deliverPromotionEmails(
-              promotion.conferenceId,
-              promotion.promoted,
-            )
-          }
-
           // SNAPSHOT SYNC (G2a): an admin speaker swap also changes who is on the
           // proposal, so keep any existing thread's participants[] in step with
           // the new set — the read path prefers participants[], and G2a must not
@@ -2046,6 +2039,15 @@ export const proposalRouter = router({
                 removedSpeakerIds,
               })
             }
+          }
+
+          // LAST (#1357): the talk is stored as this edit leaves it, and the
+          // conversation's access is in step, before anyone is told.
+          if (promotion) {
+            await deliverPromotionEmails(
+              promotion.conferenceId,
+              promotion.promoted,
+            )
           }
 
           return proposal

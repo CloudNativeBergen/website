@@ -56,17 +56,24 @@ interface StoredWorkshop {
   title?: string
   status?: string
   format?: string
+  conference?: { _ref: string }
 }
 
+/** The workshop formats, from the one rule (`isWorkshopFormat`). */
+const WORKSHOP_FORMATS = Object.values(Format).filter(isWorkshopFormat)
+
 /**
- * The rule `changeCapacity` promotes by: only a workshop that is on gives a
- * seat, so only a workshop that is still on is told of. One withdrawn, or
- * made another format, since the promotion (the status-only admin path
- * clears no flag) has its debts settled, not paid.
+ * The rule `changeCapacity` promotes by, and this conference's to tell: only
+ * a workshop that is on, and still of this conference, is told of. One
+ * withdrawn, made another format, or moved to another conference since the
+ * promotion (the status-only admin path clears no flag) is SKIPPED, its
+ * debts left owed: put back on, they are paid then. The sweep leaves such
+ * sign-ups out of its window with the same rule (`deliverDuePromotionEmails`).
  */
-const stillOn = (workshop: StoredWorkshop | undefined) =>
+const stillOn = (workshop: StoredWorkshop | undefined, conferenceId: string) =>
   workshop?.status === Status.confirmed &&
-  isWorkshopFormat(workshop.format as Format)
+  isWorkshopFormat(workshop.format as Format) &&
+  workshop.conference?._ref === conferenceId
 
 /**
  * How many of a promotion's emails the request that made it sends itself
@@ -128,16 +135,12 @@ export async function deliverPromotionEmails(
     )
     if (due.length === 0) return { emailed }
 
-    // Everything the emails need, BEFORE anything is claimed: a read that
-    // fails here costs nothing, the debt stays for the next run.
-    const workshopIds = [
-      ...new Set(due.flatMap((d) => (d.workshop ? [d.workshop._ref] : []))),
-    ]
-    const [conference, ...workshops] = await clientWrite.getDocuments<
-      StoredConference | StoredWorkshop
-    >([conferenceId, ...workshopIds])
-    // In the conference's own name or not at all: a cron has no request
-    // domain, so the conference is read by the id the sign-up names.
+    // The conference, BEFORE anything is claimed: a read that fails here
+    // costs nothing, the debt stays for the next run. In the conference's
+    // own name or not at all: a cron has no request domain, so it is read by
+    // the id the sign-up names. (The workshop is read per sign-up, below.)
+    const conference =
+      await clientWrite.getDocument<StoredConference>(conferenceId)
     if (conference?._type !== 'conference') {
       notSent(
         due.map((d) => d._id),
@@ -145,32 +148,21 @@ export async function deliverPromotionEmails(
       )
       return { emailed }
     }
-    const workshopById = new Map(
-      workshops.flatMap((w, i) =>
-        w?._type === 'talk' ? [[workshopIds[i], w] as const] : [],
-      ),
-    )
-
     // ONE AT A TIME, a pause apart: Resend allows about two requests a
     // second, and a burst sent at once fails past its retries, after its
     // claim. Each sign-up is claimed right before its own send, so a run
     // that stops (a timeout) leaves the ones after it owed, not claimed.
     const failed: { id: string; why: unknown }[] = []
-    const notOn: string[] = []
     for (const candidate of due) {
       // The talk as it is NOW, from the doc endpoint, right before the
       // claim: a run sends for up to a minute, and a withdrawal in that
       // minute must not be told of. One read per send. What is left is the
-      // moment between this read and the claim.
+      // moment between this read and the claim. A read that fails is not
+      // the snapshot: the sign-up is skipped, unclaimed, for a later run.
       const workshop = candidate.workshop
-        ? await freshWorkshop(candidate.workshop._ref, workshopById)
+        ? await freshWorkshop(candidate.workshop._ref)
         : undefined
-      if (!stillOn(workshop)) {
-        // Settled without a send, so it does not take a place in the sweep
-        // every hour; named in the log.
-        if (await claim(candidate)) notOn.push(candidate._id)
-        continue
-      }
+      if (workshop === 'unread' || !stillOn(workshop, conferenceId)) continue
       // The pause comes BEFORE the claim: a run killed while pausing has
       // claimed nothing, and the email stays owed.
       if (pacing.sends > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
@@ -194,9 +186,6 @@ export async function deliverPromotionEmails(
       if (why !== undefined) failed.push({ id: signup._id, why })
       else emailed.push(signup._id)
     }
-    if (notOn.length > 0) {
-      notSent(notOn, new Error('the workshop is no longer on: not told'))
-    }
     if (failed.length > 0) {
       notSent(
         failed.map((f) => f.id),
@@ -210,17 +199,19 @@ export async function deliverPromotionEmails(
 }
 
 /**
- * The talk from the document store, as it is now; the first read of the run
- * (which also proved the id is a talk) when this one fails.
+ * The talk from the document store, as it is now: `undefined` when there is
+ * no such talk, `'unread'` when the read failed (which is not a talk that is
+ * off, and not a reason to trust an older read).
  */
 async function freshWorkshop(
   id: string,
-  firstRead: Map<string, StoredWorkshop>,
-): Promise<StoredWorkshop | undefined> {
-  const now = await clientWrite
-    .getDocument<StoredWorkshop>(id)
-    .catch(() => undefined)
-  return now?._type === 'talk' ? now : firstRead.get(id)
+): Promise<StoredWorkshop | undefined | 'unread'> {
+  try {
+    const now = await clientWrite.getDocument<StoredWorkshop>(id)
+    return now?._type === 'talk' ? now : undefined
+  } catch {
+    return 'unread'
+  }
 }
 
 /**
@@ -293,11 +284,19 @@ export async function deliverDuePromotionEmails({
   // One whose conference is gone (a dangling reference) is left out: the
   // sender could never pay it, and it would hold a place in the window, and
   // be logged, every hour.
-  const query = `*[_type == "workshopSignup" && promotionEmailDue == true && defined(conference->_id) && !(_id in path("drafts.**"))]
+  // Only a sign-up whose workshop is on, and of the sign-up's own conference
+  // (the rule of `stillOn`): one whose workshop is withdrawn, re-formatted or
+  // moved stays owed, but takes no place in the window every hour.
+  const query = `*[_type == "workshopSignup" && promotionEmailDue == true && defined(conference->_id) && !(_id in path("drafts.**"))
+    && workshop->status == $confirmed && workshop->format in $workshopFormats && workshop->conference._ref == conference._ref]
     | order(_updatedAt asc) [0...${take}]{ _id, "conferenceId": conference._ref }`
   const due = await clientWrite.fetch<
     { _id: string; conferenceId: string | null }[] | null
-  >(query, {}, { cache: 'no-store' })
+  >(
+    query,
+    { confirmed: Status.confirmed, workshopFormats: WORKSHOP_FORMATS },
+    { cache: 'no-store' },
+  )
   const byConference = new Map<string, string[]>()
   for (const { _id, conferenceId } of due ?? []) {
     if (!conferenceId) continue
