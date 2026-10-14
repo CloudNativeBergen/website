@@ -24,6 +24,9 @@
  *    refuses the whole transaction. Every commit gives the documents it
  *    touched a new `_rev`.
  *  - A patch of a document that does not exist refuses the whole transaction.
+ *  - A `create` of an id that is already stored refuses the whole transaction
+ *    with a 409, as Sanity documents it. `@sanity/mutator` keeps the stored
+ *    document instead, so this is checked here (#1344).
  *  - A delete is refused while another document holds a STRONG reference to
  *    the deleted one (Sanity's rule). `_weak: true` on the stored reference is
  *    what makes it weak.
@@ -195,6 +198,11 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         // A document created without an id is given one, as Sanity does.
         if (!body._id) body._id = `created-${++revCounter}`
         const at = next.findIndex((d) => d._id === body._id)
+        if ('create' in mutation && at !== -1) {
+          throw Object.assign(new Error(`409: ${body._id} already exists`), {
+            statusCode: 409,
+          })
+        }
         const after = new Mutation({ mutations: [mutation] }).apply(
           at === -1 ? null : next[at],
         )
