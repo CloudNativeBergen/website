@@ -89,6 +89,7 @@ vi.mock('@/lib/sanity/client', () => {
       _id: id,
       capacity: h.stored.capacity,
       status: h.stored.status ?? 'confirmed',
+      format: 'workshop_120',
       conference: { _ref: h.stored.conferenceId },
     }),
     transaction: () => ({ patch: vi.fn(), commit: vi.fn() }),
@@ -173,6 +174,14 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
     h.stored = { capacity: 10, status: 'withdrawn', conferenceId: 'conf-A' }
 
     await update({ capacity: 12 })
+
+    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
+      promote: false,
+    })
+  })
+
+  it('an edit that also makes the talk no workshop changes capacity without promoting anyone', async () => {
+    await update({ capacity: 12, format: 'presentation_40' })
 
     expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
       promote: false,
@@ -268,7 +277,12 @@ describe('proposal.update by an organizer who speaks at the workshop (#1344)', (
 
     await organizer().update({
       id: 'talk-1',
-      data: { title: 'Kubernetes hands-on', capacity: 12 },
+      // As the CFP form sends it: the whole proposal, its format too.
+      data: {
+        title: 'Kubernetes hands-on',
+        format: 'workshop_120',
+        capacity: 12,
+      },
     } as never)
 
     expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {

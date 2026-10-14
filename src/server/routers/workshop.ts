@@ -910,7 +910,9 @@ export const workshopRouter = router({
             message: beyond
               ? `Participant confirmed beyond capacity (${outcome.seatsTaken} of ${outcome.capacity} seats)${input.sendEmail && wasWaitlisted ? ' and notification email sent' : ''}`
               : wasWaitlisted
-                ? 'Participant confirmed and notification email sent'
+                ? input.sendEmail
+                  ? 'Participant confirmed and notification email sent'
+                  : 'Participant confirmed'
                 : 'Workshop signup confirmed successfully',
           }
         } catch (error) {
@@ -956,9 +958,13 @@ export const workshopRouter = router({
             }
           }
 
-          const updatedWorkshop = await getWorkshopById(input.workshopId)
+          // Written: the emails go first, and the read for the answer can
+          // fail without failing what is saved.
           const promotedCount = outcome.promoted.length
           await emailPromotedSignups(conferenceId, outcome.promoted)
+          const updatedWorkshop = await getWorkshopById(input.workshopId).catch(
+            () => null,
+          )
 
           revalidateTag('content:workshops', 'default')
           revalidateTag('admin:workshops', 'default')

@@ -296,6 +296,24 @@ describe('admin.batchConfirmSignups', () => {
 })
 
 describe('admin.confirmSignup', () => {
+  it('confirmed from the waitlist without an email: does not say one was sent', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
+    seats.confirmSignups.mockResolvedValue({
+      confirmed: ['s-1'],
+      newlyConfirmed: ['s-1'],
+      seatsTaken: 2,
+      capacity: 5,
+    })
+
+    const result = await admin().confirmSignup({
+      signupId: 's-1',
+      sendEmail: false,
+    })
+
+    expect(result.message).toBe('Participant confirmed')
+    expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
+  })
+
   it('says so when it confirmed beyond capacity', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
     seats.confirmSignups.mockResolvedValue({
@@ -388,6 +406,20 @@ describe('admin.updateCapacity', () => {
       ['s-1'],
       expect.any(Error),
     )
+  })
+
+  it('a failed re-read of the workshop after the change still emails the promoted, and succeeds', async () => {
+    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
+    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1', 'confirmed')])
+    ws.getWorkshopById.mockRejectedValue(new Error('503: unavailable'))
+
+    const result = await admin().updateCapacity({
+      workshopId: 'w-1',
+      capacity: 5,
+    })
+
+    expect(result).toMatchObject({ success: true, promotedCount: 1 })
+    expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(1)
   })
 
   it('emails each promoted sign-up and counts them', async () => {

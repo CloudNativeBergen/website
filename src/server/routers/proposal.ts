@@ -83,7 +83,13 @@ import {
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 import type { ProposalInput, ProposalExisting } from '@/lib/proposal/types'
-import { Action, Status, isInactiveProposal } from '@/lib/proposal/types'
+import {
+  Action,
+  Format,
+  Status,
+  isInactiveProposal,
+  isWorkshopFormat,
+} from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
 import {
   countActiveProposals,
@@ -186,13 +192,19 @@ async function requireTopicsReferenceable(
  * proposal patch, so a sign-up at the same moment cannot take a seat on the
  * old count; the sign-ups it confirms into new seats are told so.
  */
-async function changeTalkCapacity(talkId: string, capacity: number) {
+async function changeTalkCapacity(
+  talkId: string,
+  capacity: number,
+  /** The edit's own status and format, when it changes them too. */
+  edit: { status?: string; format?: string },
+) {
   // Through the doc endpoint, where it is current: a read that still shows
   // the capacity from before a change on the Workshops page would make a
   // real change look like none. The caller has proved the talk is the org's.
   const talk = await clientWrite.getDocument<{
     capacity?: number
     status?: string
+    format?: string
     conference?: { _ref: string }
   }>(talkId)
   const stored = talk && {
@@ -215,8 +227,11 @@ async function changeTalkCapacity(talkId: string, capacity: number) {
   const outcome = stored.conferenceId
     ? await changeCapacity(talkId, stored.conferenceId, capacity, {
         // Waiting sign-ups are given seats, and told so, only while the
-        // workshop is on (a withdrawn one keeps them waiting).
-        promote: talk.status === Status.confirmed,
+        // workshop is on, as this edit leaves it (a withdrawn one, or one
+        // made another format, keeps them waiting).
+        promote:
+          (edit.status ?? talk.status) === Status.confirmed &&
+          isWorkshopFormat((edit.format ?? talk.format) as Format),
       })
     : ({ refused: 'not-found' } as const)
   if ('refused' in outcome) {
@@ -1054,7 +1069,7 @@ export const proposalRouter = router({
         // after-acceptance rule above.
         const { capacity, ...data } = input.data
         if (capacity !== undefined) {
-          await changeTalkCapacity(input.id, capacity)
+          await changeTalkCapacity(input.id, capacity, data)
         }
         const { proposal, err } = await updateProposal(input.id, data)
 
@@ -1979,7 +1994,7 @@ export const proposalRouter = router({
           // Last before the patch, once nothing else can refuse the edit: a
           // capacity change is written, and its promotions emailed, at once.
           if (capacity !== undefined) {
-            await changeTalkCapacity(input.id, capacity)
+            await changeTalkCapacity(input.id, capacity, proposalData)
           }
           const { proposal, err } = await updateProposal(input.id, updateData)
 

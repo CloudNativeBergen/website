@@ -113,7 +113,7 @@ vi.mock('@/lib/workshop/sanity', async (importOriginal) => ({
   moveWorkshopSignupToWaitlist: ws.moveWorkshopSignupToWaitlist,
   deleteWorkshopSignup: ws.deleteWorkshopSignup,
   getWorkshopSignupsByWorkshop: ws.getWorkshopSignupsByWorkshop,
-  getWorkshopById: vi.fn(),
+  getWorkshopById: vi.fn(async () => null),
 }))
 vi.mock('@/lib/workshop/seats', () => ({
   confirmSignups: ws.confirmSignups,
