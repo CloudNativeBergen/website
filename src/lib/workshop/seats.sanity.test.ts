@@ -771,7 +771,8 @@ describe("the organizer's confirm", () => {
     })
   })
 
-  it('past capacity is allowed, and the answer names it: 4 seats taken of 3', async () => {
+  // Full: 3 of 3 taken, one waiting (#1358).
+  const full = () =>
     store().reset([
       workshop(),
       signup(1, 'confirmed'),
@@ -780,13 +781,71 @@ describe("the organizer's confirm", () => {
       signup(4, 'waitlist'),
     ])
 
+  it('into a full workshop is refused as full, with the count it would reach, and nothing is written', async () => {
+    full()
+
     expect(await confirmSignups(WORKSHOP, CONF, ['signup-4'])).toEqual({
+      refused: 'full',
+      seatsTaken: 3,
+      capacity: 3,
+      after: 4,
+    })
+    expect(store().commits).toEqual([])
+    expect(store().doc('signup-4')?.status).toBe('waitlist')
+  })
+
+  it('past capacity with the count accepted: confirmed, and the answer names it: 4 seats taken of 3', async () => {
+    full()
+
+    expect(
+      await confirmSignups(WORKSHOP, CONF, ['signup-4'], { acceptSeats: 4 }),
+    ).toEqual({
       confirmed: ['signup-4'],
       newlyConfirmed: ['signup-4'],
       seatsTaken: 4,
       capacity: 3,
     })
     expect(withStatus('confirmed')).toHaveLength(4)
+  })
+
+  it('an accepted count below what the confirm would reach is refused again, on the true numbers', async () => {
+    full()
+
+    expect(
+      await confirmSignups(WORKSHOP, CONF, ['signup-4'], { acceptSeats: 3 }),
+    ).toEqual({ refused: 'full', seatsTaken: 3, capacity: 3, after: 4 })
+    expect(store().commits).toEqual([])
+  })
+
+  it('a batch of one workshop that only partly fits is refused as a whole, and says how far it goes past', async () => {
+    store().reset([
+      workshop(),
+      signup(1, 'confirmed'),
+      signup(2, 'confirmed'),
+      signup(3, 'waitlist'),
+      signup(4, 'waitlist'),
+    ])
+
+    expect(
+      await confirmSignups(WORKSHOP, CONF, ['signup-3', 'signup-4']),
+    ).toEqual({ refused: 'full', seatsTaken: 2, capacity: 3, after: 4 })
+    expect(withStatus('confirmed')).toHaveLength(2)
+    expect(store().commits).toEqual([])
+  })
+
+  it('a confirm of sign-ups already confirmed in a workshop already past capacity is not refused: no seat is taken', async () => {
+    store().reset([
+      workshop({ capacity: 1 }),
+      signup(1, 'confirmed'),
+      signup(2, 'confirmed'),
+    ])
+
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-2'])).toEqual({
+      confirmed: ['signup-2'],
+      newlyConfirmed: [],
+      seatsTaken: 2,
+      capacity: 1,
+    })
   })
 
   // The last seat, wanted by an organizer's confirm and an attendee's
@@ -837,7 +896,9 @@ describe("the organizer's confirm", () => {
     expect(withStatus('confirmed')).toHaveLength(2)
   })
 
-  it('sign-up first: the attendee takes the last seat, and the confirm says it went beyond capacity', async () => {
+  // THE RACE OF #1358: the organizer's dialog shows 1 of 2 taken; an attendee
+  // takes the last seat before the confirm is written.
+  it('sign-up first: the attendee takes the last seat, and the confirm is refused as full instead of going past', async () => {
     lastSeat()
 
     const [, confirm] = await race(
@@ -846,6 +907,51 @@ describe("the organizer's confirm", () => {
     )
 
     expect(store().events.slice(0, 3)).toEqual(['read', 'read', 'commit'])
+    expect(attendeeStatus()).toBe('confirmed')
+    expect(confirm).toEqual({
+      refused: 'full',
+      seatsTaken: 2,
+      capacity: 2,
+      after: 3,
+    })
+    expect(withStatus('confirmed')).toHaveLength(2)
+    expect(store().doc('signup-2')?.status).toBe('waitlist')
+  })
+
+  it('a count accepted on what the dialog showed (2 of 2), stale by the time it lands: refused again on the new numbers', async () => {
+    // Two organizers saw "full (2 of 2)" and both accepted 3. The first
+    // override makes it 3 of 2; the second would make it 4, which no one
+    // accepted.
+    store().reset([
+      workshop({ capacity: 2 }),
+      signup(1, 'confirmed'),
+      signup(2, 'waitlist'),
+      signup(3, 'confirmed'),
+      signup(4, 'waitlist'),
+    ])
+
+    const [, confirm] = await race(
+      () => confirmSignups(WORKSHOP, CONF, ['signup-4'], { acceptSeats: 3 }),
+      () => confirmSignups(WORKSHOP, CONF, ['signup-2'], { acceptSeats: 3 }),
+    )
+
+    expect(confirm).toEqual({
+      refused: 'full',
+      seatsTaken: 3,
+      capacity: 2,
+      after: 4,
+    })
+    expect(store().doc('signup-2')?.status).toBe('waitlist')
+  })
+
+  it('sign-up first, with the true count accepted: confirmed past capacity, and the answer says so', async () => {
+    lastSeat()
+
+    const [, confirm] = await race(
+      () => signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+      () => confirmSignups(WORKSHOP, CONF, ['signup-2'], { acceptSeats: 3 }),
+    )
+
     expect(attendeeStatus()).toBe('confirmed')
     expect(confirm).toMatchObject({ seatsTaken: 3, capacity: 2 })
     expect(withStatus('confirmed')).toHaveLength(3)

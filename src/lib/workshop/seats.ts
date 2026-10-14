@@ -464,11 +464,29 @@ async function current(
 }
 
 /**
- * The organizer's confirm, of sign-ups of ONE workshop. It is allowed past
- * capacity: that is the organizer's call, and the answer says so
- * (`seatsTaken > capacity`). It takes its seats through the guard all the
- * same, so `seatsTaken` is what is stored when it commits, and a sign-up
- * reading at the same moment cannot take the seat it took.
+ * A confirm that would take the workshop past capacity, refused before
+ * anything is written (#1358): `seatsTaken` now, and `after` what the confirm
+ * would make it.
+ */
+export interface Full {
+  refused: 'full'
+  seatsTaken: number
+  capacity: number
+  after: number
+}
+
+/**
+ * The organizer's confirm, of sign-ups of ONE workshop. It takes its seats
+ * through the guard, so `seatsTaken` is what is stored when it commits, and a
+ * sign-up reading at the same moment cannot take the seat it took.
+ *
+ * PAST CAPACITY IS A CHOICE MADE ON THE TRUE COUNT (#1358). A confirm that
+ * would go past capacity is refused as `full` unless `acceptSeats`, the count
+ * the organizer agreed to, covers the count it would reach. The decision is
+ * made inside the guard: a seat taken between the refusal and the override
+ * makes the override stale, and it is refused again with the new numbers. A
+ * batch that only partly fits is refused as a whole. A sign-up confirmed
+ * already takes no seat, so it is never refused, whatever the count.
  *
  * `confirmed` names the sign-ups that are confirmed now; one that is gone, or
  * of another workshop, is not in it. `newlyConfirmed` names those this write
@@ -478,8 +496,9 @@ export async function confirmSignups(
   workshopId: string,
   conferenceId: string,
   signupIds: string[],
-): Promise<Confirmed | { refused: 'not-found' | 'busy' }> {
-  const outcome = await decideAndCommit<never, Confirmed>(
+  { acceptSeats }: { acceptSeats?: number } = {},
+): Promise<Confirmed | Full | { refused: 'not-found' | 'busy' }> {
+  const outcome = await decideAndCommit<Full, Confirmed>(
     workshopId,
     conferenceId,
     async (seats, tx) => {
@@ -492,6 +511,19 @@ export async function confirmSignups(
       // same, and not counted twice. A read that still shows it confirmed is
       // no such sign: only the guard's own memory is.
       const waiting = waitingNow.filter((s) => !remembered.has(s._id))
+      const after = new Set([...taken, ...waiting.map((s) => s._id)]).size
+      if (
+        waiting.length > 0 &&
+        after > seats.capacity &&
+        (acceptSeats === undefined || after > acceptSeats)
+      ) {
+        return {
+          refused: 'full' as const,
+          seatsTaken: taken.size,
+          capacity: seats.capacity,
+          after,
+        }
+      }
       if (waitingNow.length > 0) {
         guard(tx, seats, workshopId, conferenceId, {
           took: waitingNow.map((s) => s._id),
@@ -508,7 +540,7 @@ export async function confirmSignups(
         done: {
           confirmed: wanted.map((s) => s._id),
           newlyConfirmed: waiting.map((s) => s._id),
-          seatsTaken: new Set([...taken, ...waiting.map((s) => s._id)]).size,
+          seatsTaken: after,
           capacity: seats.capacity,
         },
       }
