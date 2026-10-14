@@ -971,6 +971,25 @@ describe('a refused send', () => {
     expect(store().commits).toEqual([])
   })
 
+  it('is refused when the deal is lost while the send is under way, also when it has a link', async () => {
+    store().reset([...DATASET, sponsorDoc({ [FIELD]: STORED })])
+    // Another organizer moves the deal once the decision has read it won:
+    // the portal's host is looked up after the sponsor.
+    const claims = claimsById(provenClaim(MAIN_HOST, {}, { _id: CONF }))
+    h.getDomainClaim.mockImplementation(async (id) => {
+      store().put({ ...store().doc(SFC)!, status: 'closed-lost' })
+      return claims(id)
+    })
+
+    await expect(send()).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'Workshop early access can only be sent to a sponsor with a won deal. Move the sponsor to Closed Won first.',
+    })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(stored(SFC)).toBe(STORED)
+  })
+
   it('is refused where workshops are not enabled, before anything about the sponsor is read', async () => {
     h.workshopsEnabled.mockResolvedValue(false)
 

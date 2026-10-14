@@ -108,10 +108,14 @@ async function requirePortalUrl(): Promise<string> {
 export async function createSponsorEarlyAccessLink(
   conferenceId: string,
   sponsorForConferenceId: string,
+  /** A send of the link: the deal must still be won, link or no link. */
+  { forSend = false }: { forSend?: boolean } = {},
 ): Promise<{ token: string; notWritten: string[] }> {
   let result: Awaited<ReturnType<typeof createEarlyAccessLink>>
   try {
-    result = await createEarlyAccessLink(conferenceId, sponsorForConferenceId)
+    result = await createEarlyAccessLink(conferenceId, sponsorForConferenceId, {
+      wonOnly: forSend,
+    })
   } finally {
     expireEarlyAccessLinks(conferenceId)
   }
@@ -119,8 +123,9 @@ export async function createSponsorEarlyAccessLink(
     throw result.refused === 'not-won'
       ? new TRPCError({
           code: 'PRECONDITION_FAILED',
-          message:
-            'An early-access link can only be created for a sponsor with a won deal. Move the sponsor to Closed Won first.',
+          message: forSend
+            ? sendRefusal('not-won').message
+            : 'An early-access link can only be created for a sponsor with a won deal. Move the sponsor to Closed Won first.',
         })
       : new TRPCError({
           code: 'NOT_FOUND',
@@ -240,9 +245,12 @@ export async function prepareEarlyAccessSend(
   let notWritten: string[] = []
   return {
     appendLate: async () => {
+      // The deal is read again here, as the link is: one lost since the
+      // decision above refuses the send.
       const link = await createSponsorEarlyAccessLink(
         conference._id,
         sponsorForConferenceId,
+        { forSend: true },
       )
       notWritten = link.notWritten
       const url = earlyAccessUrl(plan.portalUrl, link.token)
@@ -296,9 +304,9 @@ export const sponsorEarlyAccessRouter = router({
    * shows: the two times, and the address of the link the sponsor already
    * has (`null`: sending creates one).
    *
-   * TWO LIVE READS, made here, when a send is being composed, and never by
-   * viewing a sponsor's record: the conference's registration times, and
-   * the portal's working host.
+   * THREE LIVE READS, made here, when a send is being composed, and never
+   * by viewing a sponsor's record: the conference's registration times, the
+   * sponsor's deal and link, and the portal's working host.
    */
   getSendReadiness: workshopAdminProcedure
     .input(SponsorOfConferenceSchema)

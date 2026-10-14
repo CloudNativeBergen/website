@@ -101,7 +101,9 @@ const releaseWriter = () =>
  * operation: it could not overwrite a stored token even without the check.
  *
  * ONLY A SPONSOR WITH A WON DEAL IS GIVEN ONE. A link that exists is answered
- * whatever the deal says now: only revoking ends it.
+ * whatever the deal says now: only revoking ends it. With `wonOnly` (a send of
+ * the link, #1347) the deal must be won on this read too, also when a link
+ * exists: a deal lost since the send was decided refuses the send.
  *
  * IT ANSWERS ONLY A TOKEN THE PUBLISHED DOCUMENT STILL HOLDS. After the token
  * is stored, every version is read once more. A published document that no
@@ -118,6 +120,7 @@ const releaseWriter = () =>
 export async function createEarlyAccessLink(
   conferenceId: string,
   sponsorForConferenceId: string,
+  { wonOnly = false }: { wonOnly?: boolean } = {},
 ): Promise<CreateEarlyAccessLink> {
   let failure: unknown
   for (let attempt = 1; attempt <= CREATE_ATTEMPTS; attempt++) {
@@ -134,8 +137,10 @@ export async function createEarlyAccessLink(
     )
     if (!sponsor) return { refused: 'not-found' }
     let token = sponsor.token
+    if ((wonOnly || !token) && sponsor.status !== 'closed-won') {
+      return { refused: 'not-won' }
+    }
     if (!token) {
-      if (sponsor.status !== 'closed-won') return { refused: 'not-won' }
       // WRITTEN ONLY TO THE REVISION THAT PASSED THE CHECKS ABOVE: this
       // conference's sponsor, with a won deal. A CRM update or a Studio edit
       // in between refuses the write, and the checks run again.
