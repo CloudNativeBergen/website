@@ -59,6 +59,7 @@ export type CreateEarlyAccessLink =
 interface Version {
   _id: string
   _rev: string
+  status: string | null
   token: string | null
 }
 
@@ -72,7 +73,7 @@ async function readVersions(
   conferenceId: string,
   sponsorForConferenceId: string,
 ) {
-  const query = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && (_id == $id || _id == $draftId || (_id in path("versions.**") && _id == "versions." + string::split(_id, ".")[1] + "." + $id))]{ _id, _rev, "token": workshopEarlyAccessToken }`
+  const query = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && (_id == $id || _id == $draftId || (_id in path("versions.**") && _id == "versions." + string::split(_id, ".")[1] + "." + $id))]{ _id, _rev, status, "token": workshopEarlyAccessToken }`
   return (
     (await clientReadUncached
       .withConfig({ apiVersion: RELEASES_API_VERSION })
@@ -195,9 +196,14 @@ export async function createEarlyAccessLink(
   // every version: the token answered is the one the published document
   // holds in the same snapshot the copies are judged by.
   const versions = await readVersions(conferenceId, sponsorForConferenceId)
-  const token = versions.find(
+  const published = versions.find(
     (version) => version._id === sponsorForConferenceId,
-  )?.token
+  )
+  // A send needs the deal won in this snapshot too.
+  if (wonOnly && published && published.status !== 'closed-won') {
+    return { refused: 'not-won' }
+  }
+  const token = published?.token
   if (token) {
     return {
       token,

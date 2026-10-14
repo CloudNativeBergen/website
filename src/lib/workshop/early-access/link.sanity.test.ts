@@ -367,6 +367,23 @@ describe('a create never answers a link that is no longer stored', () => {
     expect(stored(SFC)).toBeUndefined()
   })
 
+  it('for a send, a deal lost before the last look is refused, also when the token is stored', async () => {
+    store().reset(withCopies())
+    store().failPatchesOf(RELEASE_COPY)
+    // Every attempt fails on the copies, so the create falls back to what is
+    // stored. The deal is lost just before that last look.
+    let versionReads = 0
+    store().beforeEachRead((read) => {
+      if (!read.query.includes('versions.**') || ++versionReads !== 4) return
+      store().put({ ...store().doc(SFC)!, status: 'closed-lost' })
+    })
+
+    expect(await createEarlyAccessLink(CONF, SFC, { wonOnly: true })).toEqual({
+      refused: 'not-won',
+    })
+    expect(stored(SFC)).toMatch(UUID)
+  })
+
   it('refuses, rather than answer a dead address, when it keeps losing', async () => {
     const revoke = () => revokeEarlyAccessLink(CONF, SFC)
     // The hooks run after the first, third and fifth commit: each attempt's
