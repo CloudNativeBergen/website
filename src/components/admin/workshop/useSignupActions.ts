@@ -30,7 +30,7 @@ export function useSignupActions(onSettled: () => void) {
   const utils = api.useUtils()
   // A DELETE CHANGES A COUNT ON ANOTHER PAGE (#1348): the sponsor CRM board's
   // rows (`sponsor.crm.list`) carry how many early sign-ups were made through
-  // each sponsor's links, and are read at most once a minute. Marked stale
+  // each sponsor's links, and are polled every 30 seconds. Marked stale
   // after every delete attempt, also a refused one (the sign-up may be gone
   // all the same). Only a delete: a confirm and a move change no count.
   //
