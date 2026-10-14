@@ -9,6 +9,10 @@ import { deliverDuePromotionEmails } from '@/lib/workshop/promoted'
  * reply lost, a timeout), the debt is still stored, and this run pays it.
  * Hourly: an attendee promoted by a request that died hears within the hour.
  */
+
+/** 100 owed emails (`BACKSTOP_LIMIT`), a few reads and a claim each: well within. */
+export const maxDuration = 60
+
 export async function GET(request: NextRequest) {
   noStore()
   try {

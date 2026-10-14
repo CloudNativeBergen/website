@@ -501,6 +501,10 @@ export async function confirmSignups(
           tx.patch(_id, {
             ifRevisionID: _rev,
             set: { status: 'confirmed', confirmedAt },
+            // A promotion email still owed from before (moved back outside
+            // the app, so `freeSeat` never settled it) is owed no more: the
+            // confirm tells the person, or chose not to (#1357).
+            unset: ['promotionEmailDue'],
           })
         }
       }

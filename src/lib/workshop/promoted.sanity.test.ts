@@ -404,6 +404,18 @@ describe('the hourly backstop (the cron), over every conference', () => {
     expect(await deliverDuePromotionEmails()).toMatchObject({ found: 2 })
   })
 
+  it('leaves a sign-up whose conference reference dangles out of the sweep, so it cannot hold a place in the window every hour', async () => {
+    store().put(
+      signup(8, 'confirmed', {
+        conference: ref('conf-gone'),
+        promotionEmailDue: true,
+      }),
+    )
+
+    expect(await deliverDuePromotionEmails()).toMatchObject({ found: 2 })
+    expect(console.error).not.toHaveBeenCalled()
+  })
+
   it('does not pay a draft (Studio) of a sign-up', async () => {
     store().put(
       signup(7, 'confirmed', {

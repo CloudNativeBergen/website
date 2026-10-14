@@ -27,8 +27,10 @@
  * leaves the debt for the next run.
  */
 import { randomUUID } from 'node:crypto'
-import type { Conference } from '@/lib/conference/types'
-import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
+import {
+  sendBasicWorkshopConfirmation,
+  type WorkshopEmailConference,
+} from '@/lib/email/workshop'
 import { clientWrite } from '@/lib/sanity/client'
 
 interface DueSignup {
@@ -44,8 +46,10 @@ interface DueSignup {
   conference?: { _ref: string }
 }
 
-interface WorkshopDetails {
-  _type: string
+/** The conference and the workshops, as the document store has them. */
+type StoredConference = WorkshopEmailConference & { _type: 'conference' }
+interface StoredWorkshop {
+  _type: 'talk'
   title?: string
   date?: string
   startTime?: string
@@ -86,7 +90,7 @@ export async function deliverPromotionEmails(
       ...new Set(due.flatMap((d) => (d.workshop ? [d.workshop._ref] : []))),
     ]
     const [conference, ...workshops] = await clientWrite.getDocuments<
-      Record<string, unknown>
+      StoredConference | StoredWorkshop
     >([conferenceId, ...workshopIds])
     // In the conference's own name or not at all: a cron has no request
     // domain, so the conference is read by the id the sign-up names.
@@ -99,9 +103,7 @@ export async function deliverPromotionEmails(
     }
     const workshopById = new Map(
       workshops.flatMap((w, i) =>
-        w?._type === 'talk'
-          ? [[workshopIds[i], w as unknown as WorkshopDetails] as const]
-          : [],
+        w?._type === 'talk' ? [[workshopIds[i], w] as const] : [],
       ),
     )
 
@@ -120,7 +122,7 @@ export async function deliverPromotionEmails(
           userEmail: signup.userEmail,
           userName: signup.userName,
           status: 'confirmed',
-          conference: conference as unknown as Conference,
+          conference,
           workshopTitle: workshop?.title ?? 'Workshop',
           workshopDate: workshop?.date,
           workshopTime: workshop?.startTime,
@@ -219,7 +221,10 @@ export async function deliverDuePromotionEmails({
   // groq-global: the backstop sweeps EVERY tenant's sign-ups that still owe
   // a promotion email; each is then emailed by `deliverPromotionEmails`,
   // scoped to, and in the name of, the conference the sign-up itself names.
-  const query = `*[_type == "workshopSignup" && promotionEmailDue == true && defined(conference._ref) && !(_id in path("drafts.**"))]
+  // One whose conference is gone (a dangling reference) is left out: the
+  // sender could never pay it, and it would hold a place in the window, and
+  // be logged, every hour.
+  const query = `*[_type == "workshopSignup" && promotionEmailDue == true && defined(conference->_id) && !(_id in path("drafts.**"))]
     | order(_updatedAt asc) [0...${take}]{ _id, "conferenceId": conference._ref }`
   const due = await clientWrite.fetch<
     { _id: string; conferenceId: string | null }[] | null

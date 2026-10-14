@@ -771,6 +771,22 @@ describe("the organizer's confirm", () => {
     })
   })
 
+  it('of a promoted sign-up moved back outside the app (the debt still stored): settles the promotion email, so the confirm is the only one to tell it (#1357)', async () => {
+    store().reset([
+      workshop({ capacity: 1 }),
+      signup(1, 'confirmed'),
+      signup(2, 'waitlist'),
+    ])
+    await changeCapacity(WORKSHOP, CONF, 2)
+    // Studio: the status changed, `freeSeat` never ran, the debt stays.
+    store().put({ ...store().doc('signup-2')!, status: 'waitlist' })
+
+    await confirmSignups(WORKSHOP, CONF, ['signup-2'])
+
+    expect(store().doc('signup-2')).toMatchObject({ status: 'confirmed' })
+    expect(store().doc('signup-2')).not.toHaveProperty('promotionEmailDue')
+  })
+
   it('past capacity is allowed, and the answer names it: 4 seats taken of 3', async () => {
     store().reset([
       workshop(),
