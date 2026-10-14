@@ -10,6 +10,12 @@ export {
   revokeEarlyAccessLink,
 } from './link'
 export {
+  decideEarlyAccessSend,
+  type EarlyAccessSendConference,
+  type EarlyAccessSendDecision,
+  type EarlyAccessSendRefusal,
+} from './send'
+export {
   expireEarlyAccessLinks,
   expireEarlyAccessLinksIfTheyDisagree,
   resolveEarlyAccess,

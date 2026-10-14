@@ -367,6 +367,51 @@ describe('a create never answers a link that is no longer stored', () => {
     expect(stored(SFC)).toBeUndefined()
   })
 
+  it.each([
+    ['no copies to bring in step', () => [sponsor({ [FIELD]: TOKEN })]],
+    [
+      'copies behind',
+      () =>
+        withCopies().map((doc, i) =>
+          i === 0 ? { ...doc, [FIELD]: TOKEN } : doc,
+        ),
+    ],
+  ])(
+    'for a send, a deal lost between the two looks is refused (%s)',
+    async (_, docs) => {
+      store().reset(docs())
+      // The deal is lost after the sponsor was read won, just before every
+      // version of it is read.
+      store().beforeEachRead((read) => {
+        if (!read.query.includes('versions.**')) return
+        if (store().doc(SFC)?.status !== 'closed-won') return
+        store().put({ ...store().doc(SFC)!, status: 'closed-lost' })
+      })
+
+      expect(await createEarlyAccessLink(CONF, SFC, { wonOnly: true })).toEqual(
+        { refused: 'not-won' },
+      )
+      expect(stored(SFC)).toBe(TOKEN)
+    },
+  )
+
+  it('for a send, a deal lost before the last look is refused, also when the token is stored', async () => {
+    store().reset(withCopies())
+    store().failPatchesOf(RELEASE_COPY)
+    // Every attempt fails on the copies, so the create falls back to what is
+    // stored. The deal is lost just before that last look.
+    let versionReads = 0
+    store().beforeEachRead((read) => {
+      if (!read.query.includes('versions.**') || ++versionReads !== 4) return
+      store().put({ ...store().doc(SFC)!, status: 'closed-lost' })
+    })
+
+    expect(await createEarlyAccessLink(CONF, SFC, { wonOnly: true })).toEqual({
+      refused: 'not-won',
+    })
+    expect(stored(SFC)).toMatch(UUID)
+  })
+
   it('refuses, rather than answer a dead address, when it keeps losing', async () => {
     const revoke = () => revokeEarlyAccessLink(CONF, SFC)
     // The hooks run after the first, third and fifth commit: each attempt's

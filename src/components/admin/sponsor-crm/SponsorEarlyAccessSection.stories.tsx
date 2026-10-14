@@ -77,6 +77,42 @@ export const NoLinkDark: Story = { ...NoLink, ...dark }
 export const NoLinkMobile: Story = { ...NoLink, ...mobile }
 
 /**
+ * With a send action (#1347): "Send by email" opens the host's Send modal on
+ * the "Workshop early access" kind. Sending creates the link when there is
+ * none, so it is offered beside "Create link" too.
+ */
+export const NoLinkWithSend: Story = {
+  args: { onSend: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('button', { name: 'Create link' }),
+    ).toBeInTheDocument()
+    await userEvent.click(canvas.getByRole('button', { name: 'Send by email' }))
+    await expect(args.onSend).toHaveBeenCalledTimes(1)
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const NoLinkWithSendDark: Story = { ...NoLinkWithSend, ...dark }
+export const NoLinkWithSendMobile: Story = { ...NoLinkWithSend, ...mobile }
+
+/** A sponsor that has a link: copy, send and revoke. */
+export const LinkedWithSend: Story = {
+  args: { hasLink: true, onSend: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('button', { name: 'Copy link' }),
+    ).toBeInTheDocument()
+    await userEvent.click(canvas.getByRole('button', { name: 'Send by email' }))
+    await expect(args.onSend).toHaveBeenCalledTimes(1)
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const LinkedWithSendDark: Story = { ...LinkedWithSend, ...dark }
+export const LinkedWithSendMobile: Story = { ...LinkedWithSend, ...mobile }
+
+/**
  * The conference has no "Sponsor Early Access Opens" time: a link can be
  * created, but gives no head start until one is set. The section says so, and
  * where to set it.

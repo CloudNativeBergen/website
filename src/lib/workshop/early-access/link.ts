@@ -59,6 +59,7 @@ export type CreateEarlyAccessLink =
 interface Version {
   _id: string
   _rev: string
+  status: string | null
   token: string | null
 }
 
@@ -72,7 +73,7 @@ async function readVersions(
   conferenceId: string,
   sponsorForConferenceId: string,
 ) {
-  const query = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && (_id == $id || _id == $draftId || (_id in path("versions.**") && _id == "versions." + string::split(_id, ".")[1] + "." + $id))]{ _id, _rev, "token": workshopEarlyAccessToken }`
+  const query = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && (_id == $id || _id == $draftId || (_id in path("versions.**") && _id == "versions." + string::split(_id, ".")[1] + "." + $id))]{ _id, _rev, status, "token": workshopEarlyAccessToken }`
   return (
     (await clientReadUncached
       .withConfig({ apiVersion: RELEASES_API_VERSION })
@@ -101,7 +102,10 @@ const releaseWriter = () =>
  * operation: it could not overwrite a stored token even without the check.
  *
  * ONLY A SPONSOR WITH A WON DEAL IS GIVEN ONE. A link that exists is answered
- * whatever the deal says now: only revoking ends it.
+ * whatever the deal says now: only revoking ends it. With `wonOnly` (a send of
+ * the link, #1347) the deal must be won in every snapshot the answer comes
+ * from, also when a link exists: a deal lost since the send was decided
+ * refuses the send.
  *
  * IT ANSWERS ONLY A TOKEN THE PUBLISHED DOCUMENT STILL HOLDS. After the token
  * is stored, every version is read once more. A published document that no
@@ -118,7 +122,11 @@ const releaseWriter = () =>
 export async function createEarlyAccessLink(
   conferenceId: string,
   sponsorForConferenceId: string,
+  { wonOnly = false }: { wonOnly?: boolean } = {},
 ): Promise<CreateEarlyAccessLink> {
+  // A send needs the deal won in every snapshot it answers from.
+  const lostForSend = (published: Version | undefined) =>
+    wonOnly && published !== undefined && published.status !== 'closed-won'
   let failure: unknown
   for (let attempt = 1; attempt <= CREATE_ATTEMPTS; attempt++) {
     const sponsor = await scopedFetch<{
@@ -134,8 +142,10 @@ export async function createEarlyAccessLink(
     )
     if (!sponsor) return { refused: 'not-found' }
     let token = sponsor.token
+    if ((wonOnly || !token) && sponsor.status !== 'closed-won') {
+      return { refused: 'not-won' }
+    }
     if (!token) {
-      if (sponsor.status !== 'closed-won') return { refused: 'not-won' }
       // WRITTEN ONLY TO THE REVISION THAT PASSED THE CHECKS ABOVE: this
       // conference's sponsor, with a won deal. A CRM update or a Studio edit
       // in between refuses the write, and the checks run again.
@@ -157,6 +167,7 @@ export async function createEarlyAccessLink(
     const published = versions.find(
       (version) => version._id === sponsorForConferenceId,
     )
+    if (lostForSend(published)) return { refused: 'not-won' }
     if (published?.token !== token) continue
     const behind = versions.filter(
       (version) => version !== published && version.token !== token,
@@ -190,9 +201,11 @@ export async function createEarlyAccessLink(
   // every version: the token answered is the one the published document
   // holds in the same snapshot the copies are judged by.
   const versions = await readVersions(conferenceId, sponsorForConferenceId)
-  const token = versions.find(
+  const published = versions.find(
     (version) => version._id === sponsorForConferenceId,
-  )?.token
+  )
+  if (lostForSend(published)) return { refused: 'not-won' }
+  const token = published?.token
   if (token) {
     return {
       token,
@@ -422,6 +435,24 @@ export async function readEarlyAccessToken(
     { cache: 'no-store' },
   )
   return token || null
+}
+
+/**
+ * What a send of the link asks about the sponsor before anything is written
+ * (#1347): the deal's status and the token the PUBLISHED document stores.
+ * `null`: no such sponsor in this conference.
+ */
+export async function readEarlyAccessSponsor(
+  conferenceId: string,
+  sponsorForConferenceId: string,
+): Promise<{ status: string | null; token: string | null } | null> {
+  return scopedFetch<{ status: string | null; token: string | null } | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "sponsorForConference" && _id == $id][0]{ status, "token": workshopEarlyAccessToken }`,
+    { id: sponsorForConferenceId },
+    { cache: 'no-store' },
+  )
 }
 
 /**

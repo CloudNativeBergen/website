@@ -8,13 +8,23 @@ import { SponsorDiscountCodeOptionsSchema as SponsorOfConferenceSchema } from '.
 import { notFoundMessage, requireDocumentInCurrentConference } from '../tenancy'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
+  EARLY_ACCESS_SEND_REFUSALS,
+  earlyAccessAttachments,
+  earlyAccessCardHtml,
+} from '@/lib/sponsor-crm/early-access-email'
+import type { ConferenceTheme } from '@/lib/branding/theme'
+import {
   createEarlyAccessLink,
+  decideEarlyAccessSend,
   earlyAccessPortalUrl,
   earlyAccessUrl,
   expireEarlyAccessLinks,
   expireEarlyAccessLinksIfTheyDisagree,
   readEarlyAccessToken,
   revokeEarlyAccessLink,
+  type EarlyAccessSendConference,
+  type EarlyAccessSendDecision,
+  type EarlyAccessSendRefusal,
 } from '@/lib/workshop/early-access'
 
 /**
@@ -43,6 +53,19 @@ import {
  * on that copy alone while the published link stayed as it was.
  */
 async function requireSponsor(sponsorForConferenceId: string): Promise<string> {
+  refuseUnpublishedCopy(sponsorForConferenceId)
+  return requireDocumentInCurrentConference(
+    sponsorForConferenceId,
+    'sponsorForConference',
+  )
+}
+
+/**
+ * The first half of {@link requireSponsor}, which reads nothing: also asked
+ * by the Send action before its own ownership check, when it sends the link
+ * (#1347).
+ */
+export function refuseUnpublishedCopy(sponsorForConferenceId: string): void {
   if (/^(drafts|versions)\./.test(sponsorForConferenceId)) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -50,10 +73,6 @@ async function requireSponsor(sponsorForConferenceId: string): Promise<string> {
         'That is an unpublished copy of the sponsor. Open the sponsor from the sponsor list and try again.',
     })
   }
-  return requireDocumentInCurrentConference(
-    sponsorForConferenceId,
-    'sponsorForConference',
-  )
 }
 
 /**
@@ -70,11 +89,189 @@ async function requirePortalUrl(): Promise<string> {
   if (!portalUrl) {
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',
-      message:
-        'This conference has no working workshop portal: its main domain cannot sign attendees in yet. Verify the domain under Settings, then try again.',
+      message: EARLY_ACCESS_SEND_REFUSALS['no-portal'],
     })
   }
   return portalUrl
+}
+
+/**
+ * CREATE THE SPONSOR'S LINK, OR ANSWER THE ONE IT HAS: the one function behind
+ * the record's "Create link" and behind a send of the link (#1347), so both
+ * store a token under the same rule and neither can leave the cached links
+ * stale. The caller has proven the sponsor belongs to `conferenceId`.
+ *
+ * The cached links are expired whenever a write may have landed, also when
+ * the create then fails, and also when what follows it does (an email the
+ * provider refuses): the expiry is made here, before anything follows.
+ */
+export async function createSponsorEarlyAccessLink(
+  conferenceId: string,
+  sponsorForConferenceId: string,
+  /** A send of the link: the deal must still be won, link or no link. */
+  { forSend = false }: { forSend?: boolean } = {},
+): Promise<{ token: string; notWritten: string[] }> {
+  let result: Awaited<ReturnType<typeof createEarlyAccessLink>>
+  try {
+    result = await createEarlyAccessLink(conferenceId, sponsorForConferenceId, {
+      wonOnly: forSend,
+    })
+  } finally {
+    expireEarlyAccessLinks(conferenceId)
+  }
+  if ('refused' in result) {
+    throw result.refused === 'not-won'
+      ? new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: forSend
+            ? sendRefusal('not-won').message
+            : 'An early-access link can only be created for a sponsor with a won deal. Move the sponsor to Closed Won first.',
+        })
+      : new TRPCError({
+          code: 'NOT_FOUND',
+          message: notFoundMessage('sponsorForConference'),
+        })
+  }
+  return result
+}
+
+/** A send that may go ahead, as {@link decideEarlyAccessSend} answers it. */
+type EarlyAccessSendPlan = Extract<EarlyAccessSendDecision, { refused: null }>
+
+/** Why a send is refused, with the words the organizer is told. */
+function sendRefusal(reason: EarlyAccessSendRefusal) {
+  return { reason, message: EARLY_ACCESS_SEND_REFUSALS[reason] }
+}
+
+/**
+ * THE REQUEST'S CONFERENCE, READ WITHOUT A CACHE: where a send of the link
+ * takes the registration times from. The read `/admin/workshops` makes, for
+ * the same reason: `updateRegistrationTimes` expires the cached conference
+ * with a profile that still serves the old answer to the next request.
+ *
+ * A read that fails is refused: the cached times are not a fallback.
+ *
+ * THE LIVE CONFERENCE MUST BE THE ONE THE SPONSOR WAS CHECKED AGAINST
+ * (`expected`), the rule `/admin/workshops` applies to the same read. Right
+ * after a main domain changes hands the live read answers the OTHER
+ * conference. Its times say nothing about this sponsor, so the request is
+ * refused here, before the window is looked at, in words of its own: the
+ * organizer would otherwise be told that conference's "no early-access
+ * period". Also what refuses a read that answered no conference at all.
+ */
+async function readConferenceLive(
+  expected: string,
+): Promise<EarlyAccessSendConference> {
+  const { conference, error } = await getConferenceForCurrentDomain({
+    uncached: true,
+  })
+  if (error) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch conference',
+    })
+  }
+  if (conference?._id !== expected) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message:
+        'This conference could not be read, so nothing was sent. Reload the page and try again.',
+    })
+  }
+  return conference
+}
+
+/**
+ * {@link decideEarlyAccessSend} for the request's conference, asked now. A
+ * sponsor that is not there is refused as a missing one; every other answer
+ * is handed back, for the Send action to refuse with and for the Send modal
+ * to show. `conferenceId`: the conference the sponsor was proven to be in.
+ */
+async function decideSendForRequest(
+  conferenceId: string,
+  domain: string | undefined,
+  sponsorForConferenceId: string,
+): Promise<
+  | { refusal: ReturnType<typeof sendRefusal>; plan: null }
+  | { refusal: null; plan: EarlyAccessSendPlan }
+> {
+  const decision = await decideEarlyAccessSend({
+    readConference: () => readConferenceLive(conferenceId),
+    domain,
+    sponsorForConferenceId,
+    now: new Date(),
+  })
+  if (decision.refused === 'not-found') {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: notFoundMessage('sponsorForConference'),
+    })
+  }
+  return decision.refused === null
+    ? { refusal: null, plan: decision }
+    : { refusal: sendRefusal(decision.refused), plan: null }
+}
+
+/**
+ * THE "WORKSHOP EARLY ACCESS" KIND of `sponsor.crm.sendCommunication` (#1347):
+ * refuse, or answer how the send gets its link.
+ *
+ * EVERY REFUSAL OF THIS KIND IS MADE HERE, BEFORE ANYTHING IS WRITTEN OR
+ * SENT, but one: the deal is asked once more when the link is taken. What is
+ * answered is handed to the send primitive as its `appendLate`: it creates
+ * the link (or answers the stored one) only once the primitive has accepted
+ * the sponsor, the recipients and the message, refuses (and sends nothing)
+ * when the deal is no longer won, and builds the block and the listed link
+ * from the token that is stored.
+ * When the email then fails (no sender, or the provider refuses), the link
+ * stays: it is the sponsor's link, the failed send is recorded with it, and
+ * the next send reuses it.
+ */
+export async function prepareEarlyAccessSend(
+  /** The request's conference, as the Send action resolved it. */
+  conference: { _id: string; theme?: ConferenceTheme | null },
+  domain: string | undefined,
+  sponsorForConferenceId: string,
+) {
+  const { refusal, plan } = await decideSendForRequest(
+    conference._id,
+    domain,
+    sponsorForConferenceId,
+  )
+  if (refusal) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: refusal.message,
+    })
+  }
+  let notWritten: string[] = []
+  return {
+    appendLate: async () => {
+      // The deal is read again here, as the link is: one lost since the
+      // decision above refuses the send.
+      const link = await createSponsorEarlyAccessLink(
+        conference._id,
+        sponsorForConferenceId,
+        { forSend: true },
+      )
+      notWritten = link.notWritten
+      const url = earlyAccessUrl(plan.portalUrl, link.token)
+      return {
+        html: earlyAccessCardHtml({
+          url,
+          sponsorStart: plan.sponsorStart,
+          officialOpening: plan.officialOpening,
+          theme: conference.theme,
+        }),
+        attachments: earlyAccessAttachments(url),
+      }
+    },
+    /**
+     * Unpublished copies of the sponsor that did not get the token, once the
+     * link has been created: publishing one of them would remove the link.
+     */
+    notWritten: () => notWritten,
+  }
 }
 
 export const sponsorEarlyAccessRouter = router({
@@ -87,33 +284,51 @@ export const sponsorEarlyAccessRouter = router({
     .mutation(async ({ input }) => {
       const conferenceId = await requireSponsor(input.sponsorForConferenceId)
       const portalUrl = await requirePortalUrl()
-      let result: Awaited<ReturnType<typeof createEarlyAccessLink>>
-      try {
-        result = await createEarlyAccessLink(
-          conferenceId,
-          input.sponsorForConferenceId,
-        )
-      } finally {
-        expireEarlyAccessLinks(conferenceId)
-      }
-      if ('refused' in result) {
-        throw result.refused === 'not-won'
-          ? new TRPCError({
-              code: 'PRECONDITION_FAILED',
-              message:
-                'An early-access link can only be created for a sponsor with a won deal. Move the sponsor to Closed Won first.',
-            })
-          : new TRPCError({
-              code: 'NOT_FOUND',
-              message: notFoundMessage('sponsorForConference'),
-            })
-      }
+      const result = await createSponsorEarlyAccessLink(
+        conferenceId,
+        input.sponsorForConferenceId,
+      )
       return {
         url: earlyAccessUrl(portalUrl, result.token),
         // Unpublished copies that did not get the token. The link works;
         // publishing one of them would remove it.
         notWritten: result.notWritten,
       }
+    }),
+
+  /**
+   * MAY THE LINK BE SENT TO THIS SPONSOR NOW? What the Send modal asks when
+   * it opens on the "Workshop early access" kind (#1347): the answer the Send
+   * action itself would give, from the same decision, so the modal and the
+   * server refuse for the same reasons, in the same words.
+   *
+   * It writes nothing. When the send may go ahead it answers what the preview
+   * shows: the two times, and the address of the link the sponsor already
+   * has (`null`: sending creates one).
+   *
+   * THREE LIVE READS, made here, when a send is being composed, and never
+   * by viewing a sponsor's record: the conference's registration times, the
+   * sponsor's deal and link, and the portal's working host.
+   */
+  getSendReadiness: workshopAdminProcedure
+    .input(SponsorOfConferenceSchema)
+    .query(async ({ input }) => {
+      const conferenceId = await requireSponsor(input.sponsorForConferenceId)
+      // The host only: the times are read live by the decision.
+      const { domain } = await getConferenceForCurrentDomain()
+      const { refusal, plan } = await decideSendForRequest(
+        conferenceId,
+        domain,
+        input.sponsorForConferenceId,
+      )
+      return refusal
+        ? { refusal }
+        : {
+            refusal: null,
+            url: plan.url,
+            sponsorStart: plan.sponsorStart,
+            officialOpening: plan.officialOpening,
+          }
     }),
 
   /**

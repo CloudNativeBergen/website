@@ -97,6 +97,7 @@ export default defineType({
           { title: 'Contract', value: 'contract' },
           { title: 'Registration', value: 'registration' },
           { title: 'Discount codes', value: 'discount' },
+          { title: 'Workshop early access', value: 'workshop-early-access' },
         ],
         layout: 'dropdown',
       },

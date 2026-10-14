@@ -3,7 +3,13 @@ import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
-import { sponsorEarlyAccessRouter } from './sponsorEarlyAccess'
+import {
+  prepareEarlyAccessSend,
+  refuseUnpublishedCopy,
+  sponsorEarlyAccessRouter,
+} from './sponsorEarlyAccess'
+import { requireWorkshopsEnabled } from '../workshopAdmin'
+import { earlyAccessCopiesBehindNotice } from '@/lib/sponsor-crm/early-access-email'
 import { expireEarlyAccessLinks } from '@/lib/workshop/early-access'
 import {
   requireDocumentInCurrentConference,
@@ -2598,6 +2604,14 @@ export const sponsorRouter = router({
         if (input.kind === 'discount') {
           await refuseIfTicketingDenied(ctx.orgId)
         }
+        // The early-access kind (#1347) creates the sponsor's link, so it is
+        // gated as the record's "Create link" is: on the workshop feature,
+        // and on the PUBLISHED sponsor (a write to a Studio draft alone would
+        // leave the live document without the link that was mailed).
+        if (input.kind === 'workshop-early-access') {
+          await requireWorkshopsEnabled()
+          refuseUnpublishedCopy(input.sponsorForConferenceId)
+        }
         await requireDocumentInCurrentConference(
           input.sponsorForConferenceId,
           'sponsorForConference',
@@ -2623,7 +2637,13 @@ export const sponsorRouter = router({
         let message: PortableTextBlock[]
         try {
           const parsed = JSON.parse(input.message)
-          if (!isValidPortableText(parsed)) {
+          // An early-access message edited down to nothing still goes out:
+          // the block with the link is the email (#1347).
+          const emptied =
+            input.kind === 'workshop-early-access' &&
+            Array.isArray(parsed) &&
+            parsed.length === 0
+          if (!emptied && !isValidPortableText(parsed)) {
             throw new Error('Invalid PortableText format')
           }
           message = parsed
@@ -2751,6 +2771,18 @@ export const sponsorRouter = router({
               )
             : undefined
 
+        // Workshop early-access kind (#1347): refused here, before anything
+        // is written or sent. The link itself is created (or the stored one
+        // answered) by `appendLate`, once nothing can refuse the send.
+        const earlyAccess =
+          input.kind === 'workshop-early-access'
+            ? await prepareEarlyAccessSend(
+                conference,
+                domain,
+                input.sponsorForConferenceId,
+              )
+            : undefined
+
         // A template applied in the composer before the link was known keeps
         // the merge field as text; the final merge happens here, so no
         // sponsor ever receives the placeholder.
@@ -2786,6 +2818,7 @@ export const sponsorRouter = router({
               attachments: registration.attachments,
               portalUrl: registration.portalUrl,
             }),
+            ...(earlyAccess && { appendLate: earlyAccess.appendLate }),
             ...(contract && {
               // The recipients the plan resolved and reserved the agreement
               // for — never re-resolved from keys at send time.
@@ -2807,6 +2840,11 @@ export const sponsorRouter = router({
           await contract?.release?.()
           throw error
         }
+
+        // Unpublished copies of the sponsor that did not get the early-access
+        // link's token. Known once the primitive has run, whether or not the
+        // email went out: the link is stored either way.
+        const copiesBehind = earlyAccess?.notWritten().length ?? 0
 
         if (!result.ok) {
           // Nothing went out, so the codes are nobody's again — and the
@@ -2851,7 +2889,11 @@ export const sponsorRouter = router({
                 message:
                   answerLost && kept
                     ? `${result.message}. The email provider did not confirm delivery, so ${kept}.`
-                    : result.message,
+                    : copiesBehind > 0
+                      ? // The organizer may not send again, and would then
+                        // never learn that publishing a copy drops the link.
+                        `${result.message}. The early-access link is stored, but ${earlyAccessCopiesBehindNotice(copiesBehind)}`
+                      : result.message,
               })
           }
         }
@@ -2944,6 +2986,9 @@ export const sponsorRouter = router({
           // discovered when the next send falls back to the name guess.
           ...(linkFailed && { linkFailed: true as const }),
           ...(contract && { contractAction: contract.action }),
+          // Unpublished copies of the sponsor that did not get the link's
+          // token: the organizer is told, as on the record's "Create link".
+          ...(copiesBehind > 0 && { earlyAccessCopiesBehind: copiesBehind }),
           ...(contractStateFailed && { contractStateFailed: true as const }),
           ...(contractCopyFailed && { contractCopyFailed: true as const }),
         }

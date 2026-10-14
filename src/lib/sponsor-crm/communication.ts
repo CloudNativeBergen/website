@@ -11,6 +11,7 @@ export const COMMUNICATION_KINDS: readonly CommunicationKind[] = [
   'contract',
   'registration',
   'discount',
+  'workshop-early-access',
 ] as const
 
 export const COMMUNICATION_KIND_LABELS: Record<CommunicationKind, string> = {
@@ -18,6 +19,7 @@ export const COMMUNICATION_KIND_LABELS: Record<CommunicationKind, string> = {
   contract: 'Contract',
   registration: 'Registration',
   discount: 'Discount codes',
+  'workshop-early-access': 'Workshop early access',
 }
 
 /**

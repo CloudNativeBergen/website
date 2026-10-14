@@ -65,6 +65,8 @@ interface SponsorCRMFormProps {
   workshopsEnabled?: boolean
   /** The conference has a "Sponsor Early Access Opens" time, passed on with it. */
   sponsorStartSet?: boolean
+  /** Send → Workshop early access (#1347), raised from the contract view's early-access section. */
+  onSendEarlyAccess?: () => void
 }
 
 export function SponsorCRMForm({
@@ -82,6 +84,7 @@ export function SponsorCRMForm({
   onSendContract,
   workshopsEnabled = false,
   sponsorStartSet,
+  onSendEarlyAccess,
 }: SponsorCRMFormProps) {
   const [view, setViewState] = useState<FormView>(initialView)
   const setView = useCallback(
@@ -446,6 +449,7 @@ export function SponsorCRMForm({
               onSendContract={onSendContract}
               workshopsEnabled={workshopsEnabled}
               sponsorStartSet={sponsorStartSet}
+              onSendEarlyAccess={onSendEarlyAccess}
             />
           ) : view === 'communications' && sponsor ? (
             <SponsorCommunicationsPanel

@@ -46,6 +46,11 @@ import {
   PORTAL_URL_WRONG_KIND_MESSAGE,
   registrationCardHtml,
 } from '@/lib/sponsor-crm/registration-email'
+import {
+  earlyAccessCardHtml,
+  earlyAccessCopiesBehindNotice,
+  earlyAccessGreeting,
+} from '@/lib/sponsor-crm/early-access-email'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 import {
   CONTRACT_ACTION_LABELS,
@@ -147,7 +152,7 @@ interface AppliedTemplate {
  * suggested language and category wins. Nothing flagged default ⇒ nothing is
  * preselected; the organizer picks or writes. `information` draws on every
  * non-contract category; the contract kind (slice #1264) on `contract`;
- * `discount` and `registration` preselect nothing.
+ * `discount`, `registration` and `workshop-early-access` preselect nothing.
  */
 export function pickDefaultTemplate(
   templates: readonly SponsorEmailTemplate[] | undefined,
@@ -180,6 +185,9 @@ export function pickDefaultTemplate(
   // Likewise no category is FOR the registration link (#1263): the built-in
   // welcome is the starting point, and the link rides in the appended card.
   if (kind === 'registration') return undefined
+  // Nor for the workshop early-access link (#1347): the built-in text is the
+  // starting point, and the link rides in the appended block.
+  if (kind === 'workshop-early-access') return undefined
   const candidates = templates.filter(
     (t) =>
       t.isDefault &&
@@ -621,11 +629,107 @@ export function SponsorDiscountCodePicker({
 }
 
 /**
+ * WHETHER A WORKSHOP EARLY-ACCESS EMAIL MAY BE SENT (#1347), as the server
+ * answered it. The modal decides none of it: `ready` and `refused` are
+ * `sponsor.crm.earlyAccess.getSendReadiness`'s answer, the decision the Send
+ * action itself refuses with, in its words.
+ */
+type EarlyAccessSend =
+  | { state: 'checking' }
+  /** The server could not be asked: nothing is known, so nothing is sent. */
+  | { state: 'unknown'; message: string }
+  | { state: 'refused'; message: string }
+  | {
+      state: 'ready'
+      /** The link the sponsor already has. Unset: sending creates one. */
+      url?: string
+      /** The sponsor start time and the official opening, as stored. */
+      sponsorStart: string
+      officialOpening: string
+    }
+
+/** Why nothing is sent yet, or `null` when the send may go ahead. */
+function earlyAccessHold(send: EarlyAccessSend): string | null {
+  switch (send.state) {
+    case 'ready':
+      return null
+    case 'checking':
+      return 'Still checking whether early access can be sent. Try again in a moment.'
+    case 'unknown':
+    case 'refused':
+      return send.message
+  }
+}
+
+/**
  * The one Send action for a sponsor (#1261, spec #1260): pick recipients,
  * start from a template, edit, preview, send. The server resolves the chosen
  * contact keys to addresses and records exactly what went out.
  */
-export function SponsorSendModal({
+export function SponsorSendModal(props: SponsorSendModalProps) {
+  return props.kind === 'workshop-early-access' ? (
+    <EarlyAccessSendModal {...props} />
+  ) : (
+    <SponsorSendComposer {...props} />
+  )
+}
+
+/**
+ * The modal on the "Workshop early access" kind (#1347): it ASKS THE SERVER
+ * whether the link may be sent, and hands the answer to the composer.
+ *
+ * A component of its own so that the question is asked on this kind ONLY.
+ * Answering it means finding the portal's working host, a live read, which
+ * neither viewing a sponsor's record nor composing any other kind may make.
+ */
+function EarlyAccessSendModal(props: SponsorSendModalProps) {
+  const readiness = api.sponsor.crm.earlyAccess.getSendReadiness.useQuery(
+    { sponsorForConferenceId: props.sponsorForConference._id },
+    {
+      enabled: props.isOpen,
+      // Asked anew on every open, and an answer that is being asked again is
+      // not shown as the answer: the times, the deal or the link may have
+      // changed since the modal was last open.
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
+  )
+  const answer = readiness.data
+  const earlyAccess: EarlyAccessSend = readiness.isFetching
+    ? { state: 'checking' }
+    : readiness.isError
+      ? {
+          state: 'unknown',
+          message: `Could not check whether early access can be sent: ${readiness.error?.message ?? 'the server did not answer'}`,
+        }
+      : !answer
+        ? { state: 'checking' }
+        : answer.refusal
+          ? { state: 'refused', message: answer.refusal.message }
+          : {
+              state: 'ready',
+              url: answer.url ?? undefined,
+              sponsorStart: answer.sponsorStart,
+              officialOpening: answer.officialOpening,
+            }
+  return (
+    <SponsorSendComposer
+      {...props}
+      earlyAccess={earlyAccess}
+      // ASK AGAIN. After a send that failed: a modal left open can be behind
+      // the server (the official opening passed, the deal moved, the times
+      // were changed), so the hold shown is the server's again. And from
+      // "Check again" on a held send: the question is otherwise asked once
+      // per open, so a refusal the organizer has since fixed, or an answer
+      // that could not be fetched, would hold Send until the modal is
+      // closed and opened again.
+      recheckEarlyAccess={() => void readiness.refetch()}
+    />
+  )
+}
+
+function SponsorSendComposer({
   isOpen,
   onClose,
   onSent,
@@ -636,7 +740,14 @@ export function SponsorSendModal({
   fromEmail,
   senderName,
   conference,
-}: SponsorSendModalProps) {
+  earlyAccess,
+  recheckEarlyAccess,
+}: SponsorSendModalProps & {
+  /** Set on the workshop early-access kind, by {@link EarlyAccessSendModal}. */
+  earlyAccess?: EarlyAccessSend
+  /** Ask the server again whether the send may go ahead. */
+  recheckEarlyAccess?: () => void
+}) {
   const { showNotification } = useNotification()
   const sendMutation = api.sponsor.crm.sendCommunication.useMutation()
   const utils = api.useUtils()
@@ -1127,6 +1238,10 @@ export function SponsorSendModal({
       }
       if (!signerKey) throw new Error('Choose who signs the agreement')
     }
+    // Refused as the server would refuse it, or not known yet: nothing is
+    // posted, so nothing can be created or sent.
+    const hold = earlyAccess ? earlyAccessHold(earlyAccess) : null
+    if (hold) throw new Error(hold)
     if (isRegistration && !portalUrl) {
       throw new Error(
         portalLinkError
@@ -1178,10 +1293,14 @@ export function SponsorSendModal({
         rememberApplied(null)
         try {
           result = await sendMutation.mutateAsync(base)
+        } catch (retryError) {
+          recheckEarlyAccess?.()
+          throw retryError
         } finally {
           invalidateRecords()
         }
       } else {
+        recheckEarlyAccess?.()
         throw error
       }
     }
@@ -1205,6 +1324,14 @@ export function SponsorSendModal({
         title: 'Deal not updated',
         message:
           'The email went out, but the sponsor record could not be updated. Check the contract status and the signing link on the sponsor.',
+      })
+    }
+    if ('earlyAccessCopiesBehind' in result && result.earlyAccessCopiesBehind) {
+      const behind = result.earlyAccessCopiesBehind
+      showNotification({
+        type: 'warning',
+        title: `Unpublished ${behind === 1 ? 'copy' : 'copies'} without the link`,
+        message: `The email went out and the link works, but ${earlyAccessCopiesBehindNotice(behind)}`,
       })
     }
     if ('linkFailed' in result && result.linkFailed) {
@@ -1273,7 +1400,14 @@ export function SponsorSendModal({
                           url: contractLinkUrl,
                           theme: conference.theme,
                         })}`
-                      : messageHTML,
+                      : earlyAccess?.state === 'ready'
+                        ? `${messageHTML}${earlyAccessCardHtml({
+                            url: earlyAccess.url,
+                            sponsorStart: earlyAccess.sponsorStart,
+                            officialOpening: earlyAccess.officialOpening,
+                            theme: conference.theme,
+                          })}`
+                        : messageHTML,
             }}
           />
         }
@@ -1409,6 +1543,45 @@ export function SponsorSendModal({
             : 'The signed status was set manually; no digitally signed document is stored, so there is no signed copy to send.'}
       </p>
     ) : null
+  // Workshop early access (#1347): the server's answer, in its words. A
+  // refusal here is the refusal a send would get.
+  const earlyAccessHint = !earlyAccess ? null : earlyAccess.state ===
+    'checking' ? (
+    <p
+      role="status"
+      className="font-inter text-sm text-gray-500 dark:text-gray-400"
+    >
+      Checking whether early access can be sent…
+    </p>
+  ) : earlyAccess.state === 'ready' ? (
+    earlyAccess.url ? null : (
+      <p
+        role="status"
+        className="font-inter text-sm text-gray-600 dark:text-gray-300"
+      >
+        This sponsor has no early-access link yet. Sending creates it.
+      </p>
+    )
+  ) : (
+    // Refused, or the server could not be asked. Send is held either way,
+    // so the way out is here: ask again. The button sits beside the alert,
+    // not inside it: it is not part of what is announced.
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-900/20">
+      <p
+        role="alert"
+        className="font-inter min-w-0 flex-1 basis-64 text-sm text-red-800 dark:text-red-200"
+      >
+        {earlyAccess.message}
+      </p>
+      <button
+        type="button"
+        onClick={recheckEarlyAccess}
+        className="font-space-grotesk shrink-0 cursor-pointer rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-800 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:border-red-700 dark:bg-transparent dark:text-red-200 dark:hover:bg-red-900/40"
+      >
+        Check again
+      </button>
+    </div>
+  )
   const portalLinkHint = !isRegistration ? null : portalLinkError ? (
     <p
       role="alert"
@@ -1460,8 +1633,11 @@ export function SponsorSendModal({
       fromAddress={fromEmail}
       // A reminder or signed copy appends its card: a subject-only template
       // (an empty body) is still a complete email.
+      // So is a workshop early-access email: its block carries the link,
+      // the times and who can use it.
       allowEmptyBody={
-        isContract && contractAction !== 'send' && !!contractLinkUrl
+        (isContract && contractAction !== 'send' && !!contractLinkUrl) ||
+        earlyAccess?.state === 'ready'
       }
       warningContent={
         (localhostWarning ||
@@ -1470,6 +1646,7 @@ export function SponsorSendModal({
           noInviteLinkHint ||
           registrationCompleteNotice ||
           portalLinkHint ||
+          earlyAccessHint ||
           contractReadinessHint ||
           contractLinkMissingHint ||
           signingLinkNotice ||
@@ -1484,6 +1661,7 @@ export function SponsorSendModal({
             {noCodeHint}
             {registrationCompleteNotice}
             {portalLinkHint}
+            {earlyAccessHint}
             {contractReadinessHint}
             {contractLinkMissingHint}
             {signingLinkNotice}
@@ -1567,7 +1745,12 @@ export function SponsorSendModal({
                   conference.title,
                   sponsorForConference.tier?.title,
                 )
-              : []),
+              : earlyAccess
+                ? earlyAccessGreeting(
+                    sponsorForConference.sponsor.name,
+                    conference.title,
+                  )
+                : []),
       }}
       placeholder={{
         subject: 'Enter email subject...',
