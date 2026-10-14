@@ -1041,7 +1041,14 @@ export const workshopRouter = router({
               workshopId,
               conferenceId,
               group.map((signup) => signup._id),
-            ).catch(() => null)
+            ).catch((error) => {
+              console.error(
+                '[workshop] batch confirm failed',
+                workshopId,
+                error,
+              )
+              return null
+            })
             const workshopTitle = group[0].workshop?.title ?? 'Workshop'
             // One workshop's failure does not undo another's committed write:
             // it is named, so the organizer can try that one again.

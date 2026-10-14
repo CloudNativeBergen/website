@@ -156,8 +156,15 @@ export function createVersionedSanityStore(): VersionedSanityStore {
 
   let lagging = new Map<string, Doc | null>()
   const visible = (apiVersion: string, perspective: unknown) =>
-    documents
-      .map((d) => (lagging.has(d._id) ? (lagging.get(d._id) ?? null) : d))
+    [
+      ...documents.map((d) =>
+        lagging.has(d._id) ? (lagging.get(d._id) ?? null) : d,
+      ),
+      // Deleted, but still shown by a search store that lags.
+      ...[...lagging.values()].filter(
+        (seen) => seen && !documents.some((d) => d._id === seen._id),
+      ),
+    ]
       .filter((d): d is Doc => d !== null)
       .filter((d) => {
         if (knowsReleases(apiVersion)) {
@@ -272,6 +279,10 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     // (Sanity: "the absolute latest possible version of a document").
     getDocument: async (id: string) =>
       structuredClone(documents.find((d) => d._id === id)) ?? null,
+    getDocuments: async (ids: string[]) =>
+      ids.map(
+        (id) => structuredClone(documents.find((d) => d._id === id)) ?? null,
+      ),
     transaction: () => {
       const tx = real.transaction()
       tx.commit = (async () => {

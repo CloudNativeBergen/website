@@ -305,6 +305,20 @@ describe('a read that lags behind the writes (Sanity queries a search store that
     expect(withStatus('confirmed')).toHaveLength(2)
   })
 
+  it('the same person again while the read cannot see their sign-up yet: told at once they are signed up', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    const first = await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' })
+    store().readsLagFor((first as { signup: { _id: string } }).signup._id, null)
+    const readsBefore = store().events.filter((e) => e === 'read').length
+
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ).toEqual({ refused: 'already-signed-up' })
+    expect(
+      store().events.filter((e) => e === 'read').length - readsBefore,
+    ).toBeLessThanOrEqual(2)
+  })
+
   it('a capacity lowered a moment ago that the read cannot see yet still holds', async () => {
     store().reset([workshop({ capacity: 3 }), signup(1, 'confirmed')])
     await changeCapacity(WORKSHOP, CONF, 1)
@@ -424,6 +438,55 @@ describe('a guard that the reads show late', () => {
     await confirmSignups(WORKSHOP, CONF, ['signup-2'])
 
     expect(store().doc('signup-2')?.status).toBe('confirmed')
+  })
+})
+
+describe('a free and a confirm of the same sign-up at once', () => {
+  it('the confirm lands first: the free still makes the guard forget, and the seat is free', async () => {
+    store().reset([
+      workshop({ capacity: 2 }),
+      signup(1, 'confirmed'),
+      signup(2, 'waitlist'),
+    ])
+    store().beforeNextCommit(() => confirmSignups(WORKSHOP, CONF, ['signup-2']))
+
+    await freeSeat('signup-2', 'delete')
+
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { status: 'confirmed' } })
+  })
+})
+
+describe('a sign-up deleted that a read still shows waiting', () => {
+  const deletedButShown = () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    store().reset([
+      workshop({ capacity: 1 }),
+      signup(1, 'confirmed'),
+      signup(2, 'waitlist'),
+      signup(3, 'waitlist'),
+    ])
+    store().remove('signup-2')
+    store().readsLagFor('signup-2', signup(2, 'waitlist'))
+  }
+
+  it('a capacity change promotes the next one, not "busy"', async () => {
+    deletedButShown()
+
+    expect(await changeCapacity(WORKSHOP, CONF, 2)).toEqual({
+      promoted: ['signup-3'],
+    })
+    expect(store().doc('signup-3')?.status).toBe('confirmed')
+  })
+
+  it('a confirm of it answers that it is gone, not "busy"', async () => {
+    deletedButShown()
+
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-2'])).toMatchObject({
+      confirmed: [],
+      newlyConfirmed: [],
+    })
   })
 })
 
@@ -606,14 +669,36 @@ describe("the organizer's confirm", () => {
     ])
   const attendeeStatus = () =>
     storedSignups().find((d) => d.userWorkOSId === 'user_1')?.status
+  const readsSoFar = () => store().events.filter((e) => e === 'read').length
+
+  /** Both read before either writes, and `first` lands first. */
+  async function race<A, B>(
+    first: () => Promise<A>,
+    second: () => Promise<B>,
+  ): Promise<[A, B]> {
+    let firstLanded!: () => void
+    const landed = new Promise<void>((resolve) => (firstLanded = resolve))
+    let secondDone!: Promise<B>
+    const before = readsSoFar()
+    // `first`'s write waits until `second` has read too.
+    store().beforeNextCommit(async () => {
+      secondDone = second()
+      await vi.waitFor(() => expect(readsSoFar()).toBe(before + 2))
+    })
+    // `second`'s write waits until `first`'s has landed.
+    store().beforeNextCommit(() => landed)
+    store().afterNextCommit(() => firstLanded())
+    const a = await first()
+    return [a, await secondDone]
+  }
 
   it('confirm first: it takes the last seat, and the attendee waits', async () => {
     lastSeat()
 
-    const [confirm] = await Promise.all([
-      confirmSignups(WORKSHOP, CONF, ['signup-2']),
-      signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
-    ])
+    const [confirm] = await race(
+      () => confirmSignups(WORKSHOP, CONF, ['signup-2']),
+      () => signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    )
 
     expect(store().events.slice(0, 3)).toEqual(['read', 'read', 'commit'])
     expect(confirm).toMatchObject({ seatsTaken: 2, capacity: 2 })
@@ -624,10 +709,10 @@ describe("the organizer's confirm", () => {
   it('sign-up first: the attendee takes the last seat, and the confirm says it went beyond capacity', async () => {
     lastSeat()
 
-    const [, confirm] = await Promise.all([
-      signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
-      confirmSignups(WORKSHOP, CONF, ['signup-2']),
-    ])
+    const [, confirm] = await race(
+      () => signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+      () => confirmSignups(WORKSHOP, CONF, ['signup-2']),
+    )
 
     expect(store().events.slice(0, 3)).toEqual(['read', 'read', 'commit'])
     expect(attendeeStatus()).toBe('confirmed')

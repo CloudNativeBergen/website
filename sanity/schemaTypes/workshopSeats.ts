@@ -62,7 +62,8 @@ export default defineType({
       name: 'writes',
       title: 'Writes',
       type: 'number',
-      description: 'How many seat-changing writes went through the guard.',
+      description:
+        'How many seat-changing writes went through the guard. Raised on every one, so each changes the document and gives it a new revision, even when nothing else in it changes.',
     }),
   ],
   preview: {

@@ -181,7 +181,8 @@ async function readSeats(
   if (!seats) return null
   return {
     ...seats,
-    guard: guard?.conference?._ref === conferenceId ? guard : null,
+    // Its id is derived from the conference's own.
+    guard: guard ?? null,
     now: Date.now(),
   }
 }
@@ -261,7 +262,12 @@ const backOff = (attempt: number) =>
 async function decideAndCommit<F extends { refused: string }, D>(
   workshopId: string,
   conferenceId: string,
-  decide: (seats: Seats, tx: Transaction) => F | { done: D },
+  decide: (
+    seats: Seats,
+    tx: Transaction,
+  ) => F | { done: D } | Promise<F | { done: D }>,
+  /** After a lost race: an answer that makes reading again pointless. */
+  lost?: () => Promise<F | undefined>,
 ): Promise<F | { refused: 'not-found' | 'busy' } | { done: D }> {
   // Each round lets one seat through, so one more round per seat left.
   let attempts = MAX_ATTEMPTS
@@ -273,13 +279,15 @@ async function decideAndCommit<F extends { refused: string }, D>(
       attempts += Math.max(0, capacityOf(seats) - takenIn(seats).size)
     }
     const tx = clientWrite.transaction()
-    const decision = decide(seats, tx)
+    const decision = await decide(seats, tx)
     if ('refused' in decision || tx.serialize().length === 0) return decision
     try {
       await tx.commit()
       return decision
     } catch (error) {
       if (!lostTheRace(error)) throw error
+      const answer = await lost?.()
+      if (answer) return answer
     }
   }
   return { refused: 'busy' }
@@ -298,47 +306,50 @@ export async function signUpForWorkshop(
   const outcome = await decideAndCommit<
     { refused: 'already-signed-up' | 'full' },
     string
-  >(workshopId, conferenceId, (seats, tx) => {
-    if (seats.signups.some((s) => s.userWorkOSId === request.userWorkOSId)) {
-      return { refused: 'already-signed-up' as const }
-    }
-    const free = takenIn(seats).size < capacityOf(seats)
-    if (!free && whenFull === 'refuse') return { refused: 'full' as const }
-    if (free) guard(tx, seats, workshopId, conferenceId, { took: [_id] })
-    tx.create({
-      _id,
-      _type: 'workshopSignup',
-      userWorkOSId: request.userWorkOSId,
-      userEmail: request.userEmail,
-      userName: request.userName,
-      workshop: { _type: 'reference', _ref: workshopId },
-      conference: { _type: 'reference', _ref: conferenceId },
-      status: free ? 'confirmed' : 'waitlist',
-      confirmationEmailSent: false,
-      experienceLevel: request.experienceLevel,
-      operatingSystem: request.operatingSystem,
-      ...(request.notes && { notes: request.notes }),
-      // WEAK IN THE WRITE ITSELF: the schema's `weak` governs Studio only,
-      // and a strong reference would keep the sponsor from being removed
-      // from the conference.
-      ...(earlyAccessSponsorId && {
-        earlyAccessSponsor: {
-          _type: 'reference',
-          _ref: earlyAccessSponsorId,
-          _weak: true,
-        },
-      }),
-    })
-    return { done: _id }
-  })
-  if ('refused' in outcome) {
-    // Every attempt lost on the sign-up's own id, which the read did not find
-    // among this workshop's sign-ups (edited in Studio): it is there.
-    if (outcome.refused === 'busy' && (await isStored(_id))) {
-      return { refused: 'already-signed-up' }
-    }
-    return outcome
-  }
+  >(
+    workshopId,
+    conferenceId,
+    (seats, tx) => {
+      if (seats.signups.some((s) => s.userWorkOSId === request.userWorkOSId)) {
+        return { refused: 'already-signed-up' as const }
+      }
+      const free = takenIn(seats).size < capacityOf(seats)
+      if (!free && whenFull === 'refuse') return { refused: 'full' as const }
+      if (free) guard(tx, seats, workshopId, conferenceId, { took: [_id] })
+      tx.create({
+        _id,
+        _type: 'workshopSignup',
+        userWorkOSId: request.userWorkOSId,
+        userEmail: request.userEmail,
+        userName: request.userName,
+        workshop: { _type: 'reference', _ref: workshopId },
+        conference: { _type: 'reference', _ref: conferenceId },
+        status: free ? 'confirmed' : 'waitlist',
+        confirmationEmailSent: false,
+        experienceLevel: request.experienceLevel,
+        operatingSystem: request.operatingSystem,
+        ...(request.notes && { notes: request.notes }),
+        // WEAK IN THE WRITE ITSELF: the schema's `weak` governs Studio only,
+        // and a strong reference would keep the sponsor from being removed
+        // from the conference.
+        ...(earlyAccessSponsorId && {
+          earlyAccessSponsor: {
+            _type: 'reference',
+            _ref: earlyAccessSponsorId,
+            _weak: true,
+          },
+        }),
+      })
+      return { done: _id }
+    },
+    // Lost on the sign-up's own id, which the read does not show yet (or
+    // shows edited in Studio): it is stored, so the person is signed up.
+    async () =>
+      (await isStored(_id))
+        ? { refused: 'already-signed-up' as const }
+        : undefined,
+  )
+  if ('refused' in outcome) return outcome
   const signup = await readSignup(outcome.done, conferenceId)
   return signup ? { signup } : { refused: 'removed' }
 }
@@ -377,6 +388,39 @@ interface Confirmed {
   capacity: number
 }
 
+interface CurrentSignup {
+  _id: string
+  _createdAt: string
+  signedUpAt?: string
+  status: 'confirmed' | 'waitlist'
+}
+
+/**
+ * These sign-ups of the workshop, as they are now: from the document store,
+ * not from a read that may still show one deleted or moved. A write is then
+ * refused only by a race, not by a read that has not caught up.
+ */
+async function current(
+  ids: string[],
+  workshopId: string,
+  conferenceId: string,
+): Promise<CurrentSignup[]> {
+  if (ids.length === 0) return []
+  const docs = await clientWrite.getDocuments<
+    CurrentSignup & {
+      workshop?: { _ref: string }
+      conference?: { _ref: string }
+    }
+  >(ids)
+  return docs.filter(
+    (d): d is NonNullable<typeof d> =>
+      d !== null &&
+      d.workshop?._ref === workshopId &&
+      d.conference?._ref === conferenceId &&
+      (d.status === 'confirmed' || d.status === 'waitlist'),
+  )
+}
+
 /**
  * The organizer's confirm, of sign-ups of ONE workshop. It is allowed past
  * capacity: that is the organizer's call, and the answer says so
@@ -396,19 +440,20 @@ export async function confirmSignups(
   const outcome = await decideAndCommit<never, Confirmed>(
     workshopId,
     conferenceId,
-    (seats, tx) => {
+    async (seats, tx) => {
       const taken = takenIn(seats)
-      const wanted = seats.signups.filter((s) => signupIds.includes(s._id))
-      const shownWaiting = wanted.filter((s) => s.status === 'waitlist')
-      // Shown waiting, but holding a seat the guard let through a moment
-      // ago: written confirmed all the same, and not counted twice.
-      const waiting = shownWaiting.filter((s) => !taken.has(s._id))
-      if (shownWaiting.length > 0) {
+      const wanted = await current(signupIds, workshopId, conferenceId)
+      const waitingNow = wanted.filter((s) => s.status === 'waitlist')
+      // Waiting, but holding a seat the guard let through a moment ago (moved
+      // to the waitlist outside the app): written confirmed all the same, and
+      // not counted twice.
+      const waiting = waitingNow.filter((s) => !taken.has(s._id))
+      if (waitingNow.length > 0) {
         guard(tx, seats, workshopId, conferenceId, {
           took: waiting.map((s) => s._id),
         })
         const confirmedAt = new Date().toISOString()
-        for (const { _id } of shownWaiting) {
+        for (const { _id } of waitingNow) {
           tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
         }
       }
@@ -442,16 +487,25 @@ export async function changeCapacity(
   const outcome = await decideAndCommit<
     { refused: 'below-seats-taken'; seatsTaken: number },
     string[]
-  >(workshopId, conferenceId, (seats, tx) => {
+  >(workshopId, conferenceId, async (seats, tx) => {
     const taken = takenIn(seats)
     const seatsTaken = taken.size
     if (capacity < seatsTaken) {
       return { refused: 'below-seats-taken' as const, seatsTaken }
     }
-    const since = (s: Seats['signups'][number]) =>
+    const since = (s: CurrentSignup) =>
       new Date(s.signedUpAt || s._createdAt).getTime()
-    const promoted = seats.signups
-      .filter((s) => s.status === 'waitlist' && !taken.has(s._id))
+    const waitlisted = seats.signups.filter(
+      (s) => s.status === 'waitlist' && !taken.has(s._id),
+    )
+    const promoted = (
+      await current(
+        waitlisted.map((s) => s._id),
+        workshopId,
+        conferenceId,
+      )
+    )
+      .filter((s) => s.status === 'waitlist')
       .sort((a, b) => since(a) - since(b))
       .slice(0, capacity - seatsTaken)
     guard(tx, seats, workshopId, conferenceId, {
@@ -488,13 +542,18 @@ export async function freeSeat(
   const workshopId = signup?.workshop?._ref
   const conferenceId = signup?.conference?._ref
   if (workshopId && conferenceId) {
-    // Read where it is current, and forgotten by the sign-up's id in the
-    // document store itself, whichever entries hold it by then.
+    // Forgotten in the document store itself, whatever was read and whatever
+    // lands first: a confirm of this sign-up committed just before this
+    // write has its entry removed here; one after it finds the sign-up gone.
     const _id = seatsDocumentId(conferenceId, workshopId)
-    const guard = await clientWrite.getDocument<Guard>(_id)
-    if (guard?.recent?.some((r) => r.signup === signupId)) {
-      tx.patch(_id, { unset: [`recent[signup=="${signupId}"]`] })
-    }
+    tx.createIfNotExists({
+      _id,
+      _type: 'workshopSeats',
+      workshop: { _type: 'reference', _ref: workshopId, _weak: true },
+      conference: { _type: 'reference', _ref: conferenceId, _weak: true },
+      writes: 0,
+    })
+    tx.patch(_id, { unset: [`recent[signup=="${signupId}"]`] })
   }
   await tx.commit()
 }

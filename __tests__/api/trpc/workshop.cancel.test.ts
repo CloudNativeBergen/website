@@ -70,6 +70,10 @@ vi.mock('@/lib/sanity/client', async () => {
       fetch,
       getDocument: async (id: string) =>
         structuredClone(h.dataset.find((d) => d._id === id)) ?? null,
+      getDocuments: async (ids: string[]) =>
+        ids.map(
+          (id) => structuredClone(h.dataset.find((d) => d._id === id)) ?? null,
+        ),
       delete: async (id: string) => {
         h.writes.push(`delete:${id}`)
         const index = h.dataset.findIndex((d) => d._id === id)
@@ -409,7 +413,11 @@ describe('after an attendee’s cancel', () => {
 
     // Before #1331 this set `waitlist` on a waitlisted sign-up: nothing
     // happened, and nobody could leave a waitlist.
-    expect(h.writes).toEqual([`delete:${bob}`])
+    // With the forget in the seats guard that every free carries (#1344).
+    expect(h.writes).toEqual([
+      `delete:${bob}`,
+      'patch:workshopSeats-conf-1-ws-1',
+    ])
     expect(stored(bob)).toBeUndefined()
     const mine = await createWorkshopCaller(BOB).workshop.getMySignups()
     expect(mine.data).toEqual([])
