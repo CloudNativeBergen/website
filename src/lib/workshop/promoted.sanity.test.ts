@@ -517,7 +517,9 @@ describe('the pace across a whole sweep, and the bound of an inline delivery', (
   const dueSignup = (n: number, conf: string) =>
     signup(n, 'confirmed', {
       conference: ref(conf),
-      workshop: ref(`talk-${conf}`),
+      // The conference's own workshop, which is on (a workshop that is
+      // not is settled, not paid: see below).
+      workshop: ref(conf === CONF ? WORKSHOP : `talk-${conf}`),
       promotionEmailDue: true,
     })
   const anotherConference = (id: string) => {
@@ -585,4 +587,54 @@ describe('the pace across a whole sweep, and the bound of an inline delivery', (
       emailed: 25,
     })
   })
+})
+
+describe('the order of a send, and a workshop no longer on', () => {
+  it('pauses BEFORE claiming, so a run killed during the pause leaves the email owed: pause, claim, send', async () => {
+    const events: string[] = []
+    pacing.delay.mockImplementation(async () => {
+      events.push('pause')
+    })
+    store().afterNextCommit(() => events.push('claim'))
+    email.sendBasicWorkshopConfirmation.mockImplementation(async (req) => {
+      events.push(`send ${req.userEmail}`)
+      // The next claim is the next commit.
+      store().afterNextCommit(() => events.push('claim'))
+      return { data: { emailId: 'e' } }
+    })
+
+    await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
+
+    expect(events).toEqual([
+      'claim',
+      'send person2@example.com',
+      'pause',
+      'claim',
+      'send person3@example.com',
+    ])
+  })
+
+  it.each([
+    ['withdrawn', { status: 'withdrawn' }],
+    ['changed to a talk format', { format: 'lightning_10' }],
+  ])(
+    'a workshop %s after the promotion (the status-only admin path clears no flag): the cron sends nothing, settles the debts, and logs the ids',
+    async (_how, change) => {
+      store().put({ ...store().doc(WORKSHOP)!, ...change })
+
+      const outcome = await deliverDuePromotionEmails()
+
+      expect(outcome).toMatchObject({ found: 2, emailed: 0 })
+      expect(emailed()).toEqual([])
+      expect(store().doc('signup-2')).not.toHaveProperty('promotionEmailDue')
+      expect(store().doc('signup-3')).not.toHaveProperty('promotionEmailDue')
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('promotion emails not sent'),
+        ['signup-2', 'signup-3'],
+        expect.anything(),
+      )
+      // Settled: the next sweep finds nothing.
+      expect(await deliverDuePromotionEmails()).toMatchObject({ found: 0 })
+    },
+  )
 })

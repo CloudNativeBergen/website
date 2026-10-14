@@ -32,6 +32,7 @@ import {
   sendBasicWorkshopConfirmation,
   type WorkshopEmailConference,
 } from '@/lib/email/workshop'
+import { Format, Status, isWorkshopFormat } from '@/lib/proposal/types'
 import { clientWrite } from '@/lib/sanity/client'
 
 interface DueSignup {
@@ -53,7 +54,19 @@ type StoredConference = WorkshopEmailConference & { _type: 'conference' }
 interface StoredWorkshop {
   _type: 'talk'
   title?: string
+  status?: string
+  format?: string
 }
+
+/**
+ * The rule `changeCapacity` promotes by: only a workshop that is on gives a
+ * seat, so only a workshop that is still on is told of. One withdrawn, or
+ * made another format, since the promotion (the status-only admin path
+ * clears no flag) has its debts settled, not paid.
+ */
+const stillOn = (workshop: StoredWorkshop | undefined) =>
+  workshop?.status === Status.confirmed &&
+  isWorkshopFormat(workshop.format as Format)
 
 /**
  * How many of a promotion's emails the request that made it sends itself
@@ -143,14 +156,24 @@ export async function deliverPromotionEmails(
     // claim. Each sign-up is claimed right before its own send, so a run
     // that stops (a timeout) leaves the ones after it owed, not claimed.
     const failed: { id: string; why: unknown }[] = []
+    const notOn: string[] = []
     for (const candidate of due) {
+      const workshop =
+        candidate.workshop && workshopById.get(candidate.workshop._ref)
+      if (!stillOn(workshop)) {
+        // Settled without a send, so it does not take a place in the sweep
+        // every hour; named in the log.
+        if (await claim(candidate)) notOn.push(candidate._id)
+        continue
+      }
+      // The pause comes BEFORE the claim: a run killed while pausing has
+      // claimed nothing, and the email stays owed.
+      if (pacing.sends > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
       const signup = await claim(candidate)
       // Owed, but no longer confirmed (moved back outside the app): settled
       // by the claim, told nothing.
       if (!signup || signup.status !== 'confirmed') continue
-      if (pacing.sends > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
       pacing.sends += 1
-      const workshop = signup.workshop && workshopById.get(signup.workshop._ref)
       // A send that fails answers with an `error`; it does not throw. Each
       // one is logged with the sign-up it was for.
       const why = await sendBasicWorkshopConfirmation({
@@ -165,6 +188,9 @@ export async function deliverPromotionEmails(
       )
       if (why !== undefined) failed.push({ id: signup._id, why })
       else emailed.push(signup._id)
+    }
+    if (notOn.length > 0) {
+      notSent(notOn, new Error('the workshop is no longer on: not told'))
     }
     if (failed.length > 0) {
       notSent(
