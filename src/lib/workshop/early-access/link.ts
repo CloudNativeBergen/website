@@ -103,8 +103,9 @@ const releaseWriter = () =>
  *
  * ONLY A SPONSOR WITH A WON DEAL IS GIVEN ONE. A link that exists is answered
  * whatever the deal says now: only revoking ends it. With `wonOnly` (a send of
- * the link, #1347) the deal must be won on this read too, also when a link
- * exists: a deal lost since the send was decided refuses the send.
+ * the link, #1347) the deal must be won in every snapshot the answer comes
+ * from, also when a link exists: a deal lost since the send was decided
+ * refuses the send.
  *
  * IT ANSWERS ONLY A TOKEN THE PUBLISHED DOCUMENT STILL HOLDS. After the token
  * is stored, every version is read once more. A published document that no
@@ -123,6 +124,9 @@ export async function createEarlyAccessLink(
   sponsorForConferenceId: string,
   { wonOnly = false }: { wonOnly?: boolean } = {},
 ): Promise<CreateEarlyAccessLink> {
+  // A send needs the deal won in every snapshot it answers from.
+  const lostForSend = (published: Version | undefined) =>
+    wonOnly && published !== undefined && published.status !== 'closed-won'
   let failure: unknown
   for (let attempt = 1; attempt <= CREATE_ATTEMPTS; attempt++) {
     const sponsor = await scopedFetch<{
@@ -163,6 +167,7 @@ export async function createEarlyAccessLink(
     const published = versions.find(
       (version) => version._id === sponsorForConferenceId,
     )
+    if (lostForSend(published)) return { refused: 'not-won' }
     if (published?.token !== token) continue
     const behind = versions.filter(
       (version) => version !== published && version.token !== token,
@@ -199,10 +204,7 @@ export async function createEarlyAccessLink(
   const published = versions.find(
     (version) => version._id === sponsorForConferenceId,
   )
-  // A send needs the deal won in this snapshot too.
-  if (wonOnly && published && published.status !== 'closed-won') {
-    return { refused: 'not-won' }
-  }
+  if (lostForSend(published)) return { refused: 'not-won' }
   const token = published?.token
   if (token) {
     return {
