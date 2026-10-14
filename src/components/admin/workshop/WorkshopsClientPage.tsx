@@ -227,11 +227,21 @@ export function WorkshopsClientPage({
     // with what was typed, and the reason is shown.
     onError: (error) => {
       readSignupsAgain()
-      showNotification({
-        type: 'error',
-        title: 'Participant not added',
-        message: error.message,
-      })
+      showNotification(
+        // No answer came back: the server may have added them all the same.
+        error.data
+          ? {
+              type: 'error',
+              title: 'Participant not added',
+              message: error.message,
+            }
+          : {
+              type: 'warning',
+              title: 'No answer from the server',
+              message:
+                'The participant may or may not have been added. Check the list before trying again.',
+            },
+      )
     },
   })
 
@@ -256,11 +266,20 @@ export function WorkshopsClientPage({
     },
     onError: (error) => {
       readSignupsAgain()
-      showNotification({
-        type: 'error',
-        title: 'Capacity not changed',
-        message: error.message,
-      })
+      showNotification(
+        error.data
+          ? {
+              type: 'error',
+              title: 'Capacity not changed',
+              message: error.message,
+            }
+          : {
+              type: 'warning',
+              title: 'No answer from the server',
+              message:
+                'The capacity may or may not have been changed. Check the workshop before trying again.',
+            },
+      )
     },
   })
 

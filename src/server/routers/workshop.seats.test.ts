@@ -422,6 +422,57 @@ describe('admin.updateCapacity', () => {
     expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(1)
   })
 
+  it('a failed email is logged with the sign-up it was for', async () => {
+    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
+    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1', 'confirmed')])
+    vi.mocked(sendBasicWorkshopConfirmation).mockResolvedValueOnce({
+      error: { message: 'provider down' },
+    } as never)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await admin().updateCapacity({ workshopId: 'w-1', capacity: 5 })
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('promotion emails not sent'),
+      ['s-1'],
+      expect.anything(),
+    )
+  })
+
+  it('a conference that could not be read: no email in a fallback name, and the sign-ups are logged', async () => {
+    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
+    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1', 'confirmed')])
+    const { getConferenceForCurrentDomain } =
+      await import('@/lib/conference/sanity')
+    // The read's own fallback, for the emails' read (the admin check's read,
+    // made without options, goes through): a conference, with the error.
+    const read = vi.mocked(getConferenceForCurrentDomain)
+    const usual = read.getMockImplementation()!
+    read.mockImplementation(async (options?: unknown) =>
+      options
+        ? ({
+            conference: { _id: 'conf-A', organization: { _ref: 'org-A' } },
+            domain: 'localhost',
+            error: new Error('503'),
+          } as never)
+        : usual(),
+    )
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      await admin().updateCapacity({ workshopId: 'w-1', capacity: 5 })
+    } finally {
+      read.mockImplementation(usual)
+    }
+
+    expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('promotion emails not sent'),
+      ['s-1'],
+      expect.anything(),
+    )
+  })
+
   it('emails each promoted sign-up and counts them', async () => {
     seats.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
     ws.getAllWorkshopSignups.mockResolvedValue([

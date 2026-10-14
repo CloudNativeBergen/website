@@ -175,7 +175,8 @@ const server = {
   /** The next delete is answered "not found": the attendee had cancelled. */
   deleteRefused: false,
   /** How the server refuses a manual add or a capacity change (#1344). */
-  refusal: null as null | { message: string; code: string; status: number },
+  refusal: null as
+    null | 'no answer' | { message: string; code: string; status: number },
 }
 
 const ok = (data: unknown) => ({ result: { data } })
@@ -231,6 +232,8 @@ async function answer(procedure: string, input: unknown): Promise<unknown> {
     case 'workshop.admin.manualSignup':
     case 'workshop.admin.updateCapacity': {
       const refusal = server.refusal!
+      // The connection drops: no answer at all, whatever the server did.
+      if (refusal === 'no answer') throw new TypeError('Failed to fetch')
       return {
         error: {
           message: refusal.message,
@@ -1017,5 +1020,21 @@ describe('a manual add or a capacity change the server refuses (#1344)', () => {
     )
 
     expect(await screen.findByText('Workshop is full')).toBeTruthy()
+  })
+
+  it('no answer at all (the connection dropped): says it may or may not have been saved', async () => {
+    server.refusal = 'no answer'
+    renderPage()
+    fireEvent.click(await screen.findByTitle('Edit capacity'))
+    fireEvent.change(screen.getByRole('spinbutton'), {
+      target: { value: '40' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Update Capacity' }))
+
+    expect(
+      await screen.findByText(
+        'The capacity may or may not have been changed. Check the workshop before trying again.',
+      ),
+    ).toBeTruthy()
   })
 })

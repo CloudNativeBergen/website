@@ -13,6 +13,12 @@ export async function emailPromotedSignups(
   signupIds: string[],
 ): Promise<void> {
   if (signupIds.length === 0) return
+  const notSent = (ids: string[], why: unknown) =>
+    console.error(
+      '[workshop] promotion emails not sent, promoted sign-ups:',
+      ids,
+      why,
+    )
   const read = await Promise.all([
     getAllWorkshopSignups({
       conferenceId,
@@ -21,17 +27,15 @@ export async function emailPromotedSignups(
     }),
     getConferenceForCurrentDomain({}),
   ]).catch((error: unknown) => {
-    console.error(
-      '[workshop] promotion emails not sent, promoted sign-ups:',
-      signupIds,
-      error,
-    )
+    notSent(signupIds, error)
     return null
   })
   if (!read) return
-  const [promoted, { conference }] = read
-  if (!conference) return
-  await Promise.allSettled(
+  const [promoted, { conference, error }] = read
+  // A conference that could not be read comes back as a fallback, not a
+  // failure: no email goes out in a name that is not the conference's.
+  if (!conference || error) return notSent(signupIds, error)
+  const sent = await Promise.allSettled(
     promoted.map((signup) =>
       sendBasicWorkshopConfirmation({
         userEmail: signup.userEmail,
@@ -44,4 +48,15 @@ export async function emailPromotedSignups(
       }),
     ),
   )
+  // A send that fails answers with an `error`; it does not throw.
+  const failed = promoted.filter((_, i) => {
+    const result = sent[i]
+    return result.status === 'rejected' || Boolean(result.value?.error)
+  })
+  if (failed.length > 0) {
+    notSent(
+      failed.map((signup) => signup._id),
+      sent.map((r) => (r.status === 'rejected' ? r.reason : r.value?.error)),
+    )
+  }
 }
