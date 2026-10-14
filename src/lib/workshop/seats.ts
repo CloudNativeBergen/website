@@ -16,8 +16,9 @@
  * contention at an opening time to the seats there actually are.
  *
  * ONE SIGN-UP PER PERSON AND WORKSHOP is held by the sign-up's id: it is
- * derived from the two, and Sanity refuses a `create` of a stored id. Sign-ups
- * written before #1344 have random ids; the read finds those.
+ * derived from the person, the workshop and the conference, and Sanity
+ * refuses a `create` of a stored id. Sign-ups written before #1344 have random
+ * ids; the read finds those.
  *
  * NOT GUARDED, by design: a write that frees a seat (cancel, delete, move to
  * the waitlist). Racing one can only make a sign-up wait for a seat that has
@@ -52,10 +53,14 @@ export interface SignUpRequest extends Pick<
 
 /**
  * `busy`: the request lost the race every time it tried. Nothing was written.
+ * `removed`: it was written, and deleted (a cancel) before it could be read
+ * back.
  */
 export type SignUpOutcome =
   | { signup: WorkshopSignupExisting }
-  | { refused: 'not-found' | 'already-signed-up' | 'full' | 'busy' }
+  | {
+      refused: 'not-found' | 'already-signed-up' | 'full' | 'busy' | 'removed'
+    }
 
 interface Seats {
   capacity: number
@@ -78,10 +83,18 @@ interface Seats {
 export const seatsDocumentId = (conferenceId: string, workshopId: string) =>
   `workshopSeats-${conferenceId}-${workshopId}`
 
-/** The id of a person's sign-up for a workshop: the same for every attempt. */
-export const signupDocumentId = (workshopId: string, userWorkOSId: string) =>
+/**
+ * The id of a person's sign-up for a workshop: the same for every attempt.
+ * Within the conference, like the guard's: the read that finds a sign-up is
+ * scoped to it.
+ */
+export const signupDocumentId = (
+  conferenceId: string,
+  workshopId: string,
+  userWorkOSId: string,
+) =>
   `workshopSignup-${createHash('sha256')
-    .update(`${workshopId}\n${userWorkOSId}`)
+    .update(`${conferenceId}\n${workshopId}\n${userWorkOSId}`)
     .digest('hex')
     .slice(0, 32)}`
 
@@ -138,9 +151,16 @@ function guard(
   })
 }
 
-/** Sanity's answer to a write that lost the race: a revision or an id. */
-const isConflict = (error: unknown) =>
-  (error as { statusCode?: unknown } | null)?.statusCode === 409
+/**
+ * A write refused because the dataset moved on since the read: a revision or
+ * an id that is taken (409), or a document the write patches that is gone (an
+ * attendee's cancel deletes their sign-up). Sanity documents that such a patch
+ * fails, not with which status, so both are read as a lost race.
+ */
+const lostTheRace = (error: unknown) => {
+  const status = (error as { statusCode?: unknown } | null)?.statusCode
+  return status === 409 || status === 404
+}
 
 /** A short random pause, so the losers of one race do not meet again. */
 const backOff = (attempt: number) =>
@@ -159,7 +179,6 @@ async function decideAndCommit<F extends { refused: string }, D>(
   conferenceId: string,
   decide: (seats: Seats, tx: Transaction) => F | { done: D },
 ): Promise<F | { refused: 'not-found' | 'busy' } | { done: D }> {
-  let failed = false
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (attempt > 0) await backOff(attempt)
     const seats = await readSeats(workshopId, conferenceId)
@@ -171,13 +190,7 @@ async function decideAndCommit<F extends { refused: string }, D>(
       await tx.commit()
       return decision
     } catch (error) {
-      // Anything else: a document the write touches may have gone since the
-      // read (an attendee's cancel deletes their sign-up). Read and decide
-      // once more; a second such failure is a real one.
-      if (!isConflict(error)) {
-        if (failed) throw error
-        failed = true
-      }
+      if (!lostTheRace(error)) throw error
     }
   }
   return { refused: 'busy' }
@@ -192,7 +205,7 @@ export async function signUpForWorkshop(
   { whenFull }: { whenFull: 'waitlist' | 'refuse' },
 ): Promise<SignUpOutcome> {
   const { workshopId, conferenceId, earlyAccessSponsorId } = request
-  const _id = signupDocumentId(workshopId, request.userWorkOSId)
+  const _id = signupDocumentId(conferenceId, workshopId, request.userWorkOSId)
   const outcome = await decideAndCommit<
     { refused: 'already-signed-up' | 'full' },
     string
@@ -228,15 +241,23 @@ export async function signUpForWorkshop(
     })
     return { done: _id }
   })
-  if ('refused' in outcome) return outcome
-  return { signup: await readSignup(outcome.done, conferenceId) }
+  if ('refused' in outcome) {
+    // Every attempt lost on the sign-up's own id, which the read did not find
+    // among this workshop's sign-ups (edited in Studio): it is there.
+    if (outcome.refused === 'busy' && (await readSignup(_id, conferenceId))) {
+      return { refused: 'already-signed-up' }
+    }
+    return outcome
+  }
+  const signup = await readSignup(outcome.done, conferenceId)
+  return signup ? { signup } : { refused: 'removed' }
 }
 
 async function readSignup(
   id: string,
   conferenceId: string,
-): Promise<WorkshopSignupExisting> {
-  return clientWrite.fetch<WorkshopSignupExisting>(
+): Promise<WorkshopSignupExisting | null> {
+  return clientWrite.fetch<WorkshopSignupExisting | null>(
     groq`*[_type == "workshopSignup" && _id == $id && conference._ref == $conferenceId][0]{
       _id,
       _type,
@@ -254,6 +275,13 @@ async function readSignup(
   )
 }
 
+interface Confirmed {
+  confirmed: string[]
+  newlyConfirmed: string[]
+  seatsTaken: number
+  capacity: number
+}
+
 /**
  * The organizer's confirm, of sign-ups of ONE workshop. It is allowed past
  * capacity: that is the organizer's call, and the answer says so
@@ -262,37 +290,37 @@ async function readSignup(
  * reading at the same moment cannot take the seat it took.
  *
  * `confirmed` names the sign-ups that are confirmed now; one that is gone, or
- * of another workshop, is not in it.
+ * of another workshop, is not in it. `newlyConfirmed` names those this write
+ * took a seat for; one that was confirmed already is not in it.
  */
 export async function confirmSignups(
   workshopId: string,
   conferenceId: string,
   signupIds: string[],
-): Promise<
-  | { confirmed: string[]; seatsTaken: number; capacity: number }
-  | { refused: 'not-found' | 'busy' }
-> {
-  const outcome = await decideAndCommit<
-    never,
-    { confirmed: string[]; seatsTaken: number; capacity: number }
-  >(workshopId, conferenceId, (seats, tx) => {
-    const wanted = seats.signups.filter((s) => signupIds.includes(s._id))
-    const waiting = wanted.filter((s) => s.status === 'waitlist')
-    if (waiting.length > 0) {
-      guard(tx, seats, workshopId, conferenceId)
-      const confirmedAt = new Date().toISOString()
-      for (const { _id } of waiting) {
-        tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
+): Promise<Confirmed | { refused: 'not-found' | 'busy' }> {
+  const outcome = await decideAndCommit<never, Confirmed>(
+    workshopId,
+    conferenceId,
+    (seats, tx) => {
+      const wanted = seats.signups.filter((s) => signupIds.includes(s._id))
+      const waiting = wanted.filter((s) => s.status === 'waitlist')
+      if (waiting.length > 0) {
+        guard(tx, seats, workshopId, conferenceId)
+        const confirmedAt = new Date().toISOString()
+        for (const { _id } of waiting) {
+          tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
+        }
       }
-    }
-    return {
-      done: {
-        confirmed: wanted.map((s) => s._id),
-        seatsTaken: confirmedIn(seats) + waiting.length,
-        capacity: seats.capacity,
-      },
-    }
-  })
+      return {
+        done: {
+          confirmed: wanted.map((s) => s._id),
+          newlyConfirmed: waiting.map((s) => s._id),
+          seatsTaken: confirmedIn(seats) + waiting.length,
+          capacity: seats.capacity,
+        },
+      }
+    },
+  )
   return 'refused' in outcome ? outcome : outcome.done
 }
 

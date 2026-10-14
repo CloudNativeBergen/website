@@ -225,6 +225,7 @@ beforeEach(() => {
   ws.confirmSignups.mockImplementation(
     async (_w: string, _c: string, ids: string[]) => ({
       confirmed: ids,
+      newlyConfirmed: ids,
       seatsTaken: 0,
       capacity: 100,
     }),

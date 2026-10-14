@@ -399,6 +399,11 @@ describe('workshop.signup: a sign-up that cannot take a seat (#1344)', () => {
       'You are already signed up for this workshop',
     ],
     ['not-found', 'BAD_REQUEST', 'Workshop does not belong to this conference'],
+    [
+      'removed',
+      'CONFLICT',
+      'Your sign-up was cancelled just after it was saved. Sign up again if you still want a place.',
+    ],
   ])(
     'refused as %s: %s with a clear message, never a 500',
     async (refused, code, message) => {

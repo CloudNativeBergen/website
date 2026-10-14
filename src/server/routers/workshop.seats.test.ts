@@ -127,6 +127,7 @@ describe('admin.manualSignup', () => {
       'TOO_MANY_REQUESTS',
       'Many people are signing up for this workshop right now. Nothing was saved. Try again in a moment.',
     ],
+    ['removed', 'CONFLICT', 'The sign-up was removed just after it was saved.'],
   ])(
     'refused as %s: %s with a clear message',
     async (refused, code, message) => {
@@ -167,8 +168,13 @@ describe('admin.batchConfirmSignups', () => {
     seats.confirmSignups.mockImplementation(
       async (workshopId: string, _conf: string, ids: string[]) =>
         workshopId === 'w-1'
-          ? { confirmed: ids, seatsTaken: 3, capacity: 5 }
-          : { confirmed: ids, seatsTaken: 31, capacity: 30 },
+          ? { confirmed: ids, newlyConfirmed: ids, seatsTaken: 3, capacity: 5 }
+          : {
+              confirmed: ids,
+              newlyConfirmed: ids,
+              seatsTaken: 31,
+              capacity: 30,
+            },
     )
 
     const result = await admin().batchConfirmSignups({
@@ -195,14 +201,19 @@ describe('admin.batchConfirmSignups', () => {
     expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(3)
   })
 
-  it('counts a workshop whose seats could not be decided (busy) as failed, not a 500, and emails no one there', async () => {
+  it('counts a workshop whose seats could not be decided (busy) as failed, not a 500, says to try again there, and emails no one there', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([
       row('s-1', 'w-1'),
       row('s-2', 'w-2'),
     ])
     seats.confirmSignups.mockImplementation(async (workshopId: string) =>
       workshopId === 'w-1'
-        ? { confirmed: ['s-1'], seatsTaken: 1, capacity: 5 }
+        ? {
+            confirmed: ['s-1'],
+            newlyConfirmed: ['s-1'],
+            seatsTaken: 1,
+            capacity: 5,
+          }
         : { refused: 'busy' },
     )
 
@@ -212,13 +223,36 @@ describe('admin.batchConfirmSignups', () => {
     })
 
     expect(result.results).toMatchObject({ succeeded: 1, failed: 1 })
+    expect(result.message).toBe(
+      'Confirmed 1 signup, 1 failed. Many people were signing up for Workshop w-2, so nothing was saved there. Try again in a moment.',
+    )
     expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(1)
+  })
+
+  it('names no workshop beyond capacity, and emails no one, where it confirmed no one new', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
+    seats.confirmSignups.mockResolvedValue({
+      confirmed: ['s-1'],
+      newlyConfirmed: [],
+      seatsTaken: 31,
+      capacity: 30,
+    })
+
+    const result = await admin().batchConfirmSignups({
+      signupIds: ['s-1'],
+      sendEmails: true,
+    })
+
+    expect(result.message).toBe('Confirmed 1 signup.')
+    expect(result.results.beyondCapacity).toEqual([])
+    expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
   })
 
   it('a sign-up gone by the time of the write is counted as failed', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
     seats.confirmSignups.mockResolvedValue({
       confirmed: [],
+      newlyConfirmed: [],
       seatsTaken: 0,
       capacity: 5,
     })
@@ -238,6 +272,7 @@ describe('admin.confirmSignup', () => {
     ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
     seats.confirmSignups.mockResolvedValue({
       confirmed: ['s-1'],
+      newlyConfirmed: ['s-1'],
       seatsTaken: 6,
       capacity: 5,
     })
@@ -250,6 +285,24 @@ describe('admin.confirmSignup', () => {
     expect(result.message).toBe(
       'Participant confirmed beyond capacity (6 of 5 seats)',
     )
+  })
+
+  it('confirmed already by the time of the write: not named beyond capacity, and no email', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
+    seats.confirmSignups.mockResolvedValue({
+      confirmed: ['s-1'],
+      newlyConfirmed: [],
+      seatsTaken: 6,
+      capacity: 5,
+    })
+
+    const result = await admin().confirmSignup({
+      signupId: 's-1',
+      sendEmail: true,
+    })
+
+    expect(result.message).toBe('Workshop signup confirmed successfully')
+    expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
   })
 
   it('busy: TOO_MANY_REQUESTS with a clear message', async () => {

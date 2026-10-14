@@ -223,6 +223,16 @@ export function WorkshopsClientPage({
         workshopTitle: '',
       })
     },
+    // Refused (full, already signed up, busy: #1344): the dialog stays open
+    // with what was typed, and the reason is shown.
+    onError: (error) => {
+      readSignupsAgain()
+      showNotification({
+        type: 'error',
+        title: 'Participant not added',
+        message: error.message,
+      })
+    },
   })
 
   const updateCapacityMutation = api.workshop.admin.updateCapacity.useMutation({
@@ -242,6 +252,14 @@ export function WorkshopsClientPage({
         workshopTitle: '',
         currentCapacity: 0,
         currentSignups: 0,
+      })
+    },
+    onError: (error) => {
+      readSignupsAgain()
+      showNotification({
+        type: 'error',
+        title: 'Capacity not changed',
+        message: error.message,
       })
     },
   })

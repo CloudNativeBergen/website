@@ -72,6 +72,9 @@ import {
   topicIdsOf,
 } from '@/server/proposalSubmission'
 import { clientWrite } from '@/lib/sanity/client'
+import { changeCapacity } from '@/lib/workshop/seats'
+import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
+import { emailPromotedSignups } from '@/lib/workshop/promoted'
 import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
 import {
   createNotifications,
@@ -175,6 +178,45 @@ async function requireTopicsReferenceable(
   const added = ids.filter((id) => !existing.has(id))
   if (added.length === 0) return
   await requireDocumentsInCurrentOrg(added, 'topic')
+}
+
+/**
+ * A WORKSHOP'S CAPACITY IS A SEAT DECISION (#1344). It is written through the
+ * same guard as the Workshops page (`changeCapacity`), never by the plain
+ * proposal patch, so a sign-up at the same moment cannot take a seat on the
+ * old count; the sign-ups it confirms into new seats are told so.
+ */
+async function changeTalkCapacity(talkId: string, capacity: number) {
+  const stored = await clientWrite.fetch<{
+    capacity?: number
+    conferenceId?: string
+  } | null>(
+    // groq-global-scoped: keyed by an id the caller has ALREADY been proved to
+    // own by `requireDocumentInCurrentOrg`; it reads back that same document.
+    `*[_type == "talk" && _id == $id][0]{capacity, "conferenceId": conference._ref}`,
+    { id: talkId },
+  )
+  if (!stored || stored.capacity === capacity) return
+  const outcome = stored.conferenceId
+    ? await changeCapacity(talkId, stored.conferenceId, capacity)
+    : ({ refused: 'not-found' } as const)
+  if ('refused' in outcome) {
+    switch (outcome.refused) {
+      case 'below-seats-taken':
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `Cannot reduce capacity below current signup count (${outcome.seatsTaken})`,
+        })
+      case 'busy':
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: SEATS_BUSY })
+      case 'not-found':
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Proposal not found',
+        })
+    }
+  }
+  await emailPromotedSignups(stored.conferenceId!, outcome.promoted)
 }
 
 /** The topic ids currently on a talk, for the grandfathering set above. */
@@ -1871,7 +1913,10 @@ export const proposalRouter = router({
           // the org-scoped `getProposal`; this admin sibling was not gated at
           // all, so it could rewrite any document in the shared dataset.
           await requireDocumentInCurrentOrg(input.id, 'talk')
-          const { speakers, ...proposalData } = input.data
+          const { speakers, capacity, ...proposalData } = input.data
+          if (capacity !== undefined) {
+            await changeTalkCapacity(input.id, capacity)
+          }
 
           // If speakers are being updated, convert to references
           let updateData = proposalData

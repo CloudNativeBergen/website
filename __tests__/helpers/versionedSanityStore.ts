@@ -91,6 +91,8 @@ export interface VersionedSanityStore {
   readonly events: string[]
   /** Store a document as it is, replacing one with the same id. No commit. */
   put(document: Doc): void
+  /** Delete a document outside any transaction: another writer's delete. */
+  remove(id: string): void
   /** Run once, just before the next commit is applied. */
   beforeNextCommit(hook: () => unknown): void
   /** Run once, right after the next commit has been applied. */
@@ -219,7 +221,13 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         throw new Error(`400: ${id} needs API 2025-02-19 (modelled)`)
       }
       const at = next.findIndex((d) => d._id === id)
-      if (at === -1) throw new Error(`404: no such document: ${id}`)
+      // MODELLED: Sanity documents that a patch of a missing document fails,
+      // not with which status; 404 here.
+      if (at === -1) {
+        throw Object.assign(new Error(`404: no such document: ${id}`), {
+          statusCode: 404,
+        })
+      }
       if (ifRevisionID && next[at]._rev !== ifRevisionID) {
         throw Object.assign(new Error(`409: ${id} revision mismatch`), {
           statusCode: 409,
@@ -298,6 +306,9 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         ...documents.filter((d) => d._id !== document._id),
         structuredClone(document),
       ]
+    },
+    remove(id) {
+      documents = documents.filter((d) => d._id !== id)
     },
     doc: (id) => documents.find((d) => d._id === id),
     all: () => documents,
