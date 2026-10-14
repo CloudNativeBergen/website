@@ -38,7 +38,7 @@ import {
   within,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Activity, useState, type ReactNode } from 'react'
+import { Activity, useEffect, useState, type ReactNode } from 'react'
 import { api, getTRPCClient } from '@/lib/trpc/client'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
@@ -333,7 +333,9 @@ function renderPage(address = '/admin/workshops', state: unknown = null) {
  */
 function KeptRoute() {
   const [shown, set] = useState(true)
-  setShown = set
+  useEffect(() => {
+    setShown = set
+  }, [])
   return (
     <Providers>
       <Activity mode={shown ? 'visible' : 'hidden'}>
