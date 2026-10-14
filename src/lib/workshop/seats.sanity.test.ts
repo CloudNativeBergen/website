@@ -490,6 +490,19 @@ describe('a cancel, then the same person again while a read still shows the canc
   })
 })
 
+describe('a workshop deleted that a read still shows', () => {
+  it('a capacity change answers not found, not "busy"', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    store().reset([workshop()])
+    store().remove(WORKSHOP)
+    store().readsLagFor(WORKSHOP, workshop())
+
+    expect(await changeCapacity(WORKSHOP, CONF, 5)).toEqual({
+      refused: 'not-found',
+    })
+  })
+})
+
 describe('a re-confirm near the end of the window', () => {
   it('the guard remembers the seat from the re-confirm, not from the first time', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })

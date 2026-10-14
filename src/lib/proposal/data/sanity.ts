@@ -471,9 +471,10 @@ export async function updateProposal(
 
 /**
  * Document types that only exist in service of a proposal and are safe to
- * cascade-delete together with it.
+ * cascade-delete together with it. `workshopSeats` is a workshop's seats guard
+ * (#1344); its sign-ups, which do block, hold the seats themselves.
  */
-const CASCADE_DELETE_TYPES = ['coSpeakerInvitation', 'review']
+const CASCADE_DELETE_TYPES = ['coSpeakerInvitation', 'review', 'workshopSeats']
 
 /**
  * Types that reference a proposal only WEAKLY and must neither block deletion

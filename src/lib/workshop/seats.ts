@@ -286,6 +286,14 @@ async function decideAndCommit<F extends { refused: string }, D>(
       return decision
     } catch (error) {
       if (!lostTheRace(error)) throw error
+      // A document the write patches is gone: if it is the workshop, which a
+      // read may still show, there is nothing left to decide.
+      if (
+        (error as { statusCode?: unknown }).statusCode === 404 &&
+        !(await clientWrite.getDocument(workshopId))
+      ) {
+        return { refused: 'not-found' }
+      }
       const answer = await lost?.()
       if (answer) return answer
     }

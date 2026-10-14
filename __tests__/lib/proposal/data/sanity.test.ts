@@ -134,6 +134,23 @@ describe('deleteProposal', () => {
     expect(mockTxCommit).toHaveBeenCalledTimes(1)
   })
 
+  it("deletes a workshop's seats guard with it: it only guards the workshop's seats (#1344)", async () => {
+    mockFetch
+      .mockResolvedValueOnce([
+        { _id: 'workshopSeats-conf-1-proposal-1', _type: 'workshopSeats' },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+
+    const { err } = await deleteProposal('proposal-1')
+
+    expect(err).toBeNull()
+    expect(mockTxDelete.mock.calls.map((call) => call[0])).toEqual([
+      'workshopSeats-conf-1-proposal-1',
+      'proposal-1',
+    ])
+  })
+
   it('is blocked by a saved video naming the talk as its subject, named by title (#1181)', async () => {
     mockFetch
       .mockResolvedValueOnce([{ _id: 'vp-1', _type: 'videoProject' }])
