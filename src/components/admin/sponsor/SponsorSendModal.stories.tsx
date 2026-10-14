@@ -997,6 +997,49 @@ const wonSponsor = mockSponsor({
 const NO_WINDOW = EARLY_ACCESS_SEND_REFUSALS['no-window']
 
 /**
+ * A story at phone width. `.storybook/test-runner.ts` sizes the page from
+ * `parameters.viewport.defaultViewport` and from nothing else (`mobile1` is
+ * 320 x 568); the `viewport` global is what sizes the preview in the
+ * Storybook UI. A story that sets only one of the two is tested, or looked
+ * at, at desktop width.
+ */
+const phone = {
+  viewport: { defaultViewport: 'mobile1' },
+} as const
+const phoneGlobals = { viewport: { value: 'mobile1', isRotated: false } }
+
+type Play = NonNullable<Story['play']>
+type PlayContext = Parameters<Play>[0]
+
+/** The story really is narrow, and nothing in it pushes the page sideways. */
+async function expectPhoneWidth({ canvasElement }: PlayContext) {
+  const page = canvasElement.ownerDocument
+  await expect(page.defaultView!.innerWidth).toBeLessThan(640)
+  await expect(page.documentElement.scrollWidth).toBeLessThanOrEqual(
+    page.documentElement.clientWidth,
+  )
+}
+
+/**
+ * The held-send notice at phone width: its "Check again" action wraps below
+ * the words (beside them, it would squeeze them into a sliver), and the
+ * notice stays inside the screen.
+ */
+async function expectNoticeStacked(context: PlayContext) {
+  const page = context.canvasElement.ownerDocument
+  const body = within(page.body)
+  const words = await body.findByRole('alert')
+  const action = body.getByRole('button', { name: 'Check again' })
+  await expect(action.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+    words.getBoundingClientRect().bottom,
+  )
+  await expect(
+    words.parentElement!.getBoundingClientRect().right,
+  ).toBeLessThanOrEqual(page.defaultView!.innerWidth)
+  await expectPhoneWidth(context)
+}
+
+/**
  * Send → Workshop early access (#1347). The modal asks the server whether
  * the link may be sent; here it may. The built-in text is the starting body,
  * no template is preselected, and the link rides in the block the server
@@ -1158,9 +1201,11 @@ export const EarlyAccessNotCheckedDark: Story = {
 
 export const EarlyAccessNotCheckedMobile: Story = {
   ...EarlyAccessNotChecked,
-  parameters: {
-    ...EarlyAccessNotChecked.parameters,
-    viewport: { value: 'mobile1', isRotated: false },
+  parameters: { ...EarlyAccessNotChecked.parameters, ...phone },
+  globals: phoneGlobals,
+  play: async (context) => {
+    await EarlyAccessNotChecked.play!(context)
+    await expectNoticeStacked(context)
   },
 }
 
@@ -1206,24 +1251,38 @@ export const EarlyAccessPreviewDark: Story = {
 
 export const EarlyAccessMobile: Story = {
   ...EarlyAccessNoLinkYet,
-  parameters: {
-    ...EarlyAccessNoLinkYet.parameters,
-    viewport: { value: 'mobile1', isRotated: false },
+  parameters: { ...EarlyAccessNoLinkYet.parameters, ...phone },
+  globals: phoneGlobals,
+  play: async (context) => {
+    await EarlyAccessNoLinkYet.play!(context)
+    await expectPhoneWidth(context)
   },
 }
 
 export const EarlyAccessRefusedMobile: Story = {
   ...EarlyAccessRefused,
-  parameters: {
-    ...EarlyAccessRefused.parameters,
-    viewport: { value: 'mobile1', isRotated: false },
+  parameters: { ...EarlyAccessRefused.parameters, ...phone },
+  globals: phoneGlobals,
+  play: async (context) => {
+    await EarlyAccessRefused.play!(context)
+    await expectNoticeStacked(context)
   },
 }
 
+/** The block inside the preview at phone width: the address wraps inside it. */
 export const EarlyAccessPreviewMobile: Story = {
   ...EarlyAccessPreview,
-  parameters: {
-    ...EarlyAccessPreview.parameters,
-    viewport: { value: 'mobile1', isRotated: false },
+  parameters: { ...EarlyAccessPreview.parameters, ...phone },
+  globals: phoneGlobals,
+  play: async (context) => {
+    await EarlyAccessPreview.play!(context)
+    const page = context.canvasElement.ownerDocument
+    const address = within(page.body).getByRole('link', {
+      name: EARLY_ACCESS_LINK,
+    })
+    await expect(address.getBoundingClientRect().right).toBeLessThanOrEqual(
+      page.defaultView!.innerWidth,
+    )
+    await expectPhoneWidth(context)
   },
 }

@@ -96,9 +96,28 @@ export const Default: Story = {
 
 export const Dark: Story = { ...Default, globals: { theme: 'dark' } }
 
+/**
+ * At phone width. `.storybook/test-runner.ts` sizes the page from
+ * `parameters.viewport.defaultViewport` and nothing else (`mobile1` is
+ * 320 x 568); the `viewport` global sizes the preview in the Storybook UI.
+ * `Default`'s play then asserts, at that width, that the address wraps and
+ * the email does not scroll sideways.
+ */
 export const Mobile: Story = {
   ...Default,
-  parameters: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async (context) => {
+    await Default.play!(context)
+    const page = context.canvasElement.ownerDocument
+    await expect(page.defaultView!.innerWidth).toBeLessThan(640)
+    const address = within(context.canvasElement).getByRole('link', {
+      name: LINK,
+    })
+    await expect(address.getBoundingClientRect().right).toBeLessThanOrEqual(
+      page.defaultView!.innerWidth,
+    )
+  },
 }
 
 /** A message edited down to nothing: the block is the email. */
