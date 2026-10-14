@@ -25,8 +25,15 @@ vi.mock('@/lib/conference/sanity', () => ({
     error: null,
   })),
 }))
+/** The sign-ups as the document store has them now: by default, confirmed. */
+const current = vi.hoisted(() => ({ status: {} as Record<string, string> }))
 vi.mock('@/lib/sanity/client', () => {
-  const client = { fetch: vi.fn(async () => null) }
+  const client = {
+    fetch: vi.fn(async () => null),
+    getDocuments: vi.fn(async (ids: string[]) =>
+      ids.map((_id) => ({ _id, status: current.status[_id] ?? 'confirmed' })),
+    ),
+  }
   return {
     clientRead: client,
     clientReadCached: client,
@@ -111,6 +118,7 @@ const manualInput = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  current.status = {}
   ws.getWorkshopById.mockResolvedValue({ _id: 'w-1', capacity: 5 })
 })
 
@@ -476,12 +484,13 @@ describe('admin.updateCapacity', () => {
     )
   })
 
-  it('does not email a promoted sign-up moved back to the waitlist meanwhile', async () => {
+  it('does not email a promoted sign-up moved back to the waitlist meanwhile, though a read still shows it confirmed', async () => {
     seats.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
     ws.getAllWorkshopSignups.mockResolvedValue([
       row('s-1', 'w-1', 'confirmed'),
-      row('s-2', 'w-1', 'waitlist'),
+      row('s-2', 'w-1', 'confirmed'),
     ])
+    current.status['s-2'] = 'waitlist'
 
     await admin().updateCapacity({ workshopId: 'w-1', capacity: 5 })
 

@@ -152,7 +152,7 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
     await update({ title: 'Kubernetes hands-on', capacity: 12 })
 
     expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
-      promote: undefined,
+      edit: {},
     })
     expect(h.updateProposal).toHaveBeenCalledWith('talk-1', {
       title: 'Kubernetes hands-on',
@@ -166,23 +166,23 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
     await update({ capacity: 20 })
 
     expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 20, {
-      promote: undefined,
+      edit: {},
     })
   })
 
-  it('an edit that also makes the talk no workshop changes capacity without promoting anyone', async () => {
+  it('an edit that also changes the format passes it on, for the seats module to judge with the talk as it is then', async () => {
     await update({ capacity: 12, format: 'presentation_40' })
 
     expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
-      promote: false,
+      edit: { format: 'presentation_40' },
     })
   })
 
-  it('an edit that leaves status and format alone lets the seats module judge the workshop on each try', async () => {
+  it('an edit that leaves status and format alone passes neither', async () => {
     await update({ capacity: 12 })
 
     expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
-      promote: undefined,
+      edit: {},
     })
   })
 
@@ -284,7 +284,7 @@ describe('proposal.update by an organizer who speaks at the workshop (#1344)', (
     } as never)
 
     expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
-      promote: true,
+      edit: { format: 'workshop_120' },
     })
     expect(h.updateProposal).toHaveBeenCalledTimes(1)
     expect(h.updateProposal.mock.calls[0][1]).toMatchObject({

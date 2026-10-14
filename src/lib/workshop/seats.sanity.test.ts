@@ -970,9 +970,11 @@ describe('changing the capacity', () => {
       waiting(2),
     ])
 
-    expect(await changeCapacity(WORKSHOP, CONF, 3, { promote: false })).toEqual(
-      { promoted: [] },
-    )
+    expect(
+      await changeCapacity(WORKSHOP, CONF, 3, {
+        edit: { status: 'withdrawn' },
+      }),
+    ).toEqual({ promoted: [] })
     expect(store().doc(WORKSHOP)?.capacity).toBe(3)
     expect(store().doc('signup-2')?.status).toBe('waitlist')
   })
@@ -993,6 +995,28 @@ describe('changing the capacity', () => {
       expect(store().doc('signup-2')?.status).toBe('waitlist')
     },
   )
+
+  it('an edit that sets the format only: a withdrawal meanwhile still stops the promotion', async () => {
+    store().reset([
+      workshop({ capacity: 1 }),
+      signup(1, 'confirmed'),
+      waiting(2),
+    ])
+    store().beforeNextCommit(() =>
+      store().put({
+        ...store().doc(WORKSHOP)!,
+        status: 'withdrawn',
+        _rev: 'withdrawn-meanwhile',
+      }),
+    )
+
+    expect(
+      await changeCapacity(WORKSHOP, CONF, 3, {
+        edit: { format: 'workshop_120' },
+      }),
+    ).toEqual({ promoted: [] })
+    expect(store().doc('signup-2')?.status).toBe('waitlist')
+  })
 
   it('of a workshop withdrawn between its read and its write: decided again, confirms no one', async () => {
     store().reset([

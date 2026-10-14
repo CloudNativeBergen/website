@@ -83,13 +83,7 @@ import {
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 import type { ProposalInput, ProposalExisting } from '@/lib/proposal/types'
-import {
-  Action,
-  Format,
-  Status,
-  isInactiveProposal,
-  isWorkshopFormat,
-} from '@/lib/proposal/types'
+import { Action, Status, isInactiveProposal } from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
 import {
   countActiveProposals,
@@ -203,8 +197,6 @@ async function changeTalkCapacity(
   // real change look like none. The caller has proved the talk is the org's.
   const talk = await clientWrite.getDocument<{
     capacity?: number
-    status?: string
-    format?: string
     conference?: { _ref: string }
   }>(talkId)
   const stored = talk && {
@@ -227,15 +219,10 @@ async function changeTalkCapacity(
   const outcome = stored.conferenceId
     ? await changeCapacity(talkId, stored.conferenceId, capacity, {
         // Waiting sign-ups are given seats, and told so, only while the
-        // workshop is on, as this edit leaves it (a withdrawn one, or one
-        // made another format, keeps them waiting).
-        // An edit that leaves both alone leaves the judgement to the seats
-        // module, made again on every try from the talk as it is then.
-        promote:
-          edit.status === undefined && edit.format === undefined
-            ? undefined
-            : (edit.status ?? talk.status) === Status.confirmed &&
-              isWorkshopFormat((edit.format ?? talk.format) as Format),
+        // workshop is on: judged with the talk as it is on each try, and
+        // what this edit changes of it (a withdrawn one, or one made another
+        // format, keeps them waiting).
+        edit: { status: edit.status, format: edit.format },
       })
     : ({ refused: 'not-found' } as const)
   if ('refused' in outcome) {

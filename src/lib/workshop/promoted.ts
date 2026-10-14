@@ -1,5 +1,6 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
+import { clientWrite } from '@/lib/sanity/client'
 import { getAllWorkshopSignups } from './sanity'
 
 /**
@@ -35,8 +36,18 @@ export async function emailPromotedSignups(
   // A conference that could not be read comes back as a fallback, not a
   // failure: no email goes out in a name that is not the conference's.
   if (!conference || error) return notSent(signupIds, error)
-  // One moved back to the waitlist since is not told it has a seat.
-  const stillConfirmed = promoted.filter((s) => s.status === 'confirmed')
+  // One moved back to the waitlist since is not told it has a seat: asked of
+  // the document store, past a query that may lag.
+  const now = await clientWrite
+    .getDocuments<{ status?: string }>(promoted.map((s) => s._id))
+    .catch((error: unknown) => {
+      notSent(signupIds, error)
+      return null
+    })
+  if (!now) return
+  const stillConfirmed = promoted.filter(
+    (_, i) => now[i]?.status === 'confirmed',
+  )
   const sent = await Promise.allSettled(
     stillConfirmed.map((signup) =>
       sendBasicWorkshopConfirmation({

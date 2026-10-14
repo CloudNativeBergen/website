@@ -519,8 +519,9 @@ export async function confirmSignups(
 
 /**
  * Sets the capacity, and confirms the longest-waiting sign-ups into the seats
- * that are then free, in the same write: by default only while the talk is
- * a confirmed workshop, or as `promote` says.
+ * that are then free, in the same write, only while the talk is a confirmed
+ * workshop: as it is read on each try, with the status and format of an
+ * `edit` that changes them too in its place.
  * Refused below the seats taken. `promoted` names the sign-ups it confirmed,
  * longest-waiting first.
  */
@@ -528,7 +529,7 @@ export async function changeCapacity(
   workshopId: string,
   conferenceId: string,
   capacity: number,
-  { promote }: { promote?: boolean } = {},
+  { edit = {} }: { edit?: { status?: string; format?: string } } = {},
 ): Promise<
   | { promoted: string[] }
   | { refused: 'below-seats-taken'; seatsTaken: number }
@@ -538,12 +539,11 @@ export async function changeCapacity(
     { refused: 'below-seats-taken'; seatsTaken: number },
     string[]
   >(workshopId, conferenceId, async (seats, tx) => {
-    // Unless the caller knows better (an edit that changes them too), only a
-    // workshop that is on gives its waiting sign-ups seats.
+    // Only a workshop that is on, as this try reads it and as the edit
+    // leaves it, gives its waiting sign-ups seats.
     const promoting =
-      promote ??
-      (seats.status === Status.confirmed &&
-        isWorkshopFormat(seats.format as Format))
+      (edit.status ?? seats.status) === Status.confirmed &&
+      isWorkshopFormat((edit.format ?? seats.format) as Format)
     const taken = takenIn(seats)
     const seatsTaken = taken.size
     if (capacity < seatsTaken) {
