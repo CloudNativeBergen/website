@@ -37,6 +37,11 @@ export function WorkshopCard({
   const { capacityPercentage, utilizationPercentage, overCapacityBy } =
     calculateWorkshopStats(workshop, confirmedCount, waitlistCount)
   const overCapacity = overCapacityBy > 0
+  // One decision drives both what the bar's fill says and what it looks like,
+  // so a test can read the former without asserting a class name (#1361).
+  const fill = overCapacity
+    ? { over: true, color: 'bg-red-500' }
+    : { over: false, color: getCapacityColorClass(capacityPercentage) }
 
   return (
     <div className="flex h-full flex-col rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -72,11 +77,8 @@ export function WorkshopCard({
             className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
           >
             <div
-              className={`h-full transition-all ${
-                overCapacity
-                  ? 'bg-red-500'
-                  : getCapacityColorClass(capacityPercentage)
-              }`}
+              data-over-capacity={fill.over ? '' : undefined}
+              className={`h-full transition-all ${fill.color}`}
               style={{ width: `${capacityPercentage}%` }}
             />
           </div>

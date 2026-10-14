@@ -68,6 +68,7 @@ export const AtCapacity: Story = {
     await expect(canvas.getByText('30/30')).toBeInTheDocument()
     await expect(canvas.getByText('(100%)')).toBeInTheDocument()
     await expect(canvas.queryByText(/over capacity/i)).not.toBeInTheDocument()
+    await expect(canvasElement.querySelector('[data-over-capacity]')).toBeNull()
   },
 }
 export const AtCapacityDark: Story = { ...AtCapacity, globals: dark }
@@ -79,6 +80,10 @@ export const OverCapacity: Story = {
     const canvas = within(canvasElement)
     await expect(canvas.getByText('Over capacity by 2')).toBeInTheDocument()
     await expect(canvas.getByText('(107%)')).toBeInTheDocument()
+    // The fill is marked over capacity by the same decision that colours it red.
+    await expect(
+      canvasElement.querySelector('[data-over-capacity]'),
+    ).not.toBeNull()
   },
 }
 export const OverCapacityDark: Story = { ...OverCapacity, globals: dark }

@@ -4,10 +4,11 @@
  * These functions provide reusable logic for workshop capacity management,
  * including availability checks, percentage calculations, and status messaging.
  *
- * Currently used in:
+ * Callers outside this module and its test (`__tests__/lib/workshop/capacity.test.ts`):
  * - WorkshopCard (public): getCapacityStatusMessage
- * - admin/TicketSalesChartDisplay: calculateCapacityPercentage
- * - Internal: calculateAvailableSpots, isWorkshopFull (used by other functions)
+ * The other exports (calculateAvailableSpots, isWorkshopFull,
+ * calculateCapacityPercentage, getCapacityStatusColor) have none; the admin
+ * card computes its own ratio in `components/admin/workshop/utils.ts`.
  */
 
 /**

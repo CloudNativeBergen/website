@@ -48,6 +48,8 @@ describe('WorkshopCard over-capacity marker', () => {
     const bar = screen.getByRole('progressbar', { name: 'Capacity used' })
     expect(bar).toHaveAttribute('aria-valuenow', '100')
     expect(bar).toHaveAttribute('aria-valuetext', '107%')
+    // The fill is marked over capacity by the same decision that colours it red.
+    expect(bar.querySelector('[data-over-capacity]')).not.toBeNull()
   })
 
   it('shows no marker at exactly capacity', () => {
@@ -59,6 +61,7 @@ describe('WorkshopCard over-capacity marker', () => {
     const bar = screen.getByRole('progressbar', { name: 'Capacity used' })
     expect(bar).toHaveAttribute('aria-valuenow', '100')
     expect(bar).toHaveAttribute('aria-valuetext', '100%')
+    expect(bar.querySelector('[data-over-capacity]')).toBeNull()
   })
 
   it('shows no marker below capacity', () => {
