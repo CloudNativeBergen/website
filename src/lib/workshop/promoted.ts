@@ -48,15 +48,20 @@ export async function emailPromotedSignups(
       }),
     ),
   )
-  // A send that fails answers with an `error`; it does not throw.
-  const failed = promoted.filter((_, i) => {
+  // A send that fails answers with an `error`; it does not throw. Each one
+  // is logged with the sign-up it was for.
+  const failed = promoted.flatMap((signup, i) => {
     const result = sent[i]
-    return result.status === 'rejected' || Boolean(result.value?.error)
+    const why =
+      result.status === 'rejected' ? result.reason : result.value?.error
+    return result.status === 'rejected' || why !== undefined
+      ? [{ id: signup._id, why }]
+      : []
   })
   if (failed.length > 0) {
     notSent(
-      failed.map((signup) => signup._id),
-      sent.map((r) => (r.status === 'rejected' ? r.reason : r.value?.error)),
+      failed.map((f) => f.id),
+      failed.map((f) => f.why),
     )
   }
 }

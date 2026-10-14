@@ -422,20 +422,23 @@ describe('admin.updateCapacity', () => {
     expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(1)
   })
 
-  it('a failed email is logged with the sign-up it was for', async () => {
-    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
-    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1', 'confirmed')])
-    vi.mocked(sendBasicWorkshopConfirmation).mockResolvedValueOnce({
-      error: { message: 'provider down' },
-    } as never)
+  it('a failed email is logged with the sign-up it was for, and only that one', async () => {
+    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
+    ws.getAllWorkshopSignups.mockResolvedValue([
+      row('s-1', 'w-1', 'confirmed'),
+      row('s-2', 'w-1', 'confirmed'),
+    ])
+    vi.mocked(sendBasicWorkshopConfirmation)
+      .mockResolvedValueOnce({ data: { emailId: 'e-1' } } as never)
+      .mockResolvedValueOnce({ error: { message: 'provider down' } } as never)
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await admin().updateCapacity({ workshopId: 'w-1', capacity: 5 })
 
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('promotion emails not sent'),
-      ['s-1'],
-      expect.anything(),
+      ['s-2'],
+      [{ message: 'provider down' }],
     )
   })
 
