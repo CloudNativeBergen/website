@@ -88,29 +88,69 @@ vi.mock('@/lib/sanity/client', async () => {
         }) as typeof patch.commit
         return patch
       },
+      // A real `@sanity/client` transaction, serialised and applied by
+      // `@sanity/mutator` as one write: all of it or none of it. On top, what
+      // the mutator does not do and Sanity does (#1344): a `create` of a
+      // stored id and a patch `ifRevisionID` another revision are refused
+      // with a 409, and every write gives what it touched a new `_rev`.
       transaction: () => {
-        const queued: Record<string, unknown>[] = []
-        return {
-          create(doc: Record<string, unknown>) {
-            queued.push(doc)
-            return this
-          },
-          async commit() {
-            const documentIds = queued.map((doc) => {
-              h.created += 1
-              const _id = `signup-new-${h.created}`
+        const tx = client.transaction()
+        tx.commit = (async () => {
+          const next = structuredClone(h.dataset) as Doc[]
+          const written: string[] = []
+          const conflict = (why: string) =>
+            Object.assign(new Error(`409: ${why}`), { statusCode: 409 })
+          for (const mutation of tx.serialize() as Record<
+            string,
+            Record<string, unknown>
+          >[]) {
+            h.created += 1
+            const rev = `rev-${h.created}`
+            if (mutation.create) {
+              const _id =
+                (mutation.create._id as string) ?? `signup-new-${h.created}`
+              if (next.some((d) => d._id === _id)) throw conflict(_id)
               // One minute apart, in the order they were written: the
               // promotion sorts on this.
               const at = new Date(
                 Date.UTC(2026, 8, 1, 12, h.created),
               ).toISOString()
-              h.dataset.push({ ...doc, _id, _createdAt: at, _updatedAt: at })
-              h.writes.push(`create:${_id}`)
-              return _id
-            })
-            return { documentIds }
-          },
-        }
+              next.push({
+                ...(mutation.create as Doc),
+                _id,
+                _rev: rev,
+                _createdAt: at,
+                _updatedAt: at,
+              })
+              written.push(`create:${_id}`)
+              continue
+            }
+            const { id, ifRevisionID } = mutation.patch as {
+              id: string
+              ifRevisionID?: string
+            }
+            const index = next.findIndex((d) => d._id === id)
+            if (index === -1) throw new Error(`no such document: ${id}`)
+            if (ifRevisionID && next[index]._rev !== ifRevisionID) {
+              throw conflict(id)
+            }
+            next[index] = {
+              ...(new Mutation({ mutations: [mutation] }).apply(
+                next[index],
+              ) as Doc),
+              _rev: rev,
+            }
+            written.push(`patch:${id}`)
+          }
+          h.dataset = next
+          h.writes.push(...written)
+          return {
+            documentIds: written
+              .filter((w) => w.startsWith('create:'))
+              .map((w) => w.slice('create:'.length)),
+          }
+        }) as typeof tx.commit
+        return tx
       },
     },
   }
@@ -172,6 +212,7 @@ const FOREIGN_WORKSHOP = 'ws-foreign'
 const ADA = { id: 'workos-ada', email: 'ada@example.com', name: 'Ada' }
 const BOB = { id: 'workos-bob', email: 'bob@example.com', name: 'Bob' }
 const CY = { id: 'workos-cy', email: 'cy@example.com', name: 'Cy' }
+const DEE = { id: 'workos-dee', email: 'dee@example.com', name: 'Dee' }
 
 const signupInput = {
   experienceLevel: 'beginner' as const,
@@ -235,7 +276,7 @@ beforeEach(() => {
   h.created = 0
   seed(2)
   ticketing.fetchEventTickets.mockResolvedValue(
-    [ADA, BOB, CY].map((user, i) => ({
+    [ADA, BOB, CY, DEE].map((user, i) => ({
       id: i + 1,
       order_id: i + 1,
       category: 'Workshop + Conference (2 days)',
@@ -365,7 +406,9 @@ describe('after an attendee’s cancel', () => {
       _id: again.data._id,
       status: 'confirmed',
     })
-    expect(again.data._id).not.toBe(first)
+    // A NEW document under the same id: a person's sign-up for a workshop has
+    // one id (#1344), and the cancel deleted the first.
+    expect(h.writes.filter((w) => w === `create:${first}`)).toHaveLength(2)
   })
 
   it('a capacity increase confirms and emails the people waiting, not the one who cancelled', async () => {
@@ -435,6 +478,10 @@ describe('an organizer moves a confirmed sign-up to the waitlist', () => {
     await createAdminCaller().workshop.admin.batchCancelSignups({
       signupIds: [ada],
     })
+    // Dee takes the seat Ada left, so the increase below frees exactly one:
+    // the promotion fills the seats that are free (#1344), and one seat is
+    // what makes the order visible.
+    expect(stored(await signUp(DEE))).toMatchObject({ status: 'confirmed' })
     // Newest first in the dataset, so the waitlist comes back as [Cy, Ada]
     // (the read orders by `signedUpAt`, which neither has). Only the
     // promotion's own sort by `_createdAt` can now put Ada ahead of Cy; left in

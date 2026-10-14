@@ -48,11 +48,9 @@ vi.mock('@/lib/workshop/sanity', () => ({
   checkWorkshopCapacity: vi.fn(),
   verifyWorkshopBelongsToConference: vi.fn(),
   getWorkshopSignups: vi.fn(),
-  createWorkshopSignup: vi.fn(),
   deleteWorkshopSignup: vi.fn(),
   moveWorkshopSignupToWaitlist: vi.fn(),
-  confirmWorkshopSignup: vi.fn(),
-  updateWorkshopCapacity: vi.fn(),
+  getWorkshopById: vi.fn(),
   getWorkshopSignupsByWorkshop: vi.fn(),
   getWorkshopStatistics: vi.fn(),
 }))

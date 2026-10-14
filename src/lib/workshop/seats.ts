@@ -65,8 +65,13 @@ interface Seats {
   }[]
 }
 
-export const seatsDocumentId = (workshopId: string) =>
-  `workshopSeats-${workshopId}`
+/**
+ * Within the conference: a workshop moved to another conference starts a new
+ * guard there, instead of finding none (the read is scoped) and colliding
+ * with the old one's id on every attempt.
+ */
+export const seatsDocumentId = (conferenceId: string, workshopId: string) =>
+  `workshopSeats-${conferenceId}-${workshopId}`
 
 /** The id of a person's sign-up for a workshop: the same for every attempt. */
 export const signupDocumentId = (workshopId: string, userWorkOSId: string) =>
@@ -85,12 +90,16 @@ async function readSeats(
   return clientWrite.fetch<Seats | null>(
     groq`*[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId][0]{
       "capacity": coalesce(capacity, 30),
-      "guard": *[_type == "workshopSeats" && _id == $seatsId][0]._rev,
-      "signups": *[_type == "workshopSignup" && workshop._ref == ^._id && status in ["confirmed", "waitlist"]]{
+      "guard": *[_type == "workshopSeats" && _id == $seatsId && conference._ref == $conferenceId][0]._rev,
+      "signups": *[_type == "workshopSignup" && workshop._ref == ^._id && conference._ref == $conferenceId && status in ["confirmed", "waitlist"]]{
         _id, _createdAt, signedUpAt, status, userWorkOSId
       }
     }`,
-    { workshopId, conferenceId, seatsId: seatsDocumentId(workshopId) },
+    {
+      workshopId,
+      conferenceId,
+      seatsId: seatsDocumentId(conferenceId, workshopId),
+    },
   )
 }
 
@@ -103,7 +112,7 @@ function guard(
   workshopId: string,
   conferenceId: string,
 ) {
-  const _id = seatsDocumentId(workshopId)
+  const _id = seatsDocumentId(conferenceId, workshopId)
   if (seats.guard) {
     return tx.patch(_id, {
       ifRevisionID: seats.guard,
@@ -206,12 +215,15 @@ export async function signUpForWorkshop(
     return { done: _id }
   })
   if ('refused' in outcome) return outcome
-  return { signup: await readSignup(outcome.done) }
+  return { signup: await readSignup(outcome.done, conferenceId) }
 }
 
-async function readSignup(id: string): Promise<WorkshopSignupExisting> {
+async function readSignup(
+  id: string,
+  conferenceId: string,
+): Promise<WorkshopSignupExisting> {
   return clientWrite.fetch<WorkshopSignupExisting>(
-    groq`*[_type == "workshopSignup" && _id == $id][0]{
+    groq`*[_type == "workshopSignup" && _id == $id && conference._ref == $conferenceId][0]{
       _id,
       _type,
       userEmail,
@@ -224,7 +236,7 @@ async function readSignup(id: string): Promise<WorkshopSignupExisting> {
       _createdAt,
       _updatedAt
     }`,
-    { id },
+    { id, conferenceId },
   )
 }
 

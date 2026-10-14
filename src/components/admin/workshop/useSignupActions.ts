@@ -100,7 +100,13 @@ export function useSignupActions(onSettled: () => void) {
           onSuccess: ({ results }) => {
             onSettled()
             if (results.failed > 0) return unchanged('confirm', userName)
-            alert(`✅ ${userName} confirmed! Confirmation email sent.`)
+            // Past capacity is the organizer's call (#1344), and is named.
+            const [beyond] = results.beyondCapacity
+            alert(
+              beyond
+                ? `✅ ${userName} confirmed beyond capacity (${beyond.seatsTaken} of ${beyond.capacity} seats). Confirmation email sent.`
+                : `✅ ${userName} confirmed! Confirmation email sent.`,
+            )
           },
           onError: refused('confirm', userName),
         },

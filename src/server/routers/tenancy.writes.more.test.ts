@@ -91,13 +91,14 @@ vi.mock('@/lib/sponsor-crm/activity', () => ({
 // --- workshop ---------------------------------------------------------------
 const ws = vi.hoisted(() => ({
   getAllWorkshopSignups: vi.fn(),
-  confirmWorkshopSignup: vi.fn(),
   moveWorkshopSignupToWaitlist: vi.fn(),
   deleteWorkshopSignup: vi.fn(),
-  updateWorkshopCapacity: vi.fn(),
-  verifyWorkshopBelongsToConference: vi.fn(),
-  checkWorkshopCapacity: vi.fn(),
   getWorkshopSignupsByWorkshop: vi.fn(),
+  // The seat decisions (#1344). Each reads the workshop WITHIN the conference
+  // it is given (`src/lib/workshop/seats.sanity.test.ts`); here, that it is
+  // given the request's.
+  confirmSignups: vi.fn(),
+  changeCapacity: vi.fn(),
 }))
 // The workshop admin surface is additionally gated on the `workshops` feature
 // (#689). That gate is a FEATURE decision and has its own tests; these cases are
@@ -109,13 +110,15 @@ vi.mock('@/lib/features/workshops', () => ({
 vi.mock('@/lib/workshop/sanity', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   getAllWorkshopSignups: ws.getAllWorkshopSignups,
-  confirmWorkshopSignup: ws.confirmWorkshopSignup,
   moveWorkshopSignupToWaitlist: ws.moveWorkshopSignupToWaitlist,
   deleteWorkshopSignup: ws.deleteWorkshopSignup,
-  updateWorkshopCapacity: ws.updateWorkshopCapacity,
-  verifyWorkshopBelongsToConference: ws.verifyWorkshopBelongsToConference,
-  checkWorkshopCapacity: ws.checkWorkshopCapacity,
   getWorkshopSignupsByWorkshop: ws.getWorkshopSignupsByWorkshop,
+  getWorkshopById: vi.fn(),
+}))
+vi.mock('@/lib/workshop/seats', () => ({
+  confirmSignups: ws.confirmSignups,
+  changeCapacity: ws.changeCapacity,
+  signUpForWorkshop: vi.fn(),
 }))
 
 // --- volunteer --------------------------------------------------------------
@@ -219,12 +222,17 @@ beforeEach(() => {
   })
   reg.generateRegistrationToken.mockResolvedValue({ token: 'tok' })
   ws.getAllWorkshopSignups.mockResolvedValue([])
-  ws.confirmWorkshopSignup.mockResolvedValue(undefined)
+  ws.confirmSignups.mockImplementation(
+    async (_w: string, _c: string, ids: string[]) => ({
+      confirmed: ids,
+      seatsTaken: 0,
+      capacity: 100,
+    }),
+  )
   ws.moveWorkshopSignupToWaitlist.mockResolvedValue(undefined)
   ws.deleteWorkshopSignup.mockResolvedValue(undefined)
-  ws.updateWorkshopCapacity.mockResolvedValue({ _id: 'w-1' })
-  ws.verifyWorkshopBelongsToConference.mockResolvedValue(false)
-  ws.checkWorkshopCapacity.mockResolvedValue({ capacity: 10, signups: 0 })
+  // A workshop the seats read does not find WITHIN the conference.
+  ws.changeCapacity.mockResolvedValue({ refused: 'not-found' })
   ws.getWorkshopSignupsByWorkshop.mockResolvedValue([])
   vol.getVolunteerById.mockResolvedValue({
     volunteer: { _id: 'vol-B', name: 'X' },
@@ -288,7 +296,7 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     expect(ws.getAllWorkshopSignups).toHaveBeenCalledWith(
       expect.objectContaining({ conferenceId: CONF_A, signupIds: ['sg-B'] }),
     )
-    expect(ws.confirmWorkshopSignup).not.toHaveBeenCalled()
+    expect(ws.confirmSignups).not.toHaveBeenCalled()
   })
 
   /**
@@ -308,13 +316,15 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     expect(ws.getAllWorkshopSignups).toHaveBeenCalledWith(
       expect.objectContaining({ conferenceId: CONF_A }),
     )
-    expect(ws.confirmWorkshopSignup).not.toHaveBeenCalled()
+    expect(ws.confirmSignups).not.toHaveBeenCalled()
   })
 
   it('batchConfirmSignups asks for a page big enough to hold the whole batch', async () => {
     // A batch larger than the default page size must not silently truncate.
     const ids = Array.from({ length: 60 }, (_, i) => `sg-${i}`)
-    ws.getAllWorkshopSignups.mockResolvedValue(ids.map((_id) => ({ _id })))
+    ws.getAllWorkshopSignups.mockResolvedValue(
+      ids.map((_id) => ({ _id, workshop: { _id: 'w-A' } })),
+    )
     await workshop().admin.batchConfirmSignups({
       signupIds: ids,
       sendEmails: false,
@@ -322,19 +332,24 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     expect(ws.getAllWorkshopSignups).toHaveBeenCalledWith(
       expect.objectContaining({ pageSize: 60 }),
     )
-    expect(ws.confirmWorkshopSignup).toHaveBeenCalledTimes(60)
+    expect(ws.confirmSignups).toHaveBeenCalledWith('w-A', CONF_A, ids)
   })
 
   it('batchConfirmSignups confirms when every id is ours', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([
-      { _id: 'sg-A' },
-      { _id: 'sg-B' },
+      { _id: 'sg-A', workshop: { _id: 'w-A' } },
+      { _id: 'sg-B', workshop: { _id: 'w-A' } },
     ])
-    await workshop().admin.batchConfirmSignups({
-      signupIds: ['sg-A', 'sg-B'],
-      sendEmails: false,
-    })
-    expect(ws.confirmWorkshopSignup).toHaveBeenCalledTimes(2)
+    await expect(
+      workshop().admin.batchConfirmSignups({
+        signupIds: ['sg-A', 'sg-B'],
+        sendEmails: false,
+      }),
+    ).resolves.toMatchObject({ results: { succeeded: 2, failed: 0 } })
+    expect(ws.confirmSignups).toHaveBeenCalledWith('w-A', CONF_A, [
+      'sg-A',
+      'sg-B',
+    ])
   })
 
   it('listSignups scopes the lookup to the request conference', async () => {
@@ -391,13 +406,15 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     await expect(
       workshop().admin.updateCapacity({ workshopId: 'w-B', capacity: 50 }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
-    expect(ws.updateWorkshopCapacity).not.toHaveBeenCalled()
+    expect(ws.changeCapacity).toHaveBeenCalledWith('w-B', CONF_A, 50)
   })
 
   it('updateCapacity still works for a workshop in the conference', async () => {
-    ws.verifyWorkshopBelongsToConference.mockResolvedValue(true)
-    await workshop().admin.updateCapacity({ workshopId: 'w-A', capacity: 50 })
-    expect(ws.updateWorkshopCapacity).toHaveBeenCalledWith('w-A', 50)
+    ws.changeCapacity.mockResolvedValue({ promoted: [] })
+    await expect(
+      workshop().admin.updateCapacity({ workshopId: 'w-A', capacity: 50 }),
+    ).resolves.toMatchObject({ success: true })
+    expect(ws.changeCapacity).toHaveBeenCalledWith('w-A', CONF_A, 50)
   })
 })
 

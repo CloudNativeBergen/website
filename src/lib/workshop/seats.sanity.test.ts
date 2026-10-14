@@ -212,8 +212,9 @@ describe('what a request that cannot take a seat is told', () => {
     for (let i = 0; i < 100; i++) {
       store().beforeNextCommit(() => {
         store().put({
-          _id: 'workshopSeats-talk-k8s',
+          _id: 'workshopSeats-conf-a-talk-k8s',
           _type: 'workshopSeats',
+          conference: ref(CONF),
           _rev: `other-${++rev}`,
         })
       })
@@ -247,12 +248,21 @@ describe('what a request that cannot take a seat is told', () => {
     expect(withStatus('waitlist')).toHaveLength(0)
   })
 
-  it('a workshop of another conference is not found, and nothing is written', async () => {
-    store().reset([workshop({ conference: ref('conf-b') })])
+  it('a workshop of another conference is not found, by any of the three, and nothing is written', async () => {
+    store().reset([
+      workshop({ conference: ref('conf-b') }),
+      { ...signup(1, 'waitlist'), conference: ref('conf-b') },
+    ])
 
     expect(
       await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
     ).toEqual({ refused: 'not-found' })
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-1'])).toEqual({
+      refused: 'not-found',
+    })
+    expect(await changeCapacity(WORKSHOP, CONF, 50)).toEqual({
+      refused: 'not-found',
+    })
     expect(store().commits).toEqual([])
   })
 })

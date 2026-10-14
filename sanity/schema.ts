@@ -35,6 +35,7 @@ import speakerBadge from './schemaTypes/speakerBadge'
 import sponsor from './schemaTypes/sponsor'
 import sponsorActivity from './schemaTypes/sponsorActivity'
 import discountCodeClaim from './schemaTypes/discountCodeClaim'
+import workshopSeats from './schemaTypes/workshopSeats'
 import sponsorEmailTemplate from './schemaTypes/sponsorEmailTemplate'
 import sponsorForConference from './schemaTypes/sponsorForConference'
 import sponsorTier from './schemaTypes/sponsorTier'
@@ -111,6 +112,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     sponsor,
     sponsorActivity,
     discountCodeClaim,
+    workshopSeats,
     sponsorEmailTemplate,
     sponsorForConference,
     sponsorTier,

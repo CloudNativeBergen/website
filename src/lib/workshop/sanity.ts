@@ -2,11 +2,9 @@ import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import type {
   ProposalWithWorkshopData,
-  WorkshopSignupInput,
   WorkshopSignupExisting,
   WorkshopStatistics,
 } from './types'
-import { WorkshopSignupStatus } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
