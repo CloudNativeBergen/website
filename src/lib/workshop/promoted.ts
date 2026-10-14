@@ -158,8 +158,13 @@ export async function deliverPromotionEmails(
     const failed: { id: string; why: unknown }[] = []
     const notOn: string[] = []
     for (const candidate of due) {
-      const workshop =
-        candidate.workshop && workshopById.get(candidate.workshop._ref)
+      // The talk as it is NOW, from the doc endpoint, right before the
+      // claim: a run sends for up to a minute, and a withdrawal in that
+      // minute must not be told of. One read per send. What is left is the
+      // moment between this read and the claim.
+      const workshop = candidate.workshop
+        ? await freshWorkshop(candidate.workshop._ref, workshopById)
+        : undefined
       if (!stillOn(workshop)) {
         // Settled without a send, so it does not take a place in the sweep
         // every hour; named in the log.
@@ -202,6 +207,20 @@ export async function deliverPromotionEmails(
     notSent(signupIds, error)
   }
   return { emailed }
+}
+
+/**
+ * The talk from the document store, as it is now; the first read of the run
+ * (which also proved the id is a talk) when this one fails.
+ */
+async function freshWorkshop(
+  id: string,
+  firstRead: Map<string, StoredWorkshop>,
+): Promise<StoredWorkshop | undefined> {
+  const now = await clientWrite
+    .getDocument<StoredWorkshop>(id)
+    .catch(() => undefined)
+  return now?._type === 'talk' ? now : firstRead.get(id)
 }
 
 /**

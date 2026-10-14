@@ -194,6 +194,32 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
     expect(h.emailPromoted).toHaveBeenCalledWith('conf-A', ['s-1', 's-2'])
   })
 
+  it('an edit that turns a talk back into a confirmed workshop and raises its capacity: the promoted are emailed AFTER the proposal patch has committed (the sender judges the stored talk)', async () => {
+    h.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
+
+    await update({ format: 'workshop_120', status: 'confirmed', capacity: 12 })
+
+    expect(h.updateProposal).toHaveBeenCalledTimes(1)
+    expect(h.emailPromoted).toHaveBeenCalledWith('conf-A', ['s-1', 's-2'])
+    expect(h.updateProposal.mock.invocationCallOrder[0]).toBeLessThan(
+      h.emailPromoted.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('a proposal patch that fails after the capacity write: nothing is sent now (the debts stay owed for the cron)', async () => {
+    h.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
+    h.updateProposal.mockResolvedValue({
+      proposal: null,
+      err: new Error('503'),
+    })
+
+    await expect(update({ capacity: 12 })).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+
+    expect(h.emailPromoted).not.toHaveBeenCalled()
+  })
+
   it('an unchanged capacity takes no guarded write, and is not patched either', async () => {
     await update({ title: 'Kubernetes hands-on', capacity: 10 })
 
@@ -291,5 +317,33 @@ describe('proposal.update by an organizer who speaks at the workshop (#1344)', (
       title: 'Kubernetes hands-on',
     })
     expect(h.updateProposal.mock.calls[0][1]).not.toHaveProperty('capacity')
+  })
+
+  it('emails the promoted only after the proposal patch has committed, as the admin path does', async () => {
+    h.getProposal.mockResolvedValue({
+      proposal: {
+        _id: 'talk-1',
+        status: 'draft',
+        format: 'lightning_10',
+        capacity: 10,
+        conference: { _id: 'conf-A' },
+      },
+      proposalError: null,
+    })
+    h.changeCapacity.mockResolvedValue({ promoted: ['s-1'] })
+
+    await organizer().update({
+      id: 'talk-1',
+      data: {
+        title: 'Kubernetes hands-on',
+        format: 'workshop_120',
+        capacity: 12,
+      },
+    } as never)
+
+    expect(h.emailPromoted).toHaveBeenCalledWith('conf-A', ['s-1'])
+    expect(h.updateProposal.mock.invocationCallOrder[0]).toBeLessThan(
+      h.emailPromoted.mock.invocationCallOrder[0],
+    )
   })
 })

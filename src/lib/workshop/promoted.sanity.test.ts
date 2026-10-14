@@ -188,10 +188,15 @@ describe('a promotion whose emails are owed', () => {
     store().afterNextCommit(() => {
       throw new Error('socket hang up')
     })
-    vi.spyOn(
-      store().clients.clientWrite as { getDocument: () => unknown },
-      'getDocument',
-    ).mockRejectedValueOnce(new Error('503'))
+    // The re-read of the SIGN-UP fails (the talk's own re-read goes through).
+    const client = store().clients.clientWrite as {
+      getDocument: (id: string) => Promise<unknown>
+    }
+    const real = client.getDocument.bind(client)
+    vi.spyOn(client, 'getDocument').mockImplementation(async (id) => {
+      if (id === 'signup-2') throw new Error('503')
+      return real(id)
+    })
 
     await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
 
@@ -637,4 +642,25 @@ describe('the order of a send, and a workshop no longer on', () => {
       expect(await deliverDuePromotionEmails()).toMatchObject({ found: 0 })
     },
   )
+})
+
+describe('a workshop withdrawn while a run is sending', () => {
+  it('between two sends of one run: the second sign-up is not told, and its debt is settled', async () => {
+    email.sendBasicWorkshopConfirmation.mockImplementation(async (req) => {
+      if (req.userEmail === 'person2@example.com') {
+        store().put({ ...store().doc(WORKSHOP)!, status: 'withdrawn' })
+      }
+      return { data: { emailId: 'e' } }
+    })
+
+    await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
+
+    expect(emailed()).toEqual(['person2@example.com'])
+    expect(store().doc('signup-3')).not.toHaveProperty('promotionEmailDue')
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('promotion emails not sent'),
+      ['signup-3'],
+      expect.anything(),
+    )
+  })
 })
