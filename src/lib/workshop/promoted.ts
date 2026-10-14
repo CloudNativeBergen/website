@@ -27,6 +27,7 @@
  * leaves the debt for the next run.
  */
 import { randomUUID } from 'node:crypto'
+import { EMAIL_CONFIG, delay } from '@/lib/email/config'
 import {
   sendBasicWorkshopConfirmation,
   type WorkshopEmailConference,
@@ -48,11 +49,10 @@ interface DueSignup {
 
 /** The conference and the workshops, as the document store has them. */
 type StoredConference = WorkshopEmailConference & { _type: 'conference' }
+/** A talk stores no date or time of its own (the schedule does): title only. */
 interface StoredWorkshop {
   _type: 'talk'
   title?: string
-  date?: string
-  startTime?: string
 }
 
 const notSent = (ids: string[], why: unknown) =>
@@ -107,41 +107,35 @@ export async function deliverPromotionEmails(
       ),
     )
 
-    const claimed = (
-      await Promise.all(due.map((signup) => claim(signup)))
-    ).flatMap((signup) => (signup ? [signup] : []))
-    // Owed, but no longer confirmed (moved back outside the app): settled
-    // by the claim, told nothing.
-    const toEmail = claimed.filter((s) => s.status === 'confirmed')
-
-    const sent = await Promise.allSettled(
-      toEmail.map((signup) => {
-        const workshop =
-          signup.workshop && workshopById.get(signup.workshop._ref)
-        return sendBasicWorkshopConfirmation({
-          userEmail: signup.userEmail,
-          userName: signup.userName,
-          status: 'confirmed',
-          conference,
-          workshopTitle: workshop?.title ?? 'Workshop',
-          workshopDate: workshop?.date,
-          workshopTime: workshop?.startTime,
-        })
-      }),
-    )
-    // A send that fails answers with an `error`; it does not throw. Each one
-    // is logged with the sign-up it was for.
+    // ONE AT A TIME, a pause apart: Resend allows about two requests a
+    // second, and a burst sent at once fails past its retries, after its
+    // claim. Each sign-up is claimed right before its own send, so a run
+    // that stops (a timeout) leaves the ones after it owed, not claimed.
     const failed: { id: string; why: unknown }[] = []
-    toEmail.forEach((signup, i) => {
-      const result = sent[i]
-      const why =
-        result.status === 'rejected' ? result.reason : result.value?.error
-      if (result.status === 'rejected' || why !== undefined) {
-        failed.push({ id: signup._id, why })
-      } else {
-        emailed.push(signup._id)
+    for (const candidate of due) {
+      const signup = await claim(candidate)
+      // Owed, but no longer confirmed (moved back outside the app): settled
+      // by the claim, told nothing.
+      if (!signup || signup.status !== 'confirmed') continue
+      if (emailed.length + failed.length > 0) {
+        await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
       }
-    })
+      const workshop = signup.workshop && workshopById.get(signup.workshop._ref)
+      // A send that fails answers with an `error`; it does not throw. Each
+      // one is logged with the sign-up it was for.
+      const why = await sendBasicWorkshopConfirmation({
+        userEmail: signup.userEmail,
+        userName: signup.userName,
+        status: 'confirmed',
+        conference,
+        workshopTitle: workshop?.title ?? 'Workshop',
+      }).then(
+        (result) => result?.error,
+        (error: unknown) => error ?? new Error('send rejected'),
+      )
+      if (why !== undefined) failed.push({ id: signup._id, why })
+      else emailed.push(signup._id)
+    }
     if (failed.length > 0) {
       notSent(
         failed.map((f) => f.id),

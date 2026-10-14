@@ -502,9 +502,12 @@ export async function confirmSignups(
             ifRevisionID: _rev,
             set: { status: 'confirmed', confirmedAt },
             // A promotion email still owed from before (moved back outside
-            // the app, so `freeSeat` never settled it) is owed no more: the
-            // confirm tells the person, or chose not to (#1357).
-            unset: ['promotionEmailDue'],
+            // the app, so `freeSeat` never settled it) is owed no more when
+            // this confirm reports the sign-up newly confirmed: the confirm
+            // then tells the person, or chose not to. One the guard still
+            // remembers is reported as nothing new, and told nothing by the
+            // confirm, so its email stays owed to the outbox (#1357).
+            ...(remembered.has(_id) ? {} : { unset: ['promotionEmailDue'] }),
           })
         }
       }

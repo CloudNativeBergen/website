@@ -10,8 +10,12 @@ import { deliverDuePromotionEmails } from '@/lib/workshop/promoted'
  * Hourly: an attendee promoted by a request that died hears within the hour.
  */
 
-/** 100 owed emails (`BACKSTOP_LIMIT`), a few reads and a claim each: well within. */
-export const maxDuration = 60
+/**
+ * 100 owed emails (`BACKSTOP_LIMIT`) sent one at a time, half a second apart
+ * (Resend's rate limit), a claim and a send each: about two minutes, well
+ * within, like the sibling crons.
+ */
+export const maxDuration = 300
 
 export async function GET(request: NextRequest) {
   noStore()

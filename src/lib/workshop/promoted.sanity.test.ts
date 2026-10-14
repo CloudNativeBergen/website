@@ -27,9 +27,18 @@ const email = vi.hoisted(() => ({
   >(async () => ({ data: { emailId: 'e-1' } })),
 }))
 vi.mock('@/lib/email/workshop', () => email)
+// The pause between two sends (Resend's rate limit): recorded, not waited.
+const pacing = vi.hoisted(() => ({
+  delay: vi.fn<(ms: number) => Promise<void>>(async () => {}),
+}))
+vi.mock('@/lib/email/config', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  delay: pacing.delay,
+}))
 
 import { deliverDuePromotionEmails, deliverPromotionEmails } from './promoted'
-import { changeCapacity, freeSeat } from './seats'
+import { EMAIL_CONFIG } from '@/lib/email/config'
+import { changeCapacity, confirmSignups, freeSeat } from './seats'
 
 const store = () => h.store!
 const CONF = 'conf-a'
@@ -100,6 +109,7 @@ beforeEach(async () => {
 })
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 describe('a promotion whose emails are owed', () => {
@@ -428,5 +438,77 @@ describe('the hourly backstop (the cron), over every conference', () => {
 
     expect(outcome).toMatchObject({ found: 2 })
     expect(emailed()).not.toContain('person7@example.com')
+  })
+})
+
+describe('a promoted sign-up moved back in Studio, then confirmed by an organizer', () => {
+  const movedBackInStudio = () =>
+    store().put({ ...store().doc('signup-2')!, status: 'waitlist' })
+
+  it('within the guard’s memory (the confirm reports it as not newly confirmed, so the router tells no one): the cron emails it, once', async () => {
+    movedBackInStudio()
+    const outcome = await confirmSignups(WORKSHOP, CONF, ['signup-2'])
+    expect(outcome).toMatchObject({ newlyConfirmed: [] })
+
+    await deliverDuePromotionEmails()
+    await deliverDuePromotionEmails()
+
+    expect(emailed().filter((e) => e === 'person2@example.com')).toHaveLength(1)
+  })
+
+  it('after the guard has forgotten it (the confirm reports it newly confirmed, and the router tells it): the cron sends nothing for it', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-20T09:16:00Z'))
+    movedBackInStudio()
+    const outcome = await confirmSignups(WORKSHOP, CONF, ['signup-2'])
+    expect(outcome).toMatchObject({ newlyConfirmed: ['signup-2'] })
+
+    await deliverDuePromotionEmails()
+
+    expect(emailed()).not.toContain('person2@example.com')
+  })
+})
+
+describe('the pace of the sends (Resend allows about two requests a second)', () => {
+  it('sends one at a time: the next send does not start before the previous one has resolved, with the rate-limit pause between them', async () => {
+    const events: string[] = []
+    let release: () => void = () => {}
+    email.sendBasicWorkshopConfirmation.mockImplementation(async (req) => {
+      events.push(`start ${req.userEmail}`)
+      if (req.userEmail === 'person2@example.com') {
+        await new Promise<void>((r) => (release = r))
+      }
+      events.push(`end ${req.userEmail}`)
+      return { data: { emailId: 'e' } }
+    })
+    const run = deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
+    await new Promise((r) => setTimeout(r, 20))
+    expect(events).toEqual(['start person2@example.com'])
+    release()
+    await run
+
+    expect(events).toEqual([
+      'start person2@example.com',
+      'end person2@example.com',
+      'start person3@example.com',
+      'end person3@example.com',
+    ])
+    expect(pacing.delay).toHaveBeenCalledTimes(1)
+    expect(pacing.delay).toHaveBeenCalledWith(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+  })
+
+  it('claims each sign-up right before its own send: while one is being sent, the ones after it are still owed (a run that stops there loses nothing)', async () => {
+    const dueDuringSend: Record<string, unknown> = {}
+    email.sendBasicWorkshopConfirmation.mockImplementation(async (req) => {
+      if (req.userEmail === 'person2@example.com') {
+        dueDuringSend.signup3 = store().doc('signup-3')?.promotionEmailDue
+      }
+      return { data: { emailId: 'e' } }
+    })
+
+    await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
+
+    expect(dueDuringSend).toEqual({ signup3: true })
+    expect(emailed()).toEqual(['person2@example.com', 'person3@example.com'])
   })
 })
