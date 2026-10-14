@@ -369,6 +369,28 @@ describe('"Move to Confirmed" into a full workshop (#1358)', () => {
     expect(alert).not.toHaveBeenCalled()
   })
 
+  it('a refusal that arrives after the question was dismissed (the list closed) is a toast, not a question for the next list', async () => {
+    let release: (response: Response) => void = () => {}
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>((resolve) => (release = resolve))),
+    )
+    press('confirm')
+    // The request is on its way (tRPC posts after a tick), the list closes.
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'dismiss' }))
+    release(fullAt(30, 30)())
+
+    await screen.findByText('Ada Lovelace was not confirmed')
+    expect(
+      screen.getByText(
+        'Kubernetes 101 is full (30 of 30 seats). Open its waitlist to confirm beyond capacity.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/^full:/)).not.toBeInTheDocument()
+    expect(alert).not.toHaveBeenCalled()
+  })
+
   it('dismissing keeps the sign-up on the waitlist: nothing more is posted', async () => {
     answer = fullAt(30, 30)
     press('confirm')

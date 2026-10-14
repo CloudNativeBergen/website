@@ -1111,13 +1111,20 @@ export const workshopRouter = router({
               busy.push(workshopTitle)
             }
             if (outcome && 'refused' in outcome && outcome.refused === 'full') {
+              // A member confirmed already is confirmed, whatever the
+              // refusal: only the others are to be sent again.
+              confirmed.push(
+                ...group.filter((s) => outcome.confirmed.includes(s._id)),
+              )
               full.push({
                 workshopId,
                 title: workshopTitle,
                 seatsTaken: outcome.seatsTaken,
                 capacity: outcome.capacity,
                 after: outcome.after,
-                signupIds: group.map((signup) => signup._id),
+                signupIds: group
+                  .filter((s) => !outcome.confirmed.includes(s._id))
+                  .map((s) => s._id),
               })
             }
             if (!outcome || 'refused' in outcome) continue

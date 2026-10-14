@@ -323,7 +323,13 @@ describe('admin.batchConfirmSignups', () => {
       async (workshopId: string, _conf: string, ids: string[]) =>
         workshopId === 'w-1'
           ? { confirmed: ids, newlyConfirmed: ids, seatsTaken: 3, capacity: 5 }
-          : { refused: 'full', seatsTaken: 30, capacity: 30, after: 32 },
+          : {
+              refused: 'full',
+              confirmed: [],
+              seatsTaken: 30,
+              capacity: 30,
+              after: 32,
+            },
     )
 
     const result = await admin().batchConfirmSignups({
@@ -351,6 +357,47 @@ describe('admin.batchConfirmSignups', () => {
       'Confirmed 1 signup, 2 failed. Full: Workshop w-2 (30 of 30 seats; confirming 2 goes 2 past capacity).',
     )
     expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(1)
+  })
+
+  it('a refused workshop: a member confirmed already counts as confirmed, not as failed, and is not among the refused ids', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([
+      row('s-1', 'w-2', 'confirmed'),
+      row('s-2', 'w-2'),
+    ])
+    seats.confirmSignups.mockResolvedValue({
+      refused: 'full',
+      confirmed: ['s-1'],
+      seatsTaken: 30,
+      capacity: 30,
+      after: 31,
+    })
+
+    const result = await admin().batchConfirmSignups({
+      signupIds: ['s-1', 's-2'],
+      sendEmails: true,
+    })
+
+    expect(result.results).toEqual({
+      succeeded: 1,
+      failed: 1,
+      total: 2,
+      beyondCapacity: [],
+      full: [
+        {
+          workshopId: 'w-2',
+          title: 'Workshop w-2',
+          seatsTaken: 30,
+          capacity: 30,
+          after: 31,
+          signupIds: ['s-2'],
+        },
+      ],
+    })
+    expect(result.message).toBe(
+      'Confirmed 1 signup, 1 failed. Full: Workshop w-2 (30 of 30 seats; confirming 1 goes 1 past capacity).',
+    )
+    // Confirmed already: no "you are confirmed" email, as for any confirm.
+    expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
   })
 
   it('passes each workshop its own accepted count, and none to a workshop without one', async () => {
@@ -397,6 +444,7 @@ describe('admin.confirmSignup', () => {
     ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
     seats.confirmSignups.mockResolvedValue({
       refused: 'full',
+      confirmed: [],
       seatsTaken: 30,
       capacity: 30,
       after: 31,

@@ -59,7 +59,16 @@ export const Full: Story = {
         'Getting Started with Kubernetes has 30 of 30 seats taken. Confirming Diana Prince goes 1 seat past capacity.',
       ),
     ).toBeVisible()
-    dialog.getByRole('button', { name: 'Confirm beyond capacity' }).click()
+    const confirm = dialog.getByRole('button', {
+      name: 'Confirm beyond capacity',
+    })
+    // The second tap of a double tap, from the row's button that sat where
+    // this one is: ignored, like the move and delete questions' buttons.
+    await expect(confirm).toHaveAttribute('aria-disabled', 'true')
+    confirm.click()
+    await expect(args.onConfirm).not.toHaveBeenCalled()
+    await waitFor(() => expect(confirm).not.toHaveAttribute('aria-disabled'))
+    confirm.click()
     await expect(args.onConfirm).toHaveBeenCalledTimes(1)
   },
 }

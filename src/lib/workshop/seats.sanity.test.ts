@@ -786,6 +786,7 @@ describe("the organizer's confirm", () => {
 
     expect(await confirmSignups(WORKSHOP, CONF, ['signup-4'])).toEqual({
       refused: 'full',
+      confirmed: [],
       seatsTaken: 3,
       capacity: 3,
       after: 4,
@@ -813,7 +814,13 @@ describe("the organizer's confirm", () => {
 
     expect(
       await confirmSignups(WORKSHOP, CONF, ['signup-4'], { acceptSeats: 3 }),
-    ).toEqual({ refused: 'full', seatsTaken: 3, capacity: 3, after: 4 })
+    ).toEqual({
+      refused: 'full',
+      confirmed: [],
+      seatsTaken: 3,
+      capacity: 3,
+      after: 4,
+    })
     expect(store().commits).toEqual([])
   })
 
@@ -828,8 +835,29 @@ describe("the organizer's confirm", () => {
 
     expect(
       await confirmSignups(WORKSHOP, CONF, ['signup-3', 'signup-4']),
-    ).toEqual({ refused: 'full', seatsTaken: 2, capacity: 3, after: 4 })
+    ).toEqual({
+      refused: 'full',
+      confirmed: [],
+      seatsTaken: 2,
+      capacity: 3,
+      after: 4,
+    })
     expect(withStatus('confirmed')).toHaveLength(2)
+    expect(store().commits).toEqual([])
+  })
+
+  it('a batch with one already confirmed and one waiting, into a full workshop: refused, and the refusal names the one that is confirmed', async () => {
+    full()
+
+    expect(
+      await confirmSignups(WORKSHOP, CONF, ['signup-1', 'signup-4']),
+    ).toEqual({
+      refused: 'full',
+      confirmed: ['signup-1'],
+      seatsTaken: 3,
+      capacity: 3,
+      after: 4,
+    })
     expect(store().commits).toEqual([])
   })
 
@@ -910,6 +938,7 @@ describe("the organizer's confirm", () => {
     expect(attendeeStatus()).toBe('confirmed')
     expect(confirm).toEqual({
       refused: 'full',
+      confirmed: [],
       seatsTaken: 2,
       capacity: 2,
       after: 3,
@@ -937,6 +966,7 @@ describe("the organizer's confirm", () => {
 
     expect(confirm).toEqual({
       refused: 'full',
+      confirmed: [],
       seatsTaken: 3,
       capacity: 2,
       after: 4,

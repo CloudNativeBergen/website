@@ -470,6 +470,8 @@ async function current(
  */
 export interface Full {
   refused: 'full'
+  /** Of the sign-ups asked for, those confirmed already: they take no seat. */
+  confirmed: string[]
   seatsTaken: number
   capacity: number
   after: number
@@ -519,6 +521,9 @@ export async function confirmSignups(
       ) {
         return {
           refused: 'full' as const,
+          confirmed: wanted
+            .filter((s) => s.status === 'confirmed')
+            .map((s) => s._id),
           seatsTaken: taken.size,
           capacity: seats.capacity,
           after,

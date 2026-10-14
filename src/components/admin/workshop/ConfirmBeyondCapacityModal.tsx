@@ -22,7 +22,8 @@ const seats = (n: number) => `${n} seat${n === 1 ? '' : 's'}`
  * as the list showed it: an attendee may have taken the last seat while the
  * list was open. "Confirm beyond capacity" accepts exactly the count shown;
  * if a seat changes hands before it lands, the server asks again with the new
- * numbers, and `changed` says so.
+ * numbers, and `changed` says so. `guardSecondTap`: it opens from the row's
+ * "Move to Confirmed", which on a phone sits where its own button appears.
  */
 export function ConfirmBeyondCapacityModal({
   refusal,
@@ -44,6 +45,7 @@ export function ConfirmBeyondCapacityModal({
       cancelButtonText="Keep on waitlist"
       variant="warning"
       isLoading={isLoading}
+      guardSecondTap
     />
   )
 }

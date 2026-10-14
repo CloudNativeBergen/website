@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
 
@@ -63,6 +63,10 @@ export function useSignupActions(onSettled: () => void) {
   // is shown again.
   const sponsorCountsChanged = () => void utils.sponsor.crm.list.invalidate()
   const [full, setFull] = useState<FullRefusal | null>(null)
+  // Which confirm may still ask: `dismissFull` (also the list closing) ends
+  // it, and a refusal that lands after that is told, not asked, so the next
+  // list opened does not show a question about another one.
+  const asking = useRef(0)
 
   const refused =
     (action: keyof typeof TITLES, userName: string) =>
@@ -108,7 +112,8 @@ export function useSignupActions(onSettled: () => void) {
     signupId: string,
     userName: string,
     accepted: FullRefusal | undefined,
-  ) =>
+  ) => {
+    const ask = ++asking.current
     confirm.mutate(
       {
         signupIds: [signupId],
@@ -122,6 +127,14 @@ export function useSignupActions(onSettled: () => void) {
           onSettled()
           // Refused as full (#1358): asked, with the numbers as they are now.
           const [refusal] = results.full
+          if (refusal && ask !== asking.current) {
+            showNotification({
+              type: 'warning',
+              title: `${userName} was not confirmed`,
+              message: `${refusal.title} is full (${refusal.seatsTaken} of ${refusal.capacity} seats). Open its waitlist to confirm beyond capacity.`,
+            })
+            return
+          }
           if (refusal) {
             setFull({
               signupId,
@@ -151,6 +164,7 @@ export function useSignupActions(onSettled: () => void) {
         },
       },
     )
+  }
 
   return {
     moveToWaitlist: (signupId: string, userName: string) =>
@@ -178,7 +192,10 @@ export function useSignupActions(onSettled: () => void) {
       if (!full) return
       confirmOne(full.signupId, full.userName, full)
     },
-    dismissFull: () => setFull(null),
+    dismissFull: () => {
+      asking.current++
+      setFull(null)
+    },
 
     remove: (signupId: string, userName: string) =>
       remove.mutate(
