@@ -2,16 +2,13 @@ import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import type {
   ProposalWithWorkshopData,
-  WorkshopSignupInput,
   WorkshopSignupExisting,
   WorkshopStatistics,
 } from './types'
-import { WorkshopSignupStatus } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
-
-const workshopSignupLocks = new Map<string, Promise<WorkshopSignupExisting>>()
+import { freeSeat } from './seats'
 
 export async function getWorkshopSignups(
   userWorkOSId: string,
@@ -96,110 +93,6 @@ export async function checkWorkshopCapacity(workshopId: string): Promise<{
   }
 }
 
-export async function createWorkshopSignup(
-  signupData: WorkshopSignupInput,
-  /**
-   * Decided by the server, never part of what a client sends: the sponsor
-   * whose early-access link admitted this sign-up (#1346). Only for an early
-   * sign-up.
-   */
-  { earlyAccessSponsorId }: { earlyAccessSponsorId?: string } = {},
-): Promise<WorkshopSignupExisting> {
-  const workshopId = signupData.workshop._ref
-
-  const existingLock = workshopSignupLocks.get(workshopId)
-
-  if (existingLock) {
-    await existingLock
-  }
-
-  const lockPromise = (async () => {
-    try {
-      const existingSignup = await clientWrite.fetch(
-        groq`*[_type == "workshopSignup" && userWorkOSId == $userWorkOSId && workshop._ref == $workshopId && (status == "confirmed" || status == "waitlist")][0]`,
-        { userWorkOSId: signupData.userWorkOSId, workshopId },
-      )
-
-      if (existingSignup) {
-        throw new Error('User is already signed up for this workshop')
-      }
-
-      let signupStatus: 'confirmed' | 'waitlist' = 'confirmed'
-      if (
-        'status' in signupData &&
-        typeof signupData.status === 'string' &&
-        (signupData.status === 'confirmed' || signupData.status === 'waitlist')
-      ) {
-        signupStatus = signupData.status
-      } else {
-        const capacityInfo = await checkWorkshopCapacity(workshopId)
-        if (capacityInfo.available <= 0) {
-          signupStatus = 'waitlist'
-        }
-      }
-
-      const tx = clientWrite.transaction()
-
-      const document = {
-        _type: 'workshopSignup' as const,
-        userWorkOSId: signupData.userWorkOSId,
-        userEmail: signupData.userEmail,
-        userName: signupData.userName,
-        workshop: signupData.workshop,
-        conference: signupData.conference,
-        status: signupStatus,
-        confirmationEmailSent: false,
-        experienceLevel: signupData.experienceLevel,
-        operatingSystem: signupData.operatingSystem,
-        // WEAK IN THE WRITE ITSELF: the schema's `weak` governs Studio only,
-        // and a strong reference would keep the sponsor from being removed
-        // from the conference.
-        ...(earlyAccessSponsorId && {
-          earlyAccessSponsor: {
-            _type: 'reference' as const,
-            _ref: earlyAccessSponsorId,
-            _weak: true,
-          },
-        }),
-      }
-
-      tx.create(document)
-      const result = await tx.commit()
-
-      const createdId = result.documentIds[0]
-
-      const fullSignup = await clientWrite.fetch<WorkshopSignupExisting>(
-        groq`*[_type == "workshopSignup" && _id == $id][0]{
-          _id,
-          _type,
-          userEmail,
-          userName,
-          userWorkOSId,
-          workshop->{_id, _ref, title, date, startTime, endTime, capacity},
-          conference->{_id, _ref, name},
-          status,
-          signedUpAt,
-          _createdAt,
-          _updatedAt
-        }`,
-        { id: createdId },
-      )
-
-      return fullSignup
-    } finally {
-      setTimeout(() => {
-        if (workshopSignupLocks.get(workshopId) === lockPromise) {
-          workshopSignupLocks.delete(workshopId)
-        }
-      }, 100)
-    }
-  })()
-
-  workshopSignupLocks.set(workshopId, lockPromise)
-
-  return lockPromise
-}
-
 export async function verifyWorkshopBelongsToConference(
   workshopId: string,
   conferenceId: string,
@@ -214,26 +107,23 @@ export async function verifyWorkshopBelongsToConference(
 
 /**
  * An organizer's "Move to waitlist" (#1331): the sign-up stays, and the seat it
- * held is free. An attendee's own cancel does not come here; it deletes the
- * sign-up (`deleteWorkshopSignup`), so a waitlist holds only people waiting.
+ * held is free (#1344: see `freeSeat`). An attendee's own cancel does not come
+ * here; it deletes the sign-up (`deleteWorkshopSignup`), so a waitlist holds
+ * only people waiting.
  */
 export async function moveWorkshopSignupToWaitlist(
   signupId: string,
-): Promise<WorkshopSignupExisting> {
-  return clientWrite
-    .patch(signupId)
-    .set({
-      status: 'waitlist',
-    })
-    .commit()
+): Promise<void> {
+  await freeSeat(signupId, 'waitlist')
 }
 
 /**
  * Removes a sign-up: an attendee's cancel, and an organizer's delete. The
  * caller has already established that the sign-up is the request's to remove.
+ * Frees the seat (#1344): see `freeSeat`.
  */
 export async function deleteWorkshopSignup(signupId: string): Promise<void> {
-  await clientWrite.delete(signupId)
+  await freeSeat(signupId, 'delete')
 }
 
 export async function getWorkshopById(
@@ -265,68 +155,6 @@ export async function getWorkshopById(
   return clientWrite.fetch<ProposalWithWorkshopData | null>(query, {
     workshopId,
   })
-}
-
-export async function confirmWorkshopSignup(
-  signupId: string,
-): Promise<WorkshopSignupExisting> {
-  const signup = await clientWrite.fetch<WorkshopSignupExisting>(
-    groq`*[_type == "workshopSignup" && _id == $signupId][0]{
-      _id,
-      _type,
-      userEmail,
-      userName,
-      userWorkOSId,
-      workshop->{
-        _id,
-        title,
-        date,
-        startTime,
-        endTime,
-        capacity
-      },
-      conference->{
-        _id,
-        name
-      },
-      status,
-      signedUpAt,
-      _createdAt,
-      _updatedAt
-    }`,
-    { signupId },
-  )
-
-  if (!signup) {
-    throw new Error('Signup not found')
-  }
-
-  await clientWrite
-    .patch(signupId)
-    .set({
-      status: 'confirmed',
-      confirmedAt: new Date().toISOString(),
-    })
-    .commit()
-
-  return {
-    ...signup,
-    status: 'confirmed' as WorkshopSignupStatus,
-  }
-}
-
-export async function updateWorkshopCapacity(
-  workshopId: string,
-  capacity: number,
-): Promise<ProposalWithWorkshopData> {
-  await clientWrite.patch(workshopId).set({ capacity: capacity }).commit()
-
-  const updatedWorkshop = await getWorkshopById(workshopId)
-  if (!updatedWorkshop) {
-    throw new Error('Workshop not found after update')
-  }
-
-  return updatedWorkshop
 }
 
 export async function getWorkshopSignupsByWorkshop(

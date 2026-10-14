@@ -164,8 +164,11 @@ export default defineType({
       title: 'Workshop Capacity',
       type: 'number',
       description:
-        'Maximum number of participants for workshop sessions (default: 30)',
+        'Maximum number of participants for workshop sessions (default: 30). Once the talk is confirmed, change it on the Workshops admin page instead: it confirms waiting sign-ups into new seats, and no sign-up at the same moment can take a seat on the old count.',
       initialValue: 30,
+      // Sign-ups are taken for confirmed workshops, and every change of their
+      // seats goes through the seats guard (#1344), which a Studio edit cannot.
+      readOnly: ({ document }) => document?.status === Status.confirmed,
       hidden: ({ document }) => {
         const format = document?.format as string | undefined
         const capacity = document?.capacity as number | undefined

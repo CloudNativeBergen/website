@@ -31,16 +31,31 @@ const json = (body: unknown, status = 200) =>
   })
 
 /** A batch procedure's answer: "success" for the batch, with what failed counted. */
-const batch = (succeeded: number, failed: number) => () =>
-  json({
-    result: {
-      data: {
-        success: true,
-        message: 'unused',
-        results: { succeeded, failed, total: succeeded + failed },
+const batch =
+  (
+    succeeded: number,
+    failed: number,
+    beyondCapacity: {
+      workshopTitle: string
+      seatsTaken: number
+      capacity: number
+    }[] = [],
+  ) =>
+  () =>
+    json({
+      result: {
+        data: {
+          success: true,
+          message: 'unused',
+          results: {
+            succeeded,
+            failed,
+            total: succeeded + failed,
+            beyondCapacity,
+          },
+        },
       },
-    },
-  })
+    })
 
 const refusal = (code: string, httpStatus: number, message: string) => () =>
   json(
@@ -222,6 +237,18 @@ describe('"Move to Confirmed"', () => {
       },
     ])
     expect(onSettled).toHaveBeenCalledTimes(1)
+  })
+
+  it('says so when the confirm went beyond capacity (#1344)', async () => {
+    answer = batch(1, 0, [
+      { workshopTitle: 'Kubernetes 101', seatsTaken: 31, capacity: 30 },
+    ])
+    press('confirm')
+
+    await vi.waitFor(() => expect(alert).toHaveBeenCalledTimes(1))
+    expect(alert).toHaveBeenCalledWith(
+      '✅ Ada Lovelace confirmed beyond capacity (31 of 30 seats). Confirmation email sent.',
+    )
   })
 
   it('does not say "confirmed" when the server could not confirm', async () => {

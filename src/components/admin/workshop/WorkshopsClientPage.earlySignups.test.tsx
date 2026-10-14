@@ -174,6 +174,9 @@ const server = {
   boardReads: 0,
   /** The next delete is answered "not found": the attendee had cancelled. */
   deleteRefused: false,
+  /** How the server refuses a manual add or a capacity change (#1344). */
+  refusal: null as
+    null | 'no answer' | { message: string; code: string; status: number },
 }
 
 const ok = (data: unknown) => ({ result: { data } })
@@ -193,7 +196,7 @@ async function answer(procedure: string, input: unknown): Promise<unknown> {
       return ok({
         success: true,
         message: 'unused',
-        results: { succeeded: 1, failed: 0, total: 1 },
+        results: { succeeded: 1, failed: 0, total: 1, beyondCapacity: [] },
       })
     case 'workshop.admin.getAllSignups':
       return ok({ success: true, data: server.general })
@@ -225,6 +228,19 @@ async function answer(procedure: string, input: unknown): Promise<unknown> {
       server.earlyInputs.push(input)
       const { sponsorId = '' } = (input ?? {}) as { sponsorId?: string }
       return ok(server.early[sponsorId] ?? { signups: [], sponsors: [] })
+    }
+    case 'workshop.admin.manualSignup':
+    case 'workshop.admin.updateCapacity': {
+      const refusal = server.refusal!
+      // The connection drops: no answer at all, whatever the server did.
+      if (refusal === 'no answer') throw new TypeError('Failed to fetch')
+      return {
+        error: {
+          message: refusal.message,
+          code: -32000,
+          data: { code: refusal.code, httpStatus: refusal.status },
+        },
+      }
     }
     case 'workshop.admin.deleteSignup': {
       if (server.deleteRefused) {
@@ -280,6 +296,7 @@ beforeEach(() => {
     earlyInputs: [],
     boardReads: 0,
     deleteRefused: false,
+    refusal: null,
   })
   boardOnThePage = 'none'
   vi.stubGlobal('alert', vi.fn())
@@ -956,5 +973,68 @@ describe('the badge in a workshop’s sign-up dialog, from both reads that feed 
       2,
     )
     expect(within(dialog).queryAllByText(/^via /)).toHaveLength(2)
+  })
+})
+
+describe('a manual add or a capacity change the server refuses (#1344)', () => {
+  it('a capacity change: the organizer is shown the server’s reason', async () => {
+    server.refusal = {
+      message:
+        'Many people are signing up for this workshop right now. Nothing was saved. Try again in a moment.',
+      code: 'TOO_MANY_REQUESTS',
+      status: 429,
+    }
+    renderPage()
+    fireEvent.click(await screen.findByTitle('Edit capacity'))
+    fireEvent.change(screen.getByRole('spinbutton'), {
+      target: { value: '40' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Update Capacity' }))
+
+    expect(
+      await screen.findByText(
+        'Many people are signing up for this workshop right now. Nothing was saved. Try again in a moment.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('adding a participant to a full workshop: the organizer is shown “Workshop is full”', async () => {
+    server.refusal = {
+      message: 'Workshop is full',
+      code: 'CONFLICT',
+      status: 409,
+    }
+    renderPage()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Add Participant' }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByPlaceholderText('John Doe'), {
+      target: { value: 'Ada Lovelace' },
+    })
+    fireEvent.change(within(dialog).getByPlaceholderText('john@example.com'), {
+      target: { value: 'ada@example.com' },
+    })
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Add Participant' }),
+    )
+
+    expect(await screen.findByText('Workshop is full')).toBeTruthy()
+  })
+
+  it('no answer at all (the connection dropped): says it may or may not have been saved', async () => {
+    server.refusal = 'no answer'
+    renderPage()
+    fireEvent.click(await screen.findByTitle('Edit capacity'))
+    fireEvent.change(screen.getByRole('spinbutton'), {
+      target: { value: '40' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Update Capacity' }))
+
+    expect(
+      await screen.findByText(
+        'The capacity may or may not have been changed. Check the workshop before trying again.',
+      ),
+    ).toBeTruthy()
   })
 })

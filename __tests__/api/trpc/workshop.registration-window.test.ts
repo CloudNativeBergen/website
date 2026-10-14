@@ -183,19 +183,28 @@ vi.mock('@/lib/workshop/sanity', async (importActual) => ({
     signups: 0,
   })),
   verifyWorkshopBelongsToConference: vi.fn(async () => true),
-  createWorkshopSignup: vi.fn(async (data) => ({
-    _id: 'signup-1',
-    _type: 'workshopSignup',
-    status: data.status ?? 'confirmed',
-    userEmail: data.userEmail,
-    workshop: { _ref: data.workshop._ref, title: 'Kubernetes 101' },
-    conference: { _ref: data.conference._ref },
+}))
+
+// The seat decision (#1344) is proven on stored documents in
+// `src/lib/workshop/seats.sanity.test.ts`; here only what the router asks.
+vi.mock('@/lib/workshop/seats', () => ({
+  signUpForWorkshop: vi.fn(async (request) => ({
+    signup: {
+      _id: 'signup-1',
+      _type: 'workshopSignup',
+      status: 'confirmed',
+      userEmail: request.userEmail,
+      userName: request.userName,
+      userWorkOSId: request.userWorkOSId,
+      workshop: { _ref: request.workshopId, title: 'Kubernetes 101' },
+      conference: { _ref: request.conferenceId },
+    },
   })),
 }))
 
+import { signUpForWorkshop } from '@/lib/workshop/seats'
 import {
   getWorkshopSignups,
-  createWorkshopSignup,
   checkWorkshopCapacity,
   verifyWorkshopBelongsToConference,
 } from '@/lib/workshop/sanity'
@@ -203,7 +212,7 @@ import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 import { revalidateTag } from 'next/cache'
 
 type LooseMock = ReturnType<typeof vi.fn>
-const createSignupMock = createWorkshopSignup as unknown as LooseMock
+const createSignupMock = signUpForWorkshop as unknown as LooseMock
 const getSignupsMock = getWorkshopSignups as unknown as LooseMock
 const capacityMock = checkWorkshopCapacity as unknown as LooseMock
 const belongsMock = verifyWorkshopBelongsToConference as unknown as LooseMock
@@ -242,7 +251,7 @@ async function attempt(): Promise<
   expect(createSignupMock).toHaveBeenCalledTimes(1)
   const written = createSignupMock.mock.calls[0][0]
   return {
-    written: { workshop: written.workshop._ref, email: written.userEmail },
+    written: { workshop: written.workshopId, email: written.userEmail },
   }
 }
 

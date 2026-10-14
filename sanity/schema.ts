@@ -35,6 +35,7 @@ import speakerBadge from './schemaTypes/speakerBadge'
 import sponsor from './schemaTypes/sponsor'
 import sponsorActivity from './schemaTypes/sponsorActivity'
 import discountCodeClaim from './schemaTypes/discountCodeClaim'
+import workshopSeats from './schemaTypes/workshopSeats'
 import sponsorEmailTemplate from './schemaTypes/sponsorEmailTemplate'
 import sponsorForConference from './schemaTypes/sponsorForConference'
 import sponsorTier from './schemaTypes/sponsorTier'
@@ -152,6 +153,8 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     // A failed gallery upload's file, awaiting the delayed orphan check
     // (#1167). Same rule.
     marketingAssetCleanup,
+    // The seats guard of a workshop (#1344). Same rule.
+    workshopSeats,
   ],
 }
 
@@ -167,4 +170,5 @@ export const STUDIO_HIDDEN_TYPES: readonly string[] = [
   'marketingRateLimit',
   'planTemplateName',
   'marketingAssetCleanup',
+  'workshopSeats',
 ]

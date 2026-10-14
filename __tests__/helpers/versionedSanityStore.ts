@@ -24,6 +24,10 @@
  *    refuses the whole transaction. Every commit gives the documents it
  *    touched a new `_rev`.
  *  - A patch of a document that does not exist refuses the whole transaction.
+ *  - A `create` of an id that is already stored refuses the whole transaction.
+ *    Sanity documents that it fails, not with which status: 409 here, MODELLED.
+ *    `@sanity/mutator` keeps the stored document instead, so this is checked
+ *    here (#1344).
  *  - A delete is refused while another document holds a STRONG reference to
  *    the deleted one (Sanity's rule). `_weak: true` on the stored reference is
  *    what makes it weak.
@@ -88,6 +92,16 @@ export interface VersionedSanityStore {
   readonly events: string[]
   /** Store a document as it is, replacing one with the same id. No commit. */
   put(document: Doc): void
+  /** Delete a document outside any transaction: another writer's delete. */
+  remove(id: string): void
+  /**
+   * Until the next `reset()`, reads see `seen` for this id (`null`: no such
+   * document) instead of what is stored; writes, and `getDocument` (the doc
+   * endpoint), still see what is stored.
+   * Sanity documents this: queries run against a search store that is synced
+   * from the document store outside transactions, and may lag behind it.
+   */
+  readsLagFor(id: string, seen: Doc | null): void
   /** Run once, just before the next commit is applied. */
   beforeNextCommit(hook: () => unknown): void
   /** Run once, right after the next commit has been applied. */
@@ -140,14 +154,25 @@ export function createVersionedSanityStore(): VersionedSanityStore {
   let writeFailure: Error | null = null
   let revCounter = 0
 
+  let lagging = new Map<string, Doc | null>()
   const visible = (apiVersion: string, perspective: unknown) =>
-    documents.filter((d) => {
-      if (knowsReleases(apiVersion)) {
-        if (perspective === 'raw') return true
-        return !isVersion(d._id) && !isDraft(d._id)
-      }
-      return !isVersion(d._id)
-    })
+    [
+      ...documents.map((d) =>
+        lagging.has(d._id) ? (lagging.get(d._id) ?? null) : d,
+      ),
+      // Deleted, but still shown by a search store that lags.
+      ...[...lagging.values()].filter(
+        (seen) => seen && !documents.some((d) => d._id === seen._id),
+      ),
+    ]
+      .filter((d): d is Doc => d !== null)
+      .filter((d) => {
+        if (knowsReleases(apiVersion)) {
+          if (perspective === 'raw') return true
+          return !isVersion(d._id) && !isDraft(d._id)
+        }
+        return !isVersion(d._id)
+      })
 
   const fetchAs =
     (client: RecordedRead['client'], apiVersion: string) =>
@@ -195,6 +220,11 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         // A document created without an id is given one, as Sanity does.
         if (!body._id) body._id = `created-${++revCounter}`
         const at = next.findIndex((d) => d._id === body._id)
+        if ('create' in mutation && at !== -1) {
+          throw Object.assign(new Error(`409: ${body._id} already exists`), {
+            statusCode: 409,
+          })
+        }
         const after = new Mutation({ mutations: [mutation] }).apply(
           at === -1 ? null : next[at],
         )
@@ -211,7 +241,13 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         throw new Error(`400: ${id} needs API 2025-02-19 (modelled)`)
       }
       const at = next.findIndex((d) => d._id === id)
-      if (at === -1) throw new Error(`404: no such document: ${id}`)
+      // MODELLED: Sanity documents that a patch of a missing document fails,
+      // not with which status; 404 here.
+      if (at === -1) {
+        throw Object.assign(new Error(`404: no such document: ${id}`), {
+          statusCode: 404,
+        })
+      }
       if (ifRevisionID && next[at]._rev !== ifRevisionID) {
         throw Object.assign(new Error(`409: ${id} revision mismatch`), {
           statusCode: 409,
@@ -239,6 +275,14 @@ export function createVersionedSanityStore(): VersionedSanityStore {
 
   const writer = (apiVersion: string) => ({
     fetch: fetchAs('write', apiVersion),
+    // The doc endpoint reads the document store, past the search store's lag
+    // (Sanity: "the absolute latest possible version of a document").
+    getDocument: async (id: string) =>
+      structuredClone(documents.find((d) => d._id === id)) ?? null,
+    getDocuments: async (ids: string[]) =>
+      ids.map(
+        (id) => structuredClone(documents.find((d) => d._id === id)) ?? null,
+      ),
     transaction: () => {
       const tx = real.transaction()
       tx.commit = (async () => {
@@ -281,6 +325,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       hooks = []
       afterHooks = []
       unpatchable = new Set()
+      lagging = new Map()
       unreadable = null
       readHook = null
       writeFailure = null
@@ -290,6 +335,12 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         ...documents.filter((d) => d._id !== document._id),
         structuredClone(document),
       ]
+    },
+    remove(id) {
+      documents = documents.filter((d) => d._id !== id)
+    },
+    readsLagFor(id, seen) {
+      lagging.set(id, seen && structuredClone(seen))
     },
     doc: (id) => documents.find((d) => d._id === id),
     all: () => documents,

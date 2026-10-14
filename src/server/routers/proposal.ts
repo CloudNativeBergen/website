@@ -72,6 +72,9 @@ import {
   topicIdsOf,
 } from '@/server/proposalSubmission'
 import { clientWrite } from '@/lib/sanity/client'
+import { changeCapacity } from '@/lib/workshop/seats'
+import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
+import { emailPromotedSignups } from '@/lib/workshop/promoted'
 import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
 import {
   createNotifications,
@@ -175,6 +178,70 @@ async function requireTopicsReferenceable(
   const added = ids.filter((id) => !existing.has(id))
   if (added.length === 0) return
   await requireDocumentsInCurrentOrg(added, 'topic')
+}
+
+/**
+ * A WORKSHOP'S CAPACITY IS A SEAT DECISION (#1344). It is written through the
+ * same guard as the Workshops page (`changeCapacity`), never by the plain
+ * proposal patch, so a sign-up at the same moment cannot take a seat on the
+ * old count; the sign-ups it confirms into new seats are told so.
+ */
+async function changeTalkCapacity(
+  talkId: string,
+  capacity: number,
+  /** The edit's own status and format, when it changes them too. */
+  edit: { status?: string; format?: string },
+) {
+  // Through the doc endpoint, where it is current: a read that still shows
+  // the capacity from before a change on the Workshops page would make a
+  // real change look like none. The caller has proved the talk is the org's.
+  const talk = await clientWrite.getDocument<{
+    capacity?: number
+    conference?: { _ref: string }
+  }>(talkId)
+  const stored = talk && {
+    capacity: talk.capacity,
+    conferenceId: talk.conference?._ref,
+  }
+  if (!stored || stored.capacity === capacity) return
+  // The promotions are emailed in the name of the site's conference: a
+  // previous edition's workshop is changed from its own site.
+  if (
+    stored.conferenceId &&
+    stored.conferenceId !== (await resolveConferenceId())
+  ) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message:
+        'This workshop belongs to another edition. Change its capacity on that edition’s site.',
+    })
+  }
+  const outcome = stored.conferenceId
+    ? await changeCapacity(talkId, stored.conferenceId, capacity, {
+        // Waiting sign-ups are given seats, and told so, only while the
+        // workshop is on: judged with the talk as it is on each try, and
+        // what this edit changes of it (a withdrawn one, or one made another
+        // format, keeps them waiting).
+        edit: { status: edit.status, format: edit.format },
+      })
+    : ({ refused: 'not-found' } as const)
+  if ('refused' in outcome) {
+    switch (outcome.refused) {
+      case 'below-seats-taken':
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `Cannot reduce capacity below current signup count (${outcome.seatsTaken})`,
+        })
+      case 'busy':
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: SEATS_BUSY })
+      case 'not-found':
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Proposal not found',
+        })
+    }
+  }
+  await emailPromotedSignups(stored.conferenceId!, outcome.promoted)
 }
 
 /** The topic ids currently on a talk, for the grandfathering set above. */
@@ -988,7 +1055,14 @@ export const proposalRouter = router({
           topicIdsOf(existing.topics),
         )
 
-        const { proposal, err } = await updateProposal(input.id, input.data)
+        // Last before the patch, once nothing else can refuse the edit. An
+        // organizer who speaks at the workshop gets here past the
+        // after-acceptance rule above.
+        const { capacity, ...data } = input.data
+        if (capacity !== undefined) {
+          await changeTalkCapacity(input.id, capacity, data)
+        }
+        const { proposal, err } = await updateProposal(input.id, data)
 
         if (err) {
           throw new TRPCError({
@@ -1871,7 +1945,7 @@ export const proposalRouter = router({
           // the org-scoped `getProposal`; this admin sibling was not gated at
           // all, so it could rewrite any document in the shared dataset.
           await requireDocumentInCurrentOrg(input.id, 'talk')
-          const { speakers, ...proposalData } = input.data
+          const { speakers, capacity, ...proposalData } = input.data
 
           // If speakers are being updated, convert to references
           let updateData = proposalData
@@ -1908,6 +1982,11 @@ export const proposalRouter = router({
             )
           }
 
+          // Last before the patch, once nothing else can refuse the edit: a
+          // capacity change is written, and its promotions emailed, at once.
+          if (capacity !== undefined) {
+            await changeTalkCapacity(input.id, capacity, proposalData)
+          }
           const { proposal, err } = await updateProposal(input.id, updateData)
 
           if (err) {

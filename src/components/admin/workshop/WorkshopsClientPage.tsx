@@ -223,6 +223,26 @@ export function WorkshopsClientPage({
         workshopTitle: '',
       })
     },
+    // Refused (full, already signed up, busy: #1344): the dialog stays open
+    // with what was typed, and the reason is shown.
+    onError: (error) => {
+      readSignupsAgain()
+      showNotification(
+        // No answer came back: the server may have added them all the same.
+        error.data
+          ? {
+              type: 'error',
+              title: 'Participant not added',
+              message: error.message,
+            }
+          : {
+              type: 'warning',
+              title: 'No answer from the server',
+              message:
+                'The participant may or may not have been added. Check the list before trying again.',
+            },
+      )
+    },
   })
 
   const updateCapacityMutation = api.workshop.admin.updateCapacity.useMutation({
@@ -243,6 +263,23 @@ export function WorkshopsClientPage({
         currentCapacity: 0,
         currentSignups: 0,
       })
+    },
+    onError: (error) => {
+      readSignupsAgain()
+      showNotification(
+        error.data
+          ? {
+              type: 'error',
+              title: 'Capacity not changed',
+              message: error.message,
+            }
+          : {
+              type: 'warning',
+              title: 'No answer from the server',
+              message:
+                'The capacity may or may not have been changed. Check the workshop before trying again.',
+            },
+      )
     },
   })
 
