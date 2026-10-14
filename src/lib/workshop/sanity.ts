@@ -8,6 +8,7 @@ import type {
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
+import { freeSeat } from './seats'
 
 export async function getWorkshopSignups(
   userWorkOSId: string,
@@ -109,23 +110,20 @@ export async function verifyWorkshopBelongsToConference(
  * held is free. An attendee's own cancel does not come here; it deletes the
  * sign-up (`deleteWorkshopSignup`), so a waitlist holds only people waiting.
  */
+/** Frees the seat (#1344): see `freeSeat`. */
 export async function moveWorkshopSignupToWaitlist(
   signupId: string,
-): Promise<WorkshopSignupExisting> {
-  return clientWrite
-    .patch(signupId)
-    .set({
-      status: 'waitlist',
-    })
-    .commit()
+): Promise<void> {
+  await freeSeat(signupId, 'waitlist')
 }
 
 /**
  * Removes a sign-up: an attendee's cancel, and an organizer's delete. The
  * caller has already established that the sign-up is the request's to remove.
+ * Frees the seat (#1344): see `freeSeat`.
  */
 export async function deleteWorkshopSignup(signupId: string): Promise<void> {
-  await clientWrite.delete(signupId)
+  await freeSeat(signupId, 'delete')
 }
 
 export async function getWorkshopById(

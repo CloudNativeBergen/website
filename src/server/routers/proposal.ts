@@ -197,6 +197,18 @@ async function changeTalkCapacity(talkId: string, capacity: number) {
     { id: talkId },
   )
   if (!stored || stored.capacity === capacity) return
+  // The promotions are emailed in the name of the site's conference: a
+  // previous edition's workshop is changed from its own site.
+  if (
+    stored.conferenceId &&
+    stored.conferenceId !== (await resolveConferenceId())
+  ) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message:
+        'This workshop belongs to another edition. Change its capacity on that edition’s site.',
+    })
+  }
   const outcome = stored.conferenceId
     ? await changeCapacity(talkId, stored.conferenceId, capacity)
     : ({ refused: 'not-found' } as const)
@@ -1030,7 +1042,14 @@ export const proposalRouter = router({
           topicIdsOf(existing.topics),
         )
 
-        const { proposal, err } = await updateProposal(input.id, input.data)
+        // Last before the patch, once nothing else can refuse the edit. An
+        // organizer who speaks at the workshop gets here past the
+        // after-acceptance rule above.
+        const { capacity, ...data } = input.data
+        if (capacity !== undefined) {
+          await changeTalkCapacity(input.id, capacity)
+        }
+        const { proposal, err } = await updateProposal(input.id, data)
 
         if (err) {
           throw new TRPCError({
@@ -1914,9 +1933,6 @@ export const proposalRouter = router({
           // all, so it could rewrite any document in the shared dataset.
           await requireDocumentInCurrentOrg(input.id, 'talk')
           const { speakers, capacity, ...proposalData } = input.data
-          if (capacity !== undefined) {
-            await changeTalkCapacity(input.id, capacity)
-          }
 
           // If speakers are being updated, convert to references
           let updateData = proposalData
@@ -1953,6 +1969,11 @@ export const proposalRouter = router({
             )
           }
 
+          // Last before the patch, once nothing else can refuse the edit: a
+          // capacity change is written, and its promotions emailed, at once.
+          if (capacity !== undefined) {
+            await changeTalkCapacity(input.id, capacity)
+          }
           const { proposal, err } = await updateProposal(input.id, updateData)
 
           if (err) {

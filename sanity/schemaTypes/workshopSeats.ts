@@ -5,8 +5,10 @@ import { defineField, defineType } from 'sanity'
  * conference, with a deterministic id
  * (`workshopSeats-<conference id>-<workshop id>`). Every write that confirms
  * a sign-up or changes the capacity patches it `ifRevisionID` the revision it
- * read, so two of them cannot both commit on the same count. It holds no
- * seats itself; the sign-ups do. See `src/lib/workshop/seats.ts`.
+ * read, so two of them cannot both commit on the same count. The sign-ups
+ * hold the seats; the guard remembers only the last couple of minutes of what
+ * it let through, for reads that do not show it yet. See
+ * `src/lib/workshop/seats.ts`.
  */
 export default defineType({
   name: 'workshopSeats',
@@ -28,6 +30,33 @@ export default defineType({
       type: 'reference',
       to: [{ type: 'conference' }],
       weak: true,
+    }),
+    defineField({
+      name: 'recent',
+      title: 'Seats taken a moment ago',
+      description:
+        'Counted beside the sign-ups for a couple of minutes, while a read may not show them yet.',
+      type: 'array',
+      of: [
+        {
+          type: 'object',
+          name: 'recentSeat',
+          fields: [
+            { name: 'signup', title: 'Sign-up id', type: 'string' },
+            { name: 'at', title: 'At', type: 'datetime' },
+          ],
+        },
+      ],
+    }),
+    defineField({
+      name: 'capacity',
+      title: 'Capacity set a moment ago',
+      type: 'number',
+    }),
+    defineField({
+      name: 'capacitySetAt',
+      title: 'Capacity set at',
+      type: 'datetime',
     }),
     defineField({
       name: 'writes',

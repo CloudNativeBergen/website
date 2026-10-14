@@ -229,6 +229,32 @@ describe('admin.batchConfirmSignups', () => {
     expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(1)
   })
 
+  it('a workshop whose write failed for another reason is named too, not counted silently', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([
+      row('s-1', 'w-1'),
+      row('s-2', 'w-2'),
+    ])
+    seats.confirmSignups.mockImplementation(async (workshopId: string) => {
+      if (workshopId === 'w-2') throw new Error('503: dataset unavailable')
+      return {
+        confirmed: ['s-1'],
+        newlyConfirmed: ['s-1'],
+        seatsTaken: 1,
+        capacity: 5,
+      }
+    })
+
+    const result = await admin().batchConfirmSignups({
+      signupIds: ['s-1', 's-2'],
+      sendEmails: false,
+    })
+
+    expect(result.results).toMatchObject({ succeeded: 1, failed: 1 })
+    expect(result.message).toBe(
+      'Confirmed 1 signup, 1 failed. Something went wrong for Workshop w-2, so no one was confirmed there. Try again.',
+    )
+  })
+
   it('names no workshop beyond capacity, and emails no one, where it confirmed no one new', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
     seats.confirmSignups.mockResolvedValue({

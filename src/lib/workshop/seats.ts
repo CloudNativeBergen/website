@@ -7,8 +7,17 @@
  * decides, and commits its change in ONE transaction together with a patch of
  * the guard `ifRevisionID` that revision (or the guard's `create`, when there
  * is none yet). Two such writes can never both commit on what one of them
- * read: the second is refused with a 409 by Sanity, reads again and decides
+ * read: Sanity refuses the second (a 409), which reads again and decides
  * again. Nothing is held in the memory of a server process.
+ *
+ * A READ MAY LAG. Sanity runs queries against a search store that is synced
+ * from the document store outside transactions, so a read can show the
+ * guard's newest revision without the seat taken in that same write, or a
+ * capacity from before its change. So the guard itself remembers, for
+ * `RECENT_MS`, the seats it let through and a capacity it set, and the
+ * decision counts those beside what the read shows. A decision then rests on
+ * the guard's own content, which `ifRevisionID` checks: a guard read stale is
+ * refused at the commit.
  *
  * A sign-up that is WAITLISTED does not go through the guard. Deciding
  * "waitlist" on a count that is out of date can only leave a seat empty, never
@@ -22,9 +31,11 @@
  *
  * NOT GUARDED, by design: a write that frees a seat (cancel, delete, move to
  * the waitlist). Racing one can only make a sign-up wait for a seat that has
- * just come free.
+ * just come free. It does make the guard forget the seat (`freeSeat`), so the
+ * seat is free to the next sign-up at once, not after `RECENT_MS`; a sign-up
+ * deleted in Studio is counted until then.
  */
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import type { WorkshopSignupExisting, WorkshopSignupInput } from './types'
@@ -36,6 +47,14 @@ import type { WorkshopSignupExisting, WorkshopSignupInput } from './types'
  * of trying before the person is asked to try again.
  */
 const MAX_ATTEMPTS = 25
+
+/**
+ * How long the guard counts a seat it let through, or holds a capacity it
+ * set, beside the read. Far longer than Sanity's search store takes to show a
+ * write ("generally less than 1 second"). The price: a seat freed by a cancel
+ * in this window is still counted until it ends.
+ */
+const RECENT_MS = 2 * 60_000
 
 export interface SignUpRequest extends Pick<
   WorkshopSignupInput,
@@ -62,10 +81,23 @@ export type SignUpOutcome =
       refused: 'not-found' | 'already-signed-up' | 'full' | 'busy' | 'removed'
     }
 
+/** As the read projects it: a field the document lacks is `null`. */
+interface Guard {
+  _rev: string
+  /** The seats it let through, with when. */
+  recent: { _key: string; signup: string; at: string }[] | null
+  /** The capacity it last set, with when. */
+  capacity: number | null
+  capacitySetAt: string | null
+}
+
 interface Seats {
+  /** The workshop's capacity, as the read shows it. */
   capacity: number
-  /** The guard's revision, or `null` when no seat was ever taken through it. */
-  guard: string | null
+  /** `null` when no seat was ever taken through it. */
+  guard: Guard | null
+  /** When the read was made. */
+  now: number
   signups: {
     _id: string
     _createdAt: string
@@ -98,18 +130,42 @@ export const signupDocumentId = (
     .digest('hex')
     .slice(0, 32)}`
 
-const confirmedIn = (seats: Seats) =>
-  seats.signups.filter((s) => s.status === 'confirmed').length
+const isRecent = (seats: Seats, at: string | null | undefined) =>
+  typeof at === 'string' && seats.now - Date.parse(at) < RECENT_MS
+
+/** The guard's own memory of the seats it let through a moment ago. */
+const recentIn = (seats: Seats) =>
+  (seats.guard?.recent ?? []).filter((r) => isRecent(seats, r.at))
+
+/**
+ * The sign-ups that hold a seat: confirmed in the read, and those the guard
+ * let through a moment ago, which the read may not show yet.
+ */
+const takenIn = (seats: Seats) =>
+  new Set([
+    ...seats.signups.filter((s) => s.status === 'confirmed').map((s) => s._id),
+    ...recentIn(seats).map((r) => r.signup),
+  ])
+
+/** The lower of the read's capacity and one the guard set a moment ago. */
+function capacityOf(seats: Seats) {
+  const set = seats.guard?.capacity
+  return typeof set === 'number' && isRecent(seats, seats.guard?.capacitySetAt)
+    ? Math.min(seats.capacity, set)
+    : seats.capacity
+}
 
 async function readSeats(
   workshopId: string,
   conferenceId: string,
 ): Promise<Seats | null> {
-  return clientWrite.fetch<Seats | null>(
+  const seats = await clientWrite.fetch<Omit<Seats, 'now'> | null>(
     groq`*[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId][0]{
       "capacity": coalesce(capacity, 30),
-      "guard": *[_type == "workshopSeats" && _id == $seatsId && conference._ref == $conferenceId][0]._rev,
-      "signups": *[_type == "workshopSignup" && workshop._ref == ^._id && conference._ref == $conferenceId && status in ["confirmed", "waitlist"]]{
+      "guard": *[_type == "workshopSeats" && _id == $seatsId && conference._ref == $conferenceId][0]{
+        _rev, recent, capacity, capacitySetAt
+      },
+      "signups": *[_type == "workshopSignup" && workshop._ref == ^._id && conference._ref == $conferenceId && status in ["confirmed", "waitlist"] && !(_id in path("drafts.**"))]{
         _id, _createdAt, signedUpAt, status, userWorkOSId
       }
     }`,
@@ -119,23 +175,41 @@ async function readSeats(
       seatsId: seatsDocumentId(conferenceId, workshopId),
     },
   )
+  return seats && { ...seats, now: Date.now() }
 }
 
 type Transaction = ReturnType<typeof clientWrite.transaction>
 
-/** Makes `tx` commit only if no seat changed hands since `seats` was read. */
+/**
+ * Makes `tx` commit only if no seat changed hands since `seats` was read, and
+ * has the guard remember the seats `took` and a `capacity` it sets.
+ */
 function guard(
   tx: Transaction,
   seats: Seats,
   workshopId: string,
   conferenceId: string,
+  { took, capacity }: { took: string[]; capacity?: number },
 ) {
   const _id = seatsDocumentId(conferenceId, workshopId)
+  const at = new Date(seats.now).toISOString()
+  const remembered = {
+    recent: [
+      ...recentIn(seats),
+      ...took.map((signup) => ({
+        _key: randomUUID().slice(0, 12),
+        signup,
+        at,
+      })),
+    ],
+    ...(capacity !== undefined && { capacity, capacitySetAt: at }),
+  }
   if (seats.guard) {
-    // `inc` makes the patch a real change, so it gives the guard a new
-    // revision: the one every other reader of this revision is refused on.
+    // Every commit that changes the guard gives it a new revision: the one
+    // every other reader of this revision is refused on.
     return tx.patch(_id, {
-      ifRevisionID: seats.guard,
+      ifRevisionID: seats.guard._rev,
+      set: remembered,
       setIfMissing: { writes: 0 },
       inc: { writes: 1 },
     })
@@ -148,6 +222,7 @@ function guard(
     workshop: { _type: 'reference', _ref: workshopId, _weak: true },
     conference: { _type: 'reference', _ref: conferenceId, _weak: true },
     writes: 1,
+    ...remembered,
   })
 }
 
@@ -179,10 +254,15 @@ async function decideAndCommit<F extends { refused: string }, D>(
   conferenceId: string,
   decide: (seats: Seats, tx: Transaction) => F | { done: D },
 ): Promise<F | { refused: 'not-found' | 'busy' } | { done: D }> {
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  // Each round lets one seat through, so one more round per seat left.
+  let attempts = MAX_ATTEMPTS
+  for (let attempt = 0; attempt < attempts; attempt++) {
     if (attempt > 0) await backOff(attempt)
     const seats = await readSeats(workshopId, conferenceId)
     if (!seats) return { refused: 'not-found' }
+    if (attempt === 0) {
+      attempts += Math.max(0, capacityOf(seats) - takenIn(seats).size)
+    }
     const tx = clientWrite.transaction()
     const decision = decide(seats, tx)
     if ('refused' in decision || tx.serialize().length === 0) return decision
@@ -213,9 +293,9 @@ export async function signUpForWorkshop(
     if (seats.signups.some((s) => s.userWorkOSId === request.userWorkOSId)) {
       return { refused: 'already-signed-up' as const }
     }
-    const free = confirmedIn(seats) < seats.capacity
+    const free = takenIn(seats).size < capacityOf(seats)
     if (!free && whenFull === 'refuse') return { refused: 'full' as const }
-    if (free) guard(tx, seats, workshopId, conferenceId)
+    if (free) guard(tx, seats, workshopId, conferenceId, { took: [_id] })
     tx.create({
       _id,
       _type: 'workshopSignup',
@@ -244,13 +324,21 @@ export async function signUpForWorkshop(
   if ('refused' in outcome) {
     // Every attempt lost on the sign-up's own id, which the read did not find
     // among this workshop's sign-ups (edited in Studio): it is there.
-    if (outcome.refused === 'busy' && (await readSignup(_id, conferenceId))) {
+    if (outcome.refused === 'busy' && (await isStored(_id))) {
       return { refused: 'already-signed-up' }
     }
     return outcome
   }
   const signup = await readSignup(outcome.done, conferenceId)
   return signup ? { signup } : { refused: 'removed' }
+}
+
+async function isStored(id: string): Promise<boolean> {
+  return clientWrite.fetch<boolean>(
+    // groq-global-scoped: the id is derived from this conference's own id (`signupDocumentId`), so a document under it is this conference's, whatever its references say.
+    groq`defined(*[_id == $id][0]._id)`,
+    { id },
+  )
 }
 
 async function readSignup(
@@ -302,10 +390,16 @@ export async function confirmSignups(
     workshopId,
     conferenceId,
     (seats, tx) => {
+      const taken = takenIn(seats)
       const wanted = seats.signups.filter((s) => signupIds.includes(s._id))
-      const waiting = wanted.filter((s) => s.status === 'waitlist')
+      // Shown waiting, but the guard let it through a moment ago: confirmed.
+      const waiting = wanted.filter(
+        (s) => s.status === 'waitlist' && !taken.has(s._id),
+      )
       if (waiting.length > 0) {
-        guard(tx, seats, workshopId, conferenceId)
+        guard(tx, seats, workshopId, conferenceId, {
+          took: waiting.map((s) => s._id),
+        })
         const confirmedAt = new Date().toISOString()
         for (const { _id } of waiting) {
           tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
@@ -315,8 +409,8 @@ export async function confirmSignups(
         done: {
           confirmed: wanted.map((s) => s._id),
           newlyConfirmed: waiting.map((s) => s._id),
-          seatsTaken: confirmedIn(seats) + waiting.length,
-          capacity: seats.capacity,
+          seatsTaken: taken.size + waiting.length,
+          capacity: capacityOf(seats),
         },
       }
     },
@@ -342,17 +436,21 @@ export async function changeCapacity(
     { refused: 'below-seats-taken'; seatsTaken: number },
     string[]
   >(workshopId, conferenceId, (seats, tx) => {
-    const seatsTaken = confirmedIn(seats)
+    const taken = takenIn(seats)
+    const seatsTaken = taken.size
     if (capacity < seatsTaken) {
       return { refused: 'below-seats-taken' as const, seatsTaken }
     }
     const since = (s: Seats['signups'][number]) =>
       new Date(s.signedUpAt || s._createdAt).getTime()
     const promoted = seats.signups
-      .filter((s) => s.status === 'waitlist')
+      .filter((s) => s.status === 'waitlist' && !taken.has(s._id))
       .sort((a, b) => since(a) - since(b))
       .slice(0, capacity - seatsTaken)
-    guard(tx, seats, workshopId, conferenceId)
+    guard(tx, seats, workshopId, conferenceId, {
+      took: promoted.map((s) => s._id),
+      capacity,
+    })
     tx.patch(workshopId, { set: { capacity } })
     const confirmedAt = new Date().toISOString()
     for (const { _id } of promoted) {
@@ -361,4 +459,45 @@ export async function changeCapacity(
     return { done: promoted.map((s) => s._id) }
   })
   return 'refused' in outcome ? outcome : { promoted: outcome.done }
+}
+
+/**
+ * Frees a sign-up's seat: deletes it (an attendee's cancel, an organizer's
+ * delete) or moves it to the waitlist. In the same write, the guard forgets
+ * that it let the sign-up through, so the next sign-up can have the seat at
+ * once. The caller has established that the sign-up is the request's.
+ */
+export async function freeSeat(
+  signupId: string,
+  how: 'delete' | 'waitlist',
+): Promise<void> {
+  const of = await clientWrite.fetch<{
+    workshop: string
+    conference: string
+  } | null>(
+    // groq-global-scoped: keyed by a sign-up id the caller has ALREADY proved is this conference's.
+    groq`*[_type == "workshopSignup" && _id == $id][0]{"workshop": workshop._ref, "conference": conference._ref}`,
+    { id: signupId },
+  )
+  const guard =
+    of &&
+    (await clientWrite.fetch<{ _id: string; keys: string[] | null } | null>(
+      groq`*[_type == "workshopSeats" && _id == $guardId && conference._ref == $conferenceId][0]{
+        _id, "keys": recent[signup == $id]._key
+      }`,
+      {
+        id: signupId,
+        guardId: seatsDocumentId(of.conference, of.workshop),
+        conferenceId: of.conference,
+      },
+    ))
+  const tx = clientWrite.transaction()
+  if (how === 'delete') tx.delete(signupId)
+  else tx.patch(signupId, { set: { status: 'waitlist' } })
+  if (guard?.keys?.length) {
+    tx.patch(guard._id, {
+      unset: guard.keys.map((key) => `recent[_key=="${key}"]`),
+    })
+  }
+  await tx.commit()
 }

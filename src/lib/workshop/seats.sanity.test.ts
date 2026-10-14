@@ -7,8 +7,9 @@
  *
  * REAL: the module under test, the query text (`groq-js`) and the writes (the
  * real client's serialized mutations applied by `@sanity/mutator`).
- * MODELLED: `ifRevisionID` and `create` of a stored id, both refused with a
- * 409 as Sanity does; see `__tests__/helpers/versionedSanityStore.ts`.
+ * MODELLED: the refusal of an `ifRevisionID` mismatch (a 409, as Sanity
+ * documents it) and of a `create` of a stored id (documented to fail, not with
+ * which status; a 409 here). See `__tests__/helpers/versionedSanityStore.ts`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
@@ -27,6 +28,7 @@ vi.mock('@/lib/sanity/client', async () => {
 import {
   changeCapacity,
   confirmSignups,
+  freeSeat,
   signUpForWorkshop,
   signupDocumentId,
 } from './seats'
@@ -84,6 +86,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 describe('sign-ups arriving together', () => {
@@ -287,7 +290,157 @@ describe('what a request that cannot take a seat is told', () => {
   })
 })
 
+describe('a read that lags behind the writes (Sanity queries a search store that is synced outside transactions)', () => {
+  it('a seat taken a moment ago that the read cannot see yet is still counted: the next one waits', async () => {
+    store().reset([workshop({ capacity: 2 }), signup(1, 'confirmed')])
+    const first = await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' })
+    expect(first).toMatchObject({ signup: { status: 'confirmed' } })
+    store().readsLagFor((first as { signup: { _id: string } }).signup._id, null)
+
+    const second = await signUpForWorkshop(attendee(2), {
+      whenFull: 'waitlist',
+    })
+
+    expect(second).toMatchObject({ signup: { status: 'waitlist' } })
+    expect(withStatus('confirmed')).toHaveLength(2)
+  })
+
+  it('a capacity lowered a moment ago that the read cannot see yet still holds', async () => {
+    store().reset([workshop({ capacity: 3 }), signup(1, 'confirmed')])
+    await changeCapacity(WORKSHOP, CONF, 1)
+    store().readsLagFor(WORKSHOP, workshop({ capacity: 3 }))
+
+    await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' })
+
+    expect(withStatus('confirmed')).toHaveLength(1)
+  })
+
+  it('the guard counts a seat for a few minutes only: a seat freed by a cancel waits that long, then is taken again', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-20T09:00:00Z'))
+    store().reset([workshop({ capacity: 2 }), signup(1, 'confirmed')])
+    const first = await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' })
+    store().remove((first as { signup: { _id: string } }).signup._id)
+
+    vi.setSystemTime(new Date('2026-10-20T09:00:30Z'))
+    expect(
+      await signUpForWorkshop(attendee(2), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { status: 'waitlist' } })
+
+    vi.setSystemTime(new Date('2026-10-20T09:05:00Z'))
+    expect(
+      await signUpForWorkshop(attendee(3), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { status: 'confirmed' } })
+  })
+})
+
+describe('a read that shows waiting a sign-up the guard confirmed a moment ago', () => {
+  const lagged = () => {
+    store().reset([
+      workshop({ capacity: 2 }),
+      signup(1, 'confirmed'),
+      signup(2, 'waitlist'),
+    ])
+  }
+
+  it('a second confirm does not confirm it again, nor call it beyond capacity', async () => {
+    lagged()
+    await confirmSignups(WORKSHOP, CONF, ['signup-2'])
+    store().readsLagFor('signup-2', signup(2, 'waitlist'))
+
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-2'])).toEqual({
+      confirmed: ['signup-2'],
+      newlyConfirmed: [],
+      seatsTaken: 2,
+      capacity: 2,
+    })
+  })
+
+  it('a capacity change does not promote it again', async () => {
+    lagged()
+    await confirmSignups(WORKSHOP, CONF, ['signup-2'])
+    store().readsLagFor('signup-2', signup(2, 'waitlist'))
+
+    expect(await changeCapacity(WORKSHOP, CONF, 3)).toEqual({ promoted: [] })
+  })
+})
+
+describe('a seat freed through the app is free at once', () => {
+  it.each(['delete', 'waitlist'] as const)(
+    'freed by %s a moment after it was taken: the next one is confirmed',
+    async (how) => {
+      store().reset([workshop({ capacity: 2 }), signup(1, 'confirmed')])
+      const first = await signUpForWorkshop(attendee(1), {
+        whenFull: 'waitlist',
+      })
+
+      await freeSeat((first as { signup: { _id: string } }).signup._id, how)
+
+      expect(
+        await signUpForWorkshop(attendee(2), { whenFull: 'waitlist' }),
+      ).toMatchObject({ signup: { status: 'confirmed' } })
+      expect(withStatus('confirmed')).toHaveLength(2)
+    },
+  )
+})
+
+describe('what holds a seat', () => {
+  it('a draft of a sign-up (Studio) does not', async () => {
+    store().reset([
+      workshop({ capacity: 2 }),
+      signup(1, 'confirmed'),
+      { ...signup(2, 'confirmed'), _id: 'drafts.signup-2' },
+    ])
+
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { status: 'confirmed' } })
+  })
+})
+
+describe('an opening with more seats than attempts', () => {
+  it('one that loses a round for every seat taken by others is still confirmed while seats remain', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    store().reset([workshop({ capacity: 40 }), signup(1, 'confirmed')])
+    for (let i = 0; i < 30; i++) {
+      store().beforeNextCommit(() => {
+        store().put({
+          ...signup(100 + i, 'confirmed'),
+          _id: `other-${i}`,
+          userWorkOSId: `user_other_${i}`,
+        })
+        store().put({
+          ...(store().doc('workshopSeats-conf-a-talk-k8s') ?? {
+            _id: 'workshopSeats-conf-a-talk-k8s',
+            _type: 'workshopSeats',
+            conference: ref(CONF),
+          }),
+          _rev: `other-${i}`,
+        })
+      })
+    }
+
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { status: 'confirmed' } })
+  })
+})
+
 describe('a sign-up of theirs that the read cannot see', () => {
+  it('its conference reference edited in Studio: answered as already signed up, not as busy', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    store().put({
+      ...signup(11, 'confirmed'),
+      _id: signupDocumentId(CONF, WORKSHOP, 'user_11'),
+      userWorkOSId: 'user_11',
+      conference: ref('conf-elsewhere'),
+    })
+
+    expect(
+      await signUpForWorkshop(attendee(11), { whenFull: 'waitlist' }),
+    ).toEqual({ refused: 'already-signed-up' })
+  })
+
   it('(a status or a reference edited in Studio) is answered as already signed up, not as busy', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)
     store().put({

@@ -1029,6 +1029,7 @@ export const workshopRouter = router({
           const confirmed: typeof signups = []
           const newlyConfirmed: typeof signups = []
           const busy: string[] = []
+          const errored: string[] = []
           const beyondCapacity: {
             workshopTitle: string
             seatsTaken: number
@@ -1041,6 +1042,9 @@ export const workshopRouter = router({
               group.map((signup) => signup._id),
             ).catch(() => null)
             const workshopTitle = group[0].workshop?.title ?? 'Workshop'
+            // One workshop's failure does not undo another's committed write:
+            // it is named, so the organizer can try that one again.
+            if (!outcome) errored.push(workshopTitle)
             if (outcome && 'refused' in outcome && outcome.refused === 'busy') {
               busy.push(workshopTitle)
             }
@@ -1090,13 +1094,17 @@ export const workshopRouter = router({
             busy.length > 0
               ? ` Many people were signing up for ${busy.join(', ')}, so nothing was saved there. Try again in a moment.`
               : ''
+          const failedFor =
+            errored.length > 0
+              ? ` Something went wrong for ${errored.join(', ')}, so no one was confirmed there. Try again.`
+              : ''
 
           revalidateTag('admin:workshops', 'default')
           revalidateTag('content:workshops', 'default')
 
           return {
             success: true,
-            message: `Confirmed ${succeeded} signup${succeeded === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}.${beyond}${tryAgain}`,
+            message: `Confirmed ${succeeded} signup${succeeded === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}.${beyond}${tryAgain}${failedFor}`,
             results: {
               succeeded,
               failed,

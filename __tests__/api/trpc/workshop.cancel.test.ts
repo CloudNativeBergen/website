@@ -106,6 +106,13 @@ vi.mock('@/lib/sanity/client', async () => {
           >[]) {
             h.created += 1
             const rev = `rev-${h.created}`
+            if (mutation.delete) {
+              const id = mutation.delete.id as string
+              const index = next.findIndex((d) => d._id === id)
+              if (index !== -1) next.splice(index, 1)
+              written.push(`delete:${id}`)
+              continue
+            }
             if (mutation.create) {
               const _id =
                 (mutation.create._id as string) ?? `signup-new-${h.created}`
@@ -307,7 +314,13 @@ describe('an attendee cancels a workshop seat', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(h.writes).toEqual([`delete:${id}`])
+    // In the same write, the seats guard forgets it let this one through
+    // (#1344), so the seat is free to the next sign-up at once.
+    expect(h.writes).toEqual([
+      `delete:${id}`,
+      'patch:workshopSeats-conf-1-ws-1',
+    ])
+    expect(stored('workshopSeats-conf-1-ws-1')?.recent).toEqual([])
     expect(stored(id)).toBeUndefined()
     expect(signupsOf(ADA)).toEqual([])
   })
@@ -455,7 +468,15 @@ describe('an organizer moves a confirmed sign-up to the waitlist', () => {
     expect(result.results).toEqual({ succeeded: 1, failed: 0, total: 1 })
     // The procedure's name says cancel; nothing it tells an organizer does.
     expect(result.message).toBe('Moved 1 signup to the waitlist')
-    expect(h.writes).toEqual([`patch:${ada}`])
+    expect(h.writes).toEqual([
+      `patch:${ada}`,
+      'patch:workshopSeats-conf-1-ws-1',
+    ])
+    expect(
+      (stored('workshopSeats-conf-1-ws-1')?.recent as { signup: string }[]).map(
+        (r) => r.signup,
+      ),
+    ).not.toContain(ada)
     expect(stored(ada)).toMatchObject({
       status: 'waitlist',
       userWorkOSId: ADA.id,

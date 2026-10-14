@@ -102,6 +102,7 @@ vi.mock('@/lib/workshop/promoted', () => ({
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Context } from '@/server/trpc'
 import { proposalRouter } from './proposal'
+import { requireSpeakersInCurrentOrg } from '@/server/tenancy'
 
 const organizer = () => {
   const speaker = {
@@ -181,4 +182,64 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
       expect(h.updateProposal).not.toHaveBeenCalled()
     },
   )
+})
+
+describe('a capacity change in an edit that is refused for another reason (#1344)', () => {
+  it('a speaker the organizer may not add: nothing is written, the capacity neither', async () => {
+    vi.mocked(requireSpeakersInCurrentOrg).mockRejectedValueOnce(
+      new Error('speaker of another organization'),
+    )
+
+    await expect(
+      update({ capacity: 12, speakers: ['sp-foreign'] }),
+    ).rejects.toThrow()
+    expect(h.changeCapacity).not.toHaveBeenCalled()
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('a workshop of another edition than the site’s: refused, so its promotions are never emailed in this edition’s name', async () => {
+    h.stored = { capacity: 10, conferenceId: 'conf-2025' }
+
+    await expect(update({ capacity: 12 })).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message:
+        'This workshop belongs to another edition. Change its capacity on that edition’s site.',
+    })
+    expect(h.changeCapacity).not.toHaveBeenCalled()
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('a capacity that is not a whole number is refused before any write', async () => {
+    await expect(update({ capacity: 1.5 })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+    expect(h.changeCapacity).not.toHaveBeenCalled()
+  })
+})
+
+describe('proposal.update by an organizer who speaks at the workshop (#1344)', () => {
+  it('a changed capacity is written through the seats guard, not by the plain patch', async () => {
+    h.getProposal.mockResolvedValue({
+      proposal: {
+        _id: 'talk-1',
+        status: 'draft',
+        format: 'workshop_120',
+        capacity: 10,
+        conference: { _id: 'conf-A' },
+      },
+      proposalError: null,
+    })
+
+    await organizer().update({
+      id: 'talk-1',
+      data: { title: 'Kubernetes hands-on', capacity: 12 },
+    } as never)
+
+    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12)
+    expect(h.updateProposal).toHaveBeenCalledTimes(1)
+    expect(h.updateProposal.mock.calls[0][1]).toMatchObject({
+      title: 'Kubernetes hands-on',
+    })
+    expect(h.updateProposal.mock.calls[0][1]).not.toHaveProperty('capacity')
+  })
 })
