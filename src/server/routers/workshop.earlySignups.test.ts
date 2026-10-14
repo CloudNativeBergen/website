@@ -541,7 +541,7 @@ describe('the list of early sign-ups (workshop.admin.listEarlySignups)', () => {
     expect(store().reads).toHaveLength(1)
   })
 
-  // `createWorkshopSignup` stores no `signedUpAt` today.
+  // `signUpForWorkshop` stores no `signedUpAt` today.
   it('places a sign-up stored without `signedUpAt` by when it was created, and answers that time', async () => {
     store().put({
       ...signup('su-new', { via: 'sfc-globex', at: '2026-06-09T08:04:30Z' }),

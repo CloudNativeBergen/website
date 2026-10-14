@@ -928,13 +928,11 @@ export const workshopRouter = router({
       .input(updateWorkshopCapacitySchema)
       .mutation(async ({ input }) => {
         try {
-          // OWNERSHIP (#730): the same check the public `signup` path already
-          // does. Unguarded, `updateWorkshopCapacity` is a bare
-          // `patch(id).set({capacity})` — no tenant check and no `_type` check,
-          // so it could stamp `capacity` onto any document in the dataset.
-          // The capacity, and the waitlisted sign-ups it lets in, are written
-          // together through the seats guard (#1344): a sign-up at the same
-          // moment cannot take a seat on the old count.
+          // OWNERSHIP (#730): the workshop is read within the request's
+          // conference, so `capacity` is never stamped onto another tenant's
+          // document. The capacity, and the waitlisted sign-ups it lets in,
+          // are written together through the seats guard (#1344): a sign-up
+          // at the same moment cannot take a seat on the old count.
           const conferenceId = await resolveConferenceId()
           const outcome = await changeCapacity(
             input.workshopId,

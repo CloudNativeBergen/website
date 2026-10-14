@@ -187,15 +187,17 @@ async function requireTopicsReferenceable(
  * old count; the sign-ups it confirms into new seats are told so.
  */
 async function changeTalkCapacity(talkId: string, capacity: number) {
-  const stored = await clientWrite.fetch<{
+  // Through the doc endpoint, where it is current: a read that still shows
+  // the capacity from before a change on the Workshops page would make a
+  // real change look like none. The caller has proved the talk is the org's.
+  const talk = await clientWrite.getDocument<{
     capacity?: number
-    conferenceId?: string
-  } | null>(
-    // groq-global-scoped: keyed by an id the caller has ALREADY been proved to
-    // own by `requireDocumentInCurrentOrg`; it reads back that same document.
-    `*[_type == "talk" && _id == $id][0]{capacity, "conferenceId": conference._ref}`,
-    { id: talkId },
-  )
+    conference?: { _ref: string }
+  }>(talkId)
+  const stored = talk && {
+    capacity: talk.capacity,
+    conferenceId: talk.conference?._ref,
+  }
   if (!stored || stored.capacity === capacity) return
   // The promotions are emailed in the name of the site's conference: a
   // previous edition's workshop is changed from its own site.

@@ -458,6 +458,23 @@ describe('a free and a confirm of the same sign-up at once', () => {
   })
 })
 
+describe('a confirm of a sign-up a read still shows confirmed, just moved to the waitlist', () => {
+  it('the guard remembers the seat it takes again: the next one waits', async () => {
+    store().reset([workshop({ capacity: 1 }), signup(1, 'confirmed')])
+    await freeSeat('signup-1', 'waitlist')
+    store().readsLagFor('signup-1', signup(1, 'confirmed'))
+
+    await confirmSignups(WORKSHOP, CONF, ['signup-1'])
+    // The read catches up with the move, not yet with the confirm.
+    store().readsLagFor('signup-1', signup(1, 'waitlist'))
+
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { status: 'waitlist' } })
+    expect(withStatus('confirmed')).toHaveLength(1)
+  })
+})
+
 describe('a sign-up deleted that a read still shows waiting', () => {
   const deletedButShown = () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)

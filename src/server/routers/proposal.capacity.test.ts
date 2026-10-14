@@ -26,6 +26,7 @@ const h = vi.hoisted(() => ({
   createInvitation: vi.fn(),
   sendInvitationEmail: vi.fn(),
   currentSpeakerRefs: [] as string[],
+  lagging: null as null | { capacity?: number; conferenceId: string },
   stored: { capacity: 10, conferenceId: 'conf-A' } as {
     capacity?: number
     conferenceId: string
@@ -74,11 +75,20 @@ vi.mock('@/lib/notification/sanity', () => ({
 vi.mock('@/lib/sanity/client', () => {
   const client = {
     fetch: async (query: string) => {
-      if (query.includes('"conferenceId": conference._ref')) return h.stored
+      // A search-store read of the talk: it may lag (see the stale test).
+      if (query.includes('"conferenceId": conference._ref')) {
+        return h.lagging ?? h.stored
+      }
       if (query.includes('speakers[]._ref')) return h.currentSpeakerRefs
       if (query.includes('topics[]._ref')) return []
       return []
     },
+    // The doc endpoint: current.
+    getDocument: async (id: string) => ({
+      _id: id,
+      capacity: h.stored.capacity,
+      conference: { _ref: h.stored.conferenceId },
+    }),
     transaction: () => ({ patch: vi.fn(), commit: vi.fn() }),
     patch: vi.fn(),
     create: vi.fn(),
@@ -127,6 +137,7 @@ beforeEach(() => {
   h.getConference.mockResolvedValue({ conference, error: null })
   h.updateProposal.mockResolvedValue({ proposal: { _id: 'talk-1' }, err: null })
   h.stored = { capacity: 10, conferenceId: 'conf-A' }
+  h.lagging = null
   h.changeCapacity.mockResolvedValue({ promoted: [] })
 })
 
@@ -141,6 +152,15 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
     expect(h.updateProposal).toHaveBeenCalledWith('talk-1', {
       title: 'Kubernetes hands-on',
     })
+  })
+
+  it('compares with the capacity stored now, not one a lagging read still shows', async () => {
+    // Changed to 10 on the Workshops page a moment ago; a read still shows 20.
+    h.lagging = { capacity: 20, conferenceId: 'conf-A' }
+
+    await update({ capacity: 20 })
+
+    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 20)
   })
 
   it('emails the sign-ups it confirmed into the new seats', async () => {

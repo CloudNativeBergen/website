@@ -86,7 +86,6 @@ export type SignUpOutcome =
 
 interface Guard {
   _rev: string
-  conference?: { _ref: string }
   /** The seats it let through, with when. */
   recent?: { _key: string; signup: string; at: string }[] | null
   /** The capacity it last set, with when. */
@@ -442,12 +441,14 @@ export async function confirmSignups(
     conferenceId,
     async (seats, tx) => {
       const taken = takenIn(seats)
+      const remembered = new Set(recentIn(seats).map((r) => r.signup))
       const wanted = await current(signupIds, workshopId, conferenceId)
       const waitingNow = wanted.filter((s) => s.status === 'waitlist')
-      // Waiting, but holding a seat the guard let through a moment ago (moved
-      // to the waitlist outside the app): written confirmed all the same, and
-      // not counted twice.
-      const waiting = waitingNow.filter((s) => !taken.has(s._id))
+      // Waiting now, but still remembered by the guard as holding a seat
+      // (moved to the waitlist outside the app): written confirmed all the
+      // same, and not counted twice. A read that still shows it confirmed is
+      // no such sign: only the guard's own memory is.
+      const waiting = waitingNow.filter((s) => !remembered.has(s._id))
       if (waitingNow.length > 0) {
         guard(tx, seats, workshopId, conferenceId, {
           took: waiting.map((s) => s._id),
@@ -461,7 +462,7 @@ export async function confirmSignups(
         done: {
           confirmed: wanted.map((s) => s._id),
           newlyConfirmed: waiting.map((s) => s._id),
-          seatsTaken: taken.size + waiting.length,
+          seatsTaken: new Set([...taken, ...waiting.map((s) => s._id)]).size,
           capacity: capacityOf(seats),
         },
       }

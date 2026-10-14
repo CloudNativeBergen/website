@@ -107,10 +107,10 @@ export async function verifyWorkshopBelongsToConference(
 
 /**
  * An organizer's "Move to waitlist" (#1331): the sign-up stays, and the seat it
- * held is free. An attendee's own cancel does not come here; it deletes the
- * sign-up (`deleteWorkshopSignup`), so a waitlist holds only people waiting.
+ * held is free (#1344: see `freeSeat`). An attendee's own cancel does not come
+ * here; it deletes the sign-up (`deleteWorkshopSignup`), so a waitlist holds
+ * only people waiting.
  */
-/** Frees the seat (#1344): see `freeSeat`. */
 export async function moveWorkshopSignupToWaitlist(
   signupId: string,
 ): Promise<void> {
