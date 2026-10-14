@@ -36,10 +36,10 @@ export const earlySignupsShownState = () => ({ [SHOWN]: true })
  *
  *  - An ARRIVAL by the link is a new entry, so it has no mark: the list is
  *    brought into view, also on a kept page and for the same sponsor again.
- *  - A RETURN to an entry (Back, Forward, a reload) finds the mark: nothing
- *    moves, and the position is the browser's and Next's to restore. Without
- *    this, Back would throw the organizer from the workshop cards they had
- *    scrolled up to back down to the list.
+ *  - A RETURN to an entry (Back, Forward, a reload) finds the mark: the hook
+ *    moves nothing, and the position is the browser's and Next's to decide.
+ *    Measured in Chromium, the browser then goes to the fragment itself, so a
+ *    return still ends at the list; the hook is not what puts it there.
  *  - The list's own control writes its entry with the mark
  *    (`earlySignupsShownState`): the organizer is at the list already.
  *
