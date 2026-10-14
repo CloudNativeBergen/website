@@ -137,20 +137,21 @@ const backOff = (attempt: number) =>
 /**
  * Reads, lets `decide` add its writes to a transaction, and commits; reads
  * and decides again when another write got there first. `decide` answers a
- * refusal by returning it instead of writing.
+ * refusal by returning it instead of writing, and `done` with no write by
+ * leaving the transaction empty.
  */
-async function decideAndCommit<R, D>(
+async function decideAndCommit<F extends { refused: string }, D>(
   workshopId: string,
   conferenceId: string,
-  decide: (seats: Seats, tx: Transaction) => { refused: R } | { done: D },
-): Promise<{ refused: R | 'not-found' | 'busy' } | { done: D }> {
+  decide: (seats: Seats, tx: Transaction) => F | { done: D },
+): Promise<F | { refused: 'not-found' | 'busy' } | { done: D }> {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (attempt > 0) await backOff(attempt)
     const seats = await readSeats(workshopId, conferenceId)
     if (!seats) return { refused: 'not-found' }
     const tx = clientWrite.transaction()
     const decision = decide(seats, tx)
-    if ('refused' in decision) return decision
+    if ('refused' in decision || tx.serialize().length === 0) return decision
     try {
       await tx.commit()
       return decision
@@ -171,38 +172,42 @@ export async function signUpForWorkshop(
 ): Promise<SignUpOutcome> {
   const { workshopId, conferenceId, earlyAccessSponsorId } = request
   const _id = signupDocumentId(workshopId, request.userWorkOSId)
-  const outcome = await decideAndCommit(workshopId, conferenceId, (seats, tx) => {
-    if (seats.signups.some((s) => s.userWorkOSId === request.userWorkOSId)) {
-      return { refused: 'already-signed-up' as const }
-    }
-    const free = confirmedIn(seats) < seats.capacity
-    if (!free && whenFull === 'refuse') return { refused: 'full' as const }
-    if (free) guard(tx, seats, workshopId, conferenceId)
-    tx.create({
-      _id,
-      _type: 'workshopSignup',
-      userWorkOSId: request.userWorkOSId,
-      userEmail: request.userEmail,
-      userName: request.userName,
-      workshop: { _type: 'reference', _ref: workshopId },
-      conference: { _type: 'reference', _ref: conferenceId },
-      status: free ? 'confirmed' : 'waitlist',
-      confirmationEmailSent: false,
-      experienceLevel: request.experienceLevel,
-      operatingSystem: request.operatingSystem,
-      // WEAK IN THE WRITE ITSELF: the schema's `weak` governs Studio only,
-      // and a strong reference would keep the sponsor from being removed
-      // from the conference.
-      ...(earlyAccessSponsorId && {
-        earlyAccessSponsor: {
-          _type: 'reference',
-          _ref: earlyAccessSponsorId,
-          _weak: true,
-        },
-      }),
-    })
-    return { done: _id }
-  })
+  const outcome = await decideAndCommit(
+    workshopId,
+    conferenceId,
+    (seats, tx) => {
+      if (seats.signups.some((s) => s.userWorkOSId === request.userWorkOSId)) {
+        return { refused: 'already-signed-up' as const }
+      }
+      const free = confirmedIn(seats) < seats.capacity
+      if (!free && whenFull === 'refuse') return { refused: 'full' as const }
+      if (free) guard(tx, seats, workshopId, conferenceId)
+      tx.create({
+        _id,
+        _type: 'workshopSignup',
+        userWorkOSId: request.userWorkOSId,
+        userEmail: request.userEmail,
+        userName: request.userName,
+        workshop: { _type: 'reference', _ref: workshopId },
+        conference: { _type: 'reference', _ref: conferenceId },
+        status: free ? 'confirmed' : 'waitlist',
+        confirmationEmailSent: false,
+        experienceLevel: request.experienceLevel,
+        operatingSystem: request.operatingSystem,
+        // WEAK IN THE WRITE ITSELF: the schema's `weak` governs Studio only,
+        // and a strong reference would keep the sponsor from being removed
+        // from the conference.
+        ...(earlyAccessSponsorId && {
+          earlyAccessSponsor: {
+            _type: 'reference',
+            _ref: earlyAccessSponsorId,
+            _weak: true,
+          },
+        }),
+      })
+      return { done: _id }
+    },
+  )
   if ('refused' in outcome) return outcome
   return { signup: await readSignup(outcome.done) }
 }
@@ -224,4 +229,87 @@ async function readSignup(id: string): Promise<WorkshopSignupExisting> {
     }`,
     { id },
   )
+}
+
+/**
+ * The organizer's confirm, of sign-ups of ONE workshop. It is allowed past
+ * capacity: that is the organizer's call, and the answer says so
+ * (`seatsTaken > capacity`). It takes its seats through the guard all the
+ * same, so `seatsTaken` is what is stored when it commits, and a sign-up
+ * reading at the same moment cannot take the seat it took.
+ *
+ * `confirmed` names the sign-ups that are confirmed now; one that is gone, or
+ * of another workshop, is not in it.
+ */
+export async function confirmSignups(
+  workshopId: string,
+  conferenceId: string,
+  signupIds: string[],
+): Promise<
+  | { confirmed: string[]; seatsTaken: number; capacity: number }
+  | { refused: 'not-found' | 'busy' }
+> {
+  const outcome = await decideAndCommit(
+    workshopId,
+    conferenceId,
+    (seats, tx) => {
+      const wanted = seats.signups.filter((s) => signupIds.includes(s._id))
+      const waiting = wanted.filter((s) => s.status === 'waitlist')
+      if (waiting.length > 0) {
+        guard(tx, seats, workshopId, conferenceId)
+        const confirmedAt = new Date().toISOString()
+        for (const { _id } of waiting) {
+          tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
+        }
+      }
+      return {
+        done: {
+          confirmed: wanted.map((s) => s._id),
+          seatsTaken: confirmedIn(seats) + waiting.length,
+          capacity: seats.capacity,
+        },
+      }
+    },
+  )
+  return 'refused' in outcome ? outcome : outcome.done
+}
+
+/**
+ * Sets the capacity, and confirms the longest-waiting sign-ups into the seats
+ * that are then free, in the same write. Refused below the seats taken.
+ * `promoted` names the sign-ups it confirmed, longest-waiting first.
+ */
+export async function changeCapacity(
+  workshopId: string,
+  conferenceId: string,
+  capacity: number,
+): Promise<
+  | { promoted: string[] }
+  | { refused: 'below-seats-taken'; seatsTaken: number }
+  | { refused: 'not-found' | 'busy' }
+> {
+  const outcome = await decideAndCommit(
+    workshopId,
+    conferenceId,
+    (seats, tx) => {
+      const seatsTaken = confirmedIn(seats)
+      if (capacity < seatsTaken) {
+        return { refused: 'below-seats-taken' as const, seatsTaken }
+      }
+      const since = (s: Seats['signups'][number]) =>
+        new Date(s.signedUpAt || s._createdAt).getTime()
+      const promoted = seats.signups
+        .filter((s) => s.status === 'waitlist')
+        .sort((a, b) => since(a) - since(b))
+        .slice(0, capacity - seatsTaken)
+      guard(tx, seats, workshopId, conferenceId)
+      tx.patch(workshopId, { set: { capacity } })
+      const confirmedAt = new Date().toISOString()
+      for (const { _id } of promoted) {
+        tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
+      }
+      return { done: promoted.map((s) => s._id) }
+    },
+  )
+  return 'refused' in outcome ? outcome : { promoted: outcome.done }
 }

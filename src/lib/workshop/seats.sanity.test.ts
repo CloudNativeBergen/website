@@ -10,7 +10,7 @@
  * MODELLED: `ifRevisionID` and `create` of a stored id, both refused with a
  * 409 as Sanity does; see `__tests__/helpers/versionedSanityStore.ts`.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
 
 const h = vi.hoisted(() => ({ store: null as null | VersionedSanityStore }))
@@ -24,7 +24,7 @@ vi.mock('@/lib/sanity/client', async () => {
   return h.store.clients
 })
 
-import { signUpForWorkshop } from './seats'
+import { changeCapacity, confirmSignups, signUpForWorkshop } from './seats'
 
 const store = () => h.store!
 const CONF = 'conf-a'
@@ -76,6 +76,9 @@ const withStatus = (status: string) =>
 
 beforeEach(() => {
   store().reset([workshop(), signup(1, 'confirmed')])
+})
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 describe('sign-ups arriving together', () => {
@@ -186,12 +189,242 @@ describe('one person, one sign-up per workshop', () => {
     const first = await signUpForWorkshop(attendee(7), { whenFull: 'waitlist' })
     const id = (first as { signup: { _id: string } }).signup._id
     // An attendee's cancel deletes the sign-up (#1331).
-    store().reset(store().all().filter((d) => d._id !== id))
+    store().reset(
+      store()
+        .all()
+        .filter((d) => d._id !== id),
+    )
 
     const again = await signUpForWorkshop(attendee(7), {
       whenFull: 'waitlist',
     })
 
     expect(again).toMatchObject({ signup: { _id: id, status: 'confirmed' } })
+  })
+})
+
+describe('what a request that cannot take a seat is told', () => {
+  it('one that loses the race every time it tries is refused as busy, and writes nothing', async () => {
+    // No pause between attempts: the test need not wait out the back-off.
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    // Another seat changes hands between every read and its write.
+    let rev = 0
+    for (let i = 0; i < 100; i++) {
+      store().beforeNextCommit(() => {
+        store().put({
+          _id: 'workshopSeats-talk-k8s',
+          _type: 'workshopSeats',
+          _rev: `other-${++rev}`,
+        })
+      })
+    }
+
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ).toEqual({ refused: 'busy' })
+    expect(storedSignups()).toHaveLength(1)
+  })
+
+  it('the organizer adding someone to a full workshop is refused as full, and nothing is written', async () => {
+    store().reset([workshop({ capacity: 1 }), signup(1, 'confirmed')])
+
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'refuse' }),
+    ).toEqual({ refused: 'full' })
+    expect(store().commits).toEqual([])
+  })
+
+  it('two organizers adding the last seat at once: one is added, the other is told it is full', async () => {
+    store().reset([workshop({ capacity: 2 }), signup(1, 'confirmed')])
+
+    const outcomes = await Promise.all([
+      signUpForWorkshop(attendee(1), { whenFull: 'refuse' }),
+      signUpForWorkshop(attendee(2), { whenFull: 'refuse' }),
+    ])
+
+    expect(outcomes).toContainEqual({ refused: 'full' })
+    expect(withStatus('confirmed')).toHaveLength(2)
+    expect(withStatus('waitlist')).toHaveLength(0)
+  })
+
+  it('a workshop of another conference is not found, and nothing is written', async () => {
+    store().reset([workshop({ conference: ref('conf-b') })])
+
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ).toEqual({ refused: 'not-found' })
+    expect(store().commits).toEqual([])
+  })
+})
+
+describe('what is stored', () => {
+  it('records the sponsor of an early sign-up as a weak reference', async () => {
+    const outcome = await signUpForWorkshop(
+      { ...attendee(1), earlyAccessSponsorId: 'sfc-acme' },
+      { whenFull: 'waitlist' },
+    )
+
+    const id = (outcome as { signup: { _id: string } }).signup._id
+    expect(store().doc(id)).toMatchObject({
+      status: 'confirmed',
+      userWorkOSId: 'user_1',
+      conference: ref(CONF),
+      workshop: ref(WORKSHOP),
+      earlyAccessSponsor: { _ref: 'sfc-acme', _weak: true },
+    })
+  })
+})
+
+describe("the organizer's confirm", () => {
+  it('takes a free seat, and says it is within capacity', async () => {
+    store().reset([workshop(), signup(1, 'confirmed'), signup(2, 'waitlist')])
+
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-2'])).toEqual({
+      confirmed: ['signup-2'],
+      seatsTaken: 2,
+      capacity: 3,
+    })
+    expect(store().doc('signup-2')).toMatchObject({
+      status: 'confirmed',
+      confirmedAt: expect.any(String),
+    })
+  })
+
+  it('past capacity is allowed, and the answer names it: 4 seats taken of 3', async () => {
+    store().reset([
+      workshop(),
+      signup(1, 'confirmed'),
+      signup(2, 'confirmed'),
+      signup(3, 'confirmed'),
+      signup(4, 'waitlist'),
+    ])
+
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-4'])).toEqual({
+      confirmed: ['signup-4'],
+      seatsTaken: 4,
+      capacity: 3,
+    })
+    expect(withStatus('confirmed')).toHaveLength(4)
+  })
+
+  // The last seat, wanted by an organizer's confirm and an attendee's
+  // sign-up at once. Both read "1 of 2 taken"; the one that read first
+  // commits first, and the other must read again rather than act on it.
+  const lastSeat = () =>
+    store().reset([
+      workshop({ capacity: 2 }),
+      signup(1, 'confirmed'),
+      signup(2, 'waitlist'),
+    ])
+  const attendeeStatus = () =>
+    storedSignups().find((d) => d.userWorkOSId === 'user_1')?.status
+
+  it('confirm first: it takes the last seat, and the attendee waits', async () => {
+    lastSeat()
+
+    const [confirm] = await Promise.all([
+      confirmSignups(WORKSHOP, CONF, ['signup-2']),
+      signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ])
+
+    expect(store().events.slice(0, 3)).toEqual(['read', 'read', 'commit'])
+    expect(confirm).toMatchObject({ seatsTaken: 2, capacity: 2 })
+    expect(attendeeStatus()).toBe('waitlist')
+    expect(withStatus('confirmed')).toHaveLength(2)
+  })
+
+  it('sign-up first: the attendee takes the last seat, and the confirm says it went beyond capacity', async () => {
+    lastSeat()
+
+    const [, confirm] = await Promise.all([
+      signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+      confirmSignups(WORKSHOP, CONF, ['signup-2']),
+    ])
+
+    expect(store().events.slice(0, 3)).toEqual(['read', 'read', 'commit'])
+    expect(attendeeStatus()).toBe('confirmed')
+    expect(confirm).toMatchObject({ seatsTaken: 3, capacity: 2 })
+    expect(withStatus('confirmed')).toHaveLength(3)
+  })
+
+  it('a sign-up that is gone or belongs to another workshop is not confirmed, and the rest are', async () => {
+    store().reset([
+      workshop(),
+      signup(1, 'waitlist'),
+      { ...signup(2, 'waitlist'), workshop: ref('talk-other') },
+    ])
+
+    expect(
+      await confirmSignups(WORKSHOP, CONF, ['signup-1', 'signup-2', 'gone']),
+    ).toMatchObject({ confirmed: ['signup-1'] })
+    expect(store().doc('signup-2')?.status).toBe('waitlist')
+  })
+
+  it('a sign-up that is already confirmed counts as confirmed, and is not written', async () => {
+    store().reset([workshop(), signup(1, 'confirmed')])
+
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-1'])).toEqual({
+      confirmed: ['signup-1'],
+      seatsTaken: 1,
+      capacity: 3,
+    })
+    expect(store().commits).toEqual([])
+  })
+})
+
+describe('changing the capacity', () => {
+  const waiting = (n: number) => signup(n, 'waitlist')
+
+  it('promotes the longest-waiting into the seats that are free, oldest first', async () => {
+    store().reset([
+      workshop({ capacity: 2 }),
+      signup(1, 'confirmed'),
+      signup(2, 'confirmed'),
+      waiting(5),
+      waiting(3),
+      waiting(4),
+    ])
+
+    expect(await changeCapacity(WORKSHOP, CONF, 4)).toEqual({
+      promoted: ['signup-3', 'signup-4'],
+    })
+    expect(store().doc(WORKSHOP)?.capacity).toBe(4)
+    expect(store().doc('signup-5')?.status).toBe('waitlist')
+  })
+
+  it('promotes no one into a workshop that was already over capacity', async () => {
+    store().reset([
+      workshop({ capacity: 1 }),
+      signup(1, 'confirmed'),
+      signup(2, 'confirmed'),
+      signup(3, 'confirmed'),
+      waiting(4),
+    ])
+
+    expect(await changeCapacity(WORKSHOP, CONF, 3)).toEqual({ promoted: [] })
+    expect(store().doc('signup-4')?.status).toBe('waitlist')
+  })
+
+  it('is refused below the seats taken, and writes nothing', async () => {
+    store().reset([workshop(), signup(1, 'confirmed'), signup(2, 'confirmed')])
+
+    expect(await changeCapacity(WORKSHOP, CONF, 1)).toEqual({
+      refused: 'below-seats-taken',
+      seatsTaken: 2,
+    })
+    expect(store().commits).toEqual([])
+  })
+
+  it('and a sign-up at the same time: the capacity and the seats taken agree afterwards', async () => {
+    store().reset([workshop({ capacity: 1 }), waiting(2), waiting(3)])
+
+    await Promise.all([
+      changeCapacity(WORKSHOP, CONF, 2),
+      signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ])
+
+    expect(store().events.slice(0, 3)).toEqual(['read', 'read', 'commit'])
+    expect(store().doc(WORKSHOP)?.capacity).toBe(2)
+    expect(withStatus('confirmed')).toHaveLength(2)
   })
 })
