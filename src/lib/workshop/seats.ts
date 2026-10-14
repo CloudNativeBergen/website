@@ -38,6 +38,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
+import { Format, Status, isWorkshopFormat } from '@/lib/proposal/types'
 import type { WorkshopSignupExisting, WorkshopSignupInput } from './types'
 
 /**
@@ -96,6 +97,9 @@ interface Guard {
 interface Seats {
   /** The workshop's capacity, as the read shows it. */
   capacity: number
+  /** The talk's status and format, as the read shows them. */
+  status?: string
+  format?: string
   /** `null` when no seat was ever taken through it. */
   guard: Guard | null
   /** When the read was made. */
@@ -169,6 +173,8 @@ async function readSeats(
     clientWrite.fetch<Omit<Seats, 'now' | 'guard'> | null>(
       groq`*[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId][0]{
         "capacity": coalesce(capacity, 30),
+        status,
+        format,
         "signups": *[_type == "workshopSignup" && workshop._ref == ^._id && conference._ref == $conferenceId && status in ["confirmed", "waitlist"] && !(_id in path("drafts.**"))]{
           _id, _createdAt, signedUpAt, status, userWorkOSId
         }
@@ -505,7 +511,8 @@ export async function confirmSignups(
 
 /**
  * Sets the capacity, and confirms the longest-waiting sign-ups into the seats
- * that are then free, in the same write (none with `promote: false`).
+ * that are then free, in the same write: by default only while the talk is
+ * a confirmed workshop, or as `promote` says.
  * Refused below the seats taken. `promoted` names the sign-ups it confirmed,
  * longest-waiting first.
  */
@@ -513,7 +520,7 @@ export async function changeCapacity(
   workshopId: string,
   conferenceId: string,
   capacity: number,
-  { promote = true }: { promote?: boolean } = {},
+  { promote }: { promote?: boolean } = {},
 ): Promise<
   | { promoted: string[] }
   | { refused: 'below-seats-taken'; seatsTaken: number }
@@ -523,6 +530,12 @@ export async function changeCapacity(
     { refused: 'below-seats-taken'; seatsTaken: number },
     string[]
   >(workshopId, conferenceId, async (seats, tx) => {
+    // Unless the caller knows better (an edit that changes them too), only a
+    // workshop that is on gives its waiting sign-ups seats.
+    const promoting =
+      promote ??
+      (seats.status === Status.confirmed &&
+        isWorkshopFormat(seats.format as Format))
     const taken = takenIn(seats)
     const seatsTaken = taken.size
     if (capacity < seatsTaken) {
@@ -530,7 +543,7 @@ export async function changeCapacity(
     }
     const since = (s: CurrentSignup) =>
       new Date(s.signedUpAt || s._createdAt).getTime()
-    const waitlisted = promote
+    const waitlisted = promoting
       ? seats.signups.filter(
           (s) => s.status === 'waitlist' && !taken.has(s._id),
         )

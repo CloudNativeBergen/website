@@ -256,6 +256,7 @@ function seed(capacity: number) {
       _type: 'talk',
       title: 'Kubernetes 101',
       format: 'workshop_120',
+      status: 'confirmed',
       capacity,
       conference: ref('conf-1'),
     },

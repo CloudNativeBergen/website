@@ -46,6 +46,8 @@ function workshop(overrides: Record<string, unknown> = {}) {
     _rev: 'r0',
     conference: ref(CONF),
     capacity: 3,
+    status: 'confirmed',
+    format: 'workshop_120',
     ...overrides,
   }
 }
@@ -956,6 +958,23 @@ describe('changing the capacity', () => {
     expect(store().doc(WORKSHOP)?.capacity).toBe(3)
     expect(store().doc('signup-2')?.status).toBe('waitlist')
   })
+
+  it.each([
+    ['withdrawn', { status: 'withdrawn' }],
+    ['made another format', { format: 'presentation_40' }],
+  ])(
+    'of a workshop %s meanwhile: sets the capacity, confirms no one',
+    async (_, change) => {
+      store().reset([
+        workshop({ capacity: 1, ...change }),
+        signup(1, 'confirmed'),
+        waiting(2),
+      ])
+
+      expect(await changeCapacity(WORKSHOP, CONF, 3)).toEqual({ promoted: [] })
+      expect(store().doc('signup-2')?.status).toBe('waitlist')
+    },
+  )
 
   it('is refused below the seats taken, and writes nothing', async () => {
     store().reset([workshop(), signup(1, 'confirmed'), signup(2, 'confirmed')])
