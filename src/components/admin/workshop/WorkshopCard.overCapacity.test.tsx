@@ -73,6 +73,9 @@ describe('WorkshopCard over-capacity marker', () => {
 
   it('shows no marker below capacity', () => {
     renderCard(30, 12)
+    // The card rendered its counts: the absence below is not an empty render.
+    expect(screen.getByText('12/30')).toBeInTheDocument()
+    expect(screen.getByText('(40%)')).toBeInTheDocument()
     expect(screen.queryByText(/over capacity/i)).not.toBeInTheDocument()
   })
 })
