@@ -42,6 +42,8 @@ describe('WorkshopCard over-capacity marker', () => {
   it('says by how many seats a workshop is over capacity', () => {
     renderCard(30, 32)
     expect(screen.getByText('Over capacity by 2')).toBeInTheDocument()
+    // The percentage is the real ratio, not the bar's capped 100.
+    expect(screen.getByText('(107%)')).toBeInTheDocument()
   })
 
   it('shows no marker at exactly capacity', () => {
