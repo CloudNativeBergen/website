@@ -85,23 +85,23 @@ export const cancelWorkshopSignupSchema = z.object({
 })
 
 /**
- * The seat count an organizer agreed to go past capacity to (#1358): the
- * `after` of the refusal they answered. A confirm that would reach more is
- * refused again.
+ * How many seats past capacity an organizer agreed to (#1358): what the
+ * refusal they answered showed. A confirm that would go further is refused
+ * again.
  */
-const acceptSeatsSchema = z.number().int().nonnegative()
+const acceptPastSchema = z.number().int().nonnegative()
 
 export const confirmWorkshopSignupSchema = z.object({
   signupId: z.string().min(1, 'Signup ID is required'),
   sendEmail: z.boolean().optional().default(true),
-  acceptSeats: acceptSeatsSchema.optional(),
+  acceptPast: acceptPastSchema.optional(),
 })
 
 export const batchConfirmSignupsSchema = z.object({
   signupIds: z.array(z.string()).min(1, 'At least one signup ID is required'),
   sendEmails: z.boolean().optional().default(true),
   /** By workshop id. */
-  acceptSeats: z.record(z.string(), acceptSeatsSchema).optional(),
+  acceptPast: z.record(z.string(), acceptPastSchema).optional(),
 })
 
 export const batchCancelSignupsSchema = z.object({

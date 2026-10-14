@@ -197,14 +197,14 @@ describe('admin.batchConfirmSignups', () => {
       'conf-A',
       ['s-1'],
       {
-        acceptSeats: undefined,
+        acceptPast: undefined,
       },
     )
     expect(seats.confirmSignups).toHaveBeenCalledWith(
       'w-2',
       'conf-A',
       ['s-2', 's-3'],
-      { acceptSeats: undefined },
+      { acceptPast: undefined },
     )
     expect(result.results).toEqual({
       succeeded: 3,
@@ -417,7 +417,7 @@ describe('admin.batchConfirmSignups', () => {
     await admin().batchConfirmSignups({
       signupIds: ['s-1', 's-2'],
       sendEmails: false,
-      acceptSeats: { 'w-2': 31 },
+      acceptPast: { 'w-2': 1 },
     })
 
     expect(seats.confirmSignups).toHaveBeenCalledWith(
@@ -425,7 +425,7 @@ describe('admin.batchConfirmSignups', () => {
       'conf-A',
       ['s-1'],
       {
-        acceptSeats: undefined,
+        acceptPast: undefined,
       },
     )
     expect(seats.confirmSignups).toHaveBeenCalledWith(
@@ -433,7 +433,7 @@ describe('admin.batchConfirmSignups', () => {
       'conf-A',
       ['s-2'],
       {
-        acceptSeats: 31,
+        acceptPast: 1,
       },
     )
   })
@@ -468,7 +468,7 @@ describe('admin.confirmSignup', () => {
       'conf-A',
       ['s-1'],
       {
-        acceptSeats: undefined,
+        acceptPast: undefined,
       },
     )
     expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
@@ -486,7 +486,7 @@ describe('admin.confirmSignup', () => {
     const result = await admin().confirmSignup({
       signupId: 's-1',
       sendEmail: false,
-      acceptSeats: 31,
+      acceptPast: 1,
     })
 
     expect(seats.confirmSignups).toHaveBeenCalledWith(
@@ -494,7 +494,7 @@ describe('admin.confirmSignup', () => {
       'conf-A',
       ['s-1'],
       {
-        acceptSeats: 31,
+        acceptPast: 1,
       },
     )
     expect(result.message).toBe(

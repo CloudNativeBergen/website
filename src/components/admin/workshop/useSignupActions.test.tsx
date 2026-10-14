@@ -319,8 +319,8 @@ describe('"Move to Confirmed" into a full workshop (#1358)', () => {
     expect(await screen.findByText(FULL)).toBeInTheDocument()
     expect(alert).not.toHaveBeenCalled()
     expect(screen.queryByText('Could not confirm')).not.toBeInTheDocument()
-    // The posted confirm carries no accepted count: the organizer has not
-    // agreed to anything yet.
+    // The posted confirm carries no accepted overshoot: the organizer has
+    // not agreed to anything yet.
     expect(posted[0].input).toEqual({
       signupIds: ['signup-1'],
       sendEmails: true,
@@ -328,7 +328,7 @@ describe('"Move to Confirmed" into a full workshop (#1358)', () => {
     expect(onSettled).toHaveBeenCalledTimes(1)
   })
 
-  it('"Confirm beyond capacity" sends the confirm again with the count shown, and says it went past capacity', async () => {
+  it('"Confirm beyond capacity" sends the confirm again with the overshoot shown, and says it went past capacity', async () => {
     answer = fullAt(30, 30)
     press('confirm')
     await screen.findByText(FULL)
@@ -347,7 +347,7 @@ describe('"Move to Confirmed" into a full workshop (#1358)', () => {
       input: {
         signupIds: ['signup-1'],
         sendEmails: true,
-        acceptSeats: { 'ws-1': 31 },
+        acceptPast: { 'ws-1': 1 },
       },
     })
     expect(screen.queryByText(/^full:/)).not.toBeInTheDocument()
@@ -384,7 +384,7 @@ describe('"Move to Confirmed" into a full workshop (#1358)', () => {
     await screen.findByText('Ada Lovelace was not confirmed')
     expect(
       screen.getByText(
-        'Kubernetes 101 is full (30 of 30 seats). Open its waitlist to confirm beyond capacity.',
+        'Kubernetes 101 is full (30 of 30 seats). Confirm again to go beyond capacity.',
       ),
     ).toBeInTheDocument()
     expect(screen.queryByText(/^full:/)).not.toBeInTheDocument()

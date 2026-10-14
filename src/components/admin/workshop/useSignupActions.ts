@@ -34,9 +34,10 @@ const TITLES = {
  *
  * A confirm into a FULL workshop is refused by the server and asked about
  * here (#1358): `full` holds the question, `confirmBeyondCapacity` answers it
- * by sending the confirm again with the count the organizer saw, and
- * `dismissFull` leaves the sign-up on the waitlist. A seat taken meanwhile
- * makes that count stale, and the server asks again with the new numbers.
+ * by sending the confirm again with the overshoot the organizer was shown,
+ * and `dismissFull` leaves the sign-up on the waitlist. A seat taken, or a
+ * capacity lowered, meanwhile makes that stale, and the server asks again
+ * with the new numbers.
  *
  * `onSettled` runs after EVERY attempt, whatever came of it: the lists should
  * show what is stored. It matters most when the attempt failed. An attendee's
@@ -103,8 +104,8 @@ export function useSignupActions(onSettled: () => void) {
     })
 
   /**
-   * One sign-up's confirm, with the count the organizer `accepted` to go past
-   * capacity to (the refusal they answered), or none.
+   * One sign-up's confirm, with how far past capacity the organizer
+   * `accepted` to go (the refusal they answered), or none.
    */
   const confirmOne = (
     signupId: string,
@@ -117,7 +118,9 @@ export function useSignupActions(onSettled: () => void) {
         signupIds: [signupId],
         sendEmails: true,
         ...(accepted && {
-          acceptSeats: { [accepted.workshopId]: accepted.after },
+          acceptPast: {
+            [accepted.workshopId]: accepted.after - accepted.capacity,
+          },
         }),
       },
       {
@@ -129,7 +132,7 @@ export function useSignupActions(onSettled: () => void) {
             showNotification({
               type: 'warning',
               title: `${userName} was not confirmed`,
-              message: `${refusal.workshopTitle} is full (${refusal.seatsTaken} of ${refusal.capacity} seats). Open its waitlist to confirm beyond capacity.`,
+              message: `${refusal.workshopTitle} is full (${refusal.seatsTaken} of ${refusal.capacity} seats). Confirm again to go beyond capacity.`,
             })
             return
           }

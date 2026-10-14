@@ -334,7 +334,7 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
       expect.objectContaining({ pageSize: 60 }),
     )
     expect(ws.confirmSignups).toHaveBeenCalledWith('w-A', CONF_A, ids, {
-      acceptSeats: undefined,
+      acceptPast: undefined,
     })
   })
 
@@ -353,7 +353,7 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
       'w-A',
       CONF_A,
       ['sg-A', 'sg-B'],
-      { acceptSeats: undefined },
+      { acceptPast: undefined },
     )
   })
 

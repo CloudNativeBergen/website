@@ -484,12 +484,13 @@ export interface Full extends FullSeats {
  * sign-up reading at the same moment cannot take the seat it took.
  *
  * PAST CAPACITY IS A CHOICE MADE ON THE TRUE COUNT (#1358). A confirm that
- * would go past capacity is refused as `full` unless `acceptSeats`, the count
- * the organizer agreed to, covers the count it would reach. The decision is
- * made inside the guard: a seat taken between the refusal and the override
- * makes the override stale, and it is refused again with the new numbers. A
- * batch that only partly fits is refused as a whole. A sign-up confirmed
- * already takes no seat, so it is never refused, whatever the count.
+ * would go past capacity is refused as `full` unless `acceptPast`, how many
+ * seats past capacity the organizer agreed to (what the question showed),
+ * covers how far it would go. The decision is made inside the guard: a seat
+ * taken, or a capacity lowered, between the refusal and the override makes
+ * the override stale, and it is refused again with the new numbers. A batch
+ * that only partly fits is refused as a whole. A sign-up confirmed already
+ * takes no seat, so it is never refused, whatever the count.
  *
  * `confirmed` names the sign-ups that are confirmed now; one that is gone, or
  * of another workshop, is not in it. `newlyConfirmed` names those this write
@@ -499,7 +500,7 @@ export async function confirmSignups(
   workshopId: string,
   conferenceId: string,
   signupIds: string[],
-  { acceptSeats }: { acceptSeats?: number } = {},
+  { acceptPast }: { acceptPast?: number } = {},
 ): Promise<Confirmed | Full | { refused: 'not-found' | 'busy' }> {
   const outcome = await decideAndCommit<Full, Confirmed>(
     workshopId,
@@ -518,7 +519,7 @@ export async function confirmSignups(
       if (
         waiting.length > 0 &&
         after > seats.capacity &&
-        (acceptSeats === undefined || after > acceptSeats)
+        (acceptPast === undefined || after - seats.capacity > acceptPast)
       ) {
         return {
           refused: 'full' as const,

@@ -884,15 +884,15 @@ export const workshopRouter = router({
           const signup = signups[0]
 
           // Past capacity is the organizer's call (#1344), made on the true
-          // count (#1358): refused as full until the call carries the count
-          // they accepted. The seat is taken through the same guard as a
-          // sign-up.
+          // count (#1358): refused as full until the call carries how far
+          // past capacity they accepted. The seat is taken through the same
+          // guard as a sign-up.
           const outcome = signup.workshop?._id
             ? await confirmSignups(
                 signup.workshop._id,
                 conferenceId,
                 [signup._id],
-                { acceptSeats: input.acceptSeats },
+                { acceptPast: input.acceptPast },
               )
             : ({ refused: 'not-found' } as const)
           if ('refused' in outcome && outcome.refused === 'busy') {
@@ -1059,8 +1059,8 @@ export const workshopRouter = router({
           // ONE guarded write per workshop (#1344). Past capacity is the
           // organizer's call, made on the true count (#1358): a workshop the
           // batch would take past capacity is refused as a whole, with its
-          // numbers, until the call carries the count accepted for it. The
-          // answer names each workshop it went past with one.
+          // numbers, until the call carries how far past capacity was
+          // accepted for it. The answer names each workshop it went past.
           const byWorkshop = new Map<string, typeof signups>()
           for (const signup of signups) {
             const workshopId = signup.workshop?._id
@@ -1084,7 +1084,7 @@ export const workshopRouter = router({
               workshopId,
               conferenceId,
               group.map((signup) => signup._id),
-              { acceptSeats: input.acceptSeats?.[workshopId] },
+              { acceptPast: input.acceptPast?.[workshopId] },
             ).catch((error) => {
               console.error(
                 '[workshop] batch confirm failed',
