@@ -193,7 +193,7 @@ async function answer(procedure: string, input: unknown): Promise<unknown> {
       return ok({
         success: true,
         message: 'unused',
-        results: { succeeded: 1, failed: 0, total: 1 },
+        results: { succeeded: 1, failed: 0, total: 1, beyondCapacity: [] },
       })
     case 'workshop.admin.getAllSignups':
       return ok({ success: true, data: server.general })
