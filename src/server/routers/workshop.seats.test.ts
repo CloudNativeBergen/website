@@ -169,7 +169,7 @@ describe('admin.manualSignup', () => {
 })
 
 describe('admin.batchConfirmSignups', () => {
-  it('confirms per workshop, and names the workshops it took beyond capacity', async () => {
+  it('confirms per workshop, and names the workshops it took beyond capacity with an accepted count', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([
       row('s-1', 'w-1'),
       row('s-2', 'w-2'),
@@ -192,11 +192,20 @@ describe('admin.batchConfirmSignups', () => {
       sendEmails: true,
     })
 
-    expect(seats.confirmSignups).toHaveBeenCalledWith('w-1', 'conf-A', ['s-1'])
-    expect(seats.confirmSignups).toHaveBeenCalledWith('w-2', 'conf-A', [
-      's-2',
-      's-3',
-    ])
+    expect(seats.confirmSignups).toHaveBeenCalledWith(
+      'w-1',
+      'conf-A',
+      ['s-1'],
+      {
+        acceptSeats: undefined,
+      },
+    )
+    expect(seats.confirmSignups).toHaveBeenCalledWith(
+      'w-2',
+      'conf-A',
+      ['s-2', 's-3'],
+      { acceptSeats: undefined },
+    )
     expect(result.results).toEqual({
       succeeded: 3,
       failed: 0,
@@ -204,6 +213,7 @@ describe('admin.batchConfirmSignups', () => {
       beyondCapacity: [
         { workshopTitle: 'Workshop w-2', seatsTaken: 31, capacity: 30 },
       ],
+      full: [],
     })
     expect(result.message).toBe(
       'Confirmed 3 signups. Beyond capacity: Workshop w-2 (31 of 30 seats).',
@@ -281,6 +291,7 @@ describe('admin.batchConfirmSignups', () => {
 
     expect(result.message).toBe('Confirmed 1 signup.')
     expect(result.results.beyondCapacity).toEqual([])
+    expect(result.results.full).toEqual([])
     expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
   })
 
@@ -301,9 +312,147 @@ describe('admin.batchConfirmSignups', () => {
     expect(result.results).toMatchObject({ succeeded: 0, failed: 1 })
     expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
   })
+
+  it('a workshop refused as full (#1358) is answered with its numbers and sign-ups, confirms the rest, and emails no one there', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([
+      row('s-1', 'w-1'),
+      row('s-2', 'w-2'),
+      row('s-3', 'w-2'),
+    ])
+    seats.confirmSignups.mockImplementation(
+      async (workshopId: string, _conf: string, ids: string[]) =>
+        workshopId === 'w-1'
+          ? { confirmed: ids, newlyConfirmed: ids, seatsTaken: 3, capacity: 5 }
+          : { refused: 'full', seatsTaken: 30, capacity: 30, after: 32 },
+    )
+
+    const result = await admin().batchConfirmSignups({
+      signupIds: ['s-1', 's-2', 's-3'],
+      sendEmails: true,
+    })
+
+    expect(result.results).toEqual({
+      succeeded: 1,
+      failed: 2,
+      total: 3,
+      beyondCapacity: [],
+      full: [
+        {
+          workshopId: 'w-2',
+          title: 'Workshop w-2',
+          seatsTaken: 30,
+          capacity: 30,
+          after: 32,
+          signupIds: ['s-2', 's-3'],
+        },
+      ],
+    })
+    expect(result.message).toBe(
+      'Confirmed 1 signup, 2 failed. Full: Workshop w-2 (30 of 30 seats; confirming 2 goes 2 past capacity).',
+    )
+    expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes each workshop its own accepted count, and none to a workshop without one', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([
+      row('s-1', 'w-1'),
+      row('s-2', 'w-2'),
+    ])
+    seats.confirmSignups.mockImplementation(
+      async (_w: string, _c: string, ids: string[]) => ({
+        confirmed: ids,
+        newlyConfirmed: ids,
+        seatsTaken: 1,
+        capacity: 5,
+      }),
+    )
+
+    await admin().batchConfirmSignups({
+      signupIds: ['s-1', 's-2'],
+      sendEmails: false,
+      acceptSeats: { 'w-2': 31 },
+    })
+
+    expect(seats.confirmSignups).toHaveBeenCalledWith(
+      'w-1',
+      'conf-A',
+      ['s-1'],
+      {
+        acceptSeats: undefined,
+      },
+    )
+    expect(seats.confirmSignups).toHaveBeenCalledWith(
+      'w-2',
+      'conf-A',
+      ['s-2'],
+      {
+        acceptSeats: 31,
+      },
+    )
+  })
 })
 
 describe('admin.confirmSignup', () => {
+  it('refused as full (#1358): a structured answer with the numbers, not an error, and no email', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
+    seats.confirmSignups.mockResolvedValue({
+      refused: 'full',
+      seatsTaken: 30,
+      capacity: 30,
+      after: 31,
+    })
+
+    const result = await admin().confirmSignup({
+      signupId: 's-1',
+      sendEmail: true,
+    })
+
+    expect(result).toEqual({
+      success: false,
+      refused: 'full',
+      seatsTaken: 30,
+      capacity: 30,
+      after: 31,
+      message: 'Full (30 of 30). Confirming goes 1 past capacity.',
+    })
+    expect(seats.confirmSignups).toHaveBeenCalledWith(
+      'w-1',
+      'conf-A',
+      ['s-1'],
+      {
+        acceptSeats: undefined,
+      },
+    )
+    expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
+  })
+
+  it('with an accepted count: passes it on, and still says it went beyond capacity', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
+    seats.confirmSignups.mockResolvedValue({
+      confirmed: ['s-1'],
+      newlyConfirmed: ['s-1'],
+      seatsTaken: 31,
+      capacity: 30,
+    })
+
+    const result = await admin().confirmSignup({
+      signupId: 's-1',
+      sendEmail: false,
+      acceptSeats: 31,
+    })
+
+    expect(seats.confirmSignups).toHaveBeenCalledWith(
+      'w-1',
+      'conf-A',
+      ['s-1'],
+      {
+        acceptSeats: 31,
+      },
+    )
+    expect(result.message).toBe(
+      'Participant confirmed beyond capacity (31 of 30 seats)',
+    )
+  })
   it('confirmed from the waitlist without an email: does not say one was sent', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
     seats.confirmSignups.mockResolvedValue({

@@ -333,7 +333,9 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     expect(ws.getAllWorkshopSignups).toHaveBeenCalledWith(
       expect.objectContaining({ pageSize: 60 }),
     )
-    expect(ws.confirmSignups).toHaveBeenCalledWith('w-A', CONF_A, ids)
+    expect(ws.confirmSignups).toHaveBeenCalledWith('w-A', CONF_A, ids, {
+      acceptSeats: undefined,
+    })
   })
 
   it('batchConfirmSignups confirms when every id is ours', async () => {
@@ -347,10 +349,12 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
         sendEmails: false,
       }),
     ).resolves.toMatchObject({ results: { succeeded: 2, failed: 0 } })
-    expect(ws.confirmSignups).toHaveBeenCalledWith('w-A', CONF_A, [
-      'sg-A',
-      'sg-B',
-    ])
+    expect(ws.confirmSignups).toHaveBeenCalledWith(
+      'w-A',
+      CONF_A,
+      ['sg-A', 'sg-B'],
+      { acceptSeats: undefined },
+    )
   })
 
   it('listSignups scopes the lookup to the request conference', async () => {

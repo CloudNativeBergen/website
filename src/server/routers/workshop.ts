@@ -145,6 +145,26 @@ const beyondCapacityText = (
     .map((b) => `${b.workshopTitle} (${b.seatsTaken} of ${b.capacity} seats)`)
     .join(', ')
 
+/**
+ * "Workshop w-2 (30 of 30 seats; confirming 2 goes 2 past capacity)": a
+ * workshop an organizer's batch confirm was refused on, as full (#1358).
+ */
+const fullText = (
+  full: {
+    title: string
+    seatsTaken: number
+    capacity: number
+    after: number
+    signupIds: string[]
+  }[],
+) =>
+  full
+    .map(
+      (f) =>
+        `${f.title} (${f.seatsTaken} of ${f.capacity} seats; confirming ${f.signupIds.length} goes ${f.after - f.capacity} past capacity)`,
+    )
+    .join(', ')
+
 function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
   const user = ctx.workosUser
   if (!user?.id) {
@@ -866,15 +886,33 @@ export const workshopRouter = router({
 
           const signup = signups[0]
 
-          // Past capacity is the organizer's call (#1344), and is named as
-          // such. The seat is taken through the same guard as a sign-up.
+          // Past capacity is the organizer's call (#1344), made on the true
+          // count (#1358): refused as full until the call carries the count
+          // they accepted. The seat is taken through the same guard as a
+          // sign-up.
           const outcome = signup.workshop?._id
-            ? await confirmSignups(signup.workshop._id, conferenceId, [
-                signup._id,
-              ])
+            ? await confirmSignups(
+                signup.workshop._id,
+                conferenceId,
+                [signup._id],
+                { acceptSeats: input.acceptSeats },
+              )
             : ({ refused: 'not-found' } as const)
           if ('refused' in outcome && outcome.refused === 'busy') {
             return seatsBusy()
+          }
+          // Not an error: nothing is wrong, and the organizer is asked. The
+          // answer carries what the dialog needs to ask with.
+          if ('refused' in outcome && outcome.refused === 'full') {
+            const past = outcome.after - outcome.capacity
+            return {
+              success: false as const,
+              refused: 'full' as const,
+              seatsTaken: outcome.seatsTaken,
+              capacity: outcome.capacity,
+              after: outcome.after,
+              message: `Full (${outcome.seatsTaken} of ${outcome.capacity}). Confirming goes ${past} past capacity.`,
+            }
           }
           if ('refused' in outcome || !outcome.confirmed.includes(signup._id)) {
             throw new TRPCError({
@@ -906,7 +944,7 @@ export const workshopRouter = router({
           revalidateTag('content:workshops', 'default')
 
           return {
-            success: true,
+            success: true as const,
             message: beyond
               ? `Participant confirmed beyond capacity (${outcome.seatsTaken} of ${outcome.capacity} seats)${input.sendEmail && wasWaitlisted ? ' and notification email sent' : ''}`
               : wasWaitlisted
@@ -1022,7 +1060,10 @@ export const workshopRouter = router({
           const { conference } = await getConferenceForCurrentDomain({})
 
           // ONE guarded write per workshop (#1344). Past capacity is the
-          // organizer's call, and the answer names each workshop it went past.
+          // organizer's call, made on the true count (#1358): a workshop the
+          // batch would take past capacity is refused as a whole, with its
+          // numbers, until the call carries the count accepted for it. The
+          // answer names each workshop it went past with one.
           const byWorkshop = new Map<string, typeof signups>()
           for (const signup of signups) {
             const workshopId = signup.workshop?._id
@@ -1040,11 +1081,20 @@ export const workshopRouter = router({
             seatsTaken: number
             capacity: number
           }[] = []
+          const full: {
+            workshopId: string
+            title: string
+            seatsTaken: number
+            capacity: number
+            after: number
+            signupIds: string[]
+          }[] = []
           for (const [workshopId, group] of byWorkshop) {
             const outcome = await confirmSignups(
               workshopId,
               conferenceId,
               group.map((signup) => signup._id),
+              { acceptSeats: input.acceptSeats?.[workshopId] },
             ).catch((error) => {
               console.error(
                 '[workshop] batch confirm failed',
@@ -1059,6 +1109,16 @@ export const workshopRouter = router({
             if (!outcome) errored.push(workshopTitle)
             if (outcome && 'refused' in outcome && outcome.refused === 'busy') {
               busy.push(workshopTitle)
+            }
+            if (outcome && 'refused' in outcome && outcome.refused === 'full') {
+              full.push({
+                workshopId,
+                title: workshopTitle,
+                seatsTaken: outcome.seatsTaken,
+                capacity: outcome.capacity,
+                after: outcome.after,
+                signupIds: group.map((signup) => signup._id),
+              })
             }
             if (!outcome || 'refused' in outcome) continue
             confirmed.push(
@@ -1102,6 +1162,7 @@ export const workshopRouter = router({
             beyondCapacity.length > 0
               ? ` Beyond capacity: ${beyondCapacityText(beyondCapacity)}.`
               : ''
+          const isFull = full.length > 0 ? ` Full: ${fullText(full)}.` : ''
           const tryAgain =
             busy.length > 0
               ? ` Many people were signing up for ${busy.join(', ')}, so nothing was saved there. Try again in a moment.`
@@ -1116,12 +1177,13 @@ export const workshopRouter = router({
 
           return {
             success: true,
-            message: `Confirmed ${succeeded} signup${succeeded === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}.${beyond}${tryAgain}${failedFor}`,
+            message: `Confirmed ${succeeded} signup${succeeded === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}.${beyond}${isFull}${tryAgain}${failedFor}`,
             results: {
               succeeded,
               failed,
               total: signups.length,
               beyondCapacity,
+              full,
             },
           }
         } catch (error) {
