@@ -756,21 +756,6 @@ describe('what is stored', () => {
 })
 
 describe("the organizer's confirm", () => {
-  it('takes a free seat, and says it is within capacity', async () => {
-    store().reset([workshop(), signup(1, 'confirmed'), signup(2, 'waitlist')])
-
-    expect(await confirmSignups(WORKSHOP, CONF, ['signup-2'])).toEqual({
-      confirmed: ['signup-2'],
-      newlyConfirmed: ['signup-2'],
-      seatsTaken: 2,
-      capacity: 3,
-    })
-    expect(store().doc('signup-2')).toMatchObject({
-      status: 'confirmed',
-      confirmedAt: expect.any(String),
-    })
-  })
-
   it('of a promoted sign-up moved back outside the app (the debt still stored): settles the promotion email, so the confirm is the only one to tell it (#1357)', async () => {
     store().reset([
       workshop({ capacity: 1 }),
@@ -785,6 +770,21 @@ describe("the organizer's confirm", () => {
 
     expect(store().doc('signup-2')).toMatchObject({ status: 'confirmed' })
     expect(store().doc('signup-2')).not.toHaveProperty('promotionEmailDue')
+  })
+
+  it('takes a free seat, and says it is within capacity', async () => {
+    store().reset([workshop(), signup(1, 'confirmed'), signup(2, 'waitlist')])
+
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-2'])).toEqual({
+      confirmed: ['signup-2'],
+      newlyConfirmed: ['signup-2'],
+      seatsTaken: 2,
+      capacity: 3,
+    })
+    expect(store().doc('signup-2')).toMatchObject({
+      status: 'confirmed',
+      confirmedAt: expect.any(String),
+    })
   })
 
   it('past capacity is allowed, and the answer names it: 4 seats taken of 3', async () => {
