@@ -613,8 +613,13 @@ export function SponsorContractView({
       )}
 
       {/* Shown for a link that exists even after workshops were turned off,
-          so it can still be revoked. */}
-      {(workshopsEnabled || sponsor.hasWorkshopEarlyAccessLink) && (
+          so it can still be revoked. And for a sponsor people signed up
+          through, link or no link, workshops or not: those sign-ups stay,
+          and so does their count (#1348). With workshops off the section
+          offers no link to create and the count opens no list. */}
+      {(workshopsEnabled ||
+        sponsor.hasWorkshopEarlyAccessLink ||
+        (sponsor.workshopEarlySignupCount ?? 0) > 0) && (
         <SponsorEarlyAccessSection
           sponsorForConferenceId={sponsor._id}
           hasLink={!!sponsor.hasWorkshopEarlyAccessLink}

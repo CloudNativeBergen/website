@@ -538,3 +538,31 @@ export const RevokedWithEarlySignupsMobile: Story = {
   ...RevokedWithEarlySignups,
   ...mobile,
 }
+
+/**
+ * Workshops were turned off and the link revoked, after two people had signed
+ * up through it: the count is still said. It is text, since there is no list
+ * to open, and no link can be created.
+ */
+export const WorkshopsOffWithEarlySignups: Story = {
+  args: {
+    hasLink: false,
+    createRefusal: 'Workshops are not enabled for this conference.',
+    earlySignupCount: 2,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText('2 early sign-ups')).toBeInTheDocument()
+    await expect(canvas.queryByRole('link')).not.toBeInTheDocument()
+    await expect(canvas.queryByRole('button')).not.toBeInTheDocument()
+    await expectNoSidewaysScroll(canvasElement)
+  },
+}
+export const WorkshopsOffWithEarlySignupsDark: Story = {
+  ...WorkshopsOffWithEarlySignups,
+  ...dark,
+}
+export const WorkshopsOffWithEarlySignupsMobile: Story = {
+  ...WorkshopsOffWithEarlySignups,
+  ...mobile,
+}

@@ -75,8 +75,9 @@ const columns: Column<EarlySignupRow>[] = [
           {signup.earlyAccess.sponsor.name}
         </span>
       ) : (
-        // The sponsor is no longer in the conference.
-        <EarlyAccessBadge earlyAccess={{ sponsor: null }} />
+        // The sponsor is no longer in the conference, or has no name: the
+        // badge says which in its tooltip.
+        <EarlyAccessBadge earlyAccess={signup.earlyAccess} />
       ),
   },
   {

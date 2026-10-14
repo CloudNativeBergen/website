@@ -27,6 +27,17 @@ export function useSignupActions(onSettled: () => void) {
   const move = api.workshop.admin.batchCancelSignups.useMutation()
   const confirm = api.workshop.admin.batchConfirmSignups.useMutation()
   const remove = api.workshop.admin.deleteSignup.useMutation()
+  const utils = api.useUtils()
+  // A DELETE CHANGES A COUNT ON ANOTHER PAGE (#1348): the sponsor CRM board's
+  // rows (`sponsor.crm.list`) carry how many early sign-ups were made through
+  // each sponsor's links, and are read at most once a minute. Marked stale
+  // after every delete attempt, also a refused one (the sign-up may be gone
+  // all the same). Only a delete: a confirm and a move change no count.
+  //
+  // This reads nothing unless the board is on screen: `invalidate` refetches
+  // the queries someone is showing. A board Next keeps hidden is read when it
+  // is shown again.
+  const sponsorCountsChanged = () => void utils.sponsor.crm.list.invalidate()
 
   const refused =
     (action: keyof typeof TITLES, userName: string) =>
@@ -98,7 +109,16 @@ export function useSignupActions(onSettled: () => void) {
     remove: (signupId: string, userName: string) =>
       remove.mutate(
         { signupId },
-        { onSuccess: onSettled, onError: refused('remove', userName) },
+        {
+          onSuccess: () => {
+            sponsorCountsChanged()
+            onSettled()
+          },
+          onError: (error) => {
+            sponsorCountsChanged()
+            refused('remove', userName)(error)
+          },
+        },
       ),
 
     isMoving: move.isPending,

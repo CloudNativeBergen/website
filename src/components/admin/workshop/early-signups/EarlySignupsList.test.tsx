@@ -125,6 +125,28 @@ describe('the "Early sign-ups" list', () => {
     ])
   })
 
+  // A sponsor that is in the conference and has no name reads "early
+  // access" too; the tooltip does not say it left the conference.
+  it('tells in the tooltip a sponsor that left the conference from one that has no name', () => {
+    renderList({
+      signups: [
+        row('cy', 'Cy Young', { earlyAccess: { sponsor: null } }),
+        row('dee', 'Dee Dee', {
+          earlyAccess: { sponsor: { _id: 'sfc-x', name: null } },
+        }),
+      ],
+    })
+
+    expect(
+      within(screen.getByRole('table'))
+        .getAllByText('early access')
+        .map((badge) => badge.getAttribute('title')),
+    ).toEqual([
+      'Signed up through the early-access link of a sponsor that is no longer in this conference',
+      'Signed up through the early-access link of a sponsor of this conference that has no name',
+    ])
+  })
+
   it('says how many sign-ups it shows', () => {
     renderList()
     expect(screen.getByText('3 early sign-ups')).toBeVisible()

@@ -170,6 +170,10 @@ const server = {
   >,
   /** The input of every read of the list, in order. */
   earlyInputs: [] as unknown[],
+  /** How often the sponsor CRM board's rows (`sponsor.crm.list`) were read. */
+  boardReads: 0,
+  /** The next delete is answered "not found": the attendee had cancelled. */
+  deleteRefused: false,
 }
 
 const ok = (data: unknown) => ({ result: { data } })
@@ -181,6 +185,16 @@ const broughtIntoView = () =>
 
 async function answer(procedure: string, input: unknown): Promise<unknown> {
   switch (procedure) {
+    case 'sponsor.crm.list':
+      server.boardReads += 1
+      return ok([])
+    case 'workshop.admin.batchCancelSignups':
+    case 'workshop.admin.batchConfirmSignups':
+      return ok({
+        success: true,
+        message: 'unused',
+        results: { succeeded: 1, failed: 0, total: 1 },
+      })
     case 'workshop.admin.getAllSignups':
       return ok({ success: true, data: server.general })
     case 'workshop.admin.listSignups': {
@@ -213,6 +227,15 @@ async function answer(procedure: string, input: unknown): Promise<unknown> {
       return ok(server.early[sponsorId] ?? { signups: [], sponsors: [] })
     }
     case 'workshop.admin.deleteSignup': {
+      if (server.deleteRefused) {
+        return {
+          error: {
+            message: 'Not found',
+            code: -32004,
+            data: { code: 'NOT_FOUND', httpStatus: 404 },
+          },
+        }
+      }
       const { signupId } = input as { signupId: string }
       for (const answered of Object.values(server.early)) {
         answered.signups = answered.signups.filter(
@@ -255,7 +278,11 @@ beforeEach(() => {
       },
     },
     earlyInputs: [],
+    boardReads: 0,
+    deleteRefused: false,
   })
+  boardOnThePage = 'none'
+  vi.stubGlobal('alert', vi.fn())
   server.early['sfc-globex'] = {
     signups: [early('su-gus', 'Gus Grissom', GLOBEX, 'waitlist')],
     sponsors: [ACME, GLOBEX],
@@ -333,8 +360,10 @@ function renderPage(address = '/admin/workshops', state: unknown = null) {
  */
 function KeptRoute() {
   const [shown, set] = useState(true)
+  const [boardShown, setBoard] = useState(boardOnThePage === 'shown')
   useEffect(() => {
     setShown = set
+    setBoardShown = setBoard
   }, [])
   return (
     <Providers>
@@ -345,9 +374,27 @@ function KeptRoute() {
           resendDisabledReason={null}
         />
       </Activity>
+      {boardOnThePage !== 'none' && (
+        <Activity mode={boardShown ? 'visible' : 'hidden'}>
+          <SponsorBoard />
+        </Activity>
+      )}
     </Providers>
   )
 }
+
+/**
+ * The sponsor CRM board, as far as this page is concerned: a reader of
+ * `sponsor.crm.list`, whose rows carry each sponsor's count of early
+ * sign-ups. The REAL query hook, on the same query client as the page.
+ */
+function SponsorBoard() {
+  api.sponsor.crm.list.useQuery()
+  return null
+}
+/** Whether the board is in the tree at all, and if so shown or kept hidden. */
+let boardOnThePage: 'none' | 'shown' | 'kept hidden' = 'none'
+let setBoardShown: (shown: boolean) => void = () => {}
 
 const list = () => screen.getByRole('region', { name: 'Early sign-ups' })
 /** Name, status and sponsor of each row of the list's table. */
@@ -584,6 +631,115 @@ describe('the "Early sign-ups" list on the page', () => {
           ),
       ).toEqual(['Gus Grissom', 'Cy Young']),
     )
+  })
+})
+
+/**
+ * THE COUNT ON A SPONSOR'S RECORD AFTER A DELETE (#1348, review). The count is
+ * a field of the sponsor CRM board's rows (`sponsor.crm.list`), read at most
+ * once a minute. An organizer who came by the count's link, deletes a sign-up
+ * and goes back would see the old count. So a delete marks those rows stale.
+ * Only a delete: a confirm and a move change no count.
+ *
+ * Real here: the query client and `invalidate`. A query nobody is showing is
+ * marked stale and NOT read: the read happens when its board is shown again.
+ */
+describe('the sponsor board’s rows after an action on a sign-up', () => {
+  /** Open the confirmed list of the workshop: Ada is in it. */
+  async function openTheDialog(status: 'confirmed' | 'waitlist' = 'confirmed') {
+    server.ofWorkshop = [
+      dialogRow('su-ada', 'Ada Lovelace', { sponsor: ACME }, status),
+    ]
+    renderPage()
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: status === 'confirmed' ? /^Confirmed\s*2$/ : /^Waitlist\s*0$/,
+      }),
+    )
+    const dialog = await screen.findByRole('dialog', {
+      name: `Kubernetes 101 - ${status === 'confirmed' ? 'Confirmed' : 'Waitlist'} Signups`,
+    })
+    await within(dialog).findAllByText('Ada Lovelace')
+    return dialog
+  }
+  /** Press the confirm button of the question that is open, once it listens. */
+  async function answerTheQuestion(title: string, button: string) {
+    const confirm = within(
+      await screen.findByRole('dialog', { name: title }),
+    ).getByRole('button', { name: button })
+    await waitFor(() => expect(confirm).not.toHaveAttribute('aria-disabled'))
+    fireEvent.click(confirm)
+  }
+  async function deleteAda() {
+    const dialog = await openTheDialog()
+    fireEvent.click(within(dialog).getAllByTitle('Delete participant')[0])
+    await answerTheQuestion('Delete signup', 'Delete')
+    // The page's own lists have been read again: the delete has settled.
+    await waitFor(() => expect(server.earlyInputs).toEqual([{}, {}]))
+  }
+
+  it('a delete makes a board that is on screen read its rows again', async () => {
+    boardOnThePage = 'shown'
+    await deleteAda()
+
+    await waitFor(() => expect(server.boardReads).toBe(2))
+  })
+
+  it('a delete the server refused does too: the sign-up may be gone all the same', async () => {
+    boardOnThePage = 'shown'
+    server.deleteRefused = true
+    await deleteAda()
+
+    await waitFor(() => expect(server.boardReads).toBe(2))
+  })
+
+  it('"Move to waitlist" does not: it changes no count', async () => {
+    boardOnThePage = 'shown'
+    const dialog = await openTheDialog()
+    fireEvent.click(
+      within(dialog).getAllByRole('button', { name: 'Move to waitlist' })[0],
+    )
+    await answerTheQuestion('Move to waitlist', 'Move to waitlist')
+
+    await waitFor(() => expect(server.earlyInputs).toEqual([{}, {}]))
+    expect(server.boardReads).toBe(1)
+  })
+
+  it('"Move to Confirmed" does not either', async () => {
+    boardOnThePage = 'shown'
+    const dialog = await openTheDialog('waitlist')
+    fireEvent.click(
+      within(dialog).getAllByRole('button', { name: 'Move to Confirmed' })[0],
+    )
+
+    await waitFor(() => expect(server.earlyInputs).toEqual([{}, {}]))
+    expect(server.boardReads).toBe(1)
+  })
+
+  it('a board Next keeps hidden is not read by the delete, and is read when it is shown again', async () => {
+    boardOnThePage = 'shown'
+    const dialog = await openTheDialog()
+    await waitFor(() => expect(server.boardReads).toBe(1))
+    // The organizer left the board for this page: Next keeps it, hidden.
+    act(() => setBoardShown(false))
+
+    fireEvent.click(within(dialog).getAllByTitle('Delete participant')[0])
+    await answerTheQuestion('Delete signup', 'Delete')
+    await waitFor(() => expect(server.earlyInputs).toEqual([{}, {}]))
+
+    // Hidden: marked stale, not read.
+    expect(server.boardReads).toBe(1)
+
+    // The organizer goes back to the board: its rows are read again.
+    act(() => setBoardShown(true))
+    await waitFor(() => expect(server.boardReads).toBe(2))
+  })
+
+  it('with no board in the tree, a delete asks the server for no sponsor rows', async () => {
+    await deleteAda()
+
+    expect(server.boardReads).toBe(0)
   })
 })
 

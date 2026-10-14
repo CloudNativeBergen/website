@@ -196,6 +196,14 @@ beforeEach(() => {
     }),
     // Its link was revoked after one person had signed up through it.
     sponsorOfConference('sfc-globex', 'sponsor-globex'),
+    // Its link was revoked after TWO had, and nothing else is special.
+    sponsorOfConference('sfc-initech', 'sponsor-initech'),
+    { _id: 'sponsor-initech', _type: 'sponsor', name: 'Initech' },
+    signup('su-5', 'sfc-initech'),
+    signup('su-6', 'sfc-initech', 'waitlist'),
+    // No link, and nobody ever signed up through one.
+    sponsorOfConference('sfc-hooli', 'sponsor-hooli'),
+    { _id: 'sponsor-hooli', _type: 'sponsor', name: 'Hooli' },
     signup('su-1', 'sfc-acme'),
     signup('su-2', 'sfc-acme'),
     signup('su-3', 'sfc-acme', 'waitlist'),
@@ -210,7 +218,10 @@ beforeEach(() => {
 afterEach(cleanup)
 
 /** The record of one sponsor, opened from the board on its contract view. */
-async function openRecordOf(sponsorForConferenceId: string) {
+async function openRecordOf(
+  sponsorForConferenceId: string,
+  { workshopsEnabled = true }: { workshopsEnabled?: boolean } = {},
+) {
   const rows = await caller().crm.list()
   const row = rows.find((each) => each._id === sponsorForConferenceId)
   if (!row) throw new Error(`${sponsorForConferenceId} is not on the board`)
@@ -223,19 +234,19 @@ async function openRecordOf(sponsorForConferenceId: string) {
       onClose={vi.fn()}
       onSuccess={vi.fn()}
       initialView="contract"
-      workshopsEnabled
+      workshopsEnabled={workshopsEnabled}
       sponsorStartSet
     />,
   )
-  return within(
-    screen.getByRole('heading', { name: 'Workshop early access' })
-      .parentElement!,
-  )
+  const heading = screen.queryByRole('heading', {
+    name: 'Workshop early access',
+  })
+  return heading && within(heading.parentElement!)
 }
 
 describe('the count of early sign-ups on a sponsor’s record, from the board’s own row', () => {
   it('says how many were made through the sponsor’s links, and links to the list narrowed to it', async () => {
-    const section = await openRecordOf('sfc-acme')
+    const section = (await openRecordOf('sfc-acme'))!
 
     expect(
       section.getByRole('link', { name: '3 early sign-ups' }),
@@ -246,7 +257,7 @@ describe('the count of early sign-ups on a sponsor’s record, from the board’
   })
 
   it('says it for a sponsor whose link was revoked since', async () => {
-    const section = await openRecordOf('sfc-globex')
+    const section = (await openRecordOf('sfc-globex'))!
 
     expect(
       section.getByRole('link', { name: '1 early sign-up' }),
@@ -263,5 +274,39 @@ describe('the count of early sign-ups on a sponsor’s record, from the board’
     expect(
       h.asked.filter((name) => /early|signup|workshop/i.test(name)),
     ).toEqual([])
+  })
+
+  /**
+   * WORKSHOPS TURNED OFF, AND THE LINK REVOKED (#1348, review): the sign-ups
+   * made through it stay, and the ticket says the count includes them. With
+   * neither workshops nor a link the section used not to render at all.
+   */
+  describe('for a conference that has turned workshops off', () => {
+    it('still says the count of a sponsor whose link was revoked, as text, and offers no link to create', async () => {
+      const section = (await openRecordOf('sfc-initech', {
+        workshopsEnabled: false,
+      }))!
+
+      expect(section.getByText('2 early sign-ups')).toBeVisible()
+      // No list to open, and nothing to create or copy.
+      expect(section.queryByRole('link')).toBeNull()
+      expect(section.queryByRole('button')).toBeNull()
+      expect(
+        section.getByText('Workshops are not enabled for this conference.'),
+      ).toBeVisible()
+    })
+
+    it('shows no section for a sponsor without a link and without sign-ups, as before', async () => {
+      expect(
+        await openRecordOf('sfc-hooli', { workshopsEnabled: false }),
+      ).toBeNull()
+    })
+
+    it('with workshops on, that sponsor has the section, to create a link in', async () => {
+      const section = (await openRecordOf('sfc-hooli'))!
+
+      expect(section.getByRole('button', { name: 'Create link' })).toBeVisible()
+      expect(section.queryByText(/early sign-up/)).toBeNull()
+    })
   })
 })

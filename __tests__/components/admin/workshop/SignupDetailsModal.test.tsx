@@ -317,6 +317,29 @@ describe('SignupDetailsModal: the sponsor on an early sign-up (#1348)', () => {
     ])
   })
 
+  // The visible text is "early access" for both; the tooltip says which.
+  it('tells in the tooltip a sponsor that left the conference from one that has no name', () => {
+    renderModal({ signups: rows })
+
+    const tableRows = within(screen.getByRole('table'))
+      .getAllByRole('row')
+      .slice(1)
+    expect(
+      tableRows.map(
+        (row) =>
+          within(row)
+            .queryByText(/^(via .+|early access)$/)
+            ?.getAttribute('title') ?? null,
+      ),
+    ).toEqual([
+      'Signed up through Acme AS’s early-access link',
+      null,
+      null,
+      'Signed up through the early-access link of a sponsor that is no longer in this conference',
+      'Signed up through the early-access link of a sponsor of this conference that has no name',
+    ])
+  })
+
   it('says the same on the cards a phone shows', () => {
     renderModal({ signups: rows })
 
