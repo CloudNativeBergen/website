@@ -36,15 +36,18 @@ import {
   checkWorkshopCapacity,
   verifyWorkshopBelongsToConference,
   getWorkshopSignups,
-  createWorkshopSignup,
   deleteWorkshopSignup,
   moveWorkshopSignupToWaitlist,
-  confirmWorkshopSignup,
-  updateWorkshopCapacity,
+  getWorkshopById,
   getWorkshopSignupsByWorkshop,
   getAllWorkshopSignups,
   getWorkshopStatistics,
 } from '@/lib/workshop/sanity'
+import {
+  changeCapacity,
+  confirmSignups,
+  signUpForWorkshop,
+} from '@/lib/workshop/seats'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
@@ -88,6 +91,26 @@ import { requireDocumentInCurrentConference } from '@/server/tenancy'
  * cookie (see `resolveWorkshopUser` in trpc.ts) — it is NEVER taken from client
  * input, which is what an attacker previously spoofed.
  */
+/**
+ * A seat decision (#1344) that lost the race every time it tried. Nothing was
+ * written, and trying again is the remedy.
+ */
+const seatsBusy = (): never => {
+  throw new TRPCError({
+    code: 'TOO_MANY_REQUESTS',
+    message:
+      'Many people are signing up for this workshop right now. Nothing was saved. Try again in a moment.',
+  })
+}
+
+/** "Workshop w-2 (31 of 30 seats)": what an organizer's confirm went past. */
+const beyondCapacityText = (
+  beyond: { workshopTitle: string; seatsTaken: number; capacity: number }[],
+) =>
+  beyond
+    .map((b) => `${b.workshopTitle} (${b.seatsTaken} of ${b.capacity} seats)`)
+    .join(', ')
+
 function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
   const user = ctx.workosUser
   if (!user?.id) {
@@ -587,58 +610,48 @@ export const workshopRouter = router({
 
         // The conference is ALWAYS the domain-resolved one — never client
         // input — so a signup cannot target (or bypass the registration
-        // window of) another tenant's conference.
-        const belongs = await verifyWorkshopBelongsToConference(
-          input.workshop._ref,
-          conference._id,
-        )
-
-        if (!belongs) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Workshop does not belong to this conference',
-          })
-        }
-
-        const existingSignups = await getWorkshopSignups(
-          userWorkOSId,
-          conference._id,
-          undefined,
-        )
-
-        const alreadySignedUp = existingSignups.some(
-          (signup) => signup.workshop._ref === input.workshop._ref,
-        )
-
-        if (alreadySignedUp) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'You are already signed up for this workshop',
-          })
-        }
-
-        const capacity = await checkWorkshopCapacity(input.workshop._ref)
-        const isWaitlist = !capacity || capacity.available <= 0
-
-        const signup = await createWorkshopSignup(
+        // window of) another tenant's conference. Confirmed or waitlisted,
+        // and one sign-up per person, is decided in the write (#1344).
+        const outcome = await signUpForWorkshop(
           {
             userWorkOSId,
             userEmail,
             userName,
             experienceLevel: input.experienceLevel,
             operatingSystem: input.operatingSystem,
-            workshop: input.workshop,
-            conference: { _type: 'reference' as const, _ref: conference._id },
-            notes: input.notes,
-            status: isWaitlist
-              ? WorkshopSignupStatus.WAITLIST
-              : WorkshopSignupStatus.CONFIRMED,
+            workshopId: input.workshop._ref,
+            conferenceId: conference._id,
+            // AN EARLY SIGN-UP records the sponsor whose link admitted it. A
+            // sponsor was looked up only inside the early-access window, so a
+            // sign-up after the official opening records nothing, cookie or
+            // not.
+            earlyAccessSponsorId: sponsor?._id,
           },
-          // AN EARLY SIGN-UP records the sponsor whose link admitted it. A
-          // sponsor was looked up only inside the early-access window, so a
-          // sign-up after the official opening records nothing, cookie or not.
-          sponsor ? { earlyAccessSponsorId: sponsor._id } : {},
+          { whenFull: 'waitlist' },
         )
+        if ('refused' in outcome) {
+          switch (outcome.refused) {
+            case 'not-found':
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: 'Workshop does not belong to this conference',
+              })
+            case 'already-signed-up':
+              throw new TRPCError({
+                code: 'CONFLICT',
+                message: 'You are already signed up for this workshop',
+              })
+            case 'full':
+              throw new TRPCError({
+                code: 'CONFLICT',
+                message: 'Workshop is full',
+              })
+            case 'busy':
+              return seatsBusy()
+          }
+        }
+        const { signup } = outcome
+        const isWaitlist = signup.status === WorkshopSignupStatus.WAITLIST
 
         await sendBasicWorkshopConfirmation({
           userEmail: signup.userEmail,
@@ -836,7 +849,25 @@ export const workshopRouter = router({
           const signup = signups[0]
           const wasWaitlisted = signup.status === 'waitlist'
 
-          await confirmWorkshopSignup(input.signupId)
+          // Past capacity is the organizer's call (#1344), and is named as
+          // such. The seat is taken through the same guard as a sign-up.
+          const outcome = signup.workshop?._id
+            ? await confirmSignups(
+                signup.workshop._id,
+                await resolveConferenceId(),
+                [signup._id],
+              )
+            : ({ refused: 'not-found' } as const)
+          if ('refused' in outcome && outcome.refused === 'busy') {
+            return seatsBusy()
+          }
+          if ('refused' in outcome || !outcome.confirmed.includes(signup._id)) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Signup not found',
+            })
+          }
+          const beyond = outcome.seatsTaken > outcome.capacity
 
           if (input.sendEmail && wasWaitlisted) {
             const { conference } = await getConferenceForCurrentDomain({})
@@ -859,9 +890,11 @@ export const workshopRouter = router({
 
           return {
             success: true,
-            message: wasWaitlisted
-              ? 'Participant confirmed and notification email sent'
-              : 'Workshop signup confirmed successfully',
+            message: beyond
+              ? `Participant confirmed beyond capacity (${outcome.seatsTaken} of ${outcome.capacity} seats)`
+              : wasWaitlisted
+                ? 'Participant confirmed and notification email sent'
+                : 'Workshop signup confirmed successfully',
           }
         } catch (error) {
           if (error instanceof TRPCError) throw error
@@ -882,59 +915,45 @@ export const workshopRouter = router({
           // does. Unguarded, `updateWorkshopCapacity` is a bare
           // `patch(id).set({capacity})` — no tenant check and no `_type` check,
           // so it could stamp `capacity` onto any document in the dataset.
+          // The capacity, and the waitlisted sign-ups it lets in, are written
+          // together through the seats guard (#1344): a sign-up at the same
+          // moment cannot take a seat on the old count.
           const conferenceId = await resolveConferenceId()
-          const belongs = await verifyWorkshopBelongsToConference(
+          const outcome = await changeCapacity(
             input.workshopId,
             conferenceId,
-          )
-          if (!belongs) {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'Workshop not found for this conference',
-            })
-          }
-          const current = await checkWorkshopCapacity(input.workshopId)
-          const signupCount = current.signups
-
-          if (input.capacity < signupCount) {
-            throw new TRPCError({
-              code: 'CONFLICT',
-              message: `Cannot reduce capacity below current signup count (${signupCount})`,
-            })
-          }
-
-          const oldCapacity = current.capacity
-          const updatedWorkshop = await updateWorkshopCapacity(
-            input.workshopId,
             input.capacity,
           )
+          if ('refused' in outcome) {
+            switch (outcome.refused) {
+              case 'not-found':
+                throw new TRPCError({
+                  code: 'NOT_FOUND',
+                  message: 'Workshop not found for this conference',
+                })
+              case 'below-seats-taken':
+                throw new TRPCError({
+                  code: 'CONFLICT',
+                  message: `Cannot reduce capacity below current signup count (${outcome.seatsTaken})`,
+                })
+              case 'busy':
+                return seatsBusy()
+            }
+          }
 
-          const capacityIncrease = input.capacity - oldCapacity
-          let promotedCount = 0
-
-          if (capacityIncrease > 0) {
-            const waitlistSignups = await getWorkshopSignupsByWorkshop(
-              input.workshopId,
+          const updatedWorkshop = await getWorkshopById(input.workshopId)
+          const promotedCount = outcome.promoted.length
+          if (promotedCount > 0) {
+            const promoted = await getAllWorkshopSignups({
               conferenceId,
-              'waitlist',
-            )
-
-            const signupsToPromote = waitlistSignups
-              .sort((a, b) => {
-                const dateA = new Date(a.signedUpAt || a._createdAt).getTime()
-                const dateB = new Date(b.signedUpAt || b._createdAt).getTime()
-                return dateA - dateB
-              })
-              .slice(0, capacityIncrease)
-
+              signupIds: outcome.promoted,
+              pageSize: promotedCount,
+            })
             const { conference } = await getConferenceForCurrentDomain({})
-
-            const promotionResults = await Promise.allSettled(
-              signupsToPromote.map(async (signup) => {
-                await confirmWorkshopSignup(signup._id)
-
-                if (conference) {
-                  await sendBasicWorkshopConfirmation({
+            if (conference) {
+              await Promise.allSettled(
+                promoted.map((signup) =>
+                  sendBasicWorkshopConfirmation({
                     userEmail: signup.userEmail,
                     userName: signup.userName,
                     status: 'confirmed',
@@ -943,16 +962,10 @@ export const workshopRouter = router({
                     workshopDate: (signup.workshop as { date?: string })?.date,
                     workshopTime: (signup.workshop as { startTime?: string })
                       ?.startTime,
-                  })
-                }
-
-                return signup
-              }),
-            )
-
-            promotedCount = promotionResults.filter(
-              (r) => r.status === 'fulfilled',
-            ).length
+                  }),
+                ),
+              )
+            }
           }
 
           revalidateTag('content:workshops', 'default')
@@ -1010,43 +1023,79 @@ export const workshopRouter = router({
 
           const { conference } = await getConferenceForCurrentDomain({})
 
-          const results = await Promise.allSettled(
-            signups.map(async (signup) => {
-              const wasWaitlisted = signup.status === 'waitlist'
-              await confirmWorkshopSignup(signup._id)
+          // ONE guarded write per workshop (#1344). Past capacity is the
+          // organizer's call, and the answer names each workshop it went past.
+          const byWorkshop = new Map<string, typeof signups>()
+          for (const signup of signups) {
+            const workshopId = signup.workshop?._id
+            if (!workshopId) continue
+            byWorkshop.set(workshopId, [
+              ...(byWorkshop.get(workshopId) ?? []),
+              signup,
+            ])
+          }
+          const confirmed: typeof signups = []
+          const beyondCapacity: {
+            workshopTitle: string
+            seatsTaken: number
+            capacity: number
+          }[] = []
+          for (const [workshopId, group] of byWorkshop) {
+            const outcome = await confirmSignups(
+              workshopId,
+              conferenceId,
+              group.map((signup) => signup._id),
+            ).catch(() => null)
+            if (!outcome || 'refused' in outcome) continue
+            confirmed.push(
+              ...group.filter((s) => outcome.confirmed.includes(s._id)),
+            )
+            if (outcome.seatsTaken > outcome.capacity) {
+              beyondCapacity.push({
+                workshopTitle: group[0].workshop?.title ?? 'Workshop',
+                seatsTaken: outcome.seatsTaken,
+                capacity: outcome.capacity,
+              })
+            }
+          }
 
-              if (input.sendEmails && wasWaitlisted && conference) {
-                await sendBasicWorkshopConfirmation({
-                  userEmail: signup.userEmail,
-                  userName: signup.userName,
-                  status: 'confirmed',
-                  conference,
-                  workshopTitle: signup.workshop?.title ?? 'Workshop',
-                  workshopDate: (signup.workshop as { date?: string })?.date,
-                  workshopTime: (signup.workshop as { startTime?: string })
-                    ?.startTime,
-                }).catch(() => {})
-              }
+          if (input.sendEmails && conference) {
+            await Promise.allSettled(
+              confirmed
+                .filter((signup) => signup.status === 'waitlist')
+                .map((signup) =>
+                  sendBasicWorkshopConfirmation({
+                    userEmail: signup.userEmail,
+                    userName: signup.userName,
+                    status: 'confirmed',
+                    conference,
+                    workshopTitle: signup.workshop?.title ?? 'Workshop',
+                    workshopDate: (signup.workshop as { date?: string })?.date,
+                    workshopTime: (signup.workshop as { startTime?: string })
+                      ?.startTime,
+                  }),
+                ),
+            )
+          }
 
-              return signup
-            }),
-          )
-
-          const succeeded = results.filter(
-            (r) => r.status === 'fulfilled',
-          ).length
-          const failed = results.filter((r) => r.status === 'rejected').length
+          const succeeded = confirmed.length
+          const failed = signups.length - succeeded
+          const beyond =
+            beyondCapacity.length > 0
+              ? ` Beyond capacity: ${beyondCapacityText(beyondCapacity)}.`
+              : ''
 
           revalidateTag('admin:workshops', 'default')
           revalidateTag('content:workshops', 'default')
 
           return {
             success: true,
-            message: `Confirmed ${succeeded} signup${succeeded === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}`,
+            message: `Confirmed ${succeeded} signup${succeeded === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}.${beyond}`,
             results: {
               succeeded,
               failed,
               total: signups.length,
+              beyondCapacity,
             },
           }
         } catch (error) {
@@ -1233,47 +1282,41 @@ export const workshopRouter = router({
           // tenant's conference.
           const conferenceId = await resolveConferenceId()
 
-          const belongs = await verifyWorkshopBelongsToConference(
-            input.workshop._ref,
-            conferenceId,
+          // Refused when full, decided in the write (#1344).
+          const outcome = await signUpForWorkshop(
+            {
+              userWorkOSId: input.userWorkOSId,
+              userEmail: input.userEmail,
+              userName: input.userName,
+              experienceLevel: input.experienceLevel,
+              operatingSystem: input.operatingSystem,
+              workshopId: input.workshop._ref,
+              conferenceId,
+            },
+            { whenFull: 'refuse' },
           )
-
-          if (!belongs) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: 'Workshop does not belong to this conference',
-            })
+          if ('refused' in outcome) {
+            switch (outcome.refused) {
+              case 'not-found':
+                throw new TRPCError({
+                  code: 'BAD_REQUEST',
+                  message: 'Workshop does not belong to this conference',
+                })
+              case 'full':
+                throw new TRPCError({
+                  code: 'CONFLICT',
+                  message: 'Workshop is full',
+                })
+              case 'already-signed-up':
+                throw new TRPCError({
+                  code: 'CONFLICT',
+                  message: 'User is already signed up for this workshop',
+                })
+              case 'busy':
+                return seatsBusy()
+            }
           }
-
-          const capacity = await checkWorkshopCapacity(input.workshop._ref)
-          if (!capacity || capacity.available <= 0) {
-            throw new TRPCError({
-              code: 'CONFLICT',
-              message: 'Workshop is full',
-            })
-          }
-
-          const existingSignups = await getWorkshopSignups(
-            input.userWorkOSId,
-            conferenceId,
-            undefined,
-          )
-
-          const alreadySignedUp = existingSignups.some(
-            (signup) => signup.workshop._ref === input.workshop._ref,
-          )
-
-          if (alreadySignedUp) {
-            throw new TRPCError({
-              code: 'CONFLICT',
-              message: 'User is already signed up for this workshop',
-            })
-          }
-
-          const signup = await createWorkshopSignup({
-            ...input,
-            conference: { _type: 'reference' as const, _ref: conferenceId },
-          })
+          const { signup } = outcome
 
           await sendBasicWorkshopConfirmation({
             userEmail: signup.userEmail,

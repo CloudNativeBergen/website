@@ -114,16 +114,6 @@ vi.mock('@/lib/workshop/sanity', async (importActual) => {
       signups: 0,
     })),
     verifyWorkshopBelongsToConference: vi.fn(async () => true),
-    createWorkshopSignup: vi.fn(async (data) => ({
-      _id: 'signup-1',
-      _type: 'workshopSignup',
-      status: data.status ?? 'confirmed',
-      userEmail: data.userEmail,
-      userName: data.userName,
-      userWorkOSId: data.userWorkOSId,
-      workshop: { _ref: data.workshop._ref, title: 'Kubernetes 101' },
-      conference: { _ref: data.conference._ref },
-    })),
     getAllWorkshopSignups: vi.fn(async () => []),
     deleteWorkshopSignup: vi.fn(async () => {}),
     moveWorkshopSignupToWaitlist: vi.fn(async () => {}),
@@ -142,9 +132,26 @@ vi.mock('@/lib/workshop/sanity', async (importActual) => {
   }
 })
 
+// The seat decision (#1344) is proven on stored documents in
+// `src/lib/workshop/seats.sanity.test.ts`; here only what the router asks.
+vi.mock('@/lib/workshop/seats', () => ({
+  signUpForWorkshop: vi.fn(async (request) => ({
+    signup: {
+      _id: 'signup-1',
+      _type: 'workshopSignup',
+      status: 'confirmed',
+      userEmail: request.userEmail,
+      userName: request.userName,
+      userWorkOSId: request.userWorkOSId,
+      workshop: { _ref: request.workshopId, title: 'Kubernetes 101' },
+      conference: { _ref: request.conferenceId },
+    },
+  })),
+}))
+
+import { signUpForWorkshop } from '@/lib/workshop/seats'
 import {
   getWorkshopSignups,
-  createWorkshopSignup,
   getAllWorkshopSignups,
   deleteWorkshopSignup,
   moveWorkshopSignupToWaitlist,
@@ -158,7 +165,7 @@ import { seal } from '@/lib/workshop/central-sign-in/seal'
 
 type LooseMock = ReturnType<typeof vi.fn>
 const getSignupsMock = getWorkshopSignups as unknown as LooseMock
-const createSignupMock = createWorkshopSignup as unknown as LooseMock
+const createSignupMock = signUpForWorkshop as unknown as LooseMock
 const getAllMock = getAllWorkshopSignups as unknown as LooseMock
 const deleteMock = deleteWorkshopSignup as unknown as LooseMock
 const waitlistMock = moveWorkshopSignupToWaitlist as unknown as LooseMock
@@ -246,12 +253,6 @@ describe('workshop.signup identity binding', () => {
     expect(written.userWorkOSId).toBe('workos-real')
     expect(written.userEmail).toBe('real@example.com')
     expect(written.userName).toBe('Real User')
-    // The duplicate-check read is also scoped to the session id.
-    expect(getSignupsMock).toHaveBeenCalledWith(
-      'workos-real',
-      'conf-1',
-      undefined,
-    )
   })
 
   it('stores the signup under the WorkOS user ID of the session the browser holds (#1314)', async () => {
@@ -345,7 +346,7 @@ describe('workshop.signup identity binding', () => {
 
     expect(createSignupMock).toHaveBeenCalledTimes(1)
     const written = createSignupMock.mock.calls[0][0]
-    expect(written.conference).toEqual({ _type: 'reference', _ref: 'conf-1' })
+    expect(written.conferenceId).toBe('conf-1')
   })
 
   it('rejects signup with UNAUTHORIZED when there is no WorkOS session', async () => {
@@ -355,6 +356,62 @@ describe('workshop.signup identity binding', () => {
     )
     expect(createSignupMock).not.toHaveBeenCalled()
   })
+})
+
+describe('workshop.signup: a sign-up that cannot take a seat (#1344)', () => {
+  const caller = () =>
+    createWorkshopCaller({ id: 'workos-real', email: 'real@example.com' })
+
+  it('a waitlisted sign-up is told it is on the waitlist', async () => {
+    createSignupMock.mockImplementationOnce(async () => ({
+      signup: {
+        _id: 'signup-1',
+        status: 'waitlist',
+        userEmail: 'real@example.com',
+        userName: 'Real User',
+        workshop: { title: 'Kubernetes 101' },
+      },
+    }))
+
+    await expect(
+      caller().workshop.signup(baseSignupInput),
+    ).resolves.toMatchObject({
+      message: 'Successfully added to workshop waitlist',
+      data: { status: 'waitlist' },
+    })
+  })
+
+  it('asks for the waitlist, not a refusal, when the workshop is full', async () => {
+    await caller().workshop.signup(baseSignupInput)
+
+    expect(createSignupMock.mock.calls[0][1]).toEqual({ whenFull: 'waitlist' })
+  })
+
+  it.each([
+    [
+      'busy',
+      'TOO_MANY_REQUESTS',
+      'Many people are signing up for this workshop right now. Nothing was saved. Try again in a moment.',
+    ],
+    [
+      'already-signed-up',
+      'CONFLICT',
+      'You are already signed up for this workshop',
+    ],
+    ['not-found', 'BAD_REQUEST', 'Workshop does not belong to this conference'],
+  ])(
+    'refused as %s: %s with a clear message, never a 500',
+    async (refused, code, message) => {
+      createSignupMock.mockResolvedValueOnce({ refused })
+
+      await expect(
+        caller().workshop.signup(baseSignupInput),
+      ).rejects.toMatchObject({
+        code,
+        message,
+      })
+    },
+  )
 })
 
 describe('workshop.cancelSignup ownership', () => {
@@ -647,12 +704,9 @@ describe('workshop admin procedures remain NextAuth-gated', () => {
 
     expect(createSignupMock).toHaveBeenCalledTimes(1)
     const written = createSignupMock.mock.calls[0][0]
-    expect(written.conference).toEqual({ _type: 'reference', _ref: 'conf-1' })
-    // The duplicate-check read is scoped to the domain conference too.
-    expect(getSignupsMock).toHaveBeenCalledWith(
-      'manual-user',
-      'conf-1',
-      undefined,
-    )
+    expect(written).toMatchObject({
+      userWorkOSId: 'manual-user',
+      conferenceId: 'conf-1',
+    })
   })
 })

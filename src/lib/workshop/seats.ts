@@ -26,21 +26,19 @@
 import { createHash } from 'node:crypto'
 import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
-import type {
-  ExperienceLevel,
-  OperatingSystem,
-  WorkshopSignupExisting,
-} from './types'
+import type { WorkshopSignupExisting, WorkshopSignupInput } from './types'
 
 /** How many times a write that lost a race reads again before giving up. */
 const MAX_ATTEMPTS = 25
 
-export interface SignUpRequest {
-  userWorkOSId: string
-  userEmail: string
-  userName: string
-  experienceLevel: ExperienceLevel
-  operatingSystem: OperatingSystem
+export interface SignUpRequest extends Pick<
+  WorkshopSignupInput,
+  | 'userWorkOSId'
+  | 'userEmail'
+  | 'userName'
+  | 'experienceLevel'
+  | 'operatingSystem'
+> {
   workshopId: string
   conferenceId: string
   /** The sponsor whose early-access link admitted this sign-up (#1346). */
@@ -172,42 +170,41 @@ export async function signUpForWorkshop(
 ): Promise<SignUpOutcome> {
   const { workshopId, conferenceId, earlyAccessSponsorId } = request
   const _id = signupDocumentId(workshopId, request.userWorkOSId)
-  const outcome = await decideAndCommit(
-    workshopId,
-    conferenceId,
-    (seats, tx) => {
-      if (seats.signups.some((s) => s.userWorkOSId === request.userWorkOSId)) {
-        return { refused: 'already-signed-up' as const }
-      }
-      const free = confirmedIn(seats) < seats.capacity
-      if (!free && whenFull === 'refuse') return { refused: 'full' as const }
-      if (free) guard(tx, seats, workshopId, conferenceId)
-      tx.create({
-        _id,
-        _type: 'workshopSignup',
-        userWorkOSId: request.userWorkOSId,
-        userEmail: request.userEmail,
-        userName: request.userName,
-        workshop: { _type: 'reference', _ref: workshopId },
-        conference: { _type: 'reference', _ref: conferenceId },
-        status: free ? 'confirmed' : 'waitlist',
-        confirmationEmailSent: false,
-        experienceLevel: request.experienceLevel,
-        operatingSystem: request.operatingSystem,
-        // WEAK IN THE WRITE ITSELF: the schema's `weak` governs Studio only,
-        // and a strong reference would keep the sponsor from being removed
-        // from the conference.
-        ...(earlyAccessSponsorId && {
-          earlyAccessSponsor: {
-            _type: 'reference',
-            _ref: earlyAccessSponsorId,
-            _weak: true,
-          },
-        }),
-      })
-      return { done: _id }
-    },
-  )
+  const outcome = await decideAndCommit<
+    { refused: 'already-signed-up' | 'full' },
+    string
+  >(workshopId, conferenceId, (seats, tx) => {
+    if (seats.signups.some((s) => s.userWorkOSId === request.userWorkOSId)) {
+      return { refused: 'already-signed-up' as const }
+    }
+    const free = confirmedIn(seats) < seats.capacity
+    if (!free && whenFull === 'refuse') return { refused: 'full' as const }
+    if (free) guard(tx, seats, workshopId, conferenceId)
+    tx.create({
+      _id,
+      _type: 'workshopSignup',
+      userWorkOSId: request.userWorkOSId,
+      userEmail: request.userEmail,
+      userName: request.userName,
+      workshop: { _type: 'reference', _ref: workshopId },
+      conference: { _type: 'reference', _ref: conferenceId },
+      status: free ? 'confirmed' : 'waitlist',
+      confirmationEmailSent: false,
+      experienceLevel: request.experienceLevel,
+      operatingSystem: request.operatingSystem,
+      // WEAK IN THE WRITE ITSELF: the schema's `weak` governs Studio only,
+      // and a strong reference would keep the sponsor from being removed
+      // from the conference.
+      ...(earlyAccessSponsorId && {
+        earlyAccessSponsor: {
+          _type: 'reference',
+          _ref: earlyAccessSponsorId,
+          _weak: true,
+        },
+      }),
+    })
+    return { done: _id }
+  })
   if ('refused' in outcome) return outcome
   return { signup: await readSignup(outcome.done) }
 }
@@ -249,28 +246,27 @@ export async function confirmSignups(
   | { confirmed: string[]; seatsTaken: number; capacity: number }
   | { refused: 'not-found' | 'busy' }
 > {
-  const outcome = await decideAndCommit(
-    workshopId,
-    conferenceId,
-    (seats, tx) => {
-      const wanted = seats.signups.filter((s) => signupIds.includes(s._id))
-      const waiting = wanted.filter((s) => s.status === 'waitlist')
-      if (waiting.length > 0) {
-        guard(tx, seats, workshopId, conferenceId)
-        const confirmedAt = new Date().toISOString()
-        for (const { _id } of waiting) {
-          tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
-        }
+  const outcome = await decideAndCommit<
+    never,
+    { confirmed: string[]; seatsTaken: number; capacity: number }
+  >(workshopId, conferenceId, (seats, tx) => {
+    const wanted = seats.signups.filter((s) => signupIds.includes(s._id))
+    const waiting = wanted.filter((s) => s.status === 'waitlist')
+    if (waiting.length > 0) {
+      guard(tx, seats, workshopId, conferenceId)
+      const confirmedAt = new Date().toISOString()
+      for (const { _id } of waiting) {
+        tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
       }
-      return {
-        done: {
-          confirmed: wanted.map((s) => s._id),
-          seatsTaken: confirmedIn(seats) + waiting.length,
-          capacity: seats.capacity,
-        },
-      }
-    },
-  )
+    }
+    return {
+      done: {
+        confirmed: wanted.map((s) => s._id),
+        seatsTaken: confirmedIn(seats) + waiting.length,
+        capacity: seats.capacity,
+      },
+    }
+  })
   return 'refused' in outcome ? outcome : outcome.done
 }
 
@@ -288,28 +284,27 @@ export async function changeCapacity(
   | { refused: 'below-seats-taken'; seatsTaken: number }
   | { refused: 'not-found' | 'busy' }
 > {
-  const outcome = await decideAndCommit(
-    workshopId,
-    conferenceId,
-    (seats, tx) => {
-      const seatsTaken = confirmedIn(seats)
-      if (capacity < seatsTaken) {
-        return { refused: 'below-seats-taken' as const, seatsTaken }
-      }
-      const since = (s: Seats['signups'][number]) =>
-        new Date(s.signedUpAt || s._createdAt).getTime()
-      const promoted = seats.signups
-        .filter((s) => s.status === 'waitlist')
-        .sort((a, b) => since(a) - since(b))
-        .slice(0, capacity - seatsTaken)
-      guard(tx, seats, workshopId, conferenceId)
-      tx.patch(workshopId, { set: { capacity } })
-      const confirmedAt = new Date().toISOString()
-      for (const { _id } of promoted) {
-        tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
-      }
-      return { done: promoted.map((s) => s._id) }
-    },
-  )
+  const outcome = await decideAndCommit<
+    { refused: 'below-seats-taken'; seatsTaken: number },
+    string[]
+  >(workshopId, conferenceId, (seats, tx) => {
+    const seatsTaken = confirmedIn(seats)
+    if (capacity < seatsTaken) {
+      return { refused: 'below-seats-taken' as const, seatsTaken }
+    }
+    const since = (s: Seats['signups'][number]) =>
+      new Date(s.signedUpAt || s._createdAt).getTime()
+    const promoted = seats.signups
+      .filter((s) => s.status === 'waitlist')
+      .sort((a, b) => since(a) - since(b))
+      .slice(0, capacity - seatsTaken)
+    guard(tx, seats, workshopId, conferenceId)
+    tx.patch(workshopId, { set: { capacity } })
+    const confirmedAt = new Date().toISOString()
+    for (const { _id } of promoted) {
+      tx.patch(_id, { set: { status: 'confirmed', confirmedAt } })
+    }
+    return { done: promoted.map((s) => s._id) }
+  })
   return 'refused' in outcome ? outcome : { promoted: outcome.done }
 }
