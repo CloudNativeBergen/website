@@ -40,6 +40,14 @@ const batch =
       seatsTaken: number
       capacity: number
     }[] = [],
+    full: {
+      workshopId: string
+      title: string
+      seatsTaken: number
+      capacity: number
+      after: number
+      signupIds: string[]
+    }[] = [],
   ) =>
   () =>
     json({
@@ -52,10 +60,29 @@ const batch =
             failed,
             total: succeeded + failed,
             beyondCapacity,
+            full,
           },
         },
       },
     })
+
+/** The server's refusal of a confirm into a full workshop (#1358). */
+const fullAt = (seatsTaken: number, capacity: number) =>
+  batch(
+    0,
+    1,
+    [],
+    [
+      {
+        workshopId: 'ws-1',
+        title: 'Kubernetes 101',
+        seatsTaken,
+        capacity,
+        after: seatsTaken + 1,
+        signupIds: ['signup-1'],
+      },
+    ],
+  )
 
 const refusal = (code: string, httpStatus: number, message: string) => () =>
   json(
@@ -122,6 +149,17 @@ function Row({ onSettled }: { onSettled: () => void }) {
       <button onClick={() => actions.remove('signup-1', 'Ada Lovelace')}>
         delete
       </button>
+      <button onClick={() => actions.confirmBeyondCapacity()}>
+        beyond capacity
+      </button>
+      <button onClick={() => actions.dismissFull()}>dismiss</button>
+      {actions.full && (
+        <p>
+          full: {actions.full.workshopTitle} {actions.full.seatsTaken} of{' '}
+          {actions.full.capacity}, after {actions.full.after}
+          {actions.full.changed ? ', changed' : ''}
+        </p>
+      )}
       <output>
         {[
           actions.isMoving && 'moving',
@@ -268,6 +306,79 @@ describe('"Move to Confirmed"', () => {
     expect(screen.getByText(GONE_TEXT)).toBeInTheDocument()
     expect(alert).not.toHaveBeenCalled()
     expect(onSettled).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('"Move to Confirmed" into a full workshop (#1358)', () => {
+  const FULL = 'full: Kubernetes 101 30 of 30, after 31'
+
+  it('is refused and asked: no "confirmed", no "could not", the numbers shown, and the lists read again', async () => {
+    answer = fullAt(30, 30)
+    const { onSettled } = press('confirm')
+
+    expect(await screen.findByText(FULL)).toBeInTheDocument()
+    expect(alert).not.toHaveBeenCalled()
+    expect(screen.queryByText('Could not confirm')).not.toBeInTheDocument()
+    // The posted confirm carries no accepted count: the organizer has not
+    // agreed to anything yet.
+    expect(posted[0].input).toEqual({
+      signupIds: ['signup-1'],
+      sendEmails: true,
+    })
+    expect(onSettled).toHaveBeenCalledTimes(1)
+  })
+
+  it('"Confirm beyond capacity" sends the confirm again with the count shown, and says it went past capacity', async () => {
+    answer = fullAt(30, 30)
+    press('confirm')
+    await screen.findByText(FULL)
+
+    answer = batch(1, 0, [
+      { workshopTitle: 'Kubernetes 101', seatsTaken: 31, capacity: 30 },
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'beyond capacity' }))
+
+    await vi.waitFor(() => expect(alert).toHaveBeenCalledTimes(1))
+    expect(alert).toHaveBeenCalledWith(
+      '✅ Ada Lovelace confirmed beyond capacity (31 of 30 seats). Confirmation email sent.',
+    )
+    expect(posted[1]).toEqual({
+      procedure: 'workshop.admin.batchConfirmSignups',
+      input: {
+        signupIds: ['signup-1'],
+        sendEmails: true,
+        acceptSeats: { 'ws-1': 31 },
+      },
+    })
+    expect(screen.queryByText(/^full:/)).not.toBeInTheDocument()
+  })
+
+  it('an override refused again (a seat changed hands meanwhile) shows the new numbers and says they changed', async () => {
+    answer = fullAt(30, 30)
+    press('confirm')
+    await screen.findByText(FULL)
+
+    answer = fullAt(31, 30)
+    fireEvent.click(screen.getByRole('button', { name: 'beyond capacity' }))
+
+    expect(
+      await screen.findByText(
+        'full: Kubernetes 101 31 of 30, after 32, changed',
+      ),
+    ).toBeInTheDocument()
+    expect(alert).not.toHaveBeenCalled()
+  })
+
+  it('dismissing keeps the sign-up on the waitlist: nothing more is posted', async () => {
+    answer = fullAt(30, 30)
+    press('confirm')
+    await screen.findByText(FULL)
+
+    fireEvent.click(screen.getByRole('button', { name: 'dismiss' }))
+
+    expect(screen.queryByText(/^full:/)).not.toBeInTheDocument()
+    expect(posted).toHaveLength(1)
+    expect(alert).not.toHaveBeenCalled()
   })
 })
 

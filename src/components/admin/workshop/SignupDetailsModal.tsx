@@ -8,6 +8,8 @@ import { ModalShell } from '@/components/ModalShell'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { DataTable, type Column } from '@/components/DataTable'
 import { EarlyAccessBadge } from './early-signups'
+import { ConfirmBeyondCapacityModal } from './ConfirmBeyondCapacityModal'
+import type { FullRefusal } from './useSignupActions'
 import type {
   WorkshopSignupExisting,
   WorkshopSignupStatus,
@@ -23,6 +25,13 @@ interface SignupDetailsModalProps {
   /** Runs after the organizer has answered the question this modal asks. */
   onMoveToWaitlist: (signupId: string, userName: string) => void
   onDeleteSignup: (signupId: string, userName: string) => void
+  /**
+   * A confirm refused because the workshop is full (#1358), asked about in
+   * this modal: "Confirm beyond capacity" or keep them on the waitlist.
+   */
+  fullRefusal?: FullRefusal | null
+  onConfirmBeyondCapacity?: () => void
+  onDismissFullRefusal?: () => void
   isConfirming?: boolean
   isMoving?: boolean
   isDeleting?: boolean
@@ -37,6 +46,9 @@ export function SignupDetailsModal({
   onConfirmSignup,
   onMoveToWaitlist,
   onDeleteSignup,
+  fullRefusal = null,
+  onConfirmBeyondCapacity = () => {},
+  onDismissFullRefusal = () => {},
   isConfirming = false,
   isMoving = false,
   isDeleting = false,
@@ -180,6 +192,15 @@ export function SignupDetailsModal({
         variant="warning"
         isLoading={isMoving}
         guardSecondTap
+      />
+
+      {/* Nested like the questions above: a sibling dialog would count as
+          an outside click on this one and close it. */}
+      <ConfirmBeyondCapacityModal
+        refusal={fullRefusal}
+        onConfirm={onConfirmBeyondCapacity}
+        onClose={onDismissFullRefusal}
+        isLoading={isConfirming}
       />
 
       <ConfirmationModal

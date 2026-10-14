@@ -1,5 +1,6 @@
 export { WorkshopCard } from './WorkshopCard'
 export { SignupDetailsModal } from './SignupDetailsModal'
+export { ConfirmBeyondCapacityModal } from './ConfirmBeyondCapacityModal'
 export { AddParticipantModal } from './AddParticipantModal'
 export { EditCapacityModal } from './EditCapacityModal'
 export { AnnounceModal } from './AnnounceModal'

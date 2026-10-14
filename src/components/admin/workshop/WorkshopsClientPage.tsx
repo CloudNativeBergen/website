@@ -562,6 +562,9 @@ export function WorkshopsClientPage({
         status={signupModal.status}
         signups={filteredSignups}
         onConfirmSignup={signupActions.confirm}
+        fullRefusal={signupActions.full}
+        onConfirmBeyondCapacity={signupActions.confirmBeyondCapacity}
+        onDismissFullRefusal={signupActions.dismissFull}
         onMoveToWaitlist={signupActions.moveToWaitlist}
         onDeleteSignup={signupActions.remove}
         isConfirming={signupActions.isConfirming}
