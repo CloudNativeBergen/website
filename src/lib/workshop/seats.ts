@@ -190,7 +190,8 @@ type Transaction = ReturnType<typeof clientWrite.transaction>
 
 /**
  * Makes `tx` commit only if no seat changed hands since `seats` was read, and
- * has the guard remember the seats `took` and a `capacity` it sets.
+ * has the guard remember, from now, the sign-ups `took` writes confirmed (an
+ * older entry of one gives way) and a `capacity` it sets.
  */
 function guard(
   tx: Transaction,
@@ -204,7 +205,7 @@ function guard(
   const at = new Date().toISOString()
   const remembered = {
     recent: [
-      ...recentIn(seats),
+      ...recentIn(seats).filter((r) => !took.includes(r.signup)),
       ...took.map((signup) => ({
         _key: randomUUID().slice(0, 12),
         signup,
@@ -308,8 +309,22 @@ export async function signUpForWorkshop(
   >(
     workshopId,
     conferenceId,
-    (seats, tx) => {
-      if (seats.signups.some((s) => s.userWorkOSId === request.userWorkOSId)) {
+    async (seats, tx) => {
+      const mine = seats.signups.filter(
+        (s) => s.userWorkOSId === request.userWorkOSId,
+      )
+      // A read may still show one cancelled a moment ago: only one stored
+      // now makes the person signed up.
+      if (
+        mine.length > 0 &&
+        (
+          await current(
+            mine.map((s) => s._id),
+            workshopId,
+            conferenceId,
+          )
+        ).length > 0
+      ) {
         return { refused: 'already-signed-up' as const }
       }
       const free = takenIn(seats).size < capacityOf(seats)
@@ -451,7 +466,7 @@ export async function confirmSignups(
       const waiting = waitingNow.filter((s) => !remembered.has(s._id))
       if (waitingNow.length > 0) {
         guard(tx, seats, workshopId, conferenceId, {
-          took: waiting.map((s) => s._id),
+          took: waitingNow.map((s) => s._id),
         })
         const confirmedAt = new Date().toISOString()
         for (const { _id } of waitingNow) {

@@ -475,6 +475,42 @@ describe('a confirm of a sign-up a read still shows confirmed, just moved to the
   })
 })
 
+describe('a cancel, then the same person again while a read still shows the cancelled sign-up', () => {
+  it('is signed up again, not told they already are', async () => {
+    const first = await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' })
+    const id = (first as { signup: { _id: string } }).signup._id
+    const before = store().doc(id)!
+    await freeSeat(id, 'delete')
+    store().readsLagFor(id, before)
+
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { _id: id } })
+    expect(store().doc(id)).toBeDefined()
+  })
+})
+
+describe('a re-confirm near the end of the window', () => {
+  it('the guard remembers the seat from the re-confirm, not from the first time', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-20T09:00:00Z'))
+    store().reset([workshop({ capacity: 1 }), signup(1, 'waitlist')])
+    await confirmSignups(WORKSHOP, CONF, ['signup-1'])
+    // Moved to the waitlist in Studio: the guard is not told.
+    store().put({ ...store().doc('signup-1')!, status: 'waitlist' })
+
+    vi.setSystemTime(new Date('2026-10-20T09:14:59Z'))
+    await confirmSignups(WORKSHOP, CONF, ['signup-1'])
+    store().readsLagFor('signup-1', signup(1, 'waitlist'))
+
+    vi.setSystemTime(new Date('2026-10-20T09:15:01Z'))
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { status: 'waitlist' } })
+    expect(withStatus('confirmed')).toHaveLength(1)
+  })
+})
+
 describe('a sign-up deleted that a read still shows waiting', () => {
   const deletedButShown = () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)
