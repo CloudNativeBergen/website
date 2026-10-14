@@ -37,7 +37,9 @@ export type EarlyAccessSendDecision =
 /**
  * MAY A WORKSHOP EARLY-ACCESS EMAIL BE SENT TO THIS SPONSOR NOW? (#1347, spec
  * §8.) THE ONE DECISION: the Send action refuses with it, and the Send modal
- * shows its answer before the organizer writes anything.
+ * shows its answer before the organizer writes anything. Only the deal is
+ * asked again, when the send takes the link (`createEarlyAccessLink`'s
+ * `wonOnly`): a deal lost in between refuses the send there.
  *
  * IT WRITES NOTHING, and reads only as far as it has to. In this order:
  *

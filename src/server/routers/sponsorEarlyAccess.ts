@@ -217,10 +217,12 @@ async function decideSendForRequest(
  * refuse, or answer how the send gets its link.
  *
  * EVERY REFUSAL OF THIS KIND IS MADE HERE, BEFORE ANYTHING IS WRITTEN OR
- * SENT. What is answered is handed to the send primitive as its
- * `appendLate`: it creates the link (or answers the stored one) only once
- * the primitive has accepted the sponsor, the recipients and the message,
- * and builds the block and the listed link from the token that is stored.
+ * SENT, but one: the deal is asked once more when the link is taken. What is
+ * answered is handed to the send primitive as its `appendLate`: it creates
+ * the link (or answers the stored one) only once the primitive has accepted
+ * the sponsor, the recipients and the message, refuses (and sends nothing)
+ * when the deal is no longer won, and builds the block and the listed link
+ * from the token that is stored.
  * When the email then fails (no sender, or the provider refuses), the link
  * stays: it is the sponsor's link, the failed send is recorded with it, and
  * the next send reuses it.
