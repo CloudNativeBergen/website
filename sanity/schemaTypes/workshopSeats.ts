@@ -1,8 +1,9 @@
 import { defineField, defineType } from 'sanity'
 
 /**
- * The seats guard of a workshop (#1344): one document per workshop, with a
- * deterministic id (`workshopSeats-<workshop id>`). Every write that confirms
+ * The seats guard of a workshop (#1344): one document per workshop and
+ * conference, with a deterministic id
+ * (`workshopSeats-<conference id>-<workshop id>`). Every write that confirms
  * a sign-up or changes the capacity patches it `ifRevisionID` the revision it
  * read, so two of them cannot both commit on the same count. It holds no
  * seats itself; the sign-ups do. See `src/lib/workshop/seats.ts`.

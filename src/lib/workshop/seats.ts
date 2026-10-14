@@ -28,7 +28,12 @@ import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import type { WorkshopSignupExisting, WorkshopSignupInput } from './types'
 
-/** How many times a write that lost a race reads again before giving up. */
+/**
+ * How many times a write that lost a race reads again before giving up. Each
+ * round lets one writer through, so at an opening time a request may lose
+ * several in a row; with the back-off (at most 200 ms) this is a few seconds
+ * of trying before the person is asked to try again.
+ */
 const MAX_ATTEMPTS = 25
 
 export interface SignUpRequest extends Pick<
@@ -114,6 +119,8 @@ function guard(
 ) {
   const _id = seatsDocumentId(conferenceId, workshopId)
   if (seats.guard) {
+    // `inc` makes the patch a real change, so it gives the guard a new
+    // revision: the one every other reader of this revision is refused on.
     return tx.patch(_id, {
       ifRevisionID: seats.guard,
       setIfMissing: { writes: 0 },
@@ -152,6 +159,7 @@ async function decideAndCommit<F extends { refused: string }, D>(
   conferenceId: string,
   decide: (seats: Seats, tx: Transaction) => F | { done: D },
 ): Promise<F | { refused: 'not-found' | 'busy' } | { done: D }> {
+  let failed = false
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (attempt > 0) await backOff(attempt)
     const seats = await readSeats(workshopId, conferenceId)
@@ -163,7 +171,13 @@ async function decideAndCommit<F extends { refused: string }, D>(
       await tx.commit()
       return decision
     } catch (error) {
-      if (!isConflict(error)) throw error
+      // Anything else: a document the write touches may have gone since the
+      // read (an attendee's cancel deletes their sign-up). Read and decide
+      // once more; a second such failure is a real one.
+      if (!isConflict(error)) {
+        if (failed) throw error
+        failed = true
+      }
     }
   }
   return { refused: 'busy' }

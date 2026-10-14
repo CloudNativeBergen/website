@@ -370,6 +370,35 @@ describe("the organizer's confirm", () => {
     expect(store().doc('signup-2')?.status).toBe('waitlist')
   })
 
+  it('a sign-up deleted between the read and the write (the attendee cancelled) is not confirmed, and the answer says so instead of failing', async () => {
+    store().reset([workshop(), signup(1, 'waitlist')])
+    store().beforeNextCommit(() => {
+      store().reset(
+        store()
+          .all()
+          .filter((d) => d._id !== 'signup-1'),
+      )
+    })
+
+    expect(await confirmSignups(WORKSHOP, CONF, ['signup-1'])).toEqual({
+      confirmed: [],
+      seatsTaken: 0,
+      capacity: 3,
+    })
+    expect(store().doc('signup-1')).toBeUndefined()
+  })
+
+  it('a write that keeps failing for another reason is reported, after one more read, and not retried on', async () => {
+    store().reset([workshop(), signup(1, 'waitlist')])
+    store().failWrites(new Error('503: dataset unavailable'))
+
+    await expect(confirmSignups(WORKSHOP, CONF, ['signup-1'])).rejects.toThrow(
+      '503: dataset unavailable',
+    )
+    expect(store().events).toEqual(['read', 'read'])
+    expect(store().doc('signup-1')?.status).toBe('waitlist')
+  })
+
   it('a sign-up that is already confirmed counts as confirmed, and is not written', async () => {
     store().reset([workshop(), signup(1, 'confirmed')])
 

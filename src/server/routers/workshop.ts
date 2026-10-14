@@ -834,8 +834,9 @@ export const workshopRouter = router({
           // OWNERSHIP (#730): `getAllWorkshopSignups` only constrains the
           // conference when the filter is PASSED. Without it this confirmed any
           // signup id in the shared dataset, including another tenant's.
+          const conferenceId = await resolveConferenceId()
           const signups = await getAllWorkshopSignups({
-            conferenceId: await resolveConferenceId(),
+            conferenceId,
             signupIds: [input.signupId],
           })
 
@@ -852,11 +853,9 @@ export const workshopRouter = router({
           // Past capacity is the organizer's call (#1344), and is named as
           // such. The seat is taken through the same guard as a sign-up.
           const outcome = signup.workshop?._id
-            ? await confirmSignups(
-                signup.workshop._id,
-                await resolveConferenceId(),
-                [signup._id],
-              )
+            ? await confirmSignups(signup.workshop._id, conferenceId, [
+                signup._id,
+              ])
             : ({ refused: 'not-found' } as const)
           if ('refused' in outcome && outcome.refused === 'busy') {
             return seatsBusy()
@@ -891,7 +890,7 @@ export const workshopRouter = router({
           return {
             success: true,
             message: beyond
-              ? `Participant confirmed beyond capacity (${outcome.seatsTaken} of ${outcome.capacity} seats)`
+              ? `Participant confirmed beyond capacity (${outcome.seatsTaken} of ${outcome.capacity} seats)${input.sendEmail && wasWaitlisted ? ' and notification email sent' : ''}`
               : wasWaitlisted
                 ? 'Participant confirmed and notification email sent'
                 : 'Workshop signup confirmed successfully',
@@ -1029,10 +1028,9 @@ export const workshopRouter = router({
           for (const signup of signups) {
             const workshopId = signup.workshop?._id
             if (!workshopId) continue
-            byWorkshop.set(workshopId, [
-              ...(byWorkshop.get(workshopId) ?? []),
-              signup,
-            ])
+            const group = byWorkshop.get(workshopId) ?? []
+            group.push(signup)
+            byWorkshop.set(workshopId, group)
           }
           const confirmed: typeof signups = []
           const beyondCapacity: {
