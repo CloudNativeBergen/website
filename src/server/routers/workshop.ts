@@ -1108,7 +1108,9 @@ export const workshopRouter = router({
             }
             // Confirmed now, as the write found them: also the members of a
             // refused workshop that were confirmed already (they take no
-            // seat), which are then not among the ids to send again.
+            // seat). The ids to send again are those the decision found
+            // waiting: one gone since the list was read is not among them,
+            // so the retry is not refused as a whole for it.
             confirmed.push(
               ...group.filter((s) => outcome.confirmed.includes(s._id)),
             )
@@ -1119,9 +1121,7 @@ export const workshopRouter = router({
                 seatsTaken: outcome.seatsTaken,
                 capacity: outcome.capacity,
                 after: outcome.after,
-                signupIds: group
-                  .filter((s) => !outcome.confirmed.includes(s._id))
-                  .map((s) => s._id),
+                signupIds: outcome.waiting,
               })
               continue
             }

@@ -326,6 +326,7 @@ describe('admin.batchConfirmSignups', () => {
           : {
               refused: 'full',
               confirmed: [],
+              waiting: ids,
               seatsTaken: 30,
               capacity: 30,
               after: 32,
@@ -367,6 +368,7 @@ describe('admin.batchConfirmSignups', () => {
     seats.confirmSignups.mockResolvedValue({
       refused: 'full',
       confirmed: ['s-1'],
+      waiting: ['s-2'],
       seatsTaken: 30,
       capacity: 30,
       after: 31,
@@ -398,6 +400,42 @@ describe('admin.batchConfirmSignups', () => {
     )
     // Confirmed already: no "you are confirmed" email, as for any confirm.
     expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
+  })
+
+  it('a refused workshop: a sign-up gone by the time of the decision is not among the ids to send again, so the retry is not refused for it', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([
+      row('s-2', 'w-2'),
+      row('s-3', 'w-2'),
+    ])
+    // The decision read the document store: s-3 was deleted meanwhile.
+    seats.confirmSignups.mockResolvedValue({
+      refused: 'full',
+      confirmed: [],
+      waiting: ['s-2'],
+      seatsTaken: 30,
+      capacity: 30,
+      after: 31,
+    })
+
+    const result = await admin().batchConfirmSignups({
+      signupIds: ['s-2', 's-3'],
+      sendEmails: false,
+    })
+
+    expect(result.results.full).toEqual([
+      {
+        workshopId: 'w-2',
+        workshopTitle: 'Workshop w-2',
+        seatsTaken: 30,
+        capacity: 30,
+        after: 31,
+        signupIds: ['s-2'],
+      },
+    ])
+    expect(result.results).toMatchObject({ succeeded: 0, failed: 2 })
+    expect(result.message).toBe(
+      'Confirmed 0 signups, 2 failed. Full: Workshop w-2 (30 of 30 seats; confirming 1 goes 1 past capacity).',
+    )
   })
 
   it('passes each workshop its own accepted count, and none to a workshop without one', async () => {
@@ -445,6 +483,7 @@ describe('admin.confirmSignup', () => {
     seats.confirmSignups.mockResolvedValue({
       refused: 'full',
       confirmed: [],
+      waiting: ['s-1'],
       seatsTaken: 30,
       capacity: 30,
       after: 31,

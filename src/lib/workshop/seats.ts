@@ -476,6 +476,12 @@ export interface Full extends FullSeats {
   refused: 'full'
   /** Of the sign-ups asked for, those confirmed already: they take no seat. */
   confirmed: string[]
+  /**
+   * Of the sign-ups asked for, those waiting now (from the document store):
+   * the ones to send again with the overshoot accepted. One gone, or of
+   * another workshop, is not among them.
+   */
+  waiting: string[]
 }
 
 /**
@@ -526,6 +532,7 @@ export async function confirmSignups(
           confirmed: wanted
             .filter((s) => s.status === 'confirmed')
             .map((s) => s._id),
+          waiting: waitingNow.map((s) => s._id),
           seatsTaken: taken.size,
           capacity: seats.capacity,
           after,

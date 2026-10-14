@@ -787,6 +787,7 @@ describe("the organizer's confirm", () => {
     expect(await confirmSignups(WORKSHOP, CONF, ['signup-4'])).toEqual({
       refused: 'full',
       confirmed: [],
+      waiting: ['signup-4'],
       seatsTaken: 3,
       capacity: 3,
       after: 4,
@@ -817,6 +818,7 @@ describe("the organizer's confirm", () => {
     ).toEqual({
       refused: 'full',
       confirmed: [],
+      waiting: ['signup-4'],
       seatsTaken: 3,
       capacity: 3,
       after: 4,
@@ -838,6 +840,7 @@ describe("the organizer's confirm", () => {
     ).toEqual({
       refused: 'full',
       confirmed: [],
+      waiting: ['signup-3', 'signup-4'],
       seatsTaken: 2,
       capacity: 3,
       after: 4,
@@ -864,6 +867,7 @@ describe("the organizer's confirm", () => {
     ).toEqual({
       refused: 'full',
       confirmed: [],
+      waiting: ['signup-4'],
       seatsTaken: 3,
       capacity: 1,
       after: 4,
@@ -880,6 +884,33 @@ describe("the organizer's confirm", () => {
     expect(store().doc('signup-4')?.status).toBe('confirmed')
   })
 
+  // The ids to send again with the override are the ones the decision found
+  // waiting in the document store: a sign-up deleted (the attendee
+  // cancelled) or moved to another workshop since the list was read is not
+  // among them, so the retry is not refused as a whole for it.
+  it('a batch with a sign-up that is gone, and one moved to another workshop, into a full workshop: the refusal names only the one still waiting here', async () => {
+    store().reset([
+      workshop(),
+      signup(1, 'confirmed'),
+      signup(2, 'confirmed'),
+      signup(3, 'confirmed'),
+      signup(4, 'waitlist'),
+      { ...signup(5, 'waitlist'), workshop: ref('talk-other') },
+    ])
+
+    expect(
+      await confirmSignups(WORKSHOP, CONF, ['signup-4', 'signup-5', 'gone']),
+    ).toEqual({
+      refused: 'full',
+      confirmed: [],
+      waiting: ['signup-4'],
+      seatsTaken: 3,
+      capacity: 3,
+      after: 4,
+    })
+    expect(store().commits).toEqual([])
+  })
+
   it('a batch with one already confirmed and one waiting, into a full workshop: refused, and the refusal names the one that is confirmed', async () => {
     full()
 
@@ -888,6 +919,7 @@ describe("the organizer's confirm", () => {
     ).toEqual({
       refused: 'full',
       confirmed: ['signup-1'],
+      waiting: ['signup-4'],
       seatsTaken: 3,
       capacity: 3,
       after: 4,
@@ -973,6 +1005,7 @@ describe("the organizer's confirm", () => {
     expect(confirm).toEqual({
       refused: 'full',
       confirmed: [],
+      waiting: ['signup-2'],
       seatsTaken: 2,
       capacity: 2,
       after: 3,
@@ -1009,6 +1042,7 @@ describe("the organizer's confirm", () => {
     expect(confirm).toEqual({
       refused: 'full',
       confirmed: [],
+      waiting: ['signup-2'],
       seatsTaken: 3,
       capacity: 2,
       after: 4,
