@@ -173,11 +173,23 @@ async function claim(signup: DueSignup): Promise<DueSignup | null> {
     const status = (error as { statusCode?: unknown } | null)?.statusCode
     if (status === 409 || status === 404) return null
     // Anything else, the reply lost among them: the claim may have landed.
-    // It is this run's only if the token stored is this run's.
-    const now = await clientWrite
-      .getDocument<DueSignup>(signup._id)
-      .catch(() => null)
-    return now?.promotionEmailClaim === token ? signup : null
+    // It is this run's only if the token stored is this run's; and then the
+    // sign-up AS IT IS NOW is what is emailed (or not: a free that landed
+    // after the claim has moved it back, and the token on it says it is
+    // nobody else's to tell).
+    try {
+      const now = await clientWrite.getDocument<DueSignup>(signup._id)
+      return now?.promotionEmailClaim === token ? now : null
+    } catch (readError) {
+      // Whether the claim landed cannot be known: if it did, nothing will
+      // find this sign-up again. Named, for a hand to check.
+      console.error(
+        '[workshop] promotion email claim uncertain (reply lost, re-read failed), check by hand:',
+        [signup._id],
+        { claim: error, read: readError },
+      )
+      return null
+    }
   }
 }
 
@@ -207,7 +219,7 @@ export async function deliverDuePromotionEmails({
   // groq-global: the backstop sweeps EVERY tenant's sign-ups that still owe
   // a promotion email; each is then emailed by `deliverPromotionEmails`,
   // scoped to, and in the name of, the conference the sign-up itself names.
-  const query = `*[_type == "workshopSignup" && promotionEmailDue == true && !(_id in path("drafts.**"))]
+  const query = `*[_type == "workshopSignup" && promotionEmailDue == true && defined(conference._ref) && !(_id in path("drafts.**"))]
     | order(_updatedAt asc) [0...${take}]{ _id, "conferenceId": conference._ref }`
   const due = await clientWrite.fetch<
     { _id: string; conferenceId: string | null }[] | null

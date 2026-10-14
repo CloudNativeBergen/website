@@ -160,6 +160,39 @@ describe('a promotion whose emails are owed', () => {
     expect(store().doc('signup-2')).not.toHaveProperty('promotionEmailDue')
   })
 
+  it('the reply to the claim lost, and the sign-up moved back to the waitlist before the re-read: not emailed', async () => {
+    // The claim lands, then a free lands, then the connection drop is
+    // noticed: the re-read shows this run's token on a waiting sign-up.
+    store().afterNextCommit(async () => {
+      await freeSeat('signup-2', 'waitlist')
+      throw new Error('socket hang up')
+    })
+
+    await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
+
+    expect(emailed()).toEqual(['person3@example.com'])
+    expect(store().doc('signup-2')).toMatchObject({ status: 'waitlist' })
+  })
+
+  it('the reply to the claim lost, and the re-read failing too: not emailed, and logged as uncertain with the id', async () => {
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+    vi.spyOn(
+      store().clients.clientWrite as { getDocument: () => unknown },
+      'getDocument',
+    ).mockRejectedValueOnce(new Error('503'))
+
+    await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
+
+    expect(emailed()).toEqual(['person3@example.com'])
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('uncertain'),
+      ['signup-2'],
+      expect.anything(),
+    )
+  })
+
   it('a claim refused for another reason, and the re-read showing another claim: not emailed by this run', async () => {
     // A claim that fails before it lands, and lands as someone else's.
     store().afterNextCommit(() => {
@@ -358,6 +391,17 @@ describe('the hourly backstop (the cron), over every conference', () => {
       emailed: 1,
     })
     expect(emailed()).toHaveLength(2)
+  })
+
+  it('leaves a sign-up with no conference out of the sweep, so it cannot hold a place in the window every hour', async () => {
+    store().put(
+      signup(8, 'confirmed', {
+        conference: undefined,
+        promotionEmailDue: true,
+      }),
+    )
+
+    expect(await deliverDuePromotionEmails()).toMatchObject({ found: 2 })
   })
 
   it('does not pay a draft (Studio) of a sign-up', async () => {
