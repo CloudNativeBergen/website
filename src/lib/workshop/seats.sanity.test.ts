@@ -537,6 +537,24 @@ describe('a sign-up moved to another workshop in Studio between the check and th
   })
 })
 
+describe('a query that does not find the workshop the document store has', () => {
+  it('(moved between conferences meanwhile) reads again rather than counting no sign-ups', async () => {
+    store().reset([workshop({ capacity: 1 }), signup(1, 'confirmed')])
+    // The query still sees the workshop in another conference, once.
+    store().readsLagFor(WORKSHOP, workshop({ conference: ref('conf-b') }))
+    let reads = 0
+    store().beforeEachRead(() => {
+      if (++reads === 2) store().readsLagFor(WORKSHOP, store().doc(WORKSHOP)!)
+    })
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    expect(
+      await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+    ).toMatchObject({ signup: { status: 'waitlist' } })
+    expect(withStatus('confirmed')).toHaveLength(1)
+  })
+})
+
 describe('a workshop deleted that a read still shows', () => {
   it('a capacity change answers not found, not "busy"', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)

@@ -35,8 +35,10 @@ export async function emailPromotedSignups(
   // A conference that could not be read comes back as a fallback, not a
   // failure: no email goes out in a name that is not the conference's.
   if (!conference || error) return notSent(signupIds, error)
+  // One moved back to the waitlist since is not told it has a seat.
+  const stillConfirmed = promoted.filter((s) => s.status === 'confirmed')
   const sent = await Promise.allSettled(
-    promoted.map((signup) =>
+    stillConfirmed.map((signup) =>
       sendBasicWorkshopConfirmation({
         userEmail: signup.userEmail,
         userName: signup.userName,
@@ -50,7 +52,7 @@ export async function emailPromotedSignups(
   )
   // A send that fails answers with an `error`; it does not throw. Each one
   // is logged with the sign-up it was for.
-  const failed = promoted.flatMap((signup, i) => {
+  const failed = stillConfirmed.flatMap((signup, i) => {
     const result = sent[i]
     const why =
       result.status === 'rejected' ? result.reason : result.value?.error

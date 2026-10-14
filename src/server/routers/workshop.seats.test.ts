@@ -476,6 +476,22 @@ describe('admin.updateCapacity', () => {
     )
   })
 
+  it('does not email a promoted sign-up moved back to the waitlist meanwhile', async () => {
+    seats.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
+    ws.getAllWorkshopSignups.mockResolvedValue([
+      row('s-1', 'w-1', 'confirmed'),
+      row('s-2', 'w-1', 'waitlist'),
+    ])
+
+    await admin().updateCapacity({ workshopId: 'w-1', capacity: 5 })
+
+    expect(
+      vi
+        .mocked(sendBasicWorkshopConfirmation)
+        .mock.calls.map(([to]) => to.userEmail),
+    ).toEqual(['s-1@example.com'])
+  })
+
   it('emails each promoted sign-up and counts them', async () => {
     seats.changeCapacity.mockResolvedValue({ promoted: ['s-1', 's-2'] })
     ws.getAllWorkshopSignups.mockResolvedValue([

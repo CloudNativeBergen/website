@@ -229,9 +229,13 @@ async function changeTalkCapacity(
         // Waiting sign-ups are given seats, and told so, only while the
         // workshop is on, as this edit leaves it (a withdrawn one, or one
         // made another format, keeps them waiting).
+        // An edit that leaves both alone leaves the judgement to the seats
+        // module, made again on every try from the talk as it is then.
         promote:
-          (edit.status ?? talk.status) === Status.confirmed &&
-          isWorkshopFormat((edit.format ?? talk.format) as Format),
+          edit.status === undefined && edit.format === undefined
+            ? undefined
+            : (edit.status ?? talk.status) === Status.confirmed &&
+              isWorkshopFormat((edit.format ?? talk.format) as Format),
       })
     : ({ refused: 'not-found' } as const)
   if ('refused' in outcome) {

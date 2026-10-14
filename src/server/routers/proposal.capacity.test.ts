@@ -152,7 +152,7 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
     await update({ title: 'Kubernetes hands-on', capacity: 12 })
 
     expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
-      promote: true,
+      promote: undefined,
     })
     expect(h.updateProposal).toHaveBeenCalledWith('talk-1', {
       title: 'Kubernetes hands-on',
@@ -166,17 +166,7 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
     await update({ capacity: 20 })
 
     expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 20, {
-      promote: true,
-    })
-  })
-
-  it('a workshop that is not confirmed (withdrawn) changes capacity without promoting anyone', async () => {
-    h.stored = { capacity: 10, status: 'withdrawn', conferenceId: 'conf-A' }
-
-    await update({ capacity: 12 })
-
-    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
-      promote: false,
+      promote: undefined,
     })
   })
 
@@ -185,6 +175,14 @@ describe('proposal.admin.update and a workshop capacity (#1344)', () => {
 
     expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
       promote: false,
+    })
+  })
+
+  it('an edit that leaves status and format alone lets the seats module judge the workshop on each try', async () => {
+    await update({ capacity: 12 })
+
+    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 12, {
+      promote: undefined,
     })
   })
 

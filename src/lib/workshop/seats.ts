@@ -155,7 +155,7 @@ const takenIn = (seats: Seats) =>
 async function readSeats(
   workshopId: string,
   conferenceId: string,
-): Promise<Seats | null> {
+): Promise<Seats | 'lagging' | null> {
   const [read, [guard, talk]] = await Promise.all([
     clientWrite.fetch<Pick<Seats, 'signups'> | null>(
       groq`*[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId][0]{
@@ -187,12 +187,15 @@ async function readSeats(
   ) {
     return null
   }
+  // The document store has it in this conference, the query not (yet): its
+  // sign-ups are unknown, not none.
+  if (!read) return 'lagging'
   return {
     capacity: workshop.capacity ?? 30,
     status: workshop.status,
     format: workshop.format,
     talkRev: workshop._rev,
-    signups: read?.signups ?? [],
+    signups: read.signups ?? [],
     // Its id is derived from the conference's own.
     guard: (guard as Guard | null) ?? null,
     now: Date.now(),
@@ -283,12 +286,15 @@ async function decideAndCommit<F extends { refused: string }, D>(
 ): Promise<F | { refused: 'not-found' | 'busy' } | { done: D }> {
   // Each round lets one seat through, so one more round per seat left.
   let attempts = MAX_ATTEMPTS
+  let budgeted = false
   for (let attempt = 0; attempt < attempts; attempt++) {
     if (attempt > 0) await backOff(attempt)
     const seats = await readSeats(workshopId, conferenceId)
     if (!seats) return { refused: 'not-found' }
-    if (attempt === 0) {
+    if (seats === 'lagging') continue
+    if (!budgeted) {
       attempts += Math.max(0, seats.capacity - takenIn(seats).size)
+      budgeted = true
     }
     const tx = clientWrite.transaction()
     const decision = await decide(seats, tx)
