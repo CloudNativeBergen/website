@@ -637,8 +637,9 @@ workshops off still lets its attendees out.
 2. **Auth host, start** (`central-sign-in/start.ts`). Without a request a tenant host
    sealed, nothing is read and the answer is 404. It takes the decision for the named
    host, generates a PKCE pair, seals the host, the conference that claims it, the hash
-   and a nonce as the OAuth `state` (30 minutes), puts the nonce and the PKCE verifier in
-   a cookie on the auth host (`__Host-workshop-auth-start`, 30 minutes), and redirects to
+   and a nonce as the OAuth `state` (28 minutes), puts the nonce and the PKCE verifier in
+   a cookie on the auth host (`__Host-workshop-auth-start`, 28 minutes: the step 1
+   cookie's 30 less the two 60-second transits), and redirects to
    WorkOS's authorize URL with `redirect_uri` `<auth origin>/api/auth/callback`.
 3. **Auth host, callback** (`central-sign-in/callback.ts`). Before the code is
    exchanged: the state unseals and has not expired, a code is present, the cookie from
@@ -649,8 +650,10 @@ workshops off still lets its attendees out.
    email verified, name, the WorkOS session ID (the access token's `sid`), the host, the
    conference and the hash, clears the step 2 cookie, and redirects to
    `https://<host>/workshop/redeem?token=…` with `Cache-Control: no-store` and
-   `Referrer-Policy: no-referrer`. Every refusal leaves one line in the log
-   (`logRefusal`). Without a code or without the step 2 cookie, the browser goes back to
+   `Referrer-Policy: no-referrer`. Every refusal leaves one `callback refused: <reason>`
+   line in the log (`logRefusal`); a failed exchange is not a refusal and logs its own
+   error line, `the code exchange failed; nothing handed off`. Without a code or without
+   the step 2 cookie, the browser goes back to
    `https://<host in state>/workshop?sign-in=incomplete` with no record read, and so does
    a failed exchange; every other refusal is a 404 that says the sign-in could not be
    completed (spec §3).
@@ -660,8 +663,9 @@ workshops off still lets its attendees out.
    Then the decision is taken live, the conference claiming the host must be the one in
    the token, and it must have workshops. The session cookie is set, the step 1 cookie is
    cleared and the browser goes to `/workshop`; that path is fixed. A refusal goes to
-   `/workshop?sign-in=incomplete`, signed out, with one neutral line on the page and the
-   reason in the log only; no cookie is touched.
+   `/workshop?sign-in=incomplete`, with one neutral line on the signed-out page and the
+   reason in the log only; no cookie is touched, so a session the browser already holds
+   stays.
 
 The hand-off is not single use: nothing records a redeemed token. Only the browser that
 began can redeem it, and a redeem clears the cookie that makes it that browser.

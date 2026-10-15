@@ -58,11 +58,12 @@ Unchanged:
    WorkOS. It builds the authorize URL with PKCE and
    carries the host, the conference that claims it and the hash in sealed state. Nothing from the
    query string is trusted later. It also sets a cookie on the auth host that the callback requires,
-   so a callback URL completes nothing outside the browser that started. The state and both cookies
-   last **30 minutes** (#1322): everything the attendee does at WorkOS fits in that window, and a
-   sign-up waits for a code sent by email. A longer window protects nothing less: the PKCE verifier
-   is good for one code, and the step 1 value only with a hand-off that hashes to it. The 60-second
-   request of step 1 and the hand-off (§5) are separate lifetimes.
+   so a callback URL completes nothing outside the browser that started. **A sign-in has 30
+   minutes** from the button to redeem (#1322), the lifetime of the step 1 cookie, because a sign-up
+   waits for a code sent by email. The state and the step 2 cookie last **28 minutes**: the 30 less
+   the 60-second request of step 1 and the 60-second hand-off (§5), so a state that is still valid
+   always finds the step 1 cookie at redeem. A longer window protects nothing less: the PKCE verifier
+   is good for one code, and the step 1 value only with a hand-off that hashes to it.
 3. **Auth host, callback.** It verifies state and the cookie from step 2. It then checks again that
    the host passes §4, that the conference claiming it is still the one in state, and that this
    conference still has workshops. Only then does it exchange the code. It stores **no session and no
@@ -77,15 +78,16 @@ Unchanged:
    fixed; nothing in the request chooses it. The response is `no-store` and sends no referrer,
    because the token is in the URL.
 
-A refusal at redeem sends the attendee to `/workshop` signed out, with one neutral line that sign-in
-did not complete (`?sign-in=incomplete`). The reason is never shown; it goes to the log. A sign-in
+A refusal at redeem sends the attendee to `/workshop` with one neutral line that sign-in did not
+complete (`?sign-in=incomplete`). It touches no cookie: a session the browser already holds stays,
+and the page then shows it instead of the line. The reason is never shown; it goes to the log. A sign-in
 started in a second tab replaces the first tab's cookie, so the first to return is refused this way.
 
 A refusal at the callback (#1321) goes to the same place, `https://<host in state>/workshop?sign-in=incomplete`,
 when the state unseals, the request is on the auth host, and what is missing is the code (WorkOS
 reported an error, such as a cancelled consent) or the step 2 cookie (Back and submit again, or the
 sign-in finished in another browser). **The host is not checked again** for this: the start route
-proved it at most 30 minutes earlier, nothing but the browser goes there, and so the refusal reads no
+proved it at most 28 minutes earlier, nothing but the browser goes there, and so the refusal reads no
 record. A failed code exchange goes there too, after the host has just been checked. Everything else
 is a 404 on the auth host that says the sign-in could not be completed: no state, a state the auth
 host did not seal, **an expired state** (its host can no longer be read, and is not carried anywhere
