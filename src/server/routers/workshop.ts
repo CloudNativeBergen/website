@@ -54,6 +54,31 @@ import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
+
+/**
+ * The organizer's confirm tells the person itself; a send that fails is not
+ * retried (at most once, #1357) but named, in the form of the outbox's own
+ * log, so the organizer can resend by hand. A send answers a failure with an
+ * `error`; it does not throw, but a rejection is logged the same.
+ */
+function logFailedConfirmationEmails(
+  sent: { id: string; result: PromiseSettledResult<{ error?: unknown }> }[],
+) {
+  const failed = sent.flatMap(({ id, result }) => {
+    const why =
+      result.status === 'rejected' ? result.reason : result.value?.error
+    return result.status === 'rejected' || why !== undefined
+      ? [{ id, why }]
+      : []
+  })
+  if (failed.length > 0) {
+    console.error(
+      '[workshop] confirmation emails not sent, confirmed sign-ups:',
+      failed.map((f) => f.id),
+      failed.map((f) => f.why),
+    )
+  }
+}
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { workshopAdminProcedure } from '../workshopAdmin'
 import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
@@ -889,16 +914,19 @@ export const workshopRouter = router({
           if (input.sendEmail && wasWaitlisted) {
             const { conference } = await getConferenceForCurrentDomain({})
             if (conference) {
-              await sendBasicWorkshopConfirmation({
-                userEmail: signup.userEmail,
-                userName: signup.userName,
-                status: 'confirmed',
-                conference,
-                workshopTitle: signup.workshop?.title ?? 'Workshop',
-                workshopDate: (signup.workshop as { date?: string })?.date,
-                workshopTime: (signup.workshop as { startTime?: string })
-                  ?.startTime,
-              }).catch(() => {})
+              const [result] = await Promise.allSettled([
+                sendBasicWorkshopConfirmation({
+                  userEmail: signup.userEmail,
+                  userName: signup.userName,
+                  status: 'confirmed',
+                  conference,
+                  workshopTitle: signup.workshop?.title ?? 'Workshop',
+                  workshopDate: (signup.workshop as { date?: string })?.date,
+                  workshopTime: (signup.workshop as { startTime?: string })
+                    ?.startTime,
+                }),
+              ])
+              logFailedConfirmationEmails([{ id: signup._id, result }])
             }
           }
 
@@ -1082,7 +1110,7 @@ export const workshopRouter = router({
           }
 
           if (input.sendEmails && conference) {
-            await Promise.allSettled(
+            const sent = await Promise.allSettled(
               newlyConfirmed.map((signup) =>
                 sendBasicWorkshopConfirmation({
                   userEmail: signup.userEmail,
@@ -1095,6 +1123,12 @@ export const workshopRouter = router({
                     ?.startTime,
                 }),
               ),
+            )
+            logFailedConfirmationEmails(
+              newlyConfirmed.map((signup, i) => ({
+                id: signup._id,
+                result: sent[i],
+              })),
             )
           }
 

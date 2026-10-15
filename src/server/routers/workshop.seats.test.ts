@@ -271,6 +271,35 @@ describe('admin.batchConfirmSignups', () => {
     )
   })
 
+  it('a batch confirm with one failed email among two: that sign-up alone is logged as not sent (#1357)', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([
+      row('s-1', 'w-1'),
+      row('s-2', 'w-1'),
+    ])
+    seats.confirmSignups.mockResolvedValue({
+      confirmed: ['s-1', 's-2'],
+      newlyConfirmed: ['s-1', 's-2'],
+      seatsTaken: 2,
+      capacity: 5,
+    })
+    vi.mocked(sendBasicWorkshopConfirmation)
+      .mockResolvedValueOnce({ data: { emailId: 'e-1' } } as never)
+      .mockResolvedValueOnce({ error: { message: 'provider down' } } as never)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await admin().batchConfirmSignups({
+      signupIds: ['s-1', 's-2'],
+      sendEmails: true,
+    })
+
+    expect(sendBasicWorkshopConfirmation).toHaveBeenCalledTimes(2)
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('confirmation emails not sent'),
+      ['s-2'],
+      [{ message: 'provider down' }],
+    )
+  })
+
   it('names no workshop beyond capacity, and emails no one, where it confirmed no one new', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
     seats.confirmSignups.mockResolvedValue({
@@ -326,6 +355,54 @@ describe('admin.confirmSignup', () => {
 
     expect(result.message).toBe('Participant confirmed')
     expect(sendBasicWorkshopConfirmation).not.toHaveBeenCalled()
+  })
+
+  it('a manual confirm whose email fails (an `error` result): logged with the sign-up id, in the outbox log’s form, and the confirm still succeeds (#1357)', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
+    seats.confirmSignups.mockResolvedValue({
+      confirmed: ['s-1'],
+      newlyConfirmed: ['s-1'],
+      seatsTaken: 2,
+      capacity: 5,
+    })
+    vi.mocked(sendBasicWorkshopConfirmation).mockResolvedValueOnce({
+      error: { message: 'provider down' },
+    } as never)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await admin().confirmSignup({
+      signupId: 's-1',
+      sendEmail: true,
+    })
+
+    expect(result.success).toBe(true)
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('confirmation emails not sent'),
+      ['s-1'],
+      [{ message: 'provider down' }],
+    )
+  })
+
+  it('a manual confirm whose email rejects: logged with the sign-up id and the reason', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([row('s-1', 'w-1')])
+    seats.confirmSignups.mockResolvedValue({
+      confirmed: ['s-1'],
+      newlyConfirmed: ['s-1'],
+      seatsTaken: 2,
+      capacity: 5,
+    })
+    vi.mocked(sendBasicWorkshopConfirmation).mockRejectedValueOnce(
+      new Error('socket hang up'),
+    )
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await admin().confirmSignup({ signupId: 's-1', sendEmail: true })
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('confirmation emails not sent'),
+      ['s-1'],
+      [expect.objectContaining({ message: 'socket hang up' })],
+    )
   })
 
   it('says so when it confirmed beyond capacity', async () => {
