@@ -48,8 +48,9 @@ export const WORKSHOP_EARLY_ACCESS_PATH = '/workshop/early-access'
 export const WORKSHOP_REDEEM_PATH = '/workshop/redeem'
 
 /**
- * What the redeem route adds to the portal path when it refuses, whatever the
- * reason: the signed-out page then says sign-in did not complete.
+ * What the redeem route, and the auth host's callback (#1321), add to the
+ * portal path when they refuse, whatever the reason: the signed-out page then
+ * says sign-in did not complete.
  */
 export const WORKSHOP_SIGN_IN_INCOMPLETE = {
   param: 'sign-in',

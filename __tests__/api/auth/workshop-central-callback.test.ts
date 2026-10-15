@@ -550,6 +550,29 @@ describe('callback: development, two local origins over plain http', () => {
   })
 })
 
+describe('callback: WORKSHOP_AUTH_ORIGIN unusable', () => {
+  it.each([
+    ['with an error from WorkOS', WORKOS_ERROR],
+    ['without its cookie', { cookie: null }],
+  ])(
+    'a return %s is refused on the auth host, not sent back, and says why once',
+    async (_, options) => {
+      const flow = await startFlow()
+      vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'auth.example.org')
+
+      const response = await callback(flow, options)
+
+      expect(response.status).toBe(404)
+      expect(response.headers.get('location')).toBeNull()
+      expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+        '[workshop] callback refused: host-refused',
+      )
+      expect(console.error).toHaveBeenCalledOnce()
+      expect(getDomainClaim).not.toHaveBeenCalled()
+    },
+  )
+})
+
 describe('callback: WORKSHOP_AUTH_ORIGIN unset', () => {
   beforeEach(() => {
     vi.stubEnv('WORKSHOP_AUTH_ORIGIN', '')

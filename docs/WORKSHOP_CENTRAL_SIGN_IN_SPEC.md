@@ -184,7 +184,9 @@ through `workshopPortalUrl`. `AUTH.md` and `DOMAIN_VERIFICATION.md` are rewritte
 - Whoever holds a state that is still valid can learn from the callback which conference site that
   sign-in began on, without the auth host's cookie: a return without it is sent back there (§3). The
   state passes through WorkOS and the attendee's browser. Answering 404 instead would leave an
-  attendee who finished the sign-in in another browser on the auth host with no way back.
+  attendee who finished the sign-in in another browser on the auth host with no way back. The host
+  is not read again for this, so a host delisted after a sign-in started is still sent such a
+  return until that state expires; a completed sign-in is refused there (§3).
 
 - Signing out on one host does not end a session the same attendee holds on another conference's
   host. It lasts until its 7 days are over.
