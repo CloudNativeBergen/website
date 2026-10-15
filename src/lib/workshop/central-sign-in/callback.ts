@@ -23,7 +23,10 @@ import { workshopWorkOS } from './workos'
 
 const accessTokenClaims = z.object({ sid: z.string().min(1) })
 
-/** What a 404 here says: nothing in it tells where to send the attendee. */
+/**
+ * What a 404 here says. Nothing in the request names a site the auth host may
+ * send the attendee to, so it can only point them back in words.
+ */
 const NOT_COMPLETED =
   'This sign-in could not be completed. Go back to the conference website and sign in again.'
 

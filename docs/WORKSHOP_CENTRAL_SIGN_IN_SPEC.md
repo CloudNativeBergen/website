@@ -81,8 +81,7 @@ Unchanged:
 
 A refusal at redeem sends the attendee to `/workshop` with one neutral line that sign-in did not
 complete (`?sign-in=incomplete`). It touches no cookie: a session the browser already holds stays,
-and the page then shows it instead of the line. The reason is never shown; it goes to the log. A sign-in
-started in a second tab replaces the first tab's cookie, so the first to return is refused this way.
+and the page then shows it instead of the line. The reason is never shown; it goes to the log. A sign-in started in a second tab replaces the first tab's cookies on both hosts, so the first tab is refused: at the callback (§3, below), or at redeem when the second tab began after the first had already left the auth host.
 
 A refusal at the callback (#1321) goes to the same place, `https://<host in state>/workshop?sign-in=incomplete`,
 when the state unseals, the request is on the auth host, and what is missing is the code (WorkOS

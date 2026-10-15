@@ -198,7 +198,7 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
     ])
   })
 
-  it('signs in at the latest every step allows, on a slow server: the browser still holds its cookie at redeem', async () => {
+  it('signs in at the latest every seal allows, with 40 seconds of server work: the browser still holds its cookie at redeem', async () => {
     vi.useFakeTimers({
       toFake: ['Date'],
       now: new Date('2026-10-12T10:00:00Z'),
