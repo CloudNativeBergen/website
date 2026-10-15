@@ -55,8 +55,8 @@ export function WorkshopSignInCookieNote({ signInHost }: Props) {
       event while you are signed in, the cookie stays in your browser until it
       expires or you clear this site&apos;s cookies. While a sign-in or sign-out
       is in progress, short-lived cookies exist on this site
-      <OnSignInHost signInHost={signInHost} />; they expire within thirty minutes,
-      and sooner when the step completes.
+      <OnSignInHost signInHost={signInHost} />; they expire within thirty
+      minutes, and sooner when the step completes.
     </p>
   )
 }
