@@ -12,11 +12,21 @@ import { resolveConferenceFrom, resolveConferenceContact } from './from'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { resolveEmailBrandPalette } from '@/lib/branding/email'
 
+/**
+ * What the confirmation email reads of a conference: the sender fields, the
+ * brand and the owning organization. A stored `conference` document carries
+ * them as they are, so a caller may pass one read by id (#1357).
+ */
+export type WorkshopEmailConference = Pick<
+  Conference,
+  'title' | 'organizer' | 'contactEmail' | 'domains' | 'theme' | 'organization'
+>
+
 export interface WorkshopConfirmationEmailRequest {
   userEmail: string
   userName: string
   status?: string
-  conference?: Conference
+  conference?: WorkshopEmailConference
   /**
    * The owning tenant, for call sites that have an org id but no conference
    * document (the admin `manualSignup` path). Takes precedence over

@@ -547,6 +547,13 @@ export async function confirmSignups(
           tx.patch(_id, {
             ifRevisionID: _rev,
             set: { status: 'confirmed', confirmedAt },
+            // A promotion email still owed from before (moved back outside
+            // the app, so `freeSeat` never settled it) is owed no more when
+            // this confirm reports the sign-up newly confirmed: the confirm
+            // then tells the person, or chose not to. One the guard still
+            // remembers is reported as nothing new, and told nothing by the
+            // confirm, so its email stays owed to the outbox (#1357).
+            ...(remembered.has(_id) ? {} : { unset: ['promotionEmailDue'] }),
           })
         }
       }
@@ -620,9 +627,13 @@ export async function changeCapacity(
     tx.patch(workshopId, { ifRevisionID: seats.talkRev, set: { capacity } })
     const confirmedAt = new Date().toISOString()
     for (const { _id, _rev } of promoted) {
+      // The debt of a promotion email is stored WITH the promotion (#1357):
+      // a reply lost after this write still leaves it for the sender
+      // (`./promoted.ts`) to find, and a retry that finds nobody newly
+      // promoted has not lost it.
       tx.patch(_id, {
         ifRevisionID: _rev,
-        set: { status: 'confirmed', confirmedAt },
+        set: { status: 'confirmed', confirmedAt, promotionEmailDue: true },
       })
     }
     return { done: promoted.map((s) => s._id) }
@@ -646,7 +657,14 @@ export async function freeSeat(
   }>(signupId)
   const tx = clientWrite.transaction()
   if (how === 'delete') tx.delete(signupId)
-  else tx.patch(signupId, { set: { status: 'waitlist' } })
+  // A promotion email still owed is owed no more (#1357): the sign-up waits
+  // again, and one confirmed by hand later is told so by hand.
+  else {
+    tx.patch(signupId, {
+      set: { status: 'waitlist' },
+      unset: ['promotionEmailDue'],
+    })
+  }
   const workshopId = signup?.workshop?._ref
   const conferenceId = signup?.conference?._ref
   if (workshopId && conferenceId) {

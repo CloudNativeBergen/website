@@ -95,6 +95,9 @@ export interface WorkshopSignup {
   signedUpAt: string
   confirmedAt?: string
   confirmationEmailSent?: boolean
+  /** #1357: a promotion email owed, and the token of the run that paid it. */
+  promotionEmailDue?: boolean
+  promotionEmailClaim?: string
   notes?: string
   /**
    * The sponsor whose early-access link admitted this sign-up (#1348). Set by

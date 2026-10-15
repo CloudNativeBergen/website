@@ -74,7 +74,7 @@ import {
 import { clientWrite } from '@/lib/sanity/client'
 import { changeCapacity } from '@/lib/workshop/seats'
 import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
-import { emailPromotedSignups } from '@/lib/workshop/promoted'
+import { deliverPromotionEmails } from '@/lib/workshop/promoted'
 import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
 import {
   createNotifications,
@@ -191,7 +191,7 @@ async function changeTalkCapacity(
   capacity: number,
   /** The edit's own status and format, when it changes them too. */
   edit: { status?: string; format?: string },
-) {
+): Promise<{ conferenceId: string; promoted: string[] } | null> {
   // Through the doc endpoint, where it is current: a read that still shows
   // the capacity from before a change on the Workshops page would make a
   // real change look like none. The caller has proved the talk is the org's.
@@ -203,7 +203,7 @@ async function changeTalkCapacity(
     capacity: talk.capacity,
     conferenceId: talk.conference?._ref,
   }
-  if (!stored || stored.capacity === capacity) return
+  if (!stored || stored.capacity === capacity) return null
   // The promotions are emailed in the name of the site's conference: a
   // previous edition's workshop is changed from its own site.
   if (
@@ -241,7 +241,12 @@ async function changeTalkCapacity(
         })
     }
   }
-  await emailPromotedSignups(stored.conferenceId!, outcome.promoted)
+  // Who is owed an email is stored by the write (#1357): an early return
+  // above on a retry with the same capacity loses nothing, the cron pays it.
+  // NOT SENT HERE: the sender judges the talk as it is stored, and this
+  // edit's own status and format are patched after this. The caller sends
+  // once that patch has landed; if it does not, the cron pays the debts.
+  return { conferenceId: stored.conferenceId!, promoted: outcome.promoted }
 }
 
 /** The topic ids currently on a talk, for the grandfathering set above. */
@@ -1059,9 +1064,10 @@ export const proposalRouter = router({
         // organizer who speaks at the workshop gets here past the
         // after-acceptance rule above.
         const { capacity, ...data } = input.data
-        if (capacity !== undefined) {
-          await changeTalkCapacity(input.id, capacity, data)
-        }
+        const promotion =
+          capacity !== undefined
+            ? await changeTalkCapacity(input.id, capacity, data)
+            : null
         const { proposal, err } = await updateProposal(input.id, data)
 
         if (err) {
@@ -1077,6 +1083,15 @@ export const proposalRouter = router({
             code: 'NOT_FOUND',
             message: 'Proposal not found',
           })
+        }
+
+        // After the patch: the talk is stored as this edit leaves it, which
+        // is what the sender judges it by (#1357).
+        if (promotion) {
+          await deliverPromotionEmails(
+            promotion.conferenceId,
+            promotion.promoted,
+          )
         }
 
         return proposal
@@ -1983,10 +1998,12 @@ export const proposalRouter = router({
           }
 
           // Last before the patch, once nothing else can refuse the edit: a
-          // capacity change is written, and its promotions emailed, at once.
-          if (capacity !== undefined) {
-            await changeTalkCapacity(input.id, capacity, proposalData)
-          }
+          // capacity change is written at once; its promotions are emailed
+          // once the patch has landed (#1357).
+          const promotion =
+            capacity !== undefined
+              ? await changeTalkCapacity(input.id, capacity, proposalData)
+              : null
           const { proposal, err } = await updateProposal(input.id, updateData)
 
           if (err) {
@@ -2022,6 +2039,15 @@ export const proposalRouter = router({
                 removedSpeakerIds,
               })
             }
+          }
+
+          // LAST (#1357): the talk is stored as this edit leaves it, and the
+          // conversation's access is in step, before anyone is told.
+          if (promotion) {
+            await deliverPromotionEmails(
+              promotion.conferenceId,
+              promotion.promoted,
+            )
           }
 
           return proposal

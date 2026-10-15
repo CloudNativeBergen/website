@@ -54,7 +54,7 @@ const RECIPIENTS_SOURCE = readFileSync(
 const EMAIL_FIELD = /^(.*[Ee]mail.*|identifier)$/
 /** …minus the ones whose name contains "email" but hold a boolean/date/id. */
 const NOT_AN_ADDRESS =
-  /^(emailedAt|emailSent|emailSentAt|emailId|emailError|messagingEmailDefault|emailOverride|confirmationEmailSent|emailIdentity|approvalEmailSentAt|approvalEmailSentBy)$/
+  /^(emailedAt|emailSent|emailSentAt|emailId|emailError|messagingEmailDefault|emailOverride|confirmationEmailSent|emailIdentity|approvalEmailSentAt|approvalEmailSentBy|promotionEmailDue|promotionEmailClaim)$/
 
 type Disposition =
   | { verdict: 'swept'; why: string }
