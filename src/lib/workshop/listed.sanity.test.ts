@@ -44,7 +44,8 @@ beforeEach(() => {
     talk('withdrawn', { status: 'withdrawn' }),
     talk('no-format', { format: undefined }),
     talk('elsewhere', { conference: { _type: 'reference', _ref: 'conf-b' } }),
-    { _id: 'a-sponsor', _type: 'sponsor', _rev: 'r0' },
+    // Every other field of a listed workshop: only its type tells.
+    talk('a-sponsor', { _type: 'sponsor' }),
     talk('drafts.unpublished'),
     talk('drafts.listed-120', { status: 'confirmed' }),
   ])
