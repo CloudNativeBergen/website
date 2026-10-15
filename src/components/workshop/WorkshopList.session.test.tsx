@@ -48,7 +48,12 @@ const SIGNUP = {
   workshop: { _type: 'reference', _ref: 'ws-1' },
 }
 
-const server = { signedIn: true, signupReads: 0 }
+const server = {
+  signedIn: true,
+  signupReads: 0,
+  /** The attendee's sign-ups while signed in. */
+  signups: [SIGNUP] as unknown[],
+}
 
 const ok = (data: unknown) => ({ result: { data } })
 
@@ -71,10 +76,18 @@ function answer(procedure: string): [unknown, number] {
     case 'workshop.getMySignups':
       server.signupReads += 1
       if (!server.signedIn) return UNAUTHORIZED
-      return [ok({ success: true, data: [SIGNUP], count: 1 }), 200]
+      return [
+        ok({
+          success: true,
+          data: server.signups,
+          count: server.signups.length,
+        }),
+        200,
+      ]
     case 'workshop.announcementsByWorkshop':
       return [ok({ success: true, data: {} }), 200]
     case 'workshop.cancelSignup':
+    case 'workshop.signup':
       if (!server.signedIn) return UNAUTHORIZED
       return [ok({ success: true, message: 'cancelled' }), 200]
     default:
@@ -83,7 +96,7 @@ function answer(procedure: string): [unknown, number] {
 }
 
 beforeEach(() => {
-  Object.assign(server, { signedIn: true, signupReads: 0 })
+  Object.assign(server, { signedIn: true, signupReads: 0, signups: [SIGNUP] })
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -150,25 +163,48 @@ describe('WorkshopList when the session has ended (#1303)', () => {
     expectSignInAgain(await screen.findByRole('alert'))
   })
 
-  it('asks the same when a write is refused, reading the signups again', async () => {
-    renderPortal()
-    // Signed in: the registration is shown, and no notice.
-    const cancel = await screen.findByRole('button', {
-      name: 'Cancel Registration',
-    })
-    expect(screen.queryByRole('alert')).toBeNull()
-    const readsBefore = server.signupReads
+  // The write opened a dialog (the cancel's question, the sign-up form). Once
+  // the session has ended the list shows the notice and nothing else: no
+  // dialog, no card with its own copy of the refusal, and none of the
+  // registrations the query client still holds from before.
+  it.each([
+    {
+      write: 'cancel',
+      signups: [SIGNUP],
+      open: 'Cancel Registration',
+      dialog: 'Cancel your registration?',
+      submit: 'Cancel Registration',
+    },
+    {
+      write: 'sign-up',
+      signups: [],
+      open: 'Register for Workshop',
+      dialog: 'Kubernetes 101',
+      submit: 'Confirm Registration',
+    },
+  ])(
+    'asks the same when a $write is refused, and shows nothing else',
+    async ({ signups, open, dialog, submit }) => {
+      server.signups = signups
+      renderPortal()
+      // Signed in: the workshop is shown, and no notice.
+      const opener = await screen.findByRole('button', { name: open })
+      expect(screen.queryByRole('alert')).toBeNull()
+      const readsBefore = server.signupReads
 
-    server.signedIn = false
-    fireEvent.click(cancel)
-    const confirm = within(
-      await screen.findByRole('dialog', { name: 'Cancel your registration?' }),
-    ).getByRole('button', { name: 'Cancel Registration' })
-    await waitFor(() => expect(confirm).not.toHaveAttribute('aria-disabled'))
-    fireEvent.click(confirm)
+      server.signedIn = false
+      fireEvent.click(opener)
+      const confirm = within(
+        await screen.findByRole('dialog', { name: dialog }),
+      ).getByRole('button', { name: submit })
+      await waitFor(() => expect(confirm).not.toHaveAttribute('aria-disabled'))
+      fireEvent.click(confirm)
 
-    await waitFor(() => expect(server.signupReads).toBe(readsBefore + 1))
-    const notice = await screen.findByText(/your session has ended/i)
-    expectSignInAgain(notice.closest('[role="alert"]') as HTMLElement)
-  })
+      await waitFor(() => expect(server.signupReads).toBe(readsBefore + 1))
+      expectSignInAgain(await screen.findByRole('alert'))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.queryByText('Kubernetes 101')).toBeNull()
+      expect(screen.queryByText(/must be signed in/i)).toBeNull()
+    },
+  )
 })

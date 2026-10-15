@@ -105,14 +105,9 @@ export default function WorkshopList({
 
   // THE SESSION HAS ENDED (#1303): it lasts 7 days with no renewal, and the
   // attendee can sign out in another tab. A refused write reads the sign-ups
-  // again, so the notice below (not a five-second message) says so.
+  // again, whose refusal replaces the list with the notice below.
   const sessionEnded = signupsError?.data?.code === 'UNAUTHORIZED'
-  const refusedForSession = (code: string | undefined) => {
-    if (code !== 'UNAUTHORIZED') return false
-    setErrorMessage(null)
-    refetchSignups()
-    return true
-  }
+  const isSessionRefusal = (code: string | undefined) => code === 'UNAUTHORIZED'
 
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
@@ -128,7 +123,10 @@ export default function WorkshopList({
     },
     onError: (error) => {
       setSuccessMessage(null)
-      if (refusedForSession(error.data?.code)) return
+      if (isSessionRefusal(error.data?.code)) {
+        refetchSignups()
+        return
+      }
       // The server refused for the window while this list was offering
       // sign-up BECAUSE OF early access: the one case where a refusal
       // contradicts what is on screen. (Once sign-up is open for everyone a
@@ -174,7 +172,10 @@ export default function WorkshopList({
     },
     onError: (error) => {
       setSuccessMessage(null)
-      if (refusedForSession(error.data?.code)) return
+      if (isSessionRefusal(error.data?.code)) {
+        refetchSignups()
+        return
+      }
       setErrorMessage(error.message)
       setTimeout(() => setErrorMessage(null), 5000)
     },
@@ -251,6 +252,30 @@ export default function WorkshopList({
         <div className="text-gray-600 dark:text-gray-400">
           Loading workshops...
         </div>
+      </div>
+    )
+  }
+
+  // NOTHING BUT THE WAY BACK IN, as on the signed-out view. Whatever the
+  // query client still holds is from before the session ended, and an open
+  // dialog (the sign-up form, the cancel's question) goes with its card.
+  if (sessionEnded) {
+    return (
+      <div
+        role="alert"
+        className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
+      >
+        <p>
+          Your session has ended. Sign in again to see your workshop
+          registrations and sign up for workshops.
+        </p>
+        {/* A FORM, NOT A LINK, as on the signed-out view: the route sets a
+            cookie and redirects to another origin. */}
+        <form action={WORKSHOP_SIGN_IN_PATH} method="get" className="shrink-0">
+          <Button type="submit" size="sm" className="min-h-11">
+            Sign in again
+          </Button>
+        </form>
       </div>
     )
   }
@@ -340,41 +365,24 @@ export default function WorkshopList({
           role="alert"
           className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
         >
-          {/* An ended session can only be fixed by signing in again. A
-              refusal carries the server's own reason (no ticket, wrong ticket
-              type, ticket check unavailable); anything else is a failed
-              read, and "try again" is all there is to say. */}
+          {/* A refusal carries the server's own reason (no ticket, wrong
+              ticket type, ticket check unavailable); anything else is a
+              failed read, and "try again" is all there is to say. */}
           <p>
-            {sessionEnded
-              ? 'Your session has ended. Sign in again to see your workshop registrations and sign up for workshops.'
-              : signupsError?.data?.code === 'FORBIDDEN'
-                ? signupsError.message
-                : 'We could not load your workshop registrations. Workshops you are already registered for may be listed as available below.'}
+            {signupsError?.data?.code === 'FORBIDDEN'
+              ? signupsError.message
+              : 'We could not load your workshop registrations. Workshops you are already registered for may be listed as available below.'}
           </p>
-          {sessionEnded ? (
-            // A FORM, NOT A LINK, as on the signed-out view: the route sets a
-            // cookie and redirects to another origin.
-            <form
-              action={WORKSHOP_SIGN_IN_PATH}
-              method="get"
-              className="shrink-0"
-            >
-              <Button type="submit" size="sm" className="min-h-11">
-                Sign in again
-              </Button>
-            </form>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 shrink-0"
-              onClick={() => refetchSignups()}
-              disabled={signupsFetching}
-            >
-              Try again
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11 shrink-0"
+            onClick={() => refetchSignups()}
+            disabled={signupsFetching}
+          >
+            Try again
+          </Button>
         </div>
       )}
 

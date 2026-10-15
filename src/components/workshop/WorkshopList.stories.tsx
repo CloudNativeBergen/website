@@ -483,32 +483,28 @@ export const SignupError: Story = {
   },
 }
 
-const signupsUnavailable = () =>
+/** A tRPC error response, as the server sends one. */
+const trpcError = (
+  message: string,
+  code: number,
+  data: { code: string; httpStatus: number },
+) =>
   HttpResponse.json(
-    {
-      error: {
-        message: 'fetch failed',
-        code: -32603,
-        data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
-      },
-    },
-    { status: 500 },
+    { error: { message, code, data } },
+    { status: data.httpStatus },
   )
+
+const signupsUnavailable = () =>
+  trpcError('fetch failed', -32603, {
+    code: 'INTERNAL_SERVER_ERROR',
+    httpStatus: 500,
+  })
 
 const REFUSAL =
   'No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at hello@example.com if you believe this is an error.'
 
 const signupsRefused = () =>
-  HttpResponse.json(
-    {
-      error: {
-        message: REFUSAL,
-        code: -32003,
-        data: { code: 'FORBIDDEN', httpStatus: 403 },
-      },
-    },
-    { status: 403 },
-  )
+  trpcError(REFUSAL, -32003, { code: 'FORBIDDEN', httpStatus: 403 })
 
 const signupsFailedHandlers = [
   http.get('/api/trpc/workshop.list', () =>
@@ -598,16 +594,10 @@ export const SignupsUnavailableMobile: Story = {
 }
 
 const signupsSessionEnded = () =>
-  HttpResponse.json(
-    {
-      error: {
-        message: 'You must be signed in to manage workshop signups',
-        code: -32001,
-        data: { code: 'UNAUTHORIZED', httpStatus: 401 },
-      },
-    },
-    { status: 401 },
-  )
+  trpcError('You must be signed in to manage workshop signups', -32001, {
+    code: 'UNAUTHORIZED',
+    httpStatus: 401,
+  })
 
 /**
  * The session ended while the page was open (#1303): the read is refused with
