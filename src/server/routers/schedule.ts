@@ -384,35 +384,50 @@ export const scheduleRouter = router({
         // `conference.schedules` and appended a second official doc for the
         // same date — two "official" days, which makes the speaker-facing
         // lookups tie on `order(date asc)[0]` and go nondeterministic again.
-        const existingOfficial = await clientWrite.fetch<{
-          _id: string
-          tracks?: ConferenceSchedule['tracks']
-        } | null>(
-          `*[_type == "schedule" && conference._ref == $conferenceId && date == $date && (status == 'official' || !defined(status))][0]`,
-          { conferenceId: conference._id, date },
-        )
+        const [existingOfficial, confDoc] = await Promise.all([
+          clientWrite.fetch<{
+            _id: string
+            _rev?: string
+            tracks?: ConferenceSchedule['tracks']
+          } | null>(
+            `*[_type == "schedule" && conference._ref == $conferenceId && date == $date && _id != $id && (status == 'official' || !defined(status))][0]`,
+            { conferenceId: conference._id, date, id: targetSchedule._id },
+          ),
+          clientWrite.fetch<{ _rev?: string } | null>(
+            // groq-global-scoped: by-id read of the conference the request resolved.
+            `*[_type == "conference" && _id == $conferenceId][0]{ _rev }`,
+            { conferenceId: conference._id },
+          ),
+        ])
 
         const tx = clientWrite.transaction()
 
         if (existingOfficial) {
-          tx.patch(existingOfficial._id, (p) =>
-            p.set({ status: ScheduleStatus.Archived }),
-          )
+          tx.patch(existingOfficial._id, (p) => {
+            const rev = existingOfficial._rev
+              ? p.ifRevisionId(existingOfficial._rev)
+              : p
+            return rev.set({ status: ScheduleStatus.Archived })
+          })
           tx.patch(conference._id, (p) =>
             p.unset([`schedules[_ref == "${existingOfficial._id}"]`]),
           )
         }
 
-        tx.patch(targetSchedule._id, (p) =>
-          p.set({ status: ScheduleStatus.Official }),
-        )
-        tx.patch(conference._id, (p) =>
-          p
+        tx.patch(targetSchedule._id, (p) => {
+          const rev = targetSchedule._rev
+            ? p.ifRevisionId(targetSchedule._rev)
+            : p
+          return rev.set({ status: ScheduleStatus.Official })
+        })
+        tx.patch(conference._id, (p) => {
+          const rev = confDoc?._rev ? p.ifRevisionId(confDoc._rev) : p
+          return rev
             .setIfMissing({ schedules: [] })
             .append('schedules', [
               createReferenceWithKey(targetSchedule._id, 'schedule'),
-            ]),
-        )
+            ])
+        })
 
         await tx.commit()
         revalidateTag(conferenceTag(conference._id), 'default')

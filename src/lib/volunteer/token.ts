@@ -67,12 +67,7 @@ export function verifyVolunteerConfirmToken(
   const encodedPayload = raw.slice(0, dot)
   const signature = raw.slice(dot + 1)
 
-  let data: string
-  try {
-    data = Buffer.from(encodedPayload, 'base64url').toString('utf8')
-  } catch {
-    return { ok: false, reason: 'malformed' }
-  }
+  const data = Buffer.from(encodedPayload, 'base64url').toString('utf8')
 
   const expected = sign(data)
   const a = Buffer.from(signature)

@@ -28,6 +28,7 @@ interface Draft {
   tshirtSize: string
   dietaryRestrictions: string
   otherInfo: string
+  reviewNotes: string
 }
 
 function draftFrom(v: VolunteerWithConference): Draft {
@@ -41,6 +42,7 @@ function draftFrom(v: VolunteerWithConference): Draft {
     tshirtSize: v.tshirtSize ?? '',
     dietaryRestrictions: v.dietaryRestrictions ?? '',
     otherInfo: v.otherInfo ?? '',
+    reviewNotes: v.reviewNotes ?? '',
   }
 }
 
@@ -51,8 +53,8 @@ function nullable(value: string): string | null {
 }
 
 /**
- * SE-4 — organizer edit of a volunteer's own detail fields. Status and review
- * provenance are edited elsewhere and are intentionally absent here.
+ * SE-4 — organizer edit of a volunteer's own detail fields and internal review
+ * notes. Status and review provenance are edited via status transitions.
  */
 export function VolunteerEditModal({
   isOpen,
@@ -132,6 +134,7 @@ export function VolunteerEditModal({
         draft.tshirtSize === '' ? null : (draft.tshirtSize as TShirtSize),
       dietaryRestrictions: nullable(draft.dietaryRestrictions),
       otherInfo: nullable(draft.otherInfo),
+      reviewNotes: nullable(draft.reviewNotes),
     })
   }
 
@@ -264,6 +267,19 @@ export function VolunteerEditModal({
             onChange={(e) =>
               setDraft((p) => ({ ...p, otherInfo: e.target.value }))
             }
+            className={inputClass}
+          />
+        </Field>
+
+        <Field label="Review notes (internal)" htmlFor="vol-review-notes">
+          <textarea
+            id="vol-review-notes"
+            rows={2}
+            value={draft.reviewNotes}
+            onChange={(e) =>
+              setDraft((p) => ({ ...p, reviewNotes: e.target.value }))
+            }
+            placeholder="Internal notes about this applicant..."
             className={inputClass}
           />
         </Field>

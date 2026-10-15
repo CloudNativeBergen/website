@@ -150,6 +150,12 @@ describe('volunteerStatus', () => {
         'unknown',
         'unknown',
       ])
+
+      const titoStatuses = joinVolunteerTicketStatus(volunteers, redeemed, {
+        ...CONF,
+        ticketingProvider: 'tito',
+      })
+      expect(titoStatuses[0].manageUrl).toBeUndefined()
     })
   })
 

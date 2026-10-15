@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
+import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { formatDateTimeSafe } from '@/lib/time'
 import {
   CheckBadgeIcon,
@@ -10,10 +11,11 @@ import {
   TicketIcon,
   ChatBubbleLeftRightIcon,
   ArrowTopRightOnSquareIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/outline'
 
 export type VolunteerConfirmState =
-  'ready' | 'confirmed' | 'invalid' | 'not-approved'
+  'ready' | 'confirmed' | 'declined' | 'invalid' | 'not-approved'
 
 export interface VolunteerConfirmClientProps {
   initialState: VolunteerConfirmState
@@ -24,15 +26,6 @@ export interface VolunteerConfirmClientProps {
   registrationUrl?: string | null
   slackInviteUrl?: string | null
   contactEmail?: string
-}
-
-function isSafeHttpsUrl(value: string | null | undefined): value is string {
-  if (!value) return false
-  try {
-    return new URL(value).protocol === 'https:'
-  } catch {
-    return false
-  }
 }
 
 export function VolunteerConfirmClient({
@@ -56,6 +49,8 @@ export function VolunteerConfirmClient({
     string | null | undefined
   >(initialSlackInviteUrl)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [showDeclineForm, setShowDeclineForm] = useState(false)
+  const [declineReason, setDeclineReason] = useState('')
 
   const confirmMutation = api.volunteer.confirmAttendance.useMutation({
     onSuccess: (data) => {
@@ -63,6 +58,7 @@ export function VolunteerConfirmClient({
       setConfirmedAt(data.confirmedAt)
       setRegistrationUrl(data.registrationUrl)
       setSlackInviteUrl(data.slackInviteUrl)
+      setShowDeclineForm(false)
       setErrorMessage(null)
     },
     onError: (err) => {
@@ -73,18 +69,43 @@ export function VolunteerConfirmClient({
     },
   })
 
+  const declineMutation = api.volunteer.declineAttendance.useMutation({
+    onSuccess: () => {
+      setState('declined')
+      setShowDeclineForm(false)
+      setErrorMessage(null)
+    },
+    onError: (err) => {
+      setErrorMessage(
+        err.message ||
+          'Could not decline your attendance. Please try again or contact the organizers.',
+      )
+    },
+  })
+
   const handleConfirm = () => {
     if (!token) return
     setErrorMessage(null)
     confirmMutation.mutate({ token })
   }
 
-  const safeRegistrationUrl = isSafeHttpsUrl(registrationUrl)
-    ? registrationUrl
-    : null
-  const safeSlackInviteUrl = isSafeHttpsUrl(slackInviteUrl)
-    ? slackInviteUrl
-    : null
+  const handleDecline = () => {
+    if (!token) return
+    setErrorMessage(null)
+    declineMutation.mutate({
+      token,
+      reason: declineReason.trim() || undefined,
+    })
+  }
+
+  const safeRegistrationUrl =
+    registrationUrl && isAbsoluteHttpsUrl(registrationUrl.trim())
+      ? registrationUrl.trim()
+      : null
+  const safeSlackInviteUrl =
+    slackInviteUrl && isAbsoluteHttpsUrl(slackInviteUrl.trim())
+      ? slackInviteUrl.trim()
+      : null
 
   if (state === 'invalid' || state === 'not-approved') {
     return (
@@ -121,6 +142,103 @@ export function VolunteerConfirmClient({
               )}
             </div>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (state === 'declined') {
+    return (
+      <div className="mx-auto max-w-xl rounded-2xl border border-gray-200 bg-white/90 p-6 shadow-sm backdrop-blur-sm sm:p-8 dark:border-gray-700 dark:bg-gray-800/90">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+            <XCircleIcon className="h-7 w-7" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+              Attendance Declined
+            </span>
+            <h2 className="font-space-grotesk mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+              We&apos;ve updated your status
+              {volunteerName ? `, ${volunteerName}` : ''}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300">
+              Thank you for letting the{' '}
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {conferenceTitle || 'conference'}
+              </span>{' '}
+              organizing team know that you can&apos;t make it. If your plans
+              change, please reach out to the organizers directly.
+            </p>
+            {contactEmail && (
+              <div className="mt-6">
+                <a
+                  href={`mailto:${contactEmail}`}
+                  className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                >
+                  Contact Organizers
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderDeclineSection = () => {
+    if (!token) return null
+    if (!showDeclineForm) {
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            setErrorMessage(null)
+            setShowDeclineForm(true)
+          }}
+          className="text-xs font-medium text-gray-500 underline hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+        >
+          Can&apos;t make it? Decline attendance
+        </button>
+      )
+    }
+
+    return (
+      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
+        <label
+          htmlFor="volunteer-decline-reason"
+          className="block text-xs font-medium text-gray-700 dark:text-gray-300"
+        >
+          Optional note for the organizers
+        </label>
+        <textarea
+          id="volunteer-decline-reason"
+          rows={2}
+          maxLength={500}
+          value={declineReason}
+          onChange={(e) => setDeclineReason(e.target.value)}
+          placeholder="Let us know if your plans changed..."
+          className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+        />
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleDecline}
+            disabled={declineMutation.isPending}
+            className="inline-flex items-center justify-center rounded-lg bg-red-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {declineMutation.isPending
+              ? 'Declining...'
+              : 'Confirm Decline Attendance'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowDeclineForm(false)}
+            disabled={declineMutation.isPending}
+            className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     )
@@ -198,6 +316,18 @@ export function VolunteerConfirmClient({
             follow up with your ticket and shift details shortly.
           </div>
         )}
+
+        {errorMessage && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800/60 dark:bg-red-900/30 dark:text-red-300">
+            {errorMessage}
+          </div>
+        )}
+
+        {token && (
+          <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+            {renderDeclineSection()}
+          </div>
+        )}
       </div>
     )
   }
@@ -240,7 +370,7 @@ export function VolunteerConfirmClient({
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={confirmMutation.isPending}
+          disabled={confirmMutation.isPending || declineMutation.isPending}
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
           <CheckBadgeIcon className="h-5 w-5" />
@@ -250,18 +380,9 @@ export function VolunteerConfirmClient({
               : 'Confirm My Attendance'}
           </span>
         </button>
-        {contactEmail && (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Can&apos;t make it?{' '}
-            <a
-              href={`mailto:${contactEmail}`}
-              className="font-medium text-brand-cloud-blue underline hover:text-blue-700 dark:text-blue-400"
-            >
-              Let the organizers know
-            </a>
-          </p>
-        )}
+        {!showDeclineForm && renderDeclineSection()}
       </div>
+      {showDeclineForm && renderDeclineSection()}
     </div>
   )
 }

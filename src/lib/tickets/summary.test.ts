@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   resolveAccess: vi.fn(),
   getSpeakers: vi.fn(),
   getOrganizerCount: vi.fn(),
+  getVolunteersByConference: vi.fn(),
   fetchSpeakerTicketInputs: vi.fn(),
   resolveSpeakerTicketType: vi.fn(),
   fetchEventTickets: vi.fn(),
@@ -35,6 +36,9 @@ vi.mock('@/lib/sanity/client', () => {
 vi.mock('@/lib/speaker/sanity', () => ({
   getSpeakers: h.getSpeakers,
   getOrganizerCount: h.getOrganizerCount,
+}))
+vi.mock('@/lib/volunteer/sanity', () => ({
+  getVolunteersByConference: h.getVolunteersByConference,
 }))
 vi.mock('@/lib/speaker/ticketInputs', () => ({
   fetchSpeakerTicketInputs: h.fetchSpeakerTicketInputs,
@@ -161,6 +165,10 @@ beforeEach(() => {
     err: null,
   })
   h.getOrganizerCount.mockResolvedValue({ count: 3, err: null })
+  h.getVolunteersByConference.mockResolvedValue({
+    volunteers: [],
+    error: null,
+  })
   h.fetchSpeakerTicketInputs.mockResolvedValue([
     {
       speakerId: 'sp-1',
@@ -405,5 +413,43 @@ describe('exportParticipants', () => {
     ])
     expect(res.find((p) => p.email === 'paid@example.com')?.isComp).toBe(false)
     expect(res.find((p) => p.email === 'free@example.com')?.isComp).toBe(true)
+  })
+})
+
+describe('volunteer free ticket allocation in buildTicketSummary', () => {
+  it('populates freeTicketAllocation.volunteers when approved/confirmed volunteers exist', async () => {
+    h.getVolunteersByConference.mockResolvedValue({
+      volunteers: [
+        {
+          _id: 'vol-1',
+          name: 'Vol One',
+          email: 'vol1@example.com',
+          status: 'confirmed',
+        },
+        {
+          _id: 'vol-2',
+          name: 'Vol Two',
+          email: 'vol2@example.com',
+          status: 'approved',
+        },
+      ],
+      error: null,
+    })
+    h.fetchEventTickets.mockResolvedValue([
+      ...TICKETS,
+      ticket({
+        id: 6,
+        order_id: 104,
+        category: 'Volunteer ticket',
+        crm: crm('vol1@example.com'),
+      }),
+    ])
+
+    const summary = await ready()
+    expect(summary.freeTicketAllocation.volunteers).toMatchObject({
+      allocated: 2,
+      claimed: 1,
+    })
+    expect(summary.freeTicketAllocation.claimedCovers).toContain('volunteers')
   })
 })

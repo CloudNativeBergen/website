@@ -24,6 +24,7 @@ import type { TicketClassificationContext } from './classification'
 import { proposeTicketTypeRoles } from './discovery'
 import type { EventRef, TicketingProvider } from './provider'
 import { resolveSpeakerTicketType } from './speakerStatus'
+import { resolveVolunteerTicketType } from './volunteerStatus'
 import type { EventTicket } from './types'
 
 /** The resolved ticketing access a page already holds. */
@@ -95,6 +96,20 @@ export async function buildClassificationContext(
     speakerType = undefined
   }
 
+  let volunteerType: Awaited<ReturnType<typeof resolveVolunteerTicketType>>
+  try {
+    volunteerType = await resolveVolunteerTicketType(
+      {
+        configured: true,
+        provider: access.provider,
+        eventRef: access.eventRef,
+      },
+      conference.organization?._ref,
+    )
+  } catch {
+    volunteerType = undefined
+  }
+
   // The types discovery gets to reason about: the list that came free with the
   // discounts (IDs, so a code can be joined to a type) plus the one type we
   // know is invitation-gated, which is the only `requiresInvitation` flag
@@ -102,12 +117,23 @@ export async function buildClassificationContext(
   const ticketTypes = (discountData?.ticketTypes ?? []).map((type) => ({
     id: type.id,
     name: type.name,
-    requiresInvitation: type.name === speakerType?.name,
+    requiresInvitation:
+      type.name === speakerType?.name || type.name === volunteerType?.name,
   }))
   if (speakerType && !ticketTypes.some((t) => t.name === speakerType.name)) {
     ticketTypes.push({
       id: speakerType.id,
       name: speakerType.name,
+      requiresInvitation: true,
+    })
+  }
+  if (
+    volunteerType &&
+    !ticketTypes.some((t) => t.name === volunteerType.name)
+  ) {
+    ticketTypes.push({
+      id: volunteerType.id,
+      name: volunteerType.name,
       requiresInvitation: true,
     })
   }
@@ -118,6 +144,7 @@ export async function buildClassificationContext(
     // code falls back to the name heuristic and lands on the wrong sponsor.
     sponsors: await conferenceSponsorClaimants(conference, clientReadUncached),
     speakerTicketTypeName: speakerType?.name,
+    volunteerTicketTypeName: volunteerType?.name,
     ticketTypeRoles: conference.ticketTypeRoles,
     ticketTypeProposals: proposeTicketTypeRoles({
       tickets,

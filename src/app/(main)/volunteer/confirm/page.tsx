@@ -67,6 +67,11 @@ export default async function VolunteerConfirmPage({
         initialState = 'confirmed'
       } else if (volunteer.status === VolunteerStatus.APPROVED) {
         initialState = 'ready'
+      } else if (
+        volunteer.status === VolunteerStatus.REJECTED &&
+        volunteer.reviewNotes?.startsWith('Declined by volunteer')
+      ) {
+        initialState = 'declined'
       } else {
         initialState = 'not-approved'
       }

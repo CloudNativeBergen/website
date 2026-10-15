@@ -103,6 +103,16 @@ export function FreeTicketAllocationTable({
       pill: 'blue',
       ...allocation.speakers,
     },
+    ...(allocation.volunteers
+      ? [
+          {
+            key: 'volunteers',
+            category: 'Approved Volunteers',
+            pill: 'amber' as PillColor,
+            ...allocation.volunteers,
+          },
+        ]
+      : []),
     {
       key: 'organizers',
       category: 'Organizers',

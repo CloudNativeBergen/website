@@ -5,6 +5,7 @@ import {
   normalizeChoiceValue,
   discoverTicketQuestions,
   resolveSpeakerAnswer,
+  resolveSpeakerAnswers,
 } from './questions'
 
 describe('ticket questions discovery & normalization', () => {
@@ -137,7 +138,7 @@ describe('ticket questions discovery & normalization', () => {
     expect(new Set(ids).size).toBe(3)
   })
 
-  it('resolves speaker answers accurately including multi-select choices', () => {
+  it('resolves speaker answers accurately including multi-select and comma-containing choices', () => {
     const speaker1 = {
       additionals: [
         {
@@ -153,7 +154,7 @@ describe('ticket questions discovery & normalization', () => {
           value: '1',
         },
         {
-          name: 'Dietary restrictions - Gluten-free',
+          name: 'Dietary restrictions - Gluten-free, dairy-free',
           value: '1',
         },
       ],
@@ -179,7 +180,31 @@ describe('ticket questions discovery & normalization', () => {
     expect(resolveSpeakerAnswer(speaker2, workshopQ)).toBe('No')
     expect(resolveSpeakerAnswer(speaker1, dinnerQ)).toBe('Yes')
     expect(resolveSpeakerAnswer(speaker2, dinnerQ)).toBeNull()
-    expect(resolveSpeakerAnswer(speaker1, dietQ)).toBe('Vegan, Gluten-free')
+    expect(resolveSpeakerAnswers(speaker1, dietQ)).toEqual([
+      'Vegan',
+      'Gluten-free, dairy-free',
+    ])
+    expect(resolveSpeakerAnswer(speaker1, dietQ)).toBe(
+      'Vegan, Gluten-free, dairy-free',
+    )
     expect(resolveSpeakerAnswer(speaker1, companyQ)).toBe('Google Cloud')
+  })
+
+  it('normalizes Norwegian Ja/Nei boolean values and deduplicates case-insensitive field keys', () => {
+    expect(normalizeChoiceValue(undefined, 'Ja')).toBe('Yes')
+    expect(normalizeChoiceValue(undefined, 'nei')).toBe('No')
+    expect(normalizeChoiceValue('Ja, jeg kommer', 'ja')).toBe('Yes')
+    expect(normalizeChoiceValue('Nei, dessverre', 'ja')).toBe('No')
+    expect(normalizeChoiceValue('Ja, jeg kommer', 'nei')).toBeNull()
+
+    const tickets = [
+      { fields: [{ key: 'Company', value: 'Acme' }] },
+      { fields: [{ key: 'company', value: 'Globex' }] },
+    ]
+    const questions = discoverTicketQuestions(tickets)
+    expect(questions).toHaveLength(1)
+    expect(questions[0].id).toBe('field:company')
+    expect(resolveSpeakerAnswer(tickets[0], questions[0])).toBe('Acme')
+    expect(resolveSpeakerAnswer(tickets[1], questions[0])).toBe('Globex')
   })
 })

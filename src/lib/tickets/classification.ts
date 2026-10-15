@@ -78,7 +78,10 @@ import { parseTicketAmount } from '@/lib/tickets/amount'
 // TYPE-ONLY on purpose: `./discovery` imports `removesFullPrice` and `typeKey`
 // from here, and a type import is erased, so the cycle never exists at runtime.
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
-import { SPEAKER_TICKET_CATEGORY } from '@/lib/tickets/speakerTicketCategory'
+import {
+  SPEAKER_TICKET_CATEGORY,
+  VOLUNTEER_TICKET_CATEGORY,
+} from '@/lib/tickets/speakerTicketCategory'
 import type { EventTicket } from '@/lib/tickets/types'
 
 /**
@@ -100,6 +103,7 @@ export type ClassifiableTicket = Pick<
 export type TicketGrantedBy =
   | 'sponsor'
   | 'speaker'
+  | 'volunteer'
   /**
    * NOTHING PRODUCES THIS YET, deliberately. An organizer/crew comp is
    * indistinguishable in provider data from any other zero-priced ticket, and
@@ -189,6 +193,11 @@ export interface TicketClassificationContext {
    * only, exactly as `redeemedSpeakerEmails` does.
    */
   speakerTicketTypeName?: string | null
+  /**
+   * The name of the volunteer ticket type, from `findVolunteerTicketType` over
+   * the event's ticket types. Absent falls back to `VOLUNTEER_TICKET_CATEGORY`.
+   */
+  volunteerTicketTypeName?: string | null
   /** `conference.ticketTypeRoles`. Absent/empty ⇒ every type admits. */
   ticketTypeRoles?: readonly TicketTypeRole[]
   /**
@@ -296,6 +305,14 @@ export function classifyTicket(
   speakerTypes.delete('')
   const isSpeakerType = speakerTypes.has(typeKey(ticket.category))
 
+  const volunteerTypes = new Set(
+    [context.volunteerTicketTypeName, VOLUNTEER_TICKET_CATEGORY].map(typeKey),
+  )
+  volunteerTypes.delete('')
+  const isVolunteerType =
+    volunteerTypes.has(typeKey(ticket.category)) ||
+    /volunteer|frivillig/i.test(ticket.category ?? '')
+
   let comp: boolean | 'unknown'
   let grantedBy: TicketGrantedBy | null = null
 
@@ -304,6 +321,9 @@ export function classifyTicket(
     // issued, not sold, whatever it cost.
     comp = true
     grantedBy = 'speaker'
+  } else if (isVolunteerType) {
+    comp = true
+    grantedBy = 'volunteer'
   } else if (discount) {
     // A partial discount is a PURCHASE: the holder paid, at a discount. Naming
     // the sponsor whose code it is as the GRANTOR would count a sale as a

@@ -230,6 +230,24 @@ describe('classifyTicket', () => {
     ).toBe('speaker')
   })
 
+  it('reads a volunteer ticket as a volunteer comp, by literal or derived type name', () => {
+    expect(
+      classifyTicket(ticket({ category: 'Volunteer ticket', sum: '0.00' })),
+    ).toEqual({
+      admits: true,
+      admitsSource: 'unknown',
+      comp: true,
+      grantedBy: 'volunteer',
+      grantsWorkshop: false,
+    })
+
+    expect(
+      classifyTicket(ticket({ category: 'Free ticket - Crew', sum: '0.00' }), {
+        volunteerTicketTypeName: 'Free ticket - Crew',
+      }).grantedBy,
+    ).toBe('volunteer')
+  })
+
   it('leaves a comp unattributed when its code matches no known sponsor', () => {
     const result = classifyTicket(
       ticket({ coupon: 'ORGCREW2026', sum: '0.00' }),

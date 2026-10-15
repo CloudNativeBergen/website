@@ -91,6 +91,7 @@ import {
   extractSpeakersFromProposal,
 } from '@/lib/proposal/utils'
 import { filterProposals } from '@/lib/proposal/utils/filtering'
+import { convertPortableTextToString } from '@/lib/proposal/utils/validation'
 import { Speaker } from '@/lib/speaker/types'
 import {
   buildOrganizerCreatedSpeaker,
@@ -2107,14 +2108,6 @@ export const proposalRouter = router({
           // TENANT was not checked — any tenant's talk could be given audience
           // feedback.
           await requireDocumentInCurrentOrg(input.id, 'talk')
-          const existing = await clientWrite.getDocument(input.id)
-
-          if (!existing || existing._type !== 'talk') {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'Proposal not found',
-            })
-          }
 
           const result = await clientWrite
             .patch(input.id)
@@ -2413,8 +2406,9 @@ export const proposalRouter = router({
               const titleMatch = proposal.title
                 ?.toLowerCase()
                 .includes(searchTerm)
-              const descriptionMatch = proposal.description
-                ?.toString()
+              const descriptionMatch = convertPortableTextToString(
+                proposal.description,
+              )
                 .toLowerCase()
                 .includes(searchTerm)
               return titleMatch || descriptionMatch

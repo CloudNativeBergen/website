@@ -23,18 +23,25 @@ vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
 const getVolunteerByIdMock = vi.fn()
 const updateVolunteerDetailsMock = vi.fn()
 const confirmVolunteerAttendanceMock = vi.fn()
+const declineVolunteerAttendanceMock = vi.fn()
+const hasActiveVolunteerByEmailMock = vi.fn()
+const createVolunteerMock = vi.fn()
 vi.mock('@/lib/volunteer/sanity', () => ({
   getVolunteersByConference: vi.fn(),
   getVolunteerById: (...a: unknown[]) => getVolunteerByIdMock(...a),
   updateVolunteerStatus: vi.fn(),
   updateVolunteerDetails: (...a: unknown[]) => updateVolunteerDetailsMock(...a),
   deleteVolunteer: vi.fn(),
-  createVolunteer: vi.fn(),
+  createVolunteer: (...a: unknown[]) => createVolunteerMock(...a),
+  hasActiveVolunteerByEmail: (...a: unknown[]) =>
+    hasActiveVolunteerByEmailMock(...a),
   recordVolunteerApprovalEmailSent: vi
     .fn()
     .mockResolvedValue({ success: true, error: null }),
   confirmVolunteerAttendance: (...a: unknown[]) =>
     confirmVolunteerAttendanceMock(...a),
+  declineVolunteerAttendance: (...a: unknown[]) =>
+    declineVolunteerAttendanceMock(...a),
 }))
 
 // OWNERSHIP PROBE (#730): the volunteer mutations now resolve the target's
@@ -95,6 +102,51 @@ beforeEach(() => {
     success: true,
     error: null,
   })
+  declineVolunteerAttendanceMock.mockResolvedValue({
+    success: true,
+    error: null,
+  })
+  hasActiveVolunteerByEmailMock.mockResolvedValue({
+    exists: false,
+    error: null,
+  })
+  createVolunteerMock.mockResolvedValue({
+    volunteer: { _id: 'vol-new' },
+    error: null,
+  })
+})
+
+describe('volunteer.create — duplicate email guard', () => {
+  const createInput = {
+    name: 'Ada Lovelace',
+    email: 'Ada@Example.com',
+    phone: '+4711111111',
+    occupation: Occupation.WORKING,
+    consent: {
+      dataProcessing: true,
+    },
+  }
+
+  it('rejects duplicate active application for the same conference (CONFLICT)', async () => {
+    hasActiveVolunteerByEmailMock.mockResolvedValueOnce({
+      exists: true,
+      error: null,
+    })
+    await expect(makeCaller(false).create(createInput)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    })
+    expect(hasActiveVolunteerByEmailMock).toHaveBeenCalledWith(
+      'conf-1',
+      'Ada@Example.com',
+    )
+    expect(createVolunteerMock).not.toHaveBeenCalled()
+  })
+
+  it('creates volunteer when no active application exists for that email', async () => {
+    const result = await makeCaller(false).create(createInput)
+    expect(result).toEqual({ success: true, volunteerId: 'vol-new' })
+    expect(createVolunteerMock).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('volunteer.admin.update — authorization', () => {
@@ -115,6 +167,7 @@ describe('volunteer.admin.update — behavior', () => {
       tshirtSize: null,
       dietaryRestrictions: null,
       otherInfo: null,
+      reviewNotes: 'Strong shift lead candidate',
     })
     expect(result.success).toBe(true)
     expect(updateVolunteerDetailsMock).toHaveBeenCalledWith('vol-1', {
@@ -127,6 +180,7 @@ describe('volunteer.admin.update — behavior', () => {
       tshirtSize: null,
       dietaryRestrictions: null,
       otherInfo: null,
+      reviewNotes: 'Strong shift lead candidate',
     })
   })
 
@@ -173,6 +227,7 @@ describe('volunteer.confirmAttendance', () => {
     getVolunteerByIdMock.mockResolvedValue({
       volunteer: {
         _id: 'vol-1',
+        _rev: 'rev-1',
         name: 'Ada',
         email: 'ada@example.com',
         status: VolunteerStatus.APPROVED,
@@ -197,6 +252,7 @@ describe('volunteer.confirmAttendance', () => {
     expect(confirmVolunteerAttendanceMock).toHaveBeenCalledWith(
       'vol-1',
       expect.any(String),
+      'rev-1',
     )
   })
 
@@ -209,6 +265,7 @@ describe('volunteer.confirmAttendance', () => {
     getVolunteerByIdMock.mockResolvedValue({
       volunteer: {
         _id: 'vol-1',
+        _rev: 'rev-2',
         name: 'Ada',
         email: 'ada@example.com',
         status: VolunteerStatus.CONFIRMED,
@@ -227,6 +284,48 @@ describe('volunteer.confirmAttendance', () => {
     expect(result.status).toBe(VolunteerStatus.CONFIRMED)
     expect(result.confirmedAt).toBe('2026-04-01T10:00:00Z')
     expect(confirmVolunteerAttendanceMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects if concurrent organizer edit changed status to REJECTED before revision-guarded patch', async () => {
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-1',
+      conferenceId: 'conf-1',
+      email: 'ada@example.com',
+    })
+    getVolunteerByIdMock
+      .mockResolvedValueOnce({
+        volunteer: {
+          _id: 'vol-1',
+          _rev: 'rev-1',
+          name: 'Ada',
+          email: 'ada@example.com',
+          status: VolunteerStatus.APPROVED,
+          conference: { _id: 'conf-1', title: 'Conf' },
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        volunteer: {
+          _id: 'vol-1',
+          _rev: 'rev-2',
+          name: 'Ada',
+          email: 'ada@example.com',
+          status: VolunteerStatus.REJECTED,
+          conference: { _id: 'conf-1', title: 'Conf' },
+        },
+        error: null,
+      })
+    confirmVolunteerAttendanceMock.mockResolvedValueOnce({
+      success: false,
+      error: new Error('Document revision mismatch'),
+    })
+
+    await expect(
+      makeCaller(false).confirmAttendance({ token }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Only approved volunteers can confirm attendance',
+    })
   })
 
   it('rejects a forged token before fetching any volunteer', async () => {
@@ -290,5 +389,70 @@ describe('volunteer.confirmAttendance', () => {
       message: 'Volunteer not found',
     })
     expect(confirmVolunteerAttendanceMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('volunteer.declineAttendance', () => {
+  it('declines an approved or confirmed volunteer with a valid token and optional reason', async () => {
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-1',
+      conferenceId: 'conf-1',
+      email: 'ada@example.com',
+    })
+    getVolunteerByIdMock.mockResolvedValue({
+      volunteer: {
+        _id: 'vol-1',
+        _rev: 'rev-1',
+        name: 'Ada',
+        email: 'ada@example.com',
+        status: VolunteerStatus.CONFIRMED,
+        conference: { _id: 'conf-1', title: 'Cloud Native Days Norway 2026' },
+      },
+      error: null,
+    })
+
+    const result = await makeCaller(false).declineAttendance({
+      token,
+      reason: 'Travel conflict',
+    })
+    expect(result).toEqual({
+      status: VolunteerStatus.REJECTED,
+      volunteerName: 'Ada',
+      conferenceTitle: 'Cloud Native Days Norway 2026',
+    })
+    expect(declineVolunteerAttendanceMock).toHaveBeenCalledWith(
+      'vol-1',
+      expect.any(String),
+      'rev-1',
+      'Travel conflict',
+      undefined,
+    )
+  })
+
+  it('rejects a pending volunteer attempting to decline via token', async () => {
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-1',
+      conferenceId: 'conf-1',
+      email: 'ada@example.com',
+    })
+    getVolunteerByIdMock.mockResolvedValue({
+      volunteer: {
+        _id: 'vol-1',
+        _rev: 'rev-1',
+        name: 'Ada',
+        email: 'ada@example.com',
+        status: VolunteerStatus.PENDING,
+        conference: { _id: 'conf-1', title: 'Conf' },
+      },
+      error: null,
+    })
+
+    await expect(
+      makeCaller(false).declineAttendance({ token }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Only approved or confirmed volunteers can decline attendance',
+    })
+    expect(declineVolunteerAttendanceMock).not.toHaveBeenCalled()
   })
 })

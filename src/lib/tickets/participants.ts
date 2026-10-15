@@ -19,6 +19,7 @@
  */
 import {
   classifyTicket,
+  isPaidTicket,
   type TicketClassificationContext,
   type TicketRoleSource,
 } from './classification'
@@ -76,7 +77,8 @@ export interface ParticipantTally {
 export const seatsUsed = (tally: ParticipantTally) =>
   tally.participants + tally.repeatTickets
 
-const emailOf = (ticket: EventTicket) => ticket.crm?.email?.toLowerCase() || ''
+const emailOf = (ticket: EventTicket) =>
+  ticket.crm?.email?.trim().toLowerCase() || ''
 
 /**
  * @param context classification inputs. The conference-derived parts
@@ -107,12 +109,14 @@ export function tallyParticipants(
   let paidWorkshopParticipants = 0
   let freeWorkshopParticipants = 0
 
-  const compByTicket = new Map(classified.map(([t, c]) => [t, c.comp]))
+  const paidByTicket = new Map(
+    classified.map(([t]) => [t, isPaidTicket(t, context)]),
+  )
   const workshopByEmail = new Map<string, typeof tickets>()
   for (const t of workshopTickets) {
     const e = emailOf(t)
     if (!e) {
-      const isPaid = compByTicket.get(t) === false
+      const isPaid = paidByTicket.get(t) === true
       if (isPaid) paidWorkshopParticipants++
       else freeWorkshopParticipants++
       continue
@@ -122,7 +126,7 @@ export function tallyParticipants(
   }
 
   for (const group of workshopByEmail.values()) {
-    const hasPaid = group.some((t) => compByTicket.get(t) === false)
+    const hasPaid = group.some((t) => paidByTicket.get(t) === true)
     if (hasPaid) paidWorkshopParticipants++
     else freeWorkshopParticipants++
   }

@@ -17,7 +17,7 @@ export function deduplicateTicketsByEmail(
   const emailMap = new Map<string, EventTicket>()
 
   tickets.forEach((ticket) => {
-    const email = ticket.crm?.email?.toLowerCase()
+    const email = ticket.crm?.email?.trim().toLowerCase()
     if (!email) {
       emailMap.set(`no-email-${ticket.id}`, ticket)
       return

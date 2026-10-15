@@ -134,7 +134,7 @@ export function ActionMenu({
 }
 
 interface ActionMenuItemProps {
-  onClick: () => void
+  onClick?: () => void
   icon?: React.ComponentType<{ className?: string }>
   children: ReactNode
   variant?: 'default' | 'danger'

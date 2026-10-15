@@ -216,6 +216,15 @@ export function BulkDiscountSendModal({
   const [results, setResults] = useState<Record<string, SponsorSendResult>>({})
   const [currentSendingIndex, setCurrentSendingIndex] = useState(0)
 
+  // Reset transient progress state when reopening the modal
+  React.useEffect(() => {
+    if (isOpen) {
+      setSendingState('idle')
+      setResults({})
+      setCurrentSendingIndex(0)
+    }
+  }, [isOpen])
+
   // Guard against navigating or closing tab while sending is actively in-flight
   React.useEffect(() => {
     if (sendingState !== 'sending') return

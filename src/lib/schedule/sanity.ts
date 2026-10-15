@@ -379,11 +379,14 @@ export async function saveScheduleToSanity(
       // so the client tells the organizer to reload rather than fork the day.
       // Check for an existing schedule for this (conference, date, status)
       // so we don't block drafting if an official day exists.
+      const targetStatus = schedule.status || 'draft'
       const existingId = await scopedFetch<string | null>(
         clientWrite,
         { conferenceId: conference._id },
-        `*[_type == "schedule" && date == $date && status == $status][0]._id`,
-        { date: schedule.date, status: schedule.status || 'draft' },
+        targetStatus === 'official'
+          ? `*[_type == "schedule" && date == $date && (status == $status || !defined(status))][0]._id`
+          : `*[_type == "schedule" && date == $date && status == $status][0]._id`,
+        { date: schedule.date, status: targetStatus },
       )
       if (existingId) {
         return {

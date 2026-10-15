@@ -1,11 +1,17 @@
 import { normalizeEmail } from '@/lib/speaker/email'
-import type { ConferenceTicketingBinding } from '@/lib/tickets/provider'
+import type {
+  ConferenceTicketingBinding,
+  PublicTicketType,
+  ResolvedTicketing,
+} from '@/lib/tickets/provider'
 import {
   fetchEventTicketCandidates,
   type TicketCandidate,
 } from '@/lib/tickets/speakerStatus'
 
-export const VOLUNTEER_TICKET_CATEGORY = 'Volunteer'
+import { VOLUNTEER_TICKET_CATEGORY } from '@/lib/tickets/speakerTicketCategory'
+
+export { VOLUNTEER_TICKET_CATEGORY }
 
 const VOLUNTEER_CATEGORY_PATTERN = /volunteer|frivillig/i
 
@@ -33,6 +39,45 @@ export function findVolunteerTicketType<
       (b.position ?? Number.MAX_SAFE_INTEGER)
     )
   })[0]
+}
+
+const VOLUNTEER_TYPE_TTL_MS = 30_000
+const volunteerTypeCache = new Map<
+  string,
+  { expiresAt: number; type: Promise<PublicTicketType | undefined> }
+>()
+
+export function __resetVolunteerTicketTypeCache() {
+  volunteerTypeCache.clear()
+}
+
+export function resolveVolunteerTicketType(
+  ticketing: Extract<ResolvedTicketing, { configured: true }>,
+  orgId?: string,
+): Promise<PublicTicketType | undefined> {
+  const lookup = () =>
+    ticketing.provider
+      .fetchPublicTicketTypes(ticketing.eventRef)
+      .then(({ tickets }) => findVolunteerTicketType(tickets))
+
+  if (!orgId) return lookup()
+
+  const key = `${orgId}:${JSON.stringify(ticketing.eventRef)}`
+  const now = Date.now()
+  const cached = volunteerTypeCache.get(key)
+  if (cached && cached.expiresAt > now) return cached.type
+
+  const type = lookup().catch((err) => {
+    if (volunteerTypeCache.get(key)?.type === type) {
+      volunteerTypeCache.delete(key)
+    }
+    throw err
+  })
+  volunteerTypeCache.set(key, {
+    expiresAt: now + VOLUNTEER_TYPE_TTL_MS,
+    type,
+  })
+  return type
 }
 
 export type VolunteerTicketState =
@@ -81,6 +126,8 @@ export function redeemedVolunteerEmails(
  * Join conference volunteers against the redeemed volunteer ticket map.
  * When `redeemed === null` (provider unconfigured or unreachable), every
  * volunteer reports `'unknown'` rather than appearing unclaimed.
+ * Note: `'invited'` indicates an approval email was recorded (`approvalEmailSentAt`),
+ * though the email may or may not have included a ticket claim link.
  */
 export function joinVolunteerTicketStatus(
   volunteers: readonly VolunteerTicketInput[],
@@ -107,6 +154,7 @@ export function joinVolunteerTicketStatus(
       category: foundTicket?.category,
       manageUrl:
         foundTicket &&
+        (conference?.ticketingProvider ?? 'checkin') === 'checkin' &&
         conference?.checkinCustomerId &&
         conference?.checkinEventId
           ? `https://app.checkin.no/customer/${conference.checkinCustomerId}/event/${conference.checkinEventId}/orders/order?id=${foundTicket.orderId}`

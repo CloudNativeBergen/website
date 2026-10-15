@@ -120,6 +120,7 @@ const mockVolunteers: VolunteerWithConference[] = [
 ]
 
 const mockTicketStatuses = {
+  available: true,
   statuses: [
     {
       volunteerId: 'vol-1',

@@ -62,12 +62,12 @@ const ticketStatusConfig: Record<
     icon: CheckBadgeIcon,
   },
   invited: {
-    label: 'Ticket Invited',
+    label: 'Approval Email Sent',
     color: 'yellow',
     icon: ClockIcon,
   },
   'not-invited': {
-    label: 'Ticket Not Invited',
+    label: 'No Approval Email',
     color: 'gray',
     icon: MinusCircleIcon,
   },
@@ -86,8 +86,8 @@ type TicketFilterState =
 const TICKET_FILTER_LABELS: Record<TicketFilterState, string> = {
   all: 'All ticket states',
   redeemed: 'Claimed',
-  invited: 'Invited (Unclaimed)',
-  'not-invited': 'Not invited',
+  invited: 'Email sent (Unclaimed)',
+  'not-invited': 'No email sent',
   unclaimed: 'Not claimed (Chase list)',
 }
 
@@ -397,24 +397,26 @@ export default function VolunteerAdminPage() {
   }) => {
     if (!emailModalVolunteer) return
 
-    // Auto-persist non-empty links to the conference record if changed
+    // Auto-persist links (including cleared links -> null) to the conference record if changed
     const conf = emailModalVolunteer.conference
     const nextTicket = data.ticketUrl?.trim() ?? ''
     const nextSlack = data.slackInviteUrl?.trim() ?? ''
     const shouldSaveTicket =
-      nextTicket.length > 0 &&
+      data.ticketUrl !== undefined &&
       nextTicket !== (conf?.volunteerRegistrationLink ?? '')
     const shouldSaveSlack =
-      nextSlack.length > 0 &&
+      data.slackInviteUrl !== undefined &&
       nextSlack !== (conf?.volunteerSlackInviteUrl ?? '')
 
     if (shouldSaveTicket || shouldSaveSlack) {
       try {
         await updateVolunteerLinks.mutateAsync({
           ...(shouldSaveTicket
-            ? { volunteerRegistrationLink: nextTicket }
+            ? { volunteerRegistrationLink: nextTicket || null }
             : {}),
-          ...(shouldSaveSlack ? { volunteerSlackInviteUrl: nextSlack } : {}),
+          ...(shouldSaveSlack
+            ? { volunteerSlackInviteUrl: nextSlack || null }
+            : {}),
         })
       } catch {
         // Best-effort auto-save; do not block sending the approval email
@@ -483,7 +485,16 @@ export default function VolunteerAdminPage() {
             color: 'blue',
           },
           {
-            value: ticketStatusQuery.isLoading ? '…' : stats.claimed,
+            value: ticketStatusQuery.isLoading
+              ? '…'
+              : ticketStatusQuery.isError ||
+                  !ticketStatusQuery.data ||
+                  ticketStatusQuery.data.available === false ||
+                  ticketStatusQuery.data.statuses.some(
+                    (s) => s.state === 'unknown',
+                  )
+                ? '—'
+                : stats.claimed,
             label: 'Tickets Claimed',
             color: 'blue',
           },
@@ -1036,9 +1047,9 @@ export default function VolunteerAdminPage() {
               )}
 
               {/* Review / Approval Actions Section */}
-              <div className="border-t border-gray-200 pt-5 dark:border-gray-700">
+              <div className="space-y-4 border-t border-gray-200 pt-5 dark:border-gray-700">
                 {selectedVolunteer.status === VolunteerStatus.PENDING && (
-                  <div className="space-y-4">
+                  <>
                     <div>
                       <label
                         htmlFor="review-notes"
@@ -1093,7 +1104,7 @@ export default function VolunteerAdminPage() {
                         Reject
                       </AdminButton>
                     </div>
-                  </div>
+                  </>
                 )}
 
                 {(selectedVolunteer.status === VolunteerStatus.APPROVED ||

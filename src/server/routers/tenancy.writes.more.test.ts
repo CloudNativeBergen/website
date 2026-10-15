@@ -134,6 +134,9 @@ const vol = vi.hoisted(() => ({
   confirmVolunteerAttendance: vi
     .fn()
     .mockResolvedValue({ success: true, error: null }),
+  declineVolunteerAttendance: vi
+    .fn()
+    .mockResolvedValue({ success: true, error: null }),
 }))
 vi.mock('@/lib/email/volunteer', () => ({
   sendVolunteerApprovalEmail: vol.sendVolunteerApprovalEmail,
@@ -145,8 +148,12 @@ vi.mock('@/lib/volunteer/sanity', () => ({
   updateVolunteerDetails: vol.updateVolunteerDetails,
   deleteVolunteer: vol.deleteVolunteer,
   createVolunteer: vi.fn(),
+  hasActiveVolunteerByEmail: vi
+    .fn()
+    .mockResolvedValue({ exists: false, error: null }),
   recordVolunteerApprovalEmailSent: vol.recordVolunteerApprovalEmailSent,
   confirmVolunteerAttendance: vol.confirmVolunteerAttendance,
+  declineVolunteerAttendance: vol.declineVolunteerAttendance,
 }))
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: vi.fn(),
@@ -524,6 +531,33 @@ describe('volunteer mutations are conference-scoped (#730)', () => {
     expect(vol.confirmVolunteerAttendance).not.toHaveBeenCalled()
   })
 
+  it('declineAttendance refuses a token minted for another conference before reading', async () => {
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-B',
+      conferenceId: 'conf-B',
+      email: 'x@example.com',
+    })
+    await expect(
+      volunteer().declineAttendance({ token }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(vol.getVolunteerById).not.toHaveBeenCalled()
+    expect(vol.declineVolunteerAttendance).not.toHaveBeenCalled()
+  })
+
+  it('declineAttendance refuses a foreign volunteer document even if token conference matches', async () => {
+    foreign('volunteer')
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-B',
+      conferenceId: CONF_A,
+      email: 'x@example.com',
+    })
+    await expect(
+      volunteer().declineAttendance({ token }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(vol.getVolunteerById).not.toHaveBeenCalled()
+    expect(vol.declineVolunteerAttendance).not.toHaveBeenCalled()
+  })
+
   it('our own volunteer still updates and deletes', async () => {
     owned('volunteer')
     await expect(
@@ -702,6 +736,7 @@ describe('the volunteer procedure surface is pinned (#858)', () => {
       'admin.updateStatus',
       'confirmAttendance',
       'create',
+      'declineAttendance',
     ])
   })
 })

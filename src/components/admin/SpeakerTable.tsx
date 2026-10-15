@@ -54,6 +54,7 @@ import type { SpeakerTicketStatus } from '@/lib/tickets/speakerStatus'
 import {
   discoverTicketQuestions,
   resolveSpeakerAnswer,
+  resolveSpeakerAnswers,
   type DiscoveredTicketQuestion,
 } from '@/lib/tickets/questions'
 
@@ -365,16 +366,18 @@ export function SpeakerTable({
         if (!expectedVal || expectedVal === 'all') return true
         const q = discoveredQuestions.find((dq) => dq.id === qId)
         if (!q) return true
-        const answer = resolveSpeakerAnswer(ticketStatus, q)
+        const answers = resolveSpeakerAnswers(ticketStatus, q)
         if (expectedVal === '__unanswered__') {
           // A known ticket state is required: during provider outage (unknown) or while loading,
           // tickets cannot be verified as unanswered.
           if (!ticketStatus || ticketStatus.state === 'unknown') {
             return false
           }
-          return !answer
+          return answers.length === 0
         }
-        return answer?.toLowerCase() === expectedVal.toLowerCase()
+        return answers.some(
+          (ans) => ans.toLowerCase() === expectedVal.toLowerCase(),
+        )
       })
 
       return (
@@ -623,7 +626,6 @@ export function SpeakerTable({
           organizer may legitimately issue a speaker letter by hand. */}
       {hasConfirmedTalkAtConference(speaker.proposals, currentConferenceId) && (
         <ActionMenuItem
-          onClick={() => {}}
           href={invitationLetterHref({
             fullName: speaker.name,
             email: speaker.email,
@@ -865,7 +867,10 @@ export function SpeakerTable({
                       <FilterOption
                         key={opt}
                         type="radio"
-                        checked={filters.questionAnswers[q.id] === opt}
+                        checked={
+                          filters.questionAnswers[q.id]?.toLowerCase() ===
+                          opt.toLowerCase()
+                        }
                         onClick={() =>
                           setFilters((prev) => ({
                             ...prev,
@@ -971,14 +976,16 @@ export function SpeakerTable({
 
       {/* The filter is on but the read has not landed: say so, so the rows
           below are not mistaken for the answer. */}
-      {filters.ticketNotRedeemed && ticketStatusesLoading && (
-        <div className="flex items-center gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-          <TicketIcon className="h-4 w-4 shrink-0 animate-pulse" />
-          <span>
-            Checking ticket status&hellip; showing all speakers until it lands.
-          </span>
-        </div>
-      )}
+      {(filters.ticketNotRedeemed || filters.ticketClaimState !== 'all') &&
+        ticketStatusesLoading && (
+          <div className="flex items-center gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
+            <TicketIcon className="h-4 w-4 shrink-0 animate-pulse" />
+            <span>
+              Checking ticket status&hellip; showing all speakers until it
+              lands.
+            </span>
+          </div>
+        )}
 
       <div className="space-y-3 md:hidden">
         {filteredSpeakers.map((speaker) => {

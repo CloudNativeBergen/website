@@ -881,6 +881,7 @@ export const ticketsRouter = router({
 
       const redeemed = await fetchRedeemedVolunteerEmails(conference)
       return {
+        available: redeemed !== null,
         statuses: joinVolunteerTicketStatus(volunteers, redeemed, conference),
       }
     }),
@@ -1419,7 +1420,9 @@ export const ticketsRouter = router({
           const { provider } = await checkin()
           const eventData = await provider.listDiscounts(eventId)
           const codeExists = eventData.discounts.some(
-            (discount) => discount.triggerValue === discountCode,
+            (discount) =>
+              normalizeDiscountCode(discount.triggerValue ?? '') ===
+              normalizeDiscountCode(discountCode),
           )
 
           if (codeExists) {

@@ -70,7 +70,15 @@ export async function sendMultiSpeakerEmail({
       }
     }
 
-    if (!proposal) {
+    const proposalConferenceId =
+      proposal &&
+      typeof proposal.conference === 'object' &&
+      proposal.conference &&
+      '_id' in proposal.conference
+        ? proposal.conference._id
+        : undefined
+
+    if (!proposal || proposalConferenceId !== conference._id) {
       return {
         error: createEmailError('Proposal not found', 404),
       }
@@ -170,7 +178,7 @@ export async function sendFormattedMultiSpeakerEmail({
 }): Promise<EmailResult<{ emailId: string }>> {
   try {
     const eventUrl = conferenceBaseUrl(conference)
-    const proposalUrl = `${eventUrl}/admin/proposals/${proposal._id}`
+    const proposalUrl = `${eventUrl}/cfp/proposal/${proposal._id}`
 
     const emailTemplate = SpeakerEmailTemplate({
       speakers: speakers.map((s) => ({ name: s.name, email: s.email })),

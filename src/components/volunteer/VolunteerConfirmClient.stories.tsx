@@ -41,6 +41,17 @@ export const ReadyToConfirm: Story = {
             },
           }),
         ),
+        http.post('*/api/trpc/volunteer.declineAttendance*', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                status: 'rejected',
+                volunteerName: 'Ingrid Solberg',
+                conferenceTitle: 'Cloud Native Days Norway 2026',
+              },
+            },
+          }),
+        ),
       ],
     },
   },
@@ -49,11 +60,21 @@ export const ReadyToConfirm: Story = {
 export const ConfirmedWithLinks: Story = {
   args: {
     initialState: 'confirmed',
+    token: 'sample-token',
     volunteerName: 'Ingrid Solberg',
     conferenceTitle: 'Cloud Native Days Norway 2026',
     confirmedAt: '2026-09-01T12:00:00Z',
     registrationUrl: 'https://tickets.example.com/volunteer',
     slackInviteUrl: 'https://slack.example.com/invite',
+    contactEmail: 'organizers@cloudnativedays.no',
+  },
+}
+
+export const Declined: Story = {
+  args: {
+    initialState: 'declined',
+    volunteerName: 'Ingrid Solberg',
+    conferenceTitle: 'Cloud Native Days Norway 2026',
     contactEmail: 'organizers@cloudnativedays.no',
   },
 }

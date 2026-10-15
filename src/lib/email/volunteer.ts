@@ -7,6 +7,7 @@ import {
 import { VolunteerWithConference } from '@/lib/volunteer/types'
 import { mintVolunteerConfirmToken } from '@/lib/volunteer/token'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { formatConferenceDateLong } from '@/lib/time'
 import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalTemplate'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
@@ -79,13 +80,10 @@ export async function sendVolunteerApprovalEmail(
       : 'TBD'
     const eventUrl = conferenceBaseUrl(conference)
     const toSafeHttpsUrl = (url?: string | null): string | undefined => {
-      if (!url) return undefined
-      try {
-        const parsed = new URL(url.trim())
-        return parsed.protocol === 'https:' ? parsed.href : undefined
-      } catch {
-        return undefined
-      }
+      const trimmed = url?.trim()
+      return trimmed && isAbsoluteHttpsUrl(trimmed)
+        ? new URL(trimmed).href
+        : undefined
     }
 
     const socialLinks =

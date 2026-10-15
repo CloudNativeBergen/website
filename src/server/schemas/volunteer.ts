@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { VolunteerStatus, Occupation, TShirtSize } from '@/lib/volunteer/types'
+import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 
 export const GetVolunteerByIdSchema = z.object({
   id: z.string(),
@@ -10,15 +11,6 @@ export const UpdateVolunteerStatusSchema = z.object({
   status: z.nativeEnum(VolunteerStatus),
   reviewNotes: z.string().optional(),
 })
-
-const isHttpsUrl = (val: string) => {
-  try {
-    const url = new URL(val)
-    return url.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
 
 export const SendVolunteerEmailSchema = z.object({
   volunteerId: z.string(),
@@ -37,7 +29,7 @@ export const SendVolunteerEmailSchema = z.object({
   ticketUrl: z
     .string()
     .trim()
-    .refine((val) => !val || isHttpsUrl(val), {
+    .refine((val) => !val || isAbsoluteHttpsUrl(val), {
       message: 'Ticket URL must be an absolute HTTPS URL',
     })
     .nullish()
@@ -45,7 +37,7 @@ export const SendVolunteerEmailSchema = z.object({
   slackInviteUrl: z
     .string()
     .trim()
-    .refine((val) => !val || isHttpsUrl(val), {
+    .refine((val) => !val || isAbsoluteHttpsUrl(val), {
       message: 'Slack invite URL must be an absolute HTTPS URL',
     })
     .nullish()
@@ -58,6 +50,15 @@ export const DeleteVolunteerSchema = z.object({
 
 export const ConfirmVolunteerAttendanceSchema = z.object({
   token: z.string().trim().min(1, 'Confirmation token is required'),
+})
+
+export const DeclineVolunteerAttendanceSchema = z.object({
+  token: z.string().trim().min(1, 'Confirmation token is required'),
+  reason: z
+    .string()
+    .trim()
+    .max(500, 'Reason must be less than 500 characters')
+    .optional(),
 })
 
 /**
@@ -103,6 +104,11 @@ export const UpdateVolunteerDetailsSchema = z.object({
   otherInfo: z
     .string()
     .max(1000, 'Other information must be less than 1000 characters')
+    .nullable()
+    .optional(),
+  reviewNotes: z
+    .string()
+    .max(2000, 'Review notes must be less than 2000 characters')
     .nullable()
     .optional(),
 })

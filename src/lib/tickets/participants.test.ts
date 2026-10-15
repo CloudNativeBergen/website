@@ -191,9 +191,14 @@ describe('tallyParticipants', () => {
     expect(tally.roleBasis).toBe('declared')
   })
 
-  it('splits paid and free workshop participants correctly (including comp: unknown zero-sum tickets)', () => {
+  it('splits paid and free workshop participants correctly (including comp: unknown zero-sum and positive-sum tickets)', () => {
     const paidWorkshop = withEmail('paid@x.test', {
       category: 'Workshop + Conference (2 days)',
+    })
+    const discountedPaidWorkshop = withEmail('discounted@x.test', {
+      category: 'Workshop + Conference (2 days)',
+      coupon: 'UNRESOLVED_PARTIAL_COUPON',
+      sum: '500.00',
     })
     const freeSpeakerWorkshop = withEmail('free@x.test', {
       category: 'Speaker ticket',
@@ -206,14 +211,22 @@ describe('tallyParticipants', () => {
     })
 
     expect(
-      tallyParticipants([paidWorkshop, freeSpeakerWorkshop, zeroSumWorkshop], {
-        ...context,
-        speakerTicketTypeName: 'Speaker ticket',
-      }),
+      tallyParticipants(
+        [
+          paidWorkshop,
+          discountedPaidWorkshop,
+          freeSpeakerWorkshop,
+          zeroSumWorkshop,
+        ],
+        {
+          ...context,
+          speakerTicketTypeName: 'Speaker ticket',
+        },
+      ),
     ).toEqual(
       expect.objectContaining({
-        workshopParticipants: 3,
-        paidWorkshopParticipants: 1,
+        workshopParticipants: 4,
+        paidWorkshopParticipants: 2,
         freeWorkshopParticipants: 2,
       }),
     )

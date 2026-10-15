@@ -6,6 +6,7 @@ import { VolunteerWithConference } from '@/lib/volunteer/types'
 import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalTemplate'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { formatConferenceDateLong } from '@/lib/time'
 import { PortableTextBlock } from '@sanity/types'
 
@@ -28,26 +29,35 @@ export interface VolunteerApprovalModalProps {
 
 const LINKS_STORAGE_PREFIX = 'volunteer-links-'
 
-function readStoredVolunteerLinks(conferenceId?: string): {
+interface StoredVolunteerLinks {
   ticketUrl?: string
   slackInviteUrl?: string
-} {
+  baseTicketUrl?: string
+  baseSlackInviteUrl?: string
+}
+
+function readStoredVolunteerLinks(conferenceId?: string): StoredVolunteerLinks {
   if (typeof window === 'undefined') return {}
   try {
     const raw = window.localStorage.getItem(
       `${LINKS_STORAGE_PREFIX}${conferenceId || 'default'}`,
     )
     if (!raw) return {}
-    const parsed = JSON.parse(raw) as {
-      ticketUrl?: unknown
-      slackInviteUrl?: unknown
-    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>
     return {
       ticketUrl:
         typeof parsed.ticketUrl === 'string' ? parsed.ticketUrl : undefined,
       slackInviteUrl:
         typeof parsed.slackInviteUrl === 'string'
           ? parsed.slackInviteUrl
+          : undefined,
+      baseTicketUrl:
+        typeof parsed.baseTicketUrl === 'string'
+          ? parsed.baseTicketUrl
+          : undefined,
+      baseSlackInviteUrl:
+        typeof parsed.baseSlackInviteUrl === 'string'
+          ? parsed.baseSlackInviteUrl
           : undefined,
     }
   } catch {
@@ -57,7 +67,12 @@ function readStoredVolunteerLinks(conferenceId?: string): {
 
 function writeStoredVolunteerLinks(
   conferenceId: string | undefined,
-  links: { ticketUrl: string; slackInviteUrl: string },
+  links: {
+    ticketUrl: string
+    slackInviteUrl: string
+    baseTicketUrl: string
+    baseSlackInviteUrl: string
+  },
 ) {
   if (typeof window === 'undefined') return
   try {
@@ -82,8 +97,16 @@ export function VolunteerApprovalModal({
   const storedLinks = readStoredVolunteerLinks(conf?._id)
   const serverTicketUrl = conf?.volunteerRegistrationLink || ''
   const serverSlackUrl = conf?.volunteerSlackInviteUrl || ''
-  const defaultTicketUrl = serverTicketUrl || storedLinks.ticketUrl || ''
-  const defaultSlackUrl = serverSlackUrl || storedLinks.slackInviteUrl || ''
+  const defaultTicketUrl =
+    storedLinks.ticketUrl !== undefined &&
+    (storedLinks.baseTicketUrl ?? '') === serverTicketUrl
+      ? storedLinks.ticketUrl
+      : serverTicketUrl
+  const defaultSlackUrl =
+    storedLinks.slackInviteUrl !== undefined &&
+    (storedLinks.baseSlackInviteUrl ?? '') === serverSlackUrl
+      ? storedLinks.slackInviteUrl
+      : serverSlackUrl
 
   const [ticketUrl, setTicketUrl] = useState(defaultTicketUrl)
   const [slackInviteUrl, setSlackInviteUrl] = useState(defaultSlackUrl)
@@ -97,6 +120,8 @@ export function VolunteerApprovalModal({
     writeStoredVolunteerLinks(conf?._id, {
       ticketUrl: value,
       slackInviteUrl,
+      baseTicketUrl: savedServerLinks.ticketUrl,
+      baseSlackInviteUrl: savedServerLinks.slackInviteUrl,
     })
   }
 
@@ -105,26 +130,19 @@ export function VolunteerApprovalModal({
     writeStoredVolunteerLinks(conf?._id, {
       ticketUrl,
       slackInviteUrl: value,
+      baseTicketUrl: savedServerLinks.ticketUrl,
+      baseSlackInviteUrl: savedServerLinks.slackInviteUrl,
     })
-  }
-
-  const isHttpsUrl = (val: string) => {
-    try {
-      const url = new URL(val)
-      return url.protocol === 'https:'
-    } catch {
-      return false
-    }
   }
 
   const trimmedTicket = ticketUrl.trim()
   const trimmedSlack = slackInviteUrl.trim()
   const ticketError =
-    trimmedTicket && !isHttpsUrl(trimmedTicket)
+    trimmedTicket && !isAbsoluteHttpsUrl(trimmedTicket)
       ? 'Must be an absolute https:// URL'
       : null
   const slackError =
-    trimmedSlack && !isHttpsUrl(trimmedSlack)
+    trimmedSlack && !isAbsoluteHttpsUrl(trimmedSlack)
       ? 'Must be an absolute https:// URL'
       : null
 
@@ -141,6 +159,12 @@ export function VolunteerApprovalModal({
     setSavedServerLinks({
       ticketUrl: trimmedTicket,
       slackInviteUrl: trimmedSlack,
+    })
+    writeStoredVolunteerLinks(conf?._id, {
+      ticketUrl: trimmedTicket,
+      slackInviteUrl: trimmedSlack,
+      baseTicketUrl: trimmedTicket,
+      baseSlackInviteUrl: trimmedSlack,
     })
   }
 
@@ -171,9 +195,13 @@ export function VolunteerApprovalModal({
       )
     }
 
+    const nextBaseTicket = trimmedTicket || savedServerLinks.ticketUrl
+    const nextBaseSlack = trimmedSlack || savedServerLinks.slackInviteUrl
     writeStoredVolunteerLinks(conf?._id, {
       ticketUrl: trimmedTicket,
       slackInviteUrl: trimmedSlack,
+      baseTicketUrl: nextBaseTicket,
+      baseSlackInviteUrl: nextBaseSlack,
     })
 
     const plainTextMessage = extractPlainText(data.message)
@@ -227,6 +255,8 @@ export function VolunteerApprovalModal({
         writeStoredVolunteerLinks(conf?._id, {
           ticketUrl: nextTicket,
           slackInviteUrl: nextSlack,
+          baseTicketUrl: savedServerLinks.ticketUrl,
+          baseSlackInviteUrl: savedServerLinks.slackInviteUrl,
         })
       }}
       initialValues={{

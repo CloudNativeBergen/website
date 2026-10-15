@@ -42,8 +42,9 @@ export function cleanQuestionLabel(raw: string): string {
   }
 
   // Common field key beautification: "work_title" -> "Work Title", "company" -> "Company"
-  if (cleaned === 'work_title') return 'Work Title'
-  if (cleaned === 'company') return 'Company'
+  const lower = cleaned.toLowerCase()
+  if (lower === 'work_title') return 'Work Title'
+  if (lower === 'company') return 'Company'
 
   return cleaned.replace(/\?+$/, '')
 }
@@ -76,10 +77,29 @@ export function normalizeChoiceValue(
 
   // If there's an option text like "Yes, I will attend" or "No" and value is truthy ("1", "true")
   if (optionText) {
-    if (trimmedVal === '1' || trimmedVal === 'true' || trimmedVal === 'yes') {
+    if (
+      trimmedVal === '1' ||
+      trimmedVal === 'true' ||
+      trimmedVal === 'yes' ||
+      trimmedVal === 'ja'
+    ) {
       const optLower = optionText.toLowerCase()
-      if (optLower.startsWith('yes')) return 'Yes'
-      if (optLower.startsWith('no')) return 'No'
+      if (
+        optLower.startsWith('yes') ||
+        optLower === 'ja' ||
+        optLower.startsWith('ja ') ||
+        optLower.startsWith('ja,')
+      ) {
+        return 'Yes'
+      }
+      if (
+        optLower.startsWith('no') ||
+        optLower === 'nei' ||
+        optLower.startsWith('nei ') ||
+        optLower.startsWith('nei,')
+      ) {
+        return 'No'
+      }
       return optionText
     }
     // If value is explicitly falsey for this option, it's not selected
@@ -87,10 +107,20 @@ export function normalizeChoiceValue(
   }
 
   // Bare value without option text
-  if (trimmedVal === '1' || trimmedVal === 'true' || trimmedVal === 'yes') {
+  if (
+    trimmedVal === '1' ||
+    trimmedVal === 'true' ||
+    trimmedVal === 'yes' ||
+    trimmedVal === 'ja'
+  ) {
     return 'Yes'
   }
-  if (trimmedVal === '0' || trimmedVal === 'false' || trimmedVal === 'no') {
+  if (
+    trimmedVal === '0' ||
+    trimmedVal === 'false' ||
+    trimmedVal === 'no' ||
+    trimmedVal === 'nei'
+  ) {
     return 'No'
   }
   return rawValue.trim() || null
@@ -113,7 +143,7 @@ export function discoverTicketQuestions(
       for (const f of ticket.fields) {
         if (!f.key || !f.key.trim()) continue
         const key = f.key.trim()
-        const id = `field:${key}`
+        const id = `field:${key.toLowerCase()}`
         if (!discoveredMap.has(id)) {
           discoveredMap.set(id, {
             id,
@@ -190,9 +220,10 @@ export function discoverTicketQuestions(
 }
 
 /**
- * Resolves a speaker's answer for a specific discovered question.
+ * Resolves a speaker's individual answers for a specific discovered question.
+ * Preserves individual selected options for membership filtering without string splitting.
  */
-export function resolveSpeakerAnswer(
+export function resolveSpeakerAnswers(
   status:
     | {
         fields?: Array<{ key: string; value: string }>
@@ -200,18 +231,18 @@ export function resolveSpeakerAnswer(
       }
     | undefined,
   question: DiscoveredTicketQuestion,
-): string | null {
-  if (!status) return null
+): string[] {
+  if (!status) return []
 
   if (question.source === 'field') {
     const field = status.fields?.find(
       (f) => f.key.trim().toLowerCase() === question.rawKey.toLowerCase(),
     )
-    return field && field.value.trim() ? field.value.trim() : null
+    return field && field.value.trim() ? [field.value.trim()] : []
   }
 
   if (question.source === 'additional') {
-    if (!status.additionals) return null
+    if (!status.additionals) return []
 
     // Find all additionals matching this questionPrompt
     const matchedAnswers: string[] = []
@@ -224,8 +255,24 @@ export function resolveSpeakerAnswer(
         }
       }
     }
-    return matchedAnswers.length > 0 ? matchedAnswers.join(', ') : null
+    return matchedAnswers
   }
 
-  return null
+  return []
+}
+
+/**
+ * Resolves a speaker's display answer string for a specific discovered question.
+ */
+export function resolveSpeakerAnswer(
+  status:
+    | {
+        fields?: Array<{ key: string; value: string }>
+        additionals?: Array<{ name: string; value: string }>
+      }
+    | undefined,
+  question: DiscoveredTicketQuestion,
+): string | null {
+  const answers = resolveSpeakerAnswers(status, question)
+  return answers.length > 0 ? answers.join(', ') : null
 }
