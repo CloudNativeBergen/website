@@ -210,6 +210,7 @@ const PROCEDURES: Array<
     (c) => c.admin.deleteDiscountCode({ eventId: EVENT, discountCode: 'OURS' }),
   ],
   ['speakerTicketStatus', (c) => c.admin.speakerTicketStatus()],
+  ['volunteerTicketStatus', (c) => c.admin.volunteerTicketStatus()],
   ['searchEventTickets', (c) => c.admin.searchEventTickets({ query: 'ada' })],
   ['getPaymentDetails', (c) => c.admin.getPaymentDetails({ orderId: 500 })],
   ['getPageContent', (c) => c.admin.getPageContent()],

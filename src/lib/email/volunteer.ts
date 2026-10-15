@@ -5,12 +5,15 @@ import {
   createEmailError,
 } from './config'
 import { VolunteerWithConference } from '@/lib/volunteer/types'
+import { mintVolunteerConfirmToken } from '@/lib/volunteer/token'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { formatConferenceDateLong } from '@/lib/time'
 import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalTemplate'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 
 interface ConferenceForEmail {
+  _id?: string
   /**
    * The owning tenant. This local projection used to omit it, which is exactly
    * why the volunteer mail went out on the PLATFORM's Resend account no matter
@@ -47,6 +50,7 @@ export async function sendVolunteerApprovalEmail(
   options?: {
     registrationUrl?: string | null
     slackInviteUrl?: string | null
+    confirmUrl?: string | null
   },
 ): Promise<EmailResult<{ emailId: string }>> {
   try {
@@ -76,13 +80,10 @@ export async function sendVolunteerApprovalEmail(
       : 'TBD'
     const eventUrl = conferenceBaseUrl(conference)
     const toSafeHttpsUrl = (url?: string | null): string | undefined => {
-      if (!url) return undefined
-      try {
-        const parsed = new URL(url.trim())
-        return parsed.protocol === 'https:' ? parsed.href : undefined
-      } catch {
-        return undefined
-      }
+      const trimmed = url?.trim()
+      return trimmed && isAbsoluteHttpsUrl(trimmed)
+        ? new URL(trimmed).href
+        : undefined
     }
 
     const socialLinks =
@@ -111,6 +112,25 @@ export async function sendVolunteerApprovalEmail(
               : conference.volunteerSlackInviteUrl,
           )
 
+    const conferenceId = conference._id || volunteer.conference?._id
+    let confirmUrl: string | undefined
+    if (options?.confirmUrl !== undefined) {
+      confirmUrl = options.confirmUrl
+        ? toSafeHttpsUrl(options.confirmUrl)
+        : undefined
+    } else if (volunteer._id && conferenceId && volunteer.email) {
+      try {
+        const token = mintVolunteerConfirmToken({
+          volunteerId: volunteer._id,
+          conferenceId,
+          email: volunteer.email,
+        })
+        confirmUrl = `${eventUrl.replace(/\/$/, '')}/volunteer/confirm?token=${encodeURIComponent(token)}`
+      } catch {
+        confirmUrl = undefined
+      }
+    }
+
     const result = await retryWithBackoff(async () => {
       const response = await client.emails.send({
         from: `${conference.organizer || conference.title} <${fromEmail}>`,
@@ -127,6 +147,7 @@ export async function sendVolunteerApprovalEmail(
           brandColor: emailBrandColor(conference.theme),
           registrationUrl,
           slackInviteUrl,
+          confirmUrl,
         }) as React.ReactElement,
       })
 

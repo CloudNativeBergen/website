@@ -323,115 +323,6 @@ export const scheduleRouter = router({
         await clientWrite.delete(input.id)
         return { success: true }
       }),
-
-    addTalk: adminProcedure
-      .input(
-        z.object({
-          scheduleId: z.string(),
-          trackIndex: z.number().int().min(0),
-          startTime: z.string(),
-          endTime: z.string(),
-          proposalId: z.string().optional(),
-          placeholder: z.string().optional(),
-        }),
-      )
-      .mutation(async ({ input }) => {
-        const { conference, error } = await getConferenceForCurrentDomain()
-        if (error || !conference)
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch conference',
-          })
-
-        const doc = await clientWrite.fetch(
-          `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
-          { id: input.scheduleId, conferenceId: conference._id },
-        )
-        if (!doc) throw new TRPCError({ code: 'NOT_FOUND' })
-        if (doc.status === ScheduleStatus.Official) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Cannot directly mutate an official schedule.',
-          })
-        }
-
-        if (!doc.tracks || !doc.tracks[input.trackIndex]) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Track index out of bounds.',
-          })
-        }
-
-        const trackKey = doc.tracks[input.trackIndex]._key
-        const newTalk = {
-          _key: crypto.randomUUID().replace(/-/g, '').slice(0, 16),
-          startTime: input.startTime,
-          endTime: input.endTime,
-          ...(input.proposalId
-            ? { talk: { _ref: input.proposalId, _type: 'reference' } }
-            : { placeholder: input.placeholder }),
-        }
-
-        await clientWrite
-          .patch(input.scheduleId)
-          .insert('after', `tracks[_key=="${trackKey}"].talks[-1]`, [newTalk])
-          .commit()
-
-        revalidateTag(conferenceTag(conference._id), 'default')
-        return { success: true }
-      }),
-
-    removeTalk: adminProcedure
-      .input(
-        z.object({
-          scheduleId: z.string(),
-          trackIndex: z.number().int().min(0),
-          talkIndex: z.number().int().min(0),
-        }),
-      )
-      .mutation(async ({ input }) => {
-        const { conference, error } = await getConferenceForCurrentDomain()
-        if (error || !conference)
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch conference',
-          })
-
-        const doc = await clientWrite.fetch(
-          `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
-          { id: input.scheduleId, conferenceId: conference._id },
-        )
-        if (!doc) throw new TRPCError({ code: 'NOT_FOUND' })
-        if (doc.status === ScheduleStatus.Official) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Cannot directly mutate an official schedule.',
-          })
-        }
-
-        if (
-          !doc.tracks ||
-          !doc.tracks[input.trackIndex] ||
-          !doc.tracks[input.trackIndex].talks ||
-          !doc.tracks[input.trackIndex].talks[input.talkIndex]
-        ) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Track or talk index out of bounds.',
-          })
-        }
-
-        const trackKey = doc.tracks[input.trackIndex]._key
-        const talkKey = doc.tracks[input.trackIndex].talks[input.talkIndex]._key
-
-        await clientWrite
-          .patch(input.scheduleId)
-          .unset([`tracks[_key=="${trackKey}"].talks[_key=="${talkKey}"]`])
-          .commit()
-
-        revalidateTag(conferenceTag(conference._id), 'default')
-        return { success: true }
-      }),
   }),
 
   action: adminProcedure
@@ -493,35 +384,50 @@ export const scheduleRouter = router({
         // `conference.schedules` and appended a second official doc for the
         // same date — two "official" days, which makes the speaker-facing
         // lookups tie on `order(date asc)[0]` and go nondeterministic again.
-        const existingOfficial = await clientWrite.fetch<{
-          _id: string
-          tracks?: ConferenceSchedule['tracks']
-        } | null>(
-          `*[_type == "schedule" && conference._ref == $conferenceId && date == $date && (status == 'official' || !defined(status))][0]`,
-          { conferenceId: conference._id, date },
-        )
+        const [existingOfficial, confDoc] = await Promise.all([
+          clientWrite.fetch<{
+            _id: string
+            _rev?: string
+            tracks?: ConferenceSchedule['tracks']
+          } | null>(
+            `*[_type == "schedule" && conference._ref == $conferenceId && date == $date && _id != $id && (status == 'official' || !defined(status))][0]`,
+            { conferenceId: conference._id, date, id: targetSchedule._id },
+          ),
+          clientWrite.fetch<{ _rev?: string } | null>(
+            // groq-global-scoped: by-id read of the conference the request resolved.
+            `*[_type == "conference" && _id == $conferenceId][0]{ _rev }`,
+            { conferenceId: conference._id },
+          ),
+        ])
 
         const tx = clientWrite.transaction()
 
         if (existingOfficial) {
-          tx.patch(existingOfficial._id, (p) =>
-            p.set({ status: ScheduleStatus.Archived }),
-          )
+          tx.patch(existingOfficial._id, (p) => {
+            const rev = existingOfficial._rev
+              ? p.ifRevisionId(existingOfficial._rev)
+              : p
+            return rev.set({ status: ScheduleStatus.Archived })
+          })
           tx.patch(conference._id, (p) =>
             p.unset([`schedules[_ref == "${existingOfficial._id}"]`]),
           )
         }
 
-        tx.patch(targetSchedule._id, (p) =>
-          p.set({ status: ScheduleStatus.Official }),
-        )
-        tx.patch(conference._id, (p) =>
-          p
+        tx.patch(targetSchedule._id, (p) => {
+          const rev = targetSchedule._rev
+            ? p.ifRevisionId(targetSchedule._rev)
+            : p
+          return rev.set({ status: ScheduleStatus.Official })
+        })
+        tx.patch(conference._id, (p) => {
+          const rev = confDoc?._rev ? p.ifRevisionId(confDoc._rev) : p
+          return rev
             .setIfMissing({ schedules: [] })
             .append('schedules', [
               createReferenceWithKey(targetSchedule._id, 'schedule'),
-            ]),
-        )
+            ])
+        })
 
         await tx.commit()
         revalidateTag(conferenceTag(conference._id), 'default')

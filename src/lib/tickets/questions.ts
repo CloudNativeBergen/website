@@ -42,8 +42,9 @@ export function cleanQuestionLabel(raw: string): string {
   }
 
   // Common field key beautification: "work_title" -> "Work Title", "company" -> "Company"
-  if (cleaned === 'work_title') return 'Work Title'
-  if (cleaned === 'company') return 'Company'
+  const lower = cleaned.toLowerCase()
+  if (lower === 'work_title') return 'Work Title'
+  if (lower === 'company') return 'Company'
 
   return cleaned.replace(/\?+$/, '')
 }
@@ -56,7 +57,7 @@ export function splitQuestionAndOption(rawName: string): {
   questionPrompt: string
   optionText?: string
 } {
-  const delimiterIndex = rawName.indexOf(' - ')
+  const delimiterIndex = rawName.lastIndexOf(' - ')
   if (delimiterIndex !== -1) {
     const questionPrompt = rawName.slice(0, delimiterIndex).trim()
     const optionText = rawName.slice(delimiterIndex + 3).trim()
@@ -76,10 +77,29 @@ export function normalizeChoiceValue(
 
   // If there's an option text like "Yes, I will attend" or "No" and value is truthy ("1", "true")
   if (optionText) {
-    if (trimmedVal === '1' || trimmedVal === 'true' || trimmedVal === 'yes') {
+    if (
+      trimmedVal === '1' ||
+      trimmedVal === 'true' ||
+      trimmedVal === 'yes' ||
+      trimmedVal === 'ja'
+    ) {
       const optLower = optionText.toLowerCase()
-      if (optLower.startsWith('yes')) return 'Yes'
-      if (optLower.startsWith('no')) return 'No'
+      if (
+        optLower.startsWith('yes') ||
+        optLower === 'ja' ||
+        optLower.startsWith('ja ') ||
+        optLower.startsWith('ja,')
+      ) {
+        return 'Yes'
+      }
+      if (
+        optLower.startsWith('no') ||
+        optLower === 'nei' ||
+        optLower.startsWith('nei ') ||
+        optLower.startsWith('nei,')
+      ) {
+        return 'No'
+      }
       return optionText
     }
     // If value is explicitly falsey for this option, it's not selected
@@ -87,10 +107,20 @@ export function normalizeChoiceValue(
   }
 
   // Bare value without option text
-  if (trimmedVal === '1' || trimmedVal === 'true' || trimmedVal === 'yes') {
+  if (
+    trimmedVal === '1' ||
+    trimmedVal === 'true' ||
+    trimmedVal === 'yes' ||
+    trimmedVal === 'ja'
+  ) {
     return 'Yes'
   }
-  if (trimmedVal === '0' || trimmedVal === 'false' || trimmedVal === 'no') {
+  if (
+    trimmedVal === '0' ||
+    trimmedVal === 'false' ||
+    trimmedVal === 'no' ||
+    trimmedVal === 'nei'
+  ) {
     return 'No'
   }
   return rawValue.trim() || null
@@ -113,7 +143,7 @@ export function discoverTicketQuestions(
       for (const f of ticket.fields) {
         if (!f.key || !f.key.trim()) continue
         const key = f.key.trim()
-        const id = `field:${key}`
+        const id = `field:${key.toLowerCase()}`
         if (!discoveredMap.has(id)) {
           discoveredMap.set(id, {
             id,
@@ -132,19 +162,27 @@ export function discoverTicketQuestions(
         if (!a.name || !a.name.trim()) continue
         const { questionPrompt, optionText } = splitQuestionAndOption(a.name)
         const id = `additional:${questionPrompt.trim().toLowerCase()}`
+        const isChoice =
+          Boolean(optionText) || a.value === '1' || a.value === '0'
 
         const existing = discoveredMap.get(id)
         if (existing) {
-          if (optionText && existing.type === 'choice') {
+          if (isChoice && existing.type === 'text') {
+            existing.type = 'choice'
+            if (!optionText && !existing.options) {
+              existing.options = ['Yes', 'No']
+            }
+          }
+          if (optionText) {
             const normalizedOpt =
               normalizeChoiceValue(optionText, '1') || optionText
-            if (existing.options && !existing.options.includes(normalizedOpt)) {
+            if (!existing.options) {
+              existing.options = [normalizedOpt]
+            } else if (!existing.options.includes(normalizedOpt)) {
               existing.options.push(normalizedOpt)
             }
           }
         } else {
-          const isChoice =
-            Boolean(optionText) || a.value === '1' || a.value === '0'
           const options: string[] = []
           if (optionText) {
             const normalizedOpt =
@@ -182,7 +220,49 @@ export function discoverTicketQuestions(
 }
 
 /**
- * Resolves a speaker's answer for a specific discovered question.
+ * Resolves a speaker's individual answers for a specific discovered question.
+ * Preserves individual selected options for membership filtering without string splitting.
+ */
+export function resolveSpeakerAnswers(
+  status:
+    | {
+        fields?: Array<{ key: string; value: string }>
+        additionals?: Array<{ name: string; value: string }>
+      }
+    | undefined,
+  question: DiscoveredTicketQuestion,
+): string[] {
+  if (!status) return []
+
+  if (question.source === 'field') {
+    const field = status.fields?.find(
+      (f) => f.key.trim().toLowerCase() === question.rawKey.toLowerCase(),
+    )
+    return field && field.value.trim() ? [field.value.trim()] : []
+  }
+
+  if (question.source === 'additional') {
+    if (!status.additionals) return []
+
+    // Find all additionals matching this questionPrompt
+    const matchedAnswers: string[] = []
+    for (const a of status.additionals) {
+      const { questionPrompt, optionText } = splitQuestionAndOption(a.name)
+      if (questionPrompt.toLowerCase() === question.rawKey.toLowerCase()) {
+        const normalized = normalizeChoiceValue(optionText, a.value)
+        if (normalized && !matchedAnswers.includes(normalized)) {
+          matchedAnswers.push(normalized)
+        }
+      }
+    }
+    return matchedAnswers
+  }
+
+  return []
+}
+
+/**
+ * Resolves a speaker's display answer string for a specific discovered question.
  */
 export function resolveSpeakerAnswer(
   status:
@@ -193,29 +273,6 @@ export function resolveSpeakerAnswer(
     | undefined,
   question: DiscoveredTicketQuestion,
 ): string | null {
-  if (!status) return null
-
-  if (question.source === 'field') {
-    const field = status.fields?.find(
-      (f) => f.key.trim().toLowerCase() === question.rawKey.toLowerCase(),
-    )
-    return field && field.value.trim() ? field.value.trim() : null
-  }
-
-  if (question.source === 'additional') {
-    if (!status.additionals) return null
-
-    // Find all additionals matching this questionPrompt
-    for (const a of status.additionals) {
-      const { questionPrompt, optionText } = splitQuestionAndOption(a.name)
-      if (questionPrompt.toLowerCase() === question.rawKey.toLowerCase()) {
-        const normalized = normalizeChoiceValue(optionText, a.value)
-        if (normalized) {
-          return normalized
-        }
-      }
-    }
-  }
-
-  return null
+  const answers = resolveSpeakerAnswers(status, question)
+  return answers.length > 0 ? answers.join(', ') : null
 }

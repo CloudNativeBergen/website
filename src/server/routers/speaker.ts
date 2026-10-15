@@ -55,10 +55,7 @@ import type { Speaker, TicketEmailGrant } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 import { sendMultiSpeakerEmail } from '@/lib/email/speaker'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
-import {
-  syncConferenceAudience,
-  getOrCreateConferenceAudience,
-} from '@/lib/email/audience'
+import { syncConferenceAudience } from '@/lib/email/audience'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import { buildOrganizerCreatedSpeaker } from '@/lib/speaker/sanity'
@@ -109,14 +106,16 @@ function redactForeignGrants(
   grants: TicketEmailGrant[],
   orgId: string | null | undefined,
 ): TicketEmailGrant[] {
-  return grants.map((grant) => {
-    if (orgId && grant.addedByOrg === orgId) return grant
-    const { addedBy, addedByName, ticketId, ...rest } = grant
-    void addedBy
-    void addedByName
-    void ticketId
-    return rest
-  })
+  return grants.map((grant) =>
+    orgId && grant.addedByOrg === orgId
+      ? grant
+      : {
+          ...grant,
+          addedBy: undefined,
+          addedByName: undefined,
+          ticketId: undefined,
+        },
+  )
 }
 
 /** The conference shape the ticket sweep passes straight to the handler. */
@@ -1486,7 +1485,12 @@ export const speakerRouter = router({
       }
 
       const conferenceId = await resolveConferenceId()
-      const { speakers, err } = await getSpeakers(conferenceId)
+      const { speakers, err } = await getSpeakers(
+        conferenceId,
+        [Status.confirmed],
+        false,
+        conference.organization?._ref ?? null,
+      )
 
       if (err) {
         throw new TRPCError({
@@ -1503,7 +1507,7 @@ export const speakerRouter = router({
           ),
       )
 
-      const { syncedCount, error } = await syncConferenceAudience(
+      const { audienceId, syncedCount, error } = await syncConferenceAudience(
         conference,
         eligibleSpeakers,
       )
@@ -1514,8 +1518,6 @@ export const speakerRouter = router({
           message: error.message || 'Failed to sync audience',
         })
       }
-
-      const { audienceId } = await getOrCreateConferenceAudience(conference)
 
       return {
         success: true,

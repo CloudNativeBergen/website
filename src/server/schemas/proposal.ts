@@ -286,9 +286,22 @@ export const ProposalAdminUpdateSchema = ProposalInputBaseSchema.partial()
   .extend({
     speakers: z
       .array(z.string())
+      .min(1, 'At least one speaker is required')
       .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE)
       .optional(),
   })
+  .refine(
+    (data) => {
+      if (data.format && isWorkshopFormat(data.format) && !data.capacity) {
+        return false
+      }
+      return true
+    },
+    {
+      message: 'Workshop capacity is required for workshop formats',
+      path: ['capacity'],
+    },
+  )
 
 // Proposal action schema
 // Used for validating proposal status change actions (submit, accept, reject, etc.)

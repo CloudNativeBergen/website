@@ -78,7 +78,10 @@ import { parseTicketAmount } from '@/lib/tickets/amount'
 // TYPE-ONLY on purpose: `./discovery` imports `removesFullPrice` and `typeKey`
 // from here, and a type import is erased, so the cycle never exists at runtime.
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
-import { SPEAKER_TICKET_CATEGORY } from '@/lib/tickets/speakerTicketCategory'
+import {
+  SPEAKER_TICKET_CATEGORY,
+  VOLUNTEER_TICKET_CATEGORY,
+} from '@/lib/tickets/speakerTicketCategory'
 import type { EventTicket } from '@/lib/tickets/types'
 
 /**
@@ -100,6 +103,7 @@ export type ClassifiableTicket = Pick<
 export type TicketGrantedBy =
   | 'sponsor'
   | 'speaker'
+  | 'volunteer'
   /**
    * NOTHING PRODUCES THIS YET, deliberately. An organizer/crew comp is
    * indistinguishable in provider data from any other zero-priced ticket, and
@@ -189,6 +193,11 @@ export interface TicketClassificationContext {
    * only, exactly as `redeemedSpeakerEmails` does.
    */
   speakerTicketTypeName?: string | null
+  /**
+   * The name of the volunteer ticket type, from `findVolunteerTicketType` over
+   * the event's ticket types. Absent falls back to `VOLUNTEER_TICKET_CATEGORY`.
+   */
+  volunteerTicketTypeName?: string | null
   /** `conference.ticketTypeRoles`. Absent/empty ⇒ every type admits. */
   ticketTypeRoles?: readonly TicketTypeRole[]
   /**
@@ -296,6 +305,14 @@ export function classifyTicket(
   speakerTypes.delete('')
   const isSpeakerType = speakerTypes.has(typeKey(ticket.category))
 
+  const volunteerTypes = new Set(
+    [context.volunteerTicketTypeName, VOLUNTEER_TICKET_CATEGORY].map(typeKey),
+  )
+  volunteerTypes.delete('')
+  const isVolunteerType =
+    volunteerTypes.has(typeKey(ticket.category)) ||
+    /volunteer|frivillig/i.test(ticket.category ?? '')
+
   let comp: boolean | 'unknown'
   let grantedBy: TicketGrantedBy | null = null
 
@@ -304,6 +321,9 @@ export function classifyTicket(
     // issued, not sold, whatever it cost.
     comp = true
     grantedBy = 'speaker'
+  } else if (isVolunteerType) {
+    comp = true
+    grantedBy = 'volunteer'
   } else if (discount) {
     // A partial discount is a PURCHASE: the holder paid, at a discount. Naming
     // the sponsor whose code it is as the GRANTOR would count a sale as a
@@ -344,37 +364,77 @@ export function classifyTicket(
       let granted =
         workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted'
       if (isSpeakerType) {
-        const fieldMatch = ticket.fields?.find(
-          (f) =>
-            f.key.toLowerCase().includes('monday') ||
-            f.key.toLowerCase().includes('workshop'),
-        )
-        const additionalMatch = ticket.additionals?.find(
-          (a) =>
-            a.name.toLowerCase().includes('monday') ||
-            a.name.toLowerCase().includes('workshop'),
-        )
-        const matched = fieldMatch?.value || additionalMatch?.value
+        const fieldMatches =
+          ticket.fields?.filter(
+            (f) =>
+              f.key.toLowerCase().includes('monday') ||
+              f.key.toLowerCase().includes('workshop'),
+          ) ?? []
+        const additionalMatches =
+          ticket.additionals?.filter(
+            (a) =>
+              a.name.toLowerCase().includes('monday') ||
+              a.name.toLowerCase().includes('workshop'),
+          ) ?? []
 
-        if (matched) {
-          const val = matched.toLowerCase().trim()
-          // Additionals store the multiple choice answer *in the name*, and the value is "1".
-          // Example: name: "Will you attend the Monday workshops? - Yes", value: "1"
+        granted = false
+
+        for (const f of fieldMatches) {
+          const val = (f.value ?? '').toLowerCase().trim()
+          const isNegative = val.includes('no') || val.includes('nei')
           if (
-            additionalMatch &&
-            (additionalMatch.name.toLowerCase().includes('yes') ||
-              additionalMatch.name.toLowerCase().includes('ja')) &&
-            val === '1'
+            !isNegative &&
+            (val.includes('yes') ||
+              val.includes('ja') ||
+              ['true', '1', 'on', 'checked', 'ok', 'y'].some((t) => val === t))
           ) {
             granted = true
-          } else {
-            granted =
+            break
+          }
+        }
+
+        if (!granted) {
+          for (const a of additionalMatches) {
+            const val = (a.value ?? '').toLowerCase().trim()
+            const isSelected =
               val.includes('yes') ||
               val.includes('ja') ||
               ['true', '1', 'on', 'checked', 'ok', 'y'].some((t) => val === t)
+            if (!isSelected) continue
+
+            // Additionals store multiple-choice answers in the name ("Prompt - Option") with value "1"
+            const dashIdx = a.name.lastIndexOf(' - ')
+            if (dashIdx !== -1) {
+              const optionSuffix = a.name
+                .slice(dashIdx + 3)
+                .toLowerCase()
+                .trim()
+              const isAffirmativeOption =
+                optionSuffix.includes('yes') || optionSuffix.includes('ja')
+              const isNegativeOption =
+                optionSuffix.includes('no') || optionSuffix.includes('nei')
+              if (isAffirmativeOption && !isNegativeOption) {
+                granted = true
+                break
+              }
+            } else {
+              const nameLower = a.name.toLowerCase()
+              const isNegativeVal = val.includes('no') || val.includes('nei')
+              if (
+                !isNegativeVal &&
+                (val.includes('yes') ||
+                  val.includes('ja') ||
+                  ['true', '1', 'on', 'checked', 'ok', 'y'].some(
+                    (t) => val === t,
+                  ) ||
+                  nameLower.includes('yes') ||
+                  nameLower.includes('ja'))
+              ) {
+                granted = true
+                break
+              }
+            }
           }
-        } else {
-          granted = false // No explicitly declared intent means best-effort/no guaranteed seat
         }
       }
       return granted

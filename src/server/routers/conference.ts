@@ -56,6 +56,7 @@ import {
   UpdateDatesSchema,
   UpdateRegistrationSchema,
   UpdateCommunicationSchema,
+  UpdateVolunteerLinksSchema,
   UpdateTicketingIdsSchema,
   UpdatePublicFreeTicketsSchema,
   UpdateAnalyticsSchema,
@@ -378,6 +379,19 @@ export const conferenceRouter = router({
 
   updateSpeakerRegistrationLink: adminProcedure
     .input(UpdateRegistrationSchema.pick({ speakerRegistrationLink: true }))
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, input)
+    }),
+
+  /**
+   * Save ONLY the volunteer registration and Slack invite links, from the
+   * volunteer approval modal. Narrower than {@link UpdateRegistrationSchema}
+   * and {@link UpdateCommunicationSchema} so the modal can persist both links
+   * without echoing unrelated registration toggles.
+   */
+  updateVolunteerLinks: adminProcedure
+    .input(UpdateVolunteerLinksSchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, input)

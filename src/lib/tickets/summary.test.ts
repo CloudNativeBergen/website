@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   resolveAccess: vi.fn(),
   getSpeakers: vi.fn(),
   getOrganizerCount: vi.fn(),
+  getVolunteersByConference: vi.fn(),
   fetchSpeakerTicketInputs: vi.fn(),
   resolveSpeakerTicketType: vi.fn(),
   fetchEventTickets: vi.fn(),
@@ -36,6 +37,9 @@ vi.mock('@/lib/speaker/sanity', () => ({
   getSpeakers: h.getSpeakers,
   getOrganizerCount: h.getOrganizerCount,
 }))
+vi.mock('@/lib/volunteer/sanity', () => ({
+  getVolunteersByConference: h.getVolunteersByConference,
+}))
 vi.mock('@/lib/speaker/ticketInputs', () => ({
   fetchSpeakerTicketInputs: h.fetchSpeakerTicketInputs,
 }))
@@ -48,7 +52,11 @@ vi.mock('./speakerStatus', async (importOriginal) => ({
   resolveSpeakerTicketType: h.resolveSpeakerTicketType,
 }))
 
-import { buildTicketSummary, type TicketSummaryReady } from './summary'
+import {
+  buildTicketSummary,
+  exportParticipants,
+  type TicketSummaryReady,
+} from './summary'
 import type { Conference } from '@/lib/conference/types'
 import type { EventTicket } from './types'
 
@@ -157,6 +165,10 @@ beforeEach(() => {
     err: null,
   })
   h.getOrganizerCount.mockResolvedValue({ count: 3, err: null })
+  h.getVolunteersByConference.mockResolvedValue({
+    volunteers: [],
+    error: null,
+  })
   h.fetchSpeakerTicketInputs.mockResolvedValue([
     {
       speakerId: 'sp-1',
@@ -364,5 +376,80 @@ describe('stored codes on sponsors outside the public list', () => {
     expect(freeTicketAllocation.sponsors.status).toBe(
       'Redemptions of 100%-off sponsor codes.',
     )
+  })
+})
+
+describe('exportParticipants', () => {
+  it('excludes standalone non-admitting add-ons when workshopOnly is false and aligns isComp with isPaidTicket', async () => {
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 100,
+        category: 'Regular',
+        sum: '2500',
+        crm: crm('paid@example.com'),
+      }),
+      ticket({
+        id: 2,
+        order_id: 101,
+        category: 'Regular',
+        sum: '0',
+        crm: crm('free@example.com'),
+      }),
+      ticket({
+        id: 3,
+        order_id: 102,
+        category: 'Workshop upgrade',
+        sum: '500',
+        crm: crm('addon-only@example.com'),
+      }),
+    ])
+
+    const res = await exportParticipants(conference, false)
+
+    expect(res.map((p) => p.email)).toEqual([
+      'paid@example.com',
+      'free@example.com',
+    ])
+    expect(res.find((p) => p.email === 'paid@example.com')?.isComp).toBe(false)
+    expect(res.find((p) => p.email === 'free@example.com')?.isComp).toBe(true)
+  })
+})
+
+describe('volunteer free ticket allocation in buildTicketSummary', () => {
+  it('populates freeTicketAllocation.volunteers when approved/confirmed volunteers exist', async () => {
+    h.getVolunteersByConference.mockResolvedValue({
+      volunteers: [
+        {
+          _id: 'vol-1',
+          name: 'Vol One',
+          email: 'vol1@example.com',
+          status: 'confirmed',
+        },
+        {
+          _id: 'vol-2',
+          name: 'Vol Two',
+          email: 'vol2@example.com',
+          status: 'approved',
+        },
+      ],
+      error: null,
+    })
+    h.fetchEventTickets.mockResolvedValue([
+      ...TICKETS,
+      ticket({
+        id: 6,
+        order_id: 104,
+        category: 'Volunteer ticket',
+        crm: crm('vol1@example.com'),
+      }),
+    ])
+
+    const summary = await ready()
+    expect(summary.freeTicketAllocation.volunteers).toMatchObject({
+      allocated: 2,
+      claimed: 1,
+    })
+    expect(summary.freeTicketAllocation.claimedCovers).toContain('volunteers')
   })
 })

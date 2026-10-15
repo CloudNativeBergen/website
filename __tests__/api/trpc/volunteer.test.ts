@@ -27,11 +27,18 @@ vi.mock('@/lib/sanity/client', () => ({
 
 vi.mock('@/lib/volunteer/sanity', () => ({
   createVolunteer: vi.fn(),
+  hasActiveVolunteerByEmail: vi.fn().mockResolvedValue(false),
   getVolunteersByConference: vi.fn(),
   getVolunteerById: vi.fn(),
   updateVolunteerStatus: vi.fn(),
   deleteVolunteer: vi.fn(),
   recordVolunteerApprovalEmailSent: vi
+    .fn()
+    .mockResolvedValue({ success: true, error: null }),
+  confirmVolunteerAttendance: vi
+    .fn()
+    .mockResolvedValue({ success: true, error: null }),
+  declineVolunteerAttendance: vi
     .fn()
     .mockResolvedValue({ success: true, error: null }),
 }))

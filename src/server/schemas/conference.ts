@@ -235,6 +235,24 @@ export const UpdateCommunicationSchema = z.object({
     .optional(),
 })
 
+const optionalClearableHttpsUrl = z
+  .string()
+  .trim()
+  .transform((val) => (val === '' ? null : val))
+  .pipe(
+    z
+      .string()
+      .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
+      .nullable(),
+  )
+  .nullable()
+  .optional()
+
+export const UpdateVolunteerLinksSchema = z.object({
+  volunteerRegistrationLink: optionalClearableHttpsUrl,
+  volunteerSlackInviteUrl: optionalClearableHttpsUrl,
+})
+
 // === Ticketing IDs ===
 // Positive integers; clearing is allowed by sending `null` (unset).
 // Provider-discriminated: `ticketingProvider` selects the vendor (absent/null ⇒

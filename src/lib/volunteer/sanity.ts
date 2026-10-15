@@ -56,7 +56,8 @@ export async function getVolunteersByConference(
       approvalEmailSentBy->{
         _id,
         name
-      }
+      },
+      confirmedAt
     }`
 
     const volunteers = await clientRead.fetch<VolunteerWithConference[]>(
@@ -121,7 +122,8 @@ export async function getVolunteerById(
       approvalEmailSentBy->{
         _id,
         name
-      }
+      },
+      confirmedAt
     }`
 
     const volunteer = await clientRead.fetch<VolunteerWithConference | null>(
@@ -161,6 +163,90 @@ export async function recordVolunteerApprovalEmailSent(
   }
 }
 
+export async function confirmVolunteerAttendance(
+  volunteerId: string,
+  confirmedAt: string,
+  expectedRevisionId?: string,
+): Promise<{ success: boolean; error: Error | null }> {
+  try {
+    let patch = clientWrite.patch(volunteerId)
+    if (expectedRevisionId) {
+      patch = patch.ifRevisionId(expectedRevisionId)
+    }
+    await patch
+      .set({
+        status: VolunteerStatus.CONFIRMED,
+        confirmedAt,
+      })
+      .commit()
+    return { success: true, error: null }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error : new Error('Unknown error'),
+    }
+  }
+}
+
+export async function declineVolunteerAttendance(
+  volunteerId: string,
+  declinedAt: string,
+  expectedRevisionId?: string,
+  reason?: string,
+  existingNotes?: string,
+): Promise<{ success: boolean; error: Error | null }> {
+  try {
+    const declineNote = reason?.trim()
+      ? `Declined by volunteer: ${reason.trim()}`
+      : 'Declined by volunteer'
+    const reviewNotes = existingNotes?.trim()
+      ? `${existingNotes.trim()}\n\n${declineNote}`
+      : declineNote
+
+    let patch = clientWrite.patch(volunteerId)
+    if (expectedRevisionId) {
+      patch = patch.ifRevisionId(expectedRevisionId)
+    }
+    await patch
+      .set({
+        status: VolunteerStatus.REJECTED,
+        reviewedAt: declinedAt,
+        reviewNotes,
+      })
+      .unset(['confirmedAt'])
+      .commit()
+    return { success: true, error: null }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error : new Error('Unknown error'),
+    }
+  }
+}
+
+export async function hasActiveVolunteerByEmail(
+  conferenceId: string,
+  email: string,
+): Promise<{ exists: boolean; error: Error | null }> {
+  try {
+    const normalizedEmail = email.trim().toLowerCase()
+    const count = await clientRead.fetch<number>(
+      `count(*[_type == "volunteer" && conference._ref == $conferenceId && lower(email) == $email && status != $rejected])`,
+      {
+        conferenceId,
+        email: normalizedEmail,
+        rejected: VolunteerStatus.REJECTED,
+      },
+    )
+    return { exists: (count ?? 0) > 0, error: null }
+  } catch (error) {
+    return {
+      exists: false,
+      error: error instanceof Error ? error : new Error('Unknown error'),
+    }
+  }
+}
+
 export async function createVolunteer(
   data: VolunteerInput,
 ): Promise<{ volunteer: Volunteer | null; error: Error | null }> {
@@ -189,20 +275,38 @@ export async function updateVolunteerStatus(
   reviewNotes?: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
+    const now = new Date().toISOString()
     const updates: Record<string, unknown> = {
       status,
-      reviewedAt: new Date().toISOString(),
+      reviewedAt: now,
       reviewedBy: {
         _type: 'reference',
         _ref: reviewedBy,
       },
     }
+    const unset: string[] = []
 
-    if (reviewNotes) {
-      updates.reviewNotes = reviewNotes
+    if (reviewNotes !== undefined) {
+      if (reviewNotes.trim()) {
+        updates.reviewNotes = reviewNotes
+      } else {
+        unset.push('reviewNotes')
+      }
     }
 
-    await clientWrite.patch(volunteerId).set(updates).commit()
+    let patch = clientWrite.patch(volunteerId)
+    if (status === VolunteerStatus.CONFIRMED) {
+      updates.confirmedAt = now
+    } else {
+      unset.push('confirmedAt')
+    }
+
+    patch = patch.set(updates)
+    if (unset.length > 0) {
+      patch = patch.unset(unset)
+    }
+
+    await patch.commit()
     return { success: true, error: null }
   } catch (error) {
     return {
@@ -223,6 +327,7 @@ export interface VolunteerDetailsUpdate {
   tshirtSize?: string | null
   dietaryRestrictions?: string | null
   otherInfo?: string | null
+  reviewNotes?: string | null
 }
 
 /**
@@ -250,6 +355,7 @@ export async function updateVolunteerDetails(
       'tshirtSize',
       'dietaryRestrictions',
       'otherInfo',
+      'reviewNotes',
     ]
     for (const key of optional) {
       const value = data[key]

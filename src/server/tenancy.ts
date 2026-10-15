@@ -96,8 +96,8 @@ export async function getDocumentTenant(
     const query = groq`*[_id == $id][0]{
       _type,
       "orgId": organization._ref,
-      "conferenceId": conference._ref,
-      "conferenceOrgId": conference->organization._ref,
+      "conferenceId": coalesce(conference._ref, sponsorForConference->conference._ref),
+      "conferenceOrgId": coalesce(conference->organization._ref, sponsorForConference->conference->organization._ref),
       "memberOrgIds": coalesce(organizations, [])[]._ref
     }`
     const doc = await clientReadUncached.fetch<{

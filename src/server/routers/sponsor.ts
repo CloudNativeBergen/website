@@ -494,12 +494,15 @@ async function prepareDiscountSend(
 
 async function getSponsorForCurrentConference(id: string) {
   const conferenceId = await resolveConferenceId()
+  if (!conferenceId) {
+    return { error: new Error('Sponsor relationship not found') }
+  }
   const result = await getSponsorForConference(id)
   if (
     result.sponsorForConference &&
     result.sponsorForConference.conference?._id !== conferenceId
   ) {
-    return { error: new Error('Not authorized for this conference') }
+    return { error: new Error('Sponsor relationship not found') }
   }
   return result
 }
@@ -2338,6 +2341,7 @@ export const sponsorRouter = router({
       update: adminProcedure
         .input(UpdateSponsorActivitySchema)
         .mutation(async ({ input, ctx }) => {
+          await requireDocumentInCurrentConference(input.id, 'sponsorActivity')
           const { success, error } = await updateSponsorActivity(
             input.id,
             ctx.speaker._id,
@@ -2359,6 +2363,7 @@ export const sponsorRouter = router({
       delete: adminProcedure
         .input(IdParamSchema)
         .mutation(async ({ input, ctx }) => {
+          await requireDocumentInCurrentConference(input.id, 'sponsorActivity')
           const { success, error } = await deleteSponsorActivity(
             input.id,
             ctx.speaker._id,
@@ -3653,6 +3658,9 @@ export const sponsorRouter = router({
             message: 'Cannot create a contract template in another conference',
           })
         }
+        if (input.tier) {
+          await requireDocumentInCurrentConference(input.tier, 'sponsorTier')
+        }
         const { template, error } = await createContractTemplate(input)
         if (error) {
           throw new TRPCError({
@@ -3671,6 +3679,9 @@ export const sponsorRouter = router({
         // OWNERSHIP (#730): `updateContractTemplate` is a bare patch. Contrast
         // the sponsor EMAIL templates, guarded by `isTemplateInCurrentOrg`.
         await requireDocumentInCurrentConference(id, 'contractTemplate')
+        if (data.tier) {
+          await requireDocumentInCurrentConference(data.tier, 'sponsorTier')
+        }
         const { template, error } = await updateContractTemplate(id, {
           ...data,
           tier: data.tier === null ? undefined : data.tier,
@@ -3708,6 +3719,9 @@ export const sponsorRouter = router({
     findBest: adminProcedure
       .input(FindBestContractTemplateSchema)
       .query(async ({ input }) => {
+        if (input.tierId) {
+          await requireDocumentInCurrentConference(input.tierId, 'sponsorTier')
+        }
         const conferenceId = await resolveConferenceId()
         const { template, error } = await findBestContractTemplate(
           conferenceId,
@@ -3829,6 +3843,9 @@ export const sponsorRouter = router({
     previewPdf: adminProcedure
       .input(PreviewContractPdfSchema)
       .mutation(async ({ input }) => {
+        if (input.tierId) {
+          await requireDocumentInCurrentConference(input.tierId, 'sponsorTier')
+        }
         const conferenceId = await resolveConferenceId()
         const conference = await clientReadUncached.fetch<Conference | null>(
           `*[_type == "conference" && _id == $id][0]`,

@@ -93,6 +93,7 @@ const meta = {
     volunteer: volunteerWithLinks,
     onClose: fn(),
     onSend: fn(),
+    onSaveLinks: fn(),
   },
   tags: ['autodocs'],
 } satisfies Meta<typeof VolunteerApprovalModal>

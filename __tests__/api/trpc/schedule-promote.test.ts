@@ -58,12 +58,14 @@ const slot = (talkId: string, startTime: string) => ({
 /** The draft being published: talk-a moved 09:00 -> 14:00. */
 const draft = {
   _id: 'draft-1',
+  _rev: 'rev-draft-1',
   date: '2026-11-05',
   status: 'draft',
   tracks: [{ trackTitle: 'Track A', talks: [slot('talk-a', '14:00')] }],
 }
 
 const patches: string[] = []
+const revisionGuards: Array<{ id: string; rev: string }> = []
 const commit = vi.fn()
 
 const createCaller = () =>
@@ -77,9 +79,12 @@ const fetchMock = clientWrite.fetch as unknown as ReturnType<typeof vi.fn>
 const notifyMock = notifyScheduleChanges as unknown as ReturnType<typeof vi.fn>
 
 /** `existing` is whatever the outgoing-official lookup should return. */
-function wireFetch(existing: unknown) {
+function wireFetch(existing: unknown, confRev = 'rev-conf-1') {
   fetchMock.mockImplementation((query: string) => {
-    if (query.includes('_id == $id')) return Promise.resolve(draft)
+    if (query.includes('_type == "schedule" && _id == $id'))
+      return Promise.resolve(draft)
+    if (query.includes('_type == "conference" && _id == $conferenceId'))
+      return Promise.resolve(confRev ? { _rev: confRev } : null)
     return Promise.resolve(existing)
   })
 }
@@ -87,6 +92,7 @@ function wireFetch(existing: unknown) {
 beforeEach(() => {
   vi.clearAllMocks()
   patches.length = 0
+  revisionGuards.length = 0
   vi.mocked(getConferenceForCurrentDomain).mockResolvedValue({
     conference: conference as never,
     domain: 'test.com',
@@ -97,11 +103,30 @@ beforeEach(() => {
     'talk-a': ProposalStatus.confirmed,
   })
   notifyMock.mockResolvedValue({ moved: 1, notified: 1 })
+  const makePatchBuilder = (id: string) => {
+    const builder = {
+      ifRevisionId: (rev: string) => {
+        revisionGuards.push({ id, rev })
+        return builder
+      },
+      set: () => builder,
+      unset: () => builder,
+      setIfMissing: () => builder,
+      append: () => builder,
+    }
+    return builder
+  }
   ;(
     clientWrite.transaction as unknown as ReturnType<typeof vi.fn>
   ).mockReturnValue({
-    patch: (id: string) => {
+    patch: (
+      id: string,
+      fn?: (p: ReturnType<typeof makePatchBuilder>) => unknown,
+    ) => {
       patches.push(id)
+      if (typeof fn === 'function') {
+        fn(makePatchBuilder(id))
+      }
       return {
         patch: () => ({}),
         commit,
@@ -116,8 +141,8 @@ afterEach(() => {
 })
 
 describe('schedule.action promote — archiving the outgoing day', () => {
-  it('finds a LEGACY official day that has no status field', async () => {
-    wireFetch({ _id: 'legacy-1', tracks: [] })
+  it('finds a LEGACY official day that has no status field, excludes target _id, and guards revisions', async () => {
+    wireFetch({ _id: 'legacy-1', _rev: 'rev-legacy-1', tracks: [] })
 
     await createCaller().schedule.action({ id: 'draft-1', action: 'promote' })
 
@@ -127,15 +152,25 @@ describe('schedule.action promote — archiving the outgoing day', () => {
     // Matching only `status == 'official'` would skip the legacy day and leave
     // the conference with two published days for one date.
     expect(lookup).toContain('!defined(status)')
+    expect(lookup).toContain('_id != $id')
     expect(patches).toContain('legacy-1')
+    expect(revisionGuards).toEqual([
+      { id: 'legacy-1', rev: 'rev-legacy-1' },
+      { id: 'draft-1', rev: 'rev-draft-1' },
+      { id: 'conf-1', rev: 'rev-conf-1' },
+    ])
   })
 
-  it('still publishes when there is no previous day for the date', async () => {
-    wireFetch(null)
+  it('still publishes when there is no previous day for the date and guards conference._rev', async () => {
+    wireFetch(null, 'rev-conf-first')
 
     await expect(
       createCaller().schedule.action({ id: 'draft-1', action: 'promote' }),
     ).resolves.toMatchObject({ success: true })
+    expect(revisionGuards).toEqual([
+      { id: 'draft-1', rev: 'rev-draft-1' },
+      { id: 'conf-1', rev: 'rev-conf-first' },
+    ])
   })
 })
 

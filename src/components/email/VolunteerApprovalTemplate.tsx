@@ -33,6 +33,10 @@ export interface VolunteerApprovalTemplateProps {
    * Slack invitation link for volunteers to join the community workspace.
    */
   slackInviteUrl?: string
+  /**
+   * Signed one-click confirmation link for the volunteer to confirm attendance.
+   */
+  confirmUrl?: string
 }
 
 export const VolunteerApprovalTemplate: React.FC<
@@ -48,6 +52,7 @@ export const VolunteerApprovalTemplate: React.FC<
   brandColor,
   registrationUrl,
   slackInviteUrl,
+  confirmUrl,
 }) => {
   const brand = resolveEmailBrandPalette(brandColor)
   return (
@@ -75,6 +80,25 @@ export const VolunteerApprovalTemplate: React.FC<
           {message.split(/\n\n+/).map((paragraph, idx) => (
             <EmailText key={idx}>{paragraph}</EmailText>
           ))}
+        </EmailSection>
+      )}
+
+      {confirmUrl && (
+        <EmailSection
+          backgroundColor="#FEF3C7"
+          borderColor="#F59E0B"
+          borderLeftColor="#D97706"
+        >
+          <EmailSectionHeader color="#1F2937">
+            ⚠️ Action Required: Confirm Your Attendance
+          </EmailSectionHeader>
+          <EmailText color="#1F2937" weight="600">
+            Please confirm that you will be joining us as a volunteer at{' '}
+            {eventName} by clicking the button below:
+          </EmailText>
+          <div style={{ marginTop: '16px' }}>
+            <EmailButton href={confirmUrl}>Confirm Your Attendance</EmailButton>
+          </div>
         </EmailSection>
       )}
 

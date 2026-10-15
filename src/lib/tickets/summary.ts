@@ -55,6 +55,13 @@ import {
   SPEAKER_TICKET_CATEGORY,
 } from './speakerStatus'
 import {
+  joinVolunteerTicketStatus,
+  redeemedVolunteerEmails,
+  VOLUNTEER_TICKET_CATEGORY,
+} from './volunteerStatus'
+import { getVolunteersByConference } from '@/lib/volunteer/sanity'
+import { VolunteerStatus } from '@/lib/volunteer/types'
+import {
   calculateCategoryStats,
   calculateSponsorTickets,
   calculateTicketStatistics,
@@ -211,6 +218,7 @@ export async function exportParticipants(
   const classified = allTickets.map((t) => ({
     ticket: t,
     class: classifyTicket(t, classification),
+    isPaid: isPaidTicket(t, classification),
   }))
 
   const byEmail = new Map<string, typeof classified>()
@@ -230,10 +238,12 @@ export async function exportParticipants(
 
   const addGroup = (group: typeof classified) => {
     const grantsWorkshop = group.some((g) => g.class.grantsWorkshop)
+    const admitsConference = group.some((g) => g.class.admits)
     if (workshopOnly && !grantsWorkshop) return
+    if (!workshopOnly && !admitsConference) return
 
-    // Paid if ANY ticket in their bundle is not a comp
-    const isComp = group.every((g) => g.class.comp === true)
+    // Paid if ANY ticket in their bundle satisfies isPaidTicket (including comp: 'unknown' with sum > 0)
+    const isComp = !group.some((g) => g.isPaid)
 
     // Deduplicate categories in case they bought 5 of the same ticket
     const uniqueCategories = Array.from(
@@ -419,12 +429,31 @@ async function buildFreeTicketAllocation({
   const speakerTicketInputs = await fetchSpeakerTicketInputs(conference._id, [
     Status.confirmed,
   ])
+  const candidates = toTicketCandidates(allTickets)
   const redeemedEmails = classification.speakerTicketTypeName
-    ? redeemedSpeakerEmails(toTicketCandidates(allTickets), [
+    ? redeemedSpeakerEmails(candidates, [
         classification.speakerTicketTypeName,
         SPEAKER_TICKET_CATEGORY,
       ])
     : null
+
+  const { volunteers, error: volunteerErr } = await getVolunteersByConference(
+    conference._id,
+  )
+  const approvedVolunteers = (volunteers ?? []).filter(
+    (v) =>
+      v.status === VolunteerStatus.APPROVED ||
+      v.status === VolunteerStatus.CONFIRMED,
+  )
+  const includeVolunteers = Boolean(
+    volunteerErr || approvedVolunteers.length > 0,
+  )
+  const redeemedVolunteerMap = redeemedVolunteerEmails(
+    candidates,
+    classification.volunteerTicketTypeName
+      ? [classification.volunteerTicketTypeName, VOLUNTEER_TICKET_CATEGORY]
+      : [VOLUNTEER_TICKET_CATEGORY],
+  )
 
   return calculateFreeTicketAllocation({
     sponsors: [
@@ -453,5 +482,20 @@ async function buildFreeTicketAllocation({
       ? joinSpeakerTicketStatus(speakerTicketInputs, redeemedEmails, conference)
       : null,
     organizerCount: organizers,
+    ...(includeVolunteers
+      ? {
+          volunteerCount: countOrUnknown({
+            count: approvedVolunteers.length,
+            err: volunteerErr,
+          }),
+          volunteerStatuses: volunteerErr
+            ? null
+            : joinVolunteerTicketStatus(
+                approvedVolunteers,
+                redeemedVolunteerMap,
+                conference,
+              ),
+        }
+      : {}),
   })
 }

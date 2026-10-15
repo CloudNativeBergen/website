@@ -34,9 +34,13 @@ vi.mock('@/lib/sanity/client', () => ({
     fetch: vi.fn(
       async (query: string, params: { ids?: string[]; id?: string } = {}) => {
         if (query.includes('"memberOrgIds"')) {
-          return params.id === 'sponsor-1'
-            ? { _type: 'sponsor', orgId: 'org-test' }
-            : null
+          if (params.id === 'sponsor-1') {
+            return { _type: 'sponsor', orgId: 'org-test' }
+          }
+          if (params.id === 'activity-1') {
+            return { _type: 'sponsorActivity', conferenceId: 'conf-1' }
+          }
+          return null
         }
         return params.ids?.length ?? 0
       },

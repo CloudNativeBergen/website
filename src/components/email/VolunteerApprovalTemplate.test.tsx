@@ -77,4 +77,19 @@ describe('VolunteerApprovalTemplate', () => {
 
     expect(html).toContain('#9333EA')
   })
+
+  it('renders attendance confirmation CTA when confirmUrl is provided', async () => {
+    const html = await render(
+      <VolunteerApprovalTemplate
+        {...baseProps}
+        confirmUrl="https://cloudnativebergen.dev/volunteer/confirm?token=abc.123"
+      />,
+    )
+
+    expect(html).toContain('Action Required: Confirm Your Attendance')
+    expect(html).toContain('Confirm Your Attendance')
+    expect(html).toContain(
+      'https://cloudnativebergen.dev/volunteer/confirm?token=abc.123',
+    )
+  })
 })

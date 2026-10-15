@@ -235,6 +235,54 @@ describe('speakers — the redeemed / invited / not-invited split', () => {
   })
 })
 
+describe('volunteers — optional row when volunteerCount is supplied', () => {
+  it('computes redeemed, invited, and not-invited volunteer statuses and includes them in totals', () => {
+    const allocation = calculateFreeTicketAllocation(
+      input({
+        volunteerCount: 4,
+        volunteerStatuses: [
+          { volunteerId: 'v1', state: 'redeemed' },
+          { volunteerId: 'v2', state: 'redeemed' },
+          { volunteerId: 'v3', state: 'invited' },
+          { volunteerId: 'v4', state: 'not-invited' },
+        ],
+      }),
+    )
+
+    expect(allocation.volunteers).toEqual({
+      allocated: 4,
+      claimed: 2,
+      fromProvider: false,
+      status: '1 approval email unclaimed · 1 volunteer not yet emailed.',
+    })
+    expect(allocation.totalAllocated).toBe(4)
+    expect(allocation.totalClaimed).toBe(2)
+    expect(allocation.claimedCovers).toEqual([
+      'sponsors',
+      'speakers',
+      'volunteers',
+    ])
+  })
+
+  it('marks volunteer claims unknown when statuses are null or contain unknown', () => {
+    const nullStatuses = calculateFreeTicketAllocation(
+      input({ volunteerCount: 3, volunteerStatuses: null }),
+    )
+    expect(nullStatuses.volunteers?.claimed).toBe('unknown')
+
+    const partialUnknown = calculateFreeTicketAllocation(
+      input({
+        volunteerCount: 2,
+        volunteerStatuses: [
+          { volunteerId: 'v1', state: 'redeemed' },
+          { volunteerId: 'v2', state: 'unknown' },
+        ],
+      }),
+    )
+    expect(partialUnknown.volunteers?.claimed).toBe('unknown')
+  })
+})
+
 describe('organizers — not derivable, therefore unknown', () => {
   it('renders unknown rather than 0 claimed', () => {
     const { organizers } = calculateFreeTicketAllocation(
