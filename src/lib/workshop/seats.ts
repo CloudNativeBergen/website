@@ -37,6 +37,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { Format, Status, isWorkshopFormat } from '@/lib/proposal/types'
+import { isListedWorkshop } from './listed'
 import type {
   FullSeats,
   WorkshopSignupExisting,
@@ -334,12 +335,17 @@ export async function signUpForWorkshop(
   const { workshopId, conferenceId, earlyAccessSponsorId } = request
   const _id = signupDocumentId(conferenceId, workshopId, request.userWorkOSId)
   const outcome = await decideAndCommit<
-    { refused: 'already-signed-up' | 'full' },
+    { refused: 'already-signed-up' | 'full' | 'not-found' },
     string
   >(
     workshopId,
     conferenceId,
     async (seats, tx) => {
+      // ONLY WHAT THE PORTAL LISTS (#1301), asked again of the talk this
+      // round read: one withdrawn since the router's check takes no sign-up.
+      if (!isListedWorkshop({ _id: workshopId, ...seats })) {
+        return { refused: 'not-found' as const }
+      }
       const mine = seats.signups.filter(
         (s) => s.userWorkOSId === request.userWorkOSId,
       )

@@ -6,9 +6,9 @@ import type {
   WorkshopStatistics,
 } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
-import { Status } from '@/lib/proposal/types'
 import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
 import { freeSeat } from './seats'
+import { isListedWorkshop } from './listed'
 
 export async function getWorkshopSignups(
   userWorkOSId: string,
@@ -93,16 +93,30 @@ export async function checkWorkshopCapacity(workshopId: string): Promise<{
   }
 }
 
-export async function verifyWorkshopBelongsToConference(
+/**
+ * Whether an attendee may sign up for this id (#1301): only a workshop the
+ * portal lists, of this conference. Read from the document store, where the
+ * seat decision reads the talk too. The id goes into the endpoint's path
+ * unescaped, which reads `a,b` as two ids and the client keeps the first
+ * answer: only the document stored under exactly this id counts.
+ */
+export async function isListedWorkshopOf(
   workshopId: string,
   conferenceId: string,
 ): Promise<boolean> {
-  const query = groq`
-    *[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId][0]
-  `
-
-  const result = await clientWrite.fetch(query, { workshopId, conferenceId })
-  return !!result
+  const talk = await clientWrite.getDocument<{
+    _id: string
+    _type: string
+    status?: string
+    format?: string
+    conference?: { _ref?: string }
+  }>(workshopId)
+  return (
+    talk?._id === workshopId &&
+    talk._type === 'talk' &&
+    talk.conference?._ref === conferenceId &&
+    isListedWorkshop(talk)
+  )
 }
 
 /**
@@ -380,7 +394,6 @@ export async function getWorkshopsByConference(
 ): Promise<ProposalWithWorkshopData[]> {
   const { workshops } = await getWorkshops({
     conferenceId,
-    statuses: [Status.confirmed],
     includeScheduleInfo: true,
   })
   return workshops as ProposalWithWorkshopData[]
@@ -391,7 +404,6 @@ export async function getWorkshopStatistics(
 ): Promise<WorkshopStatistics> {
   const { workshops } = await getWorkshops({
     conferenceId,
-    statuses: [Status.confirmed],
     includeScheduleInfo: true,
   })
 

@@ -183,6 +183,8 @@ const workshop = (capacity: number) => ({
   _id: 'workshop-1',
   _type: 'talk',
   title: 'Kubernetes 101',
+  // Listed in the portal (#1301): only such a workshop takes a sign-up.
+  status: 'confirmed',
   format: 'workshop_120',
   conference: ref(CONF),
   capacity,

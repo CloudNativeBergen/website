@@ -286,6 +286,26 @@ describe('what a request that cannot take a seat is told', () => {
     expect(withStatus('waitlist')).toHaveLength(0)
   })
 
+  // Checked again in the decision itself (#1301): a workshop withdrawn after
+  // the router's check takes no sign-up, from an attendee or an organizer.
+  it.each([
+    ['withdrawn', { status: 'withdrawn' }],
+    ['made a talk', { format: 'presentation_40' }],
+  ])(
+    'a workshop %s is not found for a sign-up, and nothing is written',
+    async (_, edit) => {
+      store().reset([workshop(edit)])
+
+      expect(
+        await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' }),
+      ).toEqual({ refused: 'not-found' })
+      expect(
+        await signUpForWorkshop(attendee(2), { whenFull: 'refuse' }),
+      ).toEqual({ refused: 'not-found' })
+      expect(store().commits).toEqual([])
+    },
+  )
+
   it('a workshop of another conference is not found, by any of the three, and nothing is written', async () => {
     store().reset([
       workshop({ conference: ref('conf-b') }),

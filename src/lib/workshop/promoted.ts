@@ -32,7 +32,11 @@ import {
   sendBasicWorkshopConfirmation,
   type WorkshopEmailConference,
 } from '@/lib/email/workshop'
-import { Format, Status, isWorkshopFormat } from '@/lib/proposal/types'
+import {
+  LISTED_WORKSHOP_FORMATS,
+  LISTED_WORKSHOP_STATUSES,
+  isListedWorkshop,
+} from './listed'
 import { clientWrite } from '@/lib/sanity/client'
 
 interface DueSignup {
@@ -52,15 +56,13 @@ interface DueSignup {
 type StoredConference = WorkshopEmailConference & { _type: 'conference' }
 /** A talk stores no date or time of its own (the schedule does): title only. */
 interface StoredWorkshop {
+  _id: string
   _type: 'talk'
   title?: string
   status?: string
   format?: string
   conference?: { _ref: string }
 }
-
-/** The workshop formats, from the one rule (`isWorkshopFormat`). */
-const WORKSHOP_FORMATS = Object.values(Format).filter(isWorkshopFormat)
 
 /**
  * The rule `changeCapacity` promotes by, and this conference's to tell: only
@@ -71,8 +73,8 @@ const WORKSHOP_FORMATS = Object.values(Format).filter(isWorkshopFormat)
  * sign-ups out of its window with the same rule (`deliverDuePromotionEmails`).
  */
 const stillOn = (workshop: StoredWorkshop | undefined, conferenceId: string) =>
-  workshop?.status === Status.confirmed &&
-  isWorkshopFormat(workshop.format as Format) &&
+  !!workshop &&
+  isListedWorkshop(workshop) &&
   workshop.conference?._ref === conferenceId
 
 /**
@@ -291,13 +293,14 @@ export async function deliverDuePromotionEmails({
   // (the rule of `stillOn`): one whose workshop is withdrawn, re-formatted or
   // moved stays owed, but takes no place in the window every hour.
   const query = `*[_type == "workshopSignup" && promotionEmailDue == true && defined(conference->_id) && !(_id in path("drafts.**"))
-    && workshop->status == $confirmed && workshop->format in $workshopFormats && workshop->conference._ref == conference._ref]
+    && !(workshop._ref in path("drafts.**")) && !(workshop._ref in path("versions.**"))
+    && workshop->status in $statuses && workshop->format in $formats && workshop->conference._ref == conference._ref]
     | order(confirmedAt asc) [0...${take}]{ _id, "conferenceId": conference._ref }`
   const due = await clientWrite.fetch<
     { _id: string; conferenceId: string | null }[] | null
   >(
     query,
-    { confirmed: Status.confirmed, workshopFormats: WORKSHOP_FORMATS },
+    { statuses: LISTED_WORKSHOP_STATUSES, formats: LISTED_WORKSHOP_FORMATS },
     { cache: 'no-store' },
   )
   const byConference = new Map<string, string[]>()

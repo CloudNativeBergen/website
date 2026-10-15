@@ -136,7 +136,7 @@ describe('admin.manualSignup', () => {
       'CONFLICT',
       'User is already signed up for this workshop',
     ],
-    ['not-found', 'BAD_REQUEST', 'Workshop does not belong to this conference'],
+    ['not-found', 'NOT_FOUND', 'Workshop not found for this conference'],
     [
       'busy',
       'TOO_MANY_REQUESTS',

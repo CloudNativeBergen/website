@@ -182,7 +182,7 @@ vi.mock('@/lib/workshop/sanity', async (importActual) => ({
     capacity: 10,
     signups: 0,
   })),
-  verifyWorkshopBelongsToConference: vi.fn(async () => true),
+  isListedWorkshopOf: vi.fn(async () => true),
 }))
 
 // The seat decision (#1344) is proven on stored documents in
@@ -206,7 +206,7 @@ import { signUpForWorkshop } from '@/lib/workshop/seats'
 import {
   getWorkshopSignups,
   checkWorkshopCapacity,
-  verifyWorkshopBelongsToConference,
+  isListedWorkshopOf,
 } from '@/lib/workshop/sanity'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 import { revalidateTag } from 'next/cache'
@@ -215,7 +215,7 @@ type LooseMock = ReturnType<typeof vi.fn>
 const createSignupMock = signUpForWorkshop as unknown as LooseMock
 const getSignupsMock = getWorkshopSignups as unknown as LooseMock
 const capacityMock = checkWorkshopCapacity as unknown as LooseMock
-const belongsMock = verifyWorkshopBelongsToConference as unknown as LooseMock
+const listedMock = isListedWorkshopOf as unknown as LooseMock
 const revalidateMock = revalidateTag as unknown as LooseMock
 
 const signupInput = {
@@ -242,7 +242,7 @@ async function attempt(): Promise<
     const { code, message } = error as { code: string; message: string }
     // A refusal for the window is made before anything is read or written
     // about the workshop.
-    expect(belongsMock).not.toHaveBeenCalled()
+    expect(listedMock).not.toHaveBeenCalled()
     expect(getSignupsMock).not.toHaveBeenCalled()
     expect(capacityMock).not.toHaveBeenCalled()
     expect(createSignupMock).not.toHaveBeenCalled()
