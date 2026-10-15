@@ -1,10 +1,18 @@
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
-import { calculateCapacityPercentage } from '@/lib/workshop/capacity'
 
 export interface WorkshopStats {
   confirmedCount: number
   waitlistCount: number
+  /** Confirmed over capacity, capped at 100: the width of the utilization bar. */
   capacityPercentage: number
+  /** The same ratio uncapped (107 for 32/30): the number the card prints. */
+  utilizationPercentage: number
+  /**
+   * Confirmed seats beyond capacity, 0 at or below it (#1361). An organizer
+   * can admit past capacity on purpose (#1344), and the card has to show
+   * where that happened rather than read as a full `32/30`.
+   */
+  overCapacityBy: number
 }
 
 /**
@@ -18,15 +26,14 @@ export function calculateWorkshopStats(
   waitlistCount: number,
 ): WorkshopStats {
   const capacity = workshop.capacity || 30
-  const capacityPercentage = calculateCapacityPercentage(
-    capacity,
-    confirmedCount,
-  )
+  const utilizationPercentage = Math.round((confirmedCount / capacity) * 100)
 
   return {
     confirmedCount,
     waitlistCount,
-    capacityPercentage,
+    capacityPercentage: Math.min(100, utilizationPercentage),
+    utilizationPercentage,
+    overCapacityBy: Math.max(0, confirmedCount - capacity),
   }
 }
 

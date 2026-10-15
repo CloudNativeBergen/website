@@ -5,11 +5,13 @@ import {
   PlusCircleIcon,
   PencilIcon,
   MegaphoneIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { getWorkshopDuration } from '@/lib/workshop/utils'
 import { calculateWorkshopStats, getCapacityColorClass } from './utils'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { StatusBadge } from '@/components/StatusBadge'
 
 interface WorkshopCardProps {
   workshop: ProposalWithWorkshopData
@@ -32,11 +34,14 @@ export function WorkshopCard({
   onEditCapacity,
   onAnnounce,
 }: WorkshopCardProps) {
-  const { capacityPercentage } = calculateWorkshopStats(
-    workshop,
-    confirmedCount,
-    waitlistCount,
-  )
+  const { capacityPercentage, utilizationPercentage, overCapacityBy } =
+    calculateWorkshopStats(workshop, confirmedCount, waitlistCount)
+  const overCapacity = overCapacityBy > 0
+  // One decision drives both what the bar's fill says and what it looks like,
+  // so a test can read the former without asserting a class name (#1361).
+  const fill = overCapacity
+    ? { over: true, color: 'bg-red-500' }
+    : { over: false, color: getCapacityColorClass(capacityPercentage) }
 
   return (
     <div className="flex h-full flex-col rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -59,15 +64,32 @@ export function WorkshopCard({
               <span className="font-medium">
                 {confirmedCount}/{workshop.capacity}
               </span>
-              <span>({capacityPercentage.toFixed(0)}%)</span>
+              <span>({utilizationPercentage}%)</span>
             </div>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+          <div
+            role="progressbar"
+            aria-label="Capacity used"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={capacityPercentage}
+            aria-valuetext={`${utilizationPercentage}%`}
+            className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
+          >
             <div
-              className={`h-full transition-all ${getCapacityColorClass(capacityPercentage)}`}
-              style={{ width: `${Math.min(capacityPercentage, 100)}%` }}
+              data-over-capacity={fill.over ? '' : undefined}
+              className={`h-full transition-all ${fill.color}`}
+              style={{ width: `${capacityPercentage}%` }}
             />
           </div>
+          {overCapacity && (
+            <StatusBadge
+              label={`Over capacity by ${overCapacityBy}`}
+              color="red"
+              icon={ExclamationTriangleIcon}
+              className="mt-2"
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-2">
