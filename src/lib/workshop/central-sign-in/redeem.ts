@@ -41,7 +41,7 @@ import { challengeOf, signInCookie } from './start-seals'
  * request chooses it. A refusal goes there too, with one neutral line on the
  * signed-out page; the reason is never shown (it goes to the log,
  * `logRefusal`) and no cookie is touched, so a session the browser already
- * holds stays. The token is in the URL, so every answer is `no-store` and
+ * holds stays. The token is in the URL, so every redirect is `no-store` and
  * sends no referrer.
  *
  * NOT SINGLE USE BY ANY RECORD (spec §5): nothing remembers a redeemed token.

@@ -11,7 +11,7 @@ import { hostCookie } from './cookies'
 /**
  * How long a sign-in may take from the button to redeem (#1322): the tenant
  * host's cookie. A sign-up waits for a code sent by email, so thirty minutes,
- * not ten. It protects nothing the shorter one did: the verifier is good for
+ * not ten. It gives up nothing the shorter one protected: the verifier is good for
  * one code, and the tenant value only with a hand-off that hashes to it.
  */
 export const START_TTL_SECONDS = 1800
