@@ -414,16 +414,16 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     },
   )
 
-  it('a state older than twenty-eight minutes', async () => {
+  it('a state older than twenty-seven minutes', async () => {
     const now = new Date('2026-10-10T12:00:00Z')
     vi.useFakeTimers({ toFake: ['Date'], now })
     const flow = await startFlow()
 
-    vi.setSystemTime(now.getTime() + 1_679_000)
+    vi.setSystemTime(now.getTime() + 1_619_000)
     expect((await callback(flow)).status).toBe(307)
     exchangeCode.mockClear()
     expect(console.warn).not.toHaveBeenCalled()
-    vi.setSystemTime(now.getTime() + 1_681_000)
+    vi.setSystemTime(now.getTime() + 1_621_000)
     getDomainClaim.mockClear()
     await expectRefused(await callback(flow), 'no-state')
     expect(getDomainClaim).not.toHaveBeenCalled()
@@ -576,9 +576,30 @@ describe('callback: WORKSHOP_AUTH_ORIGIN unset', () => {
     )
   })
 
-  it('a callback on any other host than the one in state is refused', async () => {
+  it.each([
+    ['with a code', {}],
+    ['with an error from WorkOS', WORKOS_ERROR],
+    ['without its cookie', { cookie: null }],
+  ])(
+    'a callback on any other host than the one in state, %s, is refused without reading a record',
+    async (_, options) => {
+      const flow = await startFlow(TENANT, TENANT)
+
+      await expectRefused(
+        await callback(flow, { on: ALLOCATED, ...options }),
+        'host-refused',
+      )
+      expect(getDomainClaim).not.toHaveBeenCalled()
+    },
+  )
+
+  it('development: a refused return goes back over https to a host that is not localhost', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
     const flow = await startFlow(TENANT, TENANT)
 
-    await expectRefused(await callback(flow, { on: ALLOCATED }), 'host-refused')
+    expectIncomplete(
+      await callback(flow, { on: TENANT, cookie: null }),
+      'no-cookie',
+    )
   })
 })

@@ -46,6 +46,10 @@ import { GET } from '@/app/(workshop)/workshop/redeem/route'
 import { seal, unseal } from '@/lib/workshop/central-sign-in/seal'
 import { workshopWorkOS } from '@/lib/workshop/central-sign-in/workos'
 import {
+  HANDOFF_TTL_SECONDS,
+  START_REQUEST_TTL_SECONDS,
+} from '@/lib/workshop/central-sign-in/start-seals'
+import {
   callback,
   handOff as handOffOn,
   startFlow,
@@ -194,13 +198,26 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
     ])
   })
 
-  it('signs in at the latest every step allows: the browser still holds its cookie at redeem', async () => {
+  it('signs in at the latest every step allows, on a slow server: the browser still holds its cookie at redeem', async () => {
     vi.useFakeTimers({
       toFake: ['Date'],
       now: new Date('2026-10-12T10:00:00Z'),
     })
-    // 59 of the start request's 60 seconds on the way to the auth host.
-    const flow = await startFlow(TENANT, AUTH, { transitMs: 59_000 })
+    // The server's own time: 5 seconds for every record read, 30 for the
+    // exchange with WorkOS. Each step's clock runs while it works.
+    const claims = getDomainClaim.getMockImplementation()!
+    getDomainClaim.mockImplementation(async (id) => {
+      vi.setSystemTime(Date.now() + 5_000)
+      return claims(id)
+    })
+    exchangeCode.mockImplementation(async () => {
+      vi.setSystemTime(Date.now() + 30_000)
+      return AUTHENTICATED as never
+    })
+    // The last second of the start request on the way to the auth host.
+    const flow = await startFlow(TENANT, AUTH, {
+      transitMs: (START_REQUEST_TTL_SECONDS - 1) * 1000,
+    })
     // Back from WorkOS in the last second of the state.
     const { exp } = (await unseal(
       'auth-state',
@@ -210,8 +227,9 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
     vi.setSystemTime((exp - 1) * 1000)
     const returned = await callback(flow, { on: AUTH })
     expect(returned.status).toBe(307)
-    // 59 of the hand-off's 60 seconds on the way back.
-    vi.setSystemTime(Date.now() + 59_000)
+    // The last second of the hand-off on the way back.
+    vi.setSystemTime(Date.now() + (HANDOFF_TTL_SECONDS - 1) * 1000)
+    expect(Date.now() / 1000).toBeLessThan(flow.browserExpires)
     const redeemUrl = new URL(returned.headers.get('location')!)
     const response = await redeem({
       redeemUrl,
@@ -219,20 +237,19 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
       browser: flow.browser,
     })
 
-    expect(Date.now() / 1000).toBeLessThan(flow.browserExpires)
     expect(response.headers.get('location')).toBe('/workshop')
     expect(sessionOf(response)).toBeDefined()
     expect(console.warn).not.toHaveBeenCalled()
   })
 
-  it('gives a sign-in thirty minutes from the button to redeem, twenty-eight of them at WorkOS', async () => {
+  it('gives a sign-in thirty minutes from the button to redeem, twenty-seven of them at WorkOS', async () => {
     const now = Date.parse('2026-10-12T10:00:00Z')
     vi.useFakeTimers({ toFake: ['Date'], now })
     const flow = await startFlow(TENANT, AUTH)
 
     expect(flow.browserExpires).toBe(now / 1000 + 30 * 60)
     expect((await unseal('auth-state', flow.state, anything))!.exp).toBe(
-      now / 1000 + 28 * 60,
+      now / 1000 + 27 * 60,
     )
   })
 

@@ -23,12 +23,22 @@ export const START_REQUEST_TTL_SECONDS = 60
 export const HANDOFF_TTL_SECONDS = 60
 
 /**
+ * Time the steps spend on their own work, which no seal counts: record reads,
+ * and the exchange with WorkOS before the hand-off is sealed.
+ */
+const SERVER_MARGIN_SECONDS = 60
+
+/**
  * How long the attendee may spend at WorkOS: the state and the auth host's
- * start cookie. The tenant cookie's window less the two transits around it,
- * so a state that is still valid always finds the tenant cookie at redeem.
+ * start cookie. The tenant cookie's window less the two transits around it
+ * and a minute for the server, so a state that is still valid finds the
+ * tenant cookie at redeem.
  */
 export const AUTH_STATE_TTL_SECONDS =
-  START_TTL_SECONDS - START_REQUEST_TTL_SECONDS - HANDOFF_TTL_SECONDS
+  START_TTL_SECONDS -
+  START_REQUEST_TTL_SECONDS -
+  HANDOFF_TTL_SECONDS -
+  SERVER_MARGIN_SECONDS
 
 /**
  * The tenant host's cookie: a random value only this browser holds. The
