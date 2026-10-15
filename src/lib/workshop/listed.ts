@@ -13,8 +13,8 @@ const listedStatuses: ReadonlySet<string> = new Set(LISTED_WORKSHOP_STATUSES)
 const listedFormats: ReadonlySet<string> = new Set(LISTED_WORKSHOP_FORMATS)
 
 /**
- * A stored talk the portal lists. A draft or a release version (an id under a
- * path) never is. Which conference it is listed in is the caller's to check:
+ * A stored talk the portal lists. A draft or a release version never is (an
+ * ordinary id may hold a dot: the demo seed's `kkdemo.talk.s4`). Which conference it is listed in is the caller's to check:
  * `isListedWorkshopOf` reads one by id and asks both.
  */
 export const isListedWorkshop = (talk: {
@@ -22,6 +22,7 @@ export const isListedWorkshop = (talk: {
   status?: string
   format?: string
 }) =>
-  !talk._id.includes('.') &&
+  !talk._id.startsWith('drafts.') &&
+  !talk._id.startsWith('versions.') &&
   listedStatuses.has(talk.status ?? '') &&
   listedFormats.has(talk.format ?? '')

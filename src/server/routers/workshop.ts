@@ -135,10 +135,12 @@ const signUpRefused = (
   { own }: { own: boolean },
 ): never => {
   switch (refused) {
+    // Not of this conference, or not listed (#1301): as the router's own
+    // check answers.
     case 'not-found':
       throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Workshop does not belong to this conference',
+        code: 'NOT_FOUND',
+        message: 'Workshop not found for this conference',
       })
     case 'already-signed-up':
       throw new TRPCError({

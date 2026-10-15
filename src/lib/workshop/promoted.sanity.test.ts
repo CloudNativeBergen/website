@@ -431,6 +431,18 @@ describe('the hourly backstop (the cron), over every conference', () => {
     expect(console.error).not.toHaveBeenCalled()
   })
 
+  it('leaves a sign-up of a workshop draft out of the sweep, so it cannot hold a place in the window every hour', async () => {
+    store().put(workshop({ _id: `drafts.${WORKSHOP}` }))
+    store().put(
+      signup(8, 'confirmed', {
+        workshop: ref(`drafts.${WORKSHOP}`),
+        promotionEmailDue: true,
+      }),
+    )
+
+    expect(await deliverDuePromotionEmails()).toMatchObject({ found: 2 })
+  })
+
   it('does not pay a draft (Studio) of a sign-up', async () => {
     store().put(
       signup(7, 'confirmed', {

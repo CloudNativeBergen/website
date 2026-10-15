@@ -38,6 +38,8 @@ beforeEach(() => {
   h.store!.reset([
     talk('listed-120'),
     talk('listed-240', { format: 'workshop_240' }),
+    // A published id may hold a dot (the demo seed's `kkdemo.talk.s4`).
+    talk('kkdemo.talk.s4'),
     talk('a-talk', { format: 'presentation_40' }),
     talk('a-lightning-talk', { format: 'lightning_10' }),
     talk('submitted', { status: 'submitted' }),
@@ -49,11 +51,12 @@ beforeEach(() => {
     talk('a-sponsor', { _type: 'sponsor' }),
     talk('drafts.unpublished'),
     talk('drafts.listed-120'),
+    talk('versions.r1.listed-120'),
   ])
 })
 
 describe('a workshop an attendee can sign up for', () => {
-  it.each(['listed-120', 'listed-240'])(
+  it.each(['listed-120', 'listed-240', 'kkdemo.talk.s4'])(
     'a confirmed workshop of the conference (%s) is one',
     async (id) => {
       expect(await isListedWorkshopOf(id, CONF)).toBe(true)
@@ -72,21 +75,29 @@ describe('a workshop an attendee can sign up for', () => {
     ['an id that does not exist', 'nothing-here'],
     ['a draft that was never published', 'drafts.unpublished'],
     ['the draft of a listed workshop', 'drafts.listed-120'],
+    ['a release version of a listed workshop', 'versions.r1.listed-120'],
   ])('%s is not', async (_, id) => {
     expect(await isListedWorkshopOf(id, CONF)).toBe(false)
   })
 })
 
 describe('the portal listing', () => {
-  it('lists exactly the workshops an attendee can sign up for', async () => {
-    const { workshops, workshopsError } = await getWorkshops({
-      conferenceId: CONF,
-    })
+  // With the schedule attached too: the portal, the admin list and the
+  // statistics all ask for it.
+  it.each([false, true])(
+    'lists exactly the workshops an attendee can sign up for (schedule info: %s)',
+    async (includeScheduleInfo) => {
+      const { workshops, workshopsError } = await getWorkshops({
+        conferenceId: CONF,
+        includeScheduleInfo,
+      })
 
-    expect(workshopsError).toBeNull()
-    expect(workshops.map((w) => w._id).sort()).toEqual([
-      'listed-120',
-      'listed-240',
-    ])
-  })
+      expect(workshopsError).toBeNull()
+      expect(workshops.map((w) => w._id).sort()).toEqual([
+        'kkdemo.talk.s4',
+        'listed-120',
+        'listed-240',
+      ])
+    },
+  )
 })

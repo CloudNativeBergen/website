@@ -400,7 +400,7 @@ describe('workshop.signup: a sign-up that cannot take a seat (#1344)', () => {
       'CONFLICT',
       'You are already signed up for this workshop',
     ],
-    ['not-found', 'BAD_REQUEST', 'Workshop does not belong to this conference'],
+    ['not-found', 'NOT_FOUND', 'Workshop not found for this conference'],
     [
       'removed',
       'CONFLICT',

@@ -1117,7 +1117,7 @@ export async function getWorkshops({
         { cache: 'no-store' },
       )
 
-      workshops = proposals.map((workshop) => {
+      workshops = workshops.map((workshop) => {
         let date, startTime, endTime, room
 
         for (const schedule of schedules || []) {

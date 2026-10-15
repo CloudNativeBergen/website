@@ -293,6 +293,7 @@ export async function deliverDuePromotionEmails({
   // (the rule of `stillOn`): one whose workshop is withdrawn, re-formatted or
   // moved stays owed, but takes no place in the window every hour.
   const query = `*[_type == "workshopSignup" && promotionEmailDue == true && defined(conference->_id) && !(_id in path("drafts.**"))
+    && !(workshop._ref in path("drafts.**")) && !(workshop._ref in path("versions.**"))
     && workshop->status in $statuses && workshop->format in $formats && workshop->conference._ref == conference._ref]
     | order(confirmedAt asc) [0...${take}]{ _id, "conferenceId": conference._ref }`
   const due = await clientWrite.fetch<

@@ -546,7 +546,13 @@ describe('schedule resolution — official documents only', () => {
       )
     })
     mockFetch.mockResolvedValue([
-      { _id: 'workshop-1', title: 'A Workshop', format: 'workshop_120' },
+      // As the listing's query returns it: confirmed (#1301).
+      {
+        _id: 'workshop-1',
+        title: 'A Workshop',
+        status: 'confirmed',
+        format: 'workshop_120',
+      },
     ])
 
     const { workshops } = await getWorkshops({
