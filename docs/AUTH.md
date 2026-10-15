@@ -643,8 +643,9 @@ workshops off still lets its attendees out.
    redirects to
    WorkOS's authorize URL with `redirect_uri` `<auth origin>/api/auth/callback`.
 3. **Auth host, callback** (`central-sign-in/callback.ts`). Before the code is
-   exchanged: the state unseals and has not expired, a code is present, the cookie from
-   step 2 carries the state's nonce, the decision holds again for the host in state, and
+   exchanged, in this order: the state unseals and has not expired, the request is on
+   the auth host for the host in state (from the request alone), a code is present, the
+   cookie from step 2 carries the state's nonce, the decision holds again for the host in state, and
    the conference claiming it is still the one in state. Only then does it exchange the
    code with the PKCE verifier. It keeps **no session and no WorkOS token**: it seals a
    hand-off (60 seconds) holding the WorkOS user ID, email, whether WorkOS reports the
@@ -653,11 +654,12 @@ workshops off still lets its attendees out.
    `https://<host>/workshop/redeem?token=…` with `Cache-Control: no-store` and
    `Referrer-Policy: no-referrer`. Every refusal leaves one `callback refused: <reason>`
    line in the log (`logRefusal`); a failed exchange is not a refusal and logs its own
-   error line, `the code exchange failed; nothing handed off`. Without a code or without
-   the step 2 cookie, the browser goes back to
-   `https://<host in state>/workshop?sign-in=incomplete` with no record read. A failed
-   exchange goes there too, after the decision above (its one live record read, and the workshops check). Every other
-   refusal is a 404 that says the sign-in could not be completed (spec §3).
+   error line, `the code exchange failed; nothing handed off`. When the state unseals and
+   the request is on the auth host, a return without a code or without the step 2 cookie
+   goes back to `https://<host in state>/workshop?sign-in=incomplete` with no record
+   read. A failed exchange goes there too, after the decision above (its one live record
+   read, and the workshops check). Every other refusal is a 404 that says the sign-in
+   could not be completed (spec §3).
 4. **Tenant host, redeem** (`central-sign-in/redeem.ts`). The token must unseal and not
    have expired, the browser must hold the step 1 cookie and its value must hash to what
    the token carries, and the token must name this host; so far from the request alone.
