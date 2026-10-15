@@ -679,6 +679,10 @@ describe('a failed send', () => {
 })
 
 describe('the audit record is immutable', () => {
+  beforeEach(() => {
+    h.tenant = { _type: 'sponsorActivity', conferenceId: CONF }
+  })
+
   it('refuses activities.update on a sent-communication record', async () => {
     h.activityProbe = {
       activityType: 'email',

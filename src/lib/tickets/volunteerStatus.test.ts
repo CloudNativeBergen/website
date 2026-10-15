@@ -16,6 +16,7 @@ import {
   redeemedVolunteerEmails,
   joinVolunteerTicketStatus,
   fetchRedeemedVolunteerEmails,
+  __resetVolunteerTicketTypeCache,
 } from './volunteerStatus'
 
 function ticket(
@@ -41,6 +42,7 @@ const CONF = {
 beforeEach(() => {
   vi.clearAllMocks()
   __resetRedeemedCache()
+  __resetVolunteerTicketTypeCache()
 })
 
 describe('volunteerStatus', () => {
