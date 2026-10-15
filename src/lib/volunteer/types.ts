@@ -3,6 +3,7 @@ import type { ConferenceTheme } from '@/lib/branding/theme'
 export enum VolunteerStatus {
   PENDING = 'pending',
   APPROVED = 'approved',
+  CONFIRMED = 'confirmed',
   REJECTED = 'rejected',
 }
 
@@ -68,6 +69,7 @@ export interface Volunteer extends VolunteerInput {
     _type: 'reference'
     _ref: string
   }
+  confirmedAt?: string
 }
 
 export interface VolunteerWithConference extends Omit<

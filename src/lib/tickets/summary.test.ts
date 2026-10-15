@@ -48,7 +48,11 @@ vi.mock('./speakerStatus', async (importOriginal) => ({
   resolveSpeakerTicketType: h.resolveSpeakerTicketType,
 }))
 
-import { buildTicketSummary, type TicketSummaryReady } from './summary'
+import {
+  buildTicketSummary,
+  exportParticipants,
+  type TicketSummaryReady,
+} from './summary'
 import type { Conference } from '@/lib/conference/types'
 import type { EventTicket } from './types'
 
@@ -364,5 +368,42 @@ describe('stored codes on sponsors outside the public list', () => {
     expect(freeTicketAllocation.sponsors.status).toBe(
       'Redemptions of 100%-off sponsor codes.',
     )
+  })
+})
+
+describe('exportParticipants', () => {
+  it('excludes standalone non-admitting add-ons when workshopOnly is false and aligns isComp with isPaidTicket', async () => {
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 100,
+        category: 'Regular',
+        sum: '2500',
+        crm: crm('paid@example.com'),
+      }),
+      ticket({
+        id: 2,
+        order_id: 101,
+        category: 'Regular',
+        sum: '0',
+        crm: crm('free@example.com'),
+      }),
+      ticket({
+        id: 3,
+        order_id: 102,
+        category: 'Workshop upgrade',
+        sum: '500',
+        crm: crm('addon-only@example.com'),
+      }),
+    ])
+
+    const res = await exportParticipants(conference, false)
+
+    expect(res.map((p) => p.email)).toEqual([
+      'paid@example.com',
+      'free@example.com',
+    ])
+    expect(res.find((p) => p.email === 'paid@example.com')?.isComp).toBe(false)
+    expect(res.find((p) => p.email === 'free@example.com')?.isComp).toBe(true)
   })
 })

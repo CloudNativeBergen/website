@@ -131,6 +131,9 @@ const vol = vi.hoisted(() => ({
   recordVolunteerApprovalEmailSent: vi
     .fn()
     .mockResolvedValue({ success: true, error: null }),
+  confirmVolunteerAttendance: vi
+    .fn()
+    .mockResolvedValue({ success: true, error: null }),
 }))
 vi.mock('@/lib/email/volunteer', () => ({
   sendVolunteerApprovalEmail: vol.sendVolunteerApprovalEmail,
@@ -143,6 +146,7 @@ vi.mock('@/lib/volunteer/sanity', () => ({
   deleteVolunteer: vol.deleteVolunteer,
   createVolunteer: vi.fn(),
   recordVolunteerApprovalEmailSent: vol.recordVolunteerApprovalEmailSent,
+  confirmVolunteerAttendance: vol.confirmVolunteerAttendance,
 }))
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: vi.fn(),
@@ -155,6 +159,7 @@ import type { Context } from '@/server/trpc'
 import { registrationRouter } from './registration'
 import { workshopRouter } from './workshop'
 import { volunteerRouter } from './volunteer'
+import { mintVolunteerConfirmToken } from '@/lib/volunteer/token'
 
 const t = initTRPC.context<Context>().create()
 const ORG_A = 'org-A'
@@ -492,6 +497,33 @@ describe('volunteer mutations are conference-scoped (#730)', () => {
     expect(vol.getVolunteerById).not.toHaveBeenCalled()
   })
 
+  it('confirmAttendance refuses a token minted for another conference before reading', async () => {
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-B',
+      conferenceId: 'conf-B',
+      email: 'x@example.com',
+    })
+    await expect(
+      volunteer().confirmAttendance({ token }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(vol.getVolunteerById).not.toHaveBeenCalled()
+    expect(vol.confirmVolunteerAttendance).not.toHaveBeenCalled()
+  })
+
+  it('confirmAttendance refuses a foreign volunteer document even if token conference matches', async () => {
+    foreign('volunteer')
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-B',
+      conferenceId: CONF_A,
+      email: 'x@example.com',
+    })
+    await expect(
+      volunteer().confirmAttendance({ token }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(vol.getVolunteerById).not.toHaveBeenCalled()
+    expect(vol.confirmVolunteerAttendance).not.toHaveBeenCalled()
+  })
+
   it('our own volunteer still updates and deletes', async () => {
     owned('volunteer')
     await expect(
@@ -668,6 +700,7 @@ describe('the volunteer procedure surface is pinned (#858)', () => {
       'admin.sendEmail',
       'admin.update',
       'admin.updateStatus',
+      'confirmAttendance',
       'create',
     ])
   })

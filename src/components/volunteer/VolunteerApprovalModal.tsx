@@ -19,6 +19,55 @@ export interface VolunteerApprovalModalProps {
     ticketUrl?: string
     slackInviteUrl?: string
   }) => Promise<void>
+  onSaveLinks?: (links: {
+    ticketUrl: string
+    slackInviteUrl: string
+  }) => Promise<void>
+  isSavingLinks?: boolean
+}
+
+const LINKS_STORAGE_PREFIX = 'volunteer-links-'
+
+function readStoredVolunteerLinks(conferenceId?: string): {
+  ticketUrl?: string
+  slackInviteUrl?: string
+} {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(
+      `${LINKS_STORAGE_PREFIX}${conferenceId || 'default'}`,
+    )
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as {
+      ticketUrl?: unknown
+      slackInviteUrl?: unknown
+    }
+    return {
+      ticketUrl:
+        typeof parsed.ticketUrl === 'string' ? parsed.ticketUrl : undefined,
+      slackInviteUrl:
+        typeof parsed.slackInviteUrl === 'string'
+          ? parsed.slackInviteUrl
+          : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
+function writeStoredVolunteerLinks(
+  conferenceId: string | undefined,
+  links: { ticketUrl: string; slackInviteUrl: string },
+) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(
+      `${LINKS_STORAGE_PREFIX}${conferenceId || 'default'}`,
+      JSON.stringify(links),
+    )
+  } catch {
+    // Ignore storage quota / privacy mode errors
+  }
 }
 
 export function VolunteerApprovalModal({
@@ -26,13 +75,38 @@ export function VolunteerApprovalModal({
   onClose,
   volunteer,
   onSend,
+  onSaveLinks,
+  isSavingLinks = false,
 }: VolunteerApprovalModalProps) {
   const conf = volunteer.conference
-  const defaultTicketUrl = conf?.volunteerRegistrationLink || ''
-  const defaultSlackUrl = conf?.volunteerSlackInviteUrl || ''
+  const storedLinks = readStoredVolunteerLinks(conf?._id)
+  const serverTicketUrl = conf?.volunteerRegistrationLink || ''
+  const serverSlackUrl = conf?.volunteerSlackInviteUrl || ''
+  const defaultTicketUrl = serverTicketUrl || storedLinks.ticketUrl || ''
+  const defaultSlackUrl = serverSlackUrl || storedLinks.slackInviteUrl || ''
 
   const [ticketUrl, setTicketUrl] = useState(defaultTicketUrl)
   const [slackInviteUrl, setSlackInviteUrl] = useState(defaultSlackUrl)
+  const [savedServerLinks, setSavedServerLinks] = useState({
+    ticketUrl: serverTicketUrl,
+    slackInviteUrl: serverSlackUrl,
+  })
+
+  const updateTicketUrl = (value: string) => {
+    setTicketUrl(value)
+    writeStoredVolunteerLinks(conf?._id, {
+      ticketUrl: value,
+      slackInviteUrl,
+    })
+  }
+
+  const updateSlackInviteUrl = (value: string) => {
+    setSlackInviteUrl(value)
+    writeStoredVolunteerLinks(conf?._id, {
+      ticketUrl,
+      slackInviteUrl: value,
+    })
+  }
 
   const isHttpsUrl = (val: string) => {
     try {
@@ -53,6 +127,22 @@ export function VolunteerApprovalModal({
     trimmedSlack && !isHttpsUrl(trimmedSlack)
       ? 'Must be an absolute https:// URL'
       : null
+
+  const linksChangedFromServer =
+    trimmedTicket !== savedServerLinks.ticketUrl.trim() ||
+    trimmedSlack !== savedServerLinks.slackInviteUrl.trim()
+
+  const handleSaveLinksToServer = async () => {
+    if (!onSaveLinks || ticketError || slackError) return
+    await onSaveLinks({
+      ticketUrl: trimmedTicket,
+      slackInviteUrl: trimmedSlack,
+    })
+    setSavedServerLinks({
+      ticketUrl: trimmedTicket,
+      slackInviteUrl: trimmedSlack,
+    })
+  }
 
   const extractPlainText = (blocks: PortableTextBlock[]): string => {
     if (!Array.isArray(blocks)) return ''
@@ -81,13 +171,20 @@ export function VolunteerApprovalModal({
       )
     }
 
+    writeStoredVolunteerLinks(conf?._id, {
+      ticketUrl: trimmedTicket,
+      slackInviteUrl: trimmedSlack,
+    })
+
     const plainTextMessage = extractPlainText(data.message)
 
+    // Pass empty string "" when cleared so SendVolunteerEmailSchema transforms
+    // "" -> null and suppresses the conference fallback CTA button.
     await onSend({
       subject: data.subject,
       message: plainTextMessage,
-      ticketUrl: trimmedTicket || undefined,
-      slackInviteUrl: trimmedSlack || undefined,
+      ticketUrl: trimmedTicket,
+      slackInviteUrl: trimmedSlack,
     })
   }
 
@@ -119,12 +216,18 @@ export function VolunteerApprovalModal({
         slackInviteUrl,
       }}
       onAdditionalFieldsChange={(fields) => {
-        if (typeof fields.ticketUrl === 'string') {
-          setTicketUrl(fields.ticketUrl)
-        }
-        if (typeof fields.slackInviteUrl === 'string') {
-          setSlackInviteUrl(fields.slackInviteUrl)
-        }
+        const nextTicket =
+          typeof fields.ticketUrl === 'string' ? fields.ticketUrl : ticketUrl
+        const nextSlack =
+          typeof fields.slackInviteUrl === 'string'
+            ? fields.slackInviteUrl
+            : slackInviteUrl
+        setTicketUrl(nextTicket)
+        setSlackInviteUrl(nextSlack)
+        writeStoredVolunteerLinks(conf?._id, {
+          ticketUrl: nextTicket,
+          slackInviteUrl: nextSlack,
+        })
       }}
       initialValues={{
         subject: `Welcome to the ${confTitle} Volunteer Team!`,
@@ -146,7 +249,7 @@ export function VolunteerApprovalModal({
                   id="volunteer-ticket-link"
                   type="url"
                   value={ticketUrl}
-                  onChange={(e) => setTicketUrl(e.target.value)}
+                  onChange={(e) => updateTicketUrl(e.target.value)}
                   placeholder={
                     defaultTicketUrl ||
                     'Configure in Conference Settings or paste here'
@@ -177,7 +280,7 @@ export function VolunteerApprovalModal({
                   id="volunteer-slack-link"
                   type="url"
                   value={slackInviteUrl}
-                  onChange={(e) => setSlackInviteUrl(e.target.value)}
+                  onChange={(e) => updateSlackInviteUrl(e.target.value)}
                   placeholder={
                     defaultSlackUrl ||
                     'Configure in Conference Settings or paste here'
@@ -195,6 +298,21 @@ export function VolunteerApprovalModal({
                 </p>
               )}
             </div>
+
+            {onSaveLinks && linksChangedFromServer && (
+              <div className="flex items-center justify-end pt-1">
+                <button
+                  type="button"
+                  disabled={Boolean(ticketError || slackError) || isSavingLinks}
+                  onClick={handleSaveLinksToServer}
+                  className="text-xs font-medium text-brand-cloud-blue hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400"
+                >
+                  {isSavingLinks
+                    ? 'Saving to conference…'
+                    : 'Save links to conference'}
+                </button>
+              </div>
+            )}
           </div>
         ),
       }}
@@ -224,6 +342,7 @@ export function VolunteerApprovalModal({
               message={extractPlainText(message)}
               socialLinks={socialLinks}
               brandColor={emailBrandColor(conf?.theme)}
+              confirmUrl={`${eventUrl.replace(/\/$/, '')}/volunteer/confirm?token=preview`}
               registrationUrl={
                 !ticketError && trimmedTicket ? trimmedTicket : undefined
               }

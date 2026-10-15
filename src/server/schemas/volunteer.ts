@@ -56,6 +56,10 @@ export const DeleteVolunteerSchema = z.object({
   volunteerId: z.string(),
 })
 
+export const ConfirmVolunteerAttendanceSchema = z.object({
+  token: z.string().trim().min(1, 'Confirmation token is required'),
+})
+
 /**
  * Organizer edit of a volunteer's own detail fields (SE-4). Deliberately
  * EXCLUDES `status` (its own `updateStatus` mutation owns the review workflow),

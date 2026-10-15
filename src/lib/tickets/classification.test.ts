@@ -176,6 +176,50 @@ describe('classifyTicket', () => {
     })
   })
 
+  it('does not grant workshop to a speaker ticket when the selected Checkin additional is "- No"', () => {
+    expect(
+      classifyTicket(
+        ticket({
+          category: 'Speaker ticket',
+          sum: '0.00',
+          additionals: [
+            {
+              name: 'Will you attend the Monday workshops? - No',
+              value: '1',
+            },
+            {
+              name: 'Will you attend the Monday workshops? - Yes',
+              value: '0',
+            },
+          ],
+        }),
+        { speakerTicketTypeName: 'Speaker ticket' },
+      ).grantsWorkshop,
+    ).toBe(false)
+  })
+
+  it('grants workshop to a speaker ticket when "- Yes" is selected after an unselected option', () => {
+    expect(
+      classifyTicket(
+        ticket({
+          category: 'Speaker ticket',
+          sum: '0.00',
+          additionals: [
+            {
+              name: 'Will you attend the Monday workshops? - No',
+              value: '0',
+            },
+            {
+              name: 'Will you attend the Monday workshops? - Yes',
+              value: '1',
+            },
+          ],
+        }),
+        { speakerTicketTypeName: 'Speaker ticket' },
+      ).grantsWorkshop,
+    ).toBe(true)
+  })
+
   it('uses the DERIVED speaker type name, not only the historical literal', () => {
     // `findSpeakerTicketType` resolves whatever the tenant called its
     // invitation-gated type; a hardcoded 'Speaker ticket' would miss this.

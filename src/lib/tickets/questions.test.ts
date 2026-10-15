@@ -32,6 +32,13 @@ describe('ticket questions discovery & normalization', () => {
     expect(splitQuestionAndOption('Consent to Media Publication')).toEqual({
       questionPrompt: 'Consent to Media Publication',
     })
+
+    expect(
+      splitQuestionAndOption('Pre-conference - Monday workshops - Yes'),
+    ).toEqual({
+      questionPrompt: 'Pre-conference - Monday workshops',
+      optionText: 'Yes',
+    })
   })
 
   it('normalizes choice values', () => {
@@ -97,6 +104,24 @@ describe('ticket questions discovery & normalization', () => {
     expect(workshopQ.options).toContain('No')
   })
 
+  it('upgrades a question from text to choice when an earlier ticket had an empty value', () => {
+    const questions = discoverTicketQuestions([
+      {
+        additionals: [{ name: 'Dietary restrictions', value: '' }],
+      },
+      {
+        additionals: [
+          { name: 'Dietary restrictions - Vegan', value: '1' },
+          { name: 'Dietary restrictions - Gluten-free', value: '0' },
+        ],
+      },
+    ])
+
+    expect(questions).toHaveLength(1)
+    expect(questions[0].type).toBe('choice')
+    expect(questions[0].options).toEqual(['Vegan', 'Gluten-free'])
+  })
+
   it('preserves distinct prompt keys and does not collide on punctuation or non-ASCII', () => {
     const questions = discoverTicketQuestions([
       {
@@ -112,7 +137,7 @@ describe('ticket questions discovery & normalization', () => {
     expect(new Set(ids).size).toBe(3)
   })
 
-  it('resolves speaker answers accurately', () => {
+  it('resolves speaker answers accurately including multi-select choices', () => {
     const speaker1 = {
       additionals: [
         {
@@ -121,6 +146,14 @@ describe('ticket questions discovery & normalization', () => {
         },
         {
           name: 'Will you attend the speaker dinner? - Yes, I will attend',
+          value: '1',
+        },
+        {
+          name: 'Dietary restrictions - Vegan',
+          value: '1',
+        },
+        {
+          name: 'Dietary restrictions - Gluten-free',
           value: '1',
         },
       ],
@@ -139,12 +172,14 @@ describe('ticket questions discovery & normalization', () => {
     const questions = discoverTicketQuestions([speaker1, speaker2])
     const workshopQ = questions.find((q) => q.label === 'Monday workshops')!
     const dinnerQ = questions.find((q) => q.label === 'Speaker dinner')!
+    const dietQ = questions.find((q) => q.label === 'Dietary restrictions')!
     const companyQ = questions.find((q) => q.label === 'Company')!
 
     expect(resolveSpeakerAnswer(speaker1, workshopQ)).toBe('Yes')
     expect(resolveSpeakerAnswer(speaker2, workshopQ)).toBe('No')
     expect(resolveSpeakerAnswer(speaker1, dinnerQ)).toBe('Yes')
     expect(resolveSpeakerAnswer(speaker2, dinnerQ)).toBeNull()
+    expect(resolveSpeakerAnswer(speaker1, dietQ)).toBe('Vegan, Gluten-free')
     expect(resolveSpeakerAnswer(speaker1, companyQ)).toBe('Google Cloud')
   })
 })

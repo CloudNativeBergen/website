@@ -56,7 +56,8 @@ export async function getVolunteersByConference(
       approvalEmailSentBy->{
         _id,
         name
-      }
+      },
+      confirmedAt
     }`
 
     const volunteers = await clientRead.fetch<VolunteerWithConference[]>(
@@ -121,7 +122,8 @@ export async function getVolunteerById(
       approvalEmailSentBy->{
         _id,
         name
-      }
+      },
+      confirmedAt
     }`
 
     const volunteer = await clientRead.fetch<VolunteerWithConference | null>(
@@ -161,6 +163,27 @@ export async function recordVolunteerApprovalEmailSent(
   }
 }
 
+export async function confirmVolunteerAttendance(
+  volunteerId: string,
+  confirmedAt: string,
+): Promise<{ success: boolean; error: Error | null }> {
+  try {
+    await clientWrite
+      .patch(volunteerId)
+      .set({
+        status: VolunteerStatus.CONFIRMED,
+        confirmedAt,
+      })
+      .commit()
+    return { success: true, error: null }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error : new Error('Unknown error'),
+    }
+  }
+}
+
 export async function createVolunteer(
   data: VolunteerInput,
 ): Promise<{ volunteer: Volunteer | null; error: Error | null }> {
@@ -189,9 +212,10 @@ export async function updateVolunteerStatus(
   reviewNotes?: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
+    const now = new Date().toISOString()
     const updates: Record<string, unknown> = {
       status,
-      reviewedAt: new Date().toISOString(),
+      reviewedAt: now,
       reviewedBy: {
         _type: 'reference',
         _ref: reviewedBy,
@@ -202,7 +226,15 @@ export async function updateVolunteerStatus(
       updates.reviewNotes = reviewNotes
     }
 
-    await clientWrite.patch(volunteerId).set(updates).commit()
+    let patch = clientWrite.patch(volunteerId)
+    if (status === VolunteerStatus.CONFIRMED) {
+      updates.confirmedAt = now
+      patch = patch.set(updates)
+    } else {
+      patch = patch.set(updates).unset(['confirmedAt'])
+    }
+
+    await patch.commit()
     return { success: true, error: null }
   } catch (error) {
     return {

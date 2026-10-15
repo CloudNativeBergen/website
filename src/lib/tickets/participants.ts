@@ -107,12 +107,13 @@ export function tallyParticipants(
   let paidWorkshopParticipants = 0
   let freeWorkshopParticipants = 0
 
+  const compByTicket = new Map(classified.map(([t, c]) => [t, c.comp]))
   const workshopByEmail = new Map<string, typeof tickets>()
   for (const t of workshopTickets) {
     const e = emailOf(t)
     if (!e) {
-      const isComp = classified.find((x) => x[0] === t)?.[1].comp === true
-      if (!isComp) paidWorkshopParticipants++
+      const isPaid = compByTicket.get(t) === false
+      if (isPaid) paidWorkshopParticipants++
       else freeWorkshopParticipants++
       continue
     }
@@ -121,10 +122,7 @@ export function tallyParticipants(
   }
 
   for (const group of workshopByEmail.values()) {
-    const hasPaid = group.some((t) => {
-      const isComp = classified.find((x) => x[0] === t)?.[1].comp === true
-      return !isComp
-    })
+    const hasPaid = group.some((t) => compByTicket.get(t) === false)
     if (hasPaid) paidWorkshopParticipants++
     else freeWorkshopParticipants++
   }

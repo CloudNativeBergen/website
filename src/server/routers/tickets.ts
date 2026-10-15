@@ -38,6 +38,11 @@ import {
   searchTicketCandidates,
   joinSpeakerTicketStatus,
 } from '@/lib/tickets/speakerStatus'
+import {
+  fetchRedeemedVolunteerEmails,
+  joinVolunteerTicketStatus,
+} from '@/lib/tickets/volunteerStatus'
+import { getVolunteersByConference } from '@/lib/volunteer/sanity'
 import { discoverTicketQuestions } from '@/lib/tickets/questions'
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { buildTicketSummary, exportParticipants } from '@/lib/tickets/summary'
@@ -845,6 +850,38 @@ export const ticketsRouter = router({
       return {
         statuses: joinSpeakerTicketStatus(inputs, redeemed, conference),
         questions,
+      }
+    }),
+
+    /**
+     * Per-volunteer: have they claimed their volunteer ticket?
+     *
+     * Shares the same 30s-memoized `fetchEventTicketCandidates` cache as
+     * `speakerTicketStatus` and `searchEventTickets`, joined in memory against
+     * this conference's volunteers.
+     */
+    volunteerTicketStatus: ticketingAdminProcedure.query(async () => {
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (error || !conference?._id) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Conference not found',
+        })
+      }
+
+      const { volunteers, error: volunteersError } =
+        await getVolunteersByConference(conference._id)
+      if (volunteersError) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Unable to read conference volunteers',
+          cause: volunteersError,
+        })
+      }
+
+      const redeemed = await fetchRedeemedVolunteerEmails(conference)
+      return {
+        statuses: joinVolunteerTicketStatus(volunteers, redeemed, conference),
       }
     }),
 

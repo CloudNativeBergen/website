@@ -58,7 +58,7 @@ const mockVolunteers: VolunteerWithConference[] = [
     availability: 'Anytime during the event days',
     preferredTasks: ['Stage Assistant', 'Audio/Video Help'],
     tshirtSize: TShirtSize.L,
-    status: VolunteerStatus.APPROVED,
+    status: VolunteerStatus.CONFIRMED,
     submittedAt: '2026-05-20T14:30:00Z',
     reviewedAt: '2026-05-22T09:00:00Z',
     reviewedBy: {
@@ -71,6 +71,7 @@ const mockVolunteers: VolunteerWithConference[] = [
       _id: 'org-1',
       name: 'Organizer Jane',
     },
+    confirmedAt: '2026-05-22T10:15:00Z',
     conference: mockConference,
   },
   {
@@ -118,9 +119,36 @@ const mockVolunteers: VolunteerWithConference[] = [
   },
 ]
 
+const mockTicketStatuses = {
+  statuses: [
+    {
+      volunteerId: 'vol-1',
+      state: 'not-invited',
+    },
+    {
+      volunteerId: 'vol-2',
+      state: 'redeemed',
+      orderId: 5001,
+      category: 'Volunteer Ticket',
+      manageUrl: 'https://app.checkin.no/event/12345/order/5001',
+    },
+    {
+      volunteerId: 'vol-3',
+      state: 'not-invited',
+    },
+    {
+      volunteerId: 'vol-4',
+      state: 'not-invited',
+    },
+  ],
+}
+
 const handlers = [
   http.get('/api/trpc/volunteer.admin.list', () =>
     HttpResponse.json({ result: { data: mockVolunteers } }),
+  ),
+  http.get('/api/trpc/tickets.admin.volunteerTicketStatus', () =>
+    HttpResponse.json({ result: { data: mockTicketStatuses } }),
   ),
   http.get('/api/trpc/volunteer.admin.getById', ({ request }) => {
     const url = new URL(request.url)
@@ -146,6 +174,9 @@ const handlers = [
       result: { data: { success: true, emailId: 'em_test123' } },
     }),
   ),
+  http.post('/api/trpc/conference.updateVolunteerLinks', () =>
+    HttpResponse.json({ result: { data: { success: true } } }),
+  ),
   http.post('/api/trpc/volunteer.admin.delete', () =>
     HttpResponse.json({ result: { data: { success: true } } }),
   ),
@@ -163,7 +194,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Modernized Volunteer Management admin page with responsive master-detail layout, search, task badges, and integrated approval email modal.',
+          'Modernized Volunteer Management admin page with responsive master-detail layout, search, task badges, ticket claim status, and integrated approval email modal.',
       },
     },
   },
@@ -218,6 +249,11 @@ export const Empty: Story = {
       handlers: [
         http.get('/api/trpc/volunteer.admin.list', () =>
           HttpResponse.json({ result: { data: [] } }),
+        ),
+        http.get('/api/trpc/tickets.admin.volunteerTicketStatus', () =>
+          HttpResponse.json({
+            result: { data: { available: true, statuses: [] } },
+          }),
         ),
       ],
     },

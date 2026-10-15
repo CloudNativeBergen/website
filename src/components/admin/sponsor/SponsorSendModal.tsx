@@ -521,18 +521,13 @@ export function SponsorInviteLinkPrompt({
 
 /** What a screen reader hears for a code chip: the code AND its state. */
 function codeChipLabel(option: DiscountCodeOption): string {
-  if (option.linkedTo) return `${option.code} (linked to ${option.linkedTo})`
-  if (option.attributedTo)
-    return `${option.code}, now counted for ${option.attributedTo}; sending moves it to this sponsor`
   if (option.linked) return `${option.code}, already linked to this sponsor`
   return option.code
 }
 
 /**
- * The Codes: line of a discount send (#1262) — the conference's discount
- * codes from the ticket provider as toggles, the sponsor's own preselected.
- * A code stored on another sponsor is shown but cannot be chosen, with the
- * reason, so the organizer is not left wondering where it went.
+ * The Codes: line of a discount send (#1262) — the sponsor's discount codes
+ * from the ticket provider as toggles, with linked codes preselected.
  */
 export function SponsorDiscountCodePicker({
   options,

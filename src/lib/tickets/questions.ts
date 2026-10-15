@@ -56,7 +56,7 @@ export function splitQuestionAndOption(rawName: string): {
   questionPrompt: string
   optionText?: string
 } {
-  const delimiterIndex = rawName.indexOf(' - ')
+  const delimiterIndex = rawName.lastIndexOf(' - ')
   if (delimiterIndex !== -1) {
     const questionPrompt = rawName.slice(0, delimiterIndex).trim()
     const optionText = rawName.slice(delimiterIndex + 3).trim()
@@ -132,19 +132,27 @@ export function discoverTicketQuestions(
         if (!a.name || !a.name.trim()) continue
         const { questionPrompt, optionText } = splitQuestionAndOption(a.name)
         const id = `additional:${questionPrompt.trim().toLowerCase()}`
+        const isChoice =
+          Boolean(optionText) || a.value === '1' || a.value === '0'
 
         const existing = discoveredMap.get(id)
         if (existing) {
-          if (optionText && existing.type === 'choice') {
+          if (isChoice && existing.type === 'text') {
+            existing.type = 'choice'
+            if (!optionText && !existing.options) {
+              existing.options = ['Yes', 'No']
+            }
+          }
+          if (optionText) {
             const normalizedOpt =
               normalizeChoiceValue(optionText, '1') || optionText
-            if (existing.options && !existing.options.includes(normalizedOpt)) {
+            if (!existing.options) {
+              existing.options = [normalizedOpt]
+            } else if (!existing.options.includes(normalizedOpt)) {
               existing.options.push(normalizedOpt)
             }
           }
         } else {
-          const isChoice =
-            Boolean(optionText) || a.value === '1' || a.value === '0'
           const options: string[] = []
           if (optionText) {
             const normalizedOpt =
@@ -206,15 +214,17 @@ export function resolveSpeakerAnswer(
     if (!status.additionals) return null
 
     // Find all additionals matching this questionPrompt
+    const matchedAnswers: string[] = []
     for (const a of status.additionals) {
       const { questionPrompt, optionText } = splitQuestionAndOption(a.name)
       if (questionPrompt.toLowerCase() === question.rawKey.toLowerCase()) {
         const normalized = normalizeChoiceValue(optionText, a.value)
-        if (normalized) {
-          return normalized
+        if (normalized && !matchedAnswers.includes(normalized)) {
+          matchedAnswers.push(normalized)
         }
       }
     }
+    return matchedAnswers.length > 0 ? matchedAnswers.join(', ') : null
   }
 
   return null

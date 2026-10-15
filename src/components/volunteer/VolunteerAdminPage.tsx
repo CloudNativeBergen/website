@@ -16,7 +16,12 @@ import {
   ArrowLeftIcon,
   PaperAirplaneIcon,
   ExclamationTriangleIcon,
+  TicketIcon,
+  MinusCircleIcon,
+  QuestionMarkCircleIcon,
+  ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline'
+import { CheckBadgeIcon } from '@heroicons/react/24/solid'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { AdminPageHeader } from '@/components/admin'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
@@ -27,6 +32,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { TableToolbar } from '@/components/DataTable/TableToolbar'
 import { useNotificationSafe } from '@/components/admin/NotificationProvider'
+import type { VolunteerTicketStatus } from '@/lib/tickets/volunteerStatus'
 
 const volunteerStatusConfig: Record<
   VolunteerStatus,
@@ -37,7 +43,52 @@ const volunteerStatusConfig: Record<
 > = {
   [VolunteerStatus.PENDING]: { color: 'yellow', icon: ClockIcon },
   [VolunteerStatus.APPROVED]: { color: 'green', icon: CheckCircleIcon },
+  [VolunteerStatus.CONFIRMED]: { color: 'blue', icon: CheckBadgeIcon },
   [VolunteerStatus.REJECTED]: { color: 'red', icon: XCircleIcon },
+}
+
+const ticketStatusConfig: Record<
+  VolunteerTicketStatus['state'],
+  {
+    label: string
+    color: BadgeColor
+    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+    className?: string
+  }
+> = {
+  redeemed: {
+    label: 'Ticket Claimed',
+    color: 'green',
+    icon: CheckBadgeIcon,
+  },
+  invited: {
+    label: 'Ticket Invited',
+    color: 'yellow',
+    icon: ClockIcon,
+  },
+  'not-invited': {
+    label: 'Ticket Not Invited',
+    color: 'gray',
+    icon: MinusCircleIcon,
+  },
+  unknown: {
+    label: 'Ticket Unknown',
+    color: 'gray',
+    icon: QuestionMarkCircleIcon,
+    className:
+      'border border-dashed border-gray-400 bg-transparent dark:border-gray-500',
+  },
+}
+
+type TicketFilterState =
+  'all' | 'redeemed' | 'invited' | 'not-invited' | 'unclaimed'
+
+const TICKET_FILTER_LABELS: Record<TicketFilterState, string> = {
+  all: 'All ticket states',
+  redeemed: 'Claimed',
+  invited: 'Invited (Unclaimed)',
+  'not-invited': 'Not invited',
+  unclaimed: 'Not claimed (Chase list)',
 }
 
 export default function VolunteerAdminPage() {
@@ -49,6 +100,7 @@ export default function VolunteerAdminPage() {
   const [statusFilter, setStatusFilter] = useState<Set<VolunteerStatus>>(
     new Set(),
   )
+  const [ticketFilter, setTicketFilter] = useState<TicketFilterState>('all')
   const [emailModalOpen, setEmailModalOpen] = useState(false)
   const [emailModalVolunteer, setEmailModalVolunteer] =
     useState<VolunteerWithConference | null>(null)
@@ -59,6 +111,11 @@ export default function VolunteerAdminPage() {
     null,
   )
   const [editModalOpen, setEditModalOpen] = useState(false)
+
+  const selectVolunteer = (id: string | null) => {
+    setSelectedVolunteerId(id)
+    setReviewNotes('')
+  }
 
   const {
     data: volunteers,
@@ -75,7 +132,63 @@ export default function VolunteerAdminPage() {
     { enabled: !!selectedVolunteerId },
   )
 
+  const ticketStatusQuery = api.tickets.admin.volunteerTicketStatus.useQuery(
+    undefined,
+    { retry: false, staleTime: 30_000 },
+  )
+
+  const ticketStatuses = useMemo<Record<string, VolunteerTicketStatus>>(() => {
+    if (ticketStatusQuery.isError && volunteers) {
+      return Object.fromEntries(
+        volunteers.map((v) => [
+          v._id,
+          { volunteerId: v._id, state: 'unknown' as const },
+        ]),
+      )
+    }
+    return Object.fromEntries(
+      (ticketStatusQuery.data?.statuses ?? []).map((s) => [s.volunteerId, s]),
+    )
+  }, [ticketStatusQuery.data, ticketStatusQuery.isError, volunteers])
+
   const utils = api.useUtils()
+
+  const updateVolunteerLinks = api.conference.updateVolunteerLinks.useMutation({
+    onSuccess: async (_, variables) => {
+      await Promise.all([
+        utils.volunteer.admin.list.invalidate(),
+        selectedVolunteerId
+          ? utils.volunteer.admin.getById.invalidate({
+              id: selectedVolunteerId,
+            })
+          : Promise.resolve(),
+      ])
+      setEmailModalVolunteer((prev) =>
+        prev
+          ? {
+              ...prev,
+              conference: prev.conference
+                ? {
+                    ...prev.conference,
+                    ...(variables.volunteerRegistrationLink !== undefined
+                      ? {
+                          volunteerRegistrationLink:
+                            variables.volunteerRegistrationLink || undefined,
+                        }
+                      : {}),
+                    ...(variables.volunteerSlackInviteUrl !== undefined
+                      ? {
+                          volunteerSlackInviteUrl:
+                            variables.volunteerSlackInviteUrl || undefined,
+                        }
+                      : {}),
+                  }
+                : prev.conference,
+            }
+          : null,
+      )
+    },
+  })
 
   const updateStatus = api.volunteer.admin.updateStatus.useMutation({
     onSuccess: async (_, variables) => {
@@ -108,6 +221,7 @@ export default function VolunteerAdminPage() {
       setEmailModalVolunteer(null)
       await Promise.all([
         utils.volunteer.admin.list.invalidate(),
+        utils.tickets.admin.volunteerTicketStatus.invalidate(),
         variables.volunteerId
           ? utils.volunteer.admin.getById.invalidate({
               id: variables.volunteerId,
@@ -140,7 +254,7 @@ export default function VolunteerAdminPage() {
           : Promise.resolve(),
       ])
       if (selectedVolunteerId === variables.volunteerId) {
-        setSelectedVolunteerId(null)
+        selectVolunteer(null)
       }
       setDeleteVolunteerId(null)
       notify?.showNotification({
@@ -162,6 +276,21 @@ export default function VolunteerAdminPage() {
     return volunteers.filter((v) => {
       if (statusFilter.size > 0 && !statusFilter.has(v.status)) {
         return false
+      }
+      if (ticketFilter !== 'all') {
+        const ts = ticketStatuses[v._id]
+        if (!ts) return false
+        if (ticketFilter === 'unclaimed') {
+          if (
+            (v.status !== VolunteerStatus.APPROVED &&
+              v.status !== VolunteerStatus.CONFIRMED) ||
+            (ts.state !== 'invited' && ts.state !== 'not-invited')
+          ) {
+            return false
+          }
+        } else if (ts.state !== ticketFilter) {
+          return false
+        }
       }
       if (searchQuery.trim()) {
         const query = searchQuery.trim().toLowerCase()
@@ -189,20 +318,38 @@ export default function VolunteerAdminPage() {
       }
       return true
     })
-  }, [volunteers, statusFilter, searchQuery])
+  }, [volunteers, statusFilter, ticketFilter, ticketStatuses, searchQuery])
 
   const stats = useMemo(() => {
-    if (!volunteers) return { total: 0, pending: 0, approved: 0, rejected: 0 }
+    if (!volunteers)
+      return {
+        total: 0,
+        pending: 0,
+        approved: 0,
+        confirmed: 0,
+        rejected: 0,
+        claimed: 0,
+      }
+    const claimed = volunteers.filter(
+      (v) => ticketStatuses[v._id]?.state === 'redeemed',
+    ).length
     return {
       total: volunteers.length,
       pending: volunteers.filter((v) => v.status === VolunteerStatus.PENDING)
         .length,
-      approved: volunteers.filter((v) => v.status === VolunteerStatus.APPROVED)
-        .length,
+      approved: volunteers.filter(
+        (v) =>
+          v.status === VolunteerStatus.APPROVED ||
+          v.status === VolunteerStatus.CONFIRMED,
+      ).length,
+      confirmed: volunteers.filter(
+        (v) => v.status === VolunteerStatus.CONFIRMED,
+      ).length,
       rejected: volunteers.filter((v) => v.status === VolunteerStatus.REJECTED)
         .length,
+      claimed,
     }
-  }, [volunteers])
+  }, [volunteers, ticketStatuses])
 
   const handleStatusUpdate = async (status: VolunteerStatus) => {
     if (!selectedVolunteerId) return
@@ -219,6 +366,29 @@ export default function VolunteerAdminPage() {
     setEmailModalOpen(true)
   }
 
+  const handleSaveVolunteerLinks = async (links: {
+    ticketUrl: string
+    slackInviteUrl: string
+  }) => {
+    try {
+      await updateVolunteerLinks.mutateAsync({
+        volunteerRegistrationLink: links.ticketUrl.trim() || null,
+        volunteerSlackInviteUrl: links.slackInviteUrl.trim() || null,
+      })
+      notify?.showNotification({
+        type: 'success',
+        title: 'Volunteer links saved to conference',
+      })
+    } catch (err) {
+      notify?.showNotification({
+        type: 'error',
+        title: 'Failed to save volunteer links',
+        message: err instanceof Error ? err.message : String(err),
+      })
+      throw err
+    }
+  }
+
   const handleSendApprovalEmail = async (data: {
     subject: string
     message: string
@@ -227,8 +397,35 @@ export default function VolunteerAdminPage() {
   }) => {
     if (!emailModalVolunteer) return
 
-    // If volunteer is not yet approved (pending or rejected), approve them first
-    if (emailModalVolunteer.status !== VolunteerStatus.APPROVED) {
+    // Auto-persist non-empty links to the conference record if changed
+    const conf = emailModalVolunteer.conference
+    const nextTicket = data.ticketUrl?.trim() ?? ''
+    const nextSlack = data.slackInviteUrl?.trim() ?? ''
+    const shouldSaveTicket =
+      nextTicket.length > 0 &&
+      nextTicket !== (conf?.volunteerRegistrationLink ?? '')
+    const shouldSaveSlack =
+      nextSlack.length > 0 &&
+      nextSlack !== (conf?.volunteerSlackInviteUrl ?? '')
+
+    if (shouldSaveTicket || shouldSaveSlack) {
+      try {
+        await updateVolunteerLinks.mutateAsync({
+          ...(shouldSaveTicket
+            ? { volunteerRegistrationLink: nextTicket }
+            : {}),
+          ...(shouldSaveSlack ? { volunteerSlackInviteUrl: nextSlack } : {}),
+        })
+      } catch {
+        // Best-effort auto-save; do not block sending the approval email
+      }
+    }
+
+    // If volunteer is not yet approved or confirmed (pending or rejected), approve them first
+    if (
+      emailModalVolunteer.status !== VolunteerStatus.APPROVED &&
+      emailModalVolunteer.status !== VolunteerStatus.CONFIRMED
+    ) {
       await updateStatus.mutateAsync({
         volunteerId: emailModalVolunteer._id,
         status: VolunteerStatus.APPROVED,
@@ -254,6 +451,10 @@ export default function VolunteerAdminPage() {
     await deleteVolunteer.mutateAsync({ volunteerId: deleteVolunteerId })
   }
 
+  const selectedTicketStatus = selectedVolunteer
+    ? ticketStatuses[selectedVolunteer._id]
+    : undefined
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -277,6 +478,16 @@ export default function VolunteerAdminPage() {
             color: 'green',
           },
           {
+            value: stats.confirmed,
+            label: 'Confirmed',
+            color: 'blue',
+          },
+          {
+            value: ticketStatusQuery.isLoading ? '…' : stats.claimed,
+            label: 'Tickets Claimed',
+            color: 'blue',
+          },
+          {
             value: stats.rejected,
             label: 'Rejected',
             color: 'red',
@@ -288,10 +499,13 @@ export default function VolunteerAdminPage() {
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search volunteers by name, email, task..."
-        showClearButton={Boolean(searchQuery || statusFilter.size > 0)}
+        showClearButton={Boolean(
+          searchQuery || statusFilter.size > 0 || ticketFilter !== 'all',
+        )}
         onClear={() => {
           setSearchQuery('')
           setStatusFilter(new Set())
+          setTicketFilter('all')
         }}
         resultCount={filteredVolunteers.length}
         totalCount={volunteers?.length}
@@ -315,6 +529,24 @@ export default function VolunteerAdminPage() {
               {status}
             </FilterOption>
           ))}
+        </FilterDropdown>
+
+        <FilterDropdown
+          label="Ticket"
+          activeCount={ticketFilter !== 'all' ? 1 : 0}
+        >
+          {(Object.keys(TICKET_FILTER_LABELS) as TicketFilterState[]).map(
+            (state) => (
+              <FilterOption
+                key={state}
+                type="radio"
+                checked={ticketFilter === state}
+                onClick={() => setTicketFilter(state)}
+              >
+                {TICKET_FILTER_LABELS[state]}
+              </FilterOption>
+            ),
+          )}
         </FilterDropdown>
       </TableToolbar>
 
@@ -368,11 +600,14 @@ export default function VolunteerAdminPage() {
                   action={
                     volunteers &&
                     volunteers.length > 0 &&
-                    (statusFilter.size > 0 || searchQuery) ? (
+                    (statusFilter.size > 0 ||
+                      ticketFilter !== 'all' ||
+                      searchQuery) ? (
                       <AdminButton
                         onClick={() => {
                           setSearchQuery('')
                           setStatusFilter(new Set())
+                          setTicketFilter('all')
                         }}
                         size="sm"
                       >
@@ -386,17 +621,27 @@ export default function VolunteerAdminPage() {
                 filteredVolunteers.map((volunteer) => {
                   const isSelected = selectedVolunteerId === volunteer._id
                   const statusConf = volunteerStatusConfig[volunteer.status]
+                  const ticketStatus = ticketStatuses[volunteer._id]
+                  const showTicketBadge =
+                    ticketStatus &&
+                    (volunteer.status === VolunteerStatus.APPROVED ||
+                      volunteer.status === VolunteerStatus.CONFIRMED ||
+                      ticketStatus.state === 'redeemed' ||
+                      ticketStatus.state === 'invited')
+                  const ticketConf = showTicketBadge
+                    ? ticketStatusConfig[ticketStatus.state]
+                    : null
 
                   return (
                     <div
                       key={volunteer._id}
                       role="button"
                       tabIndex={0}
-                      onClick={() => setSelectedVolunteerId(volunteer._id)}
+                      onClick={() => selectVolunteer(volunteer._id)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
-                          setSelectedVolunteerId(volunteer._id)
+                          selectVolunteer(volunteer._id)
                         }
                       }}
                       className={`cursor-pointer rounded-lg border p-4 text-left transition-all ${
@@ -428,11 +673,21 @@ export default function VolunteerAdminPage() {
                           </div>
                         </div>
 
-                        <StatusBadge
-                          label={volunteer.status}
-                          color={statusConf.color}
-                          icon={statusConf.icon}
-                        />
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <StatusBadge
+                            label={volunteer.status}
+                            color={statusConf.color}
+                            icon={statusConf.icon}
+                          />
+                          {ticketConf && (
+                            <StatusBadge
+                              label={ticketConf.label}
+                              color={ticketConf.color}
+                              icon={ticketConf.icon}
+                              className={ticketConf.className}
+                            />
+                          )}
+                        </div>
                       </div>
 
                       <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-gray-700/50 dark:text-gray-400">
@@ -463,7 +718,7 @@ export default function VolunteerAdminPage() {
           <div className="mb-3 flex items-center justify-between lg:hidden">
             <button
               type="button"
-              onClick={() => setSelectedVolunteerId(null)}
+              onClick={() => selectVolunteer(null)}
               className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-cloud-blue hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
               <ArrowLeftIcon className="h-4 w-4" />
@@ -484,7 +739,7 @@ export default function VolunteerAdminPage() {
               {/* Header & Main Actions */}
               <div className="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-start sm:justify-between dark:border-gray-700">
                 <div>
-                  <div className="flex min-w-0 flex-wrap items-center gap-3">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <h2 className="text-xl font-bold break-words text-gray-900 dark:text-white">
                       {selectedVolunteer.name}
                     </h2>
@@ -497,6 +752,28 @@ export default function VolunteerAdminPage() {
                         volunteerStatusConfig[selectedVolunteer.status].icon
                       }
                     />
+                    {selectedTicketStatus &&
+                      (selectedVolunteer.status === VolunteerStatus.APPROVED ||
+                        selectedVolunteer.status ===
+                          VolunteerStatus.CONFIRMED ||
+                        selectedTicketStatus.state === 'redeemed' ||
+                        selectedTicketStatus.state === 'invited') && (
+                        <StatusBadge
+                          label={
+                            ticketStatusConfig[selectedTicketStatus.state].label
+                          }
+                          color={
+                            ticketStatusConfig[selectedTicketStatus.state].color
+                          }
+                          icon={
+                            ticketStatusConfig[selectedTicketStatus.state].icon
+                          }
+                          className={
+                            ticketStatusConfig[selectedTicketStatus.state]
+                              .className
+                          }
+                        />
+                      )}
                   </div>
                   <p className="mt-1 text-sm text-gray-500 capitalize dark:text-gray-400">
                     {selectedVolunteer.occupation || 'Volunteer application'}
@@ -680,27 +957,77 @@ export default function VolunteerAdminPage() {
                         &quot;{selectedVolunteer.reviewNotes}&quot;
                       </p>
                     )}
-                    {selectedVolunteer.status === VolunteerStatus.APPROVED && (
-                      <div className="pt-2">
-                        {selectedVolunteer.approvalEmailSentAt ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
-                            <CheckCircleIcon className="h-4 w-4" />
-                            Approval email sent on{' '}
-                            {formatDateTimeSafe(
-                              selectedVolunteer.approvalEmailSentAt,
+                    {(selectedVolunteer.status === VolunteerStatus.APPROVED ||
+                      selectedVolunteer.status ===
+                        VolunteerStatus.CONFIRMED) && (
+                      <div className="space-y-1.5 pt-2">
+                        <div>
+                          {selectedVolunteer.approvalEmailSentAt ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
+                              <CheckCircleIcon className="h-4 w-4" />
+                              Approval email sent on{' '}
+                              {formatDateTimeSafe(
+                                selectedVolunteer.approvalEmailSentAt,
+                              )}
+                              {selectedVolunteer.approvalEmailSentBy && (
+                                <>
+                                  {' '}
+                                  by{' '}
+                                  {selectedVolunteer.approvalEmailSentBy.name}
+                                </>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                              <ClockIcon className="h-4 w-4" />
+                              Approval email has not been sent yet
+                            </span>
+                          )}
+                        </div>
+                        {selectedVolunteer.confirmedAt && (
+                          <div>
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 dark:text-blue-400">
+                              <CheckBadgeIcon className="h-4 w-4" />
+                              Confirmed attendance on{' '}
+                              {formatDateTimeSafe(
+                                selectedVolunteer.confirmedAt,
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {selectedTicketStatus && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {selectedTicketStatus.state === 'redeemed' ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
+                                <TicketIcon className="h-4 w-4" />
+                                Volunteer ticket claimed
+                                {selectedTicketStatus.category
+                                  ? ` (${selectedTicketStatus.category})`
+                                  : ''}
+                              </span>
+                            ) : selectedTicketStatus.state === 'unknown' ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                                <QuestionMarkCircleIcon className="h-4 w-4" />
+                                Ticket claim status unavailable
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                                <TicketIcon className="h-4 w-4" />
+                                Volunteer ticket not yet claimed
+                              </span>
                             )}
-                            {selectedVolunteer.approvalEmailSentBy && (
-                              <>
-                                {' '}
-                                by {selectedVolunteer.approvalEmailSentBy.name}
-                              </>
+                            {selectedTicketStatus.manageUrl && (
+                              <a
+                                href={selectedTicketStatus.manageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-medium text-brand-cloud-blue hover:underline dark:text-blue-400"
+                              >
+                                View Ticket Order
+                                <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+                              </a>
                             )}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-                            <ClockIcon className="h-4 w-4" />
-                            Approval email has not been sent yet
-                          </span>
+                          </div>
                         )}
                       </div>
                     )}
@@ -769,7 +1096,8 @@ export default function VolunteerAdminPage() {
                   </div>
                 )}
 
-                {selectedVolunteer.status === VolunteerStatus.APPROVED && (
+                {(selectedVolunteer.status === VolunteerStatus.APPROVED ||
+                  selectedVolunteer.status === VolunteerStatus.CONFIRMED) && (
                   <div className="flex flex-wrap items-center gap-3">
                     <AdminButton
                       onClick={() => handleOpenApprovalModal(selectedVolunteer)}
@@ -837,6 +1165,8 @@ export default function VolunteerAdminPage() {
           }}
           volunteer={emailModalVolunteer}
           onSend={handleSendApprovalEmail}
+          onSaveLinks={handleSaveVolunteerLinks}
+          isSavingLinks={updateVolunteerLinks.isPending}
         />
       )}
 

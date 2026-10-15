@@ -344,37 +344,77 @@ export function classifyTicket(
       let granted =
         workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted'
       if (isSpeakerType) {
-        const fieldMatch = ticket.fields?.find(
-          (f) =>
-            f.key.toLowerCase().includes('monday') ||
-            f.key.toLowerCase().includes('workshop'),
-        )
-        const additionalMatch = ticket.additionals?.find(
-          (a) =>
-            a.name.toLowerCase().includes('monday') ||
-            a.name.toLowerCase().includes('workshop'),
-        )
-        const matched = fieldMatch?.value || additionalMatch?.value
+        const fieldMatches =
+          ticket.fields?.filter(
+            (f) =>
+              f.key.toLowerCase().includes('monday') ||
+              f.key.toLowerCase().includes('workshop'),
+          ) ?? []
+        const additionalMatches =
+          ticket.additionals?.filter(
+            (a) =>
+              a.name.toLowerCase().includes('monday') ||
+              a.name.toLowerCase().includes('workshop'),
+          ) ?? []
 
-        if (matched) {
-          const val = matched.toLowerCase().trim()
-          // Additionals store the multiple choice answer *in the name*, and the value is "1".
-          // Example: name: "Will you attend the Monday workshops? - Yes", value: "1"
+        granted = false
+
+        for (const f of fieldMatches) {
+          const val = (f.value ?? '').toLowerCase().trim()
+          const isNegative = val.includes('no') || val.includes('nei')
           if (
-            additionalMatch &&
-            (additionalMatch.name.toLowerCase().includes('yes') ||
-              additionalMatch.name.toLowerCase().includes('ja')) &&
-            val === '1'
+            !isNegative &&
+            (val.includes('yes') ||
+              val.includes('ja') ||
+              ['true', '1', 'on', 'checked', 'ok', 'y'].some((t) => val === t))
           ) {
             granted = true
-          } else {
-            granted =
+            break
+          }
+        }
+
+        if (!granted) {
+          for (const a of additionalMatches) {
+            const val = (a.value ?? '').toLowerCase().trim()
+            const isSelected =
               val.includes('yes') ||
               val.includes('ja') ||
               ['true', '1', 'on', 'checked', 'ok', 'y'].some((t) => val === t)
+            if (!isSelected) continue
+
+            // Additionals store multiple-choice answers in the name ("Prompt - Option") with value "1"
+            const dashIdx = a.name.lastIndexOf(' - ')
+            if (dashIdx !== -1) {
+              const optionSuffix = a.name
+                .slice(dashIdx + 3)
+                .toLowerCase()
+                .trim()
+              const isAffirmativeOption =
+                optionSuffix.includes('yes') || optionSuffix.includes('ja')
+              const isNegativeOption =
+                optionSuffix.includes('no') || optionSuffix.includes('nei')
+              if (isAffirmativeOption && !isNegativeOption) {
+                granted = true
+                break
+              }
+            } else {
+              const nameLower = a.name.toLowerCase()
+              const isNegativeVal = val.includes('no') || val.includes('nei')
+              if (
+                !isNegativeVal &&
+                (val.includes('yes') ||
+                  val.includes('ja') ||
+                  ['true', '1', 'on', 'checked', 'ok', 'y'].some(
+                    (t) => val === t,
+                  ) ||
+                  nameLower.includes('yes') ||
+                  nameLower.includes('ja'))
+              ) {
+                granted = true
+                break
+              }
+            }
           }
-        } else {
-          granted = false // No explicitly declared intent means best-effort/no guaranteed seat
         }
       }
       return granted

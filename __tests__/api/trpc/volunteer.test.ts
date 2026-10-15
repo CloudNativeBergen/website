@@ -34,6 +34,9 @@ vi.mock('@/lib/volunteer/sanity', () => ({
   recordVolunteerApprovalEmailSent: vi
     .fn()
     .mockResolvedValue({ success: true, error: null }),
+  confirmVolunteerAttendance: vi
+    .fn()
+    .mockResolvedValue({ success: true, error: null }),
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({

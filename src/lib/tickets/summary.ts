@@ -230,10 +230,12 @@ export async function exportParticipants(
 
   const addGroup = (group: typeof classified) => {
     const grantsWorkshop = group.some((g) => g.class.grantsWorkshop)
+    const admitsConference = group.some((g) => g.class.admits)
     if (workshopOnly && !grantsWorkshop) return
+    if (!workshopOnly && !admitsConference) return
 
-    // Paid if ANY ticket in their bundle is not a comp
-    const isComp = group.every((g) => g.class.comp === true)
+    // Paid if ANY ticket in their bundle has comp === false (matching isPaidTicket)
+    const isComp = !group.some((g) => g.class.comp === false)
 
     // Deduplicate categories in case they bought 5 of the same ticket
     const uniqueCategories = Array.from(

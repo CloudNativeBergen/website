@@ -11,6 +11,7 @@ import {
   UpdateVolunteerDetailsSchema,
   SendVolunteerEmailSchema,
   DeleteVolunteerSchema,
+  ConfirmVolunteerAttendanceSchema,
   CreateVolunteerSchema,
 } from '../schemas/volunteer'
 import { requireDocumentInCurrentConference } from '../tenancy'
@@ -22,7 +23,9 @@ import {
   deleteVolunteer,
   createVolunteer,
   recordVolunteerApprovalEmailSent,
+  confirmVolunteerAttendance,
 } from '@/lib/volunteer/sanity'
+import { verifyVolunteerConfirmToken } from '@/lib/volunteer/token'
 import { VolunteerStatus } from '@/lib/volunteer/types'
 import type { VolunteerInput } from '@/lib/volunteer/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -127,6 +130,116 @@ export const volunteerRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to create volunteer application',
+          cause: error,
+        })
+      }
+    }),
+
+  confirmAttendance: publicProcedure
+    .input(ConfirmVolunteerAttendanceSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const verification = verifyVolunteerConfirmToken(input.token)
+        if (!verification.ok) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid confirmation link',
+          })
+        }
+        const { payload } = verification
+
+        const conferenceId = await resolveConferenceId()
+        if (payload.conferenceId !== conferenceId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'No volunteer with that id for this request',
+          })
+        }
+
+        await requireDocumentInCurrentConference(
+          payload.volunteerId,
+          'volunteer',
+        )
+
+        const { volunteer, error: fetchError } = await getVolunteerById(
+          payload.volunteerId,
+        )
+        if (fetchError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch volunteer',
+            cause: fetchError,
+          })
+        }
+
+        if (
+          !volunteer ||
+          volunteer.email?.trim().toLowerCase() !== payload.email
+        ) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Volunteer not found',
+          })
+        }
+
+        if (
+          volunteer.status !== VolunteerStatus.APPROVED &&
+          volunteer.status !== VolunteerStatus.CONFIRMED
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Only approved volunteers can confirm attendance',
+          })
+        }
+
+        let confirmedAt = volunteer.confirmedAt
+        if (volunteer.status === VolunteerStatus.APPROVED) {
+          confirmedAt = getCurrentDateTime()
+          const { success, error: confirmError } =
+            await confirmVolunteerAttendance(volunteer._id, confirmedAt)
+          if (confirmError || !success) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to confirm volunteer attendance',
+              cause: confirmError,
+            })
+          }
+
+          try {
+            const organizerIds = await resolveRoutedOrganizerIds({
+              conferenceId,
+              teamKey: 'volunteers',
+            })
+            await createNotifications(
+              organizerIds
+                .filter((id) => id)
+                .map((id): NotificationInput => ({
+                  recipientId: id,
+                  conferenceId,
+                  notificationType: 'system',
+                  title: `Volunteer confirmed attendance: ${volunteer.name}`,
+                  link: '/admin/volunteers',
+                })),
+            )
+          } catch {
+            // Never fail confirmation on notification error
+          }
+        }
+
+        return {
+          status: VolunteerStatus.CONFIRMED,
+          confirmedAt: confirmedAt || getCurrentDateTime(),
+          volunteerName: volunteer.name,
+          conferenceTitle: volunteer.conference?.title || '',
+          registrationUrl:
+            volunteer.conference?.volunteerRegistrationLink ?? null,
+          slackInviteUrl: volunteer.conference?.volunteerSlackInviteUrl ?? null,
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to confirm volunteer attendance',
           cause: error,
         })
       }
@@ -335,7 +448,10 @@ export const volunteerRouter = router({
             })
           }
 
-          if (volunteer.status !== VolunteerStatus.APPROVED) {
+          if (
+            volunteer.status !== VolunteerStatus.APPROVED &&
+            volunteer.status !== VolunteerStatus.CONFIRMED
+          ) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: 'Can only send approval emails to approved volunteers',

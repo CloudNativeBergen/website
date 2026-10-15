@@ -100,6 +100,7 @@ export default defineType({
         list: [
           { title: 'Pending', value: 'pending' },
           { title: 'Approved', value: 'approved' },
+          { title: 'Confirmed', value: 'confirmed' },
           { title: 'Rejected', value: 'rejected' },
         ],
       },
@@ -137,7 +138,8 @@ export default defineType({
       title: 'Approval Email Sent At',
       type: 'datetime',
       readOnly: true,
-      hidden: ({ document }) => document?.status !== 'approved',
+      hidden: ({ document }) =>
+        document?.status !== 'approved' && document?.status !== 'confirmed',
     }),
     defineField({
       name: 'approvalEmailSentBy',
@@ -145,7 +147,15 @@ export default defineType({
       type: 'reference',
       to: [{ type: 'speaker' }],
       readOnly: true,
-      hidden: ({ document }) => document?.status !== 'approved',
+      hidden: ({ document }) =>
+        document?.status !== 'approved' && document?.status !== 'confirmed',
+    }),
+    defineField({
+      name: 'confirmedAt',
+      title: 'Confirmed At',
+      type: 'datetime',
+      readOnly: true,
+      hidden: ({ document }) => document?.status !== 'confirmed',
     }),
 
     // GDPR Consent

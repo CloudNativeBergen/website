@@ -65,7 +65,7 @@ export function SponsorDashboardBroadcastAction({
         onSyncContacts={handleSyncContacts}
         recipientCount={recipientCount}
         recipientType="sponsors"
-        fromEmail={`${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`}
+        fromEmail={`${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail || conference.contactEmail || ''}>`}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
         eventDate={formatConferenceDateLong(conference.startDate)}
