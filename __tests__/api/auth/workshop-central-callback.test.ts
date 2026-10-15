@@ -372,6 +372,7 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     )
 
     await expectRefused(await callback(flow), 'host-refused')
+    expect(getDomainClaim).toHaveBeenCalledOnce()
   })
 
   it('a host that another conference has claimed since the start', async () => {
@@ -387,6 +388,7 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     )
 
     await expectRefused(await callback(flow), 'conference-changed')
+    expect(getDomainClaim).toHaveBeenCalledOnce()
   })
 
   it('a conference whose workshops were switched off since the start', async () => {
@@ -394,6 +396,7 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     isWorkshopsEnabledForConference.mockResolvedValue(false)
 
     await expectRefused(await callback(flow), 'host-refused')
+    expect(getDomainClaim).toHaveBeenCalledOnce()
   })
 
   it.each([
@@ -466,6 +469,7 @@ describe('callback: WorkOS does not answer as expected', () => {
     const response = await callback(await startFlow())
 
     expectBackToPortal(response)
+    expect(getDomainClaim).toHaveBeenCalledOnce()
     expect(console.error).toHaveBeenCalledExactlyOnceWith(
       '[workshop] the code exchange failed; nothing handed off',
       { name: 'TypeError', message: 'fetch failed' },
