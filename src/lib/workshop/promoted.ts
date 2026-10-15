@@ -154,6 +154,10 @@ export async function deliverPromotionEmails(
     // that stops (a timeout) leaves the ones after it owed, not claimed.
     const failed: { id: string; why: unknown }[] = []
     for (const candidate of due) {
+      // The pause comes FIRST: a run killed while pausing has claimed
+      // nothing, and the email stays owed; and what the pause lets happen
+      // (a withdrawal) is seen by the read after it.
+      if (pacing.sends > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
       // The talk as it is NOW, from the doc endpoint, right before the
       // claim: a run sends for up to a minute, and a withdrawal in that
       // minute must not be told of. One read per send. What is left is the
@@ -163,9 +167,6 @@ export async function deliverPromotionEmails(
         ? await freshWorkshop(candidate.workshop._ref)
         : undefined
       if (workshop === 'unread' || !stillOn(workshop, conferenceId)) continue
-      // The pause comes BEFORE the claim: a run killed while pausing has
-      // claimed nothing, and the email stays owed.
-      if (pacing.sends > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
       const signup = await claim(candidate)
       // Owed, but no longer confirmed (moved back outside the app): settled
       // by the claim, told nothing.

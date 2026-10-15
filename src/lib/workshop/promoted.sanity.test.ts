@@ -595,10 +595,18 @@ describe('the pace across a whole sweep, and the bound of an inline delivery', (
 })
 
 describe('the order of a send, and a workshop no longer on', () => {
-  it('pauses BEFORE claiming, so a run killed during the pause leaves the email owed: pause, claim, send', async () => {
+  it('for each sign-up: pause, then re-read the workshop, then claim, then send (a withdrawal during the pause is seen; a run killed during the pause has claimed nothing)', async () => {
     const events: string[] = []
     pacing.delay.mockImplementation(async () => {
       events.push('pause')
+    })
+    const client = store().clients.clientWrite as {
+      getDocument: (id: string) => Promise<unknown>
+    }
+    const real = client.getDocument.bind(client)
+    vi.spyOn(client, 'getDocument').mockImplementation(async (id) => {
+      if (id === WORKSHOP) events.push('read')
+      return real(id)
     })
     store().afterNextCommit(() => events.push('claim'))
     email.sendBasicWorkshopConfirmation.mockImplementation(async (req) => {
@@ -611,9 +619,11 @@ describe('the order of a send, and a workshop no longer on', () => {
     await deliverPromotionEmails(CONF, ['signup-2', 'signup-3'])
 
     expect(events).toEqual([
+      'read',
       'claim',
       'send person2@example.com',
       'pause',
+      'read',
       'claim',
       'send person3@example.com',
     ])
