@@ -656,7 +656,7 @@ workshops off still lets its attendees out.
    error line, `the code exchange failed; nothing handed off`. Without a code or without
    the step 2 cookie, the browser goes back to
    `https://<host in state>/workshop?sign-in=incomplete` with no record read. A failed
-   exchange goes there too, after the one live read of the decision above. Every other
+   exchange goes there too, after the decision above (its one live record read, and the workshops check). Every other
    refusal is a 404 that says the sign-in could not be completed (spec §3).
 4. **Tenant host, redeem** (`central-sign-in/redeem.ts`). The token must unseal and not
    have expired, the browser must hold the step 1 cookie and its value must hash to what
