@@ -121,8 +121,8 @@ export default async function WorkshopPage({
     query[WORKSHOP_EARLY_ACCESS_INVALID.param] ===
     WORKSHOP_EARLY_ACCESS_INVALID.value
   if (!user) {
-    // A refused redeem or callback lands here with one fixed marker, whatever
-    // refused it.
+    // A refused redeem, or a refused return the callback sends back, lands
+    // here with one fixed marker, whatever refused it.
     const { [WORKSHOP_SIGN_IN_INCOMPLETE.param]: marker } = query
     return (
       <WorkshopSignedOut
