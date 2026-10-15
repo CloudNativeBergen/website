@@ -24,6 +24,16 @@ export type SignupEarlyAccess = {
 } | null
 export type OperatingSystem = 'windows' | 'macos' | 'linux'
 
+/**
+ * The count a confirm into a full workshop was refused on (#1358): the seats
+ * taken now, the capacity, and what the confirm would make it.
+ */
+export interface FullSeats {
+  seatsTaken: number
+  capacity: number
+  after: number
+}
+
 /** Individual workshop statistics returned by getWorkshopStatistics() */
 export interface WorkshopStats {
   workshopId: string

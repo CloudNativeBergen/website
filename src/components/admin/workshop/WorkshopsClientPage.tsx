@@ -557,11 +557,18 @@ export function WorkshopsClientPage({
 
       <SignupDetailsModal
         isOpen={signupModal.isOpen}
-        onClose={() => setSignupModal({ ...signupModal, isOpen: false })}
+        onClose={() => {
+          setSignupModal({ ...signupModal, isOpen: false })
+          // A question left open (#1358) is not asked again on reopening.
+          signupActions.dismissFull()
+        }}
         workshopTitle={signupModal.workshopTitle}
         status={signupModal.status}
         signups={filteredSignups}
         onConfirmSignup={signupActions.confirm}
+        fullRefusal={signupActions.full}
+        onConfirmBeyondCapacity={signupActions.confirmBeyondCapacity}
+        onDismissFullRefusal={signupActions.dismissFull}
         onMoveToWaitlist={signupActions.moveToWaitlist}
         onDeleteSignup={signupActions.remove}
         isConfirming={signupActions.isConfirming}

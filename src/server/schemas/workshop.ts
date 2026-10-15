@@ -84,14 +84,24 @@ export const cancelWorkshopSignupSchema = z.object({
   reason: z.string().max(500, 'Reason too long').optional(),
 })
 
+/**
+ * How many seats past capacity an organizer agreed to (#1358): what the
+ * refusal they answered showed. A confirm that would go further is refused
+ * again.
+ */
+const acceptPastSchema = z.number().int().nonnegative()
+
 export const confirmWorkshopSignupSchema = z.object({
   signupId: z.string().min(1, 'Signup ID is required'),
   sendEmail: z.boolean().optional().default(true),
+  acceptPast: acceptPastSchema.optional(),
 })
 
 export const batchConfirmSignupsSchema = z.object({
   signupIds: z.array(z.string()).min(1, 'At least one signup ID is required'),
   sendEmails: z.boolean().optional().default(true),
+  /** By workshop id. */
+  acceptPast: z.record(z.string(), acceptPastSchema).optional(),
 })
 
 export const batchCancelSignupsSchema = z.object({
