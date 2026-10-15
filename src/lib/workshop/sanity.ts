@@ -96,16 +96,14 @@ export async function checkWorkshopCapacity(workshopId: string): Promise<{
 /**
  * Whether an attendee may sign up for this id (#1301): only a workshop the
  * portal lists, of this conference. Read from the document store, where the
- * seat decision reads the talk too. An id under a path (a draft, a release
- * version) is never listed: it is refused before the read, which would return
- * it.
+ * seat decision reads the talk too.
  */
 export async function isListedWorkshopOf(
   workshopId: string,
   conferenceId: string,
 ): Promise<boolean> {
-  if (workshopId.includes('.')) return false
   const talk = await clientWrite.getDocument<{
+    _id: string
     _type: string
     status?: string
     format?: string

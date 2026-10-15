@@ -18,6 +18,7 @@ vi.mock('@/lib/sanity/client', async () => {
 })
 
 import { isListedWorkshopOf } from './sanity'
+import { getWorkshops } from '@/lib/proposal/data/sanity'
 
 const CONF = 'conf-a'
 
@@ -73,5 +74,19 @@ describe('a workshop an attendee can sign up for', () => {
     ['the draft of a listed workshop', 'drafts.listed-120'],
   ])('%s is not', async (_, id) => {
     expect(await isListedWorkshopOf(id, CONF)).toBe(false)
+  })
+})
+
+describe('the portal listing', () => {
+  it('lists exactly the workshops an attendee can sign up for', async () => {
+    const { workshops, workshopsError } = await getWorkshops({
+      conferenceId: CONF,
+    })
+
+    expect(workshopsError).toBeNull()
+    expect(workshops.map((w) => w._id).sort()).toEqual([
+      'listed-120',
+      'listed-240',
+    ])
   })
 })

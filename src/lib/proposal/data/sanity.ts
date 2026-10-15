@@ -8,6 +8,7 @@ import { groq } from 'next-sanity'
 import {
   LISTED_WORKSHOP_FORMATS,
   LISTED_WORKSHOP_STATUSES,
+  isListedWorkshop,
 } from '@/lib/workshop/listed'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { Reference } from 'sanity'
@@ -1083,7 +1084,9 @@ export async function getWorkshops({
     returnAll: true,
   })
 
-  let workshops = proposals
+  // The query reads drafts too (the clients' API version): the one rule
+  // decides, so the portal lists exactly what the sign-up takes.
+  let workshops = proposals.filter(isListedWorkshop)
 
   // If schedule info is requested, fetch and attach schedule data
   if (includeScheduleInfo && !proposalsError) {

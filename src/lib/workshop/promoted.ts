@@ -56,6 +56,7 @@ interface DueSignup {
 type StoredConference = WorkshopEmailConference & { _type: 'conference' }
 /** A talk stores no date or time of its own (the schedule does): title only. */
 interface StoredWorkshop {
+  _id: string
   _type: 'talk'
   title?: string
   status?: string
