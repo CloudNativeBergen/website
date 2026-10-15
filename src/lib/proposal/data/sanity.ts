@@ -5,6 +5,10 @@ import {
   clientWrite,
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
+import {
+  LISTED_WORKSHOP_FORMATS,
+  LISTED_WORKSHOP_STATUSES,
+} from '@/lib/workshop/listed'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
@@ -1062,11 +1066,9 @@ export async function searchProposals({
  */
 export async function getWorkshops({
   conferenceId,
-  statuses = [Status.confirmed],
   includeScheduleInfo = false,
 }: {
   conferenceId: string
-  statuses?: Status[]
   includeScheduleInfo?: boolean
 }): Promise<{
   workshops: ProposalExisting[] // ProposalWithWorkshopData types will be added at runtime
@@ -1074,8 +1076,9 @@ export async function getWorkshops({
 }> {
   const { proposals, proposalsError } = await getProposals({
     conferenceId,
-    formats: ['workshop_120', 'workshop_240'],
-    statuses,
+    // What the portal lists (#1301): the rule the sign-up refuses by.
+    formats: LISTED_WORKSHOP_FORMATS,
+    statuses: LISTED_WORKSHOP_STATUSES,
     includeCapacity: true,
     returnAll: true,
   })

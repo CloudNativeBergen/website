@@ -6,9 +6,9 @@ import type {
   WorkshopStatistics,
 } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
-import { Status } from '@/lib/proposal/types'
 import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
 import { freeSeat } from './seats'
+import { isListedWorkshop } from './listed'
 
 export async function getWorkshopSignups(
   userWorkOSId: string,
@@ -93,16 +93,29 @@ export async function checkWorkshopCapacity(workshopId: string): Promise<{
   }
 }
 
-export async function verifyWorkshopBelongsToConference(
+/**
+ * Whether an attendee may sign up for this id (#1301): only a workshop the
+ * portal lists, of this conference. Read from the document store, where the
+ * seat decision reads the talk too. An id under a path (a draft, a release
+ * version) is never listed: it is refused before the read, which would return
+ * it.
+ */
+export async function isListedWorkshopOf(
   workshopId: string,
   conferenceId: string,
 ): Promise<boolean> {
-  const query = groq`
-    *[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId][0]
-  `
-
-  const result = await clientWrite.fetch(query, { workshopId, conferenceId })
-  return !!result
+  if (workshopId.includes('.')) return false
+  const talk = await clientWrite.getDocument<{
+    _type: string
+    status?: string
+    format?: string
+    conference?: { _ref?: string }
+  }>(workshopId)
+  return (
+    talk?._type === 'talk' &&
+    talk.conference?._ref === conferenceId &&
+    isListedWorkshop(talk)
+  )
 }
 
 /**
@@ -380,7 +393,6 @@ export async function getWorkshopsByConference(
 ): Promise<ProposalWithWorkshopData[]> {
   const { workshops } = await getWorkshops({
     conferenceId,
-    statuses: [Status.confirmed],
     includeScheduleInfo: true,
   })
   return workshops as ProposalWithWorkshopData[]
@@ -391,7 +403,6 @@ export async function getWorkshopStatistics(
 ): Promise<WorkshopStatistics> {
   const { workshops } = await getWorkshops({
     conferenceId,
-    statuses: [Status.confirmed],
     includeScheduleInfo: true,
   })
 

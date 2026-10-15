@@ -46,7 +46,7 @@ vi.mock('@/lib/workshop/sanity', () => ({
   getAllWorkshopSignups: (...args: unknown[]) =>
     mockGetAllWorkshopSignups(...args),
   checkWorkshopCapacity: vi.fn(),
-  verifyWorkshopBelongsToConference: vi.fn(),
+  isListedWorkshopOf: vi.fn(),
   getWorkshopSignups: vi.fn(),
   deleteWorkshopSignup: vi.fn(),
   moveWorkshopSignupToWaitlist: vi.fn(),

@@ -34,7 +34,7 @@ import {
 } from '@/server/schemas/workshop'
 import {
   checkWorkshopCapacity,
-  verifyWorkshopBelongsToConference,
+  isListedWorkshopOf,
   getWorkshopSignups,
   deleteWorkshopSignup,
   moveWorkshopSignupToWaitlist,
@@ -52,7 +52,6 @@ import {
 import { deliverPromotionEmails } from '@/lib/workshop/promoted'
 import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
-import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 
 /**
@@ -309,7 +308,6 @@ export const workshopRouter = router({
       const conferenceId = await resolveConferenceId()
       const { workshops, workshopsError } = await getWorkshops({
         conferenceId,
-        statuses: [Status.confirmed],
         includeScheduleInfo: true,
       })
 
@@ -542,12 +540,7 @@ export const workshopRouter = router({
     .query(async ({ input }) => {
       try {
         const conferenceId = await resolveConferenceId()
-        const belongs = await verifyWorkshopBelongsToConference(
-          input.workshopId,
-          conferenceId,
-        )
-
-        if (!belongs) {
+        if (!(await isListedWorkshopOf(input.workshopId, conferenceId))) {
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Workshop not found for this conference',
@@ -681,6 +674,15 @@ export const workshopRouter = router({
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             message: 'Workshop registration has closed',
+          })
+        }
+
+        // ONLY WHAT THE PORTAL LISTS (#1301): a talk of another format, or a
+        // workshop not yet confirmed, is not found, before any seat is read.
+        if (!(await isListedWorkshopOf(input.workshop._ref, conference._id))) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Workshop not found for this conference',
           })
         }
 

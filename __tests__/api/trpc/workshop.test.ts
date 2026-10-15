@@ -113,7 +113,7 @@ vi.mock('@/lib/workshop/sanity', async (importActual) => {
       capacity: 10,
       signups: 0,
     })),
-    verifyWorkshopBelongsToConference: vi.fn(async () => true),
+    isListedWorkshopOf: vi.fn(async () => true),
     getAllWorkshopSignups: vi.fn(async () => []),
     deleteWorkshopSignup: vi.fn(async () => {}),
     moveWorkshopSignupToWaitlist: vi.fn(async () => {}),
@@ -156,8 +156,9 @@ import {
   deleteWorkshopSignup,
   moveWorkshopSignupToWaitlist,
   checkWorkshopCapacity,
-  verifyWorkshopBelongsToConference,
+  isListedWorkshopOf,
 } from '@/lib/workshop/sanity'
+import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 import { appRouter } from '@/server/_app'
 import { createTRPCContext } from '@/server/trpc'
@@ -170,7 +171,8 @@ const getAllMock = getAllWorkshopSignups as unknown as LooseMock
 const deleteMock = deleteWorkshopSignup as unknown as LooseMock
 const waitlistMock = moveWorkshopSignupToWaitlist as unknown as LooseMock
 const capacityMock = checkWorkshopCapacity as unknown as LooseMock
-const belongsMock = verifyWorkshopBelongsToConference as unknown as LooseMock
+const listedMock = isListedWorkshopOf as unknown as LooseMock
+const emailMock = sendBasicWorkshopConfirmation as unknown as LooseMock
 
 /** A legacy-bridge category that grants workshop access (no declared roles). */
 const WORKSHOP_TICKET = 'Workshop + Conference (2 days)'
@@ -184,7 +186,7 @@ function ticket(email: string, category = WORKSHOP_TICKET) {
 function expectNoSignupIO() {
   expect(getSignupsMock).not.toHaveBeenCalled()
   expect(getAllMock).not.toHaveBeenCalled()
-  expect(belongsMock).not.toHaveBeenCalled()
+  expect(listedMock).not.toHaveBeenCalled()
   expect(capacityMock).not.toHaveBeenCalled()
   expect(createSignupMock).not.toHaveBeenCalled()
   expect(deleteMock).not.toHaveBeenCalled()
@@ -417,6 +419,34 @@ describe('workshop.signup: a sign-up that cannot take a seat (#1344)', () => {
       })
     },
   )
+})
+
+describe('workshop.signup: only a workshop the portal lists (#1301)', () => {
+  const caller = () =>
+    createWorkshopCaller({ id: 'workos-real', email: 'real@example.com' })
+
+  it('refuses a talk the portal does not list with NOT_FOUND, before any seat is read or written, and sends no email', async () => {
+    listedMock.mockResolvedValueOnce(false)
+
+    await expect(
+      caller().workshop.signup(baseSignupInput),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Workshop not found for this conference',
+    })
+    expect(listedMock).toHaveBeenCalledWith('workshop-1', 'conf-1')
+    expect(createSignupMock).not.toHaveBeenCalled()
+    expect(emailMock).not.toHaveBeenCalled()
+  })
+
+  it('signs up for a listed workshop, asked about the domain conference', async () => {
+    await expect(
+      caller().workshop.signup(baseSignupInput),
+    ).resolves.toMatchObject({ success: true })
+    expect(listedMock).toHaveBeenCalledWith('workshop-1', 'conf-1')
+    expect(createSignupMock).toHaveBeenCalledTimes(1)
+    expect(emailMock).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('workshop.cancelSignup ownership', () => {
