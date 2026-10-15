@@ -9,16 +9,26 @@ import { hostCookie } from './cookies'
  */
 
 /**
- * How long a started sign-in may take to come back from WorkOS (#1322): the
- * state, the auth host's start cookie and the tenant host's cookie. A sign-up
- * waits for a code sent by email, so thirty minutes, not ten. It protects
- * nothing the shorter one did: the verifier is good for one code, and the
- * tenant value only with a hand-off that hashes to it.
+ * How long a sign-in may take from the button to redeem (#1322): the tenant
+ * host's cookie. A sign-up waits for a code sent by email, so thirty minutes,
+ * not ten. It protects nothing the shorter one did: the verifier is good for
+ * one code, and the tenant value only with a hand-off that hashes to it.
  */
 export const START_TTL_SECONDS = 1800
 
 /** How long the browser has to carry a start request to the auth host. */
 export const START_REQUEST_TTL_SECONDS = 60
+
+/** How long the tenant host has to redeem a hand-off (spec §5). */
+export const HANDOFF_TTL_SECONDS = 60
+
+/**
+ * How long the attendee may spend at WorkOS: the state and the auth host's
+ * start cookie. The tenant cookie's window less the two transits around it,
+ * so a state that is still valid always finds the tenant cookie at redeem.
+ */
+export const AUTH_STATE_TTL_SECONDS =
+  START_TTL_SECONDS - START_REQUEST_TTL_SECONDS - HANDOFF_TTL_SECONDS
 
 /**
  * The tenant host's cookie: a random value only this browser holds. The

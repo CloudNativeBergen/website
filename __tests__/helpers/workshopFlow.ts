@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { NextRequest } from 'next/server'
-import { expect } from 'vitest'
+import { expect, vi } from 'vitest'
 import { GET as signInRoute } from '@/app/(workshop)/workshop/sign-in/route'
 import { GET as startRoute } from '@/app/api/auth/workshop/start/route'
 import { GET as callbackRoute } from '@/app/api/auth/callback/route'
@@ -28,6 +28,8 @@ function firstCookie(response: Response): string {
 export interface StartedFlow {
   /** The tenant host's cookie, `name=value`: the browser that began. */
   browser: string
+  /** When the browser drops that cookie, in epoch seconds (its `Max-Age`). */
+  browserExpires: number
   /** The hash of that cookie's value, as the tenant host sealed it. */
   challenge: string
   /** The `state` the auth host sent to WorkOS. */
@@ -38,17 +40,24 @@ export interface StartedFlow {
 
 /**
  * Press "Sign In" on `host` and follow the browser to the auth host's start
- * route, which answers on `on`. In development the two are plain HTTP.
+ * route, which answers on `on`. In development the two are plain HTTP. With
+ * `transitMs`, the clock (faked by the caller) moves on that long in between.
  */
 export async function startFlow(
   host: string,
   on: string,
+  { transitMs = 0 } = {},
 ): Promise<StartedFlow> {
   const scheme = process.env.NODE_ENV === 'development' ? 'http' : 'https'
   const begun = await signInRoute(
     get(`${scheme}://${host}/workshop/sign-in`, host),
   )
   expect(begun.status).toBe(307)
+  const maxAge = Number(
+    begun.headers.getSetCookie()[0].match(/; Max-Age=(\d+)/)![1],
+  )
+  const browserExpires = Math.floor(Date.now() / 1000) + maxAge
+  if (transitMs) vi.setSystemTime(Date.now() + transitMs)
   const started = await startRoute(get(begun.headers.get('location')!, on))
   expect(started.status).toBe(307)
   const state = new URL(started.headers.get('location')!).searchParams.get(
@@ -57,6 +66,7 @@ export async function startFlow(
   const browser = firstCookie(begun)
   return {
     browser,
+    browserExpires,
     challenge: createHash('sha256')
       .update(browser.split('=')[1])
       .digest('base64url'),

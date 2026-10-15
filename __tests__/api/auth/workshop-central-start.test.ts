@@ -203,15 +203,15 @@ describe('start: a proven host', () => {
       decodeURIComponent(cookie.split(';')[0].split('=')[1]),
       z.object({ nonce: z.string(), iat: z.number(), exp: z.number() }),
     )
-    // Each seal lasts thirty minutes, on its own.
-    expect([kept!.iat, kept!.exp]).toEqual([now / 1000, now / 1000 + 1800])
+    // Each seal lasts twenty-eight minutes, on its own.
+    expect([kept!.iat, kept!.exp]).toEqual([now / 1000, now / 1000 + 1680])
     expect(await unseal('auth-state', state, anything)).toEqual({
       host: TENANT,
       conferenceId: CLAIMING_CONFERENCE_ID,
       challenge: CHALLENGE,
       nonce: kept!.nonce,
       iat: now / 1000,
-      exp: now / 1000 + 1800,
+      exp: now / 1000 + 1680,
     })
     // The verifier never travels in the URL.
     expect(await unseal('auth-start', state, anything)).toBeNull()
@@ -249,7 +249,7 @@ describe('start: a proven host', () => {
     expect(pair.split('=')[0]).toBe('__Host-workshop-auth-start')
     expect(attributes.filter((a) => !a.startsWith('Expires='))).toEqual([
       'Path=/',
-      'Max-Age=1800',
+      'Max-Age=1680',
       'Secure',
       'HttpOnly',
       'SameSite=lax',
@@ -516,7 +516,7 @@ describe('start: WORKSHOP_AUTH_ORIGIN', () => {
     expect(pair.split('=')[0]).toBe('workshop-auth-start')
     expect(attributes.filter((a) => !a.startsWith('Expires='))).toEqual([
       'Path=/',
-      'Max-Age=1800',
+      'Max-Age=1680',
       'HttpOnly',
       'SameSite=lax',
     ])

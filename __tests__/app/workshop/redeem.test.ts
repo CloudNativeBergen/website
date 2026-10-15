@@ -194,14 +194,24 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
     ])
   })
 
-  it('signs in a sign-up that spent one second under thirty minutes at WorkOS', async () => {
-    const now = Date.parse('2026-10-12T10:00:00Z')
-    vi.useFakeTimers({ toFake: ['Date'], now })
-    const flow = await startFlow(TENANT, AUTH)
-
-    vi.setSystemTime(now + 1_799_000)
+  it('signs in at the latest every step allows: the browser still holds its cookie at redeem', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date'],
+      now: new Date('2026-10-12T10:00:00Z'),
+    })
+    // 59 of the start request's 60 seconds on the way to the auth host.
+    const flow = await startFlow(TENANT, AUTH, { transitMs: 59_000 })
+    // Back from WorkOS in the last second of the state.
+    const { exp } = (await unseal(
+      'auth-state',
+      flow.state,
+      z.object({ exp: z.number() }),
+    ))!
+    vi.setSystemTime((exp - 1) * 1000)
     const returned = await callback(flow, { on: AUTH })
     expect(returned.status).toBe(307)
+    // 59 of the hand-off's 60 seconds on the way back.
+    vi.setSystemTime(Date.now() + 59_000)
     const redeemUrl = new URL(returned.headers.get('location')!)
     const response = await redeem({
       redeemUrl,
@@ -209,9 +219,21 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
       browser: flow.browser,
     })
 
+    expect(Date.now() / 1000).toBeLessThan(flow.browserExpires)
     expect(response.headers.get('location')).toBe('/workshop')
     expect(sessionOf(response)).toBeDefined()
     expect(console.warn).not.toHaveBeenCalled()
+  })
+
+  it('gives a sign-in thirty minutes from the button to redeem, twenty-eight of them at WorkOS', async () => {
+    const now = Date.parse('2026-10-12T10:00:00Z')
+    vi.useFakeTimers({ toFake: ['Date'], now })
+    const flow = await startFlow(TENANT, AUTH)
+
+    expect(flow.browserExpires).toBe(now / 1000 + 30 * 60)
+    expect((await unseal('auth-state', flow.state, anything))!.exp).toBe(
+      now / 1000 + 28 * 60,
+    )
   })
 
   it('lands on /workshop, whatever the query string asks for', async () => {

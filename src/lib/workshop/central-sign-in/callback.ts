@@ -90,7 +90,7 @@ function sessionIdOf(accessToken: string): string | null {
  * without the cookie (Back and submit again, another browser), the browser
  * goes back to the portal of the host in state, to say the sign-in did not
  * complete. That host is trusted as sealed: the start route proved it at most
- * `START_TTL_SECONDS` ago, and nothing goes there but the browser, so
+ * `AUTH_STATE_TTL_SECONDS` ago, and nothing goes there but the browser, so
  * the refusal reads no record. A failed exchange goes there too. Everything
  * else is a 404 on the auth host: without a state that unseals, nothing says
  * where to send anyone, and a host that fails the decision is not sent anyone.
