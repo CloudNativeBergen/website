@@ -82,8 +82,16 @@ const exchangeCode = vi.spyOn(
   'authenticateWithCode',
 )
 
-/** A sign-in begun on `host` and started on the auth host `on`. */
-const startFlow = (host = TENANT, on = AUTH) => startFlowOn(host, on)
+/**
+ * A sign-in begun on `host` and started on the auth host `on`. The reads the
+ * two routes spent are forgotten: a test counts the callback's alone.
+ */
+async function startFlow(host = TENANT, on = AUTH) {
+  const flow = await startFlowOn(host, on)
+  getDomainClaim.mockClear()
+  isWorkshopsEnabledForConference.mockClear()
+  return flow
+}
 
 /** WorkOS redirecting the browser back with a code. */
 const callback = (
@@ -111,12 +119,24 @@ async function expectRefused(response: Response, reason: string) {
 
 /**
  * Refused for this reason, and sent back to the portal of the host the sign-in
- * began on, to say it did not complete. Nothing is exchanged and no cookie set.
+ * began on, to say it did not complete. Nothing is read or exchanged.
  */
 function expectIncomplete(response: Response, reason: string, host = TENANT) {
   expect(console.warn).toHaveBeenCalledExactlyOnceWith(
     `[workshop] callback refused: ${reason}`,
   )
+  expectBackToPortal(response, host)
+  expect(getDomainClaim).not.toHaveBeenCalled()
+  expect(isWorkshopsEnabledForConference).not.toHaveBeenCalled()
+  expect(exchangeCode).not.toHaveBeenCalled()
+  expect(console.error).not.toHaveBeenCalled()
+}
+
+/**
+ * Sent back to the portal of `host`, to say the sign-in did not complete, and
+ * no cookie set.
+ */
+function expectBackToPortal(response: Response, host = TENANT) {
   expect(response.status).toBe(307)
   expect(response.headers.get('location')).toBe(
     `https://${host}/workshop?sign-in=incomplete`,
@@ -125,8 +145,6 @@ function expectIncomplete(response: Response, reason: string, host = TENANT) {
   expect(response.headers.get('cache-control')).toBe('no-store')
   // The callback URL carries the state: the tenant host is not sent it.
   expect(response.headers.get('referrer-policy')).toBe('no-referrer')
-  expect(exchangeCode).not.toHaveBeenCalled()
-  expect(console.error).not.toHaveBeenCalled()
 }
 
 /** What WorkOS sends back when the attendee cancels: an error, no code. */
@@ -292,34 +310,24 @@ describe('callback: a sign-in the auth host started', () => {
 describe('callback: refused, and sent back to the host the sign-in began on', () => {
   it('when WorkOS reports an error instead of a code, without reading a record', async () => {
     const flow = await startFlow()
-    getDomainClaim.mockClear()
-    isWorkshopsEnabledForConference.mockClear()
 
     expectIncomplete(await callback(flow, WORKOS_ERROR), 'no-code')
-    expect(getDomainClaim).not.toHaveBeenCalled()
-    expect(isWorkshopsEnabledForConference).not.toHaveBeenCalled()
   })
 
   it('without the cookie the start route set (Back and submit again), without reading a record', async () => {
     const flow = await startFlow()
-    getDomainClaim.mockClear()
-    isWorkshopsEnabledForConference.mockClear()
 
     expectIncomplete(await callback(flow, { cookie: null }), 'no-cookie')
-    expect(getDomainClaim).not.toHaveBeenCalled()
-    expect(isWorkshopsEnabledForConference).not.toHaveBeenCalled()
   })
 
   it('with the cookie of another started sign-in, without reading a record', async () => {
     const first = await startFlow()
     const second = await startFlow()
-    getDomainClaim.mockClear()
 
     expectIncomplete(
       await callback(first, { cookie: second.cookie }),
       'no-cookie',
     )
-    expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
   it('with the cookie under a name without the __Host- prefix', async () => {
@@ -416,7 +424,9 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     exchangeCode.mockClear()
     expect(console.warn).not.toHaveBeenCalled()
     vi.setSystemTime(now.getTime() + 1_801_000)
+    getDomainClaim.mockClear()
     await expectRefused(await callback(flow), 'no-state')
+    expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -448,15 +458,6 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     await expectRefused(await callback({ ...flow, state: forged }), 'no-state')
   })
 })
-
-/** Sent back to the tenant host's portal to say the sign-in did not complete. */
-function expectBackToPortal(response: Response) {
-  expect(response.status).toBe(307)
-  expect(response.headers.get('location')).toBe(
-    `https://${TENANT}/workshop?sign-in=incomplete`,
-  )
-  expect(response.headers.getSetCookie()).toEqual([])
-}
 
 describe('callback: WorkOS does not answer as expected', () => {
   it('sends the browser back with no hand-off when the exchange fails, and logs what failed', async () => {

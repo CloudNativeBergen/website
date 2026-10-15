@@ -62,13 +62,14 @@ export type RedeemRefusal =
 
 /**
  * To the portal page, by a path nothing in the request chooses. `suffix` is a
- * fixed query of ours, never the request's.
+ * fixed query of ours, never the request's. `origin` is the tenant host's,
+ * for a refusal on the auth host; without it, this host's own portal.
  */
-export function toPortal(suffix = ''): NextResponse {
+export function toPortal(suffix = '', origin = ''): NextResponse {
   return new NextResponse(null, {
     status: 307,
     headers: {
-      Location: `${WORKSHOP_PORTAL_PATH}${suffix}`,
+      Location: `${origin}${WORKSHOP_PORTAL_PATH}${suffix}`,
       'Cache-Control': 'no-store',
       'Referrer-Policy': 'no-referrer',
     },
@@ -147,7 +148,9 @@ export async function resolveAuthHostDestination(
   host: string | null | undefined,
 ): Promise<SignInHost | null> {
   const configured = configuredAuthOrigin()
-  if (!isOnAuthHost(configured, headers, host)) return null
+  if (configured === 'invalid' || !isOnAuthHost(configured, headers, host)) {
+    return null
+  }
 
   const destination = await resolveProvenDestination(host)
   return destination && signInHost(configured, destination)
@@ -161,15 +164,15 @@ export function isAuthHostFor(
   headers: { get(name: string): string | null },
   host: string | null | undefined,
 ): boolean {
-  return isOnAuthHost(configuredAuthOrigin(), headers, host)
+  const configured = configuredAuthOrigin()
+  return configured !== 'invalid' && isOnAuthHost(configured, headers, host)
 }
 
 function isOnAuthHost(
-  configured: URL | 'unset' | 'invalid',
+  configured: URL | 'unset',
   headers: { get(name: string): string | null },
   host: string | null | undefined,
-): configured is URL | 'unset' {
-  if (configured === 'invalid') return false
+): boolean {
   const authHost =
     configured === 'unset' ? normalizeDomain(host ?? '') : configured.host
   const requestHost = normalizeDomain(headers.get('host') ?? '')

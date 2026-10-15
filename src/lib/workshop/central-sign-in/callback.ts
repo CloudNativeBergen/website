@@ -4,7 +4,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { originOf } from '@/lib/domain-verification/destination'
 import {
-  WORKSHOP_PORTAL_PATH,
   WORKSHOP_REDEEM_PATH,
   WORKSHOP_SIGN_IN_INCOMPLETE_QUERY,
 } from '../sign-in-paths'
@@ -14,6 +13,7 @@ import {
   logRefusal,
   notFound,
   resolveCentralSignIn,
+  toPortal,
   type CallbackRefusal,
 } from './decision'
 import { HANDOFF_TTL_SECONDS, type HandOff } from './handoff'
@@ -34,24 +34,11 @@ function refused(reason: CallbackRefusal): NextResponse {
 
 /**
  * Back to the portal of the tenant host at `origin`, where the signed-out page
- * says the sign-in did not complete. The same fixed marker a refused redeem
- * uses; nothing in the request chooses where. The callback URL carries the
- * state, so the tenant host is not sent it as a referrer.
+ * says the sign-in did not complete: the marker a refused redeem uses. The
+ * callback URL carries the state; `toPortal` sends it as no referrer.
  */
-function toTenantPortal(origin: string): NextResponse {
-  return NextResponse.redirect(
-    new URL(
-      `${WORKSHOP_PORTAL_PATH}${WORKSHOP_SIGN_IN_INCOMPLETE_QUERY}`,
-      origin,
-    ),
-    {
-      headers: {
-        'Cache-Control': 'no-store',
-        'Referrer-Policy': 'no-referrer',
-      },
-    },
-  )
-}
+const toTenantPortal = (origin: string) =>
+  toPortal(WORKSHOP_SIGN_IN_INCOMPLETE_QUERY, origin)
 
 /**
  * What a failed exchange says about itself, for the log. An answer from WorkOS
