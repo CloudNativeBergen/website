@@ -96,7 +96,9 @@ export async function checkWorkshopCapacity(workshopId: string): Promise<{
 /**
  * Whether an attendee may sign up for this id (#1301): only a workshop the
  * portal lists, of this conference. Read from the document store, where the
- * seat decision reads the talk too.
+ * seat decision reads the talk too. The id goes into the endpoint's path
+ * unescaped, which reads `a,b` as two ids and the client keeps the first
+ * answer: only the document stored under exactly this id counts.
  */
 export async function isListedWorkshopOf(
   workshopId: string,
@@ -110,7 +112,8 @@ export async function isListedWorkshopOf(
     conference?: { _ref?: string }
   }>(workshopId)
   return (
-    talk?._type === 'talk' &&
+    talk?._id === workshopId &&
+    talk._type === 'talk' &&
     talk.conference?._ref === conferenceId &&
     isListedWorkshop(talk)
   )

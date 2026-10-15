@@ -6,7 +6,7 @@
  * documents (`__tests__/helpers/versionedSanityStore.ts`: the real client's
  * reads served from an in-memory dataset).
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
 
 const h = vi.hoisted(() => ({ store: null as null | VersionedSanityStore }))
@@ -55,6 +55,10 @@ beforeEach(() => {
   ])
 })
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('a workshop an attendee can sign up for', () => {
   it.each(['listed-120', 'listed-240', 'kkdemo.talk.s4'])(
     'a confirmed workshop of the conference (%s) is one',
@@ -79,6 +83,33 @@ describe('a workshop an attendee can sign up for', () => {
   ])('%s is not', async (_, id) => {
     expect(await isListedWorkshopOf(id, CONF)).toBe(false)
   })
+})
+
+describe('an id the document endpoint reads as several', () => {
+  // MODELLED: the Doc endpoint takes comma-separated ids, and the real
+  // client's `getDocument` puts the id in the path unescaped and returns the
+  // first document of the answer (shown against the real client in #1365).
+  // The store looks ids up exactly, so the endpoint is modelled here.
+  it.each(['nothing-here,listed-120', 'listed-120,nothing-here'])(
+    '%s is not the listed workshop it also names',
+    async (id) => {
+      const { clientWrite } = h.store!.clients as unknown as {
+        clientWrite: { getDocument: (id: string) => Promise<unknown> }
+      }
+      const exact = clientWrite.getDocument.bind(clientWrite)
+      vi.spyOn(clientWrite, 'getDocument').mockImplementation(
+        async (asked: string) => {
+          for (const one of asked.split(',')) {
+            const found = await exact(one)
+            if (found) return found
+          }
+          return undefined
+        },
+      )
+
+      expect(await isListedWorkshopOf(id, CONF)).toBe(false)
+    },
+  )
 })
 
 describe('the portal listing', () => {
