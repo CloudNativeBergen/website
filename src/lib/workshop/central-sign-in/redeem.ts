@@ -38,10 +38,11 @@ import { challengeOf, signInCookie } from './start-seals'
  *  - that conference has workshops.
  *
  * WHERE THE BROWSER GOES NEXT IS FIXED: the portal page, and nothing in the
- * request chooses it. A refusal goes there too, signed out, with one neutral
- * line; the reason is never shown (it goes to the log, `logRefusal`) and no
- * cookie is touched. The token is in
- * the URL, so every answer is `no-store` and sends no referrer.
+ * request chooses it. A refusal goes there too, with one neutral line on the
+ * signed-out page; the reason is never shown (it goes to the log,
+ * `logRefusal`) and no cookie is touched, so a session the browser already
+ * holds stays. The token is in the URL, so every redirect is `no-store` and
+ * sends no referrer.
  *
  * NOT SINGLE USE BY ANY RECORD (spec §5): nothing remembers a redeemed token.
  * Only the browser that began can redeem it, and a redeem clears the cookie

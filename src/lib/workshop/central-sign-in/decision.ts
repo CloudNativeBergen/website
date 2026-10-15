@@ -26,9 +26,9 @@ function signInHost(
   }
 }
 
-/** A refusal that shows nothing: a 404, whatever the reason. */
-export function notFound(): NextResponse {
-  return new NextResponse('Not Found', { status: 404 })
+/** A refusal that shows nothing of its reason: a 404, saying `body`. */
+export function notFound(body = 'Not Found'): NextResponse {
+  return new NextResponse(body, { status: 404 })
 }
 
 /**
@@ -62,13 +62,14 @@ export type RedeemRefusal =
 
 /**
  * To the portal page, by a path nothing in the request chooses. `suffix` is a
- * fixed query of ours, never the request's.
+ * fixed query of ours, never the request's. `origin` is the tenant host's,
+ * for a refusal on the auth host; without it, this host's own portal.
  */
-export function toPortal(suffix = ''): NextResponse {
+export function toPortal(suffix = '', origin = ''): NextResponse {
   return new NextResponse(null, {
     status: 307,
     headers: {
-      Location: `${WORKSHOP_PORTAL_PATH}${suffix}`,
+      Location: `${origin}${WORKSHOP_PORTAL_PATH}${suffix}`,
       'Cache-Control': 'no-store',
       'Referrer-Policy': 'no-referrer',
     },
@@ -147,14 +148,35 @@ export async function resolveAuthHostDestination(
   host: string | null | undefined,
 ): Promise<SignInHost | null> {
   const configured = configuredAuthOrigin()
-  if (configured === 'invalid') return null
-  const authHost =
-    configured === 'unset' ? normalizeDomain(host ?? '') : configured.host
-  const requestHost = normalizeDomain(headers.get('host') ?? '')
-  if (!requestHost || requestHost !== authHost) return null
+  if (configured === 'invalid' || !isOnAuthHost(configured, headers, host)) {
+    return null
+  }
 
   const destination = await resolveProvenDestination(host)
   return destination && signInHost(configured, destination)
+}
+
+/**
+ * The first half of {@link resolveAuthHostDestination}, which reads nothing:
+ * is this request on the auth host that signs `host` in?
+ */
+export function isAuthHostFor(
+  headers: { get(name: string): string | null },
+  host: string | null | undefined,
+): boolean {
+  const configured = configuredAuthOrigin()
+  return configured !== 'invalid' && isOnAuthHost(configured, headers, host)
+}
+
+function isOnAuthHost(
+  configured: URL | 'unset',
+  headers: { get(name: string): string | null },
+  host: string | null | undefined,
+): boolean {
+  const authHost =
+    configured === 'unset' ? normalizeDomain(host ?? '') : configured.host
+  const requestHost = normalizeDomain(headers.get('host') ?? '')
+  return requestHost !== '' && requestHost === authHost
 }
 
 /**

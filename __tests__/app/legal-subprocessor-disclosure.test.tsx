@@ -426,7 +426,12 @@ describe('the workshop portal’s own sign-in cookie (#1316)', () => {
 
     const html = await renderPrivacy()
 
-    const words: Record<string, number> = { five: 5, ten: 10, fifteen: 15 }
+    const words: Record<string, number> = {
+      five: 5,
+      ten: 10,
+      fifteen: 15,
+      thirty: 30,
+    }
     for (const [where, passage] of Object.entries(passages(html))) {
       const promised = passage?.match(/expire within (\w+) minutes/)?.[1]
       // The longest of them is the sign-in's own; the sign-out's five minutes

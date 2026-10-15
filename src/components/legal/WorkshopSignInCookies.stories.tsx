@@ -64,7 +64,7 @@ export const WithSignInHost: Story = {
     await expect(
       within(canvasElement).getByText(/Workshop sign-in:/).parentElement,
     ).toHaveTextContent(
-      "short-lived cookies exist on this site and on the platform's sign-in host (auth.konf.app); they expire within ten minutes",
+      "short-lived cookies exist on this site and on the platform's sign-in host (auth.konf.app); they expire within thirty minutes",
     )
   },
 }
@@ -77,7 +77,7 @@ export const WithoutSignInHost: Story = {
     const note =
       within(canvasElement).getByText(/Workshop sign-in:/).parentElement
     await expect(note).toHaveTextContent(
-      'short-lived cookies exist on this site; they expire within ten minutes',
+      'short-lived cookies exist on this site; they expire within thirty minutes',
     )
     await expect(note).not.toHaveTextContent('sign-in host')
   },

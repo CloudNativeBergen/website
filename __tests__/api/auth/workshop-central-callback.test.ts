@@ -82,8 +82,16 @@ const exchangeCode = vi.spyOn(
   'authenticateWithCode',
 )
 
-/** A sign-in begun on `host` and started on the auth host `on`. */
-const startFlow = (host = TENANT, on = AUTH) => startFlowOn(host, on)
+/**
+ * A sign-in begun on `host` and started on the auth host `on`. The reads the
+ * two routes spent are forgotten: a test counts the callback's alone.
+ */
+async function startFlow(host = TENANT, on = AUTH) {
+  const flow = await startFlowOn(host, on)
+  getDomainClaim.mockClear()
+  isWorkshopsEnabledForConference.mockClear()
+  return flow
+}
 
 /** WorkOS redirecting the browser back with a code. */
 const callback = (
@@ -91,17 +99,58 @@ const callback = (
   options: Partial<CallbackOptions> = {},
 ) => callbackOn(flow, { on: AUTH, ...options })
 
+/** What a 404 on the auth host says: nothing tells it where to send anyone. */
+const NOT_COMPLETED =
+  'This sign-in could not be completed. Go back to the conference website and sign in again.'
+
 /** Refused, for exactly this reason: the one line the log gets. */
-function expectRefused(response: Response, reason: string) {
+async function expectRefused(response: Response, reason: string) {
   expect(console.warn).toHaveBeenCalledExactlyOnceWith(
     `[workshop] callback refused: ${reason}`,
   )
   expect(response.status).toBe(404)
+  expect(await response.text()).toBe(NOT_COMPLETED)
   expect(response.headers.get('location')).toBeNull()
   expect(response.headers.getSetCookie()).toEqual([])
   expect(exchangeCode).not.toHaveBeenCalled()
   // A decision, not a crash that happened to answer the same.
   expect(console.error).not.toHaveBeenCalled()
+}
+
+/**
+ * Refused for this reason, and sent back to the portal of the host the sign-in
+ * began on, to say it did not complete. Nothing is read or exchanged.
+ */
+function expectIncomplete(response: Response, reason: string, host = TENANT) {
+  expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+    `[workshop] callback refused: ${reason}`,
+  )
+  expectBackToPortal(response, host)
+  expect(getDomainClaim).not.toHaveBeenCalled()
+  expect(isWorkshopsEnabledForConference).not.toHaveBeenCalled()
+  expect(exchangeCode).not.toHaveBeenCalled()
+  expect(console.error).not.toHaveBeenCalled()
+}
+
+/**
+ * Sent back to the portal of `host`, to say the sign-in did not complete, and
+ * no cookie set.
+ */
+function expectBackToPortal(response: Response, host = TENANT) {
+  expect(response.status).toBe(307)
+  expect(response.headers.get('location')).toBe(
+    `https://${host}/workshop?sign-in=incomplete`,
+  )
+  expect(response.headers.getSetCookie()).toEqual([])
+  expect(response.headers.get('cache-control')).toBe('no-store')
+  // The callback URL carries the state: the tenant host is not sent it.
+  expect(response.headers.get('referrer-policy')).toBe('no-referrer')
+}
+
+/** What WorkOS sends back when the attendee cancels: an error, no code. */
+const WORKOS_ERROR = {
+  code: null,
+  query: { error: 'access_denied', error_description: 'The user cancelled.' },
 }
 
 const anything = z.looseObject({})
@@ -258,28 +307,33 @@ describe('callback: a sign-in the auth host started', () => {
   })
 })
 
-describe('callback: refused with 404, and the code is never exchanged', () => {
-  it('without the cookie the start route set, without reading a record', async () => {
+describe('callback: refused, and sent back to the host the sign-in began on', () => {
+  it('when WorkOS reports an error instead of a code, without reading a record', async () => {
     const flow = await startFlow()
-    getDomainClaim.mockClear()
 
-    expectRefused(await callback(flow, { cookie: null }), 'no-cookie')
-    expect(getDomainClaim).not.toHaveBeenCalled()
+    expectIncomplete(await callback(flow, WORKOS_ERROR), 'no-code')
+  })
+
+  it('without the cookie the start route set (Back and submit again), without reading a record', async () => {
+    const flow = await startFlow()
+
+    expectIncomplete(await callback(flow, { cookie: null }), 'no-cookie')
   })
 
   it('with the cookie of another started sign-in, without reading a record', async () => {
     const first = await startFlow()
     const second = await startFlow()
-    getDomainClaim.mockClear()
 
-    expectRefused(await callback(first, { cookie: second.cookie }), 'no-cookie')
-    expect(getDomainClaim).not.toHaveBeenCalled()
+    expectIncomplete(
+      await callback(first, { cookie: second.cookie }),
+      'no-cookie',
+    )
   })
 
   it('with the cookie under a name without the __Host- prefix', async () => {
     const flow = await startFlow()
 
-    expectRefused(
+    expectIncomplete(
       await callback(flow, {
         cookie: flow.cookie.replace(START_COOKIE, 'workshop-auth-start'),
       }),
@@ -287,17 +341,38 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     )
   })
 
-  it('without a code', async () => {
-    expectRefused(await callback(await startFlow(), { code: null }), 'no-code')
+  it('to the host in sealed state only, whatever the query string names', async () => {
+    const flow = await startFlow()
+
+    expectIncomplete(
+      await callback(flow, {
+        cookie: null,
+        query: {
+          host: ALLOCATED,
+          returnTo: `https://${ALLOCATED}/`,
+          redirect_uri: `https://${ALLOCATED}/workshop`,
+        },
+      }),
+      'no-cookie',
+    )
   })
 
+  it('keeps two hosts apart: each goes back to its own host', async () => {
+    const flow = await startFlow(ALLOCATED)
+
+    expectIncomplete(await callback(flow, WORKOS_ERROR), 'no-code', ALLOCATED)
+  })
+})
+
+describe('callback: refused with 404, and the code is never exchanged', () => {
   it('a host delisted between start and callback', async () => {
     const flow = await startFlow()
     getDomainClaim.mockImplementation(
       claimsById(provenClaim(TENANT, { status: 'failing' })),
     )
 
-    expectRefused(await callback(flow), 'host-refused')
+    await expectRefused(await callback(flow), 'host-refused')
+    expect(getDomainClaim).toHaveBeenCalledOnce()
   })
 
   it('a host that another conference has claimed since the start', async () => {
@@ -312,35 +387,49 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
       ),
     )
 
-    expectRefused(await callback(flow), 'conference-changed')
+    await expectRefused(await callback(flow), 'conference-changed')
+    expect(getDomainClaim).toHaveBeenCalledOnce()
   })
 
   it('a conference whose workshops were switched off since the start', async () => {
     const flow = await startFlow()
     isWorkshopsEnabledForConference.mockResolvedValue(false)
 
-    expectRefused(await callback(flow), 'host-refused')
+    await expectRefused(await callback(flow), 'host-refused')
+    expect(getDomainClaim).toHaveBeenCalledOnce()
   })
 
-  it('a callback that arrives on a host other than the auth host, without reading a record', async () => {
-    const flow = await startFlow()
-    getDomainClaim.mockClear()
+  it.each([
+    ['with a code', {}],
+    ['with an error from WorkOS', WORKOS_ERROR],
+    ['without its cookie', { cookie: null }],
+  ])(
+    'a callback that arrives on a host other than the auth host, %s, without reading a record',
+    async (_, options) => {
+      const flow = await startFlow()
+      getDomainClaim.mockClear()
 
-    expectRefused(await callback(flow, { on: TENANT }), 'host-refused')
-    expect(getDomainClaim).not.toHaveBeenCalled()
-  })
+      await expectRefused(
+        await callback(flow, { on: TENANT, ...options }),
+        'host-refused',
+      )
+      expect(getDomainClaim).not.toHaveBeenCalled()
+    },
+  )
 
-  it('a state older than ten minutes', async () => {
+  it('a state older than twenty-seven minutes', async () => {
     const now = new Date('2026-10-10T12:00:00Z')
     vi.useFakeTimers({ toFake: ['Date'], now })
     const flow = await startFlow()
 
-    vi.setSystemTime(now.getTime() + 599_000)
+    vi.setSystemTime(now.getTime() + 1_619_000)
     expect((await callback(flow)).status).toBe(307)
     exchangeCode.mockClear()
     expect(console.warn).not.toHaveBeenCalled()
-    vi.setSystemTime(now.getTime() + 601_000)
-    expectRefused(await callback(flow), 'no-state')
+    vi.setSystemTime(now.getTime() + 1_621_000)
+    getDomainClaim.mockClear()
+    await expectRefused(await callback(flow), 'no-state')
+    expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -354,7 +443,7 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     const flow = await startFlow()
     getDomainClaim.mockClear()
 
-    expectRefused(
+    await expectRefused(
       await callback({ ...flow, state: state as string }),
       'no-state',
     )
@@ -369,18 +458,18 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
       600,
     )
 
-    expectRefused(await callback({ ...flow, state: forged }), 'no-state')
+    await expectRefused(await callback({ ...flow, state: forged }), 'no-state')
   })
 })
 
 describe('callback: WorkOS does not answer as expected', () => {
-  it('answers 404 with no hand-off when the exchange fails, and logs what failed', async () => {
+  it('sends the browser back with no hand-off when the exchange fails, and logs what failed', async () => {
     exchangeCode.mockRejectedValue(new TypeError('fetch failed'))
 
     const response = await callback(await startFlow())
 
-    expect(response.status).toBe(404)
-    expect(response.headers.get('location')).toBeNull()
+    expectBackToPortal(response)
+    expect(getDomainClaim).toHaveBeenCalledOnce()
     expect(console.error).toHaveBeenCalledExactlyOnceWith(
       '[workshop] the code exchange failed; nothing handed off',
       { name: 'TypeError', message: 'fetch failed' },
@@ -404,7 +493,7 @@ describe('callback: WorkOS does not answer as expected', () => {
 
     const response = await callback(await startFlow())
 
-    expect(response.status).toBe(404)
+    expectBackToPortal(response)
     expect(console.error).toHaveBeenCalledExactlyOnceWith(
       '[workshop] the code exchange failed; nothing handed off',
       {
@@ -417,16 +506,13 @@ describe('callback: WorkOS does not answer as expected', () => {
     )
   })
 
-  it('answers 404 with no hand-off when the access token names no session', async () => {
+  it('sends the browser back with no hand-off when the access token names no session', async () => {
     exchangeCode.mockResolvedValue({
       ...AUTHENTICATED,
       accessToken: accessToken({ sub: 'user_01' }),
     } as never)
 
-    const response = await callback(await startFlow())
-
-    expect(response.status).toBe(404)
-    expect(response.headers.get('location')).toBeNull()
+    expectBackToPortal(await callback(await startFlow()))
   })
 })
 
@@ -450,6 +536,45 @@ describe('callback: development, two local origins over plain http', () => {
       'workshop-auth-start=; Path=/; Max-Age=0; HttpOnly; SameSite=lax',
     ])
   })
+
+  it('sends a refused return back to localhost over http', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'http://127.0.0.1:3000')
+    getConferenceForDomain.mockResolvedValue({
+      conference: { _id: 'conference-local', domains: ['localhost:3000'] },
+      error: null,
+    })
+    const flow = await startFlow('localhost:3000', '127.0.0.1:3000')
+
+    const response = await callback(flow, { on: '127.0.0.1:3000', code: null })
+
+    expect(response.headers.get('location')).toBe(
+      'http://localhost:3000/workshop?sign-in=incomplete',
+    )
+  })
+})
+
+describe('callback: WORKSHOP_AUTH_ORIGIN unusable', () => {
+  it.each([
+    ['with an error from WorkOS', WORKOS_ERROR],
+    ['without its cookie', { cookie: null }],
+  ])(
+    'a return %s is refused on the auth host, not sent back, and says why once',
+    async (_, options) => {
+      const flow = await startFlow()
+      vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'auth.example.org')
+
+      const response = await callback(flow, options)
+
+      expect(response.status).toBe(404)
+      expect(response.headers.get('location')).toBeNull()
+      expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+        '[workshop] callback refused: host-refused',
+      )
+      expect(console.error).toHaveBeenCalledOnce()
+      expect(getDomainClaim).not.toHaveBeenCalled()
+    },
+  )
 })
 
 describe('callback: WORKSHOP_AUTH_ORIGIN unset', () => {
@@ -469,9 +594,39 @@ describe('callback: WORKSHOP_AUTH_ORIGIN unset', () => {
     expect(exchangeCode).toHaveBeenCalledOnce()
   })
 
-  it('a callback on any other host than the one in state is refused', async () => {
+  it('a refused return goes back to the host itself', async () => {
     const flow = await startFlow(TENANT, TENANT)
 
-    expectRefused(await callback(flow, { on: ALLOCATED }), 'host-refused')
+    expectIncomplete(
+      await callback(flow, { on: TENANT, cookie: null }),
+      'no-cookie',
+    )
+  })
+
+  it.each([
+    ['with a code', {}],
+    ['with an error from WorkOS', WORKOS_ERROR],
+    ['without its cookie', { cookie: null }],
+  ])(
+    'a callback on any other host than the one in state, %s, is refused without reading a record',
+    async (_, options) => {
+      const flow = await startFlow(TENANT, TENANT)
+
+      await expectRefused(
+        await callback(flow, { on: ALLOCATED, ...options }),
+        'host-refused',
+      )
+      expect(getDomainClaim).not.toHaveBeenCalled()
+    },
+  )
+
+  it('development: a refused return goes back over https to a host that is not localhost', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const flow = await startFlow(TENANT, TENANT)
+
+    expectIncomplete(
+      await callback(flow, { on: TENANT, cookie: null }),
+      'no-cookie',
+    )
   })
 })

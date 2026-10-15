@@ -630,35 +630,45 @@ workshops off still lets its attendees out.
 
 1. **Tenant host, `/workshop/sign-in` or `/workshop/sign-up`**
    (`central-sign-in/tenant-start.ts`). After the decision above, a random value goes
-   into a cookie on this host (`__Host-workshop-sign-in`, 10 minutes) and the browser is
+   into a cookie on this host (`__Host-workshop-sign-in`, 30 minutes) and the browser is
    sent to the auth host's start route with one sealed request, valid for 60 seconds,
    naming this host, the SHA-256 of that value and the screen to show. No WorkOS URL is
    built here.
 2. **Auth host, start** (`central-sign-in/start.ts`). Without a request a tenant host
    sealed, nothing is read and the answer is 404. It takes the decision for the named
    host, generates a PKCE pair, seals the host, the conference that claims it, the hash
-   and a nonce as the OAuth `state` (10 minutes), puts the nonce and the PKCE verifier in
-   a cookie on the auth host (`__Host-workshop-auth-start`, 10 minutes), and redirects to
+   and a nonce as the OAuth `state` (27 minutes), puts the nonce and the PKCE verifier in
+   a cookie on the auth host (`__Host-workshop-auth-start`, 27 minutes: the step 1
+   cookie's 30 less the two 60-second transits and a minute for the server), and
+   redirects to
    WorkOS's authorize URL with `redirect_uri` `<auth origin>/api/auth/callback`.
 3. **Auth host, callback** (`central-sign-in/callback.ts`). Before the code is
-   exchanged: the state unseals and has not expired, a code is present, the cookie from
-   step 2 carries the state's nonce, the decision holds again for the host in state, and
+   exchanged, in this order: the state unseals and has not expired, the request is on
+   the auth host for the host in state (from the request alone), a code is present, the
+   cookie from step 2 carries the state's nonce, the decision holds again for the host in state, and
    the conference claiming it is still the one in state. Only then does it exchange the
    code with the PKCE verifier. It keeps **no session and no WorkOS token**: it seals a
    hand-off (60 seconds) holding the WorkOS user ID, email, whether WorkOS reports the
    email verified, name, the WorkOS session ID (the access token's `sid`), the host, the
    conference and the hash, clears the step 2 cookie, and redirects to
    `https://<host>/workshop/redeem?token=…` with `Cache-Control: no-store` and
-   `Referrer-Policy: no-referrer`. Every refusal is a 404 with one line in the log
-   (`logRefusal`), and a failed exchange is a 404 too.
+   `Referrer-Policy: no-referrer`. Every refusal leaves one `callback refused: <reason>`
+   line in the log (`logRefusal`); a failed exchange is not a refusal and logs its own
+   error line, `the code exchange failed; nothing handed off`. When the state unseals and
+   the request is on the auth host, a return without a code or without the step 2 cookie
+   goes back to `https://<host in state>/workshop?sign-in=incomplete` with no record
+   read. A failed exchange goes there too, after the decision above (its one live record
+   read, and the workshops check). Every other refusal is a 404 that says the sign-in
+   could not be completed (spec §3).
 4. **Tenant host, redeem** (`central-sign-in/redeem.ts`). The token must unseal and not
    have expired, the browser must hold the step 1 cookie and its value must hash to what
    the token carries, and the token must name this host; so far from the request alone.
    Then the decision is taken live, the conference claiming the host must be the one in
    the token, and it must have workshops. The session cookie is set, the step 1 cookie is
    cleared and the browser goes to `/workshop`; that path is fixed. A refusal goes to
-   `/workshop?sign-in=incomplete`, signed out, with one neutral line on the page and the
-   reason in the log only; no cookie is touched.
+   `/workshop?sign-in=incomplete`, with one neutral line on the signed-out page and the
+   reason in the log only; no cookie is touched, so a session the browser already holds
+   stays.
 
 The hand-off is not single use: nothing records a redeemed token. Only the browser that
 began can redeem it, and a redeem clears the cookie that makes it that browser.

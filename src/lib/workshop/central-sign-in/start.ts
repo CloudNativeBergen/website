@@ -6,7 +6,7 @@ import { workshopCallbackUri } from '../sign-in-paths'
 import { logRefusal, notFound, resolveCentralSignIn } from './decision'
 import { seal, unseal } from './seal'
 import {
-  START_TTL_SECONDS,
+  AUTH_STATE_TTL_SECONDS,
   startCookie,
   startCookieSchema,
   startRequestSchema,
@@ -31,7 +31,8 @@ import { workshopWorkOS } from './workos'
  *
  * A refusal is a 404, with one line in the log that says which (`logRefusal`).
  * WorkOS is sent no referrer: which tenant host the browser came from travels
- * in the sealed state and nowhere else.
+ * in the sealed state and nowhere else. (The callback sends a refused return
+ * back to that host, so a live state names it to whoever holds one: spec §9.)
  */
 export async function startCentralSignIn(
   request: NextRequest,
@@ -63,7 +64,7 @@ export async function startCentralSignIn(
       challenge,
       nonce,
     } satisfies z.infer<typeof startStateSchema>,
-    START_TTL_SECONDS,
+    AUTH_STATE_TTL_SECONDS,
   )
   const authorizeUrl = workos.userManagement.getAuthorizationUrl({
     provider: 'authkit',
@@ -85,9 +86,9 @@ export async function startCentralSignIn(
       { nonce, codeVerifier: pkce.codeVerifier } satisfies z.infer<
         typeof startCookieSchema
       >,
-      START_TTL_SECONDS,
+      AUTH_STATE_TTL_SECONDS,
     ),
-    { ...cookie.options, maxAge: START_TTL_SECONDS },
+    { ...cookie.options, maxAge: AUTH_STATE_TTL_SECONDS },
   )
   return response
 }

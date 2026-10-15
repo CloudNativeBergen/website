@@ -2,8 +2,7 @@ import type { z } from 'zod'
 import { sessionSchema } from './session'
 import { startStateSchema } from './start-seals'
 
-/** How long the tenant host has to redeem a hand-off (spec §5). */
-export const HANDOFF_TTL_SECONDS = 60
+export { HANDOFF_TTL_SECONDS } from './start-seals'
 
 /**
  * Sealed as `handoff` by the auth host: what the session needs, for one host
