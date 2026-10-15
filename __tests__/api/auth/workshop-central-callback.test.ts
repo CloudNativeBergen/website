@@ -330,16 +330,16 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
-  it('a state older than ten minutes', async () => {
+  it('a state older than thirty minutes', async () => {
     const now = new Date('2026-10-10T12:00:00Z')
     vi.useFakeTimers({ toFake: ['Date'], now })
     const flow = await startFlow()
 
-    vi.setSystemTime(now.getTime() + 599_000)
+    vi.setSystemTime(now.getTime() + 1_799_000)
     expect((await callback(flow)).status).toBe(307)
     exchangeCode.mockClear()
     expect(console.warn).not.toHaveBeenCalled()
-    vi.setSystemTime(now.getTime() + 601_000)
+    vi.setSystemTime(now.getTime() + 1_801_000)
     expectRefused(await callback(flow), 'no-state')
   })
 

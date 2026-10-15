@@ -106,14 +106,14 @@ describe('sign-in on a proven tenant host', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
   })
 
-  it('keeps a random value in one host-only cookie with the __Host- prefix, for ten minutes', async () => {
+  it('keeps a random value in one host-only cookie with the __Host- prefix, for thirty minutes', async () => {
     vi.useFakeTimers({ now: new Date('2026-10-12T10:00:00Z') })
     const response = await begin()
 
     const value = cookieValue(response)
     expect(value).toMatch(/^[A-Za-z0-9_-]{43}$/)
     expect(response.headers.getSetCookie()).toEqual([
-      `${COOKIE}=${value}; Path=/; Expires=Mon, 12 Oct 2026 10:10:00 GMT; Max-Age=600; Secure; HttpOnly; SameSite=lax`,
+      `${COOKIE}=${value}; Path=/; Expires=Mon, 12 Oct 2026 10:30:00 GMT; Max-Age=1800; Secure; HttpOnly; SameSite=lax`,
     ])
   })
 
@@ -273,7 +273,7 @@ describe('sign-in: WORKSHOP_AUTH_ORIGIN', () => {
     )
     const value = cookieValue(response)
     expect(response.headers.getSetCookie()).toEqual([
-      `workshop-sign-in=${value}; Path=/; Expires=Mon, 12 Oct 2026 10:10:00 GMT; Max-Age=600; HttpOnly; SameSite=lax`,
+      `workshop-sign-in=${value}; Path=/; Expires=Mon, 12 Oct 2026 10:30:00 GMT; Max-Age=1800; HttpOnly; SameSite=lax`,
     ])
   })
 })

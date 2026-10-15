@@ -45,7 +45,12 @@ vi.mock('@/lib/features/workshops', () => ({
 import { GET } from '@/app/(workshop)/workshop/redeem/route'
 import { seal, unseal } from '@/lib/workshop/central-sign-in/seal'
 import { workshopWorkOS } from '@/lib/workshop/central-sign-in/workos'
-import { handOff as handOffOn, type HandOff } from '../../helpers/workshopFlow'
+import {
+  callback,
+  handOff as handOffOn,
+  startFlow,
+  type HandOff,
+} from '../../helpers/workshopFlow'
 
 const AUTH = 'auth.example.org'
 const TENANT = 'conf.example.org'
@@ -187,6 +192,26 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
       `${SESSION_COOKIE}=${session}; Path=/; Expires=Mon, 19 Oct 2026 10:00:00 GMT; Max-Age=${WEEK}; Secure; HttpOnly; SameSite=lax`,
       `${SIGN_IN_COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=lax`,
     ])
+  })
+
+  it('signs in a sign-up that spent one second under thirty minutes at WorkOS', async () => {
+    const now = Date.parse('2026-10-12T10:00:00Z')
+    vi.useFakeTimers({ toFake: ['Date'], now })
+    const flow = await startFlow(TENANT, AUTH)
+
+    vi.setSystemTime(now + 1_799_000)
+    const returned = await callback(flow, { on: AUTH })
+    expect(returned.status).toBe(307)
+    const redeemUrl = new URL(returned.headers.get('location')!)
+    const response = await redeem({
+      redeemUrl,
+      token: redeemUrl.searchParams.get('token')!,
+      browser: flow.browser,
+    })
+
+    expect(response.headers.get('location')).toBe('/workshop')
+    expect(sessionOf(response)).toBeDefined()
+    expect(console.warn).not.toHaveBeenCalled()
   })
 
   it('lands on /workshop, whatever the query string asks for', async () => {

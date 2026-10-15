@@ -8,8 +8,14 @@ import { hostCookie } from './cookies'
  * then the `state` WorkOS echoes back and the cookie on the auth host.
  */
 
-/** How long a started sign-in may take to come back from WorkOS. */
-export const START_TTL_SECONDS = 600
+/**
+ * How long a started sign-in may take to come back from WorkOS (#1322): the
+ * state, the auth host's start cookie and the tenant host's cookie. A sign-up
+ * waits for a code sent by email, so thirty minutes, not ten. It protects
+ * nothing the shorter one did: the verifier is good for one code, and the
+ * tenant value only with a hand-off that hashes to it.
+ */
+export const START_TTL_SECONDS = 1800
 
 /** How long the browser has to carry a start request to the auth host. */
 export const START_REQUEST_TTL_SECONDS = 60
