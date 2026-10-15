@@ -125,7 +125,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 13, 2026'
+  const lastUpdated = 'October 15, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
