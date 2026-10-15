@@ -637,9 +637,10 @@ workshops off still lets its attendees out.
 2. **Auth host, start** (`central-sign-in/start.ts`). Without a request a tenant host
    sealed, nothing is read and the answer is 404. It takes the decision for the named
    host, generates a PKCE pair, seals the host, the conference that claims it, the hash
-   and a nonce as the OAuth `state` (28 minutes), puts the nonce and the PKCE verifier in
-   a cookie on the auth host (`__Host-workshop-auth-start`, 28 minutes: the step 1
-   cookie's 30 less the two 60-second transits), and redirects to
+   and a nonce as the OAuth `state` (27 minutes), puts the nonce and the PKCE verifier in
+   a cookie on the auth host (`__Host-workshop-auth-start`, 27 minutes: the step 1
+   cookie's 30 less the two 60-second transits and a minute for the server), and
+   redirects to
    WorkOS's authorize URL with `redirect_uri` `<auth origin>/api/auth/callback`.
 3. **Auth host, callback** (`central-sign-in/callback.ts`). Before the code is
    exchanged: the state unseals and has not expired, a code is present, the cookie from

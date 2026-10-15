@@ -60,9 +60,10 @@ Unchanged:
    query string is trusted later. It also sets a cookie on the auth host that the callback requires,
    so a callback URL completes nothing outside the browser that started. **A sign-in has 30
    minutes** from the button to redeem (#1322), the lifetime of the step 1 cookie, because a sign-up
-   waits for a code sent by email. The state and the step 2 cookie last **28 minutes**: the 30 less
-   the 60-second request of step 1 and the 60-second hand-off (§5), so a state that is still valid
-   always finds the step 1 cookie at redeem. A longer window protects nothing less: the PKCE verifier
+   waits for a code sent by email. The state and the step 2 cookie last **27 minutes**: the 30 less
+   the 60-second request of step 1, the 60-second hand-off (§5) and a minute for the server's own
+   work (record reads, the code exchange), so a state that is still valid finds the step 1 cookie at
+   redeem unless that work takes longer than the minute. A longer window protects nothing less: the PKCE verifier
    is good for one code, and the step 1 value only with a hand-off that hashes to it.
 3. **Auth host, callback.** It verifies state and the cookie from step 2. It then checks again that
    the host passes §4, that the conference claiming it is still the one in state, and that this
@@ -87,7 +88,7 @@ A refusal at the callback (#1321) goes to the same place, `https://<host in stat
 when the state unseals, the request is on the auth host, and what is missing is the code (WorkOS
 reported an error, such as a cancelled consent) or the step 2 cookie (Back and submit again, or the
 sign-in finished in another browser). **The host is not checked again** for this: the start route
-proved it at most 28 minutes earlier, nothing but the browser goes there, and so the refusal reads no
+proved it at most 27 minutes earlier, nothing but the browser goes there, and so the refusal reads no
 record. A failed code exchange goes there too, after the host has just been checked. Everything else
 is a 404 on the auth host that says the sign-in could not be completed: no state, a state the auth
 host did not seal, **an expired state** (its host can no longer be read, and is not carried anywhere
@@ -179,6 +180,11 @@ through `workshopPortalUrl`. `AUTH.md` and `DOMAIN_VERIFICATION.md` are rewritte
 `/privacy` is reviewed: the cookie is now the platform's own, and the shared-login note stays true.
 
 ## 9. Known gaps
+
+- Whoever holds a state that is still valid can learn from the callback which conference site that
+  sign-in began on, without the auth host's cookie: a return without it is sent back there (§3). The
+  state passes through WorkOS and the attendee's browser. Answering 404 instead would leave an
+  attendee who finished the sign-in in another browser on the auth host with no way back.
 
 - Signing out on one host does not end a session the same attendee holds on another conference's
   host. It lasts until its 7 days are over.

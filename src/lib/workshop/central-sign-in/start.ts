@@ -31,7 +31,8 @@ import { workshopWorkOS } from './workos'
  *
  * A refusal is a 404, with one line in the log that says which (`logRefusal`).
  * WorkOS is sent no referrer: which tenant host the browser came from travels
- * in the sealed state and nowhere else.
+ * in the sealed state and nowhere else. (The callback sends a refused return
+ * back to that host, so a live state names it to whoever holds one: spec §9.)
  */
 export async function startCentralSignIn(
   request: NextRequest,
