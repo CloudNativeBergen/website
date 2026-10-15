@@ -48,7 +48,7 @@ beforeEach(() => {
     // Every other field of a listed workshop: only its type tells.
     talk('a-sponsor', { _type: 'sponsor' }),
     talk('drafts.unpublished'),
-    talk('drafts.listed-120', { status: 'confirmed' }),
+    talk('drafts.listed-120'),
   ])
 })
 

@@ -436,6 +436,8 @@ describe('workshop.signup: only a workshop the portal lists (#1301)', () => {
     })
     expect(listedMock).toHaveBeenCalledWith('workshop-1', 'conf-1')
     expect(createSignupMock).not.toHaveBeenCalled()
+    expect(capacityMock).not.toHaveBeenCalled()
+    expect(getSignupsMock).not.toHaveBeenCalled()
     expect(emailMock).not.toHaveBeenCalled()
   })
 

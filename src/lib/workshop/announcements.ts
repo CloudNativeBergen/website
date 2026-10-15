@@ -3,12 +3,11 @@ import { clientReadCached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import type { Conference } from '@/lib/conference/types'
 import { sendWorkshopAnnouncementEmail } from '@/lib/email/workshop'
+import { LISTED_WORKSHOP_FORMATS } from './listed'
 
-/** Talk formats that qualify as a workshop (mirrors workshopSignup validation). */
-export const WORKSHOP_FORMATS = ['workshop_120', 'workshop_240'] as const
-
+/** A workshop's format, by the one list (`listed.ts`, #1301). */
 export function isWorkshopFormat(format: string | undefined): boolean {
-  return !!format && (WORKSHOP_FORMATS as readonly string[]).includes(format)
+  return !!format && (LISTED_WORKSHOP_FORMATS as string[]).includes(format)
 }
 
 /** Minimal projection of a workshop talk used to authorize + label a broadcast. */
@@ -217,7 +216,7 @@ export async function getAnnouncementsByWorkshop(
         "authorName": author->name
       }
     }[count(announcements) > 0]`,
-    { formats: WORKSHOP_FORMATS },
+    { formats: LISTED_WORKSHOP_FORMATS },
   )
 
   // `fromEntries` defines each id as the object's OWN key: a workshop id is

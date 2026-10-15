@@ -9,12 +9,19 @@ export const LISTED_WORKSHOP_FORMATS =
   Object.values(Format).filter(isWorkshopFormat)
 export const LISTED_WORKSHOP_STATUSES = [Status.confirmed]
 
-/** A draft or a release version (an id under a path) is never listed. */
+const listedStatuses: ReadonlySet<string> = new Set(LISTED_WORKSHOP_STATUSES)
+const listedFormats: ReadonlySet<string> = new Set(LISTED_WORKSHOP_FORMATS)
+
+/**
+ * A stored talk the portal lists. A draft or a release version (an id under a
+ * path) never is. Which conference it is listed in is the caller's to check:
+ * `isListedWorkshopOf` reads one by id and asks both.
+ */
 export const isListedWorkshop = (talk: {
   _id: string
   status?: string
   format?: string
 }) =>
   !talk._id.includes('.') &&
-  (LISTED_WORKSHOP_STATUSES as string[]).includes(talk.status ?? '') &&
-  (LISTED_WORKSHOP_FORMATS as string[]).includes(talk.format ?? '')
+  listedStatuses.has(talk.status ?? '') &&
+  listedFormats.has(talk.format ?? '')
