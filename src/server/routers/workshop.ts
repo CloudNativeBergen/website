@@ -576,16 +576,9 @@ export const workshopRouter = router({
     try {
       // Identity is taken ONLY from the WorkOS session — never from client
       // input — so a caller cannot read another attendee's signups. No session
-      // → no signups (rather than an error, since the workshop page renders
-      // this list optimistically).
-      if (!ctx.workosUser?.id) {
-        return {
-          success: true,
-          data: [],
-          count: 0,
-        }
-      }
-
+      // is UNAUTHORIZED, never an empty list (#1303): the portal only asks
+      // with a session, so a missing one has ENDED while the page was open,
+      // and "no signups" would offer the attendee's own workshops as available.
       const { actor, conference } = await requireWorkshopAttendee(ctx)
 
       const signups = await getWorkshopSignups(

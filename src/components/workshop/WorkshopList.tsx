@@ -17,6 +17,7 @@ import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { Button } from '@/components/Button'
+import { WORKSHOP_SIGN_IN_PATH } from '@/lib/workshop/sign-in-paths'
 
 interface WorkshopListProps {
   userWorkOSId?: string
@@ -102,6 +103,17 @@ export default function WorkshopList({
     enabled: !!userWorkOSId,
   })
 
+  // THE SESSION HAS ENDED (#1303): it lasts 7 days with no renewal, and the
+  // attendee can sign out in another tab. A refused write reads the sign-ups
+  // again, so the notice below (not a five-second message) says so.
+  const sessionEnded = signupsError?.data?.code === 'UNAUTHORIZED'
+  const refusedForSession = (code: string | undefined) => {
+    if (code !== 'UNAUTHORIZED') return false
+    setErrorMessage(null)
+    refetchSignups()
+    return true
+  }
+
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
       setSuccessMessage(
@@ -116,6 +128,7 @@ export default function WorkshopList({
     },
     onError: (error) => {
       setSuccessMessage(null)
+      if (refusedForSession(error.data?.code)) return
       // The server refused for the window while this list was offering
       // sign-up BECAUSE OF early access: the one case where a refusal
       // contradicts what is on screen. (Once sign-up is open for everyone a
@@ -160,8 +173,9 @@ export default function WorkshopList({
       refetchSignups()
     },
     onError: (error) => {
-      setErrorMessage(error.message)
       setSuccessMessage(null)
+      if (refusedForSession(error.data?.code)) return
+      setErrorMessage(error.message)
       setTimeout(() => setErrorMessage(null), 5000)
     },
   })
@@ -326,24 +340,41 @@ export default function WorkshopList({
           role="alert"
           className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
         >
-          {/* A refusal carries the server's own reason (no ticket, wrong
-              ticket type, ticket check unavailable); anything else is a
-              failed read, and "try again" is all there is to say. */}
+          {/* An ended session can only be fixed by signing in again. A
+              refusal carries the server's own reason (no ticket, wrong ticket
+              type, ticket check unavailable); anything else is a failed
+              read, and "try again" is all there is to say. */}
           <p>
-            {signupsError?.data?.code === 'FORBIDDEN'
-              ? signupsError.message
-              : 'We could not load your workshop registrations. Workshops you are already registered for may be listed as available below.'}
+            {sessionEnded
+              ? 'Your session has ended. Sign in again to see your workshop registrations and sign up for workshops.'
+              : signupsError?.data?.code === 'FORBIDDEN'
+                ? signupsError.message
+                : 'We could not load your workshop registrations. Workshops you are already registered for may be listed as available below.'}
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="min-h-11 shrink-0"
-            onClick={() => refetchSignups()}
-            disabled={signupsFetching}
-          >
-            Try again
-          </Button>
+          {sessionEnded ? (
+            // A FORM, NOT A LINK, as on the signed-out view: the route sets a
+            // cookie and redirects to another origin.
+            <form
+              action={WORKSHOP_SIGN_IN_PATH}
+              method="get"
+              className="shrink-0"
+            >
+              <Button type="submit" size="sm" className="min-h-11">
+                Sign in again
+              </Button>
+            </form>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 shrink-0"
+              onClick={() => refetchSignups()}
+              disabled={signupsFetching}
+            >
+              Try again
+            </Button>
+          )}
         </div>
       )}
 
