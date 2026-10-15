@@ -26,9 +26,9 @@ function signInHost(
   }
 }
 
-/** A refusal that shows nothing: a 404, whatever the reason. */
-export function notFound(): NextResponse {
-  return new NextResponse('Not Found', { status: 404 })
+/** A refusal that shows nothing of its reason: a 404, saying `body`. */
+export function notFound(body = 'Not Found'): NextResponse {
+  return new NextResponse(body, { status: 404 })
 }
 
 /**
@@ -147,14 +147,33 @@ export async function resolveAuthHostDestination(
   host: string | null | undefined,
 ): Promise<SignInHost | null> {
   const configured = configuredAuthOrigin()
-  if (configured === 'invalid') return null
-  const authHost =
-    configured === 'unset' ? normalizeDomain(host ?? '') : configured.host
-  const requestHost = normalizeDomain(headers.get('host') ?? '')
-  if (!requestHost || requestHost !== authHost) return null
+  if (!isOnAuthHost(configured, headers, host)) return null
 
   const destination = await resolveProvenDestination(host)
   return destination && signInHost(configured, destination)
+}
+
+/**
+ * The first half of {@link resolveAuthHostDestination}, which reads nothing:
+ * is this request on the auth host that signs `host` in?
+ */
+export function isAuthHostFor(
+  headers: { get(name: string): string | null },
+  host: string | null | undefined,
+): boolean {
+  return isOnAuthHost(configuredAuthOrigin(), headers, host)
+}
+
+function isOnAuthHost(
+  configured: URL | 'unset' | 'invalid',
+  headers: { get(name: string): string | null },
+  host: string | null | undefined,
+): configured is URL | 'unset' {
+  if (configured === 'invalid') return false
+  const authHost =
+    configured === 'unset' ? normalizeDomain(host ?? '') : configured.host
+  const requestHost = normalizeDomain(headers.get('host') ?? '')
+  return requestHost !== '' && requestHost === authHost
 }
 
 /**

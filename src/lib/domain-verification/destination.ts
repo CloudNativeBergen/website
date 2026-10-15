@@ -56,6 +56,20 @@ export function isProven(record: DomainVerificationRecord, now: Date): boolean {
 }
 
 /**
+ * Where `host` is reached: over plain HTTP only for `localhost` on a
+ * development server, as {@link resolveProvenDestination} admits it.
+ */
+export function originOf(host: string): string {
+  return isLocalDevelopment(host) ? `http://${host}` : `https://${host}`
+}
+
+function isLocalDevelopment(host: string): boolean {
+  return (
+    process.env.NODE_ENV === 'development' && host.split(':')[0] === 'localhost'
+  )
+}
+
+/**
  * DEVELOPMENT ONLY: a local server. `NODE_ENV` is `production` in every
  * deployed build (previews included), so this cannot be reached there, and
  * nothing but `localhost` qualifies.
@@ -68,7 +82,7 @@ async function localDestination(
   const { _id, organization, ticketingProvider, domains } = conference
   return {
     host,
-    origin: `http://${host}`,
+    origin: originOf(host),
     conference: { _id, organization, ticketingProvider, domains },
   }
 }
@@ -82,12 +96,7 @@ export async function resolveProvenDestination(
   if (!hostname) return null
 
   try {
-    if (
-      process.env.NODE_ENV === 'development' &&
-      hostname.split(':')[0] === 'localhost'
-    ) {
-      return await localDestination(hostname)
-    }
+    if (isLocalDevelopment(hostname)) return await localDestination(hostname)
 
     const claim = await getDomainClaim(domainVerificationId(hostname))
     if (!claim?.conference) return null
@@ -99,7 +108,7 @@ export async function resolveProvenDestination(
         typeof domain === 'string' && normalizeDomain(domain) === hostname,
     )
     if (!claims) return null
-    return { host: hostname, origin: `https://${hostname}`, conference }
+    return { host: hostname, origin: originOf(hostname), conference }
   } catch (error) {
     console.error(
       '[domain-verification] destination read failed; refusing the host',

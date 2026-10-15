@@ -2,9 +2,15 @@ import 'server-only'
 import { decodeJwt } from 'jose'
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { WORKSHOP_REDEEM_PATH } from '../sign-in-paths'
+import { originOf } from '@/lib/domain-verification/destination'
+import {
+  WORKSHOP_PORTAL_PATH,
+  WORKSHOP_REDEEM_PATH,
+  WORKSHOP_SIGN_IN_INCOMPLETE_QUERY,
+} from '../sign-in-paths'
 import { clearCookie } from './cookies'
 import {
+  isAuthHostFor,
   logRefusal,
   notFound,
   resolveCentralSignIn,
@@ -17,9 +23,34 @@ import { workshopWorkOS } from './workos'
 
 const accessTokenClaims = z.object({ sid: z.string().min(1) })
 
+/** What a 404 here says: nothing in it tells where to send the attendee. */
+const NOT_COMPLETED =
+  'This sign-in could not be completed. Go back to the conference website and sign in again.'
+
 function refused(reason: CallbackRefusal): NextResponse {
   logRefusal('callback', reason)
-  return notFound()
+  return notFound(NOT_COMPLETED)
+}
+
+/**
+ * Back to the portal of the tenant host at `origin`, where the signed-out page
+ * says the sign-in did not complete. The same fixed marker a refused redeem
+ * uses; nothing in the request chooses where. The callback URL carries the
+ * state, so the tenant host is not sent it as a referrer.
+ */
+function toTenantPortal(origin: string): NextResponse {
+  return NextResponse.redirect(
+    new URL(
+      `${WORKSHOP_PORTAL_PATH}${WORKSHOP_SIGN_IN_INCOMPLETE_QUERY}`,
+      origin,
+    ),
+    {
+      headers: {
+        'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer',
+      },
+    },
+  )
 }
 
 /**
@@ -56,18 +87,27 @@ function sessionIdOf(accessToken: string): string | null {
  * FINISH A WORKSHOP SIGN-IN ON THE AUTH HOST (#1311, spec §3 step 3): WorkOS
  * sends the browser back with a code.
  *
- * Every check below passes BEFORE the code is exchanged, and a refusal is a
- * 404:
+ * Every check below passes BEFORE the code is exchanged:
  *
  *  - the state unseals as one the start route sealed, and has not expired;
  *  - the host and the hash come from the sealed state, never the query string;
- *  - the browser carries the cookie the start route set for this very state.
- *    Decided from the request alone, so a callback URL without its cookie
- *    reads nothing;
- *  - the decision is taken again (`resolveCentralSignIn`): the request is on
- *    the auth host, the host may still receive a hand-off, and its conference
- *    still has workshops;
+ *  - the request is on the auth host for that host;
+ *  - a code is present, and the browser carries the cookie the start route set
+ *    for this very state. Decided from the request alone, so none of these
+ *    reads anything;
+ *  - the decision is taken again (`resolveCentralSignIn`): the host may still
+ *    receive a hand-off, and its conference still has workshops;
  *  - the conference that claims the host is still the one in state.
+ *
+ * WHERE A REFUSAL GOES (#1321). Without a code (WorkOS reported an error) or
+ * without the cookie (Back and submit again, another browser), the browser
+ * goes back to the portal of the host in state, to say the sign-in did not
+ * complete. That host is trusted as sealed: the start route proved it at most
+ * `START_TTL_SECONDS` ago, and nothing goes there but the browser, so
+ * the refusal reads no record. A failed exchange goes there too. Everything
+ * else is a 404 on the auth host: without a state that unseals, nothing says
+ * where to send anyone, and a host that fails the decision is not sent anyone.
+ * No refusal sets a cookie.
  *
  * Each refusal leaves one line in the log with its reason (`logRefusal`).
  *
@@ -85,9 +125,17 @@ export async function finishCentralSignIn(
     startStateSchema,
   )
   if (!state) return refused('no-state')
+  // The auth-host routes answer 404 on every other host (spec §2).
+  if (!isAuthHostFor(request.headers, state.host)) {
+    return refused('host-refused')
+  }
+  const incomplete = (reason: CallbackRefusal) => {
+    logRefusal('callback', reason)
+    return toTenantPortal(originOf(state.host))
+  }
 
   const code = params.get('code')
-  if (!code) return refused('no-code')
+  if (!code) return incomplete('no-code')
 
   const cookie = startCookie()
   const started = await unseal(
@@ -95,7 +143,7 @@ export async function finishCentralSignIn(
     request.cookies.get(cookie.name)?.value,
     startCookieSchema,
   )
-  if (!started || started.nonce !== state.nonce) return refused('no-cookie')
+  if (!started || started.nonce !== state.nonce) return incomplete('no-cookie')
 
   const signIn = await resolveCentralSignIn(request.headers, state.host)
   if (!signIn) return refused('host-refused')
@@ -132,7 +180,7 @@ export async function finishCentralSignIn(
       '[workshop] the code exchange failed; nothing handed off',
       failureOf(error),
     )
-    return notFound()
+    return toTenantPortal(destination.origin)
   }
 
   const redeem = new URL(WORKSHOP_REDEEM_PATH, destination.origin)
