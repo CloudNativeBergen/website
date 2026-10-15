@@ -596,3 +596,63 @@ export const SignupsUnavailableMobile: Story = {
     viewport: { defaultViewport: 'mobile1' },
   },
 }
+
+const signupsSessionEnded = () =>
+  HttpResponse.json(
+    {
+      error: {
+        message: 'You must be signed in to manage workshop signups',
+        code: -32001,
+        data: { code: 'UNAUTHORIZED', httpStatus: 401 },
+      },
+    },
+    { status: 401 },
+  )
+
+/**
+ * The session ended while the page was open (#1303): the read is refused with
+ * UNAUTHORIZED. The notice says so and offers the way back in, the same GET
+ * form to `/workshop/sign-in` as the signed-out view, instead of "try again".
+ */
+export const SessionEnded: Story = {
+  args: signedInArgs,
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/workshop.list', () =>
+          listResponse([wsAvailableA, wsAvailableB, wsFull]),
+        ),
+        http.get('/api/trpc/workshop.getMySignups', signupsSessionEnded),
+        announcementsHandler,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const notice = await canvas.findByRole('alert', {}, { timeout: 5000 })
+    await expect(notice).toHaveTextContent(/your session has ended/i)
+    const signIn = within(notice).getByRole('button', {
+      name: 'Sign in again',
+    })
+    await expect(signIn.closest('form')).toHaveAttribute(
+      'action',
+      '/workshop/sign-in',
+    )
+    await expect(
+      within(notice).queryByRole('button', { name: /try again/i }),
+    ).toBeNull()
+  },
+}
+
+export const SessionEndedDark: Story = {
+  ...SessionEnded,
+  parameters: { ...SessionEnded.parameters, dark: true },
+}
+
+export const SessionEndedMobile: Story = {
+  ...SessionEnded,
+  parameters: {
+    ...SessionEnded.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
