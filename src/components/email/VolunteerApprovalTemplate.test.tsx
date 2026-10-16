@@ -92,4 +92,55 @@ describe('VolunteerApprovalTemplate', () => {
       'https://cloudnativebergen.dev/volunteer/confirm?token=abc.123',
     )
   })
+
+  it('renders PortableText JSON messages as formatted HTML with links and bold text', async () => {
+    const portableMessage = JSON.stringify([
+      {
+        _type: 'block',
+        _key: 'b1',
+        style: 'normal',
+        markDefs: [
+          {
+            _key: 'm1',
+            _type: 'link',
+            href: 'https://cloudnativebergen.dev/handbook',
+          },
+        ],
+        children: [
+          {
+            _type: 'span',
+            _key: 's1',
+            text: 'Please read our ',
+            marks: [],
+          },
+          {
+            _type: 'span',
+            _key: 's2',
+            text: 'volunteer handbook',
+            marks: ['strong', 'm1'],
+          },
+          {
+            _type: 'span',
+            _key: 's3',
+            text: ' before arriving.',
+            marks: [],
+          },
+        ],
+      },
+    ])
+
+    const html = await render(
+      <VolunteerApprovalTemplate
+        {...baseProps}
+        message={portableMessage}
+        brandColor="#9333EA"
+      />,
+    )
+
+    expect(html).not.toContain('"_type":"block"')
+    expect(html).toContain('Please read our ')
+    expect(html).toContain('https://cloudnativebergen.dev/handbook')
+    expect(html).toContain('<strong>')
+    expect(html).toContain('volunteer handbook')
+  })
 })

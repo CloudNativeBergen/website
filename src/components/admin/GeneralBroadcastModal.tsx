@@ -7,6 +7,34 @@ import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import { PortableTextBlock } from '@portabletext/editor'
+import {
+  findUnsupportedVariables,
+  formatUnmergedVariablesMessage,
+  RESEND_BROADCAST_VARIABLES,
+} from '@/lib/sponsor/templates'
+import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
+
+function expandPreviewBroadcastVariables(value: string): string {
+  return value.replace(
+    /\{\{\{\s*([A-Z0-9_]+)(?:\|([^}]*))?\s*\}\}\}/g,
+    (match, varName: string, fallback?: string) => {
+      if (!(varName in RESEND_BROADCAST_VARIABLES)) return match
+      if (fallback !== undefined && fallback.length > 0) return fallback
+      switch (varName) {
+        case 'FIRST_NAME':
+          return 'there'
+        case 'LAST_NAME':
+          return ''
+        case 'EMAIL':
+          return 'recipient@example.com'
+        case 'RESEND_UNSUBSCRIBE_URL':
+          return '#unsubscribe'
+        default:
+          return match
+      }
+    },
+  )
+}
 
 interface GeneralBroadcastModalProps {
   isOpen: boolean
@@ -59,16 +87,21 @@ export function GeneralBroadcastModal({
     subject: string
     message: PortableTextBlock[]
   }) => {
-    try {
-      await onSend(subject, JSON.stringify(message))
-      showNotification({
-        type: 'success',
-        title: 'Email sent',
-        message: `Email sent to ${recipientCount} ${recipientType}`,
-      })
-    } catch (error) {
-      throw error
+    const unmergedVariables = findUnsupportedVariables(
+      RESEND_BROADCAST_VARIABLES,
+      subject,
+      message as unknown as TemplateBlock[],
+    )
+    if (unmergedVariables.length > 0) {
+      throw new Error(formatUnmergedVariablesMessage(unmergedVariables))
     }
+
+    await onSend(subject, JSON.stringify(message))
+    showNotification({
+      type: 'success',
+      title: 'Email sent',
+      message: `Email sent to ${recipientCount} ${recipientType}`,
+    })
   }
 
   const recipientDisplay = (
@@ -95,19 +128,21 @@ export function GeneralBroadcastModal({
     message: PortableTextBlock[]
     messageHTML: string
   }) => {
+    const expandedSubject = expandPreviewBroadcastVariables(subject)
+    const expandedHTML = expandPreviewBroadcastVariables(messageHTML)
     return (
       <BroadcastTemplate
         content={
           <div
-            className="text-base leading-relaxed text-gray-700 dark:text-gray-300"
+            className="text-base leading-relaxed text-gray-700"
             style={{
               fontSize: '16px',
               lineHeight: '1.6',
             }}
-            dangerouslySetInnerHTML={{ __html: messageHTML }}
+            dangerouslySetInnerHTML={{ __html: expandedHTML }}
           />
         }
-        subject={subject}
+        subject={expandedSubject}
         eventName={eventName}
         eventLocation={eventLocation}
         eventDate={eventDate}
@@ -117,6 +152,10 @@ export function GeneralBroadcastModal({
       />
     )
   }
+
+  const singularRecipient = recipientType.endsWith('s')
+    ? recipientType.slice(0, -1)
+    : recipientType
 
   return (
     <EmailModal
@@ -135,7 +174,7 @@ export function GeneralBroadcastModal({
         subject: 'Enter broadcast subject...',
         message: 'Enter your message here...',
       }}
-      helpText={`Use {{{FIRST_NAME|there}}} to personalize the greeting. This will be replaced with each ${recipientType.slice(0, -1)}&apos;s first name or &apos;there&apos; as a fallback.`}
+      helpText={`Use {{{FIRST_NAME|there}}} to personalize the greeting. This will be replaced with each ${singularRecipient}'s first name or 'there' as a fallback.`}
     />
   )
 }

@@ -49,6 +49,7 @@ import { encode } from 'next-auth/jwt'
 const CLI_TOKEN_MAX_AGE = 30 * 24 * 60 * 60 // 30 days
 const JWT_SALT = 'authjs.session-token'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import type { Conference } from '@/lib/conference/types'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Status } from '@/lib/proposal/types'
 import type { Speaker, TicketEmailGrant } from '@/lib/speaker/types'
@@ -58,6 +59,12 @@ import { sendBroadcastEmail } from '@/lib/email/broadcast'
 import { syncConferenceAudience } from '@/lib/email/audience'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
+import {
+  findUnsupportedVariables,
+  formatUnmergedVariablesMessage,
+  RESEND_BROADCAST_VARIABLES,
+} from '@/lib/sponsor/templates'
+import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
 import { buildOrganizerCreatedSpeaker } from '@/lib/speaker/sanity'
 import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
 import {
@@ -116,6 +123,60 @@ function redactForeignGrants(
           ticketId: undefined,
         },
   )
+}
+
+async function syncConfirmedSpeakerAudience(
+  conference: Conference,
+  conferenceId: string,
+  options?: { requireNonEmpty?: boolean },
+) {
+  const { speakers, err } = await getSpeakers(
+    conferenceId,
+    [Status.confirmed],
+    false,
+    conference.organization?._ref ?? null,
+  )
+
+  if (err) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch speakers',
+    })
+  }
+
+  const eligibleSpeakers = speakers.filter(
+    (speaker: Speaker & { proposals: ProposalExisting[] }) =>
+      Boolean(speaker.email?.trim()) &&
+      speaker.proposals?.some(
+        (proposal: ProposalExisting) => proposal.status === 'confirmed',
+      ),
+  )
+
+  if (options?.requireNonEmpty && eligibleSpeakers.length === 0) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'No confirmed speakers with email addresses found for this conference.',
+    })
+  }
+
+  const { audienceId, syncedCount, error } = await syncConferenceAudience(
+    conference,
+    eligibleSpeakers,
+  )
+
+  if (error) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: error.message || 'Failed to sync audience',
+    })
+  }
+
+  return {
+    audienceId,
+    syncedCount,
+    eligibleSpeakers,
+  }
 }
 
 /** The conference shape the ticket sweep passes straight to the handler. */
@@ -1455,6 +1516,23 @@ export const speakerRouter = router({
           })
         }
 
+        const unmergedVariables = findUnsupportedVariables(
+          RESEND_BROADCAST_VARIABLES,
+          input.subject,
+          messagePortableText as unknown as TemplateBlock[],
+        )
+        if (unmergedVariables.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: formatUnmergedVariablesMessage(unmergedVariables),
+          })
+        }
+
+        const conferenceId = await resolveConferenceId()
+        await syncConfirmedSpeakerAudience(conference, conferenceId, {
+          requireNonEmpty: true,
+        })
+
         const response = await sendBroadcastEmail({
           conference,
           subject: input.subject,
@@ -1485,39 +1563,10 @@ export const speakerRouter = router({
       }
 
       const conferenceId = await resolveConferenceId()
-      const { speakers, err } = await getSpeakers(
-        conferenceId,
-        [Status.confirmed],
-        false,
-        conference.organization?._ref ?? null,
-      )
-
-      if (err) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch speakers',
-        })
-      }
-
-      const eligibleSpeakers = speakers.filter(
-        (speaker: Speaker & { proposals: ProposalExisting[] }) =>
-          speaker.email &&
-          speaker.proposals?.some(
-            (proposal: ProposalExisting) => proposal.status === 'confirmed',
-          ),
-      )
-
-      const { audienceId, syncedCount, error } = await syncConferenceAudience(
+      const { audienceId, syncedCount } = await syncConfirmedSpeakerAudience(
         conference,
-        eligibleSpeakers,
+        conferenceId,
       )
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to sync audience',
-        })
-      }
 
       return {
         success: true,
