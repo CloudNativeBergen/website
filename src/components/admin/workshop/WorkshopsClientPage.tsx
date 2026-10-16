@@ -423,240 +423,241 @@ export function WorkshopsClientPage({
   }, [signups, signupModal.workshopId, signupModal.status, workshopSignupsData])
 
   return (
-    <TicketHolderContext.Provider value={holderView}>
-      <div className="space-y-6">
-        <AdminPageHeader
-          title="Workshop Management"
-          description="Manage workshop signups and capacity"
-          icon={<AcademicCapIcon className="h-6 w-6" />}
-          stats={
-            statsData
-              ? [
-                  {
-                    value: statsData.data.totals.totalWorkshops,
-                    label: 'Total Workshops',
-                    color: 'blue' as const,
-                  },
-                  {
-                    value: statsData.data.totals.uniqueParticipants,
-                    label: 'Unique Participants',
-                    color: 'purple' as const,
-                  },
-                  {
-                    value: statsData.data.totals.totalSignups,
-                    label: 'Total Signups',
-                    color: 'slate' as const,
-                  },
-                  {
-                    value: statsData.data.totals.totalConfirmed,
-                    label: 'Confirmed',
-                    color: 'green' as const,
-                  },
-                  {
-                    value: statsData.data.totals.totalWaitlist,
-                    label: 'Waitlist',
-                    color: 'blue' as const,
-                  },
-                ]
-              : []
-          }
-        >
-          {/* Below the stats, not beside the title: the title row cannot wrap,
+    <div className="space-y-6">
+      <AdminPageHeader
+        title="Workshop Management"
+        description="Manage workshop signups and capacity"
+        icon={<AcademicCapIcon className="h-6 w-6" />}
+        stats={
+          statsData
+            ? [
+                {
+                  value: statsData.data.totals.totalWorkshops,
+                  label: 'Total Workshops',
+                  color: 'blue' as const,
+                },
+                {
+                  value: statsData.data.totals.uniqueParticipants,
+                  label: 'Unique Participants',
+                  color: 'purple' as const,
+                },
+                {
+                  value: statsData.data.totals.totalSignups,
+                  label: 'Total Signups',
+                  color: 'slate' as const,
+                },
+                {
+                  value: statsData.data.totals.totalConfirmed,
+                  label: 'Confirmed',
+                  color: 'green' as const,
+                },
+                {
+                  value: statsData.data.totals.totalWaitlist,
+                  label: 'Waitlist',
+                  color: 'blue' as const,
+                },
+              ]
+            : []
+        }
+      >
+        {/* Below the stats, not beside the title: the title row cannot wrap,
             and on a phone the reason text would push the page sideways. */}
-          <div className="mt-4 flex justify-end">
-            <ResendInstructionsButton disabledReason={resendDisabledReason} />
-          </div>
-        </AdminPageHeader>
-
-        <TicketHolderPanel
-          view={holderView}
-          onRetry={() => void ticketHolders.refetch()}
-          onMoveToWaitlist={signupActions.moveToWaitlist}
-          onDeleteSignup={signupActions.remove}
-          isMoving={signupActions.isMoving}
-          isDeleting={signupActions.isDeleting}
-        />
-
-        {ticketsSection}
-
-        <WorkshopRegistrationSettings
-          workshopRegistrationSponsorStart={workshopRegistrationSponsorStart}
-          workshopRegistrationStart={workshopRegistrationStart}
-          workshopRegistrationEnd={workshopRegistrationEnd}
-        />
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {initialWorkshops.length === 0 ? (
-            <EmptyState
-              icon={AcademicCapIcon}
-              title="No workshops found"
-              description="No workshops have been created for this conference yet."
-              className="col-span-full rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
-            />
-          ) : (
-            initialWorkshops.map((workshop) => {
-              const workshopSignups = signupsByWorkshop.get(workshop._id) || []
-              // The summary is read again after every action; the server render
-              // (`workshop`) never is. Once the summary is in, its numbers are
-              // the card's: the workshop's own counts from the same server read,
-              // not a count of the 100 sign-ups this page lists.
-              const live = statsData?.data.workshops.find(
-                (stats) => stats.workshopId === workshop._id,
-              )
-              const confirmedCount =
-                live?.confirmedSignups ??
-                (workshop.signups ||
-                  workshopSignups.filter((s) => s.status === 'confirmed')
-                    .length)
-              const waitlistCount =
-                live?.waitlistSignups ??
-                (workshop.waitlistCount ||
-                  workshopSignups.filter((s) => s.status === 'waitlist').length)
-              const capacity = live?.capacity ?? workshop.capacity
-
-              return (
-                <WorkshopCard
-                  key={workshop._id}
-                  workshop={{ ...workshop, capacity }}
-                  confirmedCount={confirmedCount}
-                  waitlistCount={waitlistCount}
-                  onViewConfirmed={() =>
-                    setSignupModal({
-                      isOpen: true,
-                      workshopId: workshop._id,
-                      workshopTitle: workshop.title,
-                      status: 'confirmed' as WorkshopSignupStatus,
-                    })
-                  }
-                  onViewWaitlist={() =>
-                    setSignupModal({
-                      isOpen: true,
-                      workshopId: workshop._id,
-                      workshopTitle: workshop.title,
-                      status: 'waitlist' as WorkshopSignupStatus,
-                    })
-                  }
-                  onAddParticipant={() =>
-                    setAddParticipantModal({
-                      isOpen: true,
-                      workshopId: workshop._id,
-                      workshopTitle: workshop.title,
-                    })
-                  }
-                  onEditCapacity={() => {
-                    setEditCapacityModal({
-                      isOpen: true,
-                      workshopId: workshop._id,
-                      workshopTitle: workshop.title,
-                      currentCapacity: capacity || 30,
-                      currentSignups: confirmedCount,
-                    })
-                  }}
-                  onAnnounce={() =>
-                    setAnnounceModal({
-                      isOpen: true,
-                      workshopId: workshop._id,
-                      workshopTitle: workshop.title,
-                      confirmedCount,
-                    })
-                  }
-                />
-              )
-            })
-          )}
+        <div className="mt-4 flex justify-end">
+          <ResendInstructionsButton disabledReason={resendDisabledReason} />
         </div>
+      </AdminPageHeader>
 
-        <EarlySignupsList
-          signups={
-            earlySignups.isPlaceholderData
-              ? undefined
-              : earlySignups.data?.signups
-          }
-          sponsors={earlySignups.data?.sponsors}
-          sponsorId={earlySponsorId}
-          onSponsorChange={narrowEarlySignups}
-          error={
-            earlySignups.error ? 'The early sign-ups could not be read.' : null
-          }
-          onRetry={() => void earlySignups.refetch()}
-        />
+      <TicketHolderPanel
+        view={holderView}
+        onRetry={() => void ticketHolders.refetch()}
+        onMoveToWaitlist={signupActions.moveToWaitlist}
+        onDeleteSignup={signupActions.remove}
+        isMoving={signupActions.isMoving}
+        isDeleting={signupActions.isDeleting}
+      />
 
-        <SignupDetailsModal
-          isOpen={signupModal.isOpen}
-          onClose={() => {
-            setSignupModal({ ...signupModal, isOpen: false })
-            // A question left open (#1358) is not asked again on reopening.
-            signupActions.dismissFull()
-          }}
-          workshopTitle={signupModal.workshopTitle}
-          status={signupModal.status}
-          signups={filteredSignups}
-          onConfirmSignup={signupActions.confirm}
-          fullRefusal={signupActions.full}
-          onConfirmBeyondCapacity={signupActions.confirmBeyondCapacity}
-          onDismissFullRefusal={signupActions.dismissFull}
-          onMoveToWaitlist={signupActions.moveToWaitlist}
-          onDeleteSignup={signupActions.remove}
-          isConfirming={signupActions.isConfirming}
-          isMoving={signupActions.isMoving}
-          isDeleting={signupActions.isDeleting}
-        />
+      {/* The section is rendered by the server; its banner reads the ticket
+          holders this page read, through the context. */}
+      <TicketHolderContext.Provider value={holderView}>
+        {ticketsSection}
+      </TicketHolderContext.Provider>
 
-        <AddParticipantModal
-          isOpen={addParticipantModal.isOpen}
-          onClose={() =>
-            setAddParticipantModal({ ...addParticipantModal, isOpen: false })
-          }
-          workshopTitle={addParticipantModal.workshopTitle}
-          onSubmit={handleAddParticipant}
-          isSubmitting={manualSignupMutation.isPending}
-        />
+      <WorkshopRegistrationSettings
+        workshopRegistrationSponsorStart={workshopRegistrationSponsorStart}
+        workshopRegistrationStart={workshopRegistrationStart}
+        workshopRegistrationEnd={workshopRegistrationEnd}
+      />
 
-        <EditCapacityModal
-          isOpen={editCapacityModal.isOpen}
-          onClose={() =>
-            setEditCapacityModal({ ...editCapacityModal, isOpen: false })
-          }
-          workshopTitle={editCapacityModal.workshopTitle}
-          currentCapacity={editCapacityModal.currentCapacity}
-          currentSignups={editCapacityModal.currentSignups}
-          onSubmit={handleUpdateCapacity}
-          isSubmitting={updateCapacityMutation.isPending}
-        />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {initialWorkshops.length === 0 ? (
+          <EmptyState
+            icon={AcademicCapIcon}
+            title="No workshops found"
+            description="No workshops have been created for this conference yet."
+            className="col-span-full rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+          />
+        ) : (
+          initialWorkshops.map((workshop) => {
+            const workshopSignups = signupsByWorkshop.get(workshop._id) || []
+            // The summary is read again after every action; the server render
+            // (`workshop`) never is. Once the summary is in, its numbers are
+            // the card's: the workshop's own counts from the same server read,
+            // not a count of the 100 sign-ups this page lists.
+            const live = statsData?.data.workshops.find(
+              (stats) => stats.workshopId === workshop._id,
+            )
+            const confirmedCount =
+              live?.confirmedSignups ??
+              (workshop.signups ||
+                workshopSignups.filter((s) => s.status === 'confirmed').length)
+            const waitlistCount =
+              live?.waitlistSignups ??
+              (workshop.waitlistCount ||
+                workshopSignups.filter((s) => s.status === 'waitlist').length)
+            const capacity = live?.capacity ?? workshop.capacity
 
-        <AnnounceModal
-          isOpen={announceModal.isOpen}
-          onClose={() => setAnnounceModal({ ...announceModal, isOpen: false })}
-          workshopTitle={announceModal.workshopTitle}
-          confirmedCount={announceModal.confirmedCount}
-          onSubmit={handleAnnounce}
-          isSubmitting={announceMutation.isPending}
-          announcements={announcementsData?.data ?? []}
-          onEditAnnouncement={(announcementId, body) =>
-            updateAnnouncementMutation.mutate({ announcementId, body })
-          }
-          onDeleteAnnouncement={(announcement) =>
-            setDeleteAnnouncementTarget(announcement)
-          }
-          isEditingAnnouncement={updateAnnouncementMutation.isPending}
-        />
-
-        <ConfirmationModal
-          isOpen={!!deleteAnnouncementTarget}
-          onClose={() => setDeleteAnnouncementTarget(null)}
-          onConfirm={() =>
-            deleteAnnouncementTarget &&
-            deleteAnnouncementMutation.mutate({
-              announcementId: deleteAnnouncementTarget._id,
-            })
-          }
-          isLoading={deleteAnnouncementMutation.isPending}
-          title="Delete announcement"
-          message="Are you sure you want to delete this announcement? It will be removed from the workshop page. Participants who already received the email will not be notified."
-          confirmButtonText="Delete"
-          variant="danger"
-        />
+            return (
+              <WorkshopCard
+                key={workshop._id}
+                workshop={{ ...workshop, capacity }}
+                confirmedCount={confirmedCount}
+                waitlistCount={waitlistCount}
+                onViewConfirmed={() =>
+                  setSignupModal({
+                    isOpen: true,
+                    workshopId: workshop._id,
+                    workshopTitle: workshop.title,
+                    status: 'confirmed' as WorkshopSignupStatus,
+                  })
+                }
+                onViewWaitlist={() =>
+                  setSignupModal({
+                    isOpen: true,
+                    workshopId: workshop._id,
+                    workshopTitle: workshop.title,
+                    status: 'waitlist' as WorkshopSignupStatus,
+                  })
+                }
+                onAddParticipant={() =>
+                  setAddParticipantModal({
+                    isOpen: true,
+                    workshopId: workshop._id,
+                    workshopTitle: workshop.title,
+                  })
+                }
+                onEditCapacity={() => {
+                  setEditCapacityModal({
+                    isOpen: true,
+                    workshopId: workshop._id,
+                    workshopTitle: workshop.title,
+                    currentCapacity: capacity || 30,
+                    currentSignups: confirmedCount,
+                  })
+                }}
+                onAnnounce={() =>
+                  setAnnounceModal({
+                    isOpen: true,
+                    workshopId: workshop._id,
+                    workshopTitle: workshop.title,
+                    confirmedCount,
+                  })
+                }
+              />
+            )
+          })
+        )}
       </div>
-    </TicketHolderContext.Provider>
+
+      <EarlySignupsList
+        signups={
+          earlySignups.isPlaceholderData
+            ? undefined
+            : earlySignups.data?.signups
+        }
+        sponsors={earlySignups.data?.sponsors}
+        sponsorId={earlySponsorId}
+        onSponsorChange={narrowEarlySignups}
+        error={
+          earlySignups.error ? 'The early sign-ups could not be read.' : null
+        }
+        onRetry={() => void earlySignups.refetch()}
+      />
+
+      <SignupDetailsModal
+        isOpen={signupModal.isOpen}
+        onClose={() => {
+          setSignupModal({ ...signupModal, isOpen: false })
+          // A question left open (#1358) is not asked again on reopening.
+          signupActions.dismissFull()
+        }}
+        workshopTitle={signupModal.workshopTitle}
+        status={signupModal.status}
+        signups={filteredSignups}
+        onConfirmSignup={signupActions.confirm}
+        fullRefusal={signupActions.full}
+        onConfirmBeyondCapacity={signupActions.confirmBeyondCapacity}
+        onDismissFullRefusal={signupActions.dismissFull}
+        onMoveToWaitlist={signupActions.moveToWaitlist}
+        onDeleteSignup={signupActions.remove}
+        isConfirming={signupActions.isConfirming}
+        isMoving={signupActions.isMoving}
+        isDeleting={signupActions.isDeleting}
+      />
+
+      <AddParticipantModal
+        isOpen={addParticipantModal.isOpen}
+        onClose={() =>
+          setAddParticipantModal({ ...addParticipantModal, isOpen: false })
+        }
+        workshopTitle={addParticipantModal.workshopTitle}
+        onSubmit={handleAddParticipant}
+        isSubmitting={manualSignupMutation.isPending}
+      />
+
+      <EditCapacityModal
+        isOpen={editCapacityModal.isOpen}
+        onClose={() =>
+          setEditCapacityModal({ ...editCapacityModal, isOpen: false })
+        }
+        workshopTitle={editCapacityModal.workshopTitle}
+        currentCapacity={editCapacityModal.currentCapacity}
+        currentSignups={editCapacityModal.currentSignups}
+        onSubmit={handleUpdateCapacity}
+        isSubmitting={updateCapacityMutation.isPending}
+      />
+
+      <AnnounceModal
+        isOpen={announceModal.isOpen}
+        onClose={() => setAnnounceModal({ ...announceModal, isOpen: false })}
+        workshopTitle={announceModal.workshopTitle}
+        confirmedCount={announceModal.confirmedCount}
+        onSubmit={handleAnnounce}
+        isSubmitting={announceMutation.isPending}
+        announcements={announcementsData?.data ?? []}
+        onEditAnnouncement={(announcementId, body) =>
+          updateAnnouncementMutation.mutate({ announcementId, body })
+        }
+        onDeleteAnnouncement={(announcement) =>
+          setDeleteAnnouncementTarget(announcement)
+        }
+        isEditingAnnouncement={updateAnnouncementMutation.isPending}
+      />
+
+      <ConfirmationModal
+        isOpen={!!deleteAnnouncementTarget}
+        onClose={() => setDeleteAnnouncementTarget(null)}
+        onConfirm={() =>
+          deleteAnnouncementTarget &&
+          deleteAnnouncementMutation.mutate({
+            announcementId: deleteAnnouncementTarget._id,
+          })
+        }
+        isLoading={deleteAnnouncementMutation.isPending}
+        title="Delete announcement"
+        message="Are you sure you want to delete this announcement? It will be removed from the workshop page. Participants who already received the email will not be notified."
+        confirmButtonText="Delete"
+        variant="danger"
+      />
+    </div>
   )
 }

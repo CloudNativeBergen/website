@@ -101,6 +101,9 @@ const TICKETS = [
   ticket('vic@x.test', VOLUNTEER),
   ticket('Dee@X.test ', WORKSHOP),
   ticket('dee@x.test', WORKSHOP),
+  // NFKC folds the ligature in `email`; the gate keys on the address as
+  // registered (`registeredEmail`), and so must the join.
+  ticket('oﬃce@x.test', WORKSHOP),
 ]
 
 const talks = [CONF, OTHER].map((conference) => ({
@@ -145,11 +148,13 @@ describe('readTicketHolders', () => {
       if (result.isEligible) admitted.add(userEmail.trim().toLowerCase())
     }
 
-    // Counted by hand: ada (pass), bob (speaker), dee (pass, twice).
+    // Counted by hand: ada (pass), bob (speaker), dee (pass, twice), and the
+    // ligature address as registered.
     expect([...admitted].sort()).toEqual([
       'ada@x.test',
       'bob@x.test',
       'dee@x.test',
+      'oﬃce@x.test',
     ])
     expect(join!.holders.map((holder) => holder.email).sort()).toEqual(
       [...admitted].sort(),
@@ -162,6 +167,7 @@ describe('readTicketHolders', () => {
     expect(join!.notSignedUp.map((h) => h.email).sort()).toEqual([
       'bob@x.test',
       'dee@x.test',
+      'oﬃce@x.test',
     ])
     expect(join!.flagged.map((p) => [p.email, p.name])).toEqual(
       expect.arrayContaining([

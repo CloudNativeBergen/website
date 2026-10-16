@@ -30,13 +30,15 @@ import {
 } from '@/lib/tickets/speakerStatus'
 import { liveTicketTypeRoles, ticketHolderKey } from './eligibility'
 import { getSignupsForHolderJoin } from './sanity'
+import type { WorkshopSignupStatus } from './types'
 
 /** The fields of a sign-up the join reads. */
 export interface HolderSignup {
   _id: string
   userEmail?: string | null
   userName?: string | null
-  status: string
+  /** As stored: `WorkshopSignupStatus`'s values. */
+  status: `${WorkshopSignupStatus}`
   workshop?: { _id: string; title?: string | null } | null
 }
 
@@ -54,7 +56,7 @@ export interface TicketHolder {
 export interface FlaggedPerson {
   /** `canonicalEmail` of the sign-ups' address. Empty for a sign-up without one. */
   email: string
-  /** The name on their first sign-up. */
+  /** The name on their first sign-up that has one. */
   name: string
   signups: HolderSignup[]
 }
@@ -115,8 +117,11 @@ export function joinTicketHolders({
     // A sign-up without an address is nobody's: listed on its own.
     const key = email || `signup:${signup._id}`
     const person = flaggedMap.get(key)
-    if (person) person.signups.push(signup)
-    else
+    if (person) {
+      person.signups.push(signup)
+      // The first sign-up that carries a name names the person.
+      person.name ||= signup.userName?.trim() || ''
+    } else
       flaggedMap.set(key, {
         email,
         name: signup.userName?.trim() || '',

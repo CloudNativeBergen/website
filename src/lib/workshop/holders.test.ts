@@ -182,6 +182,17 @@ describe('flagged', () => {
     expect(after.flagged[0].signups).toEqual([signups[1]])
   })
 
+  it('a flagged person is named by the first sign-up that has a name', () => {
+    const nameless = { ...signup('eve@x.test', 'waitlist', 'a'), userName: ' ' }
+    const named = { ...signup('eve@x.test', 'confirmed', 'b'), userName: 'Eve' }
+    const join = joinTicketHolders({
+      tickets: [],
+      signups: [nameless, named],
+      ticketTypeRoles: ROLES,
+    })
+    expect(join.flagged.map((p) => p.name)).toEqual(['Eve'])
+  })
+
   it('a sign-up with no address is listed on its own', () => {
     const join = joinTicketHolders({
       tickets: [],

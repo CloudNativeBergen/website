@@ -16,7 +16,7 @@ import { WorkshopAccessControl } from './WorkshopAccessControl'
 import { quoteNames } from './names'
 import { useSaveWorkshopAccess } from './useSaveWorkshopAccess'
 import { typeKey } from '@/lib/tickets/classification'
-import { useTicketHolders } from '../holders/view'
+import { useTicketHolders } from '../holders'
 
 const HEADING_ID = 'workshop-tickets-heading'
 

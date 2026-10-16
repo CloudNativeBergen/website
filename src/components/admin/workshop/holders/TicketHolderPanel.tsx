@@ -93,8 +93,8 @@ export function TicketHolderPanel({
           <p className="flex min-w-0 flex-1 basis-60 items-start gap-1.5">
             <ExclamationTriangleIcon className="mt-0.5 size-4 shrink-0" />
             <span>
-              Unavailable: the tickets could not be read, so who holds one is
-              not known right now. The sign-up totals above are not affected.
+              Unavailable: who holds a workshop ticket cannot be told right now.
+              The sign-up totals above are not affected.
             </span>
           </p>
           <button

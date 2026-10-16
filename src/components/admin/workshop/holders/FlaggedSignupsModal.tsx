@@ -8,7 +8,8 @@ import { StatusBadge } from '@/components/StatusBadge'
 import type { FlaggedPerson, HolderSignup } from '@/lib/workshop/holders'
 import { SignupQuestions, type SignupQuestionTarget } from '../SignupQuestions'
 
-const nameOf = (person: FlaggedPerson) => person.name || person.email || '—'
+const nameOf = (person: FlaggedPerson) =>
+  person.name || person.email || 'No name'
 
 /**
  * The people who signed up without a ticket that grants workshop access
@@ -43,7 +44,9 @@ export function FlaggedSignupsModal({
 
   const target = (person: FlaggedPerson, signup: HolderSignup) => ({
     signupId: signup._id,
-    userName: signup.userName?.trim() || nameOf(person),
+    // Said in the question and the notice: never a placeholder.
+    userName:
+      signup.userName?.trim() || person.name || person.email || 'this person',
     workshopTitle: signup.workshop?.title || 'this workshop',
   })
 
