@@ -123,6 +123,9 @@ export function BulkDiscountSendModal({
   const [excludedSponsorIds, setExcludedSponsorIds] = useState<Set<string>>(
     () => new Set(),
   )
+  const [newlyLinkedCodesBySponsor, setNewlyLinkedCodesBySponsor] = useState<
+    Record<string, string[]>
+  >({})
 
   const claimants = useMemo(
     () => [...sponsors, ...otherCodeHolders],
@@ -158,12 +161,18 @@ export function BulkDiscountSendModal({
 
       // Only include codes that exist upstream in the event's discounts when existingDiscounts is populated;
       // deleted codes that remain in Sanity's linkedCodes array must not be submitted
+      const rawLinkedCodes = Array.from(
+        new Set([
+          ...(sponsor.linkedCodes ?? []),
+          ...(newlyLinkedCodesBySponsor[sponsor.id] ?? []),
+        ]),
+      )
       const validLinkedCodes =
         existingDiscounts.length > 0
-          ? (sponsor.linkedCodes ?? []).filter((c) =>
+          ? rawLinkedCodes.filter((c) =>
               existingCodeSet.has(c.trim().toUpperCase()),
             )
-          : (sponsor.linkedCodes ?? [])
+          : rawLinkedCodes
 
       const allCodes = Array.from(new Set([...ownedCodes, ...validLinkedCodes]))
 
@@ -233,6 +242,7 @@ export function BulkDiscountSendModal({
     existingDiscounts,
     claimants,
     sendToAllContacts,
+    newlyLinkedCodesBySponsor,
   ])
 
   const selectedTargets = useMemo(
@@ -391,6 +401,12 @@ export function BulkDiscountSendModal({
             discountCodes: target.codes,
           })
 
+          setNewlyLinkedCodesBySponsor((prev) => ({
+            ...prev,
+            [target.id]: Array.from(
+              new Set([...(prev[target.id] ?? []), ...target.codes]),
+            ),
+          }))
           setResults((prev) => ({
             ...prev,
             [target.id]: { status: 'success' },

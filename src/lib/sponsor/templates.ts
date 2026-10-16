@@ -423,12 +423,15 @@ export function extractVariablesFromPortableText(
   for (const block of blocks) {
     if (block._type === 'block') {
       if (Array.isArray(block.children)) {
-        for (const child of block.children) {
-          if (child._type === 'span' && typeof child.text === 'string') {
-            for (const v of extractVariablesFromText(child.text)) {
-              vars.add(v)
-            }
-          }
+        const combinedText = block.children
+          .map((child) =>
+            child._type === 'span' && typeof child.text === 'string'
+              ? child.text
+              : '',
+          )
+          .join('')
+        for (const v of extractVariablesFromText(combinedText)) {
+          vars.add(v)
         }
       }
       if (Array.isArray(block.markDefs)) {

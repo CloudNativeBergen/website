@@ -547,4 +547,24 @@ describe('a sync refuses to reconcile against a partial roster (#895)', () => {
     expect(result.error).toBeUndefined()
     expect(account.contactsIn(audienceId).sort()).toEqual(emails(2).sort())
   })
+
+  it('fails the sync when a contact addition or removal fails', async () => {
+    const audienceId = await liveAudience()
+    account.fillWith(audienceId, ['stale@example.test'])
+    account.contactsRemove.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'Resend 500 on remove' },
+    })
+
+    const result = await syncAudienceWithContacts(
+      conference,
+      'speakers',
+      asContacts(['new@example.test']),
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error?.message).toContain(
+      'Failed to reconcile 1 contact(s) in speakers audience: remove stale@example.test: Failed to remove contact: Resend 500 on remove',
+    )
+  })
 })
