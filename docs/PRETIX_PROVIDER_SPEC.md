@@ -298,6 +298,7 @@ type InvitationResult =
   | { delivery: 'link'; url: string; invitationId: string; codeHash: string } // Pretix: we mail `url`; the marker stores id and hash only
   | { delivery: 'already-redeemed'; invitationId: string; codeHash: string } // Pretix: a live ticket used it; send nothing, repair the marker
   | { delivery: 'held-by-expired-order'; orderId: string } // Pretix: an expired order holds the use; the organizer must cancel it first
+  | { delivery: 'held-by-test-order'; orderId: string } // Pretix: a test-mode order holds the use; the organizer must delete it first
 
 interface Capabilities {
   discounts: boolean
@@ -910,14 +911,21 @@ gains no privilege and the form offers only valid choices:
 
 - **Before every create, with or without `existing`**, the adapter searches for
   a voucher with `tag=speaker` and exactly this reference in `comment`:
-  - a unique match is reused. If it's used, its holder is classified straight
-    from `GET /orderpositions/?voucher=<id>` (within `event.orders:read`),
-    never inferred from the feed:
-    - a position on a `p` or `n` order: `already-redeemed`, with its
-      `invitationId` and `codeHash`
-    - none found (a test-mode order holds it, or the state changed between
-      reads): an error, and nothing is sent
-    - a position on an `e` order: the use is held by an **expired order**.
+  - a unique match is reused. If it's used, its holder is classified, never
+    inferred from the feed:
+    - read `GET /orderpositions/?voucher=<id>` (within `event.orders:read`).
+      It returns the holding orders' **codes** only, test-mode orders
+      included, and has no test-mode filter.
+    - then read each distinct `GET /orders/<code>/` and classify on its
+      `testmode` and `status`:
+    - **test mode**: `held-by-test-order` with that code. Test orders count
+      toward `redeemed` but never appear in the feed. The organizer is told:
+      "<speaker>'s personal voucher is held by test-mode order <code>; delete
+      it in Pretix, then resend." Deleting a test order frees the voucher.
+    - `p` or `n`: `already-redeemed`, with its `invitationId` and `codeHash`
+    - none found (the state changed between reads): an error, and nothing is
+      sent
+    - `e`: the use is held by an **expired order**.
       Expiry doesn't free a Pretix voucher, while a cancellation does. The
       adapter returns `held-by-expired-order` with that order's code. It sends
       nothing, and the
@@ -945,9 +953,12 @@ gains no privilege and the form offers only valid choices:
     are Pretix-generated, so a fresh key could mint a second voucher while the
     first request is still running. The attempt fails with nothing sent, and
     the next resend's search-before-create finds whatever the first request
-    made. After a **replayed error**, the search runs again first, and a
-    fresh key is used only if it finds nothing, since a replayed error means
-    the first request created nothing.
+    made. A fresh key is used **only after a Pretix 4xx with a JSON body**,
+    which can only be Pretix's own refusal or its stored replay of one. The
+    search runs again first, and the fresh key is used only if it finds
+    nothing. On any 5xx, gateway error or client timeout (§7.2), the first
+    request may still be running, so the adapter retries **the same key**:
+    that gives 409 while it runs and then the stored response.
 
   It returns `{ delivery: 'link', url, invitationId, codeHash }`, where
   `codeHash = sha256(code)`.
@@ -1164,7 +1175,7 @@ _Decided in review_ (§15). Implemented in P7, in `lib/legal/subprocessors.ts`,
 | #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | After           |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
 | P1  | **Connection:** the Organization fields and `pretixEventSlug` (§6); the `pretix` secret family, store and type changes, and the binding projection with the dereferenced Organization fields (§7.1); canonicalisation and the base-URL guard (§7.2); uniqueness and the binding claim (§7.3), whose `effective` projection gains `pretixEventSlug`. No conference can select Pretix yet.                                                                                                                                    | N1              |
-| P1b | **Status probe:** the §7.4 probe and activation wiring, in `system-status/checks.ts` and `settings/activation.ts`                                                                                                                                                                                                                                                                                                                                                                                                           | P1, N5          |
+| P1b | **Status probe:** the §7.4 probe and activation wiring, in `system-status/checks.ts` and `settings/activation.ts`                                                                                                                                                                                                                                                                                                                                                                                                           | P1, P2, N5      |
 | P2  | **Adapter read path:** the client (§8.1), public ticket types (§8.3), products mapping (§8.2), the question catalogue and orders feed (§8.4), including `PublicEventInfo.publicUrl`, built from injected credentials and proven against fixtures; the fixture recorder and fixtures (§13)                                                                                                                                                                                                                                   | N1              |
 | P3  | **Payment Summary and deep links** (§8.5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | P1, P2, N3, N4  |
 | P4  | **Discounts** (§8.6), including scopes, `scopeId`, the exact-match and unscoped guards, the listing re-check with its System status and discount-manager warning and one-click retire, idempotency verification including replayed errors, and the form                                                                                                                                                                                                                                                                     | P1, P1b, P2, N5 |
