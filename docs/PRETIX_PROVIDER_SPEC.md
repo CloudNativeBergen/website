@@ -819,6 +819,12 @@ gains no privilege and the form offers only valid choices:
   form loaded.
 - **Any unscoped voucher with `show_hidden_items` on**, such as a hand-made one,
   is flagged the same way, because it shows and sells every hidden product.
+- **Scoped sponsor vouchers are re-checked too.** Their coverage is the
+  quota's or item's _current_ products and variations. Each listing
+  recomputes it, and warns and offers retirement whenever it now includes a
+  speaker- or volunteer-rule type, for example after a hidden speaker product
+  is added to a sponsor's quota. A regression changes quota membership after
+  the code was created.
 - **The guard is re-checked on every listing, not only at creation.** A later
   catalogue change can make an existing unscoped code unlock a voucher-only
   product: an organizer adds one, or un-hides one. So every `listDiscounts`
@@ -913,25 +919,32 @@ gains no privilege and the form offers only valid choices:
   a voucher with `tag=speaker` and exactly this reference in `comment`:
   - a unique match is reused. If it's used, its holder is classified, never
     inferred from the feed:
-    - read `GET /orderpositions/?voucher=<id>` (within `event.orders:read`).
-      It returns the holding orders' **codes** only, test-mode orders
-      included, and has no test-mode filter.
-    - then read each distinct `GET /orders/<code>/` and classify on its
-      `testmode` and `status`:
-    - **test mode**: `held-by-test-order` with that code. Test orders count
-      toward `redeemed` but never appear in the feed. The organizer is told:
-      "<speaker>'s personal voucher is held by test-mode order <code>; delete
-      it in Pretix, then resend." Deleting a test order frees the voucher.
-    - `p` or `n`: `already-redeemed`, with its `invitationId` and `codeHash`
-    - none found (the state changed between reads): an error, and nothing is
-      sent
-    - `e`: the use is held by an **expired order**.
-      Expiry doesn't free a Pretix voucher, while a cancellation does. The
-      adapter returns `held-by-expired-order` with that order's code. It sends
-      nothing, and the
-      organizer is told: "<speaker>'s personal voucher is held by expired order
-      <code>; cancel it in Pretix, then resend." Cancelling frees the voucher,
-      so the next resend finds it unused and re-sends the link.
+    - read `GET /orderpositions/?voucher=<id>&order__status__in=p,n,e`
+      (within `event.orders:read`). It returns the holding orders' **codes**
+      only, test-mode orders included, with no test-mode filter. The status
+      filter matters: a fully cancelled order keeps uncancelled positions.
+    - read each distinct `GET /orders/<code>/` for `testmode` and `status`
+    - classify by precedence:
+      1. any **non-test `p` or `n`** holder: `already-redeemed`, with its
+         `invitationId` and `codeHash` (and the marker is repaired)
+      2. otherwise any **test-mode** holder: `held-by-test-order` with that
+         code. Test orders count toward `redeemed` but never appear in the
+         feed. Message: "<speaker>'s personal voucher is held by test-mode order
+         <code>; delete it in Pretix, then resend." Deleting a test order frees
+         the voucher.
+      3. otherwise an **`e`** holder: `held-by-expired-order` with that code.
+         Expiry doesn't free a Pretix voucher, while a cancellation does.
+         Message: "<speaker>'s personal voucher is held by expired order <code>;
+         cancel it in Pretix, then resend." Cancelling frees the voucher, so
+         the next resend finds it unused and re-sends the link.
+      4. otherwise (the state changed between reads): an error, with nothing
+         sent
+    - **Where the organizer sees it:** `SpeakerTicketIssuanceResult` gains
+      `held: { speakerId, reason: 'expired-order' | 'test-order', orderId }[]`.
+      The sweep confirmation and the per-speaker resend result in the speaker
+      admin render each entry with its message. The confirm-time bus path
+      has no organizer to tell, so it logs the held state (without the code),
+      and the next sweep or resend shows it.
       - It is **not** re-opened automatically: Pretix lets an expired order be
         paid later without re-checking voucher usage, so raising `max_usages`
         could give one speaker two tickets.
@@ -953,20 +966,23 @@ gains no privilege and the form offers only valid choices:
     are Pretix-generated, so a fresh key could mint a second voucher while the
     first request is still running. The attempt fails with nothing sent, and
     the next resend's search-before-create finds whatever the first request
-    made. A fresh key is used **only after a Pretix 4xx with a JSON body**,
-    which can only be Pretix's own refusal or its stored replay of one. The
+    made. A fresh key is used **only after a Pretix 4xx with a JSON body other
+    than 409 and 429**, which can only be Pretix's own refusal or its stored
+    replay of one (voucher creation is atomic, so nothing was written). The
     search runs again first, and the fresh key is used only if it finds
-    nothing. On any 5xx, gateway error or client timeout (§7.2), the first
-    request may still be running, so the adapter retries **the same key**:
-    that gives 409 while it runs and then the stored response.
+    nothing. On a 409, 429, any 5xx, a gateway error or a client timeout
+    (§7.2), the first request may still be running, so the adapter retries
+    **the same key**. That gives 409 while the first request runs, then its
+    stored response, or after a real 500 or 503, whose record Pretix deletes,
+    a fresh run of the same atomic request.
 
   It returns `{ delivery: 'link', url, invitationId, codeHash }`, where
   `codeHash = sha256(code)`.
 
 - **Resend**, with `existing`, looks the voucher up by `invitationId` first,
   then falls back to the search above, and returns the same link, with the code read from Pretix, not from storage. A voucher with a live ticket returns `already-redeemed`, and the
-  handler sends nothing; one held by an expired order returns
-  `held-by-expired-order`, as above. A
+  handler sends nothing; one held by an expired or test-mode order
+  returns `held-by-expired-order` or `held-by-test-order`, as above. A
   new voucher is minted only if none exists. There is no revocation.
 - **The marker** stores `invitationId` and `invitationCodeHash`, **never the
   code** (§6, _decided in review_).
