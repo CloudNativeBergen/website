@@ -287,3 +287,61 @@ describe('seatsUsed', () => {
     expect(seatsUsed(tallyParticipants([], context))).toBe(0)
   })
 })
+
+describe('one definition of a workshop participant (#1333)', () => {
+  const SPEAKER = 'Speaker ticket'
+  const speaker = (email: string, answer?: string) =>
+    withEmail(email, {
+      category: SPEAKER,
+      sum: '0.00',
+      fields: answer
+        ? [{ key: 'Will you attend the Monday workshops?', value: answer }]
+        : [],
+    })
+
+  it.each([
+    ['the built-in list', []],
+    ['a marked speaker type', [{ typeName: SPEAKER, grantsWorkshop: true }]],
+  ])(
+    'every speaker counts when %s grants the speaker type, whatever they answered',
+    (_, ticketTypeRoles) => {
+      const tally = tallyParticipants(
+        [
+          speaker('quiet@x.test'),
+          speaker('no@x.test', 'No'),
+          speaker('nei@x.test', 'Nei takk'),
+          speaker('yes@x.test', 'Yes'),
+        ],
+        { ticketTypeRoles, speakerTicketTypeName: SPEAKER },
+      )
+      expect(tally.workshopParticipants).toBe(4)
+      expect(tally.freeWorkshopParticipants).toBe(4)
+      expect(tally.paidWorkshopParticipants).toBe(0)
+    },
+  )
+
+  it('a speaker type marked no counts nobody, whatever they answered', () => {
+    const tally = tallyParticipants([speaker('yes@x.test', 'Yes')], {
+      ticketTypeRoles: [
+        { typeName: SPEAKER, grantsWorkshop: false },
+        { typeName: UPGRADE, grantsWorkshop: true },
+      ],
+      speakerTicketTypeName: SPEAKER,
+    })
+    expect(tally.workshopParticipants).toBe(0)
+  })
+
+  it('addresses that differ only in padding or case are one person', () => {
+    const tally = tallyParticipants(
+      [
+        withEmail('  Ada@X.test ', { category: UPGRADE, sum: '500.00' }),
+        withEmail('ada@x.test', { category: SPEAKER, sum: '0.00' }),
+        withEmail('ADA@x.test\t', { category: SPEAKER, sum: '0.00' }),
+      ],
+      { speakerTicketTypeName: SPEAKER },
+    )
+    expect(tally.workshopParticipants).toBe(1)
+    expect(tally.paidWorkshopParticipants).toBe(1)
+    expect(tally.freeWorkshopParticipants).toBe(0)
+  })
+})

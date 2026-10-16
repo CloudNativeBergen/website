@@ -416,6 +416,55 @@ describe('exportParticipants', () => {
   })
 })
 
+describe('exportParticipants: one definition of a workshop participant (#1333)', () => {
+  it('exports every speaker as a workshop participant, whatever they answered', async () => {
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 100,
+        category: 'Speaker ticket',
+        crm: crm('quiet@example.com'),
+      }),
+      ticket({
+        id: 2,
+        order_id: 101,
+        category: 'Speaker ticket',
+        fields: [{ key: 'Will you attend the Monday workshops?', value: 'No' }],
+        crm: crm('no@example.com'),
+      }),
+      ticket({ id: 3, order_id: 102, sum: '2500', crm: crm('a@example.com') }),
+    ])
+
+    const res = await exportParticipants(conference, true)
+
+    expect(res.map((p) => [p.email, p.grantsWorkshop])).toEqual([
+      ['quiet@example.com', true],
+      ['no@example.com', true],
+    ])
+  })
+
+  it('exports addresses that differ only in padding or case as one person', async () => {
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 100,
+        category: 'Speaker ticket',
+        crm: crm('  Ada@Example.com '),
+      }),
+      ticket({
+        id: 2,
+        order_id: 101,
+        category: 'Speaker ticket',
+        crm: crm('ada@example.com\t'),
+      }),
+    ])
+
+    const res = await exportParticipants(conference, true)
+
+    expect(res.map((p) => p.email)).toEqual(['ada@example.com'])
+  })
+})
+
 describe('volunteer free ticket allocation in buildTicketSummary', () => {
   it('populates freeTicketAllocation.volunteers when approved/confirmed volunteers exist', async () => {
     h.getVolunteersByConference.mockResolvedValue({

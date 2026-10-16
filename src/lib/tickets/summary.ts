@@ -21,6 +21,7 @@
  */
 import 'server-only'
 import type { Conference } from '@/lib/conference/types'
+import { canonicalEmail } from '@/lib/speaker/email'
 import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { Status } from '@/lib/proposal/types'
@@ -225,7 +226,8 @@ export async function exportParticipants(
   const anonymous: typeof classified = []
 
   for (const item of classified) {
-    const e = item.ticket.crm?.email?.toLowerCase().trim()
+    // One person per address, as the workshop gate tells them apart.
+    const e = canonicalEmail(item.ticket.crm?.email)
     if (!e) {
       anonymous.push(item)
     } else {
@@ -255,7 +257,7 @@ export async function exportParticipants(
     result.push({
       firstName: first.crm?.first_name || '',
       lastName: first.crm?.last_name || '',
-      email: first.crm?.email?.toLowerCase().trim() || '',
+      email: canonicalEmail(first.crm?.email),
       categories,
       isComp,
       grantsWorkshop,
