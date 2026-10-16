@@ -666,7 +666,9 @@ reads `process.env`).
   `Deleted product <id>`, has no `admits`, and is logged. Classification then
   treats it as unclassified, never guessing.
 - **Display order** is the lexicographic rank of (category position, item
-  position, variation position).
+  position, variation position). Category positions come from
+  `GET /categories/`, read with the items; an item without a category sorts
+  first.
 - **Price, window and availability:** a variation's price and window override
   the item's. `available` is the tightest quota covering the type, from
   `/quotas/?with_availability=true`. Pretix's own product categories aren't
@@ -675,7 +677,7 @@ reads `process.env`).
 ### 8.3 Public ticket types
 
 - **Reads:** `GET /events/<e>/` (name, currency, `public_url`),
-  `/items/?active=true` (variations embedded), `/taxrules/` and
+  `/items/?active=true` (variations embedded), `/categories/`, `/taxrules/` and
   `/quotas/?with_availability=true`. _Adapter detail:_ cached with
   `If-Modified-Since`.
 - **Prices:** `vatRate` comes from the tax rule. `gross` and `net` are computed
@@ -689,40 +691,47 @@ reads `process.env`).
 ### 8.4 Orders feed
 
 `GET /orders/?testmode=false`, keeping status `p` and `n`. Expired (`e`) and
-canceled (`c`) orders are excluded. Canceled positions are hidden by default
+canceled (`c`) orders are excluded, and so is a paid order with **no live
+positions** (canceled with a fee). It has no tickets to show, and no position
+to rank by. Canceled positions are hidden by default
 (observed).
 
-| Neutral field             | Pretix source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Order.id`                | order `code`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `Order.rank`              | the highest position `id` in the order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `Order.placedAt`          | `datetime`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `Order.status`            | `p` → `paid`, `n` → `pending`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `Order.buyer`             | invoice-address name parts, else none; order `email`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `Order.company`           | `invoice_address.company`, else the first position's `company`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `Order.outstanding.gross` | `total − Σ payments{confirmed, refunded} + Σ refunds{done, transit, created}`. **May be negative.**                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `Ticket.id`               | position `id`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `Ticket.ticketType`       | `(item, variation)` per §8.2, id always present                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `Ticket.attendee`         | the position's own attendee (`attendee_name_parts` gives the first and last name when the name scheme has them), else the **parent position's** (for an add-on, `addon_to`), else the order's buyer. The API doesn't enforce attendee email (observed), so the fallback is required.                                                                                                                                                                                                                                                                    |
-| `Ticket.price`            | `gross = price`, `net = price − tax_value`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `Ticket.discountCode`     | the voucher id mapped to its code via one `GET /vouchers/` per fetch                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `Ticket.company`          | `position.company`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `Ticket.jobTitle`         | the answer whose `question_identifier` is `job_title`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `Ticket.answers`          | `answers[]` joined by question id to the question catalogue (`GET /questions/`, paginated, read with the items). Labels and option labels in the default locale (§8.2). Choice and multi-choice questions (`C`, `M`, `B`) give **`valueType: 'choice'`, one `Answer` per selected option** with `selected: true`, sharing the question's key; free text gives `valueType: 'text'`, even when its wording matches an option. A question missing from the catalogue uses its `question_identifier` as label; a missing option uses the answer's own text. |
+| Neutral field             | Pretix source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Order.id`                | order `code`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `Order.rank`              | the highest position `id` in the order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `Order.placedAt`          | `datetime`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `Order.status`            | `p` → `paid`, `n` → `pending`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `Order.buyer`             | invoice-address name parts, else none; order `email`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `Order.company`           | `invoice_address.company`, else the first position's `company`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `Order.outstanding.gross` | `total − Σ payments{confirmed, refunded} + Σ refunds{done, transit, created}`. **May be negative.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `Ticket.id`               | position `id`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `Ticket.ticketType`       | `(item, variation)` per §8.2, id always present                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `Ticket.attendee`         | the position's own attendee (`attendee_name_parts` gives the first and last name when the name scheme has them), else the **parent position's** (for an add-on, `addon_to`), else the order's buyer. The API doesn't enforce attendee email (observed), so the fallback is required.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `Ticket.price`            | `gross = price`, `net = price − tax_value`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `Ticket.discountCode`     | the voucher id mapped to its code via one `GET /vouchers/` per fetch                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `Ticket.company`          | `position.company`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `Ticket.jobTitle`         | the answer whose `question_identifier` is `job_title`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `Ticket.answers`          | `answers[]` joined by question id to the question catalogue (`GET /questions/`, paginated, read with the items). Labels and option labels in the default locale (§8.2). Choice and multi-choice questions (`C`, `M`) give **`valueType: 'choice'`, one `Answer` per selected option** with `selected: true`, sharing the question's key. A boolean (`B`), which has no options, gives one choice `Answer` with value `Yes` (in the default locale) and `selected` from the answer, matching Checkin's `'1'` / `'0'`; free text gives `valueType: 'text'`, even when its wording matches an option. A question missing from the catalogue uses its `question_identifier` as label; a missing option uses the answer's own text. |
 
 ### 8.5 Payment Summary and deep links
 
 - **`fetchPaymentSummary(ref, code)`** reads `GET /orders/<code>/`, its
   `payments[]` and `refunds[]`, and `/invoices/?order=<code>` for the invoice
-  number and date.
+  number and date. That list can hold an original, its cancellation and a
+  replacement, so the **current** invoice is used: the newest one that is not
+  a cancellation (`is_cancellation: false`) and that no cancellation `refers`
+  to. With none, the invoice fields are absent.
   - `status`: `p` → `paid`, `n` → `pending`, `e` → `canceled`, and `c` →
     `refunded` if any refund is done, else `canceled`. `statusLabel` is the
     Pretix status name.
   - `outstanding` uses §8.4's formula, with `total` taken as 0 for status `c`
-    (as Pretix's own `pending_sum` does). `settled` is `outstanding.gross <= 0`.
+    (as Pretix's own `pending_sum` does). `settled` is `outstanding.gross <= 0` (the buyer owes nothing). A negative
+    balance adds the notice "Refund due: <amount>", so a refund-due order is
+    never shown as plainly paid in full.
   - _Adapter detail:_ `dueAt` comes from `expires`, and `method` is the first
     confirmed payment's `provider`.
-  - `paymentReference` is absent and `notices` is `[]`.
+  - `paymentReference` is absent; `notices` is `[]` unless a refund is due.
 - **`orderAdminUrl`** returns
   `<baseUrl>/control/event/<org>/<event>/orders/<CODE>/`. The route exists: it
   redirects a logged-out request to login with the order path preserved
@@ -750,6 +759,16 @@ gains no privilege and the form offers only valid choices:
   Pretix, or pick fewer." The scope is re-derived from a fresh catalogue read,
   so the "All ticket types" guard is checked at write time, not just when the
   form loaded.
+- **The guard is re-checked on every listing, not only at creation.** A later
+  catalogue change can make an existing unscoped code unlock a voucher-only
+  product: an organizer adds one, or un-hides one. So every `listDiscounts`
+  re-evaluates the guard. When it fails while unscoped vouchers exist, System
+  status and the discount manager warn: "An All ticket types code can now buy
+  <product>; hide the product without a voucher, or retire the code." The
+  manager offers a one-click retire.
+  - Codes are **never retired automatically**, because that would silently
+    break a sponsor's code mid-campaign.
+  - _Refinement (spec)_ of the decision in §15.1.
 - **The reverse mapping**, for listing: an item-scoped voucher maps to that
   item's Ticket Types, an item-and-variation voucher to one, a quota voucher to
   the quota's items and variations, and an unscoped voucher to `[]` (every
@@ -818,8 +837,14 @@ gains no privilege and the form offers only valid choices:
 
 - **Before every create, with or without `existing`**, the adapter searches for
   a voucher with `tag=speaker` and exactly this reference in `comment`:
-  - a unique match is reused: its link, or `already-redeemed` (with its
-    `invitationId` and `codeHash`) if it's used
+  - a unique match is reused. If it's used, check whether a **live** ticket (paid
+    or pending, in the feed) carries its code:
+    - yes: `already-redeemed`, with its `invitationId` and `codeHash`
+    - no: the use was consumed by an **expired or canceled order**, since
+      expiry doesn't free a Pretix voucher. The adapter raises `max_usages` to
+      `redeemed + 1` and returns the same link, so the speaker can register.
+      The extra use is the only one that can be spent, because the code is
+      still personal.
   - several matches are refused as an error, and nothing is sent
   - **only when none exists** does it create one voucher on the speaker Ticket
     Type
@@ -837,8 +862,8 @@ gains no privilege and the form offers only valid choices:
   `codeHash = sha256(code)`.
 
 - **Resend**, with `existing`, looks the voucher up by `invitationId` first,
-  then falls back to the search above, and returns the same link, with the code read from Pretix, not from storage. A redeemed voucher
-  returns `{ delivery: 'already-redeemed' }`, and the handler sends nothing. A
+  then falls back to the search above, and returns the same link, with the code read from Pretix, not from storage. A voucher with a live ticket returns `already-redeemed`, and the
+  handler sends nothing; one whose use expired is re-opened as above. A
   new voucher is minted only if none exists. There is no revocation.
 - **The marker** stores `invitationId` and `invitationCodeHash`, **never the
   code** (§6, _decided in review_).
@@ -897,9 +922,12 @@ over dropping real sales by answering 401 to a retryable failure.
      previous, using `timingSafeEqual` on the fixed-length digests.
    - **Exactly one distinct Organization** with a matching secret proceeds;
      zero or several get the uniform 401.
-   - With no candidates, one comparison round runs against a dummy, so 0, 1 and
-     many candidates cost the same work. The residual timing channel (one small
-     read) is stated, as in the Checkin route.
+   - With no candidates, one comparison round runs against a dummy, so zero and
+     one candidate cost the same work. Work still grows with the number of
+     candidates: several exist only when the same Pretix organizer slug is
+     connected on different instances. That reveals only that a slug is
+     shared, which is accepted and stated, together with the one small read,
+     as in the Checkin route.
 4. **Conference:** only after verification, read the single conference of that
    org with `ticketingProvider: 'pretix'` and `pretixEventSlug == event`, with
    drafts collapsed and ambiguity refused (#731). An unknown event is logged and
@@ -994,12 +1022,18 @@ Goes into `docs/TENANT_SECRETS.md` and `docs/INTEGRATION_ADAPTERS.md`.
    `TENANT_<SLUG>_PRETIX_*` secrets and deploy, then set the Organization's
    `pretixBaseUrl` and `pretixOrganizerSlug` (the binding resolves as "not
    configured" until both are present).
-3. Register the webhook by hand: the URL with the secret (§9), `order.paid`
+3. **Self-hosted instances only:** confirm the instance runs a Celery worker and
+   `pretix runperiodic` on a schedule. Without a task queue, Pretix sends
+   webhooks inline and **never retries**, and long retries need
+   `runperiodic`, so a failed delivery would silently skip that sale's
+   workshop email. The runbook makes this a prerequisite for connecting a
+   self-hosted instance. §14 states the gap for instances that don't meet it.
+4. Register the webhook by hand: the URL with the secret (§9), `order.paid`
    only.
-4. **Rotation:** set the new secret as current and the old one as previous,
+5. **Rotation:** set the new secret as current and the old one as previous,
    update the Pretix hook, wait about 3 days for retries to drain, then remove
    the previous one. **If the old secret leaked, don't set it as previous.**
-5. Verify in System status (connected), then with one real 100 % voucher order.
+6. Verify in System status (connected), then with one real 100 % voucher order.
 
 ### 11.3 Privacy and subprocessors
 
@@ -1116,6 +1150,14 @@ Every slice is filed as an issue under [Pretix as a ticketing provider: implemen
   attendees, on the platform's email quota. It stays within one tenant; a
   dedupe store would bound it, and is out of scope.
 - **The narrow webhook oracle during a store outage** (§9) is accepted.
+- **A self-hosted instance without a task queue never retries a webhook.** The
+  runbook requires a worker and `runperiodic` (§11.2). Without them, a failed
+  delivery skips that sale's workshop email, though the ticket itself still
+  appears in the orders feed.
+- **A multi-use sponsor code keeps uses consumed by expired orders**, because
+  expiry doesn't free a Pretix voucher. Speaker vouchers are reissued (§8.7);
+  sponsor codes are not, so a sponsor can be one seat short until an organizer
+  raises `max_usages`.
 
 ## 15. Decided in review
 
