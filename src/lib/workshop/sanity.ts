@@ -395,20 +395,24 @@ export async function getAllWorkshopSignups(filters: {
  * the join reads and nothing else, in one read, unpaged.
  *
  * LIVE: the statistics are read again after every organizer action, and a
- * cached answer would show the sign-up just deleted. A draft is not a sign-up.
- * An unresolvable tenant reads nothing.
+ * cached answer would show the sign-up just deleted. A draft or a release
+ * copy is not a sign-up. An unresolvable tenant reads nothing.
+ *
+ * THE WORKSHOP IS READ ONLY IF IT IS THE CONFERENCE'S (as in
+ * `./early-access/signups`): a sign-up that points at another conference's
+ * workshop, a bad write, still counts and never carries that title.
  */
 export async function getSignupsForHolderJoin(
   conferenceId: string,
 ): Promise<HolderSignup[]> {
   if (!conferenceId) return []
   return clientReadUncached.fetch<HolderSignup[]>(
-    groq`*[_type == "workshopSignup" && conference._ref == $conferenceId && !(_id in path("drafts.**"))]{
+    groq`*[_type == "workshopSignup" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
       _id,
       userEmail,
       userName,
       status,
-      "workshop": workshop->{ _id, title }
+      "workshop": select(workshop->conference._ref == $conferenceId => workshop->{ _id, title })
     }`,
     { conferenceId },
     { cache: 'no-store' },

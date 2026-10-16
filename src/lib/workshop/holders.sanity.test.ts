@@ -207,6 +207,24 @@ describe('readTicketHolders', () => {
     expect(signupReads[0].params).toEqual({ conferenceId: CONF })
   })
 
+  // A bad write (Studio, legacy data): this conference's sign-up pointing at
+  // another conference's workshop. The sign-up counts; the foreign workshop's
+  // title never leaves the read.
+  it('never carries another conference’s workshop', async () => {
+    h.store!.put({
+      ...signupDoc('s-cross', 'cross@x.test', 'confirmed'),
+      workshop: { _type: 'reference', _ref: `talk-${OTHER}` },
+    })
+
+    const join = await readTicketHolders(CONFERENCE)
+
+    const cross = join!.flagged.find((p) => p.email === 'cross@x.test')
+    expect(cross?.signups.map((s) => [s._id, s.workshop])).toEqual([
+      ['s-cross', null],
+    ])
+    expect(JSON.stringify(join)).not.toContain(`Workshop of ${OTHER}`)
+  })
+
   it('a draft of a sign-up is not a sign-up', async () => {
     h.store!.put(signupDoc('drafts.s-dee', 'dee@x.test', 'confirmed'))
     const join = await readTicketHolders(CONFERENCE)
