@@ -109,16 +109,26 @@ export default function WorkshopList({
   // THE SESSION HAS ENDED (#1303): it lasts 7 days with no renewal, and the
   // attendee can sign out in another tab. Either the read or a write says so,
   // each on its own: a write's refusal does not wait on another read, which
-  // can fail for an unrelated reason.
+  // can fail for an unrelated reason. Latched once seen so a later focus
+  // refetch that fails with a network/server error does not clear it and
+  // re-expose stale registrations.
   const [writeRefusedForSession, setWriteRefusedForSession] = useState(false)
+  const [readRefusedForSession, setReadRefusedForSession] = useState(false)
+  const isReadUnauthorized = signupsError?.data?.code === 'UNAUTHORIZED'
+  if (isReadUnauthorized && !readRefusedForSession) {
+    setReadRefusedForSession(true)
+  }
   const sessionEnded =
-    writeRefusedForSession || signupsError?.data?.code === 'UNAUTHORIZED'
-  // A refused write took away the dialog it came from and the button that
-  // opened it, so the keyboard would land on the page: it goes to the notice.
+    writeRefusedForSession || readRefusedForSession || isReadUnauthorized
   const sessionNotice = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (writeRefusedForSession) sessionNotice.current?.focus()
-  }, [writeRefusedForSession])
+    if (!sessionEnded || !sessionNotice.current) return
+    const lostFocus =
+      !document.activeElement || document.activeElement === document.body
+    if (writeRefusedForSession || lostFocus) {
+      sessionNotice.current.focus()
+    }
+  }, [sessionEnded, writeRefusedForSession])
 
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {

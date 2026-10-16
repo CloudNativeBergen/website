@@ -245,10 +245,14 @@ describe('WorkshopList when the session has ended (#1303)', () => {
   // Signed out in ANOTHER tab: nothing on this one writes. The production
   // provider turns refetch-on-focus off for every query; coming back to this
   // tab must still read the attendee's sign-ups again once they are stale.
-  it('asks once the attendee comes back to the tab, with the app’s own provider', async () => {
+  it('asks once the attendee comes back to the tab, with the app’s own provider, and moves focus to the notice', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     renderPortal(TRPCProvider)
-    await screen.findByRole('button', { name: 'Cancel Registration' })
+    const cancelBtn = await screen.findByRole('button', {
+      name: 'Cancel Registration',
+    })
+    cancelBtn.focus()
+    expect(cancelBtn).toHaveFocus()
     expect(screen.queryByRole('alert')).toBeNull()
 
     server.signedIn = false
@@ -257,7 +261,34 @@ describe('WorkshopList when the session has ended (#1303)', () => {
     focusManager.setFocused(true)
 
     // The provider retries a failed read once, a second later.
-    expectSignInAgain(await screen.findByRole('alert', {}, { timeout: 4000 }))
+    const notice = await screen.findByRole('alert', {}, { timeout: 4000 })
+    expectSignInAgain(notice)
+    await waitFor(() => expect(notice).toHaveFocus())
+    expect(screen.queryByText('Kubernetes 101')).toBeNull()
+  })
+
+  it('keeps the ended-session notice if a later focus refetch fails with a server error', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    renderPortal(TRPCProvider)
+    await screen.findByRole('button', { name: 'Cancel Registration' })
+
+    server.signedIn = false
+    focusManager.setFocused(false)
+    vi.setSystemTime(Date.now() + 61_000)
+    focusManager.setFocused(true)
+
+    const notice = await screen.findByRole('alert', {}, { timeout: 4000 })
+    expectSignInAgain(notice)
+
+    // A later focus refetch fails with a transient 500 instead of UNAUTHORIZED;
+    // the ended-session state must stay latched rather than re-exposing stale signups.
+    server.readFails = true
+    focusManager.setFocused(false)
+    vi.setSystemTime(Date.now() + 122_000)
+    focusManager.setFocused(true)
+
+    await new Promise((r) => setTimeout(r, 1500))
+    expectSignInAgain(screen.getByRole('alert'))
     expect(screen.queryByText('Kubernetes 101')).toBeNull()
   })
 })
