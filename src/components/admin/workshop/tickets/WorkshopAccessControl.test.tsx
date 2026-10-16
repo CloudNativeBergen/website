@@ -24,6 +24,7 @@ import {
   screen,
   cleanup,
   fireEvent,
+  waitFor,
   within,
 } from '@testing-library/react'
 import {
@@ -46,7 +47,12 @@ vi.mock('@/lib/trpc/client', () => ({
   api: {
     useUtils: () => ({
       workshop: {
-        admin: { ticketHolders: { invalidate: h.invalidateHolders } },
+        admin: {
+          ticketHolders: {
+            cancel: async () => {},
+            invalidate: h.invalidateHolders,
+          },
+        },
       },
     }),
     tickets: {
@@ -661,7 +667,7 @@ describe('while a save is on its way', () => {
     row: true,
   }
 
-  it('refreshes the page once the save has landed', () => {
+  it('refreshes the page once the save has landed', async () => {
     render(<WorkshopAccessControl {...row} />)
 
     fireEvent.click(
@@ -673,8 +679,9 @@ describe('while a save is on its way', () => {
 
     expect(h.refresh).toHaveBeenCalledTimes(1)
     // The refresh keeps what the client read: the ticket holders, who
-    // follow the answers, are read again.
-    expect(h.invalidateHolders).toHaveBeenCalledTimes(1)
+    // follow the answers, are read again (once the read in flight is
+    // cancelled).
+    await waitFor(() => expect(h.invalidateHolders).toHaveBeenCalledTimes(1))
   })
 
   /**
@@ -738,7 +745,7 @@ describe('while a save is on its way', () => {
    */
   it.each(['CONFLICT', 'PRECONDITION_FAILED'])(
     'says the list changed and reloads it when the server answers %s',
-    (code) => {
+    async (code) => {
       render(<WorkshopAccessControl {...row} basedOn="v1" />)
 
       fireEvent.click(
@@ -770,7 +777,7 @@ describe('while a save is on its way', () => {
         ],
       ])
       expect(h.refresh).toHaveBeenCalledTimes(1)
-      expect(h.invalidateHolders).toHaveBeenCalledTimes(1)
+      await waitFor(() => expect(h.invalidateHolders).toHaveBeenCalledTimes(1))
       // The optimistic answer is taken back.
       expect(
         screen.getByRole('button', { name: /^No workshop access/ }),

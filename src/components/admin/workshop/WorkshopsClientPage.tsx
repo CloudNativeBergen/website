@@ -40,6 +40,7 @@ import {
   TicketHolderContext,
   TicketHolderPanel,
   ticketHolderView,
+  useRereadTicketHolders,
 } from './holders'
 
 interface SignupModalState {
@@ -155,6 +156,7 @@ export function WorkshopsClientPage({
     trpc: { context: { skipBatch: true } },
   })
   const holderView = ticketHolderView(ticketHolders)
+  const rereadTicketHolders = useRereadTicketHolders()
 
   // THE "EARLY SIGN-UPS" LIST (#1348). Narrowing it to a sponsor is a new
   // read with the sponsor in its input: the server narrows, over every match.
@@ -224,7 +226,7 @@ export function WorkshopsClientPage({
     // and one that cannot reach the server turns into a hard navigation.
     refetchStats()
     // Who is flagged, confirmed or waiting changes with every action too.
-    void utils.workshop.admin.ticketHolders.invalidate()
+    rereadTicketHolders()
   }
 
   // Confirm, move to waitlist, delete. Everything is read again after every
@@ -469,6 +471,14 @@ export function WorkshopsClientPage({
         </div>
       </AdminPageHeader>
 
+      {/* The section is rendered by the server; its banner reads the ticket
+          holders this page read, through the context. It comes FIRST (spec
+          §3): the not-set types are named above the statistics that leave
+          their holders out. */}
+      <TicketHolderContext.Provider value={holderView}>
+        {ticketsSection}
+      </TicketHolderContext.Provider>
+
       <TicketHolderPanel
         view={holderView}
         onRetry={() => void ticketHolders.refetch()}
@@ -477,12 +487,6 @@ export function WorkshopsClientPage({
         isMoving={signupActions.isMoving}
         isDeleting={signupActions.isDeleting}
       />
-
-      {/* The section is rendered by the server; its banner reads the ticket
-          holders this page read, through the context. */}
-      <TicketHolderContext.Provider value={holderView}>
-        {ticketsSection}
-      </TicketHolderContext.Provider>
 
       <WorkshopRegistrationSettings
         workshopRegistrationSponsorStart={workshopRegistrationSponsorStart}

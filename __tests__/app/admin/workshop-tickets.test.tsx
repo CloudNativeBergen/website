@@ -169,7 +169,11 @@ vi.mock('@/components/admin/NotificationProvider', () => ({
 vi.mock('@/lib/trpc/client', () => ({
   api: {
     useUtils: () => ({
-      workshop: { admin: { ticketHolders: { invalidate: () => {} } } },
+      workshop: {
+        admin: {
+          ticketHolders: { cancel: async () => {}, invalidate: () => {} },
+        },
+      },
     }),
     tickets: {
       admin: {

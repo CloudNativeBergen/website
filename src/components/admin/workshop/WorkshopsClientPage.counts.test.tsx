@@ -136,6 +136,20 @@ async function answer(
     // and the numbers follow the stored sign-ups.
     case 'workshop.admin.ticketHolders': {
       server.holderReads += 1
+      // The answer is what was stored when the read began; a slow provider
+      // delivers it late, not newer.
+      const count = (status: string) =>
+        server.signups.filter((s) => s.status === status).length
+      const stats = {
+        available: true,
+        configured: true,
+        holders: server.signups.length + 3,
+        confirmed: count('confirmed'),
+        waitlistOnly: count('waitlist'),
+        notSignedUp: 3,
+        flagged: [],
+        lockedOut: [],
+      }
       if (server.holdHolders) await server.holdHolders
       if (server.ticketsDown) return [ok({ available: false }), 200]
       if (server.holdersFail) {
@@ -150,21 +164,7 @@ async function answer(
           500,
         ]
       }
-      const count = (status: string) =>
-        server.signups.filter((s) => s.status === status).length
-      return [
-        ok({
-          available: true,
-          configured: true,
-          holders: server.signups.length + 3,
-          confirmed: count('confirmed'),
-          waitlistOnly: count('waitlist'),
-          notSignedUp: 3,
-          flagged: [],
-          lockedOut: [],
-        }),
-        200,
-      ]
+      return [ok(stats), 200]
     }
     case 'workshop.admin.batchCancelSignups': {
       const [id] = (input as { signupIds: string[] }).signupIds
@@ -469,6 +469,52 @@ describe('the ticket holders (#1333)', () => {
     expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent('2')
     await moveAdaToTheWaitlist()
     await screen.findByText('Moved to waitlist')
+
+    await waitFor(async () =>
+      expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent(
+        '1',
+      ),
+    )
+    expect((await tile('Waitlist only')).nextElementSibling).toHaveTextContent(
+      '1',
+    )
+    expect(server.holderReads).toBe(2)
+  })
+
+  // Spec §3: the banner that names the not-set types (in the "Workshop
+  // tickets" section) sits above the statistics, so the people it explains
+  // are explained before the totals that leave them out.
+  it('come after the "Workshop tickets" section and its banner', async () => {
+    render(
+      <Providers>
+        <WorkshopsClientPage
+          conferenceId="conf-1"
+          initialWorkshops={SERVER_RENDER}
+          resendDisabledReason={null}
+          ticketsSection={<section aria-label="Workshop tickets" />}
+        />
+      </Providers>,
+    )
+    const tickets = screen.getByRole('region', { name: 'Workshop tickets' })
+    expect(
+      tickets.compareDocumentPosition(await panel()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  // An action while the FIRST read is still on its way: that read began
+  // before the action, so its answer is old. It must not be taken as the
+  // re-read the action asked for (TanStack reuses a fetch in flight when a
+  // query has no data yet).
+  it('are read again after an action taken while the first read was on its way', async () => {
+    let providerAnswers!: () => void
+    server.holdHolders = new Promise((resolve) => {
+      providerAnswers = resolve
+    })
+    renderPage()
+    await moveAdaToTheWaitlist()
+    await screen.findByText('Moved to waitlist')
+    providerAnswers()
 
     await waitFor(async () =>
       expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent(

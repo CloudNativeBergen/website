@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { unknownOutcome } from '@/lib/tickets/unconfirmed-save'
+import { useRereadTicketHolders } from '../holders'
 
 /**
  * The server's two ways of saying the page was stale: the stored answers are
@@ -44,7 +45,7 @@ export function useSaveWorkshopAccess({
   onError?: () => void
 }) {
   const router = useRouter()
-  const utils = api.useUtils()
+  const rereadTicketHolders = useRereadTicketHolders()
   const { showNotification } = useNotification()
   const [refreshing, startRefresh] = useTransition()
   // The page again, and the ticket holders (#1333), which the client reads
@@ -52,7 +53,7 @@ export function useSaveWorkshopAccess({
   // Nothing is read for them where they are not shown.
   const reload = () => {
     startRefresh(() => router.refresh())
-    void utils.workshop.admin.ticketHolders.invalidate()
+    rereadTicketHolders()
   }
   /** What to say once the save in flight has landed. */
   const saved = useRef<Notice | null>(null)
