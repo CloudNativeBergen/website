@@ -901,8 +901,12 @@ gains no privilege and the form offers only valid choices:
     succeeding, never by `redeemed`: Pretix refuses to delete a voucher any order
     position ever referenced, including one whose orders were all cancelled.
   - on 403 (observed) it is **retired**:
-    `max_usages = redeemed`, the floor Pretix allows (observed), and
-    `valid_until = now`
+    `max_usages = max(redeemed, min_usages)`, reading `min_usages` from the
+    voucher, because Pretix refuses `max_usages` below either (a fully
+    cancelled order lowers `redeemed` to 0, but its positions still block the
+    DELETE). Plus `valid_until = now`. A contract test covers a voucher used
+    once by an order that was then fully cancelled: the DELETE gets 403, then
+    the retire succeeds.
   - sponsor links are untouched
   - `valid_until = now` is what holds a retirement: a later cancellation lowers
     `redeemed` below the new `max_usages`, so `max_usages` alone isn't enough
@@ -916,7 +920,13 @@ gains no privilege and the form offers only valid choices:
 ### 8.7 Speaker invitations
 
 - **Before every create, with or without `existing`**, the adapter searches for
-  a voucher with `tag=speaker` and exactly this reference in `comment`:
+  a voucher with `tag=speaker` and exactly this reference in `comment`. Pretix
+  can't filter by `comment`, and silently ignores an unknown query parameter,
+  so the search is `GET /vouchers/?tag=speaker&search=<reference>` (a
+  case-insensitive match over code, tag and comment). It follows pagination,
+  then keeps only vouchers whose `comment` **equals** the reference. A fixture
+  with two or more speakers' vouchers proves a new speaker gets a new voucher,
+  never another speaker's.
   - a unique match is reused. If it's used, its holder is classified, never
     inferred from the feed:
     - read `GET /orderpositions/?voucher=<id>&order__status__in=p,n,e`
