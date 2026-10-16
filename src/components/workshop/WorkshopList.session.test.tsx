@@ -50,10 +50,22 @@ const SIGNUP = {
 
 const server = {
   signedIn: true,
-  signupReads: 0,
   /** The attendee's sign-ups while signed in. */
   signups: [SIGNUP] as unknown[],
+  /** Signed out, the read FAILS (a 500, a dropped connection) instead of refusing. */
+  readFails: false,
 }
+
+const FAILED: [unknown, number] = [
+  {
+    error: {
+      message: 'fetch failed',
+      code: -32603,
+      data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+    },
+  },
+  500,
+]
 
 const ok = (data: unknown) => ({ result: { data } })
 
@@ -74,8 +86,7 @@ function answer(procedure: string): [unknown, number] {
     case 'workshop.list':
       return [ok({ success: true, data: [WORKSHOP], count: 1 }), 200]
     case 'workshop.getMySignups':
-      server.signupReads += 1
-      if (!server.signedIn) return UNAUTHORIZED
+      if (!server.signedIn) return server.readFails ? FAILED : UNAUTHORIZED
       return [
         ok({
           success: true,
@@ -96,7 +107,11 @@ function answer(procedure: string): [unknown, number] {
 }
 
 beforeEach(() => {
-  Object.assign(server, { signedIn: true, signupReads: 0, signups: [SIGNUP] })
+  Object.assign(server, {
+    signedIn: true,
+    signups: [SIGNUP],
+    readFails: false,
+  })
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -167,44 +182,52 @@ describe('WorkshopList when the session has ended (#1303)', () => {
   // the session has ended the list shows the notice and nothing else: no
   // dialog, no card with its own copy of the refusal, and none of the
   // registrations the query client still holds from before.
-  it.each([
-    {
-      write: 'cancel',
-      signups: [SIGNUP],
-      open: 'Cancel Registration',
-      dialog: 'Cancel your registration?',
-      submit: 'Cancel Registration',
-    },
-    {
-      write: 'sign-up',
-      signups: [],
-      open: 'Register for Workshop',
-      dialog: 'Kubernetes 101',
-      submit: 'Confirm Registration',
-    },
-  ])(
-    'asks the same when a $write is refused, and shows nothing else',
-    async ({ signups, open, dialog, submit }) => {
-      server.signups = signups
-      renderPortal()
-      // Signed in: the workshop is shown, and no notice.
-      const opener = await screen.findByRole('button', { name: open })
-      expect(screen.queryByRole('alert')).toBeNull()
-      const readsBefore = server.signupReads
+  // The notice follows from the write's own refusal: a read of the sign-ups
+  // after it, if any, may refuse too or fail for an unrelated reason.
+  describe.each([
+    { reread: 'refused', readFails: false },
+    { reread: 'failing', readFails: true },
+  ])('with a $reread read after it', ({ readFails }) => {
+    it.each([
+      {
+        write: 'cancel',
+        signups: [SIGNUP],
+        open: 'Cancel Registration',
+        dialog: 'Cancel your registration?',
+        submit: 'Cancel Registration',
+      },
+      {
+        write: 'sign-up',
+        signups: [],
+        open: 'Register for Workshop',
+        dialog: 'Kubernetes 101',
+        submit: 'Confirm Registration',
+      },
+    ])(
+      'asks the same when a $write is refused, and shows nothing else',
+      async ({ signups, open, dialog, submit }) => {
+        server.signups = signups
+        server.readFails = readFails
+        renderPortal()
+        // Signed in: the workshop is shown, and no notice.
+        const opener = await screen.findByRole('button', { name: open })
+        expect(screen.queryByRole('alert')).toBeNull()
 
-      server.signedIn = false
-      fireEvent.click(opener)
-      const confirm = within(
-        await screen.findByRole('dialog', { name: dialog }),
-      ).getByRole('button', { name: submit })
-      await waitFor(() => expect(confirm).not.toHaveAttribute('aria-disabled'))
-      fireEvent.click(confirm)
+        server.signedIn = false
+        fireEvent.click(opener)
+        const confirm = within(
+          await screen.findByRole('dialog', { name: dialog }),
+        ).getByRole('button', { name: submit })
+        await waitFor(() =>
+          expect(confirm).not.toHaveAttribute('aria-disabled'),
+        )
+        fireEvent.click(confirm)
 
-      await waitFor(() => expect(server.signupReads).toBe(readsBefore + 1))
-      expectSignInAgain(await screen.findByRole('alert'))
-      expect(screen.queryByRole('dialog')).toBeNull()
-      expect(screen.queryByText('Kubernetes 101')).toBeNull()
-      expect(screen.queryByText(/must be signed in/i)).toBeNull()
-    },
-  )
+        expectSignInAgain(await screen.findByRole('alert'))
+        expect(screen.queryByRole('dialog')).toBeNull()
+        expect(screen.queryByText('Kubernetes 101')).toBeNull()
+        expect(screen.queryByText(/must be signed in/i)).toBeNull()
+      },
+    )
+  })
 })

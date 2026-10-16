@@ -104,10 +104,12 @@ export default function WorkshopList({
   })
 
   // THE SESSION HAS ENDED (#1303): it lasts 7 days with no renewal, and the
-  // attendee can sign out in another tab. A refused write reads the sign-ups
-  // again, whose refusal replaces the list with the notice below.
-  const sessionEnded = signupsError?.data?.code === 'UNAUTHORIZED'
-  const isSessionRefusal = (code: string | undefined) => code === 'UNAUTHORIZED'
+  // attendee can sign out in another tab. Either the read or a write says so,
+  // each on its own: a write's refusal does not wait on another read, which
+  // can fail for an unrelated reason.
+  const [writeRefusedForSession, setWriteRefusedForSession] = useState(false)
+  const sessionEnded =
+    writeRefusedForSession || signupsError?.data?.code === 'UNAUTHORIZED'
 
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
@@ -123,8 +125,8 @@ export default function WorkshopList({
     },
     onError: (error) => {
       setSuccessMessage(null)
-      if (isSessionRefusal(error.data?.code)) {
-        refetchSignups()
+      if (error.data?.code === 'UNAUTHORIZED') {
+        setWriteRefusedForSession(true)
         return
       }
       // The server refused for the window while this list was offering
@@ -172,8 +174,8 @@ export default function WorkshopList({
     },
     onError: (error) => {
       setSuccessMessage(null)
-      if (isSessionRefusal(error.data?.code)) {
-        refetchSignups()
+      if (error.data?.code === 'UNAUTHORIZED') {
+        setWriteRefusedForSession(true)
         return
       }
       setErrorMessage(error.message)
