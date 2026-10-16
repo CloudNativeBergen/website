@@ -637,13 +637,13 @@ describe('findUnsupportedVariables', () => {
     ])
   })
 
-  it('detects lowercase, numeric, and whitespace-padded {{{...}}} tokens', () => {
+  it('detects lowercase, numeric, and whitespace-padded {{{...}}} tokens (including padded supported names)', () => {
     expect(
       findUnsupportedVariables(
         supported,
-        'Hello {{{sponsor_name}}}, {{{VAR_1}}}, and {{{ TIER_NAME }}}',
+        'Hello {{{sponsor_name}}}, {{{VAR_1}}}, {{{ NAME }}}, and {{{ TIER_NAME }}}',
       ),
-    ).toEqual(['sponsor_name', 'VAR_1', 'TIER_NAME'])
+    ).toEqual(['sponsor_name', 'VAR_1', ' NAME ', ' TIER_NAME '])
   })
 })
 
