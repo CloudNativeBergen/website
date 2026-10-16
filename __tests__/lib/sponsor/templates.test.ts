@@ -636,6 +636,15 @@ describe('findUnsupportedVariables', () => {
       'PROSPECTUS_URL',
     ])
   })
+
+  it('detects lowercase, numeric, and whitespace-padded {{{...}}} tokens', () => {
+    expect(
+      findUnsupportedVariables(
+        supported,
+        'Hello {{{sponsor_name}}}, {{{VAR_1}}}, and {{{ TIER_NAME }}}',
+      ),
+    ).toEqual(['sponsor_name', 'VAR_1', 'TIER_NAME'])
+  })
 })
 
 describe('formatUnmergedVariablesMessage', () => {

@@ -43,12 +43,17 @@ const h = vi.hoisted(() => ({
   getTemplate: vi.fn(),
   syncSponsorAudience: vi.fn(),
   sendBroadcastEmail: vi.fn(),
+  listEventDiscounts: vi.fn(),
 }))
 vi.mock('@/lib/email/audience', () => ({
   syncSponsorAudience: h.syncSponsorAudience,
 }))
 vi.mock('@/lib/email/broadcast', () => ({
   sendBroadcastEmail: h.sendBroadcastEmail,
+}))
+vi.mock('@/lib/sponsor-crm/discount-codes', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  listEventDiscounts: h.listEventDiscounts,
 }))
 vi.mock('@/lib/sponsor/sanity', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
@@ -887,6 +892,41 @@ describe('unmerged template variable guard — before sponsor read', () => {
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       message: expect.stringContaining('{{{PROSPECTUS_URL}}}'),
+    })
+    expect(
+      h.fetches.some((f) =>
+        f.query.includes('_type == "sponsorForConference"'),
+      ),
+    ).toBe(false)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('refuses discount kind with unmerged {{{VARIABLE}}} before reading or claiming discount codes', async () => {
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        kind: 'discount',
+        discountCodes: ['ACME2026'],
+        subject: 'Codes for {{{sponsor_name}}}',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{{{sponsor_name}}}'),
+    })
+    expect(h.listEventDiscounts).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('refuses sendEmailBySfc with unmerged {{{VARIABLE}}} before reading contacts', async () => {
+    await expect(
+      sponsor().crm.sendEmailBySfc({
+        sponsorForConferenceId: SFC,
+        subject: 'Hello {{{SPONSOR_NAME}}}',
+        body: 'Body text',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{{{SPONSOR_NAME}}}'),
     })
     expect(
       h.fetches.some((f) =>

@@ -250,28 +250,28 @@ export function BulkDiscountSendModal({
   const [results, setResults] = useState<Record<string, SponsorSendResult>>({})
   const [currentSendingIndex, setCurrentSendingIndex] = useState(0)
 
-  const supportedVars = useMemo(
-    () =>
-      buildTemplateVariables({
-        sponsorName: 'Sponsor',
-        contactNames: 'Contact',
-        tierName:
-          selectedTargets.length > 0 &&
-          selectedTargets.every((t) => Boolean(t.tierTitle))
-            ? 'Tier'
-            : undefined,
-        conference: {
-          title: conference.title,
-          startDate: conference.startDate,
-          city: conference.city,
-          organizer: conference.organizer,
-          domains: conference.domains,
-          sponsorRegistrationLink:
-            conference.sponsorRegistrationLink ?? undefined,
-        },
-      }),
-    [conference, selectedTargets],
-  )
+  const supportedVars = useMemo(() => {
+    const checkTargets =
+      selectedTargets.length > 0 ? selectedTargets : eligibleSponsors
+    return buildTemplateVariables({
+      sponsorName: 'Sponsor',
+      contactNames: 'Contact',
+      tierName:
+        checkTargets.length === 0 ||
+        checkTargets.every((t) => Boolean(t.tierTitle))
+          ? 'Tier'
+          : undefined,
+      conference: {
+        title: conference.title,
+        startDate: conference.startDate,
+        city: conference.city,
+        organizer: conference.organizer,
+        domains: conference.domains,
+        sponsorRegistrationLink:
+          conference.sponsorRegistrationLink ?? undefined,
+      },
+    })
+  }, [conference, selectedTargets, eligibleSponsors])
 
   const unmergedVariables = useMemo(
     () => findUnsupportedVariables(supportedVars, subject, messageText),
@@ -287,8 +287,12 @@ export function BulkDiscountSendModal({
       setCurrentSendingIndex(0)
       setExcludedSponsorIds(new Set())
       setSendToAllContacts(false)
+      setSubject(`Discount codes: ${conference.title}`)
+      setMessageText(
+        `Hi {{{SPONSOR_NAME}}},\n\nHere are your complimentary ticket discount codes for {{{CONFERENCE_TITLE}}}.\n\nPlease find your codes and registration link below:`,
+      )
     }
-  }, [isOpen])
+  }, [isOpen, conference.title])
 
   // Guard against navigating or closing tab while sending is actively in-flight
   React.useEffect(() => {
@@ -329,9 +333,7 @@ export function BulkDiscountSendModal({
         : selectedTargets
       if (targets.length === 0) return
 
-      if (!Array.isArray(targetsOverride)) {
-        setActiveTargets(targets)
-      }
+      setActiveTargets(targets)
       setSendingState('sending')
       setCurrentSendingIndex(0)
 

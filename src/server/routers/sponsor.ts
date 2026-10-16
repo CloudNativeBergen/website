@@ -2762,22 +2762,10 @@ export const sponsorRouter = router({
           }
         }
 
-        // Discount kind (#1262): the chosen codes must be on THIS
-        // conference's provider event and not stored on another sponsor;
-        // they ride in a server-built block and are listed on the record.
-        const discount =
-          input.kind === 'discount'
-            ? await prepareDiscountSend(
-                conference,
-                input.sponsorForConferenceId,
-                input.discountCodes ?? [],
-              )
-            : undefined
-
         // The registration merge field is exposed to every template, but only
         // a registration send can fill it: any other kind would mail the
         // literal placeholder (or an unresolved href). Refused before any
-        // read of the sponsor's own data.
+        // read of the sponsor's own data or discount code claims.
         if (
           input.kind !== 'registration' &&
           carriesPortalPlaceholder(input.subject, message)
@@ -2789,7 +2777,7 @@ export const sponsorRouter = router({
         }
 
         // Refuse any remaining unmerged {{{VARIABLE}}} placeholders in subject,
-        // body spans, or link markDefs[].href before reading sponsor data.
+        // body spans, or link markDefs[].href before reading sponsor data or claiming codes.
         const unmergedVariables = findUnsupportedVariables(
           input.kind === 'registration' ? { SPONSOR_PORTAL_URL: '' } : {},
           input.subject,
@@ -2802,90 +2790,107 @@ export const sponsorRouter = router({
           })
         }
 
-        // Contract kind (#1264): one action by state — first send, reminder
-        // or signed copy — decided and prepared before anything is sent. A
-        // client-supplied contract template id is guarded FIRST (#863).
+        // Discount kind (#1262): the chosen codes must be on THIS
+        // conference's provider event and not stored on another sponsor;
+        // they ride in a server-built block and are listed on the record.
+        const discount =
+          input.kind === 'discount'
+            ? await prepareDiscountSend(
+                conference,
+                input.sponsorForConferenceId,
+                input.discountCodes ?? [],
+              )
+            : undefined
+
         let contract: ContractSendPlan | undefined
-        if (input.kind === 'contract') {
-          if (input.contractTemplateId) {
-            await requireDocumentInCurrentConference(
-              input.contractTemplateId,
-              'contractTemplate',
-            )
-          }
-          const { sponsorForConference: sfc, error: sfcError } =
-            await getSponsorForCurrentConference(input.sponsorForConferenceId)
-          if (sfcError || !sfc) {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'Sponsor not found in this conference',
-              cause: sfcError,
-            })
-          }
-          // The removed senders' rule, kept (after the ownership guards, so a
-          // foreign id refuses identically everywhere): a dev send would
-          // create a real agreement and mail a real signer.
-          if (domain && isLocalhostDomain(domain)) {
-            throw new TRPCError({
-              code: 'PRECONDITION_FAILED',
-              message:
-                'Contract emails cannot be sent from localhost. Deploy to a production domain first.',
-            })
-          }
-          contract = await prepareContractSend({
-            conference,
-            sfc,
-            recipientKeys: input.recipientKeys,
-            signerKey: input.signerKey,
-            expectedAction: input.contractAction,
-            contractTemplateId: input.contractTemplateId,
-            organizerSignatureDataUrl: input.organizerSignatureDataUrl,
-            actor: {
-              id: ctx.speaker._id ?? null,
-              name: ctx.speaker.name,
-              email: ctx.speaker.email,
-            },
-          })
-        }
-
-        // Registration kind (#1263): the portal link from the sponsor's own
-        // token, created once when absent. Refuses before anything is sent.
-        const registration =
-          input.kind === 'registration'
-            ? await prepareRegistrationSend(
-                conference,
-                domain,
-                input.sponsorForConferenceId,
-              )
-            : undefined
-
-        // Workshop early-access kind (#1347): refused here, before anything
-        // is written or sent. The link itself is created (or the stored one
-        // answered) by `appendLate`, once nothing can refuse the send.
-        const earlyAccess =
-          input.kind === 'workshop-early-access'
-            ? await prepareEarlyAccessSend(
-                conference,
-                domain,
-                input.sponsorForConferenceId,
-              )
-            : undefined
-
-        // A template applied in the composer before the link was known keeps
-        // the merge field as text; the final merge happens here, so no
-        // sponsor ever receives the placeholder.
-        const subject = registration
-          ? mergePortalUrl(input.subject, registration.portalUrl)
-          : input.subject
-        if (registration) {
-          message = processPortableTextVariables(
-            message as unknown as TemplateBlock[],
-            { SPONSOR_PORTAL_URL: registration.portalUrl },
-          ) as unknown as PortableTextBlock[]
-        }
-
+        let registration:
+          Awaited<ReturnType<typeof prepareRegistrationSend>> | undefined
+        let earlyAccess:
+          Awaited<ReturnType<typeof prepareEarlyAccessSend>> | undefined
+        let subject = input.subject
         let result: Awaited<ReturnType<typeof sendSponsorCommunication>>
         try {
+          // Contract kind (#1264): one action by state — first send, reminder
+          // or signed copy — decided and prepared before anything is sent. A
+          // client-supplied contract template id is guarded FIRST (#863).
+          if (input.kind === 'contract') {
+            if (input.contractTemplateId) {
+              await requireDocumentInCurrentConference(
+                input.contractTemplateId,
+                'contractTemplate',
+              )
+            }
+            const { sponsorForConference: sfc, error: sfcError } =
+              await getSponsorForCurrentConference(input.sponsorForConferenceId)
+            if (sfcError || !sfc) {
+              throw new TRPCError({
+                code: 'NOT_FOUND',
+                message: 'Sponsor not found in this conference',
+                cause: sfcError,
+              })
+            }
+            // The removed senders' rule, kept (after the ownership guards, so a
+            // foreign id refuses identically everywhere): a dev send would
+            // create a real agreement and mail a real signer.
+            if (domain && isLocalhostDomain(domain)) {
+              throw new TRPCError({
+                code: 'PRECONDITION_FAILED',
+                message:
+                  'Contract emails cannot be sent from localhost. Deploy to a production domain first.',
+              })
+            }
+            contract = await prepareContractSend({
+              conference,
+              sfc,
+              recipientKeys: input.recipientKeys,
+              signerKey: input.signerKey,
+              expectedAction: input.contractAction,
+              contractTemplateId: input.contractTemplateId,
+              organizerSignatureDataUrl: input.organizerSignatureDataUrl,
+              actor: {
+                id: ctx.speaker._id ?? null,
+                name: ctx.speaker.name,
+                email: ctx.speaker.email,
+              },
+            })
+          }
+
+          // Registration kind (#1263): the portal link from the sponsor's own
+          // token, created once when absent. Refuses before anything is sent.
+          registration =
+            input.kind === 'registration'
+              ? await prepareRegistrationSend(
+                  conference,
+                  domain,
+                  input.sponsorForConferenceId,
+                )
+              : undefined
+
+          // Workshop early-access kind (#1347): refused here, before anything
+          // is written or sent. The link itself is created (or the stored one
+          // answered) by `appendLate`, once nothing can refuse the send.
+          earlyAccess =
+            input.kind === 'workshop-early-access'
+              ? await prepareEarlyAccessSend(
+                  conference,
+                  domain,
+                  input.sponsorForConferenceId,
+                )
+              : undefined
+
+          // A template applied in the composer before the link was known keeps
+          // the merge field as text; the final merge happens here, so no
+          // sponsor ever receives the placeholder.
+          subject = registration
+            ? mergePortalUrl(input.subject, registration.portalUrl)
+            : input.subject
+          if (registration) {
+            message = processPortableTextVariables(
+              message as unknown as TemplateBlock[],
+              { SPONSOR_PORTAL_URL: registration.portalUrl },
+            ) as unknown as PortableTextBlock[]
+          }
+
           result = await sendSponsorCommunication({
             conference,
             orgId: ctx.orgId,
@@ -2922,8 +2927,8 @@ export const sponsorRouter = router({
             }),
           })
         } catch (error) {
-          // The primitive THREW (a read rejected before the provider was
-          // reached) rather than refusing: nothing went out either way.
+          // The primitive or pre-send setup THREW before the provider was
+          // reached: nothing went out either way, so release any held claims.
           await discount?.release()
           await contract?.release?.()
           throw error
@@ -3243,6 +3248,17 @@ export const sponsorRouter = router({
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Message body is empty after conversion',
+          })
+        }
+        const unmergedVariables = findUnsupportedVariables(
+          {},
+          input.subject,
+          message as unknown as TemplateBlock[],
+        )
+        if (unmergedVariables.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: formatUnmergedVariablesMessage(unmergedVariables),
           })
         }
         // The old contract: every contact that has an email. Resolved on the

@@ -404,9 +404,9 @@ export function findBestTemplate(
  * Extract all {{{VARIABLE_NAME}}} references from a plain string.
  */
 export function extractVariablesFromText(text: string): string[] {
-  const matches = text.match(/\{\{\{([A-Z_]+)\}\}\}/g)
+  const matches = text.match(/\{\{\{[^{}\r\n]+\}\}\}/g)
   if (!matches) return []
-  return [...new Set(matches.map((m) => m.slice(3, -3)))]
+  return [...new Set(matches.map((m) => m.slice(3, -3).trim()).filter(Boolean))]
 }
 
 /**
