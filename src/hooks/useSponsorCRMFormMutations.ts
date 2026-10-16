@@ -71,7 +71,7 @@ export function useSponsorCRMFormMutations({
     onSuccess: async () => {
       await utils.sponsor.crm.list.invalidate()
       utils.sponsor.crm.healthViolations.invalidate()
-      utils.sponsor.contractTemplates.contractReadiness.invalidate()
+      utils.sponsor.contractTemplates?.contractReadiness?.invalidate()
       showNotification({
         title: 'Success',
         message: 'Sponsor updated successfully',
@@ -91,7 +91,7 @@ export function useSponsorCRMFormMutations({
   const updateGlobalSponsorMutation = api.sponsor.update.useMutation({
     onSuccess: (data) => {
       utils.sponsor.list.invalidate()
-      utils.sponsor.contractTemplates.contractReadiness.invalidate()
+      utils.sponsor.contractTemplates?.contractReadiness?.invalidate()
       // Saved, but something to know: Bluesky could not check the handle.
       for (const message of data?.warnings ?? [])
         showNotification({

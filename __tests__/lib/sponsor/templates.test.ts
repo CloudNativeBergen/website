@@ -9,6 +9,7 @@ import {
   extractVariablesFromPortableText,
   findUnsupportedVariables,
   formatUnmergedVariablesMessage,
+  RESEND_BROADCAST_VARIABLES,
 } from '@/lib/sponsor/templates'
 import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
 
@@ -671,6 +672,57 @@ describe('findUnsupportedVariables', () => {
       'NAME',
       'TIER_NAME',
     ])
+  })
+
+  it('allows Resend broadcast merge variables including pipe fallback syntax while rejecting CRM variables and split-span placeholders', () => {
+    const validBlocks = [
+      {
+        _type: 'block' as const,
+        _key: 'k1',
+        children: [
+          {
+            _type: 'span' as const,
+            _key: 's1',
+            text: 'Hi {{{FIRST_NAME|there}}}, {{{LAST_NAME}}} ({{{EMAIL}}})',
+          },
+        ],
+        style: 'normal' as const,
+      },
+    ]
+    expect(
+      findUnsupportedVariables(
+        RESEND_BROADCAST_VARIABLES,
+        'Update for {{{FIRST_NAME|friend}}}',
+        validBlocks,
+      ),
+    ).toEqual([])
+
+    expect(
+      findUnsupportedVariables(
+        RESEND_BROADCAST_VARIABLES,
+        'Hi {{{FIRST_NAME|there}}} from {{{SPONSOR_NAME}}}',
+      ),
+    ).toEqual(['SPONSOR_NAME'])
+
+    const splitBlocks = [
+      {
+        _type: 'block' as const,
+        _key: 'k1',
+        children: [
+          { _type: 'span' as const, _key: 's1', text: 'Hi {{{FIRST_' },
+          {
+            _type: 'span' as const,
+            _key: 's2',
+            text: 'NAME|there}}}',
+            marks: ['strong'],
+          },
+        ],
+        style: 'normal' as const,
+      },
+    ]
+    expect(
+      findUnsupportedVariables(RESEND_BROADCAST_VARIABLES, splitBlocks),
+    ).toEqual(['FIRST_NAME|there'])
   })
 })
 

@@ -443,7 +443,7 @@ export function SponsorCRMForm({
               onSuccess={() => {
                 utils.sponsor.crm.list.invalidate()
                 utils.sponsor.crm.healthViolations.invalidate()
-                utils.sponsor.contractTemplates.contractReadiness.invalidate()
+                utils.sponsor.contractTemplates?.contractReadiness?.invalidate()
               }}
               onCancel={handleClose}
               onDirtyChange={setIsContactsDirty}
@@ -476,7 +476,7 @@ export function SponsorCRMForm({
               onSuccess={() => {
                 utils.sponsor.crm.list.invalidate()
                 utils.sponsor.crm.healthViolations.invalidate()
-                utils.sponsor.contractTemplates.contractReadiness.invalidate()
+                utils.sponsor.contractTemplates?.contractReadiness?.invalidate()
               }}
               onSendRegistration={onSendRegistration}
               onSendContract={onSendContract}

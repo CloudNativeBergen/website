@@ -78,4 +78,60 @@ describe('a refused audience explains itself to the operator (#893)', () => {
     expect(response.status).toBe(500)
     expect(body.error).toBe('Failed to prepare email audience')
   })
+
+  it('surfaces the Resend error message when broadcast creation fails (e.g. HTTP 422)', async () => {
+    h.getOrCreateConferenceAudience.mockResolvedValue({
+      audienceId: 'aud-123',
+      client: {
+        broadcasts: {
+          create: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: 'Invalid `from` field: domain not verified' },
+          }),
+        },
+      },
+    })
+
+    const response = await sendBroadcastEmail({
+      conference: { ...conference, contactEmail: 'info@example.test' },
+      subject: 'Hello',
+      messagePortableText: [],
+    })
+    const body = (await response.json()) as { error: string }
+
+    expect(response.status).toBe(500)
+    expect(body.error).toBe(
+      'Failed to create broadcast email: Invalid `from` field: domain not verified',
+    )
+  })
+
+  it('surfaces the Resend error message when broadcast send fails', async () => {
+    h.getOrCreateConferenceAudience.mockResolvedValue({
+      audienceId: 'aud-123',
+      client: {
+        broadcasts: {
+          create: vi.fn().mockResolvedValue({
+            data: { id: 'bc-123' },
+            error: null,
+          }),
+          send: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: 'Segment has no subscribed contacts' },
+          }),
+        },
+      },
+    })
+
+    const response = await sendBroadcastEmail({
+      conference: { ...conference, contactEmail: 'info@example.test' },
+      subject: 'Hello',
+      messagePortableText: [],
+    })
+    const body = (await response.json()) as { error: string }
+
+    expect(response.status).toBe(500)
+    expect(body.error).toBe(
+      'Failed to send broadcast email: Segment has no subscribed contacts',
+    )
+  })
 })

@@ -50,6 +50,7 @@ vi.mock('@/lib/trpc/client', () => {
         sponsor: {
           list: invalidate,
           crm: { list: invalidate, healthViolations: invalidate },
+          contractTemplates: { contractReadiness: invalidate },
         },
       }),
       sponsor: {
