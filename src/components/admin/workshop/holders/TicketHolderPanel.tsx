@@ -7,6 +7,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { StatCard } from '@/components/admin/stats'
 import { FlaggedSignupsModal } from './FlaggedSignupsModal'
+import type { FlaggedPerson } from '@/lib/workshop/holders'
 import type { TicketHolderView } from './view'
 
 const HEADING_ID = 'ticket-holders-heading'
@@ -46,6 +47,15 @@ export function TicketHolderPanel({
   const heading = useRef<HTMLHeadingElement>(null)
   /** The Flagged button is a button only while somebody is flagged. */
   const openerGone = view.state !== 'ready' || view.stats.flagged.length === 0
+
+  // THE LIST LIVES ONLY WHILE THE NUMBERS DO. When a refresh fails with it
+  // open, it closes (and focus goes to the heading, below), and the next good
+  // read does not open it again by itself. The last list read stays in it
+  // while it closes, so it does not empty before it fades.
+  const flagged = view.state === 'ready' ? view.stats.flagged : null
+  const [shown, setShown] = useState<FlaggedPerson[]>([])
+  if (flagged && flagged !== shown) setShown(flagged)
+  if (!flagged && flaggedOpen) setFlaggedOpen(false)
 
   return (
     <section
@@ -164,20 +174,21 @@ export function TicketHolderPanel({
               }
             />
           </div>
-          <FlaggedSignupsModal
-            isOpen={flaggedOpen}
-            onClose={() => setFlaggedOpen(false)}
-            afterLeave={() => {
-              if (openerGone) heading.current?.focus()
-            }}
-            people={view.stats.flagged}
-            onMoveToWaitlist={onMoveToWaitlist}
-            onDeleteSignup={onDeleteSignup}
-            isMoving={isMoving}
-            isDeleting={isDeleting}
-          />
         </>
       )}
+
+      <FlaggedSignupsModal
+        isOpen={flaggedOpen}
+        onClose={() => setFlaggedOpen(false)}
+        afterLeave={() => {
+          if (openerGone) heading.current?.focus()
+        }}
+        people={flagged ?? shown}
+        onMoveToWaitlist={onMoveToWaitlist}
+        onDeleteSignup={onDeleteSignup}
+        isMoving={isMoving}
+        isDeleting={isDeleting}
+      />
     </section>
   )
 }

@@ -199,6 +199,34 @@ describe('TicketHolderPanel', () => {
     await waitFor(() => expect(document.activeElement).toBe(heading))
   })
 
+  // A refresh that fails while the list is open: the list closes (focus to
+  // the heading, as the Flagged button is gone), and the next good read does
+  // not open it again by itself.
+  it('closes the list when the numbers become unavailable, and does not reopen it', async () => {
+    const actions = {
+      onRetry: vi.fn(),
+      onMoveToWaitlist: vi.fn(),
+      onDeleteSignup: vi.fn(),
+    }
+    const { rerender } = render(<TicketHolderPanel view={READY} {...actions} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    screen.getByRole('dialog', { name: 'Flagged sign-ups' })
+
+    rerender(
+      <TicketHolderPanel
+        view={{ state: 'unavailable', retrying: false }}
+        {...actions}
+      />,
+    )
+    const heading = screen.getByRole('heading', { name: 'Ticket holders' })
+    await waitFor(() => expect(document.activeElement).toBe(heading))
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    rerender(<TicketHolderPanel view={READY} {...actions} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Flagged, 1' })).toBeTruthy()
+  })
+
   it('with nobody flagged, Flagged is a number and opens nothing', () => {
     renderPanel(ready({ flagged: [] }))
     expect(valueOf('Flagged')).toBe('0')
