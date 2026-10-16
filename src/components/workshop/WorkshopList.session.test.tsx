@@ -315,4 +315,29 @@ describe('WorkshopList when the session has ended (#1303)', () => {
     expectSignInAgain(notice)
     await waitFor(() => expect(notice).toHaveFocus())
   })
+
+  // Only a keyboard left on the page moves: one on a control outside the list
+  // (the page's own sign-out, say) stays where the attendee put it.
+  it('leaves the keyboard where it is when the list did not have it', async () => {
+    render(
+      <Providers>
+        <button type="button">Outside the list</button>
+        <WorkshopList
+          userWorkOSId="workos-1"
+          userEmail="attendee@example.com"
+          userName="Attendee One"
+        />
+      </Providers>,
+    )
+    await screen.findByRole('button', { name: 'Cancel Registration' })
+    const outside = screen.getByRole('button', { name: 'Outside the list' })
+    outside.focus()
+
+    server.signedIn = false
+    focusManager.setFocused(false)
+    focusManager.setFocused(true)
+
+    expectSignInAgain(await screen.findByRole('alert'))
+    expect(outside).toHaveFocus()
+  })
 })
