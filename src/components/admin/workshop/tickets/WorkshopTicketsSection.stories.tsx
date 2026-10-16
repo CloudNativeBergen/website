@@ -1,9 +1,10 @@
-import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { expect, userEvent, within } from 'storybook/test'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
+import { TicketHolderContext, type TicketHolderView } from '../holders'
 import { WorkshopTicketsNotReady } from './WorkshopTicketsNotReady'
 import {
   WorkshopTicketsSection,
@@ -374,6 +375,80 @@ export const NotSetTypeMobileDark: Story = {
   args: NotSetType.args,
   parameters: { ...phone, ...dark },
   play: fitsItsWidth,
+}
+
+/**
+ * NOT SET, WITH THE TICKET HOLDERS READ (#1333). On the page the banner also
+ * says how many people each not-set type keeps out: holders of it with no
+ * ticket that grants workshop access. The page hands it the one read it
+ * makes of the ticket holders.
+ */
+const withHolders =
+  (view: TicketHolderView): Decorator =>
+  (Story) => (
+    <TicketHolderContext.Provider value={view}>
+      <Story />
+    </TicketHolderContext.Provider>
+  )
+const holdersRead = withHolders({
+  state: 'ready',
+  stats: {
+    available: true,
+    configured: true,
+    holders: 212,
+    confirmed: 140,
+    waitlistOnly: 12,
+    notSignedUp: 60,
+    flagged: [],
+    lockedOut: [{ typeName: 'Student', people: 17 }],
+  },
+})
+export const NotSetTypeWithCounts: Story = {
+  args: NotSetType.args,
+  decorators: [holdersRead],
+  play: async ({ canvasElement }) => {
+    const banner = within(canvasElement).getByRole('region', {
+      name: 'Needs a decision',
+    })
+    await expect(banner).toHaveTextContent(
+      '“Student”: 17 people hold it and are refused.',
+    )
+    await expect(banner).toHaveTextContent(
+      '“Late Bird”: nobody is refused for it yet.',
+    )
+  },
+}
+export const NotSetTypeWithCountsDark: Story = {
+  ...NotSetTypeWithCounts,
+  parameters: dark,
+}
+export const NotSetTypeWithCountsMobile: Story = {
+  ...NotSetTypeWithCounts,
+  parameters: phone,
+  play: async (context) => {
+    await NotSetTypeWithCounts.play!(context)
+    await fitsItsWidth(context)
+  },
+}
+export const NotSetTypeWithCountsMobileDark: Story = {
+  ...NotSetTypeWithCountsMobile,
+  parameters: { ...phone, ...dark },
+}
+/** The ticket holders could not be read: the banner says so, with no number. */
+export const NotSetTypeCountsUnavailable: Story = {
+  args: NotSetType.args,
+  decorators: [withHolders({ state: 'unavailable' })],
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole('region', { name: 'Needs a decision' }),
+    ).toHaveTextContent(
+      'How many people hold them is unavailable: the tickets could not be read.',
+    )
+  },
+}
+export const NotSetTypeCountsUnavailableMobileDark: Story = {
+  ...NotSetTypeCountsUnavailable,
+  parameters: { ...phone, ...dark },
 }
 
 /**
