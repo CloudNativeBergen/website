@@ -70,6 +70,7 @@ export const RESEND_BROADCAST_VARIABLES: Record<string, string> = {
   FIRST_NAME: 'First Name',
   LAST_NAME: 'Last Name',
   EMAIL: 'email@example.com',
+  RESEND_UNSUBSCRIBE_URL: 'https://example.com/unsubscribe',
 }
 
 /**
@@ -83,10 +84,12 @@ export function processTemplateVariables(
   for (const [key, value] of Object.entries(variables)) {
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const pattern = new RegExp(
-      `\\{\\{\\{${escapedKey}(?:\\|[^{}\\r\\n]*)?\\}\\}\\}`,
+      `\\{\\{\\{${escapedKey}(?:\\|([^{}\\r\\n]*))?\\}\\}\\}`,
       'g',
     )
-    result = result.replace(pattern, () => value)
+    result = result.replace(pattern, (_match, fallback?: string) =>
+      value !== '' ? value : (fallback ?? ''),
+    )
   }
   return result
 }

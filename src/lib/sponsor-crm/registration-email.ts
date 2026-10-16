@@ -12,13 +12,18 @@ import type { CommunicationAttachment } from './types'
 
 export const PORTAL_URL_PLACEHOLDER = '{{{SPONSOR_PORTAL_URL}}}'
 
+const PORTAL_URL_PATTERN = /\{\{\{SPONSOR_PORTAL_URL(?:\|([^{}\r\n]*))?\}\}\}/g
+
 /**
- * Replace a `{{{SPONSOR_PORTAL_URL}}}` left in text — a template applied
- * before the link was known (#1263 review). The server runs this on the
- * subject and body it sends; the preview runs it on what it shows.
+ * Replace a `{{{SPONSOR_PORTAL_URL}}}` (or `{{{SPONSOR_PORTAL_URL|fallback}}}`)
+ * left in text — a template applied before the link was known (#1263 review).
+ * The server runs this on the subject and body it sends; the preview runs it on
+ * what it shows.
  */
 export function mergePortalUrl(text: string, portalUrl: string): string {
-  return text.split(PORTAL_URL_PLACEHOLDER).join(portalUrl)
+  return text.replace(PORTAL_URL_PATTERN, (_match, fallback?: string) =>
+    portalUrl !== '' ? portalUrl : (fallback ?? ''),
+  )
 }
 
 export const PORTAL_URL_WRONG_KIND_MESSAGE =
@@ -33,10 +38,9 @@ export function carriesPortalPlaceholder(
   subject: string,
   message: unknown,
 ): boolean {
-  return (
-    subject.includes(PORTAL_URL_PLACEHOLDER) ||
-    JSON.stringify(message).includes(PORTAL_URL_PLACEHOLDER)
-  )
+  const hasPlaceholder = (s: string) =>
+    /\{\{\{SPONSOR_PORTAL_URL(?:\|[^{}\r\n]*)?\}\}\}/.test(s)
+  return hasPlaceholder(subject) || hasPlaceholder(JSON.stringify(message))
 }
 
 /** The one attachment row of a registration send: the portal link itself. */

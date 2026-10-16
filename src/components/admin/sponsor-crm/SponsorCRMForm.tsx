@@ -218,7 +218,18 @@ export function SponsorCRMForm({
       total += getPrice(addon)
     })
 
-    if (total > 0 && !userHasEditedValue) {
+    const persistedAddonIds = sponsor?.addons?.map((a) => a._id) || []
+    const commercialTermsChanged =
+      formData.tierId !== (sponsor?.tier?._id || '') ||
+      formData.contractCurrency !== (sponsor?.contractCurrency || 'NOK') ||
+      formData.addonIds.length !== persistedAddonIds.length ||
+      formData.addonIds.some((id, idx) => id !== persistedAddonIds[idx])
+
+    const shouldPreservePersistedValue =
+      hasPositiveContractValue(sponsor?.contractValue) &&
+      !commercialTermsChanged
+
+    if (total > 0 && !userHasEditedValue && !shouldPreservePersistedValue) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData((prev) => ({
         ...prev,
@@ -234,6 +245,10 @@ export function SponsorCRMForm({
     isOpen,
     sponsorTiers.length,
     userHasEditedValue,
+    sponsor?.contractValue,
+    sponsor?.tier?._id,
+    sponsor?.contractCurrency,
+    sponsor?.addons,
   ])
 
   // CMD+S / CTRL+S keyboard shortcut to save the form
@@ -282,6 +297,8 @@ export function SponsorCRMForm({
   const [isAdvancing, setIsAdvancing] = useState(false)
 
   const openSubView = async (target: FormView) => {
+    if (isAdvancing || isPending) return
+
     const parsedFormValue = formData.contractValue
       ? parseFloat(formData.contractValue)
       : undefined

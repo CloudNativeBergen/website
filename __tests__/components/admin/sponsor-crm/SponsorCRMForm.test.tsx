@@ -328,4 +328,56 @@ describe('SponsorCRMForm — header primary action', () => {
       expect(screen.getByTestId('contract-view')).toBeInTheDocument(),
     )
   })
+
+  it('preserves a persisted negotiated contractValue that differs from the tier price on mount', async () => {
+    mockTiers = [
+      {
+        _id: 'tier-ingress',
+        title: 'Community Partner',
+        tierType: 'standard',
+        price: [{ _key: 'p1', amount: 25000, currency: 'NOK' }],
+      },
+    ]
+
+    renderForm(
+      mockSponsor({
+        status: 'closed-won',
+        contractStatus: 'registration-sent',
+        contractValue: 20000,
+        contractCurrency: 'NOK',
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Open Contract Card/ }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('contract-view')).toBeInTheDocument(),
+    )
+    expect(submitForm).not.toHaveBeenCalled()
+  })
+
+  it('ignores subview navigation while a stage advance save is in flight', async () => {
+    let resolveSave: () => void = () => {}
+    submitForm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve
+        }),
+    )
+
+    renderForm(mockSponsor({ status: 'negotiating', contractStatus: 'none' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /Mark as Won/ }))
+    expect(screen.getByRole('button', { name: /Saving/ })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: /Open Contract Card/ }))
+    expect(screen.queryByTestId('contract-view')).not.toBeInTheDocument()
+
+    resolveSave()
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Start contract/ }),
+      ).toBeInTheDocument(),
+    )
+  })
 })

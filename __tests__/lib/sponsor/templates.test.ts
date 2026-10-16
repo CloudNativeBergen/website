@@ -74,6 +74,19 @@ describe('processTemplateVariables', () => {
       processTemplateVariables('Value: {{{TOKEN}}}', { TOKEN: '$$' }),
     ).toBe('Value: $$')
   })
+
+  it('replaces {{{VAR|fallback}}} with the mapped value when non-empty and falls back when empty', () => {
+    expect(
+      processTemplateVariables('Location: {{{EVENT_LOCATION|Online}}}', {
+        EVENT_LOCATION: 'Bergen',
+      }),
+    ).toBe('Location: Bergen')
+    expect(
+      processTemplateVariables('Location: {{{EVENT_LOCATION|Online}}}', {
+        EVENT_LOCATION: '',
+      }),
+    ).toBe('Location: Online')
+  })
 })
 
 describe('processPortableTextVariables', () => {
@@ -683,7 +696,7 @@ describe('findUnsupportedVariables', () => {
           {
             _type: 'span' as const,
             _key: 's1',
-            text: 'Hi {{{FIRST_NAME|there}}}, {{{LAST_NAME}}} ({{{EMAIL}}})',
+            text: 'Hi {{{FIRST_NAME|there}}}, {{{LAST_NAME}}} ({{{EMAIL}}}) — {{{RESEND_UNSUBSCRIBE_URL}}}',
           },
         ],
         style: 'normal' as const,
