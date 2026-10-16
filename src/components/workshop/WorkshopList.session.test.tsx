@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -139,10 +140,14 @@ afterEach(() => {
   focusManager.setFocused(undefined)
 })
 
+/** This test's query client, to wait on its reads settling. */
+let client: QueryClient
+beforeEach(() => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+})
+
 function Providers({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-  )
+  const [queryClient] = useState(() => client)
   const [trpcClient] = useState(() => getTRPCClient())
   return (
     <api.Provider client={trpcClient} queryClient={queryClient}>
@@ -259,5 +264,55 @@ describe('WorkshopList when the session has ended (#1303)', () => {
     // The provider retries a failed read once, a second later.
     expectSignInAgain(await screen.findByRole('alert', {}, { timeout: 4000 }))
     expect(screen.queryByText('Kubernetes 101')).toBeNull()
+  })
+
+  /** The attendee comes back to the tab: every stale query is read again. */
+  async function backOnTheTab() {
+    focusManager.setFocused(false)
+    focusManager.setFocused(true)
+    await waitFor(() => expect(client.isFetching()).toBe(0))
+    // The cache tells the page on a timer of its own: let the page draw.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+  }
+
+  // Once the server has said the session ended, only a read that SUCCEEDS
+  // (the attendee signed in again, in another tab) says otherwise. A later
+  // read that fails for an unrelated reason says nothing about the session.
+  it('stays ended through a later failed read, until a read succeeds', async () => {
+    server.signedIn = false
+    renderPortal()
+    expectSignInAgain(await screen.findByRole('alert'))
+
+    server.readFails = true
+    await backOnTheTab()
+    expectSignInAgain(screen.getByRole('alert'))
+    expect(screen.queryByText('Kubernetes 101')).toBeNull()
+
+    server.signedIn = true
+    await backOnTheTab()
+    expect(
+      await screen.findByRole('button', { name: 'Cancel Registration' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/your session has ended/i)).toBeNull()
+  })
+
+  // The read's refusal can arrive while the keyboard is on a workshop's
+  // control (the tab came back into focus): that control goes with the list,
+  // and the keyboard goes to the notice.
+  it('moves the keyboard to the notice when a read takes the list away', async () => {
+    renderPortal()
+    const cancel = await screen.findByRole('button', {
+      name: 'Cancel Registration',
+    })
+    cancel.focus()
+    expect(cancel).toHaveFocus()
+
+    server.signedIn = false
+    focusManager.setFocused(false)
+    focusManager.setFocused(true)
+
+    const notice = await screen.findByRole('alert')
+    expectSignInAgain(notice)
+    await waitFor(() => expect(notice).toHaveFocus())
   })
 })

@@ -96,6 +96,8 @@ export default function WorkshopList({
     isError: signupsFailed,
     error: signupsError,
     isFetching: signupsFetching,
+    dataUpdatedAt: signupsReadAt,
+    errorUpdatedAt: signupsErrorAt,
   } = api.workshop.getMySignups.useQuery(undefined, {
     // Identity is resolved server-side from the WorkOS session; this gate is
     // purely a client-side UX guard so the query doesn't fire before the page
@@ -108,17 +110,24 @@ export default function WorkshopList({
 
   // THE SESSION HAS ENDED (#1303): it lasts 7 days with no renewal, and the
   // attendee can sign out in another tab. Either the read or a write says so,
-  // each on its own: a write's refusal does not wait on another read, which
-  // can fail for an unrelated reason.
-  const [writeRefusedForSession, setWriteRefusedForSession] = useState(false)
-  const sessionEnded =
-    writeRefusedForSession || signupsError?.data?.code === 'UNAUTHORIZED'
-  // A refused write took away the dialog it came from and the button that
-  // opened it, so the keyboard would land on the page: it goes to the notice.
+  // each on its own: a write's refusal does not wait on another read. KEPT
+  // until a read SUCCEEDS (they signed in again elsewhere): a later read that
+  // fails for an unrelated reason says nothing about the session.
+  const [sessionEndedAt, setSessionEndedAt] = useState(0)
+  const readEndedAt =
+    signupsError?.data?.code === 'UNAUTHORIZED' ? signupsErrorAt : 0
+  if (readEndedAt > sessionEndedAt) setSessionEndedAt(readEndedAt)
+  const sessionEnded = Math.max(sessionEndedAt, readEndedAt) > signupsReadAt
+  // The notice replaces the list, and with it whatever had the keyboard (a
+  // dialog, a workshop's button): when the keyboard is left on the page, it
+  // goes to the notice.
   const sessionNotice = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (writeRefusedForSession) sessionNotice.current?.focus()
-  }, [writeRefusedForSession])
+    if (!sessionEnded) return
+    const lost =
+      !document.activeElement || document.activeElement === document.body
+    if (lost) sessionNotice.current?.focus()
+  }, [sessionEnded])
 
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
@@ -135,7 +144,7 @@ export default function WorkshopList({
     onError: (error) => {
       setSuccessMessage(null)
       if (error.data?.code === 'UNAUTHORIZED') {
-        setWriteRefusedForSession(true)
+        setSessionEndedAt(Date.now())
         return
       }
       // The server refused for the window while this list was offering
@@ -184,7 +193,7 @@ export default function WorkshopList({
     onError: (error) => {
       setSuccessMessage(null)
       if (error.data?.code === 'UNAUTHORIZED') {
-        setWriteRefusedForSession(true)
+        setSessionEndedAt(Date.now())
         return
       }
       setErrorMessage(error.message)
