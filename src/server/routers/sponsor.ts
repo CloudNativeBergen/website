@@ -55,6 +55,8 @@ import {
 import { sanitizeSvgFieldOrThrow, SvgSanitizeError } from '@/lib/svg/upload'
 import {
   buildTemplateVariables,
+  findUnsupportedVariables,
+  formatUnmergedVariablesMessage,
   processPortableTextVariables,
   suggestTemplateCategory,
   suggestTemplateLanguage,
@@ -744,6 +746,73 @@ function sanitizeSponsorLogoInput<
     throw error
   }
   return out
+}
+
+async function syncConfirmedSponsorAudience(conference: Conference) {
+  const { sponsors: crmSponsors, error: crmError } =
+    await listSponsorsForConference(conference._id)
+
+  if (crmError || !crmSponsors) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to load sponsor CRM data',
+    })
+  }
+
+  // Audiences are scoped to confirmed (closed-won) sponsors. Prospects
+  // and negotiating sponsors must not receive general sponsor broadcasts.
+  const eligibleSponsors = crmSponsors.filter(
+    (s: SponsorForConferenceExpanded) =>
+      s.status === 'closed-won' &&
+      s.contactPersons &&
+      s.contactPersons.length > 0 &&
+      s.contactPersons.some((contact) => contact.email),
+  )
+
+  if (eligibleSponsors.length === 0) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'No confirmed sponsors with contact information found. Add contact information to closed-won sponsors before syncing.',
+    })
+  }
+
+  const sponsorContacts: Contact[] = eligibleSponsors.flatMap(
+    (s: SponsorForConferenceExpanded) =>
+      s.contactPersons
+        ?.filter((contact) => contact.email)
+        .map((contact) => ({
+          email: contact.email,
+          firstName: contact.name?.split(' ')[0] || '',
+          lastName: contact.name?.split(' ').slice(1).join(' ') || '',
+          organization: s.sponsor.name,
+        })) || [],
+  )
+
+  const {
+    success,
+    audienceId,
+    syncedCount,
+    addedCount,
+    removedCount,
+    error: syncError,
+  } = await syncSponsorAudience(conference, sponsorContacts)
+
+  if (!success || syncError) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: syncError?.message || 'Failed to sync sponsor audience',
+    })
+  }
+
+  return {
+    eligibleSponsors,
+    sponsorContacts,
+    audienceId,
+    syncedCount,
+    addedCount,
+    removedCount,
+  }
 }
 
 export const sponsorRouter = router({
@@ -2719,6 +2788,20 @@ export const sponsorRouter = router({
           })
         }
 
+        // Refuse any remaining unmerged {{{VARIABLE}}} placeholders in subject,
+        // body spans, or link markDefs[].href before reading sponsor data.
+        const unmergedVariables = findUnsupportedVariables(
+          input.kind === 'registration' ? { SPONSOR_PORTAL_URL: '' } : {},
+          input.subject,
+          message as unknown as TemplateBlock[],
+        )
+        if (unmergedVariables.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: formatUnmergedVariablesMessage(unmergedVariables),
+          })
+        }
+
         // Contract kind (#1264): one action by state — first send, reminder
         // or signed copy — decided and prepared before anything is sent. A
         // client-supplied contract template id is guarded FIRST (#863).
@@ -3246,6 +3329,23 @@ export const sponsorRouter = router({
           })
         }
 
+        const unmergedVariables = findUnsupportedVariables(
+          {},
+          input.subject,
+          messagePortableText as unknown as TemplateBlock[],
+        )
+        if (unmergedVariables.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: formatUnmergedVariablesMessage(unmergedVariables),
+          })
+        }
+
+        // Sync confirmed (closed-won) sponsor contacts into the Resend audience
+        // before sending so broadcasts never target a stale or empty segment.
+        const { eligibleSponsors } =
+          await syncConfirmedSponsorAudience(conference)
+
         const response = await sendBroadcastEmail({
           conference,
           subject: input.subject,
@@ -3263,15 +3363,8 @@ export const sponsorRouter = router({
 
         try {
           const userId = ctx.speaker._id
-          const sponsors = await clientReadUncached.fetch<
-            Array<{ _id: string; status: string }>
-          >(
-            `*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won"]{_id, status}`,
-            { conferenceId: conference._id },
-          )
-
-          if (sponsors.length > 0 && userId) {
-            const sponsorIds = sponsors.map((s) => s._id)
+          if (eligibleSponsors.length > 0 && userId) {
+            const sponsorIds = eligibleSponsors.map((s) => s._id)
             await logBulkEmailSent(sponsorIds, input.subject, userId)
           }
         } catch (crmError) {
@@ -3292,61 +3385,8 @@ export const sponsorRouter = router({
         })
       }
 
-      const { sponsors: crmSponsors, error: crmError } =
-        await listSponsorsForConference(conference._id)
-
-      if (crmError || !crmSponsors) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to load sponsor CRM data',
-        })
-      }
-
-      // Audiences are scoped to confirmed (closed-won) sponsors. Prospects
-      // and negotiating sponsors must not receive general sponsor broadcasts.
-      const eligibleSponsors = crmSponsors.filter(
-        (s: SponsorForConferenceExpanded) =>
-          s.status === 'closed-won' &&
-          s.contactPersons &&
-          s.contactPersons.length > 0 &&
-          s.contactPersons.some((contact) => contact.email),
-      )
-
-      if (eligibleSponsors.length === 0) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message:
-            'No confirmed sponsors with contact information found. Add contact information to closed-won sponsors before syncing.',
-        })
-      }
-
-      const sponsorContacts: Contact[] = eligibleSponsors.flatMap(
-        (s: SponsorForConferenceExpanded) =>
-          s.contactPersons
-            ?.filter((contact) => contact.email)
-            .map((contact) => ({
-              email: contact.email,
-              firstName: contact.name?.split(' ')[0] || '',
-              lastName: contact.name?.split(' ').slice(1).join(' ') || '',
-              organization: s.sponsor.name,
-            })) || [],
-      )
-
-      const {
-        success,
-        audienceId,
-        syncedCount,
-        addedCount,
-        removedCount,
-        error: syncError,
-      } = await syncSponsorAudience(conference, sponsorContacts)
-
-      if (!success || syncError) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: syncError?.message || 'Failed to sync sponsor audience',
-        })
-      }
+      const { audienceId, syncedCount, addedCount, removedCount } =
+        await syncConfirmedSponsorAudience(conference)
 
       return {
         success: true,

@@ -23,6 +23,8 @@ const h = vi.hoisted(() => ({
   invalidateList: vi.fn(),
   invalidateComms: vi.fn(),
   invalidateCodes: vi.fn(),
+  invalidateCrmList: vi.fn(),
+  invalidateCrmGetById: vi.fn(),
   saveLink: vi.fn(),
   /** `registration.generateToken` — the registration kind's link on open (#1263). */
   generateToken: vi.fn(),
@@ -47,6 +49,8 @@ vi.mock('@/lib/trpc/client', () => ({
     useUtils: () => ({
       sponsor: {
         crm: {
+          list: { invalidate: h.invalidateCrmList },
+          getById: { invalidate: h.invalidateCrmGetById },
           activities: {
             list: { invalidate: h.invalidateList },
             listCommunications: { invalidate: h.invalidateComms },
@@ -1444,6 +1448,55 @@ describe('contract kind (#1264)', () => {
         expect.objectContaining({ type: 'warning', title: 'Deal not updated' }),
       ),
     )
+  })
+
+  it('refuses to send when an unmerged {{{VARIABLE}}} placeholder remains in link markDefs or body', async () => {
+    renderModal({}, 'information')
+    draft = {
+      subject: 'Hello {{{TIER_NAME}}}',
+      message: [
+        {
+          _type: 'block',
+          _key: 'b1',
+          style: 'normal',
+          markDefs: [
+            {
+              _key: 'm1',
+              _type: 'link',
+              href: '{{{PROSPECTUS_URL}}}',
+            },
+          ],
+          children: [
+            {
+              _type: 'span',
+              _key: 's1',
+              text: 'View prospectus',
+              marks: ['m1'],
+            },
+          ],
+        },
+      ] as unknown as PortableTextBlock[],
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          title: expect.stringMatching(
+            /Email contains unmerged template variables.*TIER_NAME.*PROSPECTUS_URL/,
+          ),
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('invalidates crm.list and crm.getById after a successful send', async () => {
+    renderModal({}, 'information')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.invalidateCrmList).toHaveBeenCalledTimes(1)
+    expect(h.invalidateCrmGetById).toHaveBeenCalledTimes(1)
   })
 })
 

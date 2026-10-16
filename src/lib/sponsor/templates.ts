@@ -417,11 +417,22 @@ export function extractVariablesFromPortableText(
 ): string[] {
   const vars = new Set<string>()
   for (const block of blocks) {
-    if (block._type === 'block' && Array.isArray(block.children)) {
-      for (const child of block.children) {
-        if (child._type === 'span' && typeof child.text === 'string') {
-          for (const v of extractVariablesFromText(child.text)) {
-            vars.add(v)
+    if (block._type === 'block') {
+      if (Array.isArray(block.children)) {
+        for (const child of block.children) {
+          if (child._type === 'span' && typeof child.text === 'string') {
+            for (const v of extractVariablesFromText(child.text)) {
+              vars.add(v)
+            }
+          }
+        }
+      }
+      if (Array.isArray(block.markDefs)) {
+        for (const markDef of block.markDefs) {
+          if (markDef._type === 'link' && typeof markDef.href === 'string') {
+            for (const v of extractVariablesFromText(markDef.href)) {
+              vars.add(v)
+            }
           }
         }
       }
@@ -454,4 +465,14 @@ export function findUnsupportedVariables(
   }
 
   return [...found]
+}
+
+/**
+ * Human-readable error message when an email still contains unmerged {{{VARIABLE}}} placeholders.
+ */
+export function formatUnmergedVariablesMessage(
+  variables: readonly string[],
+): string {
+  const formatted = variables.map((v) => `{{{${v}}}}`).join(', ')
+  return `Email contains unmerged template variables (${formatted}). Fill in the missing values or remove the placeholders before sending.`
 }

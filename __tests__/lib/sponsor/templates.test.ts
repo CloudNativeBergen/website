@@ -8,6 +8,7 @@ import {
   extractVariablesFromText,
   extractVariablesFromPortableText,
   findUnsupportedVariables,
+  formatUnmergedVariablesMessage,
 } from '@/lib/sponsor/templates'
 import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
 
@@ -605,5 +606,44 @@ describe('findUnsupportedVariables', () => {
 
   it('returns empty for empty sources', () => {
     expect(findUnsupportedVariables(supported)).toEqual([])
+  })
+
+  it('detects unsupported variables in link markDefs[].href', () => {
+    const blocks = [
+      {
+        _type: 'block' as const,
+        _key: 'k1',
+        children: [
+          {
+            _type: 'span' as const,
+            _key: 'k1-s',
+            text: 'View prospectus',
+            marks: ['link-1'],
+          },
+        ],
+        markDefs: [
+          {
+            _type: 'link' as const,
+            _key: 'link-1',
+            href: '{{{PROSPECTUS_URL}}}',
+          },
+        ],
+        style: 'normal' as const,
+      },
+    ]
+    expect(extractVariablesFromPortableText(blocks)).toEqual(['PROSPECTUS_URL'])
+    expect(findUnsupportedVariables(supported, blocks)).toEqual([
+      'PROSPECTUS_URL',
+    ])
+  })
+})
+
+describe('formatUnmergedVariablesMessage', () => {
+  it('formats variable names with triple braces', () => {
+    expect(
+      formatUnmergedVariablesMessage(['PROSPECTUS_URL', 'TIER_NAME']),
+    ).toBe(
+      'Email contains unmerged template variables ({{{PROSPECTUS_URL}}}, {{{TIER_NAME}}}). Fill in the missing values or remove the placeholders before sending.',
+    )
   })
 })
