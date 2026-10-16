@@ -252,6 +252,49 @@ describe('TicketHolderPanel', () => {
     for (const action of actions) expect(action).toBeDisabled()
   })
 
+  // TENANCY: a question asked in the list does not outlive it. The numbers
+  // go (the conference changed) while "Delete signup" is open; when the list
+  // is opened again, for whoever is flagged now, no old question comes back
+  // with the old person's name and sign-up.
+  it('asks no question left over from an earlier opening', async () => {
+    const actions = {
+      onRetry: vi.fn(),
+      onMoveToWaitlist: vi.fn(),
+      onDeleteSignup: vi.fn(),
+    }
+    const { rerender } = render(<TicketHolderPanel view={READY} {...actions} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    const table = within(
+      screen.getByRole('dialog', { name: 'Flagged sign-ups' }),
+    ).getByRole('table')
+    fireEvent.click(within(table).getAllByTitle('Delete participant')[0])
+    screen.getByRole('dialog', { name: 'Delete signup' })
+
+    rerender(<TicketHolderPanel view={{ state: 'loading' }} {...actions} />)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
+    const other = {
+      email: 'zoe@x.test',
+      name: 'Zoe Other',
+      signups: [
+        {
+          _id: 's-9',
+          userEmail: 'zoe@x.test',
+          userName: 'Zoe Other',
+          status: 'waitlist' as const,
+          workshop: { _id: 'w-9', title: 'Another workshop' },
+        },
+      ],
+    }
+    rerender(
+      <TicketHolderPanel view={ready({ flagged: [other] })} {...actions} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    await screen.findByRole('dialog', { name: 'Flagged sign-ups' })
+    expect(screen.queryByRole('dialog', { name: 'Delete signup' })).toBeNull()
+    expect(screen.queryByText(/Eve Example/)).toBeNull()
+  })
+
   it('with nobody flagged, Flagged is a number and opens nothing', () => {
     renderPanel(ready({ flagged: [] }))
     expect(valueOf('Flagged')).toBe('0')

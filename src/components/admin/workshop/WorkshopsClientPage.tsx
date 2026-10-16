@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
 import {
   AdminPageHeader,
@@ -83,7 +83,17 @@ interface WorkshopsClientPageProps {
   ticketsSection?: ReactNode
 }
 
-export function WorkshopsClientPage({
+/**
+ * THE PAGE BELONGS TO ONE CONFERENCE. If the conference changes under it (the
+ * domain moved and the client kept this tree), it starts over: every list,
+ * question and answer it holds is the other conference's, and the ticket
+ * holders are read again on mount.
+ */
+export function WorkshopsClientPage(props: WorkshopsClientPageProps) {
+  return <WorkshopsClientPageFor key={props.conferenceId} {...props} />
+}
+
+function WorkshopsClientPageFor({
   conferenceId,
   initialWorkshops,
   workshopRegistrationSponsorStart,
@@ -154,6 +164,11 @@ export function WorkshopsClientPage({
   const ticketHolders = api.workshop.admin.ticketHolders.useQuery(undefined, {
     enabled: !!conferenceId,
     trpc: { context: { skipBatch: true } },
+    // READ ON EVERY VISIT, also within the app's 60-second stale time: an
+    // answer cached on an earlier visit may be another conference's (the
+    // domain moved), and `ticketHolderView` never shows one. Read again, it
+    // is this conference's; still another's, the panel says unavailable.
+    refetchOnMount: 'always',
   })
   const holderView = ticketHolderView(ticketHolders, conferenceId)
   const rereadTicketHolders = useRereadTicketHolders()
@@ -210,18 +225,6 @@ export function WorkshopsClientPage({
   }
 
   const utils = api.useUtils()
-
-  // THE TENANT CHANGED UNDER THIS PAGE (the domain now resolves to another
-  // conference, and the client kept this tree): the ticket holders in hand
-  // are the other conference's, names and emails included. The view never
-  // shows them (`ticketHolderView` checks the conference the server stamped
-  // on them); this drops them and reads again.
-  const holdersFor = useRef(conferenceId)
-  useEffect(() => {
-    if (holdersFor.current === conferenceId) return
-    holdersFor.current = conferenceId
-    void utils.workshop.admin.ticketHolders.reset()
-  }, [conferenceId, utils])
 
   // Everything this page shows about sign-ups, read again. One function for
   // every action that changes them.

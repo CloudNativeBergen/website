@@ -36,19 +36,21 @@ describe('ticketHolderView', () => {
     ).toEqual({ state: 'ready', stats: STATS })
   })
 
-  // TENANCY: an answer read for another conference (the page's conference
-  // changed under a cached answer) is never shown, whatever it says.
+  // TENANCY: an answer read for another conference is never shown, whatever
+  // it says. While a read is on its way it is loading; once the server has
+  // answered for another conference again, it is unavailable, not loading
+  // for ever.
   it.each([
     ['numbers', STATS],
     ['unavailable answer', UNAVAILABLE],
-  ])(
-    'is loading while the answer in hand is another conference’s %s',
-    (_, data) => {
-      expect(
-        ticketHolderView({ data, isError: false, isFetching: false }, 'conf-2'),
-      ).toEqual({ state: 'loading' })
-    },
-  )
+  ])('never shows another conference’s %s', (_, data) => {
+    expect(
+      ticketHolderView({ data, isError: false, isFetching: true }, 'conf-2'),
+    ).toEqual({ state: 'loading' })
+    expect(
+      ticketHolderView({ data, isError: false, isFetching: false }, 'conf-2'),
+    ).toEqual({ state: 'unavailable', retrying: false })
+  })
 
   it.each([
     ['the tickets could not be read', { data: UNAVAILABLE, isError: false }],

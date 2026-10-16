@@ -37,8 +37,12 @@ export function ticketHolderView(
     retrying: query.isFetching,
   } as const
   if (query.isError) return unavailable
-  if (!query.data || query.data.conferenceId !== conferenceId) {
-    return { state: 'loading' }
+  if (!query.data) return { state: 'loading' }
+  // Another conference's answer (cached from before the domain moved) is
+  // never shown. Being read again, it is loading; read again and still
+  // another's, the numbers for this page are unavailable.
+  if (query.data.conferenceId !== conferenceId) {
+    return query.isFetching ? { state: 'loading' } : unavailable
   }
   return query.data.available
     ? { state: 'ready', stats: query.data }

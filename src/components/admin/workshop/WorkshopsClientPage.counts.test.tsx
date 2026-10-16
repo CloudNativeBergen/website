@@ -621,6 +621,43 @@ describe('the ticket holders (#1333)', () => {
     expect(server.holderReads).toBe(2)
   })
 
+  // The page is left and opened again within the cache's 60 seconds, and
+  // the domain now resolves to another conference: the cached answer is the
+  // other conference's. It is read again on the way in, not hidden for ever.
+  it('are read again when the page is opened again for another conference', async () => {
+    const page = (conferenceId: string) => (
+      <WorkshopsClientPage
+        conferenceId={conferenceId}
+        initialWorkshops={SERVER_RENDER}
+        resendDisabledReason={null}
+      />
+    )
+    // One client for both visits, as in the app.
+    const { rerender } = render(<Providers>{page('conf-1')}</Providers>)
+    expect((await tile('Holders')).nextElementSibling).toHaveTextContent('5')
+    rerender(<Providers>{null}</Providers>)
+
+    server.conferenceId = 'conf-2'
+    server.signups = [server.signups[0]]
+    rerender(<Providers>{page('conf-2')}</Providers>)
+
+    await waitFor(async () =>
+      expect((await tile('Holders')).nextElementSibling).toHaveTextContent('4'),
+    )
+    expect(server.holderReads).toBe(2)
+  })
+
+  // The page was rendered for one conference and the server now answers for
+  // another (the domain moved under it): the panel says the numbers are
+  // unavailable, it does not load for ever.
+  it('say unavailable when the server keeps answering for another conference', async () => {
+    server.conferenceId = 'conf-2'
+    renderPage()
+    const region = await panel()
+    await within(region).findByText(/^Unavailable:/)
+    expect(region.textContent).not.toMatch(/\d/)
+  })
+
   it('wait for nothing else: a slow ticket read holds back no other number', async () => {
     let providerAnswers!: () => void
     server.holdHolders = new Promise((resolve) => {

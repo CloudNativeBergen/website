@@ -51,6 +51,7 @@ export function TicketHolderPanel({
   isRefreshing?: boolean
 }) {
   const [flaggedOpen, setFlaggedOpen] = useState(false)
+  const [openings, setOpenings] = useState(0)
   const heading = useRef<HTMLHeadingElement>(null)
   /** The Flagged button is a button only while somebody is flagged. */
   const openerGone = view.state !== 'ready' || view.stats.flagged.length === 0
@@ -176,7 +177,10 @@ export function TicketHolderPanel({
               }
               onClick={
                 view.stats.flagged.length > 0
-                  ? () => setFlaggedOpen(true)
+                  ? () => {
+                      setOpenings((n) => n + 1)
+                      setFlaggedOpen(true)
+                    }
                   : undefined
               }
             />
@@ -185,6 +189,10 @@ export function TicketHolderPanel({
       )}
 
       <FlaggedSignupsModal
+        // A NEW LIST ON EVERY OPENING: a question asked in an earlier one (a
+        // delete, a move) never comes back with its person and sign-up, which
+        // may be another conference's by now.
+        key={openings}
         isOpen={flaggedOpen}
         onClose={() => setFlaggedOpen(false)}
         afterLeave={() => {
