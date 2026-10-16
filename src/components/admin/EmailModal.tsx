@@ -322,9 +322,7 @@ export function EmailModal({
       onClose()
     } catch (error) {
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'An unexpected error occurred'
+        error instanceof Error ? error.message : 'An unexpected error occurred'
       setSendError(errorMessage)
       showNotification({
         type: 'error',
