@@ -10,8 +10,6 @@ import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { escapeHtml } from '@/lib/html/escape'
 import type { CommunicationAttachment } from './types'
 
-export const PORTAL_URL_PLACEHOLDER = '{{{SPONSOR_PORTAL_URL}}}'
-
 const PORTAL_URL_PATTERN = /\{\{\{SPONSOR_PORTAL_URL(?:\|([^{}\r\n]*))?\}\}\}/g
 
 /**
