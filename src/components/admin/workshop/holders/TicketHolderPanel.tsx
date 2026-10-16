@@ -46,8 +46,6 @@ export function TicketHolderPanel({
   const heading = useRef<HTMLHeadingElement>(null)
   /** The Flagged button is a button only while somebody is flagged. */
   const openerGone = view.state !== 'ready' || view.stats.flagged.length === 0
-  const openerGoneNow = useRef(openerGone)
-  openerGoneNow.current = openerGone
 
   return (
     <section
@@ -170,7 +168,7 @@ export function TicketHolderPanel({
             isOpen={flaggedOpen}
             onClose={() => setFlaggedOpen(false)}
             afterLeave={() => {
-              if (openerGoneNow.current) heading.current?.focus()
+              if (openerGone) heading.current?.focus()
             }}
             people={view.stats.flagged}
             onMoveToWaitlist={onMoveToWaitlist}
