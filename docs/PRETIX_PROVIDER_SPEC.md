@@ -599,10 +599,12 @@ option can't fail the contract test.)
   - no userinfo, path, query or fragment
   - redirects are never followed (`redirect: 'manual'`; any 3xx is an error)
   - a 10 s timeout
-- **Canonical form,** applied at save and again in the resolver: lower-cased
-  scheme and host, the default port dropped, no trailing slash. `www.` is not
-  folded. Uniqueness, the binding claim and `EventRef.baseUrl` all use the
-  canonical form.
+- **Canonical form:** lower-cased scheme and host, the default port dropped, no
+  trailing slash. `www.` is not folded. Studio validation **refuses a value
+  that isn't already canonical** (validation can refuse but not rewrite), and
+  the resolver canonicalises again. Uniqueness and the binding claim compare
+  canonical forms from the cached all-organizations map, never raw GROQ
+  strings, and `EventRef.baseUrl` is canonical.
 - **Self-serve setup would require the full SSRF guard.** This light guard is
   enough only because an operator sets the base URL. Self-serve would need DNS
   resolved, private, loopback, link-local and metadata ranges refused, and the
@@ -684,13 +686,22 @@ reads `process.env`).
   position, variation position). Category positions come from
   `GET /categories/`, read with the items; an item without a category sorts
   first.
-- **Price, window and availability:** a variation's price and window override
-  the item's: price from the variation's resolved `price`, never its `default_price`,
-  which is null when inherited. `available` is the tightest quota covering the
-  type, and **0 when no quota covers it** (Pretix refuses to sell such a
-  product). The values come from
-  `/quotas/?with_availability=true`. Pretix's own product categories aren't
-  used.
+- **Price, window and availability:**
+  - The price is the variation's resolved `price`, never its `default_price`,
+    which is null when inherited.
+  - The sale window is the **intersection** of the item's and the variation's,
+    because Pretix requires both: `visibleFrom` is the latest non-null start,
+    and `visibleUntil` the earliest non-null end. Disjoint windows make the type
+    unavailable.
+  - _Refinement (spec)_ of "Decide how Pretix products map to Ticket Type
+    names, roles and workshop access", which had the variation's window
+    override the item's; the same refinement covers the widened
+    `requiresInvitation` rule above and "0 when no quota covers it".
+  - `available` is the tightest quota covering the
+    type, and **0 when no quota covers it** (Pretix refuses to sell such a
+    product). The values come from
+    `/quotas/?with_availability=true`. Pretix's own product categories aren't
+    used.
 
 ### 8.3 Public ticket types
 
@@ -703,7 +714,8 @@ reads `process.env`).
 - **Public filter:**
   - inactive variations are excluded, as are inactive items
   - only products sold in the web shop are included (`all_sales_channels`, or
-    `web` in `limit_sales_channels`)
+    `web` in `limit_sales_channels`), applied to the item **and** to each
+    variation, which carries its own channel limits
   - `available_from_mode` / `available_until_mode` are ignored; the window
     keeps today's meaning
 
@@ -779,6 +791,17 @@ gains no privilege and the form offers only valid choices:
 | every variation of one item  | `item`                               | the item has variations                                                                                         |
 | an existing quota (its name) | `quota`                              | always; `ticketTypeIds` = the quota's items and variations                                                      |
 
+- **`show_hidden_items`.** Pretix defaults it to **true**, and a voucher with it
+  set shows and sells the hidden products in its scope. The rules:
+  - an unscoped sponsor voucher sends `false`, as in the table above
+  - a scoped sponsor voucher sends `true`, because sponsor products are often
+    hidden. **No scope is offered that contains a speaker- or volunteer-rule
+    type** (`findSpeakerTicketType` or the volunteer pattern), so a sponsor code
+    can never unlock those products. A capacity quota that also covers the
+    speaker product isn't offered, for example.
+  - a speaker voucher is item-scoped to the speaker type and sends `true`, so
+    the hidden speaker product is reachable with it
+  - verification after create compares the value sent
 - **Exact match before writing.** `createDiscount` refuses a missing or unknown
   `scopeId`, and any `ticketTypeIds` that don't equal that scope's, **before
   any write**; the claim hold is released. Message: "On Pretix a code can cover
@@ -829,7 +852,9 @@ gains no privilege and the form offers only valid choices:
     response** for 24 h, and a 409 means the first request is **still in
     flight**.
   - **On 409:** wait 5 s and retry the same request, with a bounded number of
-    tries.
+    tries. A key can stay locked for up to 24 h if the first request never
+    completed, so after that budget the create falls back to a fresh random
+    key, on the same code-uniqueness argument.
   - **After any 2xx**, which may be a replay: `GET /vouchers/<id>/` and verify
     the full intent (code, price mode, value, scope, `max_usages`,
     `valid_until`, `show_hidden_items`) before returning.
@@ -852,8 +877,10 @@ gains no privilege and the form offers only valid choices:
   - `validFrom` is refused as unsupported.
   - The `discountCodeClaim` lock is unchanged, because it keys on the code.
 - **Delete or retire:**
-  - an unused voucher is deleted
-  - a used one gets 403 on delete (observed), so it is **retired**:
+  - the adapter **attempts the DELETE**. "Unused" is defined by the DELETE
+    succeeding, never by `redeemed`: Pretix refuses to delete a voucher any order
+    position ever referenced, including one whose orders were all cancelled.
+  - on 403 (observed) it is **retired**:
     `max_usages = redeemed`, the floor Pretix allows (observed), and
     `valid_until = now`
   - sponsor links are untouched
@@ -875,7 +902,9 @@ gains no privilege and the form offers only valid choices:
     - yes: `already-redeemed`, with its `invitationId` and `codeHash`
     - no: the use is held by an **expired order**. Expiry doesn't free a Pretix
       voucher, while a cancellation does. The adapter returns
-      `held-by-expired-order` with that order's code, sends nothing, and the
+      `held-by-expired-order` with that order's code, read from
+      `GET /orderpositions/?voucher=<id>&order__status=e` (within
+      `event.orders:read`). It sends nothing, and the
       organizer is told: "<speaker>'s personal voucher is held by expired order
       <code>; cancel it in Pretix, then resend." Cancelling frees the voucher,
       so the next resend finds it unused and re-sends the link.
@@ -891,7 +920,8 @@ gains no privilege and the form offers only valid choices:
   failed after the email went out, beyond the 24-hour idempotency window. The
   handler then rewrites the missing marker, including on `already-redeemed`,
   where it sends no email. The new voucher is:
-  - `max_usages: 1`, `percent`/100
+  - `max_usages: 1`, `percent`/100, scoped to the speaker type's item (+
+    variation), `show_hidden_items: true` (§8.6)
   - `tag: "speaker"`, with the speaker reference in `comment`
   - `X-Idempotency-Key = sha256(JSON.stringify(["invite", baseUrl, organizerSlug, eventSlug, reference]))`,
     with the same refinement, replay and 409 handling as §8.6
@@ -983,7 +1013,7 @@ over dropping real sales by answering 401 to a retryable failure.
      timeout per attempt. So the uniform 401 and Checkin-style 404s also
      retry; that costs up to 11 small reads per delivery while a hook is
      misconfigured, which is accepted.
-   - The handler answers within 25 s. On the Pretix path, workshop emails are
+   - _Refinement (spec):_ the handler answers within 25 s. On the Pretix path, workshop emails are
      sent after the response (`after()`), so a slow email provider can't cause
      a re-delivery. Checkin's path is unchanged.
    - 5xx **only** when the re-fetch fails or the store is transiently
@@ -1105,19 +1135,19 @@ _Decided in review_ (§15). Implemented in P7, in `lib/legal/subprocessors.ts`,
 
 ## 12. Pretix slices
 
-| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | After          |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| P1  | **Connection:** the Organization fields and `pretixEventSlug` (§6); the `pretix` secret family, store and type changes, and the binding projection with the dereferenced Organization fields (§7.1); canonicalisation and the base-URL guard (§7.2); uniqueness and the binding claim (§7.3), whose `effective` projection gains `pretixEventSlug`. No conference can select Pretix yet.                                                                                                                                    | N1             |
-| P1b | **Status probe:** the §7.4 probe and activation wiring, in `system-status/checks.ts` and `settings/activation.ts`                                                                                                                                                                                                                                                                                                                                                                                                           | P1, N5         |
-| P2  | **Adapter read path:** the client (§8.1), public ticket types (§8.3), products mapping (§8.2), the question catalogue and orders feed (§8.4), including `PublicEventInfo.publicUrl`, built from injected credentials and proven against fixtures; the fixture recorder and fixtures (§13)                                                                                                                                                                                                                                   | N1             |
-| P3  | **Payment Summary and deep links** (§8.5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | P1, P2, N3, N4 |
-| P4  | **Discounts** (§8.6), including scopes, `scopeId`, the exact-match and unscoped guards, the listing re-check with its System status and discount-manager warning and one-click retire, idempotency verification including replayed errors, and the form                                                                                                                                                                                                                                                                     | P1, P2, N5     |
-| P5  | **Invitations** (§8.7), including claim detection by code hash in `speakerStatus.ts`, which gains the markers as an input. `fetchSpeakerTicketInputs` (`lib/speaker/ticketInputs.ts`) projects `issuedSpeakerTickets[]{ speakerId, email, emailedAt }` today and must add `invitationId, invitationCodeHash`, proven by an executed-GROQ test, since a missing field is silently `undefined` and typecheck stays green                                                                                                      | P4, N7         |
-| P6  | **Webhook** (§9): `/api/webhooks/pretix` on the shared handler                                                                                                                                                                                                                                                                                                                                                                                                                                                              | P1, P2, N6     |
-| P7  | **Privacy, subprocessors and docs:** §11.3; the §11.1 checklist into `TICKET_SYSTEM.md`; the secret family and runbook into `TENANT_SECRETS.md`; `INTEGRATION_ADAPTERS.md` (the provider N+1 checklist, Second-provider debt closed)                                                                                                                                                                                                                                                                                        | P1, P2         |
-| P8  | **Weekly live contract workflow** (§13)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | P2             |
-| P9  | **Operator enablement:** the `'pretix'` option in the **Sanity schema only**, settable by an operator in Studio. `server/schemas/conference.ts` and the org-admin router accept `'pretix'` only when the stored document already carries it (so an operator-bound conference can still save its other fields) and **refuse a transition to it**; the §10 grep. Then the **pre-live manual checks** (§13) on an operator-bound test conference against a real Pretix instance through a public URL, recorded on this ticket. | N2–N9, P1–P8   |
-| P10 | **Org-admin enablement:** the router's refusal is lifted and the Settings Ticketing card offers Pretix. Released only after P9's manual checks pass.                                                                                                                                                                                                                                                                                                                                                                        | P9             |
+| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | After           |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| P1  | **Connection:** the Organization fields and `pretixEventSlug` (§6); the `pretix` secret family, store and type changes, and the binding projection with the dereferenced Organization fields (§7.1); canonicalisation and the base-URL guard (§7.2); uniqueness and the binding claim (§7.3), whose `effective` projection gains `pretixEventSlug`. No conference can select Pretix yet.                                                                                                                                    | N1              |
+| P1b | **Status probe:** the §7.4 probe and activation wiring, in `system-status/checks.ts` and `settings/activation.ts`                                                                                                                                                                                                                                                                                                                                                                                                           | P1, N5          |
+| P2  | **Adapter read path:** the client (§8.1), public ticket types (§8.3), products mapping (§8.2), the question catalogue and orders feed (§8.4), including `PublicEventInfo.publicUrl`, built from injected credentials and proven against fixtures; the fixture recorder and fixtures (§13)                                                                                                                                                                                                                                   | N1              |
+| P3  | **Payment Summary and deep links** (§8.5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | P1, P2, N3, N4  |
+| P4  | **Discounts** (§8.6), including scopes, `scopeId`, the exact-match and unscoped guards, the listing re-check with its System status and discount-manager warning and one-click retire, idempotency verification including replayed errors, and the form                                                                                                                                                                                                                                                                     | P1, P1b, P2, N5 |
+| P5  | **Invitations** (§8.7), including claim detection by code hash in `speakerStatus.ts`, which gains the markers as an input. `fetchSpeakerTicketInputs` (`lib/speaker/ticketInputs.ts`) projects `issuedSpeakerTickets[]{ speakerId, email, emailedAt }` today and must add `invitationId, invitationCodeHash`, proven by an executed-GROQ test, since a missing field is silently `undefined` and typecheck stays green                                                                                                      | P4, N7          |
+| P6  | **Webhook** (§9): `/api/webhooks/pretix` on the shared handler                                                                                                                                                                                                                                                                                                                                                                                                                                                              | P1, P2, N6      |
+| P7  | **Privacy, subprocessors and docs:** §11.3; the §11.1 checklist into `TICKET_SYSTEM.md`; the secret family and runbook into `TENANT_SECRETS.md`; `INTEGRATION_ADAPTERS.md` (the provider N+1 checklist, Second-provider debt closed)                                                                                                                                                                                                                                                                                        | P1, P2          |
+| P8  | **Weekly live contract workflow** (§13)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | P2              |
+| P9  | **Operator enablement:** the `'pretix'` option in the **Sanity schema only**, settable by an operator in Studio. `server/schemas/conference.ts` and the org-admin router accept `'pretix'` only when the stored document already carries it (so an operator-bound conference can still save its other fields) and **refuse a transition to it**; the §10 grep. Then the **pre-live manual checks** (§13) on an operator-bound test conference against a real Pretix instance through a public URL, recorded on this ticket. | N2–N9, P1–P8    |
+| P10 | **Org-admin enablement:** the router's refusal is lifted and the Settings Ticketing card offers Pretix. Released only after P9's manual checks pass.                                                                                                                                                                                                                                                                                                                                                                        | P9              |
 
 ### 12.1 Tickets
 
