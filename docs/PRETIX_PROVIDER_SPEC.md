@@ -297,9 +297,7 @@ interface NeutralTicketingProvider {
   fetchPaymentSummary(ref: EventRef, orderId: string): Promise<PaymentSummary>
   orderAdminUrl(ref: EventRef, orderId: string): string | null // pure
 
-  listDiscounts(
-    ref: EventRef,
-  ): Promise<{
+  listDiscounts(ref: EventRef): Promise<{
     discounts: Discount[]
     ticketTypes: TicketTypeRef[]
     scopes: DiscountScopes
@@ -633,12 +631,12 @@ Pretix's automatic Discounts are neither read nor written.
 `listDiscounts().scopes` lists exactly what Pretix can express, so the token
 gains no privilege and the form offers only valid choices:
 
-| Scope offered                | Voucher                              | Offered when                                                                                                 |
-| ---------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| "All ticket types"           | unscoped, `show_hidden_items: false` | **only if every `require_voucher` item in the event is also `hide_without_voucher`** (pending decision, §15) |
-| one Ticket Type              | `item` (+ `variation`)               | always                                                                                                       |
-| every variation of one item  | `item`                               | the item has variations                                                                                      |
-| an existing quota (its name) | `quota`                              | always; `ticketTypeIds` = the quota's items and variations                                                   |
+| Scope offered                | Voucher                              | Offered when                                                                                                           |
+| ---------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| "All ticket types"           | unscoped, `show_hidden_items: false` | **only if every `require_voucher` item in the event is also `hide_without_voucher`** (decided during spec review, §15) |
+| one Ticket Type              | `item` (+ `variation`)               | always                                                                                                                 |
+| every variation of one item  | `item`                               | the item has variations                                                                                                |
+| an existing quota (its name) | `quota`                              | always; `ticketTypeIds` = the quota's items and variations                                                             |
 
 - **Exact match before writing.** `createDiscount` refuses any `ticketTypeIds`
   that isn't exactly one listed scope, and any id not in the fetched catalogue,
@@ -848,19 +846,37 @@ Goes into `docs/TENANT_SECRETS.md` and `docs/INTEGRATION_ADAPTERS.md`.
    the previous one. **If the old secret leaked, don't set it as previous.**
 5. Verify in System status (connected), then with one real 100 % voucher order.
 
+### 11.3 Privacy and subprocessors
+
+Implemented in P7, in `lib/legal/subprocessors.ts`, `subprocessors.resolve.ts` and `/privacy`.
+
+- **Hosted:** when the connection's canonical base URL host is `pretix.eu` or a
+  subdomain of it, list **"Pretix (pretix GmbH, pretix.eu)"** as a
+  subprocessor, as Checkin and Tito are listed today. The hosted API always
+  lives on pretix.eu, even when the shop uses a custom domain.
+- **Self-hosted:** **no platform subprocessor.** The instance is operated by
+  the organization itself, or its own hosting provider. `/privacy` states that
+  the organization's own Pretix instance at `<host>` handles ticket purchases.
+- **`registrationLinkVendor`** learns the pretix.eu hosts, plus the
+  connection's base-URL host and the event's `public_url` host, so a pasted
+  redeem link is attributed correctly.
+- **`/privacy` adds one line for every provider:** order data, including
+  answers to custom questions (which may include dietary or accessibility
+  information), is read from the ticketing provider to run the event.
+
 ## 12. Pretix slices
 
-| #   | Slice                                                                                                                                                                                                                                                                                            | After        |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
-| P1  | **Connection:** the Organization fields and `pretixEventSlug` (§6), the `pretix` secret family and store changes (§7.1), canonicalisation and the base-URL guard (§7.2), uniqueness and the binding claim (§7.3), the status probe (§7.4). No conference can select Pretix yet.                  | N1, N5       |
-| P2  | **Adapter read path:** the client (§8.1), public ticket types (§8.3), products mapping (§8.2), orders feed (§8.4); the fixture recorder and fixtures (§13)                                                                                                                                       | P1           |
-| P3  | **Payment Summary and deep links** (§8.5)                                                                                                                                                                                                                                                        | P2, N3, N4   |
-| P4  | **Discounts** (§8.6), including scopes, the exact-match guard and the form                                                                                                                                                                                                                       | P2, N5       |
-| P5  | **Invitations** (§8.7)                                                                                                                                                                                                                                                                           | P4, N7       |
-| P6  | **Webhook** (§9): `/api/webhooks/pretix` on the shared handler                                                                                                                                                                                                                                   | P2, N6       |
-| P7  | **Privacy, subprocessors and docs:** `/privacy` and the subprocessor list (rule pending decision, §15); the §11.1 checklist into `TICKET_SYSTEM.md`; the secret family and runbook into `TENANT_SECRETS.md`; `INTEGRATION_ADAPTERS.md` (the provider N+1 checklist, Second-provider debt closed) | P1           |
-| P8  | **Weekly live contract workflow** (§13) and the pre-live manual checks                                                                                                                                                                                                                           | P2           |
-| P9  | **Enable Pretix:** the `'pretix'` option in the Sanity schema, `server/schemas/conference.ts` and the Settings card; the §10 grep; the release gate (every N slice and P1–P8 merged)                                                                                                             | N2–N9, P1–P8 |
+| #   | Slice                                                                                                                                                                                                                                                                           | After        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| P1  | **Connection:** the Organization fields and `pretixEventSlug` (§6), the `pretix` secret family and store changes (§7.1), canonicalisation and the base-URL guard (§7.2), uniqueness and the binding claim (§7.3), the status probe (§7.4). No conference can select Pretix yet. | N1, N5       |
+| P2  | **Adapter read path:** the client (§8.1), public ticket types (§8.3), products mapping (§8.2), orders feed (§8.4); the fixture recorder and fixtures (§13)                                                                                                                      | P1           |
+| P3  | **Payment Summary and deep links** (§8.5)                                                                                                                                                                                                                                       | P2, N3, N4   |
+| P4  | **Discounts** (§8.6), including scopes, the exact-match guard and the form                                                                                                                                                                                                      | P2, N5       |
+| P5  | **Invitations** (§8.7)                                                                                                                                                                                                                                                          | P4, N7       |
+| P6  | **Webhook** (§9): `/api/webhooks/pretix` on the shared handler                                                                                                                                                                                                                  | P2, N6       |
+| P7  | **Privacy, subprocessors and docs:** `/privacy` and the subprocessor list per §11.3; the §11.1 checklist into `TICKET_SYSTEM.md`; the secret family and runbook into `TENANT_SECRETS.md`; `INTEGRATION_ADAPTERS.md` (the provider N+1 checklist, Second-provider debt closed)   | P1           |
+| P8  | **Weekly live contract workflow** (§13) and the pre-live manual checks                                                                                                                                                                                                          | P2           |
+| P9  | **Enable Pretix:** the `'pretix'` option in the Sanity schema, `server/schemas/conference.ts` and the Settings card; the §10 grep; the release gate (every N slice and P1–P8 merged)                                                                                            | N2–N9, P1–P8 |
 
 ## 13. Verification strategy
 
@@ -910,13 +926,14 @@ Goes into `docs/TENANT_SECRETS.md` and `docs/INTEGRATION_ADAPTERS.md`.
   attendees, on the platform's email quota. It stays within one tenant; a
   dedupe store would bound it, and is out of scope.
 
-## 15. Pending decisions
+## 15. Decided during spec review
 
-Settled on [Write the Pretix provider spec and implementation tickets](https://github.com/CloudNativeBergen/website/issues/1377)
-before this PR leaves draft:
+Both were put to the user on [Write the Pretix provider spec and implementation tickets](https://github.com/CloudNativeBergen/website/issues/1377)
+on 2026-10-16, after the security review found the first and the fidelity
+review flagged the second as undecided:
 
-1. **The "All ticket types" sponsor code on Pretix** (§8.6). The recommendation
-   in the text: offer it only when every voucher-only product is also hidden
-   without a voucher, and make hiding mandatory in the checklist.
-2. **The subprocessor and `/privacy` rule** (§12 P7). Not yet decided on any
-   ticket.
+1. **The "All ticket types" sponsor code on Pretix** (§8.6). Offer it only when
+   every voucher-only product is also hidden without a voucher, checked from the
+   catalogue before writing (fails closed). Hiding is mandatory for speaker and
+   volunteer products in the checklist (§11.1).
+2. **The subprocessor and `/privacy` rule** (§11.3).
