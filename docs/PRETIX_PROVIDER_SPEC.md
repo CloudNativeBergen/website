@@ -6,12 +6,14 @@ ends up. Every decision below was made on a closed map ticket. The spec gathers
 them and links to the ticket that holds each one's reasoning; to change a
 decision, reopen its ticket.
 
-Two kinds of statement aren't map decisions, and each is marked where it
+Three kinds of statement aren't map decisions, and each is marked where it
 appears:
 
 - **Refinement (spec):** a correction made while writing this spec or during its
   adversarial review, usually because a decided rule couldn't be implemented as
   written. Each one is posted as an amendment on the ticket it refines.
+- **Decided in review:** a decision the user took while this spec was being
+  reviewed (§15).
 - **Adapter detail:** an engineering choice inside one adapter that no consumer
   depends on.
 
@@ -65,20 +67,20 @@ These terms are added to `CONTEXT.md` in the same PR.
 
 ## 3. Decision index
 
-| Area                                            | Decided on                                                                                                                                                                                 |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Pretix API facts                                | [Research: Pretix data model and REST API](https://github.com/CloudNativeBergen/website/issues/1368) (`docs/research/pretix-api.md` on `research/pretix-api`)                              |
-| Webhook facts                                   | [Research: Pretix webhooks, authenticity, and tenant routing](https://github.com/CloudNativeBergen/website/issues/1369) (`docs/research/pretix-webhooks.md` on `research/pretix-webhooks`) |
-| Observed behaviour                              | [Task: provision a Pretix test organizer account and API token](https://github.com/CloudNativeBergen/website/issues/1370) (`docs/research/pretix-local/` on `research/pretix-local`)       |
-| Connection storage, guard and status            | [Decide how a Pretix Ticketing Connection is stored and guarded](https://github.com/CloudNativeBergen/website/issues/1371)                                                                 |
-| Neutral model (and the amendments posted on it) | [Decide the provider-neutral ticketing model](https://github.com/CloudNativeBergen/website/issues/1372)                                                                                    |
-| Products → Ticket Types                         | [Decide how Pretix products map to Ticket Type names, roles and workshop access](https://github.com/CloudNativeBergen/website/issues/1373)                                                 |
-| Discounts                                       | [Decide discounts on Pretix: vouchers, usage counting and sponsor codes](https://github.com/CloudNativeBergen/website/issues/1374)                                                         |
-| Invitations and registration links              | [Decide speaker invitations and registration links on Pretix](https://github.com/CloudNativeBergen/website/issues/1375)                                                                    |
-| Sale webhook                                    | [Decide the Pretix sale webhook: route, tenant lookup and authenticity](https://github.com/CloudNativeBergen/website/issues/1376)                                                          |
-| Stored ids and rollout                          | [Decide the migration of stored numeric provider ids and the refactor's rollout order](https://github.com/CloudNativeBergen/website/issues/1384)                                           |
-| Outcomes and budget                             | [Decide Marketing Outcomes and budget semantics on the neutral model](https://github.com/CloudNativeBergen/website/issues/1385)                                                            |
-| Verification strategy, and the refinements      | [Write the Pretix provider spec and implementation tickets](https://github.com/CloudNativeBergen/website/issues/1377)                                                                      |
+| Area                                                 | Decided on                                                                                                                                                                                 |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Pretix API facts                                     | [Research: Pretix data model and REST API](https://github.com/CloudNativeBergen/website/issues/1368) (`docs/research/pretix-api.md` on `research/pretix-api`)                              |
+| Webhook facts                                        | [Research: Pretix webhooks, authenticity, and tenant routing](https://github.com/CloudNativeBergen/website/issues/1369) (`docs/research/pretix-webhooks.md` on `research/pretix-webhooks`) |
+| Observed behaviour                                   | [Task: provision a Pretix test organizer account and API token](https://github.com/CloudNativeBergen/website/issues/1370) (`docs/research/pretix-local/` on `research/pretix-local`)       |
+| Connection storage, guard and status                 | [Decide how a Pretix Ticketing Connection is stored and guarded](https://github.com/CloudNativeBergen/website/issues/1371)                                                                 |
+| Neutral model (and the amendments posted on it)      | [Decide the provider-neutral ticketing model](https://github.com/CloudNativeBergen/website/issues/1372)                                                                                    |
+| Products → Ticket Types                              | [Decide how Pretix products map to Ticket Type names, roles and workshop access](https://github.com/CloudNativeBergen/website/issues/1373)                                                 |
+| Discounts                                            | [Decide discounts on Pretix: vouchers, usage counting and sponsor codes](https://github.com/CloudNativeBergen/website/issues/1374)                                                         |
+| Invitations and registration links                   | [Decide speaker invitations and registration links on Pretix](https://github.com/CloudNativeBergen/website/issues/1375)                                                                    |
+| Sale webhook                                         | [Decide the Pretix sale webhook: route, tenant lookup and authenticity](https://github.com/CloudNativeBergen/website/issues/1376)                                                          |
+| Stored ids and rollout                               | [Decide the migration of stored numeric provider ids and the refactor's rollout order](https://github.com/CloudNativeBergen/website/issues/1384)                                           |
+| Outcomes and budget                                  | [Decide Marketing Outcomes and budget semantics on the neutral model](https://github.com/CloudNativeBergen/website/issues/1385)                                                            |
+| Verification strategy, refinements, review decisions | [Write the Pretix provider spec and implementation tickets](https://github.com/CloudNativeBergen/website/issues/1377)                                                                      |
 
 ## 4. The neutral model
 
@@ -95,10 +97,13 @@ vendor's response in its own file.
 - **Every method takes an `EventRef`.** The bare numeric `eventId`, and the
   `EventRef | number` overload, go away.
 - **The adapter reports only what the vendor states.** A field the vendor
-  doesn't provide is absent, never guessed.
+  doesn't provide is absent or `null`, never guessed.
 - **Every id that reaches a URL path, a GROQ patch path or a vendor request is
   shape-checked first.** Path segments are `encodeURIComponent`-encoded
   (§8.1).
+- **No bearer credential is stored where another user can read it.** Voucher
+  codes and redeem URLs never go into a Sanity document that a speaker,
+  co-speaker or sponsor can read, and never into logs.
 
 ### 4.2 Types
 
@@ -126,7 +131,7 @@ interface TicketTypeRef {
 
 interface Person {
   name: string | null // display name
-  firstName?: string // when the vendor supplies the parts (participant export needs them)
+  firstName?: string // when the vendor supplies the parts (the participant export needs them)
   lastName?: string
   email: string | null
 }
@@ -143,7 +148,7 @@ interface Ticket {
   ticketType: TicketTypeRef
   attendee: Person
   price: Money // per ticket, after discounts
-  discountCode?: string // the code itself, upper-cased
+  discountCode?: string // the code itself, upper-cased; in memory only, never persisted (§4.1)
   company?: string // the attendee's own company, when the vendor asks for it
   jobTitle?: string
   answers: Answer[]
@@ -153,7 +158,13 @@ type OrderStatus = 'paid' | 'pending'
 
 interface Order {
   id: string
-  placedAt: string // ISO 8601
+  /**
+   * ISO 8601, or null when the vendor doesn't say (today Checkin emits '' when
+   * its order-user lookup finds no match, and Tito allows a missing created_at).
+   * Null orders are excluded from dated charts and snapshots, exactly as '' is
+   * today, and kept in undated totals.
+   */
+  placedAt: string | null
   status: OrderStatus
   buyer: Person
   company?: string // the buyer's company (Pretix: invoice address)
@@ -170,6 +181,7 @@ interface PublicTicketType {
   id: string // required: the catalogue always names its ids
   name: string
   description: string | null
+  providerTypeLabel?: string // Checkin's `type`, shown on TicketTypeCard as today
   prices: {
     key: string | null
     description: string | null
@@ -195,13 +207,15 @@ interface PaymentSummary {
   orderId: string
   status: 'paid' | 'pending' | 'canceled' | 'refunded' // mapping tables in §8.5 and §5.4
   statusLabel: string // the vendor's own wording, displayed as today
+  /** Checkin's separate `paid` boolean; drives the icon, "Paid in Full" and overdue exactly as today. */
+  settled: boolean
   total: Money
   /** A VAT amount has no net/gross basis. Refinement (spec): the decided `vat: Money` can't be filled meaningfully. */
   vat?: number
   outstanding: Money
   currency: string
   method?: string
-  placedAt: string
+  placedAt: string | null
   dueAt?: string
   contact: Person
   billingContact?: Person
@@ -215,8 +229,9 @@ interface PaymentSummary {
 interface Discount {
   id: string // Checkin: the code (Checkin returns no id; delete addresses `coupon-<code>`). Pretix: the voucher id.
   code: string
-  kind: 'percent' | 'fixed' | 'set' | 'none'
-  value: number
+  /** 'other' = a vendor kind with no neutral meaning (an unrecognised Checkin type). */
+  kind: 'percent' | 'fixed' | 'set' | 'none' | 'other'
+  value: number | null // null when the vendor's value doesn't parse
   ticketTypeIds: string[] // empty = every type
   maxUses: number | null
   providerUses: number // the vendor's own redemption counter
@@ -239,7 +254,9 @@ interface CreateDiscountInput {
   kind: 'percent' // the only kind the app creates
   value: number // 1–100
   maxUses: number
-  ticketTypeIds: string[] // must be a listed scope on a provider whose scopes are a list
+  /** Required when `scopes` is a list: two scopes can cover the same types (an item and a quota over it). */
+  scopeId?: string
+  ticketTypeIds: string[] // used when `scopes` is 'any'; checked against the chosen scope otherwise
   validFrom?: string // refused as unsupported by Pretix
   validUntil?: string
 }
@@ -258,12 +275,12 @@ interface SaleEvent {
 interface InvitationRequest {
   recipient: { email: string; name: string; reference: string } // reference = the published speaker id
   message: string // today's "Welcome as a speaker at <conference>!"; Pretix ignores it
-  existing?: { invitationId: string; code: string } // from the marker, on resend
+  existing?: { invitationId: string } // from the marker, on resend
 }
 
 type InvitationResult =
   | { delivery: 'provider-sent' } // Checkin mailed its own invitation
-  | { delivery: 'link'; url: string; invitationId: string; code: string } // Pretix: we mail the link
+  | { delivery: 'link'; url: string; invitationId: string; codeHash: string } // Pretix: we mail `url`; the marker stores id and hash only
   | { delivery: 'already-redeemed' } // Pretix resend on a used voucher: send nothing
 
 interface Capabilities {
@@ -277,17 +294,26 @@ interface Capabilities {
 
 ### 4.3 The interface
 
-N1 adds this as **`NeutralTicketingProvider`**, a separate interface that every
-adapter implements **in addition to** today's `TicketingProvider`. Several of
-today's method names (`fetchPublicTicketTypes`, the discount methods,
-`verifyWebhook`) have incompatible signatures, so the two can't share names
-until the old one is gone. N9 deletes the old interface and renames this one to
-`TicketingProvider`.
+**During the migration the neutral interface is a separate object.** Several
+of today's method names (`fetchPublicTicketTypes`, the discount methods,
+`verifyWebhook`) have incompatible signatures, so one class can't implement
+both interfaces. N1 therefore gives each adapter a second object:
+
+- `neutral(): NeutralTicketingProvider`, built from the same injected
+  credentials
+- a neutral resolver, `resolveNeutralTicketing(binding)`, next to today's
+  `resolveTicketingProvider`
+
+Migrated consumers use only the neutral one. N9 deletes the old interface and
+resolver and makes the neutral ones the only ones, named `TicketingProvider`
+and `resolveTicketingProvider`.
 
 ```ts
 interface NeutralTicketingProvider {
   readonly name: string
   readonly capabilities: Capabilities
+  /** 'apportioned': per-ticket prices are an even split of an order total (Checkin). Drives `revenueApportioned`. */
+  readonly priceAllocation: 'reported' | 'apportioned'
   isConfigured(): boolean
 
   fetchPublicTicketTypes(
@@ -297,7 +323,9 @@ interface NeutralTicketingProvider {
   fetchPaymentSummary(ref: EventRef, orderId: string): Promise<PaymentSummary>
   orderAdminUrl(ref: EventRef, orderId: string): string | null // pure
 
-  listDiscounts(ref: EventRef): Promise<{
+  listDiscounts(
+    ref: EventRef,
+  ): Promise<{
     discounts: Discount[]
     ticketTypes: TicketTypeRef[]
     scopes: DiscountScopes
@@ -335,19 +363,21 @@ interface NeutralTicketingProvider {
 - **`orderAdminUrl` stays pure.** The control panel always lives on the base
   URL.
 
-| Capability       | Checkin           | Tito    | Pretix   |
-| ---------------- | ----------------- | ------- | -------- |
-| `discounts`      | ✓                 | ✗       | ✓        |
-| `paymentDetails` | ✓                 | ✗       | ✓        |
-| `invitations`    | `'provider-sent'` | `false` | `'link'` |
-| `saleWebhook`    | ✓                 | ✗       | ✓        |
+| Capability        | Checkin           | Tito         | Pretix       |
+| ----------------- | ----------------- | ------------ | ------------ |
+| `discounts`       | ✓                 | ✗            | ✓            |
+| `paymentDetails`  | ✓                 | ✗            | ✓            |
+| `invitations`     | `'provider-sent'` | `false`      | `'link'`     |
+| `saleWebhook`     | ✓                 | ✗            | ✓            |
+| `priceAllocation` | `'apportioned'`   | `'reported'` | `'reported'` |
 
 ### 4.4 Money and VAT
 
 - **Revenue cards** show `net` when present, else `gross`, and label which one.
   The label comes from the basis present, replacing `amountsIncludeVat`, which
   leaves the interface. `amountBasis` and `toPerTicketAmounts` become internal
-  to the Checkin adapter.
+  to the Checkin adapter. Its effect stays visible through `priceAllocation`,
+  so `tickets/summary.ts` keeps its "apportioned" disclosure.
 - **The budget** reads `net ?? exVat(gross, budget.vatRate)` and labels any
   part derived from gross. It is unknown only when there's neither a `net` nor
   a budget VAT rate.
@@ -370,37 +400,39 @@ interface NeutralTicketingProvider {
   type's **effective `admits`** isn't false: the role entry, else the vendor's
   `admits`, else admitting by default. Revenue includes every non-complimentary
   item.
-- **Dating:** a sale is dated by `order.placedAt`. Snapshots store counts per
-  day under deterministic ids, so no per-ticket dedupe key exists or is needed.
+- **Dating:** a sale is dated by `order.placedAt`; a `null` one is undated, as
+  `''` is today. Snapshots store counts per day under deterministic ids, so no
+  per-ticket dedupe key exists or is needed.
 
 ## 5. The refactor (Checkin and Tito onto the neutral model)
 
 ### 5.1 Strangler, in nine slices
 
-Each adapter implements `NeutralTicketingProvider` **alongside** the old
-interface. Consumers move group by group, and the old interface and the
-Checkin-shaped types are deleted last, so the type checker proves nothing still
-uses them. Each slice is independently mergeable and green. Every live consumer
-of the old methods is assigned to exactly one slice below.
+Each adapter gains its `neutral()` object **alongside** the old interface.
+Consumers move group by group onto the neutral resolver, and the old interface
+and the Checkin-shaped types are deleted last, so the type checker proves
+nothing still uses them. Each slice is independently mergeable and green. Every
+live consumer of the old methods is assigned to exactly one slice below.
 
-| #   | Slice                           | Moves                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | After |
-| --- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| N1  | Foundation                      | `NeutralTicketingProvider`, the types, `capabilities` and `ticketsOf()`. Both adapters implement it. Tito's invented `-ticketId` order id becomes an explicit synthetic string id. **Recorded-fixture tests per adapter** (vendor response → neutral output, value by value). `getTicketingProvider` stops silently defaulting to Checkin.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | —     |
-| N2  | Read path: analytics and status | `ticketsOf()` consumers: `tickets/summary.ts`, `tickets/utils.ts`, `tickets/api.ts`, classification and `classificationContext`, participants (the export keeps first and last name), discovery, `status/summary.ts`, `dashboard/widget-data.ts`, Marketing snapshots (§4.5), budget income (§4.4). Speaker and volunteer status, **including** their deep links via `orderAdminUrl`. Workshop eligibility. The revenue label from the price basis (`admin/tickets/page.tsx`, `TicketAnalysisClient`, `TicketSalesChartDisplay`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | N1    |
-| N3  | Read path: admin pages          | The orders page and `OrdersTableWithSearch` onto `Order[]`, with `orderAdminUrl` (Checkin keeps the orders-table form) and unpaid/overdue on `outstanding > 0`. The companies page (`ticket.company ?? order.company`). The ticket-types page (`admin/tickets/types/page.tsx`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | N1    |
-| N4  | Payment Summary                 | `getPaymentDetails` onto the resolver and `PaymentSummary`. **`requireOrderInCurrentEvent` is rewritten**: it guards on the order id (a string) being in this conference's neutral feed, resolved via the resolver, not on `checkinEventId` / `checkinCustomerId`. `schemas/tickets.ts` `orderId` becomes a shape-checked string. `PaymentDetailsModal` renders optional fields only when present; reconcile reads `total` / `vat`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | N1    |
-| N5  | Discounts, status, activation   | The tickets router: the `checkin()` helper, `requireCheckinEventId` and `listEventDiscounts` go, reusing N4's resolver guard. `sponsor-crm/discount-codes.ts`; the discount page's `providerType === 'checkin'` gate becomes the `discounts` capability. The discount manager: the "Total Order (N)" and "Tickets Only / All Items" columns dropped; "Price set to X" / "Unlocks only" for the new kinds; scope choices from `scopes`; the notice "retired: used N times, so Pretix keeps it", with the row staying listed as used up. `discounts/usage.ts`. `removesFullPrice` stays tri-state: true for `percent ≥ 100` and `set` 0, false for `none`, `'unknown'` for `fixed` and anything unparseable. `providerCodeId = Discount.id`, stored from the created discount. The sponsor email via `discountRedeemUrl` with today's fallback chain. `system-status/checks.ts` and `settings/activation.ts` select the provider through the resolver, with **Checkin's status and activation output unchanged** (they still check configuration; the Pretix probe is new, in P1). | N4    |
-| N6  | Webhook                         | `handleSaleWebhook(providerType, request)` (§9); Checkin's route onto it, path unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | N1    |
-| N7  | Invitations                     | `issueInvitation` in `events/handlers/speakerTicket.ts`. The `speakerRegistrationLink` pre-write guard runs **only when `capabilities.invitations === 'provider-sent'`**. The marker gains `invitationId` / `invitationCode` (§6). The link-delivery email variant (§8.7). `scripts/backfill-speaker-ticket-markers.ts` onto the neutral methods.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | N1    |
-| N8  | Public types and stored ids     | Public prices `{net?, gross?, vatRate?}` through `public.ts`, the pricing grid and the JSON-LD offer. `WorkshopTickets.tsx`. `publicFreeTicketTypeIds` and the grant's `providerTicketId` (§6). `Hero`, `PhaseCtaRow` and the `TicketPricingGrid` caption stop hard-coding "excl. VAT" and use the price basis.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | N1    |
-| N9  | Delete                          | The old `TicketingProvider` interface, renaming `NeutralTicketingProvider` to it. `EventTicket` / `EventTicketWithoutDate`, `CheckinPayOrder`, `EventDiscount` / `TicketType` / `CreateEventDiscountInput`, the Checkin webhook types outside the adapter, and `toPerTicketAmounts` outside the Checkin adapter. `scripts/dump-ticket-shape.ts` becomes a Checkin-adapter-internal probe (it needs raw amounts, which the neutral model has no equivalent for).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | N2–N8 |
+| #   | Slice                                       | Moves                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | After |
+| --- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| N1  | Foundation                                  | `NeutralTicketingProvider`, the types, `capabilities`, `priceAllocation`, `ticketsOf()`, each adapter's `neutral()` and `resolveNeutralTicketing`. Tito's invented `-ticketId` order id becomes an explicit synthetic string id. **Recorded-fixture tests per adapter** (vendor response → neutral output, value by value). `getTicketingProvider` stops silently defaulting to Checkin.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | —     |
+| N2  | Read path: analytics and status             | `ticketsOf()` consumers: `tickets/summary.ts` (keeping `revenueApportioned` via `priceAllocation`), `tickets/utils.ts`, `tickets/api.ts`, classification and `classificationContext`, participants (the export keeps first and last name), discovery, `status/summary.ts`, `dashboard/widget-data.ts`, Marketing snapshots (§4.5), budget income (§4.4). Speaker and volunteer status, **including** `resolveSpeakerTicketType` and their deep links via `orderAdminUrl`. Workshop eligibility. The revenue label from the price basis (`admin/tickets/page.tsx`, `TicketAnalysisClient`, `TicketSalesChartDisplay`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | N1    |
+| N3  | Read path: orders and companies             | The orders page and `OrdersTableWithSearch` onto `Order[]`, with `orderAdminUrl` (Checkin keeps the orders-table form) and unpaid/overdue on `outstanding > 0`. The companies page (`ticket.company ?? order.company`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | N1    |
+| N4  | Payment Summary                             | `getPaymentDetails` onto the neutral resolver and `PaymentSummary`. **`requireOrderInCurrentEvent` is rewritten**: it guards on the order id (a string) being in this conference's neutral feed, not on `checkinEventId` / `checkinCustomerId`. `schemas/tickets.ts` `orderId` becomes a shape-checked string. `PaymentDetailsModal` keeps its icon, "Paid in Full" and overdue logic on `settled`, `outstanding` and `dueAt` exactly as today, and renders optional fields only when present. Reconcile reads `total` / `vat`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | N1    |
+| N5  | Discounts, status, activation               | The tickets router: the `checkin()` helper, `requireCheckinEventId` and `listEventDiscounts` go, reusing N4's guard. `sponsor-crm/discount-codes.ts`; the discount page's `providerType === 'checkin'` gate becomes the `discounts` capability. The discount manager: the "Total Order (N)" and "Tickets Only / All Items" columns dropped; "Price set to X" / "Unlocks only" for the new kinds; scope choices from `scopes`, posting `scopeId`; the notice "retired: used N times, so Pretix keeps it", with the row staying listed as used up. `discounts/usage.ts`. `removesFullPrice` stays tri-state: true for `percent ≥ 100` and `set` 0, false for `none`, `'unknown'` for `fixed`, `other` and a `null` value. `providerCodeId = Discount.id`, stored from the created discount. The sponsor email via `discountRedeemUrl` with today's fallback chain. `system-status/checks.ts` and `settings/activation.ts` select the provider through the resolver, with **Checkin's status and activation output unchanged** (they still check configuration; the Pretix probe is new, in P1b). | N4    |
+| N6  | Webhook                                     | `handleSaleWebhook(providerType, request)` (§9); Checkin's route onto it, path and responses unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | N1    |
+| N7  | Invitations                                 | `issueInvitation` in `events/handlers/speakerTicket.ts`. The `speakerRegistrationLink` pre-write guard runs **only when `capabilities.invitations === 'provider-sent'`**. The marker gains `invitationId` / `invitationCodeHash` (§6). The link-delivery email variant (§8.7). `scripts/backfill-speaker-ticket-markers.ts` onto the neutral methods.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | N2    |
+| N8  | Public types, ticket-types page, stored ids | Public prices `{net?, gross?, vatRate?}` through `public.ts`, the pricing grid and the JSON-LD offer. The **whole ticket-types surface**: `admin/tickets/types/page.tsx`, `TicketTypeCard` (with `providerTypeLabel`) and `PublicFreeTicketToggle`. `WorkshopTickets.tsx`. `publicFreeTicketTypeIds` and the grant's `providerTicketId` (§6). `Hero`, `PhaseCtaRow` and the `TicketPricingGrid` caption stop hard-coding "excl. VAT" and use the price basis.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | N2    |
+| N9  | Delete                                      | The old `TicketingProvider` interface and resolver, renaming the neutral ones to those names. `EventTicket` / `EventTicketWithoutDate`, `CheckinPayOrder`, `EventDiscount` / `TicketType` / `CreateEventDiscountInput`, the Checkin webhook types outside the adapter, and `toPerTicketAmounts` outside the Checkin adapter. `scripts/dump-ticket-shape.ts` becomes a Checkin-adapter-internal probe (it needs raw amounts, which the neutral model has no equivalent for).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | N2–N8 |
 
-**File ownership.** N2 owns `speakerStatus.ts` and `volunteerStatus.ts`; N3 owns
-the orders and companies pages; N4 owns `requireOrderInCurrentEvent`, and N5
-builds on it.
+**File ownership.** N2 owns `speakerStatus.ts`, `volunteerStatus.ts`,
+`classificationContext.ts` and `resolveSpeakerTicketType`. N3 owns the orders
+and companies pages. N8 owns the ticket-types page. N4 owns
+`requireOrderInCurrentEvent`, and N5 builds on it.
 
-**Parallel work.** N2, N3, N6, N7 and N8 can run in parallel after N1, and N4
-then N5 run in sequence. **Pretix work (§12) can start after N1.**
+**Parallel work.** After N1: N2, N3, N4 and N6 in parallel. After N2: N7 and
+N8. After N4: N5. **Pretix adapter work (P2) starts after N1** (§12).
 
 ### 5.2 Zero change: how it's proven
 
@@ -432,10 +464,12 @@ anything else is a defect.
 
 ### 5.4 Checkin and Tito status mappings
 
-| Neutral                 | Checkin                                                                                                                         | Tito                          |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `Order.status`          | `outstanding > 0` → `pending`, else `paid` (today's `amountLeft` rule in `tickets/api.ts`)                                      | the registration's paid state |
-| `PaymentSummary.status` | `paymentStatus` `'PAID'` → `paid`, `'PENDING'` → `pending`, anything else → `pending`, with the raw value kept in `statusLabel` | — (no payment details)        |
+| Neutral                  | Checkin                                                                                                                         | Tito                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `Order.status`           | `outstanding > 0` → `pending`, else `paid` (today's `amountLeft` rule in `tickets/api.ts`)                                      | the registration's paid state |
+| `PaymentSummary.status`  | `paymentStatus` `'PAID'` → `paid`, `'PENDING'` → `pending`, anything else → `pending`, with the raw value kept in `statusLabel` | — (no payment details)        |
+| `PaymentSummary.settled` | `paid`                                                                                                                          | —                             |
+| `Discount.kind`          | `type` `'percent'` → `percent`, an amount type → `fixed`, anything else → `other`                                               | — (no discounts)              |
 
 ## 6. Stored ids and schema additions
 
@@ -444,14 +478,14 @@ All additions are append-only. Nothing is retyped or removed, so
 types only, not `hidden` or option lists, so hiding a field and adding an
 option can't fail the contract test.)
 
-| Document       | Addition                                                                | Notes                                                                                                                                                                                                                                                                                                                                                                                                         |
-| -------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `conference`   | `ticketingProvider` option `'pretix'`                                   | Added **last**, in P9 (§12), so no conference can be bound to Pretix before every surface handles it.                                                                                                                                                                                                                                                                                                         |
-| `conference`   | `pretixEventSlug: string`                                               | The Ticketing Binding's event key. Validated against Pretix's slug shape at save. Shown only when the provider is Pretix.                                                                                                                                                                                                                                                                                     |
-| `conference`   | `publicFreeTicketTypeIds: string[]`                                     | Replaces `publicFreeTicketIds: number[]`, which stays declared but hidden. Checkin ids are stored as `String(id)`. The toggle input becomes `z.string().regex(/^[A-Za-z0-9:_-]{1,64}$/)`, and the patch path **quotes** the value (`publicFreeTicketTypeIds[@ == "<id>"]`). A test asserts that a `"]` payload is refused. **No migration**: no production conference has the old field (checked 2026-10-16). |
-| `organization` | `pretixBaseUrl: url`, `pretixOrganizerSlug: string`                     | **Operator-only**, edited like `secretEnvSlug`, never by org admins. Canonicalised and validated by the base-URL guard (§7.2) and the uniqueness rule (§7.3).                                                                                                                                                                                                                                                 |
-| `speaker`      | `ticketEmailGrants[].providerTicketId: string`                          | New grants write it; `TicketAddressModal` shows `providerTicketId ?? ticketId`; the old `ticketId` is hidden. **No production write**: the 13 existing grants keep their number.                                                                                                                                                                                                                              |
-| `talk`         | `issuedSpeakerTickets[].invitationId: string`, `invitationCode: string` | Optional; written only for `link` deliveries (§8.7). Not a locked schema.                                                                                                                                                                                                                                                                                                                                     |
+| Document       | Addition                                                                    | Notes                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conference`   | `ticketingProvider` option `'pretix'`                                       | Added in P9 (§12), operator-settable only. P10 exposes it to org admins.                                                                                                                                                                                                                                                                                                                                      |
+| `conference`   | `pretixEventSlug: string`                                                   | The Ticketing Binding's event key. Validated against Pretix's slug shape at save. Shown only when the provider is Pretix.                                                                                                                                                                                                                                                                                     |
+| `conference`   | `publicFreeTicketTypeIds: string[]`                                         | Replaces `publicFreeTicketIds: number[]`, which stays declared but hidden. Checkin ids are stored as `String(id)`. The toggle input becomes `z.string().regex(/^[A-Za-z0-9:_-]{1,64}$/)`, and the patch path **quotes** the value (`publicFreeTicketTypeIds[@ == "<id>"]`). A test asserts that a `"]` payload is refused. **No migration**: no production conference has the old field (checked 2026-10-16). |
+| `organization` | `pretixBaseUrl: url`, `pretixOrganizerSlug: string`                         | **Operator-only**, edited like `secretEnvSlug`, never by org admins. Canonicalised and validated by the base-URL guard (§7.2) and the uniqueness rule (§7.3).                                                                                                                                                                                                                                                 |
+| `speaker`      | `ticketEmailGrants[].providerTicketId: string`                              | New grants write it; `TicketAddressModal` shows `providerTicketId ?? ticketId`; the old `ticketId` is hidden. **No production write**: the 13 existing grants keep their number.                                                                                                                                                                                                                              |
+| `talk`         | `issuedSpeakerTickets[].invitationId: string`, `invitationCodeHash: string` | Optional; written only for `link` deliveries (§8.7). **Never the code itself**: proposal reads project the whole talk to every speaker on it, so a stored code would hand a co-speaker another speaker's free voucher (the rule `recordSpeakerTicketEmailed` already documents). _Decided in review._ Not a locked schema.                                                                                    |
 
 - `linkedDiscountCodes[].providerCodeId` is already a string. Its meaning is
   fixed as the neutral `Discount.id`.
@@ -461,7 +495,7 @@ option can't fail the contract test.)
 
 ## 7. The Pretix Ticketing Connection
 
-### 7.1 Storage
+### 7.1 Storage and resolution
 
 - **On the Organization:** base URL and Pretix organizer slug (§6).
 - **In env: only secrets**, as a new **per-org-only `pretix` secret family**,
@@ -471,11 +505,25 @@ option can't fail the contract test.)
   - `TENANT_<SLUG>_PRETIX_WEBHOOK_SECRET`
   - optional `TENANT_<SLUG>_PRETIX_WEBHOOK_SECRET_PREVIOUS`
   - or the same fields in `TENANT_SECRETS_JSON`
-- **Store changes:** P1 adds `pretix` to the `SecretFamily` union
-  (`lib/secrets/types.ts`), to `FAMILY_SEGMENT` / `REQUIRED_FIELDS` in
-  `env-per-org.ts`, and to `JSON_REQUIRED_FIELDS` in `store.ts`. The required
-  fields are `apiToken` and `webhookSecret`; the previous secret is optional.
-  This keeps a half-filled JSON bag from shadowing the chain.
+- **Store and type changes (P1):**
+  - add `pretix` to the `SecretFamily` union (`lib/secrets/types.ts`), to
+    `FamilyCredentialsMap`, to `FAMILY_SEGMENT` / `REQUIRED_FIELDS` and the
+    exhaustive `never` case in `env-per-org.ts`, and to
+    `JSON_REQUIRED_FIELDS` in `store.ts`
+  - the required fields are `apiToken` and `webhookSecret`, with the previous
+    secret optional, so a half-filled JSON bag can't shadow the chain
+  - add `'pretix'` to `TicketingProviderType` and `conferenceProviderType`
+  - `TicketingProviderCredentials` gains `webhookSecretPrevious`
+- **How the resolver gets the Organization fields (P1).** Today
+  `ConferenceTicketingBinding` carries only `organization._ref`. It gains
+  `pretixEventSlug` and a dereferenced
+  `organization: { _ref, pretixBaseUrl?, pretixOrganizerSlug? }`, projected via
+  `organization->{…}` at **every binding read**. P1 enumerates those reads,
+  including the cached ones keyed on the serialised binding and the Marketing
+  snapshot projection, so no new Sanity read is added per ticketing call. The
+  uniqueness guard (§7.3) reuses the cached all-organizations map
+  `resolveTenantEnvSlug` already builds, with its projection extended by the
+  two fields.
 - **No platform fallback.** An org without the secrets is "not configured".
 - **The token** is a Pretix team token with exactly `event.orders:read`,
   `event.vouchers:read` and `event.vouchers:write`. Never
@@ -583,6 +631,7 @@ reads `process.env`).
   from `default_price` and the rule's `price_includes_tax`.
 - **Windows:** `available_from` / `available_until` become `visibleFrom` /
   `visibleUntil`.
+- `providerTypeLabel` is absent.
 
 ### 8.4 Orders feed
 
@@ -615,6 +664,7 @@ canceled (`c`) orders are excluded. Canceled positions are hidden by default
   - `status`: `p` → `paid`, `n` → `pending`, `e` → `canceled`, and `c` →
     `refunded` if any refund is done, else `canceled`. `statusLabel` is the
     Pretix status name.
+  - `settled` is `outstanding.gross <= 0`.
   - _Adapter detail:_ `dueAt` comes from `expires`, and `method` is the first
     confirmed payment's `provider`.
   - `paymentReference` is absent and `notices` is `[]`.
@@ -631,18 +681,20 @@ Pretix's automatic Discounts are neither read nor written.
 `listDiscounts().scopes` lists exactly what Pretix can express, so the token
 gains no privilege and the form offers only valid choices:
 
-| Scope offered                | Voucher                              | Offered when                                                                                                           |
-| ---------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| "All ticket types"           | unscoped, `show_hidden_items: false` | **only if every `require_voucher` item in the event is also `hide_without_voucher`** (decided during spec review, §15) |
-| one Ticket Type              | `item` (+ `variation`)               | always                                                                                                                 |
-| every variation of one item  | `item`                               | the item has variations                                                                                                |
-| an existing quota (its name) | `quota`                              | always; `ticketTypeIds` = the quota's items and variations                                                             |
+| Scope offered                | Voucher                              | Offered when                                                                                                    |
+| ---------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| "All ticket types"           | unscoped, `show_hidden_items: false` | **only if every `require_voucher` item in the event is also `hide_without_voucher`** (_decided in review_, §15) |
+| one Ticket Type              | `item` (+ `variation`)               | always                                                                                                          |
+| every variation of one item  | `item`                               | the item has variations                                                                                         |
+| an existing quota (its name) | `quota`                              | always; `ticketTypeIds` = the quota's items and variations                                                      |
 
-- **Exact match before writing.** `createDiscount` refuses any `ticketTypeIds`
-  that isn't exactly one listed scope, and any id not in the fetched catalogue,
-  **before any write**; the claim hold is released. Message: "On Pretix a code
-  can cover one ticket type, one product, or one quota. Create a quota for
-  these types in Pretix, or pick fewer."
+- **Exact match before writing.** `createDiscount` refuses a missing or unknown
+  `scopeId`, and any `ticketTypeIds` that don't equal that scope's, **before
+  any write**; the claim hold is released. Message: "On Pretix a code can cover
+  one ticket type, one product, or one quota. Create a quota for these types in
+  Pretix, or pick fewer." The scope is re-derived from a fresh catalogue read,
+  so the "All ticket types" guard is checked at write time, not just when the
+  form loaded.
 - **The reverse mapping**, for listing: an item-scoped voucher maps to that
   item's Ticket Types, an item-and-variation voucher to one, a quota voucher to
   the quota's items and variations, and an unscoped voucher to `[]` (every
@@ -660,18 +712,34 @@ gains no privilege and the form offers only valid choices:
   - `set` → `set`
   - `none` → `none`
   - Created codes use `percent`/100.
+  - A value that doesn't parse is `null`.
 - **Usage:** `redeemed` becomes `providerUses`. It counts pending and expired
   orders and is incremented by API-created orders too (observed). Our own count
   (`Ticket.discountCode` over the feed) can read lower;
   `resolveRedemptionCount` already labels the source.
-- **Create:** `POST /vouchers/` with
-  `X-Idempotency-Key = sha256(JSON.stringify(["voucher", baseUrl, organizerSlug, eventSlug, code]))`.
-  - _Refinement (spec):_ the key is built from the `EventRef`, which identifies
-    the tenant's event as uniquely as the decided conference id, and which the
-    adapter actually receives. A domain tag and JSON encoding rule out
-    collisions with invitation keys.
-  - A 409 for a reused key is resolved by reading the voucher by code and
-    adopting it only if code, scope and value match; otherwise it's an error.
+- **Create:**
+  - `POST /vouchers/` with
+    `X-Idempotency-Key = sha256(JSON.stringify(["voucher", baseUrl, organizerSlug, eventSlug, code]))`.
+    _Refinement (spec):_ the key is built from the `EventRef`, which
+    identifies the tenant's event as uniquely as the decided conference id and
+    which the adapter actually receives. The domain tag and JSON encoding rule
+    out collisions with invitation keys.
+  - **Pretix's semantics** (research): a reused key **replays the stored
+    response** for 24 h, and a 409 means the first request is **still in
+    flight**.
+  - **On 409:** wait 5 s and retry the same request, with a bounded number of
+    tries.
+  - **After any 2xx**, which may be a replay: `GET /vouchers/<id>/` and verify
+    the full intent (code, price mode, value, scope, `max_usages`,
+    `valid_until`, `show_hidden_items`) before returning.
+    - A mismatch is an error.
+    - A 404 means the replay was of a voucher since deleted (a code deleted and
+      re-created within 24 h). The create is retried once under a fresh random
+      key. That's safe, because Pretix keeps codes unique per event: a real
+      duplicate answers 400, and is then read by code and verified the same
+      way.
+  - Nothing is returned, and no sponsor link stored, until verification
+    passes.
   - `validFrom` is refused as unsupported.
   - The `discountCodeClaim` lock is unchanged, because it keys on the code.
 - **Delete or retire:**
@@ -680,10 +748,12 @@ gains no privilege and the form offers only valid choices:
     `max_usages = redeemed`, the floor Pretix allows (observed), and
     `valid_until = now`
   - sponsor links are untouched
-- **Redeem link:** `discountRedeemUrl` returns `new URL('redeem', public_url)`
-  with `voucher=CODE`. The URL is built by URL joining, never by string
-  concatenation, so it's right with or without a trailing slash. It pre-fills
-  the code and shows the hidden products in the voucher's scope.
+- **Redeem link:** `discountRedeemUrl` normalises `public_url`'s path to end in
+  `/` and then joins: `new URL('redeem', dir)`, with
+  `searchParams.set('voucher', code)`. A bare `new URL('redeem', public_url)`
+  drops the event segment when `public_url` has no trailing slash. A test covers
+  both forms and a custom domain. The link pre-fills the code and shows the
+  hidden products in the voucher's scope.
 
 ### 8.7 Speaker invitations
 
@@ -691,18 +761,21 @@ gains no privilege and the form offers only valid choices:
   Ticket Type:
   - `max_usages: 1`, `percent`/100
   - `tag: "speaker"`, with the speaker reference in `comment`
-  - `X-Idempotency-Key = sha256(JSON.stringify(["invite", baseUrl, organizerSlug, eventSlug, reference]))`
-    (same refinement as §8.6)
+  - `X-Idempotency-Key = sha256(JSON.stringify(["invite", baseUrl, organizerSlug, eventSlug, reference]))`,
+    with the same refinement, replay and 409 handling as §8.6
 
-  It returns `{ delivery: 'link', url, invitationId, code }`.
+  It returns `{ delivery: 'link', url, invitationId, codeHash }`, where
+  `codeHash = sha256(code)`.
 
 - **Resend**, with `existing`, reuses the voucher: look it up by
   `invitationId`, falling back to `tag` plus the reference, and return the same
-  link. A redeemed voucher returns `{ delivery: 'already-redeemed' }`, and the
-  handler sends nothing. A new voucher is minted only if none exists. There is
-  no revocation.
+  link, with the code read from Pretix, not from storage. A redeemed voucher
+  returns `{ delivery: 'already-redeemed' }`, and the handler sends nothing. A
+  new voucher is minted only if none exists. There is no revocation.
+- **The marker** stores `invitationId` and `invitationCodeHash`, **never the
+  code** (§6, _decided in review_).
 - **Claimed** means an email match, as today (grants included), **or** a ticket
-  whose `discountCode` is the speaker's invitation code.
+  whose `sha256(discountCode)` equals the stored `invitationCodeHash`.
 - **The email** for a `link` delivery is a variant of today's speaker ticket
   email:
   - the button is the personal link
@@ -719,12 +792,21 @@ gains no privilege and the form offers only valid choices:
 `handleSaleWebhook(providerType, request)` implements, once, the #886 order:
 parse → shape pre-filter → identify → resolve the connection (Pretix) or the
 tenant (Checkin) → resolve its secret → verify → read → act. Checkin's route
-keeps its path. Pretix gets **`/api/webhooks/pretix`**.
+keeps its path **and its responses**: 400 for unparseable JSON, 200 for
+non-order events, the uniform 401, and 500 for an internal error. Pretix gets
+**`/api/webhooks/pretix`**.
 
-**Uniform 401.** Every failure before verification, **including a throw from
-the secrets store** (`TenantEnvSlugUnavailableError`), is logged and answered
-with the byte-identical 401. A 500 there would be an existence oracle for known
-organizer slugs and would make Pretix retry for days.
+**Uniform 401, from identify onward.** Every failure from identification
+through verification answers the byte-identical 401: an unknown slug, no
+candidate, a wrong secret, a malformed `Authorization` header, a secret that
+fails its shape rule. The one exception is a **transient** store failure, such
+as `TenantEnvSlugUnavailableError` when the slug lookup itself is
+indeterminate. That answers 500, as Checkin does today, so the vendor retries
+and no sale is lost.
+
+_Refinement (spec):_ this is a deliberate narrow oracle. A 500 appears only
+during a store outage, and only for a slug with candidates. That was preferred
+over dropping real sales by answering 401 to a retryable failure.
 
 1. **Registration**, by hand, per the runbook (§11). The URL is
    `https://pretix-webhook:<secret>@<host>/api/webhooks/pretix`, with only
@@ -759,7 +841,8 @@ organizer slugs and would make Pretix retry for days.
 7. **Status codes:**
    - other actions: 200 "ignored"
    - **never 410**, which disables the hook
-   - 5xx **only** when the re-fetch fails, so Pretix retries for about 3 days
+   - 5xx **only** when the re-fetch fails or the store is transiently
+     unavailable, so Pretix retries for about 3 days
    - a per-recipient email failure: 200, logged
    - no dedupe store; `dedupeKey` (connection + `notification_id`) is logged
 8. **Logging:** ticket ids, order codes and `notification_id` only. Never log
@@ -774,14 +857,15 @@ greps `'checkin' | 'tito'`, `=== 'tito'`, `=== 'checkin'` and
 
 - `lib/tickets/provider/index.ts`: the union, the default,
   `ticketingCredentialsConfigured`, `resolveTicketingCredentials` and
-  `conferenceProviderType`
+  `conferenceProviderType` (P1)
+- `lib/secrets/types.ts`, `env-per-org.ts`, `store.ts` (P1, §7.1)
 - `lib/conference/types.ts`, `lib/conference/sanity.ts`,
   `lib/features/ticketing.ts`
 - `lib/tickets/summary.ts`, `lib/tickets/admin-access.ts` (including the label
   ternary), `lib/tickets/classificationContext.ts` (which returns `undefined`
   for Tito), `lib/tickets/volunteerStatus.ts`
 - `lib/legal/subprocessors.ts` and `subprocessors.resolve.ts`, including
-  `registrationLinkVendor`, which must learn the Pretix hosts (§12 P7)
+  `registrationLinkVendor` (§11.3)
 - `lib/settings/activation.ts`, `lib/system-status/checks.ts`,
   `lib/conference/info-faq.ts`
 - `server/schemas/conference.ts`: the `z.enum(['checkin', 'tito'])`, plus a
@@ -792,20 +876,20 @@ greps `'checkin' | 'tito'`, `=== 'tito'`, `=== 'checkin'` and
   field `hidden` rules (the Checkin fields hide only on `=== 'tito'`, so they
   would show on Pretix)
 - the Marketing snapshot GROQ projection (`marketing/snapshots/sanity.ts`),
-  which must add `pretixEventSlug`, because a missing projected field is
-  silently `undefined`
+  which must add `pretixEventSlug` and the dereferenced Organization fields
+  (§7.1), because a missing projected field is silently `undefined`
 - `scripts/backfill-speaker-ticket-markers.ts`, `scripts/dump-ticket-shape.ts`
 
 **Settings:**
 
-- The Ticketing card offers Pretix with one field, the event slug. The
-  Organization's fields are operator-only and shown read-only with their
+- The Ticketing card offers Pretix (from P10) with one field, the event slug.
+  The Organization's fields are operator-only and shown read-only with their
   status.
 - The registration-link help text explains the shared-voucher volunteer link
   for Pretix.
 
 **Discount form:** on Pretix, it offers `scopes` (§8.6) instead of a free
-multi-select, and never lists add-on types.
+multi-select, posts `scopeId`, and never lists add-on types.
 
 ## 11. Organizer and operator setup
 
@@ -848,7 +932,8 @@ Goes into `docs/TENANT_SECRETS.md` and `docs/INTEGRATION_ADAPTERS.md`.
 
 ### 11.3 Privacy and subprocessors
 
-Implemented in P7, in `lib/legal/subprocessors.ts`, `subprocessors.resolve.ts` and `/privacy`.
+_Decided in review_ (§15). Implemented in P7, in `lib/legal/subprocessors.ts`,
+`subprocessors.resolve.ts` and `/privacy`.
 
 - **Hosted:** when the connection's canonical base URL host is `pretix.eu` or a
   subdomain of it, list **"Pretix (pretix GmbH, pretix.eu)"** as a
@@ -866,17 +951,19 @@ Implemented in P7, in `lib/legal/subprocessors.ts`, `subprocessors.resolve.ts` a
 
 ## 12. Pretix slices
 
-| #   | Slice                                                                                                                                                                                                                                                                           | After        |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| P1  | **Connection:** the Organization fields and `pretixEventSlug` (§6), the `pretix` secret family and store changes (§7.1), canonicalisation and the base-URL guard (§7.2), uniqueness and the binding claim (§7.3), the status probe (§7.4). No conference can select Pretix yet. | N1, N5       |
-| P2  | **Adapter read path:** the client (§8.1), public ticket types (§8.3), products mapping (§8.2), orders feed (§8.4); the fixture recorder and fixtures (§13)                                                                                                                      | P1           |
-| P3  | **Payment Summary and deep links** (§8.5)                                                                                                                                                                                                                                       | P2, N3, N4   |
-| P4  | **Discounts** (§8.6), including scopes, the exact-match guard and the form                                                                                                                                                                                                      | P2, N5       |
-| P5  | **Invitations** (§8.7)                                                                                                                                                                                                                                                          | P4, N7       |
-| P6  | **Webhook** (§9): `/api/webhooks/pretix` on the shared handler                                                                                                                                                                                                                  | P2, N6       |
-| P7  | **Privacy, subprocessors and docs:** `/privacy` and the subprocessor list per §11.3; the §11.1 checklist into `TICKET_SYSTEM.md`; the secret family and runbook into `TENANT_SECRETS.md`; `INTEGRATION_ADAPTERS.md` (the provider N+1 checklist, Second-provider debt closed)   | P1           |
-| P8  | **Weekly live contract workflow** (§13) and the pre-live manual checks                                                                                                                                                                                                          | P2           |
-| P9  | **Enable Pretix:** the `'pretix'` option in the Sanity schema, `server/schemas/conference.ts` and the Settings card; the §10 grep; the release gate (every N slice and P1–P8 merged)                                                                                            | N2–N9, P1–P8 |
+| #   | Slice                                                                                                                                                                                                                                                                                                                              | After          |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| P1  | **Connection:** the Organization fields and `pretixEventSlug` (§6); the `pretix` secret family, store and type changes, and the binding projection with the dereferenced Organization fields (§7.1); canonicalisation and the base-URL guard (§7.2); uniqueness and the binding claim (§7.3). No conference can select Pretix yet. | N1             |
+| P1b | **Status probe:** the §7.4 probe and activation wiring, in `system-status/checks.ts` and `settings/activation.ts`                                                                                                                                                                                                                  | P1, N5         |
+| P2  | **Adapter read path:** the client (§8.1), public ticket types (§8.3), products mapping (§8.2), orders feed (§8.4), built from injected credentials and proven against fixtures; the fixture recorder and fixtures (§13)                                                                                                            | N1             |
+| P3  | **Payment Summary and deep links** (§8.5)                                                                                                                                                                                                                                                                                          | P1, P2, N3, N4 |
+| P4  | **Discounts** (§8.6), including scopes, `scopeId`, the exact-match and unscoped guards, idempotency verification and the form                                                                                                                                                                                                      | P1, P2, N5     |
+| P5  | **Invitations** (§8.7)                                                                                                                                                                                                                                                                                                             | P4, N7         |
+| P6  | **Webhook** (§9): `/api/webhooks/pretix` on the shared handler                                                                                                                                                                                                                                                                     | P1, P2, N6     |
+| P7  | **Privacy, subprocessors and docs:** §11.3; the §11.1 checklist into `TICKET_SYSTEM.md`; the secret family and runbook into `TENANT_SECRETS.md`; `INTEGRATION_ADAPTERS.md` (the provider N+1 checklist, Second-provider debt closed)                                                                                               | P1             |
+| P8  | **Weekly live contract workflow** (§13)                                                                                                                                                                                                                                                                                            | P2             |
+| P9  | **Operator enablement:** the `'pretix'` option in the Sanity schema and `server/schemas/conference.ts`, settable by an operator in Studio only; the §10 grep. Then the **pre-live manual checks** (§13) on an operator-bound test conference against a real Pretix instance through a public URL, recorded on this ticket.         | N2–N9, P1–P8   |
+| P10 | **Org-admin enablement:** the Settings Ticketing card offers Pretix. Released only after P9's manual checks pass.                                                                                                                                                                                                                  | P9             |
 
 ## 13. Verification strategy
 
@@ -889,9 +976,10 @@ Implemented in P7, in `lib/legal/subprocessors.ts`, `subprocessors.resolve.ts` a
     `allow_http_to_private_networks=on` **in its own throwaway instance's
     config only**, never on a tenant instance.
   - Contract tests run against the fixtures: the adapter mapping, guards,
-    exact-match scoping and the unscoped guard, idempotency keys and the 409
-    path, delete-or-retire, the uniform 401 (including a throwing secrets
-    store), Basic parsing and the constant-time connection pick.
+    exact-match scoping and the unscoped guard, idempotency (replay, 409 and
+    the 404-after-delete path), delete-or-retire, the redeem-URL join, the
+    uniform 401 and the transient-store 500, Basic parsing, the constant-time
+    connection pick, and the code-hash claim match.
 - **A weekly, non-required GitHub Actions workflow** boots the pinned image (CI
   runners are amd64, so it runs natively), runs the recorder, and diffs the
   result against the committed fixtures. Drift shows up as a failed scheduled
@@ -904,16 +992,17 @@ Implemented in P7, in `lib/legal/subprocessors.ts`, `subprocessors.resolve.ts` a
     loopback targets, so local development needs a tunnel)
   - the shop's redeem page (it needs a live event with a payment provider)
 
-  These are **manual checks before the first real tenant**, recorded on the P8
-  ticket:
+  These are the **pre-live manual checks**, run in P9 on an operator-bound test
+  conference before P10 exposes Pretix to org admins:
   - one 100 % voucher order end to end
   - the webhook arriving through the public URL
   - the redeem link opening the shop with the voucher's hidden products
   - an "All ticket types" code refusing the speaker product
+  - a speaker invitation claimed with a different email address
 
 ## 14. Known gaps and risks
 
-- **The redeem page and custom-domain `public_url` are unverified.**
+- **The redeem page and custom-domain `public_url` are unverified** until P9.
   `discountRedeemUrl` reads `public_url` rather than composing it, for that
   reason.
 - **The payment `method`** for Stripe or PayPal plugins comes through as the
@@ -925,15 +1014,19 @@ Implemented in P7, in `lib/legal/subprocessors.ts`, `subprocessors.resolve.ts` a
   replay re-fetches the order and re-sends workshop emails to that tenant's own
   attendees, on the platform's email quota. It stays within one tenant; a
   dedupe store would bound it, and is out of scope.
+- **The narrow webhook oracle during a store outage** (§9) is accepted.
 
-## 15. Decided during spec review
+## 15. Decided in review
 
-Both were put to the user on [Write the Pretix provider spec and implementation tickets](https://github.com/CloudNativeBergen/website/issues/1377)
-on 2026-10-16, after the security review found the first and the fidelity
-review flagged the second as undecided:
+These were put to the user on [Write the Pretix provider spec and implementation tickets](https://github.com/CloudNativeBergen/website/issues/1377)
+on 2026-10-16, after the adversarial reviews raised them:
 
 1. **The "All ticket types" sponsor code on Pretix** (§8.6). Offer it only when
-   every voucher-only product is also hidden without a voucher, checked from the
-   catalogue before writing (fails closed). Hiding is mandatory for speaker and
-   volunteer products in the checklist (§11.1).
+   every voucher-only product is also hidden without a voucher, checked from a
+   fresh catalogue read before writing (fails closed). Hiding is mandatory for
+   speaker and volunteer products in the checklist (§11.1).
 2. **The subprocessor and `/privacy` rule** (§11.3).
+3. **The invitation marker stores `invitationCodeHash`, never the code** (§6,
+   §8.7). This refines "Decide speaker invitations and registration links on
+   Pretix", which had the marker store the code. Proposal reads expose the
+   talk document to every co-speaker.
