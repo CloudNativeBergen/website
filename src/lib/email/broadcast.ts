@@ -108,10 +108,12 @@ export async function sendBroadcastEmail({
     }
 
     const trimmedSubject = subject.trim()
-    const subjectChars = Array.from(trimmedSubject)
     const broadcastName =
-      subjectChars.length > 50
-        ? `${subjectChars.slice(0, 47).join('').trimEnd()}...`
+      trimmedSubject.length > 50
+        ? `${trimmedSubject
+            .slice(0, 47)
+            .replace(/[\uD800-\uDBFF]$/, '')
+            .trimEnd()}...`
         : trimmedSubject
 
     const emailReact = renderEmailTemplate({

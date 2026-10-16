@@ -175,7 +175,7 @@ describe('a refused audience explains itself to the operator (#893)', () => {
     expect(callArg.subject).toBe(longSubject)
   })
 
-  it('truncates by Unicode code points without splitting emoji surrogate pairs at the cutoff', async () => {
+  it('truncates without splitting emoji surrogate pairs at the 47-unit cutoff while staying within 50 UTF-16 code units', async () => {
     const createMock = vi.fn().mockResolvedValue({
       data: { id: 'bc-emoji' },
       error: null,
@@ -194,7 +194,7 @@ describe('a refused audience explains itself to the operator (#893)', () => {
       },
     })
 
-    // 46 ASCII chars + 2-UTF16-unit emoji ('🎉') + 10 more ASCII chars
+    // 46 ASCII chars + 2-UTF16-unit emoji ('🎉' at indices 46..47) + 10 more ASCII chars
     const emojiSubject = `${'A'.repeat(46)}🎉${'B'.repeat(10)}`
     const response = await sendBroadcastEmail({
       conference: { ...conference, contactEmail: 'info@example.test' },
@@ -207,8 +207,9 @@ describe('a refused audience explains itself to the operator (#893)', () => {
       name: string
       subject: string
     }
-    expect(callArg.name).toBe(`${'A'.repeat(46)}🎉...`)
-    expect(Array.from(callArg.name).length).toBe(50)
+    expect(callArg.name).toBe(`${'A'.repeat(46)}...`)
+    expect(callArg.name.length).toBeLessThanOrEqual(50)
+    expect(callArg.name.isWellFormed()).toBe(true)
     expect(callArg.subject).toBe(emojiSubject)
   })
 })
