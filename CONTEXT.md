@@ -81,7 +81,7 @@ _Avoid_: dashboard, analytics page
 ### Ticketing
 
 **Ticketing Provider**:
-The ticketing vendor a conference sells through (Checkin, Tito or Pretix), seen by the platform through one shared adapter interface.
+The ticketing vendor a conference sells through: Checkin, Tito or Pretix.
 _Avoid_: ticket system, ticket vendor integration
 
 **Ticketing Connection**:
