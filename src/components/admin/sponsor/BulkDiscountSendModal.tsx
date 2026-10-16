@@ -343,12 +343,14 @@ export function BulkDiscountSendModal({
         : selectedTargets
       if (targets.length === 0) return
 
-      setActiveTargets(targets)
+      if (!Array.isArray(targetsOverride)) {
+        setActiveTargets(targets)
+      }
       setSendingState('sending')
       setCurrentSendingIndex(0)
 
       setResults((prev) => {
-        const next = { ...prev }
+        const next = Array.isArray(targetsOverride) ? { ...prev } : {}
         targets.forEach((s) => {
           next[s.id] = { status: 'pending' }
         })
@@ -478,11 +480,11 @@ export function BulkDiscountSendModal({
     onClose()
   }
 
-  const successCount = Object.values(results).filter(
-    (r) => r.status === 'success',
+  const successCount = displayedTargets.filter(
+    (s) => results[s.id]?.status === 'success',
   ).length
-  const errorCount = Object.values(results).filter(
-    (r) => r.status === 'error',
+  const errorCount = displayedTargets.filter(
+    (s) => results[s.id]?.status === 'error',
   ).length
 
   return (
