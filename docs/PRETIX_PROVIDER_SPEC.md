@@ -581,7 +581,11 @@ option can't fail the contract test.)
   snapshot projection, so no new Sanity read is added per ticketing call. The
   uniqueness guard (§7.3) reuses the cached all-organizations map
   `resolveTenantEnvSlug` already builds, with its projection extended by the
-  two fields.
+  two fields and its filter widened from `defined(secretEnvSlug)` to
+  `defined(secretEnvSlug) || defined(pretixBaseUrl)`. Otherwise an
+  Organization whose Pretix secrets live in `TENANT_SECRETS_JSON` would be
+  missing from the map and its collisions undetected. A test covers a
+  collision between a JSON-only Organization and a slug one.
 - **No platform fallback.** An org without the secrets is "not configured".
 - **The token** is a Pretix team token with exactly `event.orders:read`,
   `event.vouchers:read` and `event.vouchers:write`. Never
@@ -597,7 +601,10 @@ option can't fail the contract test.)
   - a hostname, not an IP literal
   - not `localhost`, `*.local` or `*.internal`
   - no userinfo, path, query or fragment
-  - redirects are never followed (`redirect: 'manual'`; any 3xx is an error)
+  - redirects are never followed (`redirect: 'manual'`). Any 3xx is an error
+    **except 304 Not Modified** on a conditional catalogue read, which reuses
+    the cached representation for that exact request. A 200 → 304 regression
+    covers the client and the catalogue cache together.
   - a 10 s timeout
 - **Canonical form:** lower-cased scheme and host, the default port dropped, no
   trailing slash. `www.` is not folded. Studio validation **refuses a value
@@ -787,9 +794,9 @@ gains no privilege and the form offers only valid choices:
 | Scope offered                | Voucher                              | Offered when                                                                                                    |
 | ---------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
 | "All ticket types"           | unscoped, `show_hidden_items: false` | **only if every `require_voucher` item in the event is also `hide_without_voucher`** (_decided in review_, §15) |
-| one Ticket Type              | `item` (+ `variation`)               | always                                                                                                          |
-| every variation of one item  | `item`                               | the item has variations                                                                                         |
-| an existing quota (its name) | `quota`                              | always; `ticketTypeIds` = the quota's items and variations                                                      |
+| one Ticket Type              | `item` (+ `variation`)               | unless it is a speaker- or volunteer-rule type                                                                  |
+| every variation of one item  | `item`                               | the item has variations, none of a speaker- or volunteer-rule type                                              |
+| an existing quota (its name) | `quota`                              | unless it contains a speaker- or volunteer-rule type; `ticketTypeIds` = the quota's items and variations        |
 
 - **`show_hidden_items`.** Pretix defaults it to **true**, and a voucher with it
   set shows and sells the hidden products in its scope. The rules:
@@ -809,6 +816,8 @@ gains no privilege and the form offers only valid choices:
   Pretix, or pick fewer." The scope is re-derived from a fresh catalogue read,
   so the "All ticket types" guard is checked at write time, not just when the
   form loaded.
+- **Any unscoped voucher with `show_hidden_items` on**, such as a hand-made one,
+  is flagged the same way, because it shows and sells every hidden product.
 - **The guard is re-checked on every listing, not only at creation.** A later
   catalogue change can make an existing unscoped code unlock a voucher-only
   product: an organizer adds one, or un-hides one. So every `listDiscounts`
@@ -853,8 +862,12 @@ gains no privilege and the form offers only valid choices:
     flight**.
   - **On 409:** wait 5 s and retry the same request, with a bounded number of
     tries. A key can stay locked for up to 24 h if the first request never
-    completed, so after that budget the create falls back to a fresh random
-    key, on the same code-uniqueness argument.
+    completed, so after that budget a **sponsor code** create falls back to a
+    fresh random key, on the same code-uniqueness argument. Invitations never
+    do (§8.7).
+  - _Refinement (spec):_ the replay, 409 and fresh-key rules, scoped
+    `show_hidden_items`, and delete-by-attempt were all added while reviewing
+    this spec.
   - **After any 2xx**, which may be a replay: `GET /vouchers/<id>/` and verify
     the full intent (code, price mode, value, scope, `max_usages`,
     `valid_until`, `show_hidden_items`) before returning.
@@ -897,14 +910,17 @@ gains no privilege and the form offers only valid choices:
 
 - **Before every create, with or without `existing`**, the adapter searches for
   a voucher with `tag=speaker` and exactly this reference in `comment`:
-  - a unique match is reused. If it's used, check whether a **live** ticket (paid
-    or pending, in the feed) carries its code:
-    - yes: `already-redeemed`, with its `invitationId` and `codeHash`
-    - no: the use is held by an **expired order**. Expiry doesn't free a Pretix
-      voucher, while a cancellation does. The adapter returns
-      `held-by-expired-order` with that order's code, read from
-      `GET /orderpositions/?voucher=<id>&order__status=e` (within
-      `event.orders:read`). It sends nothing, and the
+  - a unique match is reused. If it's used, its holder is classified straight
+    from `GET /orderpositions/?voucher=<id>` (within `event.orders:read`),
+    never inferred from the feed:
+    - a position on a `p` or `n` order: `already-redeemed`, with its
+      `invitationId` and `codeHash`
+    - none found (a test-mode order holds it, or the state changed between
+      reads): an error, and nothing is sent
+    - a position on an `e` order: the use is held by an **expired order**.
+      Expiry doesn't free a Pretix voucher, while a cancellation does. The
+      adapter returns `held-by-expired-order` with that order's code. It sends
+      nothing, and the
       organizer is told: "<speaker>'s personal voucher is held by expired order
       <code>; cancel it in Pretix, then resend." Cancelling frees the voucher,
       so the next resend finds it unused and re-sends the link.
@@ -924,7 +940,14 @@ gains no privilege and the form offers only valid choices:
     variation), `show_hidden_items: true` (§8.6)
   - `tag: "speaker"`, with the speaker reference in `comment`
   - `X-Idempotency-Key = sha256(JSON.stringify(["invite", baseUrl, organizerSlug, eventSlug, reference]))`,
-    with the same refinement, replay and 409 handling as §8.6
+    with the same refinement, replay and 409 handling as §8.6, with one
+    difference. **No fresh-key fallback after the 409 budget**: speaker codes
+    are Pretix-generated, so a fresh key could mint a second voucher while the
+    first request is still running. The attempt fails with nothing sent, and
+    the next resend's search-before-create finds whatever the first request
+    made. After a **replayed error**, the search runs again first, and a
+    fresh key is used only if it finds nothing, since a replayed error means
+    the first request created nothing.
 
   It returns `{ delivery: 'link', url, invitationId, codeHash }`, where
   `codeHash = sha256(code)`.
@@ -1085,8 +1108,11 @@ Moves into `docs/TICKET_SYSTEM.md` in slice P7.
 - **Job title:** a question with identifier `job_title`. The API requires an
   identifier; the control panel generates a random one if it isn't set.
 - **Multi-type sponsor codes:** a quota covering exactly those types.
-- **Volunteers:** one shared voucher (max usages = number of volunteers), with
-  its redeem link pasted as the volunteer registration link.
+- **Volunteers:** one shared voucher (max usages = number of volunteers),
+  **scoped to the volunteer product** (item, or item plus variation), never
+  unscoped or quota-wide. An unscoped hand-made voucher applies to everything
+  and, by Pretix's default, shows every hidden product. Its redeem link is
+  pasted as the volunteer registration link.
 
 ### 11.2 Operator runbook
 
@@ -1231,9 +1257,10 @@ Every slice is filed as an issue under [Pretix as a ticketing provider: implemen
   delivery skips that sale's workshop email, though the ticket itself still
   appears in the orders feed.
 - **A multi-use sponsor code keeps uses consumed by expired orders**, because
-  expiry doesn't free a Pretix voucher. Speaker vouchers are reissued (§8.7);
-  sponsor codes are not, so a sponsor can be one seat short until an organizer
-  raises `max_usages`.
+  expiry doesn't free a Pretix voucher. Both a sponsor's and a speaker's
+  use is freed by cancelling the expired order in Pretix (§8.7). Raising
+  `max_usages` instead risks an extra redemption, because a late payment on the
+  expired order isn't re-checked.
 
 ## 15. Decided in review
 
