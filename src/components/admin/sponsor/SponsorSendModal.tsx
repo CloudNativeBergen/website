@@ -18,6 +18,8 @@ import type {
 } from '@/lib/sponsor/types'
 import {
   buildTemplateVariables,
+  findUnsupportedVariables,
+  formatUnmergedVariablesMessage,
   processPortableTextVariables,
   processTemplateVariables,
   suggestTemplateCategory,
@@ -1216,6 +1218,14 @@ function SponsorSendComposer({
     if (!isRegistration && carriesPortalPlaceholder(subject, message)) {
       throw new Error(PORTAL_URL_WRONG_KIND_MESSAGE)
     }
+    const unmergedVariables = findUnsupportedVariables(
+      isRegistration ? { SPONSOR_PORTAL_URL: '' } : {},
+      subject,
+      message as unknown as TemplateBlock[],
+    )
+    if (unmergedVariables.length > 0) {
+      throw new Error(formatUnmergedVariablesMessage(unmergedVariables))
+    }
     // The preview showed no link, so nothing is sent until it does.
     if (isContract && contractAction === 'send') {
       if (readinessQuery.isError) {
@@ -1269,6 +1279,8 @@ function SponsorSendComposer({
     const invalidateRecords = () => {
       utils.sponsor.crm.activities.list.invalidate()
       utils.sponsor.crm.activities.listCommunications.invalidate()
+      utils.sponsor.crm.list?.invalidate?.()
+      utils.sponsor.crm.getById?.invalidate?.()
       if (isDiscount) utils.sponsor.crm.discountCodeOptions.invalidate()
     }
     let result: Awaited<ReturnType<typeof sendMutation.mutateAsync>>

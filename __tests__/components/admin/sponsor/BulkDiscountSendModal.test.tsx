@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   showNotification: vi.fn(),
   sendMutation: vi.fn(),
   crmList: vi.fn(),
+  invalidateCrmList: vi.fn(),
   invalidateActivities: vi.fn(),
   invalidateComms: vi.fn(),
   invalidateDiscounts: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock('@/lib/trpc/client', () => ({
     useUtils: () => ({
       sponsor: {
         crm: {
+          list: { invalidate: h.invalidateCrmList },
           activities: {
             list: { invalidate: h.invalidateActivities },
             listCommunications: { invalidate: h.invalidateComms },
@@ -158,6 +160,7 @@ describe('BulkDiscountSendModal', () => {
 
     // Acme is eligible (1 code, valid email)
     expect(screen.getByText(/1 eligible sponsor/i)).toBeInTheDocument()
+    expect(screen.getByText('Previously linked')).toBeInTheDocument()
 
     // Globex (0 codes) and Initech (no email) are skipped
     expect(screen.getByText(/2 skipped/i)).toBeInTheDocument()
@@ -222,6 +225,8 @@ describe('BulkDiscountSendModal', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
     })
+
+    expect(h.invalidateCrmList).toHaveBeenCalledTimes(1)
 
     expect(h.showNotification).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -295,5 +300,140 @@ describe('BulkDiscountSendModal', () => {
         title: 'Sending complete with errors',
       }),
     )
+  })
+
+  it('allows selecting a subset of eligible sponsors via checkboxes', async () => {
+    const SPONSOR_4 = {
+      id: 'sp-hooli',
+      name: 'Hooli',
+      sponsorForConferenceId: 'sfc-hooli',
+      tier: { title: 'Gold', tagline: '', tierType: 'standard' as const },
+      ticketEntitlement: 3,
+      linkedCodes: ['HOOLI-100'],
+    }
+
+    h.crmList.mockReturnValue({
+      data: [
+        CRM_SPONSORS[0],
+        {
+          _id: 'sfc-hooli',
+          sponsor: { _id: 'sp-hooli', name: 'Hooli' },
+          contactPersons: [
+            {
+              _key: 'c4',
+              name: 'Gavin',
+              email: 'gavin@hooli.example',
+              isPrimary: true,
+            },
+          ],
+          linkedCodes: ['HOOLI-100'],
+        },
+      ],
+      isLoading: false,
+    })
+
+    render(
+      <BulkDiscountSendModal
+        isOpen
+        onClose={vi.fn()}
+        conference={CONFERENCE}
+        sponsors={[SPONSOR_1, SPONSOR_4]}
+        existingDiscounts={[]}
+      />,
+    )
+
+    // Uncheck Acme Corp so only Hooli is sent
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Acme Corp' }))
+    expect(
+      screen.getByText(/Sponsors to receive codes \(1\)/i),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Send to 1 sponsor/i }))
+
+    await waitFor(() => {
+      expect(h.sendMutation).toHaveBeenCalledTimes(1)
+    })
+    expect(h.sendMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sponsorForConferenceId: 'sfc-hooli',
+      }),
+    )
+  })
+
+  it('sends to all valid contact persons when "Send to all contacts with email" is checked', async () => {
+    h.crmList.mockReturnValue({
+      data: [
+        {
+          _id: 'sfc-acme',
+          sponsor: { _id: 'sp-acme', name: 'Acme Corp' },
+          contactPersons: [
+            {
+              _key: 'c1',
+              name: 'Alice',
+              email: 'alice@acme.example',
+              isPrimary: true,
+            },
+            {
+              _key: 'c1b',
+              name: 'Bob',
+              email: 'bob@acme.example',
+              isPrimary: false,
+            },
+          ],
+          linkedCodes: ['ACME-2026'],
+        },
+      ],
+      isLoading: false,
+    })
+
+    render(
+      <BulkDiscountSendModal
+        isOpen
+        onClose={vi.fn()}
+        conference={CONFERENCE}
+        sponsors={[SPONSOR_1]}
+        existingDiscounts={[]}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /Send to all contacts with email/i,
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Send to 1 sponsor/i }))
+
+    await waitFor(() => {
+      expect(h.sendMutation).toHaveBeenCalledTimes(1)
+    })
+    expect(h.sendMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sponsorForConferenceId: 'sfc-acme',
+        recipientKeys: ['c1', 'c1b'],
+      }),
+    )
+  })
+
+  it('blocks sending and shows an alert when an unsupported {{{VARIABLE}}} placeholder is present', () => {
+    render(
+      <BulkDiscountSendModal
+        isOpen
+        onClose={vi.fn()}
+        conference={CONFERENCE}
+        sponsors={[SPONSOR_1]}
+        existingDiscounts={[]}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('Subject'), {
+      target: { value: 'Discount codes for {{{PROSPECTUS_URL}}}' },
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /Email contains unmerged template variables.*PROSPECTUS_URL/,
+    )
+    expect(
+      screen.getByRole('button', { name: /Send to 1 sponsor/i }),
+    ).toBeDisabled()
   })
 })

@@ -16,12 +16,16 @@ import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
 import {
   buildTemplateVariables,
+  findUnsupportedVariables,
+  formatUnmergedVariablesMessage,
   processTemplateVariables,
 } from '@/lib/sponsor/templates'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { sponsorOwningCode } from '@/lib/discounts'
 import type { ConferenceTheme } from '@/lib/branding/theme'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
+
+export const BULK_SEND_DELAY_MS = 600
 
 export interface BulkSendSponsorInfo {
   id: string
@@ -72,9 +76,11 @@ interface SponsorSendTarget {
   tierTitle: string
   sponsorForConferenceId: string
   codes: string[]
-  recipientKey: string
+  alreadyLinked: boolean
+  recipientKeys: string[]
   recipientName: string
   recipientEmail: string
+  contactCount: number
 }
 
 interface SkippedSponsorInfo {
@@ -113,6 +119,14 @@ export function BulkDiscountSendModal({
     },
   )
 
+  const [sendToAllContacts, setSendToAllContacts] = useState(false)
+  const [excludedSponsorIds, setExcludedSponsorIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [newlyLinkedCodesBySponsor, setNewlyLinkedCodesBySponsor] = useState<
+    Record<string, string[]>
+  >({})
+
   const claimants = useMemo(
     () => [...sponsors, ...otherCodeHolders],
     [sponsors, otherCodeHolders],
@@ -147,12 +161,18 @@ export function BulkDiscountSendModal({
 
       // Only include codes that exist upstream in the event's discounts when existingDiscounts is populated;
       // deleted codes that remain in Sanity's linkedCodes array must not be submitted
+      const rawLinkedCodes = Array.from(
+        new Set([
+          ...(sponsor.linkedCodes ?? []),
+          ...(newlyLinkedCodesBySponsor[sponsor.id] ?? []),
+        ]),
+      )
       const validLinkedCodes =
         existingDiscounts.length > 0
-          ? (sponsor.linkedCodes ?? []).filter((c) =>
+          ? rawLinkedCodes.filter((c) =>
               existingCodeSet.has(c.trim().toUpperCase()),
             )
-          : (sponsor.linkedCodes ?? [])
+          : rawLinkedCodes
 
       const allCodes = Array.from(new Set([...ownedCodes, ...validLinkedCodes]))
 
@@ -191,6 +211,15 @@ export function BulkDiscountSendModal({
 
       const primaryContact =
         validContacts.find((c) => c.isPrimary) || validContacts[0]
+      const chosenContacts = sendToAllContacts
+        ? validContacts
+        : [primaryContact]
+      const linkedUpper = new Set(
+        validLinkedCodes.map((c) => c.trim().toUpperCase()),
+      )
+      const alreadyLinked =
+        validLinkedCodes.length > 0 &&
+        allCodes.every((c) => linkedUpper.has(c.trim().toUpperCase()))
 
       eligible.push({
         id: sponsor.id,
@@ -198,14 +227,28 @@ export function BulkDiscountSendModal({
         tierTitle: sponsor.tier.title,
         sponsorForConferenceId: sfcId,
         codes: allCodes,
-        recipientKey: primaryContact._key,
-        recipientName: primaryContact.name,
-        recipientEmail: primaryContact.email,
+        alreadyLinked,
+        recipientKeys: chosenContacts.map((c) => c._key),
+        recipientName: chosenContacts.map((c) => c.name || c.email).join(', '),
+        recipientEmail: chosenContacts.map((c) => c.email).join(', '),
+        contactCount: validContacts.length,
       })
     }
 
     return { eligibleSponsors: eligible, skippedSponsors: skipped }
-  }, [sponsors, crmListQuery.data, existingDiscounts, claimants])
+  }, [
+    sponsors,
+    crmListQuery.data,
+    existingDiscounts,
+    claimants,
+    sendToAllContacts,
+    newlyLinkedCodesBySponsor,
+  ])
+
+  const selectedTargets = useMemo(
+    () => eligibleSponsors.filter((s) => !excludedSponsorIds.has(s.id)),
+    [eligibleSponsors, excludedSponsorIds],
+  )
 
   const [subject, setSubject] = useState(`Discount codes: ${conference.title}`)
   const [messageText, setMessageText] = useState(
@@ -213,17 +256,53 @@ export function BulkDiscountSendModal({
   )
   const [showSkipped, setShowSkipped] = useState(false)
   const [sendingState, setSendingState] = useState<SendingState>('idle')
+  const [activeTargets, setActiveTargets] = useState<SponsorSendTarget[]>([])
   const [results, setResults] = useState<Record<string, SponsorSendResult>>({})
   const [currentSendingIndex, setCurrentSendingIndex] = useState(0)
+
+  const supportedVars = useMemo(() => {
+    const checkTargets =
+      selectedTargets.length > 0 ? selectedTargets : eligibleSponsors
+    return buildTemplateVariables({
+      sponsorName: 'Sponsor',
+      contactNames: 'Contact',
+      tierName:
+        checkTargets.length === 0 ||
+        checkTargets.every((t) => Boolean(t.tierTitle))
+          ? 'Tier'
+          : undefined,
+      conference: {
+        title: conference.title,
+        startDate: conference.startDate,
+        city: conference.city,
+        organizer: conference.organizer,
+        domains: conference.domains,
+        sponsorRegistrationLink:
+          conference.sponsorRegistrationLink ?? undefined,
+      },
+    })
+  }, [conference, selectedTargets, eligibleSponsors])
+
+  const unmergedVariables = useMemo(
+    () => findUnsupportedVariables(supportedVars, subject, messageText),
+    [supportedVars, subject, messageText],
+  )
 
   // Reset transient progress state when reopening the modal
   React.useEffect(() => {
     if (isOpen) {
       setSendingState('idle')
+      setActiveTargets([])
       setResults({})
       setCurrentSendingIndex(0)
+      setExcludedSponsorIds(new Set())
+      setSendToAllContacts(false)
+      setSubject(`Discount codes: ${conference.title}`)
+      setMessageText(
+        `Hi {{{SPONSOR_NAME}}},\n\nHere are your complimentary ticket discount codes for {{{CONFERENCE_TITLE}}}.\n\nPlease find your codes and registration link below:`,
+      )
     }
-  }, [isOpen])
+  }, [isOpen, conference.title])
 
   // Guard against navigating or closing tab while sending is actively in-flight
   React.useEffect(() => {
@@ -235,18 +314,43 @@ export function BulkDiscountSendModal({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [sendingState])
 
+  const toggleSponsorSelection = useCallback((sponsorId: string) => {
+    setExcludedSponsorIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(sponsorId)) {
+        next.delete(sponsorId)
+      } else {
+        next.add(sponsorId)
+      }
+      return next
+    })
+  }, [])
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedTargets.length === eligibleSponsors.length) {
+      setExcludedSponsorIds(new Set(eligibleSponsors.map((s) => s.id)))
+    } else {
+      setExcludedSponsorIds(new Set())
+    }
+  }, [selectedTargets.length, eligibleSponsors])
+
   const handleSend = useCallback(
     async (targetsOverride?: SponsorSendTarget[]) => {
+      if (unmergedVariables.length > 0) return
+
       const targets = Array.isArray(targetsOverride)
         ? targetsOverride
-        : eligibleSponsors
+        : selectedTargets
       if (targets.length === 0) return
 
+      if (!Array.isArray(targetsOverride)) {
+        setActiveTargets(targets)
+      }
       setSendingState('sending')
       setCurrentSendingIndex(0)
 
       setResults((prev) => {
-        const next = { ...prev }
+        const next = Array.isArray(targetsOverride) ? { ...prev } : {}
         targets.forEach((s) => {
           next[s.id] = { status: 'pending' }
         })
@@ -255,6 +359,7 @@ export function BulkDiscountSendModal({
 
       let successCount = 0
       let failCount = 0
+      const delayMs = process.env.NODE_ENV === 'test' ? 50 : BULK_SEND_DELAY_MS
 
       for (let i = 0; i < targets.length; i++) {
         const target = targets[i]
@@ -292,12 +397,18 @@ export function BulkDiscountSendModal({
           await sendMutation.mutateAsync({
             sponsorForConferenceId: target.sponsorForConferenceId,
             kind: 'discount',
-            recipientKeys: [target.recipientKey],
+            recipientKeys: target.recipientKeys,
             subject: personalizedSubject,
             message: JSON.stringify(portableBlocks),
             discountCodes: target.codes,
           })
 
+          setNewlyLinkedCodesBySponsor((prev) => ({
+            ...prev,
+            [target.id]: Array.from(
+              new Set([...(prev[target.id] ?? []), ...target.codes]),
+            ),
+          }))
           setResults((prev) => ({
             ...prev,
             [target.id]: { status: 'success' },
@@ -312,17 +423,18 @@ export function BulkDiscountSendModal({
           failCount++
         }
 
-        // Small pacing delay to prevent hitting Resend burst rate limits
+        // Pacing delay to stay under Resend's 2 req/sec rate limit
         if (i < targets.length - 1) {
-          await new Promise((r) => setTimeout(r, 200))
+          await new Promise((r) => setTimeout(r, delayMs))
         }
       }
 
       setSendingState('completed')
 
-      // Invalidate activity, communications, and discount usage
+      // Invalidate activity, communications, CRM list, and discount usage
       utils.sponsor.crm.activities.list.invalidate()
       utils.sponsor.crm.activities.listCommunications.invalidate()
+      utils.sponsor.crm.list?.invalidate?.()
       utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
 
       if (failCount === 0) {
@@ -340,7 +452,8 @@ export function BulkDiscountSendModal({
       }
     },
     [
-      eligibleSponsors,
+      unmergedVariables.length,
+      selectedTargets,
       conference,
       subject,
       messageText,
@@ -350,25 +463,28 @@ export function BulkDiscountSendModal({
     ],
   )
 
+  const displayedTargets =
+    activeTargets.length > 0 ? activeTargets : selectedTargets
+
   const handleRetryFailed = useCallback(() => {
-    const failedTargets = eligibleSponsors.filter(
+    const failedTargets = displayedTargets.filter(
       (s) => results[s.id]?.status === 'error',
     )
     if (failedTargets.length > 0) {
       handleSend(failedTargets)
     }
-  }, [eligibleSponsors, results, handleSend])
+  }, [displayedTargets, results, handleSend])
 
   const handleDone = () => {
     onSent?.()
     onClose()
   }
 
-  const successCount = Object.values(results).filter(
-    (r) => r.status === 'success',
+  const successCount = displayedTargets.filter(
+    (s) => results[s.id]?.status === 'success',
   ).length
-  const errorCount = Object.values(results).filter(
-    (r) => r.status === 'error',
+  const errorCount = displayedTargets.filter(
+    (s) => results[s.id]?.status === 'error',
   ).length
 
   return (
@@ -482,7 +598,7 @@ export function BulkDiscountSendModal({
             >
               <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
                 {sendingState === 'sending'
-                  ? `Sending ${currentSendingIndex + 1} of ${eligibleSponsors.length}…`
+                  ? `Sending ${currentSendingIndex + 1} of ${displayedTargets.length}…`
                   : 'Sending finished'}
               </h4>
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -496,21 +612,21 @@ export function BulkDiscountSendModal({
               role="progressbar"
               aria-valuenow={successCount + errorCount}
               aria-valuemin={0}
-              aria-valuemax={eligibleSponsors.length}
+              aria-valuemax={displayedTargets.length}
               aria-label="Email sending progress"
               className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
             >
               <div
                 className="h-full bg-indigo-600 transition-all duration-300 dark:bg-indigo-500"
                 style={{
-                  width: `${eligibleSponsors.length > 0 ? ((successCount + errorCount) / eligibleSponsors.length) * 100 : 0}%`,
+                  width: `${displayedTargets.length > 0 ? ((successCount + errorCount) / displayedTargets.length) * 100 : 0}%`,
                 }}
               />
             </div>
 
             {/* Per-Sponsor Status List */}
             <div className="max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200 p-2 text-sm dark:divide-gray-700 dark:border-gray-700">
-              {eligibleSponsors.map((sponsor) => {
+              {displayedTargets.map((sponsor) => {
                 const res = results[sponsor.id]
                 return (
                   <div
@@ -615,44 +731,94 @@ export function BulkDiscountSendModal({
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Variables like{' '}
-                <code className="font-mono">{'{{{SPONSOR_NAME}}}'}</code> and{' '}
+                <code className="font-mono">{'{{{SPONSOR_NAME}}}'}</code>,{' '}
+                <code className="font-mono">{'{{{CONTACT_NAMES}}}'}</code>, and{' '}
                 <code className="font-mono">{'{{{CONFERENCE_TITLE}}}'}</code>{' '}
                 are supported. Each email will automatically include a formatted
                 discount code card with the sponsor&apos;s assigned codes and
                 ticket registration link.
               </p>
+              {unmergedVariables.length > 0 && (
+                <p
+                  role="alert"
+                  className="mt-2 rounded-md border border-red-300 bg-red-50 p-2.5 text-xs text-red-800 dark:border-red-700 dark:bg-red-900/20 dark:text-red-200"
+                >
+                  {formatUnmergedVariablesMessage(unmergedVariables)}
+                </p>
+              )}
             </div>
 
             {/* Target Sponsors Preview */}
             <div>
-              <h4 className="text-xs font-semibold tracking-wider text-gray-700 uppercase dark:text-gray-300">
-                Sponsors to receive codes ({eligibleSponsors.length})
-              </h4>
-              <div className="mt-2 max-h-40 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200 p-2 text-xs dark:divide-gray-700 dark:border-gray-700">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-xs font-semibold tracking-wider text-gray-700 uppercase dark:text-gray-300">
+                  Sponsors to receive codes ({selectedTargets.length})
+                </h4>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={sendToAllContacts}
+                      onChange={(e) => setSendToAllContacts(e.target.checked)}
+                      className="size-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800"
+                    />
+                    <span>Send to all contacts with email</span>
+                  </label>
+                  {eligibleSponsors.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={toggleSelectAll}
+                      className="text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                    >
+                      {selectedTargets.length === eligibleSponsors.length
+                        ? 'Deselect all'
+                        : 'Select all'}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="mt-2 max-h-44 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200 p-2 text-xs dark:divide-gray-700 dark:border-gray-700">
                 {eligibleSponsors.length === 0 ? (
                   <p className="py-2 text-center text-gray-500 dark:text-gray-400">
                     No eligible sponsors. Make sure discount codes are created
                     for sponsors and contacts have valid emails.
                   </p>
                 ) : (
-                  eligibleSponsors.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between py-1.5"
-                    >
-                      <div>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {s.name}
-                        </span>{' '}
-                        <span className="text-gray-500 dark:text-gray-400">
-                          → {s.recipientName} ({s.recipientEmail})
-                        </span>
-                      </div>
-                      <div className="font-mono text-gray-600 dark:text-gray-300">
-                        {s.codes.join(', ')}
-                      </div>
-                    </div>
-                  ))
+                  eligibleSponsors.map((s) => {
+                    const isSelected = !excludedSponsorIds.has(s.id)
+                    return (
+                      <label
+                        key={s.id}
+                        className="flex cursor-pointer items-center justify-between gap-2 py-1.5"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSponsorSelection(s.id)}
+                            aria-label={`Select ${s.name}`}
+                            className="size-3.5 shrink-0 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800"
+                          />
+                          <div className="min-w-0 truncate">
+                            <span className="font-medium text-gray-900 dark:text-white">
+                              {s.name}
+                            </span>{' '}
+                            <span className="text-gray-500 dark:text-gray-400">
+                              → {s.recipientName} ({s.recipientEmail})
+                            </span>
+                            {s.alreadyLinked && (
+                              <span className="ml-1.5 inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                Previously linked
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="shrink-0 font-mono text-gray-600 dark:text-gray-300">
+                          {s.codes.join(', ')}
+                        </div>
+                      </label>
+                    )
+                  })
                 )}
               </div>
             </div>
@@ -669,11 +835,15 @@ export function BulkDiscountSendModal({
               <AdminButton
                 variant="primary"
                 onClick={() => handleSend()}
-                disabled={eligibleSponsors.length === 0 || !subject.trim()}
+                disabled={
+                  selectedTargets.length === 0 ||
+                  !subject.trim() ||
+                  unmergedVariables.length > 0
+                }
               >
                 <EnvelopeIcon className="mr-1.5 size-4" />
-                Send to {eligibleSponsors.length} sponsor
-                {eligibleSponsors.length === 1 ? '' : 's'}
+                Send to {selectedTargets.length} sponsor
+                {selectedTargets.length === 1 ? '' : 's'}
               </AdminButton>
             </div>
           </div>

@@ -1171,14 +1171,19 @@ export async function syncAudienceWithContacts(
     )
 
     let addedCount = 0
+    const contactErrors: string[] = []
     for (const contact of contactsToAdd) {
-      const { success } = await addContactToAudience(
+      const { success, error: addError } = await addContactToAudience(
         client,
         audienceId,
         contact,
       )
       if (success) {
         addedCount++
+      } else {
+        contactErrors.push(
+          `add ${contact.email}: ${addError?.message || 'failed'}`,
+        )
       }
       await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
     }
@@ -1186,16 +1191,26 @@ export async function syncAudienceWithContacts(
     let removedCount = 0
     for (const existingContact of contactsToRemove) {
       // By id, from the roster already paged above — see `removeContactById`.
-      const { success } = await removeContactById(
+      const { success, error: removeError } = await removeContactById(
         client,
         audienceId,
         existingContact,
       )
       if (success) {
         removedCount++
+      } else {
+        contactErrors.push(
+          `remove ${existingContact.email}: ${removeError?.message || 'failed'}`,
+        )
       }
 
       await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+    }
+
+    if (contactErrors.length > 0) {
+      throw new Error(
+        `Failed to reconcile ${contactErrors.length} contact(s) in ${audienceType} audience: ${contactErrors.join('; ')}`,
+      )
     }
 
     return {
