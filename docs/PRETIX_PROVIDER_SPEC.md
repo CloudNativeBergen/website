@@ -672,8 +672,7 @@ reads `process.env`).
 - **`admits`** comes from the item's `admission` flag.
 - **Speaker and volunteer types** use the existing rules unchanged.
   `requiresInvitation` is the item's `require_voucher`, **or** `hide_without_voucher`
-  on the item or on that variation. Each variation evaluates this itself,
-  by its variations. The adapter reads `GET /items/?active=true`, which
+  on the item or on that variation. Each variation evaluates it for itself. The adapter reads `GET /items/?active=true`, which
   includes voucher-only and `hide_without_voucher` items and excludes inactive
   ones (observed). That filter is for the **public catalogue only**. Order
   positions resolve against the full catalogue (`GET /items/`, unfiltered, with
