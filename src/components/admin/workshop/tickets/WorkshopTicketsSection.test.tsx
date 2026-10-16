@@ -27,6 +27,7 @@ import {
   WorkshopTicketsSection,
   WorkshopTicketsSkeleton,
 } from './WorkshopTicketsSection'
+import { TicketHolderContext, type TicketHolderView } from '../holders'
 
 const h = vi.hoisted(() => ({
   mutate: vi.fn(),
@@ -217,6 +218,76 @@ describe('a configured list', () => {
     ).toHaveTextContent(
       'Needs a decision“Student” and “Late Bird” are not set. Their holders cannot sign up for workshops until you choose an answer below.',
     )
+  })
+
+  // #1333: once the page has read the ticket holders, the banner says how
+  // many people each not-set type keeps out.
+  describe('with the ticket holders read', () => {
+    const withHolders = (view: TicketHolderView) =>
+      render(
+        <TicketHolderContext.Provider value={view}>
+          <WorkshopTicketsSection
+            list={buildWorkshopTicketList(types, roles)}
+            providerLabel="Checkin.no"
+          />
+        </TicketHolderContext.Provider>,
+      )
+    const ready = (
+      lockedOut: { typeName: string; people: number }[],
+    ): TicketHolderView => ({
+      state: 'ready',
+      stats: {
+        available: true,
+        configured: true,
+        holders: 9,
+        confirmed: 1,
+        waitlistOnly: 1,
+        notSignedUp: 7,
+        flagged: [],
+        lockedOut,
+      },
+    })
+
+    it('says how many people hold each not-set type and are refused', () => {
+      // The ticket's own spelling of the type: matched as the rule matches.
+      withHolders(ready([{ typeName: ' student', people: 3 }]))
+      const banner = screen.getByRole('region', { name: 'Needs a decision' })
+      expect(
+        within(banner)
+          .getAllByRole('listitem')
+          .map((item) => item.textContent),
+      ).toEqual([
+        '“Student”: 3 people hold it and are refused.',
+        '“Late Bird”: nobody is refused for it yet.',
+      ])
+    })
+
+    it('counts one person as a person', () => {
+      withHolders(ready([{ typeName: 'Late Bird', people: 1 }]))
+      expect(
+        screen.getByText('“Late Bird”: 1 person holds it and is refused.'),
+      ).toBeInTheDocument()
+    })
+
+    it('says the counts are unavailable rather than zero', () => {
+      withHolders({ state: 'unavailable' })
+      const banner = screen.getByRole('region', { name: 'Needs a decision' })
+      expect(banner).toHaveTextContent(
+        'How many people hold them is unavailable: the tickets could not be read.',
+      )
+      expect(within(banner).queryAllByRole('listitem')).toEqual([])
+      expect(banner.textContent).not.toMatch(/\d/)
+    })
+
+    it('says nothing about counts while they are being read', () => {
+      withHolders({ state: 'loading' })
+      expect(
+        screen.getByRole('region', { name: 'Needs a decision' }),
+      ).toHaveTextContent(
+        'Needs a decision“Student” and “Late Bird” are not set. Their holders cannot sign up for workshops until you choose an answer below.',
+        { normalizeWhitespace: true },
+      )
+    })
   })
 
   it('shows the banner only while a type has no answer', () => {

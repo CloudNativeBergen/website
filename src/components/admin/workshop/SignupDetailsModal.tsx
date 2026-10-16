@@ -5,10 +5,10 @@ import { formatDateSafe } from '@/lib/time'
 
 import { TrashIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
-import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { DataTable, type Column } from '@/components/DataTable'
 import { EarlyAccessBadge } from './early-signups'
 import { ConfirmBeyondCapacityModal } from './ConfirmBeyondCapacityModal'
+import { SignupQuestions } from './SignupQuestions'
 import type { FullRefusal } from './useSignupActions'
 import type {
   WorkshopSignupExisting,
@@ -168,30 +168,15 @@ export function SignupDetailsModal({
         }}
       />
 
-      {/* What the organizer cannot see from the list, said before the seat is
-          taken away: the attendee is told nothing, nobody on the waitlist is
-          moved up, and the person is not out of the running (a capacity
-          increase seats the earliest sign-ups first, which they usually are). */}
-      <ConfirmationModal
-        isOpen={moveTarget !== null}
-        onClose={() => setMoveTarget(null)}
-        onConfirm={() => {
-          if (moveTarget) {
-            onMoveToWaitlist(moveTarget.signupId, moveTarget.userName)
-          }
-          setMoveTarget(null)
-        }}
-        title="Move to waitlist"
-        message={
-          moveTarget
-            ? `Move ${moveTarget.userName} to the waitlist for ${workshopTitle}? They lose their seat and get no email about it. They stay in line by sign-up date, so a capacity increase can seat them again. The seat is open to whoever signs up next.`
-            : ''
-        }
-        confirmButtonText="Move to waitlist"
-        cancelButtonText="Keep confirmed"
-        variant="warning"
-        isLoading={isMoving}
-        guardSecondTap
+      <SignupQuestions
+        moveTarget={moveTarget && { ...moveTarget, workshopTitle }}
+        deleteTarget={deleteTarget && { ...deleteTarget, workshopTitle }}
+        onCloseMove={() => setMoveTarget(null)}
+        onCloseDelete={() => setDeleteTarget(null)}
+        onMoveToWaitlist={onMoveToWaitlist}
+        onDeleteSignup={onDeleteSignup}
+        isMoving={isMoving}
+        isDeleting={isDeleting}
       />
 
       {/* Nested like the questions above: a sibling dialog would count as
@@ -201,27 +186,6 @@ export function SignupDetailsModal({
         onConfirm={onConfirmBeyondCapacity}
         onClose={onDismissFullRefusal}
         isLoading={isConfirming}
-      />
-
-      <ConfirmationModal
-        isOpen={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (deleteTarget) {
-            onDeleteSignup(deleteTarget.signupId, deleteTarget.userName)
-          }
-          setDeleteTarget(null)
-        }}
-        title="Delete signup"
-        message={
-          deleteTarget
-            ? `Are you sure you want to permanently delete ${deleteTarget.userName}'s signup for ${workshopTitle}? This cannot be undone.`
-            : ''
-        }
-        confirmButtonText="Delete"
-        variant="danger"
-        isLoading={isDeleting}
-        guardSecondTap
       />
     </ModalShell>
   )

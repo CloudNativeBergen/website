@@ -58,6 +58,9 @@ const server = {
   /** While set, the summary waits on it. */
   holdSummary: null as Promise<void> | null,
   summaryReads: 0,
+  holderReads: 0,
+  /** The ticket provider cannot be read (#1333). */
+  ticketsDown: false,
 }
 
 /** What the server rendered when the page was loaded. Never read again. */
@@ -125,6 +128,27 @@ async function answer(
         200,
       ]
     }
+    // The ticket holders (#1333): everyone listed holds a workshop ticket,
+    // and the numbers follow the stored sign-ups.
+    case 'workshop.admin.ticketHolders': {
+      server.holderReads += 1
+      if (server.ticketsDown) return [ok({ available: false }), 200]
+      const count = (status: string) =>
+        server.signups.filter((s) => s.status === status).length
+      return [
+        ok({
+          available: true,
+          configured: true,
+          holders: server.signups.length + 3,
+          confirmed: count('confirmed'),
+          waitlistOnly: count('waitlist'),
+          notSignedUp: 3,
+          flagged: [],
+          lockedOut: [],
+        }),
+        200,
+      ]
+    }
     case 'workshop.admin.batchCancelSignups': {
       const [id] = (input as { signupIds: string[] }).signupIds
       if (server.attendeeCancelsFirst) {
@@ -184,6 +208,8 @@ beforeEach(() => {
     attendeeCancelsFirst: false,
     holdSummary: null,
     summaryReads: 0,
+    holderReads: 0,
+    ticketsDown: false,
   })
   router.refresh.mockReset()
   vi.stubGlobal(
@@ -405,5 +431,41 @@ describe('the registration card on the page', () => {
     })
     // The page's own reads have settled before the test ends.
     await cardButton(/^Confirmed\s*120$/)
+  })
+})
+
+describe('the ticket holders (#1333)', () => {
+  // Behind an open list, like the cards: `hidden` finds it all the same.
+  const panel = () =>
+    screen.findByRole('region', { name: 'Ticket holders', hidden: true })
+  const tile = async (label: string) =>
+    within(await panel()).findByText(label, { selector: 'span' })
+
+  it('follow an action on a sign-up: read again after "Move to waitlist"', async () => {
+    renderPage()
+    expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent('2')
+    await moveAdaToTheWaitlist()
+    await screen.findByText('Moved to waitlist')
+
+    await waitFor(async () =>
+      expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent(
+        '1',
+      ),
+    )
+    expect((await tile('Waitlist only')).nextElementSibling).toHaveTextContent(
+      '1',
+    )
+    expect(server.holderReads).toBe(2)
+  })
+
+  it('say unavailable when the tickets cannot be read, and the sign-up totals still render', async () => {
+    server.ticketsDown = true
+    renderPage()
+
+    const region = await panel()
+    await within(region).findByText(/^Unavailable:/)
+    expect(region.textContent).not.toMatch(/\d/)
+    // The sign-up totals from the summary are on the page all the same.
+    expect(await screen.findByText('Total Signups')).toBeInTheDocument()
   })
 })

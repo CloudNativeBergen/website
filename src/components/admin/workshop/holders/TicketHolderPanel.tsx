@@ -1,0 +1,165 @@
+'use client'
+
+import { useState } from 'react'
+import {
+  ExclamationTriangleIcon,
+  UserGroupIcon,
+} from '@heroicons/react/24/outline'
+import { StatCard } from '@/components/admin/stats'
+import { FlaggedSignupsModal } from './FlaggedSignupsModal'
+import type { TicketHolderView } from './view'
+
+const HEADING_ID = 'ticket-holders-heading'
+
+const LABELS = [
+  'Holders',
+  'Confirmed',
+  'Waitlist only',
+  'Not signed up',
+  'Flagged',
+] as const
+
+/**
+ * "Ticket holders" on `/admin/workshops` (#1333, spec §4): the people who hold
+ * a ticket that grants workshop access, and how many of them have signed up.
+ * People, by email, where the totals above count sign-ups.
+ *
+ * Read after the page: the numbers say they are coming, and a read that
+ * failed says the numbers are unavailable. Never a zero it does not know.
+ */
+export function TicketHolderPanel({
+  view,
+  onRetry,
+  onMoveToWaitlist,
+  onDeleteSignup,
+  isMoving,
+  isDeleting,
+}: {
+  view: TicketHolderView
+  onRetry: () => void
+  onMoveToWaitlist: (signupId: string, userName: string) => void
+  onDeleteSignup: (signupId: string, userName: string) => void
+  isMoving?: boolean
+  isDeleting?: boolean
+}) {
+  const [flaggedOpen, setFlaggedOpen] = useState(false)
+
+  return (
+    <section
+      aria-labelledby={HEADING_ID}
+      className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
+    >
+      <div className="flex items-center gap-2">
+        <UserGroupIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
+        <h3
+          id={HEADING_ID}
+          className="text-lg font-medium text-gray-900 dark:text-white"
+        >
+          Ticket holders
+        </h3>
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+        People holding a ticket that grants workshop access, counted once each
+        by email.
+        {view.state === 'ready' &&
+          !view.stats.configured &&
+          ' No ticket type is set yet, so the built-in list decides who holds one, as it does at sign-up.'}
+      </p>
+
+      {view.state === 'loading' && (
+        <>
+          <p className="sr-only" role="status">
+            Reading the ticket holders…
+          </p>
+          <div
+            aria-hidden
+            className="mt-4 grid animate-pulse grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5"
+          >
+            {LABELS.map((label) => (
+              <div
+                key={label}
+                className="h-[4.25rem] rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {view.state === 'unavailable' && (
+        <div
+          role="alert"
+          className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900"
+        >
+          <p className="flex min-w-0 flex-1 basis-60 items-start gap-1.5">
+            <ExclamationTriangleIcon className="mt-0.5 size-4 shrink-0" />
+            <span>
+              Unavailable: the tickets could not be read, so who holds one is
+              not known right now. The sign-up totals above are not affected.
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="min-h-11 rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {view.state === 'ready' && (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+            <StatCard
+              label="Holders"
+              value={view.stats.holders}
+              subtitle="Hold a workshop ticket"
+            />
+            <StatCard
+              label="Confirmed"
+              value={view.stats.confirmed}
+              color="green"
+              subtitle="Have a seat"
+            />
+            <StatCard
+              label="Waitlist only"
+              value={view.stats.waitlistOnly}
+              color="blue"
+              subtitle="Waiting, no seat"
+            />
+            <StatCard
+              label="Not signed up"
+              value={view.stats.notSignedUp}
+              color="yellow"
+              subtitle="No sign-up yet"
+            />
+            <StatCard
+              label="Flagged"
+              value={view.stats.flagged.length}
+              color={view.stats.flagged.length > 0 ? 'red' : 'slate'}
+              subtitle={
+                view.stats.flagged.length > 0
+                  ? 'No workshop ticket · Review'
+                  : 'No workshop ticket'
+              }
+              onClick={
+                view.stats.flagged.length > 0
+                  ? () => setFlaggedOpen(true)
+                  : undefined
+              }
+            />
+          </div>
+          <FlaggedSignupsModal
+            isOpen={flaggedOpen}
+            onClose={() => setFlaggedOpen(false)}
+            people={view.stats.flagged}
+            onMoveToWaitlist={onMoveToWaitlist}
+            onDeleteSignup={onDeleteSignup}
+            isMoving={isMoving}
+            isDeleting={isDeleting}
+          />
+        </>
+      )}
+    </section>
+  )
+}

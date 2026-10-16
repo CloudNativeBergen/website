@@ -15,6 +15,8 @@ import { BuiltInListConfirm, Question } from './Question'
 import { WorkshopAccessControl } from './WorkshopAccessControl'
 import { quoteNames } from './names'
 import { useSaveWorkshopAccess } from './useSaveWorkshopAccess'
+import { typeKey } from '@/lib/tickets/classification'
+import { useTicketHolders } from '../holders/view'
 
 const HEADING_ID = 'workshop-tickets-heading'
 
@@ -184,11 +186,14 @@ export function WorkshopTicketsSection({
             Needs a decision
           </p>
           {notSet.length > 0 && (
-            <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
-              {quoteNames(notSet)} {notSet.length === 1 ? 'is' : 'are'} not set.{' '}
-              {notSet.length === 1 ? 'Its holders' : 'Their holders'} cannot
-              sign up for workshops until you choose an answer below.
-            </p>
+            <>
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                {quoteNames(notSet)} {notSet.length === 1 ? 'is' : 'are'} not
+                set. {notSet.length === 1 ? 'Its holders' : 'Their holders'}{' '}
+                cannot sign up for workshops until you choose an answer below.
+              </p>
+              <LockedOutCounts notSet={notSet} />
+            </>
           )}
           {list.orphaned.length > 0 && (
             <ul className="mt-1 divide-y divide-amber-200 dark:divide-amber-900">
@@ -232,6 +237,47 @@ export function WorkshopTicketsSection({
         ))}
       </ul>
     </WorkshopTicketsFrame>
+  )
+}
+
+/**
+ * How many people each not-set type keeps out (#1333, spec §3): holders of
+ * the type with no ticket that grants workshop access. From the page's one
+ * read of the ticket holders; nothing while it is being read, and never a
+ * zero for a read that failed. A type no ticket carries keeps nobody out.
+ */
+function LockedOutCounts({ notSet }: { notSet: readonly string[] }) {
+  const holders = useTicketHolders()
+  if (holders?.state === 'unavailable') {
+    return (
+      <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+        How many people hold {notSet.length === 1 ? 'it' : 'them'} is
+        unavailable: the tickets could not be read.
+      </p>
+    )
+  }
+  if (holders?.state !== 'ready') return null
+  // The join keys types as the rule does; the ticket may spell it otherwise.
+  const people = (typeName: string) =>
+    holders.stats.lockedOut.find(
+      (type) => typeKey(type.typeName) === typeKey(typeName),
+    )?.people ?? 0
+  return (
+    <ul className="mt-1 list-disc pl-5 text-sm text-amber-800 dark:text-amber-300">
+      {notSet.map((typeName) => {
+        const n = people(typeName)
+        return (
+          <li key={typeName}>
+            “{typeName}”:{' '}
+            {n === 0
+              ? 'nobody is refused for it yet.'
+              : n === 1
+                ? '1 person holds it and is refused.'
+                : `${n} people hold it and are refused.`}
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
