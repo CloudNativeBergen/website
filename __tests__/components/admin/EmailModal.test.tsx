@@ -162,9 +162,8 @@ describe('EmailModal leaves nothing running when it goes away', () => {
       initialValues: { subject: 'Default Template Subject', message: [] },
     })
 
-    const subjectInput = await screen.findByPlaceholderText(
-      /Enter email subject/i,
-    )
+    const subjectInput =
+      await screen.findByPlaceholderText(/Enter email subject/i)
     expect(subjectInput).toHaveValue('Edited draft subject')
 
     const clearButton = await screen.findByRole('button', {

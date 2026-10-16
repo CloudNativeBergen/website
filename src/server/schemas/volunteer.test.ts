@@ -80,6 +80,39 @@ describe('SendVolunteerEmailSchema', () => {
     })
     expect(parsed.success).toBe(false)
   })
+
+  it('applies the 20,000-character limit to decoded text when message is PortableText JSON', () => {
+    const blocks = Array.from({ length: 180 }, (_, idx) => ({
+      _type: 'block',
+      _key: `block-${idx}`,
+      style: 'normal',
+      markDefs: [],
+      children: [
+        {
+          _type: 'span',
+          _key: `span-${idx}`,
+          text: 'A'.repeat(100),
+          marks: ['strong'],
+        },
+      ],
+    }))
+    const serialized = JSON.stringify(blocks)
+    expect(serialized.length).toBeGreaterThan(20000)
+
+    const validRich = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: serialized,
+    })
+    expect(validRich.success).toBe(true)
+
+    const tooLongPlain = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: 'A'.repeat(20001),
+    })
+    expect(tooLongPlain.success).toBe(false)
+  })
 })
 
 describe('Conference Volunteer Links Validation', () => {
