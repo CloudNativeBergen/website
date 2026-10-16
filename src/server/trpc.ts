@@ -53,12 +53,21 @@ export interface WorkshopUserIdentity {
  */
 async function resolveWorkshopUser(
   req: NextRequest,
-): Promise<WorkshopUserIdentity | null> {
+): Promise<WorkshopUserIdentity | null | 'check-failed'> {
   if (AppEnvironment.isTestMode) return null
   const sealed = req.cookies.get(sessionCookie().name)?.value
   if (!sealed) return null
   if (!namesAttendeeProcedure(req)) return null
-  const session = await readWorkshopSession(req.headers, sealed)
+  let session
+  try {
+    session = await readWorkshopSession(req.headers, sealed)
+  } catch (error) {
+    // NOT NO SESSION (#1303): the host's record could not be read, so whether
+    // this session still holds is unknown. Still no attendee (fail closed),
+    // but the guard says to try again instead of to sign in again.
+    console.error('[workshop] the session could not be checked', error)
+    return 'check-failed'
+  }
   if (!session) return null
   return {
     id: session.userId,
@@ -121,7 +130,8 @@ export async function createTRPCContext(opts: { req: NextRequest }) {
     headers: opts.req.headers,
   })
 
-  const workosUser = await resolveWorkshopUser(opts.req)
+  const workshopUser = await resolveWorkshopUser(opts.req)
+  const workosUser = workshopUser === 'check-failed' ? null : workshopUser
 
   // Extract IP address from headers
   const forwardedFor = opts.req.headers.get('x-forwarded-for')
@@ -140,6 +150,10 @@ export async function createTRPCContext(opts: { req: NextRequest }) {
     speaker: session?.speaker,
     user: session?.user,
     workosUser,
+    // Present only when the attendee's session could not be checked (#1303).
+    ...(workshopUser === 'check-failed' && {
+      workshopSessionCheckFailed: true as const,
+    }),
     ipAddress,
   }
 }

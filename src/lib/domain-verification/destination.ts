@@ -92,23 +92,8 @@ export async function resolveProvenDestination(
   host: string | null | undefined,
   now: Date = new Date(),
 ): Promise<ProvenDestination | null> {
-  const hostname = exactHost(host)
-  if (!hostname) return null
-
   try {
-    if (isLocalDevelopment(hostname)) return await localDestination(hostname)
-
-    const claim = await getDomainClaim(domainVerificationId(hostname))
-    if (!claim?.conference) return null
-    const { record, conference } = claim
-    if (normalizeDomain(record.hostname) !== hostname) return null
-    if (!isProven(record, now)) return null
-    const claims = (conference.domains ?? []).some(
-      (domain) =>
-        typeof domain === 'string' && normalizeDomain(domain) === hostname,
-    )
-    if (!claims) return null
-    return { host: hostname, origin: originOf(hostname), conference }
+    return await readProvenDestination(host, now)
   } catch (error) {
     console.error(
       '[domain-verification] destination read failed; refusing the host',
@@ -116,4 +101,30 @@ export async function resolveProvenDestination(
     )
     return null
   }
+}
+
+/**
+ * {@link resolveProvenDestination} for a caller that must tell a refusal from
+ * a read that failed (#1303): the failed read is THROWN, never answered
+ * `null`. Every other answer is the same.
+ */
+export async function readProvenDestination(
+  host: string | null | undefined,
+  now: Date = new Date(),
+): Promise<ProvenDestination | null> {
+  const hostname = exactHost(host)
+  if (!hostname) return null
+  if (isLocalDevelopment(hostname)) return localDestination(hostname)
+
+  const claim = await getDomainClaim(domainVerificationId(hostname))
+  if (!claim?.conference) return null
+  const { record, conference } = claim
+  if (normalizeDomain(record.hostname) !== hostname) return null
+  if (!isProven(record, now)) return null
+  const claims = (conference.domains ?? []).some(
+    (domain) =>
+      typeof domain === 'string' && normalizeDomain(domain) === hostname,
+  )
+  if (!claims) return null
+  return { host: hostname, origin: originOf(hostname), conference }
 }

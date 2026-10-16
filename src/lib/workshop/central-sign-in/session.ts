@@ -2,7 +2,11 @@ import 'server-only'
 import { z } from 'zod'
 import { normalizeDomain } from '@/lib/conference/domains'
 import { hostCookie } from './cookies'
-import { resolveTenantHost, type SignInHost } from './decision'
+import {
+  resolveSignInHost,
+  resolveTenantHost,
+  type SignInHost,
+} from './decision'
 import { unseal } from './seal'
 
 /**
@@ -82,6 +86,10 @@ export async function readWorkshopPortal(
  * {@link readWorkshopPortal}, with what the request alone decides first. A
  * request that carries no session of ours for this host reads nothing, so
  * this can sit in front of unrelated traffic.
+ *
+ * A RECORD READ THAT FAILS IS THROWN, not answered `null` (#1303): a session
+ * that could not be checked has not ended, and the attendee must not be told
+ * to sign in again through a sign-in that reads the same record.
  */
 export async function readWorkshopSession(
   headers: { get(name: string): string | null },
@@ -89,7 +97,9 @@ export async function readWorkshopSession(
 ): Promise<WorkshopSession | null> {
   const session = await sessionOfThisHost(headers, sealed)
   if (!session) return null
-  const tenant = await resolveTenantHost(headers)
+  const tenant = await resolveSignInHost(headers.get('host'), {
+    failedRead: 'throw',
+  })
   return tenant && isSessionFor(session, tenant) ? session : null
 }
 

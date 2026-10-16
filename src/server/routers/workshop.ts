@@ -190,6 +190,14 @@ const fullText = (full: FullWorkshop[]) =>
 
 function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
   const user = ctx.workosUser
+  if (!user?.id && ctx.workshopSessionCheckFailed) {
+    // A session that could not be checked has not ended (#1303): signing in
+    // again reads the same record, so the attendee is asked to try again.
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'We could not check your sign-in. Please try again.',
+    })
+  }
   if (!user?.id) {
     throw new TRPCError({
       code: 'UNAUTHORIZED',

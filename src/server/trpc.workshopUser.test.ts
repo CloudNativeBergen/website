@@ -271,7 +271,31 @@ describe('createTRPCContext: no attendee', () => {
     const ctx = await createTRPCContext({ req: request(cookie) })
 
     expect(ctx.workosUser).toBeNull()
+    // A refusal, not a failure: the procedures answer UNAUTHORIZED.
+    expect(ctx.workshopSessionCheckFailed).toBeUndefined()
   })
+
+  it('with the session unchecked when the host’s record cannot be read (#1303)', async () => {
+    const cookie = await signedIn()
+    getDomainClaim.mockRejectedValue(new Error('Sanity is unavailable'))
+
+    const ctx = await createTRPCContext({
+      req: request(cookie, { procedures: 'workshop.getMySignups' }),
+    })
+
+    expect(ctx.workosUser).toBeNull()
+    expect(ctx.workshopSessionCheckFailed).toBe(true)
+    // Nobody is told to sign in again: a sign-in reads the same record.
+    const { appRouter } = await import('./_app')
+    await expect(
+      appRouter.createCaller(ctx).workshop.getMySignups(),
+    ).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'We could not check your sign-in. Please try again.',
+    })
+    expect(console.error).toHaveBeenCalledTimes(1)
+    vi.mocked(console.error).mockClear()
+  }, 30_000)
 
   it('on the auth host, which serves no conference, without reading a record', async () => {
     // Even with a session that names the auth host. No route issues one, but
