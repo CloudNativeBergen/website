@@ -174,4 +174,41 @@ describe('a refused audience explains itself to the operator (#893)', () => {
     )
     expect(callArg.subject).toBe(longSubject)
   })
+
+  it('truncates by Unicode code points without splitting emoji surrogate pairs at the cutoff', async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      data: { id: 'bc-emoji' },
+      error: null,
+    })
+    const sendMock = vi.fn().mockResolvedValue({
+      data: { id: 'bc-emoji' },
+      error: null,
+    })
+    h.getOrCreateConferenceAudience.mockResolvedValue({
+      audienceId: 'aud-123',
+      client: {
+        broadcasts: {
+          create: createMock,
+          send: sendMock,
+        },
+      },
+    })
+
+    // 46 ASCII chars + 2-UTF16-unit emoji ('🎉') + 10 more ASCII chars
+    const emojiSubject = `${'A'.repeat(46)}🎉${'B'.repeat(10)}`
+    const response = await sendBroadcastEmail({
+      conference: { ...conference, contactEmail: 'info@example.test' },
+      subject: emojiSubject,
+      messagePortableText: [],
+    })
+
+    expect(response.status).toBe(200)
+    const callArg = createMock.mock.calls[0][0] as {
+      name: string
+      subject: string
+    }
+    expect(callArg.name).toBe(`${'A'.repeat(46)}🎉...`)
+    expect(Array.from(callArg.name).length).toBe(50)
+    expect(callArg.subject).toBe(emojiSubject)
+  })
 })

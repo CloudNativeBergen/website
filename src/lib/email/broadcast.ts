@@ -108,9 +108,10 @@ export async function sendBroadcastEmail({
     }
 
     const trimmedSubject = subject.trim()
+    const subjectChars = Array.from(trimmedSubject)
     const broadcastName =
-      trimmedSubject.length > 50
-        ? `${trimmedSubject.slice(0, 47).trimEnd()}...`
+      subjectChars.length > 50
+        ? `${subjectChars.slice(0, 47).join('').trimEnd()}...`
         : trimmedSubject
 
     const emailReact = renderEmailTemplate({
