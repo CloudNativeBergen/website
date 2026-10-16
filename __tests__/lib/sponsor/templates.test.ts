@@ -646,25 +646,31 @@ describe('findUnsupportedVariables', () => {
     ).toEqual(['sponsor_name', 'VAR_1', ' NAME ', ' TIER_NAME '])
   })
 
-  it('detects placeholders split across adjacent rich-text spans in the same block', () => {
+  it('detects placeholders split across adjacent rich-text spans in the same block (even when variable name is supported)', () => {
     const blocks = [
       {
         _type: 'block' as const,
         _key: 'k1',
         children: [
-          { _type: 'span' as const, _key: 's1', text: 'Tier: {{{TIER_' },
+          { _type: 'span' as const, _key: 's1', text: 'Hi {{{NA' },
           {
             _type: 'span' as const,
             _key: 's2',
-            text: 'NAME}}}',
+            text: 'ME}}} and {{{TIER_NAME}}}',
             marks: ['strong'],
           },
         ],
         style: 'normal' as const,
       },
     ]
-    expect(extractVariablesFromPortableText(blocks)).toEqual(['TIER_NAME'])
-    expect(findUnsupportedVariables(supported, blocks)).toEqual(['TIER_NAME'])
+    expect(extractVariablesFromPortableText(blocks)).toEqual([
+      'NAME',
+      'TIER_NAME',
+    ])
+    expect(findUnsupportedVariables(supported, blocks)).toEqual([
+      'NAME',
+      'TIER_NAME',
+    ])
   })
 })
 

@@ -450,23 +450,32 @@ export function extractVariablesFromPortableText(
 
 /**
  * Find unsupported variables in text and Portable Text blocks.
- * Returns an array of variable names that are not in the supported set.
+ * Returns an array of variable names that are not in the supported set
+ * or cannot be merged cleanly (e.g. split across rich-text spans).
  */
 export function findUnsupportedVariables(
   supportedVariables: Record<string, string>,
   ...sources: Array<string | PortableTextBlock[]>
 ): string[] {
-  const supported = new Set(Object.keys(supportedVariables))
+  const placeholderVars: Record<string, string> = {}
+  for (const key of Object.keys(supportedVariables)) {
+    placeholderVars[key] = '__MERGED__'
+  }
   const found = new Set<string>()
 
   for (const source of sources) {
     if (typeof source === 'string') {
-      for (const v of extractVariablesFromText(source)) {
-        if (!supported.has(v)) found.add(v)
+      const merged = processTemplateVariables(source, placeholderVars)
+      for (const v of extractVariablesFromText(merged)) {
+        found.add(v)
       }
     } else if (Array.isArray(source)) {
-      for (const v of extractVariablesFromPortableText(source)) {
-        if (!supported.has(v)) found.add(v)
+      const merged = processPortableTextVariables(
+        source as unknown as TemplateBlock[],
+        placeholderVars,
+      ) as unknown as PortableTextBlock[]
+      for (const v of extractVariablesFromPortableText(merged)) {
+        found.add(v)
       }
     }
   }
