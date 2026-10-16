@@ -232,7 +232,7 @@ async function answer(procedure: string, input: unknown): Promise<unknown> {
       })
     // The ticket holders (#1333): not what this file is about.
     case 'workshop.admin.ticketHolders':
-      return ok({ available: false })
+      return ok({ conferenceId: 'conf-1', available: false })
     case 'workshop.admin.listEarlySignups': {
       server.earlyInputs.push(input)
       const { sponsorId = '' } = (input ?? {}) as { sponsorId?: string }

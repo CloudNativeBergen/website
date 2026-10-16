@@ -68,6 +68,8 @@ const server = {
   holdHolders: null as Promise<void> | null,
   /** Sign-ups whose owner holds no workshop ticket: the flagged list. */
   flaggedIds: [] as string[],
+  /** The conference the request's domain resolves to, as the server says. */
+  conferenceId: 'conf-1',
 }
 
 /** What the server rendered when the page was loaded. Never read again. */
@@ -144,6 +146,7 @@ async function answer(
       const count = (status: string) =>
         server.signups.filter((s) => s.status === status).length
       const stats = {
+        conferenceId: server.conferenceId,
         available: true,
         configured: true,
         holders: server.signups.length + 3,
@@ -168,7 +171,12 @@ async function answer(
         lockedOut: [],
       }
       if (server.holdHolders) await server.holdHolders
-      if (server.ticketsDown) return [ok({ available: false }), 200]
+      if (server.ticketsDown) {
+        return [
+          ok({ conferenceId: server.conferenceId, available: false }),
+          200,
+        ]
+      }
       if (server.holdersFail) {
         return [
           {
@@ -247,6 +255,7 @@ beforeEach(() => {
     holdersFail: false,
     holdHolders: null,
     flaggedIds: [],
+    conferenceId: 'conf-1',
   })
   router.refresh.mockReset()
   vi.stubGlobal(
@@ -583,6 +592,33 @@ describe('the ticket holders (#1333)', () => {
 
     providerAnswers()
     await waitFor(() => expect(move()).toBeNull())
+  })
+
+  // TENANCY: the domain now resolves to another conference and the page is
+  // rendered for it in the same client. The first conference's numbers (and
+  // flagged names) are not shown from the cache; they are read again.
+  it('are read again, and the old ones never shown, when the conference changes', async () => {
+    const page = (conferenceId: string) => (
+      <Providers>
+        <WorkshopsClientPage
+          conferenceId={conferenceId}
+          initialWorkshops={SERVER_RENDER}
+          resendDisabledReason={null}
+        />
+      </Providers>
+    )
+    const { rerender } = render(page('conf-1'))
+    expect((await tile('Holders')).nextElementSibling).toHaveTextContent('5')
+
+    server.conferenceId = 'conf-2'
+    server.signups = [server.signups[0]]
+    rerender(page('conf-2'))
+
+    expect(screen.queryByText('5', { selector: 'span' })).toBeNull()
+    await waitFor(async () =>
+      expect((await tile('Holders')).nextElementSibling).toHaveTextContent('4'),
+    )
+    expect(server.holderReads).toBe(2)
   })
 
   it('wait for nothing else: a slow ticket read holds back no other number', async () => {

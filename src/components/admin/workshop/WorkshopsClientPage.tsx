@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
 import {
   AdminPageHeader,
@@ -155,7 +155,7 @@ export function WorkshopsClientPage({
     enabled: !!conferenceId,
     trpc: { context: { skipBatch: true } },
   })
-  const holderView = ticketHolderView(ticketHolders)
+  const holderView = ticketHolderView(ticketHolders, conferenceId)
   const rereadTicketHolders = useRereadTicketHolders()
 
   // THE "EARLY SIGN-UPS" LIST (#1348). Narrowing it to a sponsor is a new
@@ -210,6 +210,18 @@ export function WorkshopsClientPage({
   }
 
   const utils = api.useUtils()
+
+  // THE TENANT CHANGED UNDER THIS PAGE (the domain now resolves to another
+  // conference, and the client kept this tree): the ticket holders in hand
+  // are the other conference's, names and emails included. The view never
+  // shows them (`ticketHolderView` checks the conference the server stamped
+  // on them); this drops them and reads again.
+  const holdersFor = useRef(conferenceId)
+  useEffect(() => {
+    if (holdersFor.current === conferenceId) return
+    holdersFor.current = conferenceId
+    void utils.workshop.admin.ticketHolders.reset()
+  }, [conferenceId, utils])
 
   // Everything this page shows about sign-ups, read again. One function for
   // every action that changes them.

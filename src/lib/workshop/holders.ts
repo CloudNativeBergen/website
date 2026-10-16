@@ -224,11 +224,20 @@ export type TicketHolderStats =
       lockedOut: LockedOutType[]
     }
 
+/**
+ * {@link TicketHolderStats} as `workshop.admin.ticketHolders` answers: with
+ * the conference the server resolved, so a page whose conference has changed
+ * never shows an answer read for the one before (spec: tenancy).
+ */
+export type TicketHolderAnswer = TicketHolderStats & { conferenceId: string }
+
 export function ticketHolderStats(
   join: TicketHolderJoin | null,
-): TicketHolderStats {
-  if (!join) return { available: false }
+  conferenceId: string,
+): TicketHolderAnswer {
+  if (!join) return { conferenceId, available: false }
   return {
+    conferenceId,
     available: true,
     configured: join.configured,
     holders: join.holders.length,

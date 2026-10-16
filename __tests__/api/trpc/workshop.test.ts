@@ -801,6 +801,8 @@ describe('workshop.admin.ticketHolders (#1333)', () => {
     const result = await createAdminCaller().workshop.admin.ticketHolders()
 
     expect(result).toEqual({
+      // Stamped with the conference the server resolved (tenancy).
+      conferenceId: 'conf-1',
       available: true,
       configured: false,
       holders: 3,
@@ -821,7 +823,7 @@ describe('workshop.admin.ticketHolders (#1333)', () => {
 
     const result = await createAdminCaller().workshop.admin.ticketHolders()
 
-    expect(result).toEqual({ available: false })
+    expect(result).toEqual({ conferenceId: 'conf-1', available: false })
   })
 
   it('refuses an attendee before reading anything', async () => {

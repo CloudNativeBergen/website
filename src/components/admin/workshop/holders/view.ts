@@ -1,7 +1,10 @@
 'use client'
 
 import { createContext, useContext } from 'react'
-import type { TicketHolderStats } from '@/lib/workshop/holders'
+import type {
+  TicketHolderAnswer,
+  TicketHolderStats,
+} from '@/lib/workshop/holders'
 
 export type ReadyTicketHolderStats = Extract<
   TicketHolderStats,
@@ -20,17 +23,23 @@ export type TicketHolderView =
  * read that failed on the server are the same to an organizer: unavailable,
  * never zero.
  */
-export function ticketHolderView(query: {
-  data?: TicketHolderStats
-  isError: boolean
-  isFetching: boolean
-}): TicketHolderView {
+export function ticketHolderView(
+  query: {
+    data?: TicketHolderAnswer
+    isError: boolean
+    isFetching: boolean
+  },
+  /** The page's conference. An answer read for another is never shown. */
+  conferenceId: string,
+): TicketHolderView {
   const unavailable = {
     state: 'unavailable',
     retrying: query.isFetching,
   } as const
   if (query.isError) return unavailable
-  if (!query.data) return { state: 'loading' }
+  if (!query.data || query.data.conferenceId !== conferenceId) {
+    return { state: 'loading' }
+  }
   return query.data.available
     ? { state: 'ready', stats: query.data }
     : unavailable

@@ -1368,6 +1368,7 @@ export const workshopRouter = router({
       try {
         return ticketHolderStats(
           await readTicketHolders({ ...conference, _id: conferenceId }),
+          conferenceId,
         )
       } catch (cause) {
         throw new TRPCError({
