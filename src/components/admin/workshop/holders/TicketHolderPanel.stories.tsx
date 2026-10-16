@@ -198,7 +198,12 @@ export const FlaggedList: Story = {
     const list = await canvas.findByRole('dialog', {
       name: 'Flagged sign-ups',
     })
-    await expect(within(list).getAllByText('Ingrid Hansen')[0]).toBeVisible()
+    // The table or the phone cards, whichever this width shows.
+    await expect(
+      within(list)
+        .getAllByText('Ingrid Hansen')
+        .some((name) => name.checkVisibility()),
+    ).toBe(true)
   },
 }
 export const FlaggedListDark: Story = { ...FlaggedList, parameters: dark }
