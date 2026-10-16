@@ -1,0 +1,647 @@
+{
+ "auto_question_identifier": "diet",
+ "cancel_one_position": 204,
+ "mark_paid": 200,
+ "active_items": [
+  [
+   {
+    "en": "Conference Only (1 day)",
+    "nb-no": "Konferanse (1 dag)"
+   },
+   true,
+   false,
+   false,
+   true
+  ],
+  [
+   {
+    "en": "Workshop add-on"
+   },
+   true,
+   false,
+   false,
+   false
+  ],
+  [
+   {
+    "en": "Speaker ticket"
+   },
+   true,
+   true,
+   true,
+   true
+  ],
+  [
+   {
+    "en": "T-shirt"
+   },
+   true,
+   false,
+   false,
+   false
+  ]
+ ],
+ "variation_keys": [
+  "active",
+  "all_sales_channels",
+  "available_from",
+  "available_from_mode",
+  "available_until",
+  "available_until_mode",
+  "checkin_attention",
+  "checkin_text",
+  "default_price",
+  "description",
+  "free_price_suggestion",
+  "hide_without_voucher",
+  "id",
+  "limit_sales_channels",
+  "meta_data",
+  "original_price",
+  "position",
+  "price",
+  "require_approval",
+  "require_membership",
+  "require_membership_hidden",
+  "require_membership_types",
+  "sales_channels",
+  "value"
+ ],
+ "variation_windows": [
+  [
+   {
+    "en": "Early Bird",
+    "nb-no": "Tidlig"
+   },
+   "2026-01-01T00:00:00Z",
+   "2027-03-01T00:00:00Z",
+   "2000.00"
+  ],
+  [
+   {
+    "en": "Standard",
+    "nb-no": "Standard"
+   },
+   "2027-03-01T00:00:00Z",
+   null,
+   "2500.00"
+  ]
+ ],
+ "quotas_availability": [
+  [
+   "Main",
+   true,
+   94
+  ],
+  [
+   "Early Bird",
+   true,
+   2
+  ],
+  [
+   "Merch",
+   true,
+   null
+  ]
+ ],
+ "event": {
+  "name": {
+   "en": "CNDN Test 2027 (en)",
+   "nb-no": "CNDN Test 2027"
+  },
+  "currency": "NOK",
+  "public_url": "http://localhost:8345/cndn-test/cndn27/",
+  "testmode": false
+ },
+ "event_settings_locale": [
+  200,
+  {
+   "imprint_url": null,
+   "checkout_email_helptext": {
+    "en": "Make sure to enter a valid email address. We will send you an order confirmation including a link that you need to access your order later."
+   },
+   "presale_has_ended_text": {
+    "en": ""
+   },
+   "voucher_explanation_text": {
+    "en": ""
+   },
+   "checkout_success_text": {
+    "en": ""
+   },
+   "banner_text": {
+    "en": ""
+   },
+   "banner_text_bottom": {
+    "en": ""
+   },
+   "show_dates_on_frontpage": true,
+   "show_date_to": true,
+   "show_times": true,
+   "show_items_outside_presale_period": true,
+   "display_net_prices": false,
+   "hide_prices_from_attendees": true,
+   "presale_start_show_date": true,
+   "locales": [
+    "nb-no",
+    "en"
+   ],
+   "locale": "nb-no",
+   "region": null,
+   "allow_modifications": "order",
+   "allow_modifications_after_checkin": false,
+   "last_order_modification_date": null,
+   "show_quota_left": false,
+   "tax_rule_payment": "default",
+   "tax_rule_cancellation": "none",
+   "waiting_list_enabled": false,
+   "waiting_list_auto_disable": null,
+   "waiting_list_hours": 48,
+   "waiting_list_auto": true,
+   "waiting_list_names_asked": false,
+   "waiting_list_names_required": false,
+   "waiting_list_phones_asked": false,
+   "waiting_list_phones_required": false,
+   "waiting_list_phones_explanation_text": {
+    "en": ""
+   },
+   "waiting_list_limit_per_user": 1,
+   "max_items_per_order": 10,
+   "reservation_time": 30,
+   "contact_mail": null,
+   "contact_url": null,
+   "show_variations_expanded": false,
+   "hide_sold_out": false,
+   "meta_noindex": false,
+   "redirect_to_checkout_directly": false,
+   "frontpage_subevent_ordering": "date_ascending",
+   "event_list_type": "calendar",
+   "event_list_available_only": false,
+   "event_list_filters": true,
+   "event_calendar_future_only": false,
+   "frontpage_text": {
+    "en": ""
+   },
+   "event_info_text": {
+    "en": ""
+   },
+   "attendee_names_asked": true,
+   "attendee_names_required": false,
+   "attendee_emails_asked": true,
+   "attendee_emails_required": false,
+   "attendee_addresses_asked": false,
+   "attendee_addresses_required": false,
+   "attendee_company_asked": true,
+   "attendee_company_required": false,
+   "attendee_data_explanation_text": {
+    "en": ""
+   },
+   "confirm_texts": [],
+   "order_email_asked_twice": false,
+   "order_phone_asked": false,
+   "order_phone_required": false,
+   "checkout_phone_helptext": {
+    "en": ""
+   },
+   "payment_term_mode": "days",
+   "payment_term_days": 14,
+   "payment_term_weekdays": true,
+   "payment_term_minutes": 30,
+   "payment_term_last": null,
+   "payment_term_expire_automatically": true,
+   "payment_term_expire_delay_days": 0,
+   "payment_term_accept_late": true,
+   "payment_explanation": {
+    "en": ""
+   },
+   "payment_pending_hidden": false,
+   "payment_giftcard__enabled": true,
+   "mail_days_order_expire_warning": 3,
+   "ticket_download": false,
+   "ticket_download_date": null,
+   "ticket_download_addons": false,
+   "ticket_download_nonadm": true,
+   "ticket_download_pending": false,
+   "ticket_download_require_validated_email": false,
+   "ticket_secret_length": 32,
+   "mail_prefix": null,
+   "mail_from_name": null,
+   "mail_attach_ical": false,
+   "mail_attach_tickets": true,
+   "invoice_address_asked": true,
+   "invoice_address_required": false,
+   "invoice_address_vatid": false,
+   "invoice_address_vatid_required_countries": [
+    "IT",
+    "GR"
+   ],
+   "invoice_address_company_required": false,
+   "invoice_address_beneficiary": false,
+   "invoice_address_custom_field": {
+    "en": ""
+   },
+   "invoice_address_custom_field_helptext": {
+    "en": ""
+   },
+   "invoice_name_required": false,
+   "invoice_address_not_asked_free": false,
+   "invoice_show_payments": true,
+   "invoice_reissue_after_modify": false,
+   "invoice_include_free": true,
+   "invoice_generate": "False",
+   "invoice_generate_only_business": false,
+   "invoice_period": "auto",
+   "invoice_numbers_consecutive": true,
+   "invoice_numbers_prefix": "",
+   "invoice_numbers_prefix_cancellations": "",
+   "invoice_numbers_counter_length": 5,
+   "invoice_attendee_name": true,
+   "invoice_event_location": false,
+   "invoice_include_expire_date": true,
+   "invoice_address_explanation_text": {
+    "en": ""
+   },
+   "invoice_email_attachment": true,
+   "invoice_email_organizer": "",
+   "invoice_address_from_name": "",
+   "invoice_address_from": "",
+   "invoice_address_from_zipcode": "",
+   "invoice_address_from_city": "",
+   "invoice_address_from_state": "",
+   "invoice_address_from_country": "",
+   "invoice_address_from_tax_id": "",
+   "invoice_address_from_vat_id": "",
+   "invoice_introductory_text": {
+    "en": ""
+   },
+   "invoice_additional_text": {
+    "en": ""
+   },
+   "invoice_footer_text": {
+    "en": ""
+   },
+   "invoice_eu_currencies": "True",
+   "invoice_logo_image": null,
+   "invoice_renderer_highlight_order_code": true,
+   "tax_rounding": "line",
+   "cancel_allow_user": true,
+   "cancel_allow_user_until": null,
+   "cancel_allow_user_unpaid_keep": "0.00",
+   "cancel_allow_user_unpaid_keep_fees": false,
+   "cancel_allow_user_unpaid_keep_percentage": "0.00",
+   "cancel_allow_user_paid": false,
+   "cancel_allow_user_paid_until": null,
+   "cancel_allow_user_paid_keep": "0.00",
+   "cancel_allow_user_paid_keep_fees": false,
+   "cancel_allow_user_paid_keep_percentage": "0.00",
+   "cancel_allow_user_paid_adjust_fees": false,
+   "cancel_allow_user_paid_adjust_fees_explanation": {
+    "en": "However, if you want us to help keep the lights on here, please consider using the slider below to request a smaller refund. Thank you!"
+   },
+   "cancel_allow_user_paid_adjust_fees_step": null,
+   "cancel_allow_user_paid_refund_as_giftcard": "off",
+   "cancel_allow_user_paid_require_approval": false,
+   "cancel_allow_user_paid_require_approval_fee_unknown": false,
+   "cancel_terms_paid": null,
+   "cancel_terms_unpaid": null,
+   "change_allow_user_variation": false,
+   "change_allow_user_addons": false,
+   "change_allow_user_until": null,
+   "change_allow_user_price": "gte",
+   "change_allow_attendee": false,
+   "primary_color": "#8E44B3",
+   "theme_color_success": "#408252",
+   "theme_color_danger": "#c44f4f",
+   "theme_color_background": "#f5f5f5",
+   "theme_round_borders": true,
+   "primary_font": "Open Sans",
+   "logo_image": null,
+   "logo_image_large": false,
+   "logo_show_title": true,
+   "og_image": null,
+   "name_scheme": "given_family",
+   "reusable_media_active": false,
+   "reusable_media_usage_enforced": false,
+   "reusable_media_type_barcode": false,
+   "reusable_media_type_barcode_identifier_length": 24,
+   "reusable_media_type_nfc_uid": false,
+   "reusable_media_type_nfc_uid_autocreate_giftcard": false,
+   "reusable_media_type_nfc_uid_autocreate_giftcard_currency": "EUR",
+   "reusable_media_type_nfc_mf0aes": false,
+   "reusable_media_type_nfc_mf0aes_autocreate_giftcard": false,
+   "reusable_media_type_nfc_mf0aes_autocreate_giftcard_currency": "EUR",
+   "reusable_media_type_nfc_mf0aes_random_uid": false,
+   "seating_allow_blocked_seats_for_channel": []
+  }
+ ],
+ "orders": [
+  {
+   "code": "FDKBB",
+   "status": "p",
+   "email": "office@acme.example",
+   "total": "6200.00",
+   "company": "Acme AS",
+   "payments": [
+    [
+     "confirmed",
+     "6200.00",
+     "manual"
+    ]
+   ],
+   "positions": [
+    {
+     "id": 1,
+     "positionid": 1,
+     "item": 11,
+     "variation": 5,
+     "price": "2000.00",
+     "tax_value": "400.00",
+     "tax_rate": "25.00",
+     "attendee_name": "Kari Nordmann",
+     "attendee_email": "kari@acme.example",
+     "company": "Acme Consulting",
+     "addon_to": null,
+     "voucher": null,
+     "canceled": false,
+     "answers": [
+      [
+       "job_title",
+       "SRE"
+      ]
+     ]
+    },
+    {
+     "id": 2,
+     "positionid": 2,
+     "item": 14,
+     "variation": null,
+     "price": "1500.00",
+     "tax_value": "300.00",
+     "tax_rate": "25.00",
+     "attendee_name": null,
+     "attendee_email": null,
+     "company": null,
+     "addon_to": 1,
+     "voucher": null,
+     "canceled": false,
+     "answers": []
+    },
+    {
+     "id": 3,
+     "positionid": 3,
+     "item": 13,
+     "variation": null,
+     "price": "200.00",
+     "tax_value": "40.00",
+     "tax_rate": "25.00",
+     "attendee_name": null,
+     "attendee_email": null,
+     "company": null,
+     "addon_to": null,
+     "voucher": null,
+     "canceled": false,
+     "answers": []
+    },
+    {
+     "id": 4,
+     "positionid": 4,
+     "item": 11,
+     "variation": 6,
+     "price": "2500.00",
+     "tax_value": "500.00",
+     "tax_rate": "25.00",
+     "attendee_name": "Ola Nordmann",
+     "attendee_email": "ola@acme.example",
+     "company": null,
+     "addon_to": null,
+     "voucher": null,
+     "canceled": false,
+     "answers": []
+    }
+   ]
+  },
+  {
+   "code": "ZVF3B",
+   "status": "p",
+   "email": "late@example.org",
+   "total": "2500.00",
+   "company": null,
+   "payments": [
+    [
+     "confirmed",
+     "2500.00",
+     "manual"
+    ]
+   ],
+   "positions": [
+    {
+     "id": 5,
+     "positionid": 1,
+     "item": 11,
+     "variation": 6,
+     "price": "2500.00",
+     "tax_value": "500.00",
+     "tax_rate": "25.00",
+     "attendee_name": "Late Payer",
+     "attendee_email": null,
+     "company": null,
+     "addon_to": null,
+     "voucher": null,
+     "canceled": false,
+     "answers": []
+    }
+   ]
+  },
+  {
+   "code": "TKXKM",
+   "status": "p",
+   "email": "kari.speaker@example.org",
+   "total": "0.00",
+   "company": null,
+   "payments": [
+    [
+     "confirmed",
+     "0.00",
+     "free"
+    ]
+   ],
+   "positions": [
+    {
+     "id": 6,
+     "positionid": 1,
+     "item": 12,
+     "variation": null,
+     "price": "0.00",
+     "tax_value": "0.00",
+     "tax_rate": "0.00",
+     "attendee_name": "Kari Speaker",
+     "attendee_email": "kari.speaker@example.org",
+     "company": null,
+     "addon_to": null,
+     "voucher": 1,
+     "canceled": false,
+     "answers": []
+    }
+   ]
+  },
+  {
+   "code": "93WKD",
+   "status": "p",
+   "email": "guest@sponsor.example",
+   "total": "0.00",
+   "company": null,
+   "payments": [
+    [
+     "confirmed",
+     "0.00",
+     "free"
+    ]
+   ],
+   "positions": [
+    {
+     "id": 7,
+     "positionid": 1,
+     "item": 11,
+     "variation": 6,
+     "price": "0.00",
+     "tax_value": "0.00",
+     "tax_rate": "25.00",
+     "attendee_name": "Sponsor Guest",
+     "attendee_email": "guest@sponsor.example",
+     "company": null,
+     "addon_to": null,
+     "voucher": 2,
+     "canceled": false,
+     "answers": []
+    }
+   ]
+  },
+  {
+   "code": "7AHXE",
+   "status": "p",
+   "email": "two@example.org",
+   "total": "2500.00",
+   "company": null,
+   "payments": [
+    [
+     "confirmed",
+     "5000.00",
+     "manual"
+    ]
+   ],
+   "positions": [
+    {
+     "id": 8,
+     "positionid": 1,
+     "item": 11,
+     "variation": 6,
+     "price": "2500.00",
+     "tax_value": "500.00",
+     "tax_rate": "25.00",
+     "attendee_name": "Stays",
+     "attendee_email": null,
+     "company": null,
+     "addon_to": null,
+     "voucher": null,
+     "canceled": false,
+     "answers": []
+    }
+   ]
+  }
+ ],
+ "orders_with_canceled_positions": [
+  [
+   "FDKBB",
+   [
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     false
+    ]
+   ]
+  ],
+  [
+   "ZVF3B",
+   [
+    [
+     1,
+     false
+    ]
+   ]
+  ],
+  [
+   "TKXKM",
+   [
+    [
+     1,
+     false
+    ]
+   ]
+  ],
+  [
+   "93WKD",
+   [
+    [
+     1,
+     false
+    ]
+   ]
+  ],
+  [
+   "7AHXE",
+   [
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ]
+   ]
+  ]
+ ],
+ "vouchers": [
+  [
+   "SPEAKER-KARI",
+   1,
+   1
+  ],
+  [
+   "SPONSOR-ACME",
+   1,
+   3
+  ]
+ ],
+ "voucher_delete_redeemed": [
+  403,
+  "{\"detail\":\"This voucher can not be deleted as it has already been used.\"}"
+ ],
+ "version": [
+  200,
+  {
+   "pretix": "2026.8.0",
+   "pretix_numeric": 20260080005000
+  }
+ ],
+ "wrong_event_slug": 403,
+ "app_token_webhook_write": 403,
+ "order_codes": {
+  "paid": "FDKBB",
+  "pending": "ZVF3B",
+  "speaker": "TKXKM",
+  "sponsor": "93WKD",
+  "partial_cancel": "7AHXE"
+ }
+}
