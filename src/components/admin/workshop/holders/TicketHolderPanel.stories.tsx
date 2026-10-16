@@ -164,7 +164,7 @@ export const LoadingMobileDark: Story = { parameters: { ...phone, ...dark } }
  * above it on the page are not affected.
  */
 export const Unavailable: Story = {
-  args: { view: { state: 'unavailable' } },
+  args: { view: { state: 'unavailable', retrying: false } },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getByRole('alert')).toHaveTextContent(/^Unavailable:/)
@@ -186,6 +186,23 @@ export const UnavailableMobile: Story = {
 }
 export const UnavailableMobileDark: Story = {
   ...UnavailableMobile,
+  parameters: { ...phone, ...dark },
+}
+
+/** A RETRY ON ITS WAY: said, and the button takes no second press. */
+export const UnavailableRetrying: Story = {
+  args: { view: { state: 'unavailable', retrying: true } },
+  play: async ({ canvasElement, args }) => {
+    const retry = within(canvasElement).getByRole('button', {
+      name: 'Trying again…',
+    })
+    await expect(retry).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.click(retry)
+    await expect(args.onRetry).not.toHaveBeenCalled()
+  },
+}
+export const UnavailableRetryingMobileDark: Story = {
+  ...UnavailableRetrying,
   parameters: { ...phone, ...dark },
 }
 

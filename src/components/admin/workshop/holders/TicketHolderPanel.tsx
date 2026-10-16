@@ -99,10 +99,16 @@ export function TicketHolderPanel({
           </p>
           <button
             type="button"
-            onClick={onRetry}
-            className="min-h-11 rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
+            // A second press would cancel the read on its way and start it
+            // over, so a slow provider would never get to answer.
+            onClick={() => {
+              if (!view.retrying) onRetry()
+            }}
+            // Not `disabled`, which would drop the focus the press left here.
+            aria-disabled={view.retrying}
+            className="min-h-11 rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
           >
-            Try again
+            {view.retrying ? 'Trying again…' : 'Try again'}
           </button>
         </div>
       )}

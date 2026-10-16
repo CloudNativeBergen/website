@@ -89,13 +89,21 @@ describe('TicketHolderPanel', () => {
   })
 
   it('a failed read says unavailable and shows no number', () => {
-    const { onRetry } = renderPanel({ state: 'unavailable' })
+    const { onRetry } = renderPanel({ state: 'unavailable', retrying: false })
     const panel = screen.getByRole('region', { name: 'Ticket holders' })
     expect(panel.textContent).toMatch(/unavailable/i)
     expect(panel.textContent).not.toMatch(/\d/)
     expect(screen.queryByText('Holders', { selector: 'span' })).toBeNull()
     fireEvent.click(within(panel).getByRole('button', { name: 'Try again' }))
     expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('while a retry is on its way, says so and does not start another', () => {
+    const { onRetry } = renderPanel({ state: 'unavailable', retrying: true })
+    const retry = screen.getByRole('button', { name: 'Trying again…' })
+    expect(retry).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(retry)
+    expect(onRetry).not.toHaveBeenCalled()
   })
 
   it('while loading, shows no number either', () => {

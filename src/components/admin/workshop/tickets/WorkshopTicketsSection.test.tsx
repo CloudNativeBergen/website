@@ -277,7 +277,7 @@ describe('a configured list', () => {
     })
 
     it('says the counts are unavailable rather than zero', () => {
-      withHolders({ state: 'unavailable' })
+      withHolders({ state: 'unavailable', retrying: false })
       const banner = screen.getByRole('region', { name: 'Needs a decision' })
       expect(banner).toHaveTextContent(
         'How many people hold them is unavailable: the tickets could not be read.',

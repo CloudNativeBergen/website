@@ -437,7 +437,7 @@ export const NotSetTypeWithCountsMobileDark: Story = {
 /** The ticket holders could not be read: the banner says so, with no number. */
 export const NotSetTypeCountsUnavailable: Story = {
   args: NotSetType.args,
-  decorators: [withHolders({ state: 'unavailable' })],
+  decorators: [withHolders({ state: 'unavailable', retrying: false })],
   play: async ({ canvasElement }) => {
     await expect(
       within(canvasElement).getByRole('region', { name: 'Needs a decision' }),

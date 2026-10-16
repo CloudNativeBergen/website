@@ -11,7 +11,8 @@ export type ReadyTicketHolderStats = Extract<
 /** The join as the page holds it: still coming, unavailable, or read. */
 export type TicketHolderView =
   | { state: 'loading' }
-  | { state: 'unavailable' }
+  /** `retrying`: a read is on its way again (the organizer pressed retry). */
+  | { state: 'unavailable'; retrying: boolean }
   | { state: 'ready'; stats: ReadyTicketHolderStats }
 
 /**
@@ -22,12 +23,17 @@ export type TicketHolderView =
 export function ticketHolderView(query: {
   data?: TicketHolderStats
   isError: boolean
+  isFetching: boolean
 }): TicketHolderView {
-  if (query.isError) return { state: 'unavailable' }
+  const unavailable = {
+    state: 'unavailable',
+    retrying: query.isFetching,
+  } as const
+  if (query.isError) return unavailable
   if (!query.data) return { state: 'loading' }
   return query.data.available
     ? { state: 'ready', stats: query.data }
-    : { state: 'unavailable' }
+    : unavailable
 }
 
 /**
