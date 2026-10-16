@@ -71,40 +71,44 @@ export function FlaggedSignupsModal({
       key: 'workshops',
       header: 'Workshops',
       render: (person) => (
-        <ul className="space-y-1">
+        // One shape per sign-up, at every width: the workshop, then its
+        // status with the actions on it. Left-aligned, also in a phone card,
+        // where the cell would otherwise sit at the right edge.
+        <ul className="w-full min-w-0 divide-y divide-gray-100 text-left sm:min-w-64 dark:divide-gray-800">
           {person.signups.map((signup) => (
-            <li
-              key={signup._id}
-              className="flex flex-wrap items-center gap-x-2 gap-y-1"
-            >
-              <span className="text-sm text-gray-900 dark:text-gray-200">
+            <li key={signup._id} className="py-1 first:pt-0 last:pb-0">
+              <span className="block text-sm text-gray-900 dark:text-gray-200">
                 {signup.workshop?.title || 'Unknown workshop'}
               </span>
-              <StatusBadge
-                label={signup.status === 'confirmed' ? 'Confirmed' : 'Waitlist'}
-                color={signup.status === 'confirmed' ? 'green' : 'blue'}
-              />
-              <span className="ml-auto flex items-center gap-1">
-                {signup.status === 'confirmed' && (
+              <span className="flex flex-wrap items-center justify-between gap-x-2">
+                <StatusBadge
+                  label={
+                    signup.status === 'confirmed' ? 'Confirmed' : 'Waitlist'
+                  }
+                  color={signup.status === 'confirmed' ? 'green' : 'blue'}
+                />
+                <span className="ml-auto flex items-center gap-1">
+                  {signup.status === 'confirmed' && (
+                    <button
+                      type="button"
+                      onClick={() => setMoveTarget(target(person, signup))}
+                      disabled={busy}
+                      className="min-h-11 px-2 text-sm whitespace-nowrap text-blue-600 hover:text-blue-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      Move to waitlist
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setMoveTarget(target(person, signup))}
+                    onClick={() => setDeleteTarget(target(person, signup))}
                     disabled={busy}
-                    className="min-h-11 px-2 text-sm text-blue-600 hover:text-blue-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
+                    title="Delete participant"
+                    aria-label={`Delete ${nameOf(person)}'s signup for ${signup.workshop?.title || 'this workshop'}`}
+                    className="flex size-11 items-center justify-center rounded-md text-gray-600 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                   >
-                    Move to waitlist
+                    <TrashIcon className="size-4" />
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(target(person, signup))}
-                  disabled={busy}
-                  title="Delete participant"
-                  aria-label={`Delete ${nameOf(person)}'s signup for ${signup.workshop?.title || 'this workshop'}`}
-                  className="flex size-11 items-center justify-center rounded-md text-gray-600 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                >
-                  <TrashIcon className="size-4" />
-                </button>
+                </span>
               </span>
             </li>
           ))}
@@ -119,9 +123,15 @@ export function FlaggedSignupsModal({
       onClose={onClose}
       size="4xl"
       title="Flagged sign-ups"
-      subtitle="Signed up without a ticket that grants workshop access. Nothing is cancelled automatically."
       icon={<FlagIcon className="size-6 text-red-600 dark:text-red-400" />}
     >
+      {/* In the body, not the header's subtitle: a phone cuts that to one
+          line, and the second sentence is the one that matters. */}
+      <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+        These people signed up without a ticket that grants workshop access.
+        Nothing is cancelled automatically: move or delete a sign-up here if it
+        should not stand.
+      </p>
       <DataTable<FlaggedPerson>
         data={people}
         columns={columns}

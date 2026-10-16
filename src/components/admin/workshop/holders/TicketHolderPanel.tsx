@@ -134,6 +134,8 @@ export function TicketHolderPanel({
               subtitle="No sign-up yet"
             />
             <StatCard
+              // A row of its own on a phone, where the others pair up.
+              className="col-span-2 sm:col-span-1"
               label="Flagged"
               value={view.stats.flagged.length}
               color={view.stats.flagged.length > 0 ? 'red' : 'slate'}
