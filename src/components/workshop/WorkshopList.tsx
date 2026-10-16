@@ -101,6 +101,9 @@ export default function WorkshopList({
     // purely a client-side UX guard so the query doesn't fire before the page
     // has established the signed-in user.
     enabled: !!userWorkOSId,
+    // The app's provider turns this off. Back on the tab, a read that has gone
+    // stale is the only way to see a sign-out made in another tab (#1303).
+    refetchOnWindowFocus: true,
   })
 
   // THE SESSION HAS ENDED (#1303): it lasts 7 days with no renewal, and the
@@ -110,6 +113,12 @@ export default function WorkshopList({
   const [writeRefusedForSession, setWriteRefusedForSession] = useState(false)
   const sessionEnded =
     writeRefusedForSession || signupsError?.data?.code === 'UNAUTHORIZED'
+  // A refused write took away the dialog it came from and the button that
+  // opened it, so the keyboard would land on the page: it goes to the notice.
+  const sessionNotice = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (writeRefusedForSession) sessionNotice.current?.focus()
+  }, [writeRefusedForSession])
 
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
@@ -264,8 +273,10 @@ export default function WorkshopList({
   if (sessionEnded) {
     return (
       <div
+        ref={sessionNotice}
         role="alert"
-        className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
+        tabIndex={-1}
+        className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 focus:outline-2 focus:outline-offset-2 focus:outline-yellow-600 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 dark:focus:outline-yellow-400"
       >
         <p>
           Your session has ended. Sign in again to see your workshop

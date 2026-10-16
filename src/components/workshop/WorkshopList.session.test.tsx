@@ -19,9 +19,14 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  QueryClient,
+  QueryClientProvider,
+  focusManager,
+} from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { api, getTRPCClient } from '@/lib/trpc/client'
+import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import WorkshopList from './WorkshopList'
 
 const WORKSHOP = {
@@ -130,6 +135,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
+  focusManager.setFocused(undefined)
 })
 
 function Providers({ children }: { children: ReactNode }) {
@@ -144,15 +151,15 @@ function Providers({ children }: { children: ReactNode }) {
   )
 }
 
-function renderPortal() {
+function renderPortal(Wrapper = Providers) {
   render(
-    <Providers>
+    <Wrapper>
       <WorkshopList
         userWorkOSId="workos-1"
         userEmail="attendee@example.com"
         userName="Attendee One"
       />
-    </Providers>,
+    </Wrapper>,
   )
 }
 
@@ -223,11 +230,34 @@ describe('WorkshopList when the session has ended (#1303)', () => {
         )
         fireEvent.click(confirm)
 
-        expectSignInAgain(await screen.findByRole('alert'))
+        const notice = await screen.findByRole('alert')
+        expectSignInAgain(notice)
+        // The dialog and the button that opened it are gone: the keyboard
+        // goes to the notice, not back to the top of the page.
+        await waitFor(() => expect(notice).toHaveFocus())
         expect(screen.queryByRole('dialog')).toBeNull()
         expect(screen.queryByText('Kubernetes 101')).toBeNull()
         expect(screen.queryByText(/must be signed in/i)).toBeNull()
       },
     )
+  })
+
+  // Signed out in ANOTHER tab: nothing on this one writes. The production
+  // provider turns refetch-on-focus off for every query; coming back to this
+  // tab must still read the attendee's sign-ups again once they are stale.
+  it('asks once the attendee comes back to the tab, with the app’s own provider', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    renderPortal(TRPCProvider)
+    await screen.findByRole('button', { name: 'Cancel Registration' })
+    expect(screen.queryByRole('alert')).toBeNull()
+
+    server.signedIn = false
+    focusManager.setFocused(false)
+    vi.setSystemTime(Date.now() + 61_000)
+    focusManager.setFocused(true)
+
+    // The provider retries a failed read once, a second later.
+    expectSignInAgain(await screen.findByRole('alert', {}, { timeout: 4000 }))
+    expect(screen.queryByText('Kubernetes 101')).toBeNull()
   })
 })
