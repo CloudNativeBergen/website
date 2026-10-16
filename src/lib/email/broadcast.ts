@@ -70,18 +70,20 @@ export async function sendBroadcastEmail({
     const finalHtmlContent = htmlContent! + additionalContent
 
     const determineFromEmail = (): string => {
-      if (fromEmail) return fromEmail
+      if (fromEmail) return fromEmail.trim()
 
-      if (audienceType === 'sponsors' && conference.sponsorEmail) {
-        return `${conference.organizer} <${conference.sponsorEmail}>`
+      const organizer = conference.organizer?.trim() || conference.title.trim()
+
+      if (audienceType === 'sponsors' && conference.sponsorEmail?.trim()) {
+        return `${organizer} <${conference.sponsorEmail.trim()}>`
       }
 
-      if (audienceType === 'speakers' && conference.cfpEmail) {
-        return `${conference.organizer} <${conference.cfpEmail}>`
+      if (audienceType === 'speakers' && conference.cfpEmail?.trim()) {
+        return `${organizer} <${conference.cfpEmail.trim()}>`
       }
 
-      if (conference.contactEmail) {
-        return `${conference.organizer} <${conference.contactEmail}>`
+      if (conference.contactEmail?.trim()) {
+        return `${organizer} <${conference.contactEmail.trim()}>`
       }
 
       throw new Error(
@@ -128,7 +130,11 @@ export async function sendBroadcastEmail({
         audienceType,
         subject,
       })
-      return createEmailErrorResponse('Failed to create broadcast email')
+      return createEmailErrorResponse(
+        broadcastResponse.error.message
+          ? `Failed to create broadcast email: ${broadcastResponse.error.message}`
+          : 'Failed to create broadcast email',
+      )
     }
 
     await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
@@ -144,7 +150,11 @@ export async function sendBroadcastEmail({
         audienceId,
         audienceType,
       })
-      return createEmailErrorResponse('Failed to send broadcast email')
+      return createEmailErrorResponse(
+        sendResponse.error.message
+          ? `Failed to send broadcast email: ${sendResponse.error.message}`
+          : 'Failed to send broadcast email',
+      )
     }
 
     return createEmailSuccessResponse({
@@ -159,6 +169,10 @@ export async function sendBroadcastEmail({
       audienceType,
       conferenceName: conference.title,
     })
-    return createEmailErrorResponse('Internal server error')
+    return createEmailErrorResponse(
+      error instanceof Error && error.message
+        ? `Failed to send broadcast email: ${error.message}`
+        : 'Internal server error',
+    )
   }
 }

@@ -920,8 +920,9 @@ export async function addContactToAudience(
   audienceId: string,
   contact: Contact,
 ): Promise<{ success: boolean; error?: Error }> {
+  const trimmedEmail = contact.email?.trim()
   try {
-    if (!contact.email) {
+    if (!trimmedEmail) {
       console.warn('[Audience] Attempted to add contact without email:', {
         audienceId,
         email: contact.email,
@@ -933,7 +934,7 @@ export async function addContactToAudience(
       async () =>
         await client.contacts.create({
           audienceId,
-          email: contact.email,
+          email: trimmedEmail,
           firstName: contact.firstName,
           lastName: contact.lastName,
           unsubscribed: false,
@@ -941,12 +942,14 @@ export async function addContactToAudience(
     )
 
     if (contactResponse.error) {
-      if (contactResponse.error.message?.includes('already exists')) {
+      if (
+        contactResponse.error.message?.toLowerCase().includes('already exists')
+      ) {
         return { success: true }
       }
       console.error('[Audience] Failed to add contact:', {
         error: contactResponse.error.message,
-        email: contact.email,
+        email: trimmedEmail,
         audienceId,
       })
       throw new Error(`Failed to add contact: ${contactResponse.error.message}`)
@@ -956,7 +959,7 @@ export async function addContactToAudience(
   } catch (error) {
     if (isRateLimitError(error)) {
       console.warn(
-        `[Audience] Contact ${contact.email} could not be added to audience due to persistent rate limiting`,
+        `[Audience] Contact ${trimmedEmail || contact.email} could not be added to audience due to persistent rate limiting`,
         {
           audienceId,
           organization: contact.organization,
@@ -965,7 +968,7 @@ export async function addContactToAudience(
     } else {
       console.error('[Audience] Failed to add contact to audience:', {
         error: error instanceof Error ? error.message : String(error),
-        email: contact.email,
+        email: trimmedEmail || contact.email,
         audienceId,
       })
     }
@@ -1157,17 +1160,28 @@ export async function syncAudienceWithContacts(
       throw new ContactListTruncatedError(listing, { audienceId })
     }
 
+    const normalizeEmail = (email: string) => email.trim().toLowerCase()
     const existingContacts = listing.items
-    const existingEmails = new Set(existingContacts.map((c) => c.email))
-    const currentContactEmails = new Set(
-      contacts.filter((c) => c.email).map((c) => c.email),
+    const existingEmails = new Set(
+      existingContacts.map((c) => normalizeEmail(c.email)),
     )
+    const deduplicatedContacts: Contact[] = []
+    const currentContactEmails = new Set<string>()
+    for (const c of contacts) {
+      const trimmed = c.email?.trim()
+      if (!trimmed) continue
+      const normalized = normalizeEmail(trimmed)
+      if (!currentContactEmails.has(normalized)) {
+        currentContactEmails.add(normalized)
+        deduplicatedContacts.push({ ...c, email: trimmed })
+      }
+    }
 
-    const contactsToAdd = contacts.filter(
-      (c) => c.email && !existingEmails.has(c.email),
+    const contactsToAdd = deduplicatedContacts.filter(
+      (c) => !existingEmails.has(normalizeEmail(c.email)),
     )
     const contactsToRemove = existingContacts.filter(
-      (c) => !currentContactEmails.has(c.email),
+      (c) => !currentContactEmails.has(normalizeEmail(c.email)),
     )
 
     let addedCount = 0
@@ -1216,7 +1230,7 @@ export async function syncAudienceWithContacts(
     return {
       success: true,
       audienceId,
-      syncedCount: contacts.length,
+      syncedCount: deduplicatedContacts.length,
       addedCount,
       removedCount,
     }

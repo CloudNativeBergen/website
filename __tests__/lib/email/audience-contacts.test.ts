@@ -278,6 +278,26 @@ describe('a sync must reconcile against the WHOLE audience (#895)', () => {
     expect(account.contactsIn(audienceId)).toContain('newcomer@example.test')
     expect(account.contactsIn(audienceId)).toHaveLength(31)
   })
+
+  it('normalizes case and whitespace and deduplicates eligible contacts before reconciling', async () => {
+    const audienceId = await liveAudience()
+    account.fillWith(audienceId, ['existing@example.test'])
+
+    const result = await syncAudienceWithContacts(conference, 'speakers', [
+      { email: '  EXISTING@Example.Test ', firstName: 'A', lastName: 'B' },
+      { email: 'NewSponsor@Example.Test ', firstName: 'C', lastName: 'D' },
+      { email: 'newsponsor@example.test', firstName: 'C2', lastName: 'D2' },
+    ])
+
+    expect(result.success).toBe(true)
+    expect(result.addedCount).toBe(1)
+    expect(result.removedCount).toBe(0)
+    expect(result.syncedCount).toBe(2)
+    expect(account.contactsIn(audienceId).sort()).toEqual([
+      'NewSponsor@Example.Test',
+      'existing@example.test',
+    ])
+  })
 })
 
 /**

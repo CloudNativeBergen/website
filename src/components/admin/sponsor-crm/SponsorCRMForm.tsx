@@ -12,6 +12,7 @@ import type {
 } from '@/lib/sponsor-crm/types'
 import { sortSponsorTiers } from '@/components/admin/sponsor-crm/utils'
 import { getPrimaryAction } from './form/deal-status'
+import { hasPositiveContractValue } from '@/lib/sponsor-crm/contract-readiness'
 import { ChevronLeftIcon, ArrowRightIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
@@ -217,7 +218,18 @@ export function SponsorCRMForm({
       total += getPrice(addon)
     })
 
-    if (total > 0 && !userHasEditedValue) {
+    const persistedAddonIds = sponsor?.addons?.map((a) => a._id) || []
+    const commercialTermsChanged =
+      formData.tierId !== (sponsor?.tier?._id || '') ||
+      formData.contractCurrency !== (sponsor?.contractCurrency || 'NOK') ||
+      formData.addonIds.length !== persistedAddonIds.length ||
+      formData.addonIds.some((id, idx) => id !== persistedAddonIds[idx])
+
+    const shouldPreservePersistedValue =
+      hasPositiveContractValue(sponsor?.contractValue) &&
+      !commercialTermsChanged
+
+    if (total > 0 && !userHasEditedValue && !shouldPreservePersistedValue) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData((prev) => ({
         ...prev,
@@ -233,6 +245,10 @@ export function SponsorCRMForm({
     isOpen,
     sponsorTiers.length,
     userHasEditedValue,
+    sponsor?.contractValue,
+    sponsor?.tier?._id,
+    sponsor?.contractCurrency,
+    sponsor?.addons,
   ])
 
   // CMD+S / CTRL+S keyboard shortcut to save the form
@@ -280,6 +296,38 @@ export function SponsorCRMForm({
 
   const [isAdvancing, setIsAdvancing] = useState(false)
 
+  const openSubView = async (target: FormView) => {
+    if (isAdvancing || isPending) return
+
+    const parsedFormValue = formData.contractValue
+      ? parseFloat(formData.contractValue)
+      : undefined
+    const hasUnpersistedContractValue =
+      Boolean(sponsor) &&
+      !hasPositiveContractValue(sponsor?.contractValue) &&
+      hasPositiveContractValue(parsedFormValue)
+
+    if (
+      target === 'contract' &&
+      sponsor &&
+      (isDirty || hasUnpersistedContractValue)
+    ) {
+      setIsAdvancing(true)
+      try {
+        await submitForm(formData)
+        setIsDirty(false)
+        setView(target)
+      } catch {
+        // Mutation onError already raised a notification.
+      } finally {
+        setIsAdvancing(false)
+      }
+      return
+    }
+
+    setView(target)
+  }
+
   /**
    * Apply the header CTA.
    *
@@ -293,7 +341,7 @@ export function SponsorCRMForm({
   const handlePrimaryAction = async () => {
     if (!primaryAction) return
     if (primaryAction.kind === 'view') {
-      setView(primaryAction.target)
+      await openSubView(primaryAction.target)
       return
     }
     // A brand-new sponsor has no record to advance yet.
@@ -412,6 +460,7 @@ export function SponsorCRMForm({
               onSuccess={() => {
                 utils.sponsor.crm.list.invalidate()
                 utils.sponsor.crm.healthViolations.invalidate()
+                utils.sponsor.contractTemplates?.contractReadiness?.invalidate()
               }}
               onCancel={handleClose}
               onDirtyChange={setIsContactsDirty}
@@ -444,6 +493,7 @@ export function SponsorCRMForm({
               onSuccess={() => {
                 utils.sponsor.crm.list.invalidate()
                 utils.sponsor.crm.healthViolations.invalidate()
+                utils.sponsor.contractTemplates?.contractReadiness?.invalidate()
               }}
               onSendRegistration={onSendRegistration}
               onSendContract={onSendContract}
@@ -473,7 +523,9 @@ export function SponsorCRMForm({
               isPending={isPending}
               onSubmit={handleSubmit}
               onCancel={handleClose}
-              onOpenView={setView}
+              onOpenView={(target) => {
+                void openSubView(target)
+              }}
               // Only a PERSISTED sponsor can be emailed — the compose modal is
               // keyed off the stored record's contacts.
               onSendEmail={sponsor && onSendEmail ? onSendEmail : undefined}

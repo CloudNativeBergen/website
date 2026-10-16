@@ -976,6 +976,60 @@ describe('crm.broadcastEmail — auto-sync audience and refuse unmerged variable
     expect(h.sendBroadcastEmail).toHaveBeenCalledTimes(1)
   })
 
+  it('allows Resend broadcast merge variables ({{{FIRST_NAME|there}}}) and forwards them intact to sendBroadcastEmail', async () => {
+    h.sfc = {
+      ...h.sfc,
+      status: 'closed-won',
+    }
+    h.syncSponsorAudience.mockResolvedValue({
+      success: true,
+      audienceId: 'aud-1',
+      syncedCount: 2,
+      addedCount: 0,
+      removedCount: 0,
+    })
+    h.sendBroadcastEmail.mockResolvedValue(
+      new Response(JSON.stringify({ id: 'bcast-merge' }), { status: 200 }),
+    )
+
+    const broadcastMessage = JSON.stringify([
+      {
+        _type: 'block',
+        _key: 'b1',
+        style: 'normal',
+        children: [
+          {
+            _type: 'span',
+            _key: 's1',
+            text: 'Hi {{{FIRST_NAME|there}}}, welcome to the conference!',
+          },
+        ],
+      },
+    ])
+
+    const result = await sponsor().crm.broadcastEmail({
+      subject: 'Hello {{{FIRST_NAME|there}}}',
+      message: broadcastMessage,
+    })
+
+    expect(result).toEqual({ id: 'bcast-merge' })
+    expect(h.sendBroadcastEmail).toHaveBeenCalledTimes(1)
+    expect(h.sendBroadcastEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'Hello {{{FIRST_NAME|there}}}',
+        messagePortableText: [
+          expect.objectContaining({
+            children: [
+              expect.objectContaining({
+                text: 'Hi {{{FIRST_NAME|there}}}, welcome to the conference!',
+              }),
+            ],
+          }),
+        ],
+      }),
+    )
+  })
+
   it('refuses broadcastEmail containing unmerged {{{VARIABLE}}} before syncing or broadcasting', async () => {
     await expect(
       sponsor().crm.broadcastEmail({
@@ -988,5 +1042,37 @@ describe('crm.broadcastEmail — auto-sync audience and refuse unmerged variable
     })
     expect(h.syncSponsorAudience).not.toHaveBeenCalled()
     expect(h.sendBroadcastEmail).not.toHaveBeenCalled()
+  })
+})
+
+describe('registration portal placeholder with fallback syntax', () => {
+  it('refuses {{{SPONSOR_PORTAL_URL|fallback}}} on non-registration send and merges it via mergePortalUrl', async () => {
+    const { mergePortalUrl, carriesPortalPlaceholder } =
+      await import('@/lib/sponsor-crm/registration-email')
+
+    expect(
+      carriesPortalPlaceholder('Open {{{SPONSOR_PORTAL_URL|portal}}}', []),
+    ).toBe(true)
+    expect(
+      mergePortalUrl(
+        'Open {{{SPONSOR_PORTAL_URL|portal}}}',
+        'https://conf.example/sponsor/portal/tok',
+      ),
+    ).toBe('Open https://conf.example/sponsor/portal/tok')
+    expect(mergePortalUrl('Open {{{SPONSOR_PORTAL_URL|portal}}}', '')).toBe(
+      'Open portal',
+    )
+
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        kind: 'information',
+        subject: 'Open {{{SPONSOR_PORTAL_URL|portal}}}',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{{{SPONSOR_PORTAL_URL}}}'),
+    })
+    expect(h.send).not.toHaveBeenCalled()
   })
 })

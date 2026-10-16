@@ -58,6 +58,7 @@ import {
   findUnsupportedVariables,
   formatUnmergedVariablesMessage,
   processPortableTextVariables,
+  RESEND_BROADCAST_VARIABLES,
   suggestTemplateCategory,
   suggestTemplateLanguage,
 } from '@/lib/sponsor/templates'
@@ -766,7 +767,7 @@ async function syncConfirmedSponsorAudience(conference: Conference) {
       s.status === 'closed-won' &&
       s.contactPersons &&
       s.contactPersons.length > 0 &&
-      s.contactPersons.some((contact) => contact.email),
+      s.contactPersons.some((contact) => Boolean(contact.email?.trim())),
   )
 
   if (eligibleSponsors.length === 0) {
@@ -780,11 +781,11 @@ async function syncConfirmedSponsorAudience(conference: Conference) {
   const sponsorContacts: Contact[] = eligibleSponsors.flatMap(
     (s: SponsorForConferenceExpanded) =>
       s.contactPersons
-        ?.filter((contact) => contact.email)
+        ?.filter((contact) => Boolean(contact.email?.trim()))
         .map((contact) => ({
-          email: contact.email,
-          firstName: contact.name?.split(' ')[0] || '',
-          lastName: contact.name?.split(' ').slice(1).join(' ') || '',
+          email: contact.email.trim(),
+          firstName: contact.name?.trim().split(' ')[0] || '',
+          lastName: contact.name?.trim().split(' ').slice(1).join(' ') || '',
           organization: s.sponsor.name,
         })) || [],
   )
@@ -3346,7 +3347,7 @@ export const sponsorRouter = router({
         }
 
         const unmergedVariables = findUnsupportedVariables(
-          {},
+          RESEND_BROADCAST_VARIABLES,
           input.subject,
           messagePortableText as unknown as TemplateBlock[],
         )

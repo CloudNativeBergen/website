@@ -64,7 +64,17 @@ const URL_VARIABLE_KEYS = new Set([
 ])
 
 /**
- * Replace {{{VAR}}} placeholders in a plain string.
+ * Merge variables resolved natively by Resend Broadcasts at delivery time.
+ */
+export const RESEND_BROADCAST_VARIABLES: Record<string, string> = {
+  FIRST_NAME: 'First Name',
+  LAST_NAME: 'Last Name',
+  EMAIL: 'email@example.com',
+  RESEND_UNSUBSCRIBE_URL: 'https://example.com/unsubscribe',
+}
+
+/**
+ * Replace {{{VAR}}} and {{{VAR|fallback}}} placeholders in a plain string.
  */
 export function processTemplateVariables(
   text: string,
@@ -72,8 +82,14 @@ export function processTemplateVariables(
 ): string {
   let result = text
   for (const [key, value] of Object.entries(variables)) {
-    const pattern = new RegExp(`\\{\\{\\{${key}\\}\\}\\}`, 'g')
-    result = result.replace(pattern, () => value)
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = new RegExp(
+      `\\{\\{\\{${escapedKey}(?:\\|([^{}\\r\\n]*))?\\}\\}\\}`,
+      'g',
+    )
+    result = result.replace(pattern, (_match, fallback?: string) =>
+      value !== '' ? value : (fallback ?? ''),
+    )
   }
   return result
 }

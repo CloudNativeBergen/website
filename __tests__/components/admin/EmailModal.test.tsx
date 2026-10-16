@@ -128,4 +128,23 @@ describe('EmailModal leaves nothing running when it goes away', () => {
     set.mockRestore()
     clear.mockRestore()
   })
+
+  it('renders an inline error alert inside the modal when sending fails', async () => {
+    const onSend = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          'Failed to create broadcast email: Invalid `from` field: domain not verified',
+        ),
+      )
+    renderModal({ allowEmptyBody: true, onSend })
+
+    const button = await screen.findByRole('button', { name: /Send reminder/ })
+    fireEvent.click(button)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'Failed to create broadcast email: Invalid `from` field: domain not verified',
+    )
+  })
 })
