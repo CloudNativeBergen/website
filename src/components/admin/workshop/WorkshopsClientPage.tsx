@@ -486,6 +486,7 @@ export function WorkshopsClientPage({
         onDeleteSignup={signupActions.remove}
         isMoving={signupActions.isMoving}
         isDeleting={signupActions.isDeleting}
+        isRefreshing={ticketHolders.isFetching}
       />
 
       <WorkshopRegistrationSettings

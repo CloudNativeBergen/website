@@ -34,6 +34,7 @@ import { useState, type ReactNode } from 'react'
 import { api, getTRPCClient } from '@/lib/trpc/client'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
+import { TAP_GUARD_MS } from '@/hooks/useOpenedLongEnough'
 import { WorkshopsClientPage } from './WorkshopsClientPage'
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }))
@@ -65,6 +66,8 @@ const server = {
   holdersFail: false,
   /** While set, the ticket-holder read waits on it: a slow provider. */
   holdHolders: null as Promise<void> | null,
+  /** Sign-ups whose owner holds no workshop ticket: the flagged list. */
+  flaggedIds: [] as string[],
 }
 
 /** What the server rendered when the page was loaded. Never read again. */
@@ -147,7 +150,21 @@ async function answer(
         confirmed: count('confirmed'),
         waitlistOnly: count('waitlist'),
         notSignedUp: 3,
-        flagged: [],
+        flagged: server.signups
+          .filter((s) => server.flaggedIds.includes(s._id))
+          .map((s) => ({
+            email: `${s._id}@example.com`,
+            name: s.userName,
+            signups: [
+              {
+                _id: s._id,
+                userEmail: `${s._id}@example.com`,
+                userName: s.userName,
+                status: s.status,
+                workshop: { _id: 'ws-1', title: 'Kubernetes 101' },
+              },
+            ],
+          })),
         lockedOut: [],
       }
       if (server.holdHolders) await server.holdHolders
@@ -229,6 +246,7 @@ beforeEach(() => {
     ticketsDown: false,
     holdersFail: false,
     holdHolders: null,
+    flaggedIds: [],
   })
   router.refresh.mockReset()
   vi.stubGlobal(
@@ -525,6 +543,46 @@ describe('the ticket holders (#1333)', () => {
       '1',
     )
     expect(server.holderReads).toBe(2)
+  })
+
+  // The flagged list still shows a sign-up until the re-read after acting on
+  // it lands; acting on it again meanwhile would be refused or repeat itself.
+  it('offer no flagged action until the re-read after one is in', async () => {
+    server.flaggedIds = ['signup-bob']
+    renderPage()
+    fireEvent.click(
+      await within(await panel()).findByRole('button', { name: 'Flagged, 1' }),
+    )
+    const list = await screen.findByRole('dialog', { name: 'Flagged sign-ups' })
+    const move = () =>
+      within(within(list).getByRole('table')).queryByRole('button', {
+        name: 'Move to waitlist',
+      })
+
+    let providerAnswers!: () => void
+    server.holdHolders = new Promise((resolve) => {
+      providerAnswers = resolve
+    })
+    fireEvent.click(move()!)
+    const question = await screen.findByRole('dialog', {
+      name: 'Move to waitlist',
+    })
+    // The question takes no confirm for a moment after it opens.
+    await new Promise((resolve) => setTimeout(resolve, TAP_GUARD_MS))
+    fireEvent.click(
+      within(question).getByRole('button', { name: 'Move to waitlist' }),
+    )
+    await screen.findByText('Moved to waitlist')
+
+    // Moved, and the re-read is on its way: the row still says confirmed,
+    // and offers nothing.
+    // (The server counts the read before React has rendered it fetching.)
+    await waitFor(() => expect(server.holderReads).toBe(2))
+    await waitFor(() => expect(move()).toBeDisabled())
+    expect(server.holderReads).toBe(2)
+
+    providerAnswers()
+    await waitFor(() => expect(move()).toBeNull())
   })
 
   it('wait for nothing else: a slow ticket read holds back no other number', async () => {

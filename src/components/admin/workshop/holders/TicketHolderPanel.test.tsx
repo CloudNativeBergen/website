@@ -227,6 +227,31 @@ describe('TicketHolderPanel', () => {
     expect(screen.getByRole('button', { name: 'Flagged, 1' })).toBeTruthy()
   })
 
+  // After a move or a delete the list still shows the sign-up until the
+  // re-read lands: acting on it again would only be refused (NOT_FOUND) or
+  // move someone already moved.
+  it('offers no action while the numbers are being read again', () => {
+    render(
+      <TicketHolderPanel
+        view={READY}
+        isRefreshing
+        onRetry={vi.fn()}
+        onMoveToWaitlist={vi.fn()}
+        onDeleteSignup={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    const table = within(
+      screen.getByRole('dialog', { name: 'Flagged sign-ups' }),
+    ).getByRole('table')
+    const actions = [
+      ...within(table).getAllByRole('button', { name: 'Move to waitlist' }),
+      ...within(table).getAllByTitle('Delete participant'),
+    ]
+    expect(actions).toHaveLength(3)
+    for (const action of actions) expect(action).toBeDisabled()
+  })
+
   it('with nobody flagged, Flagged is a number and opens nothing', () => {
     renderPanel(ready({ flagged: [] }))
     expect(valueOf('Flagged')).toBe('0')

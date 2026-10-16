@@ -26,6 +26,7 @@ export function FlaggedSignupsModal({
   onDeleteSignup,
   isMoving = false,
   isDeleting = false,
+  isRefreshing = false,
 }: {
   isOpen: boolean
   onClose: () => void
@@ -36,6 +37,8 @@ export function FlaggedSignupsModal({
   onDeleteSignup: (signupId: string, userName: string) => void
   isMoving?: boolean
   isDeleting?: boolean
+  /** The list is being read again: what it shows may be gone already. */
+  isRefreshing?: boolean
 }) {
   const [moveTarget, setMoveTarget] = useState<SignupQuestionTarget | null>(
     null,
@@ -43,7 +46,7 @@ export function FlaggedSignupsModal({
   const [deleteTarget, setDeleteTarget] = useState<SignupQuestionTarget | null>(
     null,
   )
-  const busy = isMoving || isDeleting
+  const busy = isMoving || isDeleting || isRefreshing
 
   const target = (person: FlaggedPerson, signup: HolderSignup) => ({
     signupId: signup._id,

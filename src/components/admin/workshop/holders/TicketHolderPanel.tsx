@@ -35,6 +35,7 @@ export function TicketHolderPanel({
   onDeleteSignup,
   isMoving,
   isDeleting,
+  isRefreshing,
 }: {
   view: TicketHolderView
   onRetry: () => void
@@ -42,6 +43,12 @@ export function TicketHolderPanel({
   onDeleteSignup: (signupId: string, userName: string) => void
   isMoving?: boolean
   isDeleting?: boolean
+  /**
+   * The numbers are being read again (after an action, or a save). The list
+   * still shows what the last read said, so it offers no action until the
+   * new read is in.
+   */
+  isRefreshing?: boolean
 }) {
   const [flaggedOpen, setFlaggedOpen] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
@@ -188,6 +195,7 @@ export function TicketHolderPanel({
         onDeleteSignup={onDeleteSignup}
         isMoving={isMoving}
         isDeleting={isDeleting}
+        isRefreshing={isRefreshing}
       />
     </section>
   )
