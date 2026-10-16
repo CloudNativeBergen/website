@@ -2,6 +2,7 @@ import 'server-only'
 import { NextResponse } from 'next/server'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import {
+  readProvenDestination,
   resolveProvenDestination,
   type ProvenDestination,
 } from '@/lib/domain-verification/destination'
@@ -223,15 +224,21 @@ export function resolveTenantHost(headers: {
  * {@link resolveTenantHost} for a host by NAME: also asked for a link that
  * leaves the request (an emailed portal link) and never for one a request did
  * not arrive on or a conference does not claim.
+ *
+ * `failedRead: 'throw'` throws a record read that failed instead of refusing
+ * the host (#1303), for a caller that must not take an outage for a refusal.
  */
 export async function resolveSignInHost(
   host: string | null | undefined,
+  { failedRead = 'refuse' }: { failedRead?: 'refuse' | 'throw' } = {},
 ): Promise<SignInHost | null> {
   const configured = configuredAuthOrigin()
   const name = normalizeDomain(host ?? '')
   if (configured === 'invalid' || refusal(configured, name)) return null
 
-  const destination = await resolveProvenDestination(name)
+  const destination = await (failedRead === 'throw'
+    ? readProvenDestination(name)
+    : resolveProvenDestination(name))
   return destination && signInHost(configured, destination)
 }
 

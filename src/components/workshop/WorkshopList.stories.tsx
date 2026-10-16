@@ -483,32 +483,28 @@ export const SignupError: Story = {
   },
 }
 
-const signupsUnavailable = () =>
+/** A tRPC error response, as the server sends one. */
+const trpcError = (
+  message: string,
+  code: number,
+  data: { code: string; httpStatus: number },
+) =>
   HttpResponse.json(
-    {
-      error: {
-        message: 'fetch failed',
-        code: -32603,
-        data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
-      },
-    },
-    { status: 500 },
+    { error: { message, code, data } },
+    { status: data.httpStatus },
   )
+
+const signupsUnavailable = () =>
+  trpcError('fetch failed', -32603, {
+    code: 'INTERNAL_SERVER_ERROR',
+    httpStatus: 500,
+  })
 
 const REFUSAL =
   'No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at hello@example.com if you believe this is an error.'
 
 const signupsRefused = () =>
-  HttpResponse.json(
-    {
-      error: {
-        message: REFUSAL,
-        code: -32003,
-        data: { code: 'FORBIDDEN', httpStatus: 403 },
-      },
-    },
-    { status: 403 },
-  )
+  trpcError(REFUSAL, -32003, { code: 'FORBIDDEN', httpStatus: 403 })
 
 const signupsFailedHandlers = [
   http.get('/api/trpc/workshop.list', () =>
@@ -593,6 +589,60 @@ export const SignupsUnavailableMobile: Story = {
   ...SignupsUnavailable,
   parameters: {
     ...SignupsUnavailable.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+
+const signupsSessionEnded = () =>
+  trpcError('You must be signed in to manage workshop signups', -32001, {
+    code: 'UNAUTHORIZED',
+    httpStatus: 401,
+  })
+
+/**
+ * The session ended while the page was open (#1303): the read is refused with
+ * UNAUTHORIZED. The notice says so and offers the way back in, the same GET
+ * form to `/workshop/sign-in` as the signed-out view, instead of "try again".
+ */
+export const SessionEnded: Story = {
+  args: signedInArgs,
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/workshop.list', () =>
+          listResponse([wsAvailableA, wsAvailableB, wsFull]),
+        ),
+        http.get('/api/trpc/workshop.getMySignups', signupsSessionEnded),
+        announcementsHandler,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const notice = await canvas.findByRole('alert', {}, { timeout: 5000 })
+    await expect(notice).toHaveTextContent(/your session has ended/i)
+    const signIn = within(notice).getByRole('button', {
+      name: 'Sign in again',
+    })
+    await expect(signIn.closest('form')).toHaveAttribute(
+      'action',
+      '/workshop/sign-in',
+    )
+    await expect(
+      within(notice).queryByRole('button', { name: /try again/i }),
+    ).toBeNull()
+  },
+}
+
+export const SessionEndedDark: Story = {
+  ...SessionEnded,
+  parameters: { ...SessionEnded.parameters, dark: true },
+}
+
+export const SessionEndedMobile: Story = {
+  ...SessionEnded,
+  parameters: {
+    ...SessionEnded.parameters,
     viewport: { defaultViewport: 'mobile1' },
   },
 }

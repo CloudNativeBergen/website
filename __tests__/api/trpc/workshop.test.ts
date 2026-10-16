@@ -517,11 +517,16 @@ describe('workshop.getMySignups scoping', () => {
     )
   })
 
-  it('returns an empty list when there is no WorkOS session', async () => {
+  // #1303: an empty list read as "no signups" — a session that ended while the
+  // page was open showed the attendee's own workshops as available.
+  it('refuses with UNAUTHORIZED when there is no session, before any read', async () => {
     const caller = createAnonymousCaller()
-    const result = await caller.workshop.getMySignups()
-    expect(result.data).toEqual([])
+    await expect(caller.workshop.getMySignups()).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+      message: 'You must be signed in to manage workshop signups',
+    })
     expect(getSignupsMock).not.toHaveBeenCalled()
+    expect(ticketing.fetchEventTickets).not.toHaveBeenCalled()
   })
 })
 

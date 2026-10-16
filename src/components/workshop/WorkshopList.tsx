@@ -17,6 +17,7 @@ import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { Button } from '@/components/Button'
+import { WORKSHOP_SIGN_IN_PATH } from '@/lib/workshop/sign-in-paths'
 
 interface WorkshopListProps {
   userWorkOSId?: string
@@ -100,7 +101,34 @@ export default function WorkshopList({
     // purely a client-side UX guard so the query doesn't fire before the page
     // has established the signed-in user.
     enabled: !!userWorkOSId,
+    // The app's provider turns this off. Back on the tab, a read that has gone
+    // stale is the only way to see a sign-out made in another tab (#1303).
+    refetchOnWindowFocus: true,
   })
+
+  // THE SESSION HAS ENDED (#1303): it lasts 7 days with no renewal, and the
+  // attendee can sign out in another tab. Either the read or a write says so,
+  // each on its own: a write's refusal does not wait on another read, which
+  // can fail for an unrelated reason. Latched once seen so a later focus
+  // refetch that fails with a network/server error does not clear it and
+  // re-expose stale registrations.
+  const [writeRefusedForSession, setWriteRefusedForSession] = useState(false)
+  const [readRefusedForSession, setReadRefusedForSession] = useState(false)
+  const isReadUnauthorized = signupsError?.data?.code === 'UNAUTHORIZED'
+  if (isReadUnauthorized && !readRefusedForSession) {
+    setReadRefusedForSession(true)
+  }
+  const sessionEnded =
+    writeRefusedForSession || readRefusedForSession || isReadUnauthorized
+  const sessionNotice = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!sessionEnded || !sessionNotice.current) return
+    const lostFocus =
+      !document.activeElement || document.activeElement === document.body
+    if (writeRefusedForSession || lostFocus) {
+      sessionNotice.current.focus()
+    }
+  }, [sessionEnded, writeRefusedForSession])
 
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
@@ -116,6 +144,10 @@ export default function WorkshopList({
     },
     onError: (error) => {
       setSuccessMessage(null)
+      if (error.data?.code === 'UNAUTHORIZED') {
+        setWriteRefusedForSession(true)
+        return
+      }
       // The server refused for the window while this list was offering
       // sign-up BECAUSE OF early access: the one case where a refusal
       // contradicts what is on screen. (Once sign-up is open for everyone a
@@ -160,8 +192,12 @@ export default function WorkshopList({
       refetchSignups()
     },
     onError: (error) => {
-      setErrorMessage(error.message)
       setSuccessMessage(null)
+      if (error.data?.code === 'UNAUTHORIZED') {
+        setWriteRefusedForSession(true)
+        return
+      }
+      setErrorMessage(error.message)
       setTimeout(() => setErrorMessage(null), 5000)
     },
   })
@@ -237,6 +273,32 @@ export default function WorkshopList({
         <div className="text-gray-600 dark:text-gray-400">
           Loading workshops...
         </div>
+      </div>
+    )
+  }
+
+  // NOTHING BUT THE WAY BACK IN, as on the signed-out view. Whatever the
+  // query client still holds is from before the session ended, and an open
+  // dialog (the sign-up form, the cancel's question) goes with its card.
+  if (sessionEnded) {
+    return (
+      <div
+        ref={sessionNotice}
+        role="alert"
+        tabIndex={-1}
+        className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 focus:outline-2 focus:outline-offset-2 focus:outline-yellow-600 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 dark:focus:outline-yellow-400"
+      >
+        <p>
+          Your session has ended. Sign in again to see your workshop
+          registrations and sign up for workshops.
+        </p>
+        {/* A FORM, NOT A LINK, as on the signed-out view: the route sets a
+            cookie and redirects to another origin. */}
+        <form action={WORKSHOP_SIGN_IN_PATH} method="get" className="shrink-0">
+          <Button type="submit" size="sm" className="min-h-11">
+            Sign in again
+          </Button>
+        </form>
       </div>
     )
   }
