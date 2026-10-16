@@ -16,6 +16,7 @@ import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedS
 const h = vi.hoisted(() => ({
   store: null as null | VersionedSanityStore,
   fetchEventTickets: vi.fn(),
+  ticketingDenied: false,
 }))
 vi.mock('@/lib/sanity/client', async () => {
   const { createVersionedSanityStore } =
@@ -29,6 +30,11 @@ vi.mock('@/lib/tickets/provider', () => ({
     provider: { fetchEventTickets: h.fetchEventTickets },
     eventRef: { customerId: 1, eventId: 2 },
   }),
+}))
+// The operator's ticketing kill switch (`enabled: false` on the org).
+vi.mock('@/lib/features/ticketing', () => ({
+  isTicketingDeniedForOrg: async (orgId: string) =>
+    orgId === 'org-a' && h.ticketingDenied,
 }))
 // The gate tells organizers about a not-set type; not under test here.
 vi.mock('./not-set-notice', () => ({ reportNotSetTicketTypes: () => {} }))
@@ -115,6 +121,7 @@ const talks = [CONF, OTHER].map((conference) => ({
 }))
 
 beforeEach(() => {
+  h.ticketingDenied = false
   __resetRedeemedCache()
   h.fetchEventTickets.mockReset()
   h.fetchEventTickets.mockResolvedValue(TICKETS)
@@ -247,6 +254,18 @@ describe('readTicketHolders', () => {
     expect(join!.flagged.map((p) => p.email)).toContain('bob@x.test')
     expect(h.store!.doc('s-bob')).toMatchObject({ status: 'confirmed' })
     expect(h.store!.commits).toEqual([])
+  })
+
+  // GUARD BEFORE FETCH: an operator who switched ticketing off for the org
+  // gets no ticket read, no holder and no flagged name from this either, as
+  // the "Workshop tickets" section next to it shows nothing.
+  it('reads nothing when ticketing is switched off for the organization', async () => {
+    h.ticketingDenied = true
+    const readsBefore = h.store!.reads.length
+
+    expect(await readTicketHolders(CONFERENCE)).toBeNull()
+    expect(h.fetchEventTickets).not.toHaveBeenCalled()
+    expect(h.store!.reads.slice(readsBefore)).toEqual([])
   })
 
   it('a failed ticket read is null, not an empty join', async () => {

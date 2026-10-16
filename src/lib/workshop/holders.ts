@@ -16,6 +16,7 @@
  * NOTHING HERE WRITES. A sign-up whose owner holds no workshop ticket (the
  * type was unmarked, the ticket refunded) is flagged, never cancelled.
  */
+import { isTicketingDeniedForOrg } from '@/lib/features/ticketing'
 import { canonicalEmail } from '@/lib/speaker/email'
 import {
   marksWorkshopAccess,
@@ -173,7 +174,8 @@ export function joinTicketHolders({
 
 /**
  * The join for one conference, read: `null` when the ticket provider cannot
- * be read, which a surface shows as unavailable and never as zero.
+ * be read, or ticketing is switched off for the organization, which a
+ * surface shows as unavailable and never as zero.
  *
  * TICKETS through the shared 30-second memo the gate uses, unless `fresh`: a
  * send (#1334) must see a ticket sold seconds ago. ROLES live, as the gate
@@ -187,6 +189,10 @@ export async function readTicketHolders(
   },
   options: { fresh?: boolean } = {},
 ): Promise<TicketHolderJoin | null> {
+  // THE KILL SWITCH FIRST: an operator who switched ticketing off for the
+  // organization gets nothing read, as `resolveTicketingAdminAccess` does
+  // for the "Workshop tickets" section beside it.
+  if (await isTicketingDeniedForOrg(conference.organization?._ref)) return null
   const tickets = await fetchEventTicketCandidates(
     conference,
     options.fresh ? { fresh: true } : undefined,
