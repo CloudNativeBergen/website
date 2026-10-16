@@ -101,6 +101,16 @@ function readLiveTicketTypeRoles(conferenceId: string) {
   )
 }
 
+/**
+ * WHO A TICKET BELONGS TO, as the gate tells people apart: the address it was
+ * registered under, trimmed and lowercased ({@link canonicalEmail}). The
+ * statistics on `/admin/workshops` (`./holders`) key people with this too, so
+ * the people they count as holders are the people the gate admits.
+ */
+export const ticketHolderKey = (
+  ticket: Pick<TicketCandidate, 'registeredEmail'>,
+) => canonicalEmail(ticket.registeredEmail)
+
 export interface WorkshopEligibilityResult {
   isEligible: boolean
   tickets: TicketCandidate[]
@@ -135,9 +145,7 @@ export async function checkWorkshopEligibility(params: {
     const userEmail = canonicalEmail(params.userEmail)
     const ticketsOf = (tickets: TicketCandidate[]) =>
       userEmail
-        ? tickets.filter(
-            (ticket) => canonicalEmail(ticket.registeredEmail) === userEmail,
-          )
+        ? tickets.filter((ticket) => ticketHolderKey(ticket) === userEmail)
         : []
 
     // THE SHARED 30-SECOND MEMO, not a fetch of our own. The whole-event read is
