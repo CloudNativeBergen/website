@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   ExclamationTriangleIcon,
   UserGroupIcon,
@@ -43,6 +43,11 @@ export function TicketHolderPanel({
   isDeleting?: boolean
 }) {
   const [flaggedOpen, setFlaggedOpen] = useState(false)
+  const heading = useRef<HTMLHeadingElement>(null)
+  /** The Flagged button is a button only while somebody is flagged. */
+  const openerGone = view.state !== 'ready' || view.stats.flagged.length === 0
+  const openerGoneNow = useRef(openerGone)
+  openerGoneNow.current = openerGone
 
   return (
     <section
@@ -52,8 +57,12 @@ export function TicketHolderPanel({
       <div className="flex items-center gap-2">
         <UserGroupIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
         <h3
+          ref={heading}
           id={HEADING_ID}
-          className="text-lg font-medium text-gray-900 dark:text-white"
+          // Focusable from code only: focus lands here when the button that
+          // opened the flagged list has left the page (its last person went).
+          tabIndex={-1}
+          className="text-lg font-medium text-gray-900 outline-none dark:text-white"
         >
           Ticket holders
         </h3>
@@ -160,6 +169,9 @@ export function TicketHolderPanel({
           <FlaggedSignupsModal
             isOpen={flaggedOpen}
             onClose={() => setFlaggedOpen(false)}
+            afterLeave={() => {
+              if (openerGoneNow.current) heading.current?.focus()
+            }}
             people={view.stats.flagged}
             onMoveToWaitlist={onMoveToWaitlist}
             onDeleteSignup={onDeleteSignup}

@@ -20,6 +20,7 @@ const nameOf = (person: FlaggedPerson) =>
 export function FlaggedSignupsModal({
   isOpen,
   onClose,
+  afterLeave,
   people,
   onMoveToWaitlist,
   onDeleteSignup,
@@ -28,6 +29,8 @@ export function FlaggedSignupsModal({
 }: {
   isOpen: boolean
   onClose: () => void
+  /** Runs once the list has closed and let go of focus (see `ModalShell`). */
+  afterLeave?: () => void
   people: FlaggedPerson[]
   onMoveToWaitlist: (signupId: string, userName: string) => void
   onDeleteSignup: (signupId: string, userName: string) => void
@@ -124,6 +127,7 @@ export function FlaggedSignupsModal({
     <ModalShell
       isOpen={isOpen}
       onClose={onClose}
+      afterLeave={afterLeave}
       size="4xl"
       title="Flagged sign-ups"
       icon={<FlagIcon className="size-6 text-red-600 dark:text-red-400" />}

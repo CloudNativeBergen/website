@@ -11,6 +11,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react'
 import { TAP_GUARD_MS } from '@/hooks/useOpenedLongEnough'
@@ -176,6 +177,26 @@ describe('TicketHolderPanel', () => {
     )
     fireEvent.click(within(question).getByRole('button', { name: 'Delete' }))
     expect(onDeleteSignup).toHaveBeenCalledWith('s-2', 'Eve Example')
+  })
+
+  // The last flagged person deleted from the open list: the Flagged button
+  // that opened it is gone, so closing the list must not leave focus on
+  // nothing. It goes to the panel's heading.
+  it('puts focus on the heading when the button that opened the list is gone', async () => {
+    const actions = {
+      onRetry: vi.fn(),
+      onMoveToWaitlist: vi.fn(),
+      onDeleteSignup: vi.fn(),
+    }
+    const { rerender } = render(<TicketHolderPanel view={READY} {...actions} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    screen.getByRole('dialog', { name: 'Flagged sign-ups' })
+
+    rerender(<TicketHolderPanel view={ready({ flagged: [] })} {...actions} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+
+    const heading = screen.getByRole('heading', { name: 'Ticket holders' })
+    await waitFor(() => expect(document.activeElement).toBe(heading))
   })
 
   it('with nobody flagged, Flagged is a number and opens nothing', () => {
