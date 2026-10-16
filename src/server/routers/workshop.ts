@@ -1354,8 +1354,12 @@ export const workshopRouter = router({
      * page says the numbers are unavailable.
      */
     ticketHolders: workshopAdminProcedure.query(async () => {
-      const { conference, error } = await getConferenceForCurrentDomain()
-      if (error || !conference?._id) {
+      // TENANCY (AGENTS.md): the tenant is the one `resolveConferenceId()`
+      // resolves, which fails closed. The document is read for the ticketing
+      // binding and the roles, and must be that conference.
+      const conferenceId = await resolveConferenceId()
+      const { conference } = await getConferenceForCurrentDomain()
+      if (conference?._id !== conferenceId) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'Conference not found',
@@ -1363,7 +1367,7 @@ export const workshopRouter = router({
       }
       try {
         return ticketHolderStats(
-          await readTicketHolders({ ...conference, _id: conference._id }),
+          await readTicketHolders({ ...conference, _id: conferenceId }),
         )
       } catch (cause) {
         throw new TRPCError({
