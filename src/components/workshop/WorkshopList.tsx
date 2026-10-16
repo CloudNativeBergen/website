@@ -120,14 +120,17 @@ export default function WorkshopList({
   const sessionEnded = Math.max(sessionEndedAt, readEndedAt) > signupsReadAt
   // The notice replaces the list, and with it whatever had the keyboard (a
   // dialog, a workshop's button): when the keyboard is left on the page, it
-  // goes to the notice.
+  // goes to the notice. Not when the FIRST read is refused: nothing had the
+  // keyboard, and a focus ring would greet the attendee on arrival.
+  const replacedTheList =
+    sessionEnded && (signupsReadAt > 0 || sessionEndedAt > readEndedAt)
   const sessionNotice = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (!sessionEnded) return
+    if (!replacedTheList) return
     const lost =
       !document.activeElement || document.activeElement === document.body
     if (lost) sessionNotice.current?.focus()
-  }, [sessionEnded])
+  }, [replacedTheList])
 
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
@@ -285,7 +288,7 @@ export default function WorkshopList({
         ref={sessionNotice}
         role="alert"
         tabIndex={-1}
-        className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 focus:outline-2 focus:outline-offset-2 focus:outline-yellow-600 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 dark:focus:outline-yellow-400"
+        className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-600 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 dark:focus-visible:outline-yellow-400"
       >
         <p>
           Your session has ended. Sign in again to see your workshop

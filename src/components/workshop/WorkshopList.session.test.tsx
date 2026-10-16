@@ -187,7 +187,12 @@ describe('WorkshopList when the session has ended (#1303)', () => {
     server.signedIn = false
     renderPortal()
 
-    expectSignInAgain(await screen.findByRole('alert'))
+    const notice = await screen.findByRole('alert')
+    expectSignInAgain(notice)
+    // Nothing had the keyboard yet: the notice is the page, and is not
+    // focused (a focus ring on arrival, with nothing pressed).
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    expect(document.body).toHaveFocus()
   })
 
   // The write opened a dialog (the cancel's question, the sign-up form). Once
