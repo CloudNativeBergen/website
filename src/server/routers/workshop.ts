@@ -10,6 +10,7 @@ import {
 } from '@/server/trpc'
 import { TRPCError } from '@trpc/server'
 import { resendWorkshopSignupInstructions } from '@/lib/workshop/resend-instructions'
+import { readTicketHolders, ticketHolderStats } from '@/lib/workshop/holders'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
@@ -1340,6 +1341,35 @@ export const workshopRouter = router({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to generate workshop summary',
           cause: error,
+        })
+      }
+    }),
+
+    /**
+     * The ticket holders joined to the sign-ups (#1333, spec §4): who holds a
+     * workshop ticket, who of them has signed up, and the sign-ups of people
+     * who hold none. Read after the page, since the ticket read is slow when
+     * the shared memo has lapsed. A failed ticket read answers
+     * `available: false`; a failed sign-up read is an error. Either way the
+     * page says the numbers are unavailable.
+     */
+    ticketHolders: workshopAdminProcedure.query(async () => {
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (error || !conference?._id) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Conference not found',
+        })
+      }
+      try {
+        return ticketHolderStats(
+          await readTicketHolders({ ...conference, _id: conference._id }),
+        )
+      } catch (cause) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to read the workshop ticket holders',
+          cause,
         })
       }
     }),

@@ -115,6 +115,7 @@ vi.mock('@/lib/workshop/sanity', async (importActual) => {
     })),
     isListedWorkshopOf: vi.fn(async () => true),
     getAllWorkshopSignups: vi.fn(async () => []),
+    getSignupsForHolderJoin: vi.fn(async () => []),
     deleteWorkshopSignup: vi.fn(async () => {}),
     moveWorkshopSignupToWaitlist: vi.fn(async () => {}),
     getWorkshopStatistics: vi.fn(async () => ({
@@ -157,6 +158,7 @@ import {
   moveWorkshopSignupToWaitlist,
   checkWorkshopCapacity,
   isListedWorkshopOf,
+  getSignupsForHolderJoin,
 } from '@/lib/workshop/sanity'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
@@ -173,6 +175,7 @@ const waitlistMock = moveWorkshopSignupToWaitlist as unknown as LooseMock
 const capacityMock = checkWorkshopCapacity as unknown as LooseMock
 const listedMock = isListedWorkshopOf as unknown as LooseMock
 const emailMock = sendBasicWorkshopConfirmation as unknown as LooseMock
+const holderSignupsMock = getSignupsForHolderJoin as unknown as LooseMock
 
 /** A legacy-bridge category that grants workshop access (no declared roles). */
 const WORKSHOP_TICKET = 'Workshop + Conference (2 days)'
@@ -750,5 +753,84 @@ describe('workshop admin procedures remain NextAuth-gated', () => {
       userWorkOSId: 'manual-user',
       conferenceId: 'conf-1',
     })
+  })
+})
+
+describe('workshop.admin.ticketHolders (#1333)', () => {
+  beforeEach(() => {
+    ticketing.resolve.mockResolvedValue({
+      configured: true,
+      provider: { fetchEventTickets: ticketing.fetchEventTickets },
+      eventRef: { customerId: 1, eventId: 1 },
+    })
+  })
+
+  it('counts the people from the tickets and the sign-ups, and lists the flagged', async () => {
+    ticketing.fetchEventTickets.mockResolvedValue([
+      ticket('ada@example.com'),
+      ticket(' Bob@Example.com'),
+      ticket('bob@example.com'),
+      ticket('cy@example.com'),
+      ticket('eve@example.com', ORDINARY_TICKET),
+    ])
+    const flaggedSignup = {
+      _id: 's-eve',
+      userEmail: 'eve@example.com',
+      userName: 'Eve',
+      status: 'confirmed',
+      workshop: { _id: 'workshop-1', title: 'Kubernetes 101' },
+    }
+    holderSignupsMock.mockResolvedValue([
+      {
+        _id: 's-ada',
+        userEmail: 'ada@example.com',
+        userName: 'Ada',
+        status: 'confirmed',
+        workshop: { _id: 'workshop-1', title: 'Kubernetes 101' },
+      },
+      {
+        _id: 's-bob',
+        userEmail: 'BOB@example.com',
+        userName: 'Bob',
+        status: 'waitlist',
+        workshop: { _id: 'workshop-1', title: 'Kubernetes 101' },
+      },
+      flaggedSignup,
+    ])
+
+    const result = await createAdminCaller().workshop.admin.ticketHolders()
+
+    expect(result).toEqual({
+      available: true,
+      configured: false,
+      holders: 3,
+      confirmed: 1,
+      waitlistOnly: 1,
+      notSignedUp: 1,
+      flagged: [
+        { email: 'eve@example.com', name: 'Eve', signups: [flaggedSignup] },
+      ],
+      lockedOut: [],
+    })
+    expect(holderSignupsMock).toHaveBeenCalledWith('conf-1')
+  })
+
+  it('a ticket read that fails is unavailable, never zero', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    ticketing.fetchEventTickets.mockRejectedValue(new Error('provider down'))
+
+    const result = await createAdminCaller().workshop.admin.ticketHolders()
+
+    expect(result).toEqual({ available: false })
+  })
+
+  it('refuses an attendee before reading anything', async () => {
+    await expect(
+      createWorkshopCaller({
+        id: 'workos-real',
+      }).workshop.admin.ticketHolders(),
+    ).rejects.toThrow(/UNAUTHORIZED|FORBIDDEN|Authentication required/)
+    expect(ticketing.fetchEventTickets).not.toHaveBeenCalled()
+    expect(holderSignupsMock).not.toHaveBeenCalled()
   })
 })

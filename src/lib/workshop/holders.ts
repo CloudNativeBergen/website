@@ -192,3 +192,38 @@ export async function readTicketHolders(
   ])
   return joinTicketHolders({ tickets, signups, ticketTypeRoles })
 }
+
+/**
+ * What `/admin/workshops` shows of the join: the numbers, the flagged list
+ * with what its actions need, and the people each not-set type keeps out.
+ * `available: false` when the tickets could not be read: a surface says so
+ * and never shows zero.
+ */
+export type TicketHolderStats =
+  | { available: false }
+  | {
+      available: true
+      configured: boolean
+      holders: number
+      confirmed: number
+      waitlistOnly: number
+      notSignedUp: number
+      flagged: FlaggedPerson[]
+      lockedOut: LockedOutType[]
+    }
+
+export function ticketHolderStats(
+  join: TicketHolderJoin | null,
+): TicketHolderStats {
+  if (!join) return { available: false }
+  return {
+    available: true,
+    configured: join.configured,
+    holders: join.holders.length,
+    confirmed: join.confirmed.length,
+    waitlistOnly: join.waitlistOnly.length,
+    notSignedUp: join.notSignedUp.length,
+    flagged: join.flagged,
+    lockedOut: join.lockedOut,
+  }
+}
