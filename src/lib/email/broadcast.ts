@@ -107,18 +107,24 @@ export async function sendBroadcastEmail({
       )
     }
 
+    const trimmedSubject = subject.trim()
+    const broadcastName =
+      trimmedSubject.length > 50
+        ? `${trimmedSubject.slice(0, 47).trimEnd()}...`
+        : trimmedSubject
+
     const emailReact = renderEmailTemplate({
       conference,
-      subject,
+      subject: trimmedSubject,
       htmlContent: finalHtmlContent,
     })
 
     const broadcastResponse = await retryWithBackoff(async () => {
       return await client.broadcasts.create({
-        name: subject,
+        name: broadcastName,
         audienceId,
         from: resolvedFromEmail,
-        subject,
+        subject: trimmedSubject,
         react: emailReact,
       })
     })

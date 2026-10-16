@@ -134,4 +134,44 @@ describe('a refused audience explains itself to the operator (#893)', () => {
       'Failed to send broadcast email: Segment has no subscribed contacts',
     )
   })
+
+  it('truncates broadcast internal name to 50 characters while preserving the full subject line', async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      data: { id: 'bc-long' },
+      error: null,
+    })
+    const sendMock = vi.fn().mockResolvedValue({
+      data: { id: 'bc-long' },
+      error: null,
+    })
+    h.getOrCreateConferenceAudience.mockResolvedValue({
+      audienceId: 'aud-123',
+      client: {
+        broadcasts: {
+          create: createMock,
+          send: sendMock,
+        },
+      },
+    })
+
+    const longSubject =
+      'Cloud Native Days Norway 2026 — Thank you for sponsoring and important practical info'
+    const response = await sendBroadcastEmail({
+      conference: { ...conference, contactEmail: 'info@example.test' },
+      subject: longSubject,
+      messagePortableText: [],
+    })
+
+    expect(response.status).toBe(200)
+    expect(createMock).toHaveBeenCalledTimes(1)
+    const callArg = createMock.mock.calls[0][0] as {
+      name: string
+      subject: string
+    }
+    expect(callArg.name.length).toBeLessThanOrEqual(50)
+    expect(callArg.name).toBe(
+      'Cloud Native Days Norway 2026 — Thank you for s...',
+    )
+    expect(callArg.subject).toBe(longSubject)
+  })
 })
