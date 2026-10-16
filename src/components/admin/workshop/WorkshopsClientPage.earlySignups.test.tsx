@@ -343,7 +343,10 @@ beforeEach(() => {
       const answers = await Promise.all(
         procedures.map((procedure, i) => answer(procedure, inputs[i])),
       )
-      return new Response(JSON.stringify(answers), {
+      // A call sent on its own (the ticket holders skip the batch) is
+      // answered with its one answer, a batch with a list.
+      const batched = url.searchParams.has('batch')
+      return new Response(JSON.stringify(batched ? answers : answers[0]), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })

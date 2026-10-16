@@ -44,14 +44,22 @@ export function useSaveWorkshopAccess({
   onError?: () => void
 }) {
   const router = useRouter()
+  const utils = api.useUtils()
   const { showNotification } = useNotification()
   const [refreshing, startRefresh] = useTransition()
+  // The page again, and the ticket holders (#1333), which the client reads
+  // and a refresh keeps: who holds a workshop ticket follows the answers.
+  // Nothing is read for them where they are not shown.
+  const reload = () => {
+    startRefresh(() => router.refresh())
+    void utils.workshop.admin.ticketHolders.invalidate()
+  }
   /** What to say once the save in flight has landed. */
   const saved = useRef<Notice | null>(null)
 
   const mutation = api.tickets.admin.setWorkshopAccess.useMutation({
     onSuccess: () => {
-      startRefresh(() => router.refresh())
+      reload()
       if (saved.current) {
         showNotification({ type: 'success', ...saved.current })
       }
@@ -62,7 +70,7 @@ export function useSaveWorkshopAccess({
       // organizer, Studio). The server refused and wrote nothing; the page
       // reloads itself, so the next click is asked on the current answers.
       if (STALE_PAGE.has(error.data?.code ?? '')) {
-        startRefresh(() => router.refresh())
+        reload()
         showNotification({
           type: 'error',
           title: 'This list changed since you opened it',
@@ -80,7 +88,7 @@ export function useSaveWorkshopAccess({
         // The list reloads only when the server answered. With no answer the
         // connection is likely down, and a refresh would navigate to the
         // offline page and take this warning with it (see `unknownOutcome`).
-        if (unknown === 'unconfirmed') startRefresh(() => router.refresh())
+        if (unknown === 'unconfirmed') reload()
         showNotification({
           type: 'warning',
           title: 'This change may or may not have been saved',

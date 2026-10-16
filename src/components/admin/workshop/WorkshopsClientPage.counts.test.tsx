@@ -63,6 +63,8 @@ const server = {
   ticketsDown: false,
   /** The ticket-holder read fails outright (the sign-ups could not be read). */
   holdersFail: false,
+  /** While set, the ticket-holder read waits on it: a slow provider. */
+  holdHolders: null as Promise<void> | null,
 }
 
 /** What the server rendered when the page was loaded. Never read again. */
@@ -134,6 +136,7 @@ async function answer(
     // and the numbers follow the stored sign-ups.
     case 'workshop.admin.ticketHolders': {
       server.holderReads += 1
+      if (server.holdHolders) await server.holdHolders
       if (server.ticketsDown) return [ok({ available: false }), 200]
       if (server.holdersFail) {
         return [
@@ -225,6 +228,7 @@ beforeEach(() => {
     holderReads: 0,
     ticketsDown: false,
     holdersFail: false,
+    holdHolders: null,
   })
   router.refresh.mockReset()
   vi.stubGlobal(
@@ -242,7 +246,11 @@ beforeEach(() => {
       const answers = await Promise.all(
         procedures.map((procedure, i) => answer(procedure, inputs[i])),
       )
-      return new Response(JSON.stringify(answers.map(([body]) => body)), {
+      // A batch answers with a list; a call sent on its own (the ticket
+      // holders skip the batch) with its one answer.
+      const batched = url.searchParams.has('batch')
+      const bodies = answers.map(([body]) => body)
+      return new Response(JSON.stringify(batched ? bodies : bodies[0]), {
         status: Math.max(...answers.map(([, status]) => status)),
         headers: { 'content-type': 'application/json' },
       })
@@ -471,6 +479,23 @@ describe('the ticket holders (#1333)', () => {
       '1',
     )
     expect(server.holderReads).toBe(2)
+  })
+
+  it('wait for nothing else: a slow ticket read holds back no other number', async () => {
+    let providerAnswers!: () => void
+    server.holdHolders = new Promise((resolve) => {
+      providerAnswers = resolve
+    })
+    renderPage()
+
+    // The summary's numbers are in while the ticket holders are not.
+    expect(await cardButton(/^Confirmed\s*120$/)).toBeInTheDocument()
+    expect(
+      within(await panel()).getByRole('status', { hidden: true }),
+    ).toHaveTextContent('Reading the ticket holders')
+
+    providerAnswers()
+    expect((await tile('Holders')).nextElementSibling).toHaveTextContent('5')
   })
 
   it.each([

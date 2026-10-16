@@ -15,6 +15,9 @@ import { render, cleanup, screen } from '@testing-library/react'
 // behaviour is pinned in `TicketTypeRoleControl.test.tsx`.
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    useUtils: () => ({
+      workshop: { admin: { ticketHolders: { invalidate: vi.fn() } } },
+    }),
     tickets: {
       admin: {
         setTicketTypeRole: {

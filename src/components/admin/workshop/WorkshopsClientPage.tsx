@@ -149,8 +149,10 @@ export function WorkshopsClientPage({
   // THE TICKET HOLDERS (#1333): read after the page, since the ticket read is
   // slow once the shared memo has lapsed. One read for the panel and for the
   // banner in the "Workshop tickets" section (through the context below).
+  // Outside the batch: the sign-ups and the totals do not wait for it.
   const ticketHolders = api.workshop.admin.ticketHolders.useQuery(undefined, {
     enabled: !!conferenceId,
+    trpc: { context: { skipBatch: true } },
   })
   const holderView = ticketHolderView(ticketHolders)
 

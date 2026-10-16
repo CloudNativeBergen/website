@@ -37,6 +37,9 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    useUtils: () => ({
+      workshop: { admin: { ticketHolders: { invalidate: vi.fn() } } },
+    }),
     tickets: {
       admin: {
         setWorkshopAccess: {
