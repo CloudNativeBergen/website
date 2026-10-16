@@ -1,5 +1,5 @@
 import { groq } from 'next-sanity'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import type {
   ProposalWithWorkshopData,
   WorkshopSignupExisting,
@@ -9,6 +9,7 @@ import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
 import { freeSeat } from './seats'
 import { isListedWorkshop } from './listed'
+import type { HolderSignup } from './holders'
 
 export async function getWorkshopSignups(
   userWorkOSId: string,
@@ -387,6 +388,31 @@ export async function getAllWorkshopSignups(filters: {
   }`
 
   return await clientWrite.fetch(query, params)
+}
+
+/**
+ * Every sign-up of one conference, for the ticket-holder join (#1333): what
+ * the join reads and nothing else, in one read, unpaged.
+ *
+ * LIVE: the statistics are read again after every organizer action, and a
+ * cached answer would show the sign-up just deleted. A draft is not a sign-up.
+ * An unresolvable tenant reads nothing.
+ */
+export async function getSignupsForHolderJoin(
+  conferenceId: string,
+): Promise<HolderSignup[]> {
+  if (!conferenceId) return []
+  return clientReadUncached.fetch<HolderSignup[]>(
+    groq`*[_type == "workshopSignup" && conference._ref == $conferenceId && !(_id in path("drafts.**"))]{
+      _id,
+      userEmail,
+      userName,
+      status,
+      "workshop": workshop->{ _id, title }
+    }`,
+    { conferenceId },
+    { cache: 'no-store' },
+  )
 }
 
 export async function getWorkshopsByConference(

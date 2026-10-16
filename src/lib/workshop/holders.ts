@@ -23,8 +23,13 @@ import {
   workshopAccessOf,
   type TicketTypeRole,
 } from '@/lib/tickets/classification'
-import type { TicketCandidate } from '@/lib/tickets/speakerStatus'
-import { ticketHolderKey } from './eligibility'
+import type { ConferenceTicketingBinding } from '@/lib/tickets/provider'
+import {
+  fetchEventTicketCandidates,
+  type TicketCandidate,
+} from '@/lib/tickets/speakerStatus'
+import { liveTicketTypeRoles, ticketHolderKey } from './eligibility'
+import { getSignupsForHolderJoin } from './sanity'
 
 /** The fields of a sign-up the join reads. */
 export interface HolderSignup {
@@ -158,4 +163,32 @@ export function joinTicketHolders({
       people: people.size,
     })),
   }
+}
+
+/**
+ * The join for one conference, read: `null` when the ticket provider cannot
+ * be read, which a surface shows as unavailable and never as zero.
+ *
+ * TICKETS through the shared 30-second memo the gate uses, unless `fresh`: a
+ * send (#1334) must see a ticket sold seconds ago. ROLES live, as the gate
+ * reads them, so an edit shows at once. SIGN-UPS live, of this conference
+ * only. A failed sign-up read throws.
+ */
+export async function readTicketHolders(
+  conference: ConferenceTicketingBinding & {
+    _id: string
+    ticketTypeRoles?: readonly TicketTypeRole[] | null
+  },
+  options: { fresh?: boolean } = {},
+): Promise<TicketHolderJoin | null> {
+  const tickets = await fetchEventTicketCandidates(
+    conference,
+    options.fresh ? { fresh: true } : undefined,
+  )
+  if (!tickets) return null
+  const [ticketTypeRoles, signups] = await Promise.all([
+    liveTicketTypeRoles(conference),
+    getSignupsForHolderJoin(conference._id),
+  ])
+  return joinTicketHolders({ tickets, signups, ticketTypeRoles })
 }
