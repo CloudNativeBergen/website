@@ -61,6 +61,8 @@ const server = {
   holderReads: 0,
   /** The ticket provider cannot be read (#1333). */
   ticketsDown: false,
+  /** The ticket-holder read fails outright (the sign-ups could not be read). */
+  holdersFail: false,
 }
 
 /** What the server rendered when the page was loaded. Never read again. */
@@ -133,6 +135,18 @@ async function answer(
     case 'workshop.admin.ticketHolders': {
       server.holderReads += 1
       if (server.ticketsDown) return [ok({ available: false }), 200]
+      if (server.holdersFail) {
+        return [
+          {
+            error: {
+              message: 'Failed to read the workshop ticket holders',
+              code: -32603,
+              data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+            },
+          },
+          500,
+        ]
+      }
       const count = (status: string) =>
         server.signups.filter((s) => s.status === status).length
       return [
@@ -210,6 +224,7 @@ beforeEach(() => {
     summaryReads: 0,
     holderReads: 0,
     ticketsDown: false,
+    holdersFail: false,
   })
   router.refresh.mockReset()
   vi.stubGlobal(
@@ -458,14 +473,20 @@ describe('the ticket holders (#1333)', () => {
     expect(server.holderReads).toBe(2)
   })
 
-  it('say unavailable when the tickets cannot be read, and the sign-up totals still render', async () => {
-    server.ticketsDown = true
-    renderPage()
+  it.each([
+    ['the tickets cannot be read', 'ticketsDown'],
+    ['the read fails outright', 'holdersFail'],
+  ] as const)(
+    'say unavailable when %s, and the sign-up totals still render',
+    async (_, flag) => {
+      server[flag] = true
+      renderPage()
 
-    const region = await panel()
-    await within(region).findByText(/^Unavailable:/)
-    expect(region.textContent).not.toMatch(/\d/)
-    // The sign-up totals from the summary are on the page all the same.
-    expect(await screen.findByText('Total Signups')).toBeInTheDocument()
-  })
+      const region = await panel()
+      await within(region).findByText(/^Unavailable:/)
+      expect(region.textContent).not.toMatch(/\d/)
+      // The sign-up totals from the summary are on the page all the same.
+      expect(await screen.findByText('Total Signups')).toBeInTheDocument()
+    },
+  )
 })
