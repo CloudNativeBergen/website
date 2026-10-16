@@ -470,10 +470,7 @@ export function findUnsupportedVariables(
         found.add(v)
       }
     } else if (Array.isArray(source)) {
-      const merged = processPortableTextVariables(
-        source as unknown as TemplateBlock[],
-        placeholderVars,
-      ) as unknown as PortableTextBlock[]
+      const merged = processPortableTextVariables(source, placeholderVars)
       for (const v of extractVariablesFromPortableText(merged)) {
         found.add(v)
       }
