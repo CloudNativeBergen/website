@@ -21,6 +21,7 @@ import {
 } from './form'
 import { ManageCards } from './ManageCards'
 import type { SponsorSubView } from './form/deal-status'
+import { hasPositiveContractValue } from '@/lib/sponsor-crm/contract-readiness'
 import clsx from 'clsx'
 
 export interface SponsorPipelineFormData {
@@ -125,10 +126,10 @@ export function SponsorPipelineView({
   onSendEmail,
   onSendDiscountCodes,
 }: SponsorPipelineViewProps) {
-  const isContractProcessStarted =
-    sponsor?.contractStatus === 'registration-sent' ||
-    sponsor?.contractStatus === 'contract-sent' ||
-    sponsor?.contractStatus === 'contract-signed'
+  const isContractValueLocked =
+    (sponsor?.contractStatus === 'contract-sent' ||
+      sponsor?.contractStatus === 'contract-signed') &&
+    hasPositiveContractValue(sponsor?.contractValue)
 
   return (
     <form onSubmit={onSubmit}>
@@ -222,9 +223,9 @@ export function SponsorPipelineView({
                   contractCurrency: value as 'NOK' | 'USD' | 'EUR' | 'GBP',
                 }))
               }
-              disabled={isContractProcessStarted}
+              disabled={isContractValueLocked}
               helperText={
-                isContractProcessStarted
+                isContractValueLocked
                   ? 'Locked — contract has been sent'
                   : undefined
               }

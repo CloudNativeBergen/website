@@ -58,6 +58,7 @@ import {
   findUnsupportedVariables,
   formatUnmergedVariablesMessage,
   processPortableTextVariables,
+  RESEND_BROADCAST_VARIABLES,
   suggestTemplateCategory,
   suggestTemplateLanguage,
 } from '@/lib/sponsor/templates'
@@ -3346,7 +3347,7 @@ export const sponsorRouter = router({
         }
 
         const unmergedVariables = findUnsupportedVariables(
-          {},
+          RESEND_BROADCAST_VARIABLES,
           input.subject,
           messagePortableText as unknown as TemplateBlock[],
         )
