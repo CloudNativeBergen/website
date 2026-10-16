@@ -1039,6 +1039,33 @@ _Decided in review_ (§15). Implemented in P7, in `lib/legal/subprocessors.ts`,
 | P9  | **Operator enablement:** the `'pretix'` option in the **Sanity schema only**, settable by an operator in Studio. `server/schemas/conference.ts` and the org-admin router accept `'pretix'` only when the stored document already carries it (so an operator-bound conference can still save its other fields) and **refuse a transition to it**; the §10 grep. Then the **pre-live manual checks** (§13) on an operator-bound test conference against a real Pretix instance through a public URL, recorded on this ticket. | N2–N9, P1–P8   |
 | P10 | **Org-admin enablement:** the router's refusal is lifted and the Settings Ticketing card offers Pretix. Released only after P9's manual checks pass.                                                                                                                                                                                                                                                                                                                                                                        | P9             |
 
+### 12.1 Tickets
+
+Every slice is filed as an issue under [Pretix as a ticketing provider: implementation](https://github.com/CloudNativeBergen/website/issues/1388), with the dependencies above as native blocking edges.
+
+| Slice | Issue |
+| ----- | ----- |
+| N1    | #1389 |
+| N2    | #1390 |
+| N3    | #1391 |
+| N4    | #1392 |
+| N5    | #1393 |
+| N6    | #1394 |
+| N7    | #1395 |
+| N8    | #1396 |
+| N9    | #1397 |
+| P1    | #1398 |
+| P1b   | #1399 |
+| P2    | #1400 |
+| P3    | #1401 |
+| P4    | #1402 |
+| P5    | #1403 |
+| P6    | #1404 |
+| P7    | #1405 |
+| P8    | #1406 |
+| P9    | #1407 |
+| P10   | #1408 |
+
 ## 13. Verification strategy
 
 - **Per-PR CI uses recorded fixtures only.**
