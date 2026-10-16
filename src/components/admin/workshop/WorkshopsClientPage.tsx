@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
 import {
   AdminPageHeader,
@@ -36,6 +36,12 @@ import {
 } from './early-signups'
 import { workshopEarlySignupsSchema } from '@/server/schemas/workshop'
 import { useSearchParams } from 'next/navigation'
+import {
+  TicketHolderContext,
+  TicketHolderPanel,
+  ticketHolderView,
+  useRereadTicketHolders,
+} from './holders'
 
 interface SignupModalState {
   isOpen: boolean
@@ -77,7 +83,17 @@ interface WorkshopsClientPageProps {
   ticketsSection?: ReactNode
 }
 
-export function WorkshopsClientPage({
+/**
+ * THE PAGE BELONGS TO ONE CONFERENCE. If the conference changes under it (the
+ * domain moved and the client kept this tree), it starts over: every list,
+ * question and answer it holds is the other conference's, and the ticket
+ * holders are read again on mount.
+ */
+export function WorkshopsClientPage(props: WorkshopsClientPageProps) {
+  return <WorkshopsClientPageFor key={props.conferenceId} {...props} />
+}
+
+function WorkshopsClientPageFor({
   conferenceId,
   initialWorkshops,
   workshopRegistrationSponsorStart,
@@ -140,6 +156,22 @@ export function WorkshopsClientPage({
     api.workshop.admin.getSummary.useQuery(undefined, {
       enabled: !!conferenceId,
     })
+
+  // THE TICKET HOLDERS (#1333): read after the page, since the ticket read is
+  // slow once the shared memo has lapsed. One read for the panel and for the
+  // banner in the "Workshop tickets" section (through the context below).
+  // Outside the batch: the sign-ups and the totals do not wait for it.
+  const ticketHolders = api.workshop.admin.ticketHolders.useQuery(undefined, {
+    enabled: !!conferenceId,
+    trpc: { context: { skipBatch: true } },
+    // READ ON EVERY VISIT, also within the app's 60-second stale time: an
+    // answer cached on an earlier visit may be another conference's (the
+    // domain moved), and `ticketHolderView` never shows one. Read again, it
+    // is this conference's; still another's, the panel says unavailable.
+    refetchOnMount: 'always',
+  })
+  const holderView = ticketHolderView(ticketHolders, conferenceId)
+  const rereadTicketHolders = useRereadTicketHolders()
 
   // THE "EARLY SIGN-UPS" LIST (#1348). Narrowing it to a sponsor is a new
   // read with the sponsor in its input: the server narrows, over every match.
@@ -208,6 +240,8 @@ export function WorkshopsClientPage({
     // for again: `router.refresh()` re-runs the whole page for three numbers,
     // and one that cannot reach the server turns into a hard navigation.
     refetchStats()
+    // Who is flagged, confirmed or waiting changes with every action too.
+    rereadTicketHolders()
   }
 
   // Confirm, move to waitlist, delete. Everything is read again after every
@@ -452,7 +486,23 @@ export function WorkshopsClientPage({
         </div>
       </AdminPageHeader>
 
-      {ticketsSection}
+      {/* The section is rendered by the server; its banner reads the ticket
+          holders this page read, through the context. It comes FIRST (spec
+          §3): the not-set types are named above the statistics that leave
+          their holders out. */}
+      <TicketHolderContext.Provider value={holderView}>
+        {ticketsSection}
+      </TicketHolderContext.Provider>
+
+      <TicketHolderPanel
+        view={holderView}
+        onRetry={() => void ticketHolders.refetch()}
+        onMoveToWaitlist={signupActions.moveToWaitlist}
+        onDeleteSignup={signupActions.remove}
+        isMoving={signupActions.isMoving}
+        isDeleting={signupActions.isDeleting}
+        isRefreshing={ticketHolders.isFetching}
+      />
 
       <WorkshopRegistrationSettings
         workshopRegistrationSponsorStart={workshopRegistrationSponsorStart}

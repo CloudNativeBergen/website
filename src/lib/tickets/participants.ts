@@ -23,6 +23,7 @@ import {
   type TicketClassificationContext,
   type TicketRoleSource,
 } from './classification'
+import { canonicalEmail } from '@/lib/speaker/email'
 import type { EventTicket } from './types'
 import { deduplicateTicketsByEmail } from './utils'
 
@@ -77,8 +78,8 @@ export interface ParticipantTally {
 export const seatsUsed = (tally: ParticipantTally) =>
   tally.participants + tally.repeatTickets
 
-const emailOf = (ticket: EventTicket) =>
-  ticket.crm?.email?.trim().toLowerCase() || ''
+/** One person per address, as the workshop gate tells them apart. */
+const emailOf = (ticket: EventTicket) => canonicalEmail(ticket.crm?.email)
 
 /**
  * @param context classification inputs. The conference-derived parts

@@ -168,6 +168,13 @@ vi.mock('@/components/admin/NotificationProvider', () => ({
 // THE TRANSPORT ONLY: the hook's `mutate` calls the real procedure.
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    useUtils: () => ({
+      workshop: {
+        admin: {
+          ticketHolders: { cancel: async () => {}, invalidate: () => {} },
+        },
+      },
+    }),
     tickets: {
       admin: {
         setWorkshopAccess: {

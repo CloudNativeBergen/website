@@ -1,5 +1,5 @@
 import { groq } from 'next-sanity'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import type {
   ProposalWithWorkshopData,
   WorkshopSignupExisting,
@@ -9,6 +9,7 @@ import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
 import { freeSeat } from './seats'
 import { isListedWorkshop } from './listed'
+import type { HolderSignup } from './holders'
 
 export async function getWorkshopSignups(
   userWorkOSId: string,
@@ -387,6 +388,35 @@ export async function getAllWorkshopSignups(filters: {
   }`
 
   return await clientWrite.fetch(query, params)
+}
+
+/**
+ * Every sign-up of one conference, for the ticket-holder join (#1333): what
+ * the join reads and nothing else, in one read, unpaged.
+ *
+ * LIVE: the statistics are read again after every organizer action, and a
+ * cached answer would show the sign-up just deleted. A draft or a release
+ * copy is not a sign-up. An unresolvable tenant reads nothing.
+ *
+ * THE WORKSHOP IS READ ONLY IF IT IS THE CONFERENCE'S (as in
+ * `./early-access/signups`): a sign-up that points at another conference's
+ * workshop, a bad write, still counts and never carries that title.
+ */
+export async function getSignupsForHolderJoin(
+  conferenceId: string,
+): Promise<HolderSignup[]> {
+  if (!conferenceId) return []
+  return clientReadUncached.fetch<HolderSignup[]>(
+    groq`*[_type == "workshopSignup" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
+      _id,
+      userEmail,
+      userName,
+      status,
+      "workshop": select(workshop->conference._ref == $conferenceId => workshop->{ _id, title })
+    }`,
+    { conferenceId },
+    { cache: 'no-store' },
+  )
 }
 
 export async function getWorkshopsByConference(

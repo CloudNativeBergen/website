@@ -94,10 +94,7 @@ import type { EventTicket } from '@/lib/tickets/types'
 export type ClassifiableTicket = Pick<
   EventTicket,
   'category' | 'sum' | 'coupon' | 'discount'
-> & {
-  fields?: { key: string; value: string }[]
-  additionals?: { name: string; value: string }[]
-}
+>
 
 /** Who granted a ticket, when it was granted rather than bought. */
 export type TicketGrantedBy =
@@ -360,85 +357,12 @@ export function classifyTicket(
           ? 'proposed'
           : 'unknown',
     comp,
-    grantsWorkshop: (() => {
-      let granted =
-        workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted'
-      if (isSpeakerType) {
-        const fieldMatches =
-          ticket.fields?.filter(
-            (f) =>
-              f.key.toLowerCase().includes('monday') ||
-              f.key.toLowerCase().includes('workshop'),
-          ) ?? []
-        const additionalMatches =
-          ticket.additionals?.filter(
-            (a) =>
-              a.name.toLowerCase().includes('monday') ||
-              a.name.toLowerCase().includes('workshop'),
-          ) ?? []
-
-        granted = false
-
-        for (const f of fieldMatches) {
-          const val = (f.value ?? '').toLowerCase().trim()
-          const isNegative = val.includes('no') || val.includes('nei')
-          if (
-            !isNegative &&
-            (val.includes('yes') ||
-              val.includes('ja') ||
-              ['true', '1', 'on', 'checked', 'ok', 'y'].some((t) => val === t))
-          ) {
-            granted = true
-            break
-          }
-        }
-
-        if (!granted) {
-          for (const a of additionalMatches) {
-            const val = (a.value ?? '').toLowerCase().trim()
-            const isSelected =
-              val.includes('yes') ||
-              val.includes('ja') ||
-              ['true', '1', 'on', 'checked', 'ok', 'y'].some((t) => val === t)
-            if (!isSelected) continue
-
-            // Additionals store multiple-choice answers in the name ("Prompt - Option") with value "1"
-            const dashIdx = a.name.lastIndexOf(' - ')
-            if (dashIdx !== -1) {
-              const optionSuffix = a.name
-                .slice(dashIdx + 3)
-                .toLowerCase()
-                .trim()
-              const isAffirmativeOption =
-                optionSuffix.includes('yes') || optionSuffix.includes('ja')
-              const isNegativeOption =
-                optionSuffix.includes('no') || optionSuffix.includes('nei')
-              if (isAffirmativeOption && !isNegativeOption) {
-                granted = true
-                break
-              }
-            } else {
-              const nameLower = a.name.toLowerCase()
-              const isNegativeVal = val.includes('no') || val.includes('nei')
-              if (
-                !isNegativeVal &&
-                (val.includes('yes') ||
-                  val.includes('ja') ||
-                  ['true', '1', 'on', 'checked', 'ok', 'y'].some(
-                    (t) => val === t,
-                  ) ||
-                  nameLower.includes('yes') ||
-                  nameLower.includes('ja'))
-              ) {
-                granted = true
-                break
-              }
-            }
-          }
-        }
-      }
-      return granted
-    })(),
+    // THE GATE'S ANSWER AND NOTHING ELSE (#1333). A speaker's form answer
+    // about the workshops used to override it here, so a speaker the portal
+    // admits could be missing from every count, and one whose type is set to
+    // No could be in it.
+    grantsWorkshop:
+      workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted',
     grantedBy,
   }
 }

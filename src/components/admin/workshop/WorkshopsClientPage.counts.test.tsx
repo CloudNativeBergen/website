@@ -34,6 +34,7 @@ import { useState, type ReactNode } from 'react'
 import { api, getTRPCClient } from '@/lib/trpc/client'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
+import { TAP_GUARD_MS } from '@/hooks/useOpenedLongEnough'
 import { WorkshopsClientPage } from './WorkshopsClientPage'
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }))
@@ -58,6 +59,17 @@ const server = {
   /** While set, the summary waits on it. */
   holdSummary: null as Promise<void> | null,
   summaryReads: 0,
+  holderReads: 0,
+  /** The ticket provider cannot be read (#1333). */
+  ticketsDown: false,
+  /** The ticket-holder read fails outright (the sign-ups could not be read). */
+  holdersFail: false,
+  /** While set, the ticket-holder read waits on it: a slow provider. */
+  holdHolders: null as Promise<void> | null,
+  /** Sign-ups whose owner holds no workshop ticket: the flagged list. */
+  flaggedIds: [] as string[],
+  /** The conference the request's domain resolves to, as the server says. */
+  conferenceId: 'conf-1',
 }
 
 /** What the server rendered when the page was loaded. Never read again. */
@@ -125,6 +137,60 @@ async function answer(
         200,
       ]
     }
+    // The ticket holders (#1333): everyone listed holds a workshop ticket,
+    // and the numbers follow the stored sign-ups.
+    case 'workshop.admin.ticketHolders': {
+      server.holderReads += 1
+      // The answer is what was stored when the read began; a slow provider
+      // delivers it late, not newer.
+      const count = (status: string) =>
+        server.signups.filter((s) => s.status === status).length
+      const stats = {
+        conferenceId: server.conferenceId,
+        available: true,
+        configured: true,
+        holders: server.signups.length + 3,
+        confirmed: count('confirmed'),
+        waitlistOnly: count('waitlist'),
+        notSignedUp: 3,
+        flagged: server.signups
+          .filter((s) => server.flaggedIds.includes(s._id))
+          .map((s) => ({
+            email: `${s._id}@example.com`,
+            name: s.userName,
+            signups: [
+              {
+                _id: s._id,
+                userEmail: `${s._id}@example.com`,
+                userName: s.userName,
+                status: s.status,
+                workshop: { _id: 'ws-1', title: 'Kubernetes 101' },
+              },
+            ],
+          })),
+        lockedOut: [],
+      }
+      if (server.holdHolders) await server.holdHolders
+      if (server.ticketsDown) {
+        return [
+          ok({ conferenceId: server.conferenceId, available: false }),
+          200,
+        ]
+      }
+      if (server.holdersFail) {
+        return [
+          {
+            error: {
+              message: 'Failed to read the workshop ticket holders',
+              code: -32603,
+              data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+            },
+          },
+          500,
+        ]
+      }
+      return [ok(stats), 200]
+    }
     case 'workshop.admin.batchCancelSignups': {
       const [id] = (input as { signupIds: string[] }).signupIds
       if (server.attendeeCancelsFirst) {
@@ -184,6 +250,12 @@ beforeEach(() => {
     attendeeCancelsFirst: false,
     holdSummary: null,
     summaryReads: 0,
+    holderReads: 0,
+    ticketsDown: false,
+    holdersFail: false,
+    holdHolders: null,
+    flaggedIds: [],
+    conferenceId: 'conf-1',
   })
   router.refresh.mockReset()
   vi.stubGlobal(
@@ -201,7 +273,11 @@ beforeEach(() => {
       const answers = await Promise.all(
         procedures.map((procedure, i) => answer(procedure, inputs[i])),
       )
-      return new Response(JSON.stringify(answers.map(([body]) => body)), {
+      // A batch answers with a list; a call sent on its own (the ticket
+      // holders skip the batch) with its one answer.
+      const batched = url.searchParams.has('batch')
+      const bodies = answers.map(([body]) => body)
+      return new Response(JSON.stringify(batched ? bodies : bodies[0]), {
         status: Math.max(...answers.map(([, status]) => status)),
         headers: { 'content-type': 'application/json' },
       })
@@ -406,4 +482,213 @@ describe('the registration card on the page', () => {
     // The page's own reads have settled before the test ends.
     await cardButton(/^Confirmed\s*120$/)
   })
+})
+
+describe('the ticket holders (#1333)', () => {
+  // Behind an open list, like the cards: `hidden` finds it all the same.
+  const panel = () =>
+    screen.findByRole('region', { name: 'Ticket holders', hidden: true })
+  const tile = async (label: string) =>
+    within(await panel()).findByText(label, { selector: 'span' })
+
+  it('follow an action on a sign-up: read again after "Move to waitlist"', async () => {
+    renderPage()
+    expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent('2')
+    await moveAdaToTheWaitlist()
+    await screen.findByText('Moved to waitlist')
+
+    await waitFor(async () =>
+      expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent(
+        '1',
+      ),
+    )
+    expect((await tile('Waitlist only')).nextElementSibling).toHaveTextContent(
+      '1',
+    )
+    expect(server.holderReads).toBe(2)
+  })
+
+  // Spec §3: the banner that names the not-set types (in the "Workshop
+  // tickets" section) sits above the statistics, so the people it explains
+  // are explained before the totals that leave them out.
+  it('come after the "Workshop tickets" section and its banner', async () => {
+    render(
+      <Providers>
+        <WorkshopsClientPage
+          conferenceId="conf-1"
+          initialWorkshops={SERVER_RENDER}
+          resendDisabledReason={null}
+          ticketsSection={<section aria-label="Workshop tickets" />}
+        />
+      </Providers>,
+    )
+    const tickets = screen.getByRole('region', { name: 'Workshop tickets' })
+    expect(
+      tickets.compareDocumentPosition(await panel()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  // An action while the FIRST read is still on its way: that read began
+  // before the action, so its answer is old. It must not be taken as the
+  // re-read the action asked for (TanStack reuses a fetch in flight when a
+  // query has no data yet).
+  it('are read again after an action taken while the first read was on its way', async () => {
+    let providerAnswers!: () => void
+    server.holdHolders = new Promise((resolve) => {
+      providerAnswers = resolve
+    })
+    renderPage()
+    await moveAdaToTheWaitlist()
+    await screen.findByText('Moved to waitlist')
+    providerAnswers()
+
+    await waitFor(async () =>
+      expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent(
+        '1',
+      ),
+    )
+    expect((await tile('Waitlist only')).nextElementSibling).toHaveTextContent(
+      '1',
+    )
+    expect(server.holderReads).toBe(2)
+  })
+
+  // The flagged list still shows a sign-up until the re-read after acting on
+  // it lands; acting on it again meanwhile would be refused or repeat itself.
+  it('offer no flagged action until the re-read after one is in', async () => {
+    server.flaggedIds = ['signup-bob']
+    renderPage()
+    fireEvent.click(
+      await within(await panel()).findByRole('button', { name: 'Flagged, 1' }),
+    )
+    const list = await screen.findByRole('dialog', { name: 'Flagged sign-ups' })
+    const move = () =>
+      within(within(list).getByRole('table')).queryByRole('button', {
+        name: 'Move to waitlist',
+      })
+
+    let providerAnswers!: () => void
+    server.holdHolders = new Promise((resolve) => {
+      providerAnswers = resolve
+    })
+    fireEvent.click(move()!)
+    const question = await screen.findByRole('dialog', {
+      name: 'Move to waitlist',
+    })
+    // The question takes no confirm for a moment after it opens.
+    await new Promise((resolve) => setTimeout(resolve, TAP_GUARD_MS))
+    fireEvent.click(
+      within(question).getByRole('button', { name: 'Move to waitlist' }),
+    )
+    await screen.findByText('Moved to waitlist')
+
+    // Moved, and the re-read is on its way: the row still says confirmed,
+    // and offers nothing.
+    // (The server counts the read before React has rendered it fetching.)
+    await waitFor(() => expect(server.holderReads).toBe(2))
+    await waitFor(() => expect(move()).toBeDisabled())
+    expect(server.holderReads).toBe(2)
+
+    providerAnswers()
+    await waitFor(() => expect(move()).toBeNull())
+  })
+
+  // TENANCY: the domain now resolves to another conference and the page is
+  // rendered for it in the same client. The first conference's numbers (and
+  // flagged names) are not shown from the cache; they are read again.
+  it('are read again, and the old ones never shown, when the conference changes', async () => {
+    const page = (conferenceId: string) => (
+      <Providers>
+        <WorkshopsClientPage
+          conferenceId={conferenceId}
+          initialWorkshops={SERVER_RENDER}
+          resendDisabledReason={null}
+        />
+      </Providers>
+    )
+    const { rerender } = render(page('conf-1'))
+    expect((await tile('Holders')).nextElementSibling).toHaveTextContent('5')
+
+    server.conferenceId = 'conf-2'
+    server.signups = [server.signups[0]]
+    rerender(page('conf-2'))
+
+    expect(screen.queryByText('5', { selector: 'span' })).toBeNull()
+    await waitFor(async () =>
+      expect((await tile('Holders')).nextElementSibling).toHaveTextContent('4'),
+    )
+    expect(server.holderReads).toBe(2)
+  })
+
+  // The page is left and opened again within the cache's 60 seconds, and
+  // the domain now resolves to another conference: the cached answer is the
+  // other conference's. It is read again on the way in, not hidden for ever.
+  it('are read again when the page is opened again for another conference', async () => {
+    const page = (conferenceId: string) => (
+      <WorkshopsClientPage
+        conferenceId={conferenceId}
+        initialWorkshops={SERVER_RENDER}
+        resendDisabledReason={null}
+      />
+    )
+    // One client for both visits, as in the app.
+    const { rerender } = render(<Providers>{page('conf-1')}</Providers>)
+    expect((await tile('Holders')).nextElementSibling).toHaveTextContent('5')
+    rerender(<Providers>{null}</Providers>)
+
+    server.conferenceId = 'conf-2'
+    server.signups = [server.signups[0]]
+    rerender(<Providers>{page('conf-2')}</Providers>)
+
+    await waitFor(async () =>
+      expect((await tile('Holders')).nextElementSibling).toHaveTextContent('4'),
+    )
+    expect(server.holderReads).toBe(2)
+  })
+
+  // The page was rendered for one conference and the server now answers for
+  // another (the domain moved under it): the panel says the numbers are
+  // unavailable, it does not load for ever.
+  it('say unavailable when the server keeps answering for another conference', async () => {
+    server.conferenceId = 'conf-2'
+    renderPage()
+    const region = await panel()
+    await within(region).findByText(/^Unavailable:/)
+    expect(region.textContent).not.toMatch(/\d/)
+  })
+
+  it('wait for nothing else: a slow ticket read holds back no other number', async () => {
+    let providerAnswers!: () => void
+    server.holdHolders = new Promise((resolve) => {
+      providerAnswers = resolve
+    })
+    renderPage()
+
+    // The summary's numbers are in while the ticket holders are not.
+    expect(await cardButton(/^Confirmed\s*120$/)).toBeInTheDocument()
+    expect(
+      within(await panel()).getByRole('status', { hidden: true }),
+    ).toHaveTextContent('Reading the ticket holders')
+
+    providerAnswers()
+    expect((await tile('Holders')).nextElementSibling).toHaveTextContent('5')
+  })
+
+  it.each([
+    ['the tickets cannot be read', 'ticketsDown'],
+    ['the read fails outright', 'holdersFail'],
+  ] as const)(
+    'say unavailable when %s, and the sign-up totals still render',
+    async (_, flag) => {
+      server[flag] = true
+      renderPage()
+
+      const region = await panel()
+      await within(region).findByText(/^Unavailable:/)
+      expect(region.textContent).not.toMatch(/\d/)
+      // The sign-up totals from the summary are on the page all the same.
+      expect(await screen.findByText('Total Signups')).toBeInTheDocument()
+    },
+  )
 })
