@@ -33,6 +33,7 @@ import { marketingRouter } from './routers/marketing'
 import { marketingAssetRouter } from './routers/marketingAsset'
 import { videoProjectRouter } from './routers/videoProject'
 import { organizationRouter } from './routers/organization'
+import { sessionFeedbackRouter } from './routers/sessionFeedback'
 
 export const appRouter = router({
   badge: badgeRouter,
@@ -69,6 +70,7 @@ export const appRouter = router({
   marketingAsset: marketingAssetRouter,
   videoProject: videoProjectRouter,
   organization: organizationRouter,
+  sessionFeedback: sessionFeedbackRouter,
 })
 
 export type AppRouter = typeof appRouter
