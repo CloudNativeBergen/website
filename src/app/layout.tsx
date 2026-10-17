@@ -8,8 +8,6 @@ import {
   Bricolage_Grotesque,
   Atkinson_Hyperlegible,
 } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/react'
-import { SpeedInsights } from '@vercel/speed-insights/next'
 import Script from 'next/script'
 import clsx from 'clsx'
 import { headers } from 'next/headers'
@@ -22,7 +20,12 @@ import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { resolvePirschCode, resolvePosthogToken } from '@/lib/analytics'
 import { getOrganizationById } from '@/lib/organization/sanity'
 import { ANALYTICS_CONFIG_ELEMENT_ID } from '@/lib/posthog/config'
-import { AnalyticsConsentBar, AnalyticsRouteGate } from '@/components/analytics'
+import {
+  AnalyticsConsentBar,
+  AnalyticsRouteGate,
+  HiddenOnFeedbackPage,
+  VercelInsights,
+} from '@/components/analytics'
 import { canonicalOrigin } from '@/lib/seo/canonical'
 import { DevBanner } from '@/components/DevBanner'
 import {
@@ -213,14 +216,17 @@ async function TenantAnalytics() {
   const pirschCode = resolvePirschCode(conference.analyticsPirschCode)
   if (!pirschCode) return null
 
+  // Not on the attendee feedback page (speaker feedback spec §7.1).
   return (
-    <Script
-      defer
-      src="https://api.pirsch.io/pa.js"
-      id="pianjs"
-      data-code={pirschCode}
-      strategy="afterInteractive"
-    />
+    <HiddenOnFeedbackPage>
+      <Script
+        defer
+        src="https://api.pirsch.io/pa.js"
+        id="pianjs"
+        data-code={pirschCode}
+        strategy="afterInteractive"
+      />
+    </HiddenOnFeedbackPage>
   )
 }
 
@@ -280,14 +286,16 @@ export default function RootLayout({
                 <Suspense>
                   <SessionProviderWrapper>{children}</SessionProviderWrapper>
                 </Suspense>
-                <InstallPrompt />
+                <HiddenOnFeedbackPage>
+                  <InstallPrompt />
+                </HiddenOnFeedbackPage>
                 <ServiceWorkerRegistrar />
               </div>
             </PwaInstallProvider>
           </TRPCProvider>
         </ThemeProvider>
-        <Analytics />
-        <SpeedInsights />
+        {/* The Feedback Code is redacted from `/f/` URLs (speaker feedback §7.1). */}
+        <VercelInsights />
         {/*
           Web analytics — rendered ONLY when this tenant has configured its
           own PostHog token (organization) or, until it switches, its own

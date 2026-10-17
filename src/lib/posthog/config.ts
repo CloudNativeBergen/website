@@ -52,11 +52,18 @@ export function parseTenantAnalyticsConfig(
  * both behind the `(cfp)` layout's speaker check). Neither is public traffic,
  * and organizer clicks must never land in a Campaign's Outcomes. The public
  * `/cfp` landing page is NOT excluded — it is where the `cta-cfp-*` buttons
- * send visitors. Used twice: the client entry does not init on these paths
- * (`./init`), and `before_send` drops events captured on them after a
+ * send visitors. The attendee feedback page `/f/<code>` is excluded too
+ * (speaker feedback spec §7.1): its URL is the Feedback Code, and §8 promises
+ * it no consent prompt. Used twice: the client entry does not init on these
+ * paths (`./init`), and `before_send` drops events captured on them after a
  * client-side navigation into one.
  */
-const EXCLUDED_PATH_PREFIXES = ['/admin', '/cfp/', '/notifications'] as const
+const EXCLUDED_PATH_PREFIXES = [
+  '/admin',
+  '/cfp/',
+  '/notifications',
+  '/f',
+] as const
 
 export function isAnalyticsExcludedPath(pathname: string): boolean {
   return EXCLUDED_PATH_PREFIXES.some(

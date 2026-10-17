@@ -13,8 +13,31 @@ export function feedbackCodeUrl(
 }
 
 /**
- * Whether `/f/<code>` serves the attendee page yet. F1a hands out the code
- * and its QR; the page arrives with F1b (#1429), which sets this to `true`.
- * Until then the speaker section stays hidden, so no printed QR leads to a 404.
+ * Whether `/f/<code>` serves the attendee page yet. F1a handed out the code
+ * and its QR behind this; F1b (#1429) added the page and set it to `true`.
+ * Setting it back to `false` hides the speaker section again.
  */
-export const ATTENDEE_PAGE_LIVE: boolean = false
+export const ATTENDEE_PAGE_LIVE: boolean = true
+
+const FEEDBACK_PATH = /^\/f(\/|$)/
+
+/** Is this the attendee page, `/f` or anything under it? */
+export function isFeedbackPath(pathname: string | null | undefined): boolean {
+  return typeof pathname === 'string' && FEEDBACK_PATH.test(pathname)
+}
+
+/**
+ * Vercel Analytics' and Speed Insights' `beforeSend` (spec §7.1): the path of
+ * the attendee page IS the Feedback Code, so it is replaced, and the query
+ * and fragment go with it. Every other URL passes through untouched.
+ */
+export function redactFeedbackCode<T extends { url: string }>(event: T): T {
+  let url: URL
+  try {
+    url = new URL(event.url)
+  } catch {
+    return isFeedbackPath(event.url) ? { ...event, url: '/f/[code]' } : event
+  }
+  if (!isFeedbackPath(url.pathname)) return event
+  return { ...event, url: `${url.origin}/f/[code]` }
+}
