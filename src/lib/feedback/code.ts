@@ -112,7 +112,7 @@ export async function ensureFeedbackCode({
   const outcome = await mint(client, talk, conference._id, speakerId)
   if (!outcome) return { status: 'refused' }
   if (outcome.minted) {
-    await sweepTalkVersions(client, talk._id, outcome.code)
+    await sweepTalkVersions(client, talk._id)
     expireFeedbackCodeIndex(conference._id)
   }
   return { status: 'ok', code: outcome.code, window }
@@ -170,16 +170,17 @@ async function mint(
  * §4.2's post-commit sweep. A revision guard cannot catch a version created
  * between the version lookup and the commit, because it is not in the
  * transaction, and the GROQ lookup can lag a write by about a second. So
- * re-read `drafts.<id>` and every release's `versions.<release>.<id>` BY ID
- * through the doc endpoint, and re-patch any whose code differs from the
- * published one. At most {@link MAX_SWEEP_PATCHES} times; logged at the cap.
+ * re-read the published talk, `drafts.<id>` and every release's
+ * `versions.<release>.<id>` BY ID through the doc endpoint, and re-patch any
+ * version whose code differs from the PUBLISHED talk's as it is now (not the
+ * value this request wrote: a later write may have replaced it). At most
+ * {@link MAX_SWEEP_PATCHES} times; logged at the cap.
  *
  * Never throws: the write it follows has committed.
  */
 export async function sweepTalkVersions(
   client: VersionsClient,
   talkId: string,
-  code: string,
 ): Promise<void> {
   try {
     for (let patches = 0; ; patches++) {
@@ -191,11 +192,14 @@ export async function sweepTalkVersions(
       const names = (Array.isArray(releaseIds) ? releaseIds : [])
         .filter((id): id is string => typeof id === 'string')
         .map((id) => id.replace(/^_\.releases\./, ''))
-      const docs = await client.getDocuments<TalkDoc>([
+      const [published, ...versions] = await client.getDocuments<TalkDoc>([
+        talkId,
         `drafts.${talkId}`,
         ...names.map((name) => `versions.${name}.${talkId}`),
       ])
-      const stale = docs.filter(
+      const code = published?.feedbackCode
+      if (!code) return
+      const stale = versions.filter(
         (d): d is NonNullable<typeof d> => !!d && d.feedbackCode !== code,
       )
       if (stale.length === 0) return

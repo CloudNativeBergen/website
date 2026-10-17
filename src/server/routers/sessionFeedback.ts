@@ -19,18 +19,19 @@ export const sessionFeedbackRouter = router({
   ensureCode: protectedProcedure
     .input(z.object({ talkId: z.string().min(1).max(200) }))
     .mutation(async ({ ctx, input }) => {
+      const notFound = () =>
+        new TRPCError({ code: 'NOT_FOUND', message: 'Talk not found' })
+      // Not `resolveConferenceId()`: the code's URL and window need the
+      // conference's `domains` and `endDate` too. Fails closed the same way.
       const { conference } = await getConferenceForCurrentDomain()
-      const result = conference?._id
-        ? await ensureFeedbackCode({
-            talkId: input.talkId,
-            speakerId: ctx.speaker._id,
-            conference,
-            now: new Date(),
-          })
-        : ({ status: 'refused' } as const)
-      if (result.status === 'refused' || !conference) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Talk not found' })
-      }
+      if (!conference?._id) throw notFound()
+      const result = await ensureFeedbackCode({
+        talkId: input.talkId,
+        speakerId: ctx.speaker._id,
+        conference,
+        now: new Date(),
+      })
+      if (result.status === 'refused') throw notFound()
       return {
         code: result.code,
         url: result.code ? feedbackCodeUrl(conference, result.code) : null,

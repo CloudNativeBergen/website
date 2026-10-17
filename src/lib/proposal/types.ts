@@ -181,12 +181,6 @@ export interface ProposalExisting extends Proposal {
   _organizationId?: string | null
   reviews?: Review[]
   coSpeakerInvitations?: CoSpeakerInvitationMinimal[]
-  /**
-   * The talk's Feedback Code (speaker feedback spec §5): six characters,
-   * unique within the conference, minted by the server only. The attendee URL
-   * is `<conferenceBaseUrl(talk.conference)>/f/<code>`.
-   */
-  feedbackCode?: string
 }
 
 export interface FormError {

@@ -137,6 +137,8 @@ describe('feedbackWindow', () => {
     expect(w.closesAt).toBe('2026-10-26T10:00:00.000Z')
   })
 
+  // "Conference over" flips where `isConferenceOver` does, at UTC midnight
+  // after the last day, so every surface agrees.
   it('shows feedback once the conference is over, even if the last slot has not ended', () => {
     // A slot dated after the conference's last day (a data error) must not
     // hide feedback forever.
@@ -144,13 +146,13 @@ describe('feedbackWindow', () => {
     const lastDay = feedbackWindow({
       slots,
       conferenceEndDate: '2026-06-11',
-      now: at('2026-06-11T21:59:59Z'), // 23:59:59 Oslo on the last day
+      now: at('2026-06-11T23:59:59Z'),
     })
     expect(lastDay.feedbackVisible).toBe(false)
     const dayAfter = feedbackWindow({
       slots,
       conferenceEndDate: '2026-06-11',
-      now: at('2026-06-11T22:00:00Z'), // midnight Oslo after the last day
+      now: at('2026-06-12T00:00:00Z'),
     })
     expect(dayAfter.feedbackVisible).toBe(true)
   })
@@ -160,7 +162,7 @@ describe('feedbackWindow', () => {
       feedbackWindow({
         slots: [],
         conferenceEndDate: '2026-06-11',
-        now: at('2026-06-11T22:00:00Z'),
+        now: at('2026-06-12T00:00:00Z'),
       }),
     ).toEqual({ state: 'unscheduled', feedbackVisible: true })
   })

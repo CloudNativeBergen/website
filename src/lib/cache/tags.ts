@@ -30,10 +30,11 @@
  *   must expire it with `{ expire: 0 }`.
  * - `feedbackCodeIndexTag(conferenceId)` — the per-CONFERENCE tag on the
  *   Feedback Code index (speaker feedback spec §5.1): code → talk id for the
- *   conference's confirmed, published talks. Expire it with `{ expire: 0 }` on
- *   a mint, a rotation, a talk status change, a proposal delete, a speaker
- *   erasure, a fold and a schedule change. Not `conferenceTag`, which would
- *   flush the whole site on every mint.
+ *   conference's confirmed, published talks. Expire it with `{ expire: 0 }`.
+ *   Today only a mint expires it; §5.1 adds rotation, talk status changes,
+ *   proposal delete, speaker erasure, the fold and schedule changes as the
+ *   slices that read the index land. Not `conferenceTag`, which would flush
+ *   the whole site on every mint.
  * - `organizationTag(orgId)` — the per-ORGANIZATION-document tag, for cached
  *   reads keyed on the tenant itself rather than one of its conference
  *   editions (plan/entitlement resolution). Mutations that edit an

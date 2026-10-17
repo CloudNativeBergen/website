@@ -41,6 +41,11 @@ export const Closed: Story = {
   args: { window: { ...before, state: 'closed', feedbackVisible: true } },
 }
 
+/** Never scheduled, and the conference is over: it can no longer open. */
+export const UnscheduledAfterConference: Story = {
+  args: { window: { state: 'unscheduled', feedbackVisible: true } },
+}
+
 export const OpenDark: Story = {
   ...Open,
   globals: { theme: 'dark' },

@@ -28,8 +28,12 @@ const h = vi.hoisted(() => ({
   releases: [] as string[],
   revs: 0,
   commits: 0,
+  /** Transactions attempted, committed or not. */
+  attempts: 0,
   /** Runs once, just before the next transaction commits. */
   beforeCommit: [] as (() => void)[],
+  /** Runs once, just after the next transaction committed. */
+  afterCommit: [] as (() => void)[],
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -69,8 +73,11 @@ vi.mock('@/lib/sanity/client', async () => {
     transaction: () => {
       const tx = real.transaction()
       tx.commit = (async () => {
+        h.attempts++
         h.beforeCommit.shift()?.()
-        return commit(tx.serialize())
+        const out = await commit(tx.serialize())
+        h.afterCommit.shift()?.()
+        return out
       }) as unknown as typeof tx.commit
       return tx
     },
@@ -165,8 +172,10 @@ beforeEach(() => {
   vi.mocked(revalidateTag).mockClear()
   h.revs = 0
   h.commits = 0
+  h.attempts = 0
   h.releases = []
   h.beforeCommit = []
+  h.afterCommit = []
   h.dataset = [
     talk('talk-1'),
     schedule('talk-1'),
@@ -244,7 +253,7 @@ describe('ensureCode — no code once the window has closed', () => {
 
   it('mints nothing for an unscheduled talk once the conference is over', async () => {
     h.dataset = h.dataset.filter((d) => d._type !== 'schedule')
-    vi.setSystemTime(new Date('2026-06-11T22:00:00Z'))
+    vi.setSystemTime(new Date('2026-06-12T00:00:00Z'))
     const out = await caller().ensureCode({ talkId: 'talk-1' })
     expect(out.code).toBeNull()
     expect(h.commits).toBe(0)
@@ -330,9 +339,9 @@ describe('ensureCode — concurrent writes', () => {
       const i = h.dataset.findIndex((d) => d._id === 'talk-1')
       h.dataset[i] = { ...h.dataset[i], status: 'withdrawn', _rev: 'gone' }
     })
-    await expect(caller().ensureCode({ talkId: 'talk-1' })).rejects.toThrow(
-      TRPCError,
-    )
+    await expect(
+      caller().ensureCode({ talkId: 'talk-1' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Talk not found' })
     expect(doc('talk-1')?.feedbackCode).toBeUndefined()
   })
 
@@ -348,5 +357,65 @@ describe('ensureCode — concurrent writes', () => {
     h.dataset.push(talk('drafts.talk-1', { feedbackCode: 'stale2' }))
     const out = await caller().ensureCode({ talkId: 'talk-1' })
     expect(doc('drafts.talk-1')?.feedbackCode).toBe(out.code)
+  })
+
+  it('gives up after three retries and writes nothing', async () => {
+    h.dataset.push(talk('drafts.talk-1'))
+    for (let i = 0; i < 10; i++) {
+      h.beforeCommit.push(() => {
+        const d = h.dataset.find((x) => x._id === 'drafts.talk-1')!
+        d._rev = `typing-${i}`
+      })
+    }
+    await expect(
+      caller().ensureCode({ talkId: 'talk-1' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(h.attempts).toBe(4)
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+    expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('sweeps versions to the published code as it is after the commit', async () => {
+    h.dataset.push(talk('drafts.talk-1', { feedbackCode: 'stale2' }))
+    // Another write replaces the published code right after this mint.
+    h.afterCommit.push(() => {
+      const d = h.dataset.find((x) => x._id === 'talk-1')!
+      d.feedbackCode = 'rotate'
+      d._rev = 'rotated'
+    })
+    await caller().ensureCode({ talkId: 'talk-1' })
+    expect(doc('drafts.talk-1')?.feedbackCode).toBe('rotate')
+  })
+
+  it('stops re-patching after three sweeps and logs it', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.dataset.push(talk('drafts.talk-1'))
+    // Someone keeps putting an old value back on the draft.
+    for (let i = 0; i < 10; i++) {
+      h.afterCommit.push(() => {
+        const d = h.dataset.find((x) => x._id === 'drafts.talk-1')!
+        d.feedbackCode = 'stale2'
+        d._rev = `restaled-${i}`
+      })
+    }
+    const out = await caller().ensureCode({ talkId: 'talk-1' })
+    expect(out.code).toMatch(CODE)
+    // The mint, then three sweep patches.
+    expect(h.attempts).toBe(4)
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('gave up sweeping stale versions of talk-1'),
+    )
+    error.mockRestore()
+  })
+})
+
+describe('sessionFeedbackRouter surface', () => {
+  it('exposes exactly the procedures this slice ships', () => {
+    const { procedures } = (
+      sessionFeedbackRouter as unknown as {
+        _def: { procedures: Record<string, unknown> }
+      }
+    )._def
+    expect(Object.keys(procedures).sort()).toEqual(['ensureCode'])
   })
 })

@@ -3,21 +3,24 @@
 import { useEffect, useState } from 'react'
 import { CheckIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 import type { FeedbackWindow } from '@/lib/feedback'
-import { formatDateTimeSafe } from '@/lib/time'
+import { formatRegistrationInstant } from '@/lib/time'
 
 /** The code's state line (speaker feedback spec §9.2). */
 function codeState(window: FeedbackWindow): { text: string; live: boolean } {
   switch (window.state) {
     case 'unscheduled':
-      return { text: 'Opens once your session is scheduled', live: false }
+      // Once the conference is over an unscheduled session can't open any more.
+      return window.feedbackVisible
+        ? { text: 'Closed', live: false }
+        : { text: 'Opens once your session is scheduled', live: false }
     case 'before':
       return {
-        text: `Opens when your session starts (${formatDateTimeSafe(window.opensAt ?? '')})`,
+        text: `Opens when your session starts (${formatRegistrationInstant(window.opensAt ?? '')})`,
         live: false,
       }
     case 'open':
       return {
-        text: `Open until ${formatDateTimeSafe(window.closesAt ?? '')}`,
+        text: `Open until ${formatRegistrationInstant(window.closesAt ?? '')}`,
         live: true,
       }
     case 'closed':

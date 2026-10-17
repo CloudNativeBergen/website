@@ -39,12 +39,15 @@ function slotInstant(date: string | null, time: string | null): number | null {
   return iso ? Date.parse(iso) : null
 }
 
-/** Oslo midnight at the start of the day after `endDate`, or null. */
+/**
+ * The instant `isConferenceOver` (`src/lib/conference/state.ts`) flips: UTC
+ * midnight at the start of the day after `endDate`. The same instant, so this
+ * window and every other "conference over" check on the site agree.
+ */
 function conferenceOverAt(endDate: string | null | undefined): number | null {
   if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return null
   const [y, m, d] = endDate.split('-').map(Number)
-  const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
-  return slotInstant(next, '00:00')
+  return Date.UTC(y, m - 1, d + 1)
 }
 
 export function feedbackWindow({

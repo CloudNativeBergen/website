@@ -42,6 +42,11 @@ export const Loaded: Story = {}
 
 export const LoadedDark: Story = { globals: { theme: 'dark' } }
 
+/** Phone width: the QR stacks above the text (the `sm:flex-row` branch off). */
+export const LoadedPhone: Story = {
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+
 export const Loading: Story = {
   parameters: {
     msw: {
@@ -69,6 +74,31 @@ export const LoadFailed: Story = {
               },
             },
             { status: 500 },
+          ),
+        ),
+      ],
+    },
+  },
+}
+
+/**
+ * A missing, foreign, unconfirmed or someone else's talk: the server answers
+ * NOT_FOUND for all of them alike, and nothing renders.
+ */
+export const Refused: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post(ENDPOINT, () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: 'Talk not found',
+                code: -32004,
+                data: { code: 'NOT_FOUND', httpStatus: 404 },
+              },
+            },
+            { status: 404 },
           ),
         ),
       ],
