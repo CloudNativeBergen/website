@@ -37,6 +37,21 @@ vi.mock('@/lib/workshop/reminder', () => ({
     remind(conference, options, now),
 }))
 
+// THE TENANT the procedure sends for: the real one, unless a test resolves
+// another. The waist resolves the organization on its own, so this decides
+// nothing it decides.
+const resolvedConferenceId = vi.fn<() => Promise<string | null>>(
+  async () => null,
+)
+vi.mock('@/server/trpc', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/server/trpc')>()
+  return {
+    ...actual,
+    resolveConferenceId: async () =>
+      (await resolvedConferenceId()) ?? actual.resolveConferenceId(),
+  }
+})
+
 import { workshopRouter } from './workshop'
 import type { Context } from '@/server/trpc'
 
@@ -197,6 +212,23 @@ describe('workshop.admin.sendReminder', () => {
 
     await expect(caller().admin.sendReminder({})).rejects.toMatchObject({
       code: 'FORBIDDEN',
+    })
+    expect(remind).not.toHaveBeenCalled()
+  })
+
+  // The domain moved between the tenant resolution and the document read: the
+  // document is another conference's, and nobody of either is mailed.
+  it('sends nothing when the conference read is not the resolved tenant', async () => {
+    resolvedConferenceId.mockResolvedValueOnce('conf-other')
+    remind.mockResolvedValue({
+      kind: 'sent',
+      sent: 1,
+      failed: 0,
+      unconfirmed: 0,
+    })
+
+    await expect(caller().admin.sendReminder({})).rejects.toMatchObject({
+      code: 'NOT_FOUND',
     })
     expect(remind).not.toHaveBeenCalled()
   })
