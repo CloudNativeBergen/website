@@ -20,6 +20,21 @@ const BEFORE = {
   },
 }
 
+/**
+ * Deterministic dates with real timers (AGENTS.md: fix relative dates). The
+ * section only reads the clock through `Date.now()`, so it starts at a fixed
+ * instant and runs at real speed: every story sees the same state on any
+ * day, and `OpensWhileShown` still crosses its boundary in real time.
+ */
+const runningClockFrom = (start: Date) => () => {
+  const realNow = Date.now
+  const offset = start.getTime() - realNow()
+  Date.now = () => realNow() + offset
+  return () => {
+    Date.now = realNow
+  }
+}
+
 const meta = {
   title: 'Systems/Proposals/Session Feedback/SessionFeedbackSection',
   component: SessionFeedbackSection,
@@ -34,6 +49,7 @@ const meta = {
     msw: { handlers: [answer(BEFORE)] },
   },
   args: { talkId: 'talk-1' },
+  beforeEach: runningClockFrom(new Date('2026-10-17T12:00:00Z')),
 } satisfies Meta<typeof SessionFeedbackSection>
 
 export default meta
