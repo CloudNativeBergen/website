@@ -213,6 +213,13 @@ export interface Conference {
   workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
+  /**
+   * The last workshop reminder (#1334): when it went out, and to how many
+   * people (`sent`, confirmed by the provider). Written by `sendWorkshopReminder`
+   * after a send that reached at least one person; absent until then.
+   */
+  workshopReminderLastSentAt?: string
+  workshopReminderLastSentCount?: number
   contactEmail: string
   /**
    * Ticketing vendor selector. ABSENT ⇒ 'checkin' (every legacy conference);

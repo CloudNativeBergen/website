@@ -9,7 +9,7 @@ import {
   type WorkshopUserIdentity,
 } from '@/server/trpc'
 import { TRPCError } from '@trpc/server'
-import { resendWorkshopSignupInstructions } from '@/lib/workshop/resend-instructions'
+import { sendWorkshopReminder } from '@/lib/workshop/reminder'
 import { readTicketHolders, ticketHolderStats } from '@/lib/workshop/holders'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
@@ -32,6 +32,7 @@ import {
   workshopDeleteAnnouncementSchema,
   workshopAnnouncementsQuerySchema,
   workshopEarlySignupsSchema,
+  workshopReminderSchema,
 } from '@/server/schemas/workshop'
 import {
   checkWorkshopCapacity,
@@ -1380,63 +1381,76 @@ export const workshopRouter = router({
     }),
 
     /**
-     * Mail every workshop ticket holder the sign-up instructions WITH the
-     * portal link (#1298) — for tickets sold while the main host could not
-     * sign in, whose email went out without it. Refused until the link works;
-     * at most once an hour per conference. See `resend-instructions.ts`.
+     * Remind the workshop ticket holders who have not signed up (#1334, spec
+     * `docs/WORKSHOP_TICKETS_SPEC.md` §7), with the organizer's optional note.
+     * Refused without a working portal link, once registration has closed,
+     * and more than once an hour per conference. See `reminder.ts`.
      */
-    resendSignupInstructions: workshopAdminProcedure.mutation(async () => {
-      const { conference, error } = await getConferenceForCurrentDomain()
-      if (error || !conference?._id) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Conference not found',
-        })
-      }
-      const outcome = await resendWorkshopSignupInstructions({
-        ...conference,
-        _id: conference._id,
-      })
-      switch (outcome.kind) {
-        case 'sent':
-          return {
-            sent: outcome.sent,
-            failed: outcome.failed,
-            unconfirmed: outcome.unconfirmed,
-          }
-        case 'email-unavailable':
+    sendReminder: workshopAdminProcedure
+      .input(workshopReminderSchema)
+      .mutation(async ({ input }) => {
+        // TENANCY (AGENTS.md): the tenant is the one `resolveConferenceId()`
+        // resolves, which fails closed; the document must be that conference.
+        const conferenceId = await resolveConferenceId()
+        const { conference } = await getConferenceForCurrentDomain()
+        if (conference?._id !== conferenceId) {
           throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'Email sending is not available right now, so nothing was sent. Try again in a few minutes.',
-          })
-        case 'portal-unavailable':
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'Attendees cannot sign in yet on the conference’s main host, so there is no working link to send. Check the domain card in Settings.',
-          })
-        case 'registration-closed':
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'Workshop registration has closed, so there is nothing to sign up for. Nothing was sent.',
-          })
-        case 'ticketing-unavailable':
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'The ticket list could not be read, so nothing was sent. Try again in a few minutes.',
-          })
-        case 'rate-limited': {
-          const minutes = Math.max(1, Math.ceil(outcome.retryAfterMs / 60_000))
-          throw new TRPCError({
-            code: 'TOO_MANY_REQUESTS',
-            message: `The instructions were resent less than an hour ago. Try again in ${minutes} minutes.`,
+            code: 'NOT_FOUND',
+            message: 'Conference not found',
           })
         }
-      }
-    }),
+        const now = Date.now()
+        const outcome = await sendWorkshopReminder(
+          { ...conference, _id: conferenceId },
+          { note: input.note || undefined },
+          now,
+        )
+        switch (outcome.kind) {
+          case 'sent':
+            return {
+              sent: outcome.sent,
+              failed: outcome.failed,
+              unconfirmed: outcome.unconfirmed,
+              // When it went out, for the dialog: what the conference now
+              // stores, if the write of it succeeded.
+              sentAt: new Date(now).toISOString(),
+            }
+          case 'email-unavailable':
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'Email sending is not available right now, so nothing was sent. Try again in a few minutes.',
+            })
+          case 'portal-unavailable':
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'Attendees cannot sign in yet on the conference’s main host, so there is no working link to send. Check the domain card in Settings. Nothing was sent.',
+            })
+          case 'registration-closed':
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'Workshop registration has closed, so there is nothing to sign up for. Nothing was sent.',
+            })
+          case 'ticketing-unavailable':
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'The ticket holders could not be read, so nothing was sent. Try again in a few minutes.',
+            })
+          case 'rate-limited': {
+            const minutes = Math.max(
+              1,
+              Math.ceil(outcome.retryAfterMs / 60_000),
+            )
+            throw new TRPCError({
+              code: 'TOO_MANY_REQUESTS',
+              message: `A reminder went out less than an hour ago. Try again in ${minutes} minutes.`,
+            })
+          }
+        }
+      }),
 
     manualSignup: workshopAdminProcedure
       .input(workshopSignupInputSchema.omit({ conference: true }))

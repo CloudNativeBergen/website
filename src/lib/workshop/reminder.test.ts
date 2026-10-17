@@ -102,9 +102,8 @@ const emails = () => batchSend.mock.calls.flatMap(([batch]) => batch)
 /** Recipients, across batches. */
 const recipients = () => emails().map((email) => email.to[0])
 
-const { sendWorkshopReminder, __resetReminderRateLimit } = await import(
-  './reminder'
-)
+const { sendWorkshopReminder, __resetReminderRateLimit } =
+  await import('./reminder')
 
 const PORTAL = 'https://2026.cloudnativedays.no/workshop'
 const HOUR = 60 * 60 * 1000
@@ -327,7 +326,9 @@ describe('sendWorkshopReminder', () => {
     it('never tells the recipient they have no seat, and is no purchase thank-you', async () => {
       for (const target of [open, pending]) {
         const { html } = await emailFor(target, DURING)
-        expect(html).not.toMatch(/haven&apos;t signed up|not signed up|no seat/i)
+        expect(html).not.toMatch(
+          /haven&apos;t signed up|not signed up|no seat/i,
+        )
         expect(html).not.toContain('Thank you for purchasing')
       }
     })
@@ -350,9 +351,9 @@ describe('sendWorkshopReminder', () => {
       const noted = await emailFor(open, DURING, 'See you there')
 
       expect(plain.html).not.toContain('data-organizer-note')
-      expect(noted.html.replace(/\s*<div data-organizer-note[^]*?<\/div>/, '')).toBe(
-        plain.html,
-      )
+      expect(
+        noted.html.replace(/\s*<div data-organizer-note[^]*?<\/div>/, ''),
+      ).toBe(plain.html)
       expect(plain.subject).toBe(noted.subject)
     })
   })
@@ -362,7 +363,10 @@ describe('sendWorkshopReminder', () => {
 
     it('holds the time and the number sent after a send that reached someone', async () => {
       batchSend.mockResolvedValueOnce({
-        data: { data: [{ id: 'em-0' }], errors: [{ index: 1, message: 'bad' }] },
+        data: {
+          data: [{ id: 'em-0' }],
+          errors: [{ index: 1, message: 'bad' }],
+        },
         error: null,
       })
 
@@ -393,23 +397,30 @@ describe('sendWorkshopReminder', () => {
         () =>
           batchSend.mockResolvedValue({
             data: null,
-            error: { name: 'application_error', message: 'down', statusCode: null },
+            error: {
+              name: 'application_error',
+              message: 'down',
+              statusCode: null,
+            },
           }),
       ],
       [
         'nobody to remind',
         () => fetchEventTicketCandidates.mockResolvedValueOnce([]),
       ],
-    ])('is left unchanged by a send that reached nobody: %s', async (_label, arrange) => {
-      arrange()
+    ])(
+      'is left unchanged by a send that reached nobody: %s',
+      async (_label, arrange) => {
+        arrange()
 
-      await expect(remind(conference, AT)).resolves.toMatchObject({
-        kind: 'sent',
-        sent: 0,
-      })
-      expect(lastSendWrite).not.toHaveBeenCalled()
-      batchSend.mockReset()
-    })
+        await expect(remind(conference, AT)).resolves.toMatchObject({
+          kind: 'sent',
+          sent: 0,
+        })
+        expect(lastSendWrite).not.toHaveBeenCalled()
+        batchSend.mockReset()
+      },
+    )
 
     it('a failing write changes nothing the organizer is told, and sends nothing again', async () => {
       const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -469,15 +480,18 @@ describe('sendWorkshopReminder', () => {
         conference,
         'rate-limited',
       ],
-    ])('%s: sends nothing and reads no ticket', async (_label, change, target, kind) => {
-      await change()
-      batchSend.mockClear()
-      fetchEventTicketCandidates.mockClear()
+    ])(
+      '%s: sends nothing and reads no ticket',
+      async (_label, change, target, kind) => {
+        await change()
+        batchSend.mockClear()
+        fetchEventTicketCandidates.mockClear()
 
-      await expect(remind(target, 0)).resolves.toMatchObject({ kind })
-      expect(batchSend).not.toHaveBeenCalled()
-      expect(fetchEventTicketCandidates).not.toHaveBeenCalled()
-    })
+        await expect(remind(target, 0)).resolves.toMatchObject({ kind })
+        expect(batchSend).not.toHaveBeenCalled()
+        expect(fetchEventTicketCandidates).not.toHaveBeenCalled()
+      },
+    )
 
     it('the sign-ups cannot be read: sends nothing, and spends no quota', async () => {
       const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -505,9 +519,12 @@ describe('sendWorkshopReminder', () => {
       ),
     )
 
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 250, failed: 0, unconfirmed: 0 })
+    await expect(remind(conference, 0)).resolves.toEqual({
+      kind: 'sent',
+      sent: 250,
+      failed: 0,
+      unconfirmed: 0,
+    })
     expect(batchSend.mock.calls.map(([batch]) => batch.length)).toEqual([
       100, 100, 50,
     ])
@@ -521,9 +538,9 @@ describe('sendWorkshopReminder', () => {
   it('refuses when the ticket list cannot be read, and sends nothing', async () => {
     fetchEventTicketCandidates.mockResolvedValue(null)
 
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'ticketing-unavailable' })
+    await expect(remind(conference, 0)).resolves.toEqual({
+      kind: 'ticketing-unavailable',
+    })
     expect(batchSend).not.toHaveBeenCalled()
   })
 
@@ -540,9 +557,12 @@ describe('sendWorkshopReminder', () => {
       })
       .mockResolvedValueOnce({ data: null, error: { message: 'down' } })
 
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 99, failed: 51, unconfirmed: 0 })
+    await expect(remind(conference, 0)).resolves.toEqual({
+      kind: 'sent',
+      sent: 99,
+      failed: 51,
+      unconfirmed: 0,
+    })
   })
 
   it('retries a batch after a network blip, under the same idempotency key', async () => {
@@ -555,9 +575,12 @@ describe('sendWorkshopReminder', () => {
       },
     })
 
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 2, failed: 0, unconfirmed: 0 })
+    await expect(remind(conference, 0)).resolves.toEqual({
+      kind: 'sent',
+      sent: 2,
+      failed: 0,
+      unconfirmed: 0,
+    })
     const keys = batchSend.mock.calls.map(([, opts]) => opts.idempotencyKey)
     expect(keys).toHaveLength(2)
     expect(keys[0]).toBe(keys[1])
@@ -573,13 +596,17 @@ describe('sendWorkshopReminder', () => {
       },
     })
 
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 0, failed: 2, unconfirmed: 0 })
+    await expect(remind(conference, 0)).resolves.toEqual({
+      kind: 'sent',
+      sent: 0,
+      failed: 2,
+      unconfirmed: 0,
+    })
     expect(batchSend).toHaveBeenCalledTimes(1)
-    await expect(
-      remind(conference, 1),
-    ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
+    await expect(remind(conference, 1)).resolves.toMatchObject({
+      kind: 'sent',
+      sent: 2,
+    })
   })
 
   it('keeps the hour when the provider never answered — those emails may have gone', async () => {
@@ -597,12 +624,15 @@ describe('sendWorkshopReminder', () => {
       .mockResolvedValueOnce(unanswered)
       .mockResolvedValueOnce(unanswered)
 
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 0, failed: 0, unconfirmed: 2 })
-    await expect(
-      remind(conference, 1),
-    ).resolves.toMatchObject({ kind: 'rate-limited' })
+    await expect(remind(conference, 0)).resolves.toEqual({
+      kind: 'sent',
+      sent: 0,
+      failed: 0,
+      unconfirmed: 2,
+    })
+    await expect(remind(conference, 1)).resolves.toMatchObject({
+      kind: 'rate-limited',
+    })
   })
 
   it('treats a batch Resend is still processing as unconfirmed, never rejected', async () => {
@@ -620,13 +650,16 @@ describe('sendWorkshopReminder', () => {
       .mockResolvedValueOnce(inFlight)
       .mockResolvedValueOnce(inFlight)
 
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 0, failed: 0, unconfirmed: 2 })
+    await expect(remind(conference, 0)).resolves.toEqual({
+      kind: 'sent',
+      sent: 0,
+      failed: 0,
+      unconfirmed: 2,
+    })
     expect(batchSend).toHaveBeenCalledTimes(3)
-    await expect(
-      remind(conference, 1),
-    ).resolves.toMatchObject({ kind: 'rate-limited' })
+    await expect(remind(conference, 1)).resolves.toMatchObject({
+      kind: 'rate-limited',
+    })
   })
 
   it('refuses, and spends no quota, when no email sender can be resolved', async () => {
@@ -634,13 +667,14 @@ describe('sendWorkshopReminder', () => {
       throw new Error('credentials lookup failed')
     })
 
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'email-unavailable' })
+    await expect(remind(conference, 0)).resolves.toEqual({
+      kind: 'email-unavailable',
+    })
     expect(batchSend).not.toHaveBeenCalled()
-    await expect(
-      remind(conference, 1),
-    ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
+    await expect(remind(conference, 1)).resolves.toMatchObject({
+      kind: 'sent',
+      sent: 2,
+    })
   })
 
   it('says registration has closed even when the main host cannot sign in — without asking', async () => {
@@ -661,27 +695,33 @@ describe('sendWorkshopReminder', () => {
       ticket('linus@example.org', 'Conference only'),
     ])
 
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 0, failed: 0, unconfirmed: 0 })
+    await expect(remind(conference, 0)).resolves.toEqual({
+      kind: 'sent',
+      sent: 0,
+      failed: 0,
+      unconfirmed: 0,
+    })
     expect(batchSend).not.toHaveBeenCalled()
-    await expect(
-      remind(conference, 1),
-    ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
+    await expect(remind(conference, 1)).resolves.toMatchObject({
+      kind: 'sent',
+      sent: 2,
+    })
   })
 
   it('sends at most once an hour per conference — a double click sends nothing twice', async () => {
     await remind(conference, 0)
     batchSend.mockClear()
 
-    await expect(
-      remind(conference, HOUR - 1),
-    ).resolves.toEqual({ kind: 'rate-limited', retryAfterMs: 1 })
+    await expect(remind(conference, HOUR - 1)).resolves.toEqual({
+      kind: 'rate-limited',
+      retryAfterMs: 1,
+    })
     expect(batchSend).not.toHaveBeenCalled()
 
-    await expect(
-      remind(conference, HOUR),
-    ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
+    await expect(remind(conference, HOUR)).resolves.toMatchObject({
+      kind: 'sent',
+      sent: 2,
+    })
   })
 
   it('lets only one of two concurrent presses send', async () => {
@@ -709,9 +749,10 @@ describe('sendWorkshopReminder', () => {
     fetchEventTicketCandidates.mockResolvedValueOnce(null)
     await remind(conference, 1)
 
-    await expect(
-      remind(conference, 2),
-    ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
+    await expect(remind(conference, 2)).resolves.toMatchObject({
+      kind: 'sent',
+      sent: 2,
+    })
   })
 
   it('decides who holds a workshop ticket from the LIVE ticket-type roles', async () => {
@@ -720,9 +761,12 @@ describe('sendWorkshopReminder', () => {
       { typeName: 'Conference only', grantsWorkshop: true },
     ])
 
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 1, failed: 0, unconfirmed: 0 })
+    await expect(remind(conference, 0)).resolves.toEqual({
+      kind: 'sent',
+      sent: 1,
+      failed: 0,
+      unconfirmed: 0,
+    })
     expect(recipients()).toEqual(['linus@example.org'])
   })
 })

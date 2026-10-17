@@ -1,12 +1,11 @@
 /**
  * @vitest-environment node
  *
- * `workshop.admin.resendSignupInstructions` (#1298): the organizer's button
- * for mailing every workshop ticket holder the sign-up instructions with the
- * portal link, once the main host can sign in. The router, its organizer
- * waist and the workshops gate run for real; the conference/organization
- * documents and the resend itself (`resend-instructions.test.ts`) are the
- * boundaries.
+ * `workshop.admin.sendReminder` (#1334): the organizer's reminder to the
+ * workshop ticket holders who have not signed up, with an optional note. The
+ * router, its input schema, its organizer waist and the workshops gate run for
+ * real; the conference/organization documents and the send itself
+ * (`reminder.test.ts`) are the boundaries.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
@@ -29,9 +28,13 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: vi.fn(async () => null) },
 }))
 
-const resend = vi.fn<(conference: unknown) => Promise<unknown>>()
-vi.mock('@/lib/workshop/resend-instructions', () => ({
-  resendWorkshopSignupInstructions: (conference: unknown) => resend(conference),
+const remind =
+  vi.fn<
+    (conference: unknown, options: unknown, now: number) => Promise<unknown>
+  >()
+vi.mock('@/lib/workshop/reminder', () => ({
+  sendWorkshopReminder: (conference: unknown, options: unknown, now: number) =>
+    remind(conference, options, now),
 }))
 
 import { workshopRouter } from './workshop'
@@ -60,6 +63,7 @@ function caller(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.useFakeTimers({ toFake: ['Date'] })
   vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
   stubPlatformTicketingAccount()
   stubOwnTicketingSecret(ORG_ID)
@@ -74,25 +78,73 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.useRealTimers()
 })
 
-describe('workshop.admin.resendSignupInstructions', () => {
-  it('resends for the domain conference and reports the counts', async () => {
-    resend.mockResolvedValue({
+describe('workshop.admin.sendReminder', () => {
+  it('reminds for the domain conference with the note, and reports the counts and when', async () => {
+    vi.setSystemTime(Date.parse('2026-10-10T12:00:00Z'))
+    remind.mockResolvedValue({
       kind: 'sent',
       sent: 12,
       failed: 1,
       unconfirmed: 3,
     })
 
-    await expect(caller().admin.resendSignupInstructions()).resolves.toEqual({
+    await expect(
+      caller().admin.sendReminder({ note: '  Bring a laptop.  ' }),
+    ).resolves.toEqual({
       sent: 12,
       failed: 1,
       unconfirmed: 3,
+      sentAt: '2026-10-10T12:00:00.000Z',
     })
-    expect(resend).toHaveBeenCalledWith(
+    expect(remind).toHaveBeenCalledWith(
       expect.objectContaining({ _id: 'conf-1' }),
+      { note: 'Bring a laptop.' },
+      Date.parse('2026-10-10T12:00:00Z'),
     )
+  })
+
+  it('takes no note at all', async () => {
+    remind.mockResolvedValue({
+      kind: 'sent',
+      sent: 1,
+      failed: 0,
+      unconfirmed: 0,
+    })
+
+    await caller().admin.sendReminder({})
+
+    expect(remind).toHaveBeenCalledWith(
+      expect.anything(),
+      { note: undefined },
+      expect.any(Number),
+    )
+  })
+
+  it('takes a note of exactly 1,000 characters', async () => {
+    remind.mockResolvedValue({
+      kind: 'sent',
+      sent: 1,
+      failed: 0,
+      unconfirmed: 0,
+    })
+
+    await caller().admin.sendReminder({ note: 'x'.repeat(1000) })
+
+    expect(remind).toHaveBeenCalledWith(
+      expect.anything(),
+      { note: 'x'.repeat(1000) },
+      expect.any(Number),
+    )
+  })
+
+  it('refuses a note over 1,000 characters before anything is sent', async () => {
+    await expect(
+      caller().admin.sendReminder({ note: 'x'.repeat(1001) }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(remind).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -118,20 +170,21 @@ describe('workshop.admin.resendSignupInstructions', () => {
       'ticketing-unavailable',
       { kind: 'ticketing-unavailable' },
       'PRECONDITION_FAILED',
-      /ticket list could not be read/,
+      /ticket holders could not be read/,
     ],
     [
       'rate-limited',
       { kind: 'rate-limited', retryAfterMs: 30 * 60 * 1000 },
       'TOO_MANY_REQUESTS',
-      /30 minutes/,
+      /reminder went out less than an hour ago\. Try again in 30 minutes/,
     ],
   ])('answers %s as %s', async (_label, outcome, code, message) => {
-    resend.mockResolvedValue(outcome)
+    remind.mockResolvedValue(outcome)
 
-    await expect(
-      caller().admin.resendSignupInstructions(),
-    ).rejects.toMatchObject({ code, message: expect.stringMatching(message) })
+    await expect(caller().admin.sendReminder({})).rejects.toMatchObject({
+      code,
+      message: expect.stringMatching(message),
+    })
   })
 
   it('FORBIDs a tenant without workshops before anything is sent', async () => {
@@ -142,10 +195,10 @@ describe('workshop.admin.resendSignupInstructions', () => {
       plan: 'community',
     })
 
-    await expect(
-      caller().admin.resendSignupInstructions(),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
-    expect(resend).not.toHaveBeenCalled()
+    await expect(caller().admin.sendReminder({})).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(remind).not.toHaveBeenCalled()
   })
 
   it('refuses someone who is not an organizer of this conference', async () => {
@@ -153,10 +206,10 @@ describe('workshop.admin.resendSignupInstructions', () => {
       caller({
         _id: 'speaker-1',
         organizerOrgIds: [],
-      }).admin.resendSignupInstructions(),
+      }).admin.sendReminder({}),
     ).rejects.toMatchObject({
       code: expect.stringMatching(/FORBIDDEN|UNAUTHORIZED/),
     })
-    expect(resend).not.toHaveBeenCalled()
+    expect(remind).not.toHaveBeenCalled()
   })
 })
