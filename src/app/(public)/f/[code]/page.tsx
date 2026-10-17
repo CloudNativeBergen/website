@@ -10,16 +10,25 @@ import { pickConferenceLogoProps } from '@/lib/conference/logo'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveFeedbackPage } from '@/lib/feedback/server'
 
-/** The code is the whole URL: never indexed (speaker feedback spec §7.1). */
+/**
+ * The code is the whole URL (speaker feedback spec §7.1): never indexed, and
+ * never sent on as a referrer, to our own analytics endpoints or onwards.
+ */
 export const metadata: Metadata = {
   title: 'Session feedback',
   robots: { index: false, follow: false },
+  referrer: 'no-referrer',
 }
 
 /**
  * `/f/<code>` — the attendee page a Feedback Code's QR opens (speaker
  * feedback spec §7). The conference is the one serving the Host; a code is
  * looked up only in ITS index, so another tenant's code is Unknown here.
+ *
+ * Enter and leave this page with FULL page loads only, never `next/link`:
+ * Pirsch, once loaded on another page, reports every history navigation
+ * (pushState and Back) with the full URL, and only a page it never runs on
+ * keeps the code out of it.
  */
 export default async function FeedbackCodePage({
   params,

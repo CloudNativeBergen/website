@@ -8,6 +8,10 @@ import { isFeedbackPath } from '@/lib/feedback'
  * (speaker feedback spec §7.1). The root layout wraps the Pirsch script and
  * the install prompt in it: the layout is a Server Component and cannot see
  * the path, and the page promises no tracking and no prompts.
+ *
+ * It only keeps Pirsch from LOADING on `/f`. A Pirsch script already loaded on
+ * another page reports history navigations (pushState, Back) with the full
+ * URL, so `/f` must be entered and left by full page loads, never `next/link`.
  */
 export function HiddenOnFeedbackPage({
   children,

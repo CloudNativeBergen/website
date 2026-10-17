@@ -68,3 +68,11 @@ describe('/f/[code]', () => {
     expect(element.props.page).toEqual({ state: 'unavailable' })
   })
 })
+
+describe('/f/[code] metadata', () => {
+  it('is never indexed and never sends the code on as a referrer', async () => {
+    const { metadata } = await import('@/app/(public)/f/[code]/page')
+    expect(metadata.robots).toEqual({ index: false, follow: false })
+    expect(metadata.referrer).toBe('no-referrer')
+  })
+})

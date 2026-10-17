@@ -25,6 +25,16 @@ vi.mock('@/lib/schedule/sanity', () => ({
     getScheduleStatusByIdMock(...args),
 }))
 
+const writeFetchMock = vi.fn()
+const writeDeleteMock = vi.fn()
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadCached: { fetch: vi.fn() },
+  clientWrite: {
+    fetch: (...args: unknown[]) => writeFetchMock(...args),
+    delete: (...args: unknown[]) => writeDeleteMock(...args),
+  },
+}))
+
 const validateMock = vi.fn()
 vi.mock('@/lib/schedule/validation', () => ({
   validateSchedulePayload: (...args: unknown[]) => validateMock(...args),
@@ -174,5 +184,48 @@ describe('schedule router — draft and publish guards', () => {
       /Strict Block: Cannot publish schedule/,
     )
     expect(saveScheduleMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('schedule router — the Feedback Code index (speaker feedback §5.1)', () => {
+  const feedbackExpiries = () =>
+    revalidateTagMock.mock.calls.filter(
+      ([tag]) => tag === feedbackCodeIndexTag(CONFERENCE_ID),
+    )
+
+  it('expires it when an official day is saved', async () => {
+    getScheduleStatusByIdMock.mockResolvedValueOnce(ScheduleStatus.Official)
+    await makeCaller().save({
+      ...validPayload,
+      status: ScheduleStatus.Official,
+    })
+    expect(feedbackExpiries()).toEqual([
+      [feedbackCodeIndexTag(CONFERENCE_ID), { expire: 0 }],
+    ])
+  })
+
+  it('leaves it alone on a draft save: drafts never open a window, and they autosave every few seconds', async () => {
+    await makeCaller().save({ ...validPayload, status: ScheduleStatus.Draft })
+    expect(saveScheduleMock).toHaveBeenCalled()
+    expect(feedbackExpiries()).toEqual([])
+  })
+
+  it('expires it when a legacy day with no status (read as official) is deleted', async () => {
+    writeFetchMock.mockResolvedValueOnce({ _id: 'day-legacy' })
+    await makeCaller().admin.delete({ id: 'day-legacy' })
+    expect(writeDeleteMock).toHaveBeenCalledWith('day-legacy')
+    expect(feedbackExpiries()).toEqual([
+      [feedbackCodeIndexTag(CONFERENCE_ID), { expire: 0 }],
+    ])
+  })
+
+  it('leaves it alone when a draft day is deleted', async () => {
+    writeFetchMock.mockResolvedValueOnce({
+      _id: 'day-draft',
+      status: ScheduleStatus.Draft,
+    })
+    await makeCaller().admin.delete({ id: 'day-draft' })
+    expect(writeDeleteMock).toHaveBeenCalledWith('day-draft')
+    expect(feedbackExpiries()).toEqual([])
   })
 })

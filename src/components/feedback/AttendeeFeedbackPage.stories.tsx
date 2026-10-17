@@ -33,9 +33,19 @@ type Story = StoryObj<typeof meta>
 export const Open: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByText(talk.title)).toBeInTheDocument()
+    // The talk is the page's h1; the question sits under it.
+    await expect(
+      canvas.getByRole('heading', { level: 1, name: talk.title }),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByRole('heading', { level: 2, name: 'How was this session?' }),
+    ).toBeInTheDocument()
     await expect(
       canvas.getByText('Ada Lovelace, Grace Hopper'),
+    ).toBeInTheDocument()
+    // Not wired yet (F1c), and the page says so.
+    await expect(
+      canvas.getByText("Answering isn't available yet."),
     ).toBeInTheDocument()
     for (const label of ['Loved it', 'It was OK', 'Not for me']) {
       // Not wired yet: present, and refusing the tap.
@@ -55,7 +65,7 @@ export const OpenNotPublic: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
-      canvas.getByRole('heading', { name: 'How was this session?' }),
+      canvas.getByRole('heading', { level: 1, name: 'How was this session?' }),
     ).toBeInTheDocument()
     await expect(canvas.queryByText(talk.title)).toBeNull()
   },
@@ -125,6 +135,34 @@ export const Unavailable: Story = {
         name: "Feedback isn't available right now",
       }),
     ).toBeInTheDocument()
+  },
+}
+
+/** A long unbroken title and many speakers must wrap, never scroll sideways. */
+export const LongTitle: Story = {
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  args: {
+    page: {
+      state: 'closed',
+      talk: {
+        title:
+          'Supercalifragilisticexpialidocious-observability-for-kubernetes-operators-at-scale',
+        speakers: [
+          'Ada Lovelace',
+          'Grace Hopper',
+          'Margaret Hamilton',
+          'Katherine Johnson',
+        ],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.scrollWidth).toBeLessThanOrEqual(
+      canvasElement.clientWidth,
+    )
+    await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    )
   },
 }
 

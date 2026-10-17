@@ -147,8 +147,11 @@ export const scheduleRouter = router({
       // scoped tag alone fully invalidates this tenant.
       revalidateTag(conferenceTag(conference._id), 'default')
       // A moved, added or removed slot opens, closes or moves a Feedback Window
-      // (speaker feedback spec §5.1).
-      expireFeedbackCodeIndex(conference._id)
+      // (speaker feedback spec §5.1). Not for a draft: drafts never open one,
+      // and the editor autosaves them every few seconds.
+      if (payload.status !== ScheduleStatus.Draft) {
+        expireFeedbackCodeIndex(conference._id)
+      }
 
       return { schedule }
     }),
@@ -325,6 +328,11 @@ export const scheduleRouter = router({
           })
         }
         await clientWrite.delete(input.id)
+        // A legacy day with no status reads as official, so deleting it can
+        // close Feedback Windows (speaker feedback spec §5.1).
+        if (doc.status !== ScheduleStatus.Draft) {
+          expireFeedbackCodeIndex(conference._id)
+        }
         return { success: true }
       }),
   }),

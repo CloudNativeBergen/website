@@ -10,7 +10,7 @@ import {
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
 import type { FeedbackPage, PublicFeedbackTalk } from '@/lib/feedback/server'
-import { formatRegistrationInstant } from '@/lib/time'
+import { formatSessionInstant } from '@/lib/time'
 
 /** The page the attendee sees, or `unavailable` when it could not be read. */
 export type AttendeeFeedbackState = FeedbackPage | { state: 'unavailable' }
@@ -41,8 +41,8 @@ const ANSWERS = [
  * conference logo and one state, nothing else. The talk's title and speakers
  * arrive only for a public talk; the resolver never hands them over otherwise.
  *
- * The answer buttons are not wired yet (F1b): they render disabled until the
- * Submit action lands (F1c).
+ * The answer buttons are not wired yet (F1b): they render disabled, with a
+ * line saying so, until the Submit action lands (F1c).
  */
 export function AttendeeFeedbackPage({
   logo,
@@ -68,19 +68,30 @@ export function AttendeeFeedbackPage({
 }
 
 function PageState({ page }: { page: AttendeeFeedbackState }) {
+  // The talk's title is the page's h1 when it is shown; the state's own
+  // heading is the h1 otherwise.
+  const level = 'talk' in page && page.talk ? ('h2' as const) : ('h1' as const)
   switch (page.state) {
-    case 'open':
+    case 'open': {
+      const Question = level
       return (
         <>
           <TalkHeading talk={page.talk} />
-          <h1 className="text-xl font-semibold">How was this session?</h1>
+          <Question className="text-xl font-semibold">
+            How was this session?
+          </Question>
+          {/* Until the Submit action lands (F1c), say so rather than offer
+              buttons that look live and do nothing. */}
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Answering isn&apos;t available yet.
+          </p>
           <div className="mt-5 flex flex-col gap-3">
             {ANSWERS.map(({ colour, label, Icon, className }) => (
               <button
                 key={colour}
                 type="button"
                 disabled
-                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs ${className}`}
+                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
               >
                 <Icon className="size-9 shrink-0" aria-hidden="true" />
                 {label}
@@ -89,20 +100,22 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
           </div>
           <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
             Anonymous. You can change your answer until{' '}
-            {formatRegistrationInstant(page.closesAt)}.
+            {formatSessionInstant(page.closesAt)}.
           </p>
         </>
       )
+    }
     case 'not-yet-open':
       return (
         <>
           <TalkHeading talk={page.talk} />
           <Notice
+            level={level}
             Icon={ClockIcon}
             title="Feedback opens when the session starts"
           >
             {page.opensAt
-              ? `It opens ${formatRegistrationInstant(page.opensAt)}. Scan the code again then.`
+              ? `It opens ${formatSessionInstant(page.opensAt)}. Scan the code again then.`
               : 'Scan the code again during the session.'}
           </Notice>
         </>
@@ -112,6 +125,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
         <>
           <TalkHeading talk={page.talk} />
           <Notice
+            level={level}
             Icon={LockClosedIcon}
             title="Feedback for this session has closed"
           >
@@ -122,6 +136,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
     case 'unknown':
       return (
         <Notice
+          level={level}
           Icon={QuestionMarkCircleIcon}
           title="This feedback code isn't valid"
         >
@@ -132,6 +147,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
     case 'unavailable':
       return (
         <Notice
+          level={level}
           Icon={ExclamationTriangleIcon}
           title="Feedback isn't available right now"
         >
@@ -145,11 +161,11 @@ function TalkHeading({ talk }: { talk: PublicFeedbackTalk | null }) {
   if (!talk) return null
   return (
     <div className="mb-8">
-      <p className="font-display text-2xl leading-tight font-bold tracking-tight text-balance">
+      <h1 className="font-display text-2xl leading-tight font-bold tracking-tight text-balance wrap-anywhere">
         {talk.title}
-      </p>
+      </h1>
       {talk.speakers.length > 0 && (
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
+        <p className="mt-1 wrap-anywhere text-gray-600 dark:text-gray-400">
           {talk.speakers.join(', ')}
         </p>
       )}
@@ -158,10 +174,12 @@ function TalkHeading({ talk }: { talk: PublicFeedbackTalk | null }) {
 }
 
 function Notice({
+  level: Heading,
   Icon,
   title,
   children,
 }: {
+  level: 'h1' | 'h2'
   Icon: typeof ClockIcon
   title: string
   children: React.ReactNode
@@ -169,7 +187,9 @@ function Notice({
   return (
     <div className="flex flex-col items-center text-center">
       <Icon className="size-12 text-gray-400" aria-hidden="true" />
-      <h1 className="mt-4 text-lg font-semibold text-balance">{title}</h1>
+      <Heading className="mt-4 text-lg font-semibold text-balance">
+        {title}
+      </Heading>
       <p className="mt-2 text-gray-600 dark:text-gray-400">{children}</p>
     </div>
   )

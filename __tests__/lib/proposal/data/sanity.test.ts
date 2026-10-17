@@ -613,15 +613,17 @@ describe('deleteProposal reports the deleted talk’s conference (speaker feedba
     )
   })
 
-  it('still deletes when the conference lookup fails, and reports none', async () => {
+  it('refuses the delete when the conference lookup fails, before writing anything', async () => {
     noReferences()
-    mockWriteFetch.mockRejectedValueOnce(new Error('lookup down'))
+    const failure = new Error('lookup down')
+    mockWriteFetch.mockRejectedValueOnce(failure)
 
     expect(await deleteProposal('proposal-1')).toEqual({
-      err: null,
+      err: failure,
       conferenceId: null,
     })
-    expect(mockTxCommit).toHaveBeenCalledTimes(1)
+    // Deleting without knowing what to expire would leave the code resolving.
+    expect(mockTxCommit).not.toHaveBeenCalled()
   })
 
   it('reports none when the delete is blocked', async () => {

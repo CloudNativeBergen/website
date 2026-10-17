@@ -582,7 +582,7 @@ async function describeBlockingProjects(
  * conference, read before the delete, so the caller can expire caches keyed on
  * it (the Feedback Code index, speaker feedback spec §5.1). This module is
  * also bundled into client components, so it cannot expire them itself.
- * `null` when nothing was deleted, or when the lookup failed.
+ * `null` when nothing was deleted.
  */
 export async function deleteProposal(
   proposalId: string,
@@ -755,21 +755,17 @@ export async function deleteProposal(
 
 /**
  * The conference of a talk about to be deleted, for the caller's cache
- * expiry after the delete. Never throws: a failed lookup must not fail the delete, and the
- * index's own short life recovers the missed expiry.
+ * expiry after the delete. A failed lookup fails the delete before anything
+ * is written: deleting without knowing what to expire would leave the talk's
+ * Feedback Code resolving.
  */
 async function talkConferenceId(proposalId: string): Promise<string | null> {
-  try {
-    return await clientWrite.fetch<string | null>(
-      // groq-global-scoped: by-id read of the proposal both callers have already proven ownership of.
-      groq`*[_id == $proposalId][0].conference._ref`,
-      { proposalId },
-      { cache: 'no-store' },
-    )
-  } catch (error) {
-    console.error('Could not read the conference of a deleted talk:', error)
-    return null
-  }
+  return clientWrite.fetch<string | null>(
+    // groq-global-scoped: by-id read of the proposal both callers have already proven ownership of.
+    groq`*[_id == $proposalId][0].conference._ref`,
+    { proposalId },
+    { cache: 'no-store' },
+  )
 }
 
 export async function updateProposalStatus(

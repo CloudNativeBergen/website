@@ -259,7 +259,7 @@ the same (one read per cache refresh), and expiries take effect.
 - **Speaker erasure runs from a script** (`scripts/erase-speaker.ts`, no Next
   request), which prints cache tags for the operator instead of expiring them.
   `feedbackCodeIndexTag` is added to `revalidateErasureTags`, and to
-  `tagsForTargets` behind `api/provisioning/cache/invalidate`, which must expire
+  `revalidationsForTargets` behind `api/provisioning/cache/invalidate`, which must expire
   it with `{ expire: 0 }`.
 - **A stale index can't cause a wrong write.** A refill right after an expiry
   goes through GROQ, which can lag a write by about a second, so it can cache an
