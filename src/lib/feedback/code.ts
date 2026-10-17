@@ -136,18 +136,13 @@ async function mint(
     const code = createShortCodeMinter(
       await conferenceFeedbackCodes(conferenceId),
     )()
-    const versions = await client.fetch<{ _id: string; _rev: string }[]>(
-      // groq-global-scoped: the versions of ONE talk, whose conference was checked on its published document
-      `*[sanity::versionOf($id) && _id != $id]{ _id, _rev }`,
-      { id: current._id },
-      { cache: 'no-store', perspective: 'raw' },
-    )
+    const { versions } = await readTalkVersions(client, current._id)
     const tx = client
       .transaction()
       .patch(current._id, (p) =>
         p.ifRevisionId(current._rev).set({ feedbackCode: code }),
       )
-    for (const v of versions ?? []) {
+    for (const v of versions) {
       tx.patch(v._id, (p) =>
         p.ifRevisionId(v._rev).setIfMissing({ feedbackCode: code }),
       )
@@ -184,24 +179,10 @@ export async function sweepTalkVersions(
 ): Promise<void> {
   try {
     for (let patches = 0; ; patches++) {
-      const releaseIds = await client.fetch<unknown>(
-        'releases::all()._id',
-        {},
-        { cache: 'no-store', perspective: 'raw' },
-      )
-      const names = (Array.isArray(releaseIds) ? releaseIds : [])
-        .filter((id): id is string => typeof id === 'string')
-        .map((id) => id.replace(/^_\.releases\./, ''))
-      const [published, ...versions] = await client.getDocuments<TalkDoc>([
-        talkId,
-        `drafts.${talkId}`,
-        ...names.map((name) => `versions.${name}.${talkId}`),
-      ])
+      const { published, versions } = await readTalkVersions(client, talkId)
       const code = published?.feedbackCode
       if (!code) return
-      const stale = versions.filter(
-        (d): d is NonNullable<typeof d> => !!d && d.feedbackCode !== code,
-      )
+      const stale = versions.filter((d) => d.feedbackCode !== code)
       if (stale.length === 0) return
       if (patches >= MAX_SWEEP_PATCHES) {
         console.error(
@@ -223,5 +204,48 @@ export async function sweepTalkVersions(
     }
   } catch (error) {
     console.error(`[feedback] sweeping versions of ${talkId} failed`, error)
+  }
+}
+
+/**
+ * The published talk and every other version of it, each as the doc endpoint
+ * has it NOW. GROQ finds versions (`sanity::versionOf`) but can lag a write by
+ * about a second, so it only contributes ids: `drafts.<id>` and each release's
+ * `versions.<release>.<id>` are always asked for by id too, and every revision
+ * a guard uses comes from the doc endpoint. A stale revision from GROQ would
+ * fail every retry of a write after one finished draft edit.
+ */
+async function readTalkVersions(
+  client: VersionsClient,
+  talkId: string,
+): Promise<{ published: TalkDoc | null; versions: TalkDoc[] }> {
+  const raw = { cache: 'no-store', perspective: 'raw' } as const
+  const [found, releases] = await Promise.all([
+    client.fetch<unknown>(
+      // groq-global-scoped: the versions of ONE talk, whose conference was checked on its published document
+      `*[sanity::versionOf($id) && _id != $id]._id`,
+      { id: talkId },
+      raw,
+    ),
+    client.fetch<unknown>('releases::all()._id', {}, raw),
+  ])
+  const strings = (value: unknown) =>
+    (Array.isArray(value) ? value : []).filter(
+      (v): v is string => typeof v === 'string',
+    )
+  const ids = new Set([
+    `drafts.${talkId}`,
+    ...strings(releases).map(
+      (id) => `versions.${id.replace(/^_\.releases\./, '')}.${talkId}`,
+    ),
+    ...strings(found),
+  ])
+  const [published, ...versions] = await client.getDocuments<TalkDoc>([
+    talkId,
+    ...ids,
+  ])
+  return {
+    published: published ?? null,
+    versions: versions.filter((d): d is NonNullable<typeof d> => !!d),
   }
 }

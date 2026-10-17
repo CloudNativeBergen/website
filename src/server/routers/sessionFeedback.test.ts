@@ -34,6 +34,8 @@ const h = vi.hoisted(() => ({
   beforeCommit: [] as (() => void)[],
   /** Runs once, just after the next transaction committed. */
   afterCommit: [] as (() => void)[],
+  /** What GROQ sees when it lags the doc endpoint; null means no lag. */
+  groqSnapshot: null as null | (Record<string, unknown> & { _id: string })[],
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -61,7 +63,10 @@ vi.mock('@/lib/sanity/client', async () => {
     // groq-js has no `releases::all()`; the store answers it.
     if (query.includes('releases::all()'))
       return h.releases.map((name) => `_.releases.${name}`)
-    const value = await evaluate(parse(query), { dataset: h.dataset, params })
+    const value = await evaluate(parse(query), {
+      dataset: h.groqSnapshot ?? h.dataset,
+      params,
+    })
     return value.get()
   }
   const byId = (id: string) =>
@@ -176,6 +181,7 @@ beforeEach(() => {
   h.releases = []
   h.beforeCommit = []
   h.afterCommit = []
+  h.groqSnapshot = null
   h.dataset = [
     talk('talk-1'),
     schedule('talk-1'),
@@ -357,6 +363,25 @@ describe('ensureCode — concurrent writes', () => {
     h.dataset.push(talk('drafts.talk-1', { feedbackCode: 'stale2' }))
     const out = await caller().ensureCode({ talkId: 'talk-1' })
     expect(doc('drafts.talk-1')?.feedbackCode).toBe(out.code)
+  })
+
+  it('takes version revisions from the doc endpoint, not lagging GROQ', async () => {
+    h.dataset.push(talk('drafts.talk-1'))
+    // A draft edit that GROQ has not caught up with yet.
+    h.groqSnapshot = structuredClone(h.dataset)
+    h.dataset.find((d) => d._id === 'drafts.talk-1')!._rev = 'edited'
+    const out = await caller().ensureCode({ talkId: 'talk-1' })
+    expect(out.code).toMatch(CODE)
+    expect(doc('drafts.talk-1')?.feedbackCode).toBe(out.code)
+    expect(h.attempts).toBe(1)
+  })
+
+  it('finds a draft GROQ cannot see yet', async () => {
+    h.groqSnapshot = structuredClone(h.dataset)
+    h.dataset.push(talk('drafts.talk-1'))
+    await caller().ensureCode({ talkId: 'talk-1' })
+    expect(h.attempts).toBe(1)
+    expect(doc('drafts.talk-1')?.feedbackCode).toMatch(CODE)
   })
 
   it('gives up after three retries and writes nothing', async () => {
