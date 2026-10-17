@@ -50,6 +50,11 @@ vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: vi.fn(),
 }))
 
+vi.mock('next/cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/cache')>()),
+  revalidateTag: vi.fn(),
+}))
+
 vi.mock('@/lib/proposal/data/sanity', () => {
   class ProposalDeletionBlockedError extends Error {}
   return {
@@ -101,6 +106,8 @@ vi.mock('@/server/runAfterResponse', () => ({
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { revalidateTag } from 'next/cache'
+import { feedbackCodeIndexTag } from '@/lib/cache/tags'
 import { TRPCError } from '@trpc/server'
 import {
   createAnonymousCaller,
@@ -1416,6 +1423,107 @@ describe('proposal router', () => {
 
       expect(ensureProposalConversation).not.toHaveBeenCalled()
       expect(addMessage).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('the Feedback Code index follows the talk (speaker feedback §5.1)', () => {
+    // A withdrawn or deleted talk must stop resolving its code at once, and a
+    // newly confirmed one must start. The TALK's conference, never the host's:
+    // a speaker can act on their own proposal from another tenant's host.
+    const expired = () =>
+      vi
+        .mocked(revalidateTag)
+        .mock.calls.filter(([tag]) => tag.startsWith('sanity:feedback-code'))
+    beforeEach(() => vi.mocked(revalidateTag).mockClear())
+
+    it('a status change expires the index of the talk’s conference with expire 0', async () => {
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {
+          ...mockProposal,
+          status: Status.withdrawn,
+          conference: { _type: 'reference', _ref: 'conf-of-the-talk' },
+        } as any,
+        err: null,
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.withdraw,
+        reason: 'I can no longer attend the conference.',
+      })
+
+      expect(expired()).toEqual([
+        [feedbackCodeIndexTag('conf-of-the-talk'), { expire: 0 }],
+      ])
+    })
+
+    it('a failed status change expires nothing', async () => {
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {} as any,
+        err: new Error('patch failed'),
+      })
+
+      await expect(
+        createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'I can no longer attend the conference.',
+        }),
+      ).rejects.toBeTruthy()
+      expect(expired()).toEqual([])
+    })
+
+    it('a speaker’s delete expires the index of the deleted talk’s conference', async () => {
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(deleteProposal).mockResolvedValue({
+        err: null,
+        conferenceId: 'conf-of-the-talk',
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.delete,
+      })
+
+      expect(expired()).toEqual([
+        [feedbackCodeIndexTag('conf-of-the-talk'), { expire: 0 }],
+      ])
+    })
+
+    it('an organizer’s delete expires it too', async () => {
+      vi.mocked(deleteProposal).mockResolvedValue({
+        err: null,
+        conferenceId: 'conf-of-the-talk',
+      })
+
+      await createAdminCaller().proposal.admin.delete({ id: 'proposal-1' })
+
+      expect(expired()).toEqual([
+        [feedbackCodeIndexTag('conf-of-the-talk'), { expire: 0 }],
+      ])
+    })
+
+    it('a refused delete expires nothing', async () => {
+      vi.mocked(deleteProposal).mockResolvedValue({
+        err: new Error('network exploded'),
+        conferenceId: null,
+      })
+
+      await expect(
+        createAdminCaller().proposal.admin.delete({ id: 'proposal-1' }),
+      ).rejects.toBeTruthy()
+      expect(expired()).toEqual([])
     })
   })
 

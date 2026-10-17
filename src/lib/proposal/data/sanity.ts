@@ -11,7 +11,6 @@ import {
   isListedWorkshop,
 } from '@/lib/workshop/listed'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { expireFeedbackCodeIndex } from '@/lib/feedback/cache'
 import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
 import { convertStringToPortableTextBlocks } from '../utils/validation'
@@ -578,10 +577,18 @@ async function describeBlockingProjects(
     : (BLOCKING_TYPE_DESCRIPTIONS.videoProject ?? 'a saved studio video')
 }
 
+/**
+ * Delete a proposal and its cascade. `conferenceId` is the deleted talk's
+ * conference, read before the delete, so the caller can expire caches keyed on
+ * it (the Feedback Code index, speaker feedback spec §5.1). This module is
+ * also bundled into client components, so it cannot expire them itself.
+ * `null` when nothing was deleted, or when the lookup failed.
+ */
 export async function deleteProposal(
   proposalId: string,
-): Promise<{ err: Error | null }> {
+): Promise<{ err: Error | null; conferenceId?: string | null }> {
   let err = null
+  let deletedFrom: string | null = null
   try {
     // Find every document that references this proposal. Sanity refuses to
     // delete a document with inbound strong references, so we must handle
@@ -738,19 +745,17 @@ export async function deleteProposal(
     // and the proposal itself, atomically.
     const conferenceId = await talkConferenceId(proposalId)
     await commitDeletes([...cascadeIds, proposalId])
-    // A deleted talk's Feedback Code must stop resolving at once (speaker
-    // feedback spec §5.1).
-    if (conferenceId) expireFeedbackCodeIndex(conferenceId)
+    deletedFrom = conferenceId
   } catch (error) {
     console.error('Error deleting proposal:', error)
     err = error as Error
   }
-  return { err }
+  return { err, conferenceId: deletedFrom }
 }
 
 /**
- * The conference of a talk about to be deleted, for the cache expiry after
- * the delete. Never throws: a failed lookup must not fail the delete, and the
+ * The conference of a talk about to be deleted, for the caller's cache
+ * expiry after the delete. Never throws: a failed lookup must not fail the delete, and the
  * index's own short life recovers the missed expiry.
  */
 async function talkConferenceId(proposalId: string): Promise<string | null> {
@@ -804,14 +809,6 @@ export async function updateProposalStatus(
   } catch (error) {
     err = error as Error
   }
-
-  // A talk that is no longer confirmed must stop resolving its Feedback Code
-  // at once, and one that just became confirmed must start (speaker feedback
-  // spec §5.1). The TALK's conference: the caller may be on another host.
-  const conference = updatedProposal.conference as
-    { _ref?: string; _id?: string } | undefined
-  const conferenceId = conference?._ref ?? conference?._id
-  if (conferenceId) expireFeedbackCodeIndex(conferenceId)
 
   return { proposal: updatedProposal, err }
 }
