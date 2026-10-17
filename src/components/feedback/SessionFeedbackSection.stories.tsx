@@ -181,8 +181,10 @@ export const NoCode: Story = {
 let opensWhileShownRequests = 0
 
 /**
- * The page is left up for the room: the session starts 3 s after the code
- * loads (room for a busy CI runner to see "Opens…" first). The state moves on by the clock, the QR stays on screen, and the
+ * The page is left up for the room: the session starts 5 s after the code
+ * loads. The hook's timer runs on real time, so the story does too; the
+ * margin is room for a busy CI runner to see "Opens…" and the QR first, and
+ * the test fails loudly if it did not. The state moves on by the clock, the QR stays on screen, and the
  * server is not asked again.
  */
 export const OpensWhileShown: Story = {
@@ -191,7 +193,7 @@ export const OpensWhileShown: Story = {
       handlers: [
         http.post(ENDPOINT, () => {
           opensWhileShownRequests++
-          const opensAt = Date.now() + 3000
+          const opensAt = Date.now() + 5000
           return HttpResponse.json({
             result: {
               data: {
@@ -217,7 +219,9 @@ export const OpensWhileShown: Story = {
     const canvas = within(canvasElement)
     await canvas.findByText(/Opens when your session starts/)
     const qr = await canvas.findByRole('img', { name: /QR code for/ })
-    await waitFor(() => canvas.getByText(/Open until/), { timeout: 8000 })
+    // The QR was captured BEFORE the boundary, or continuity proves nothing.
+    expect(canvas.getByText(/Opens when your session starts/)).toBeVisible()
+    await waitFor(() => canvas.getByText(/Open until/), { timeout: 10000 })
     // The same QR, never blanked or redrawn, and no second request.
     expect(canvas.getByRole('img', { name: /QR code for/ })).toBe(qr)
     expect(opensWhileShownRequests).toBe(1)
