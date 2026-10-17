@@ -485,22 +485,22 @@ describe('cache revalidation is reported honestly', () => {
         organizers: [ref(SPEAKER, 'k1'), ref('other', 'k2')],
       },
     ]
-    const seen: string[] = []
+    const seen: unknown[] = []
     const result = await eraseSpeakerInPlace({
       speakerId: SPEAKER,
       actor: 'op',
-      revalidate: (tag) => {
-        seen.push(tag)
+      revalidate: (tag, profile) => {
+        seen.push([tag, profile])
       },
     })
 
     expect(seen).toEqual([
-      'content:speakers',
-      'content:speaker-detail',
-      'sanity:conference-conf-1',
-      // The attendee feedback page shows speaker names from this index
-      // (speaker feedback spec §5.1).
-      'sanity:feedback-code-index-conf-1',
+      ['content:speakers', 'default'],
+      ['content:speaker-detail', 'default'],
+      ['sanity:conference-conf-1', 'default'],
+      // The attendee feedback page shows speaker names from this index, so
+      // it is expired at once (speaker feedback spec §5.1).
+      ['sanity:feedback-code-index-conf-1', { expire: 0 }],
     ])
     expect(result.cache.revalidated).toBe(true)
   })

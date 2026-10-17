@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { connection } from 'next/server'
-import { AttendeeFeedbackPage } from '@/components/feedback/AttendeeFeedbackPage'
-import type { AttendeeFeedbackState } from '@/components/feedback/AttendeeFeedbackPage'
+import {
+  AttendeeFeedbackPage,
+  type AttendeeFeedbackState,
+} from '@/components/feedback'
 import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
 import { pickConferenceLogoProps } from '@/lib/conference/logo'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'

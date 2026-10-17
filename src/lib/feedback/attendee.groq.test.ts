@@ -333,7 +333,7 @@ describe('feedbackCodeIndex — the one cached read', () => {
     expect(h.cacheTag).toEqual([feedbackCodeIndexTag('conf-A')])
     expect(h.cacheLife).toEqual([FEEDBACK_CODE_INDEX_LIFE])
     expect(FEEDBACK_CODE_INDEX_LIFE.expire).toBe(300)
-    expect(FEEDBACK_CODE_INDEX_LIFE.revalidate).toBeLessThan(300)
+    expect(FEEDBACK_CODE_INDEX_LIFE.revalidate).toBe(300)
   })
 
   it('reads two conference-scoped roots and nothing per code', async () => {

@@ -70,7 +70,10 @@
  * read here is deliberately unscoped and annotated `groq-global:`.
  */
 
-import { feedbackCodeIndexTag } from '@/lib/cache/tags'
+import {
+  revalidationsForTargets,
+  type TagRevalidation,
+} from '@/lib/cache/invalidation'
 import {
   clientReadUncached as clientRead,
   clientWrite,
@@ -1201,7 +1204,10 @@ export interface EraseSpeakerOptions {
    * Next.js request/action scope — a `tsx` script has none. Omit and the
    * wrapper reports the tags it could not revalidate instead of pretending.
    */
-  revalidate?: (tag: string) => void | Promise<void>
+  revalidate?: (
+    tag: string,
+    profile: TagRevalidation['profile'],
+  ) => void | Promise<void>
   /**
    * Commit although a handle of theirs is shared only through another
    * speaker's profile links (`plan.sharedByLinkOnly`): the operator has
@@ -1795,13 +1801,19 @@ async function revalidateErasureTags(
   plan: ErasurePlan,
   revalidate: EraseSpeakerOptions['revalidate'],
 ): Promise<EraseSpeakerResult['cache']> {
-  const tags = [
-    ...CACHE_TAGS,
-    ...plan.affectedConferenceIds.flatMap((id) => [
-      `sanity:conference-${id}`,
-      feedbackCodeIndexTag(id),
-    ]),
+  // Each affected conference as the invalidation endpoint's `conference`
+  // target, so the operator's runbook step and this path agree on the tags
+  // and their profiles (the Feedback Code index is expired at once).
+  const revalidations: TagRevalidation[] = [
+    ...CACHE_TAGS.map((tag) => ({ tag, profile: 'default' as const })),
+    ...revalidationsForTargets(
+      plan.affectedConferenceIds.map((id) => ({
+        type: 'conference' as const,
+        id,
+      })),
+    ),
   ]
+  const tags = revalidations.map((r) => r.tag)
   if (!revalidate) {
     return {
       tags,
@@ -1812,7 +1824,7 @@ async function revalidateErasureTags(
     }
   }
   try {
-    for (const tag of tags) await revalidate(tag)
+    for (const { tag, profile } of revalidations) await revalidate(tag, profile)
     return { tags, revalidated: true, error: null }
   } catch (error) {
     return { tags, revalidated: false, error: (error as Error).message }

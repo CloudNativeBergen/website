@@ -1705,9 +1705,11 @@ export const proposalRouter = router({
         // Code at once, and a newly confirmed one must start (speaker feedback
         // spec §5.1). The TALK's conference: the owner arm admits a proposal
         // of another tenant.
-        const talkConference = updatedProposal.conference as
-          { _ref?: string; _id?: string } | undefined
-        const talkConferenceId = talkConference?._ref ?? talkConference?._id
+        const talkConference = updatedProposal.conference
+        const talkConferenceId =
+          talkConference && '_ref' in talkConference
+            ? talkConference._ref
+            : talkConference?._id
         if (talkConferenceId) expireFeedbackCodeIndex(talkConferenceId)
 
         // Publish status change event for notifications

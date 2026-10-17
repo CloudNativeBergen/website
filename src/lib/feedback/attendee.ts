@@ -23,6 +23,7 @@ import { normalizeShortCode } from '@/lib/marketing/short-code'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { OFFICIAL_SCHEDULE_FILTER } from '@/lib/speaker/sanity'
+import { PUBLISHED_ONLY } from './sanity'
 import { feedbackWindow, type FeedbackSlot } from './window'
 
 /** One confirmed, published talk that holds a Feedback Code. */
@@ -36,18 +37,14 @@ export interface FeedbackTalk {
 export type FeedbackCodeIndex = ReadonlyMap<string, FeedbackTalk>
 
 /**
- * At most 5 minutes old (§5.1), for Studio edits that expire nothing. Next
- * requires `expire` to be longer than `revalidate`, so the refresh starts at
- * 4 minutes and nothing older than 5 is ever served.
+ * 5 minutes, revalidate and expire (§5.1): the backstop for Studio edits that
+ * expire nothing. With both equal, nothing older than 5 minutes is served.
  */
 export const FEEDBACK_CODE_INDEX_LIFE = {
   stale: 60,
-  revalidate: 60 * 4,
+  revalidate: 60 * 5,
   expire: 60 * 5,
 } as const
-
-const PUBLISHED_ONLY =
-  '!(_id in path("drafts.**")) && !(_id in path("versions.**"))'
 
 interface TalkRow {
   _id: string
