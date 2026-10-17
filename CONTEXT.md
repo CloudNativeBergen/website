@@ -1,6 +1,6 @@
 # Conference Platform
 
-Multi-tenant platform for running community IT conferences: call for papers, programme, speakers, sponsors, tickets, and the marketing that fills the room. This glossary covers the marketing and ticketing contexts; other contexts join as their terms are sharpened.
+Multi-tenant platform for running community IT conferences: call for papers, programme, speakers, sponsors, tickets, and the marketing that fills the room. This glossary covers the marketing, ticketing and session feedback contexts; other contexts join as their terms are sharpened.
 
 ## Language
 
@@ -99,3 +99,29 @@ _Avoid_: organizer (alone), Pretix organization
 **Sold Ticket**:
 A non-complimentary ticket of a type that admits an attendee, whether paid or awaiting payment. Sold items that don't admit anyone, such as merchandise or add-ons, count toward revenue only.
 _Avoid_: paid ticket, sale
+
+### Session Feedback
+
+**Session Feedback**:
+What attendees think of one speaker-led session (a talk of any format, including workshops and keynotes), collected per talk and shared by all its speakers. It combines Feedback Responses and Card Counts.
+_Avoid_: review (an organizer's score of a proposal), rating, evaluation
+
+**Feedback Response**:
+One anonymous attendee's answer about a session, given by scanning the session's Feedback Code: a Feedback Colour and an optional comment.
+_Avoid_: review, vote, submission
+
+**Feedback Colour**:
+The three-step scale every piece of Session Feedback uses: green, yellow or red.
+_Avoid_: score, stars, rating
+
+**Card Counts**:
+The green, yellow and red totals from physical feedback cards collected in the room, entered by an organizer after the session.
+_Avoid_: audience feedback, paper votes
+
+**Feedback Code**:
+The short code for one session, unique within its conference, that opens the Feedback Response form on the conference's own domain. Its speakers get it as a QR code in the speaker dashboard; only organizers can rotate it, which retires the old code.
+_Avoid_: feedback link, session QR, short link (a marketing redirect)
+
+**Feedback Window**:
+The time a session accepts Feedback Responses: from the start of its earliest scheduled slot until 24 hours after its latest slot ends. A session with no slot has no window.
+_Avoid_: feedback period, voting window
