@@ -1,6 +1,6 @@
 # Conference Platform
 
-Multi-tenant platform for running community IT conferences: call for papers, programme, speakers, sponsors, tickets, and the marketing that fills the room. This glossary covers the marketing context first; other contexts join as their terms are sharpened.
+Multi-tenant platform for running community IT conferences: call for papers, programme, speakers, sponsors, tickets, and the marketing that fills the room. This glossary covers the marketing and ticketing contexts; other contexts join as their terms are sharpened.
 
 ## Language
 
@@ -77,3 +77,25 @@ _Avoid_: deadline, phase, key date
 **Marketing Report**:
 A per-edition view of Campaign Outcomes and engagement for the organizer team. Sponsors appear in it as subjects of sponsor Campaigns; sharing it with sponsors is a later slice.
 _Avoid_: dashboard, analytics page
+
+### Ticketing
+
+**Ticketing Provider**:
+The ticketing vendor a conference sells through: Checkin, Tito or Pretix.
+_Avoid_: ticket system, ticket vendor integration
+
+**Ticketing Connection**:
+An Organization's own account at a Ticketing Provider: for Pretix, the instance address, the Pretix organizer account and the credentials. Set up by a platform operator, never by the organization's admins.
+_Avoid_: integration, credentials (the credentials are only part of it)
+
+**Ticketing Binding**:
+A conference edition's link to exactly one event at its Ticketing Provider. Two editions can never claim the same event.
+_Avoid_: ticketing config, event mapping
+
+**Pretix organizer account**:
+Pretix's top-level account, which owns events, teams and API tokens. Always written out in full, because a bare "organizer" here means a person with admin access to a conference.
+_Avoid_: organizer (alone), Pretix organization
+
+**Sold Ticket**:
+A non-complimentary ticket of a type that admits an attendee, whether paid or awaiting payment. Sold items that don't admit anyone, such as merchandise or add-ons, count toward revenue only.
+_Avoid_: paid ticket, sale
