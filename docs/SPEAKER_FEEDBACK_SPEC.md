@@ -131,10 +131,18 @@ talk** (`drafts.<talkId>` and any `versions.<release>.<talkId>`, found with
 transaction as the published talk. _Refinement (spec):_ a draft or a release
 version is a full copy, so publishing one that predates a mint, rotation or
 fold would write the old value back: a rotated-out code would come back to
-life, or folded totals would be lost after their documents were deleted. The
-versions are re-read for every write, so one created in between fails the
-guard and the write is retried. Production had 0 talk drafts and 0 release
-versions on 2026-10-17, but organizers can create one at any time.
+life, or folded totals would be lost after their documents were deleted.
+
+- The version lookup runs with `withConfig({ apiVersion: '2025-02-19',
+perspective: 'raw' })`, as `src/lib/sanity/orphaned-asset.ts` does; the
+  default clients' API version never returns `versions.**`.
+- **After the commit, a sweep** re-reads `drafts.<id>` and the versions and
+  re-patches any that still carry a stale value, repeating until none does. A
+  revision guard can't catch a version created between the read and the
+  commit, because it isn't in the transaction.
+- Production had 0 talk drafts and 0 release versions on 2026-10-17, but
+  organizers can create one at any time. The remaining risk, a version created
+  and published inside one write's sweep, is in §15.
 
 ### 4.3 Totals
 
@@ -313,7 +321,7 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
 | **Open**         | window open, no response from this device                                                           | Talk title and speakers (if public), "How was this session?", three full-width buttons: **Loved it** (green, smiling face), **It was OK** (yellow, minus circle), **Not for me** (red, frowning face). Footer: "Anonymous. You can change your answer until <closesAt>." |
 | **Answered**     | window open, this device has a response                                                             | "Thanks! You answered <label>", **Change answer**, the comment box ("Comment for the speaker (optional)", 1,000-character counter, **Send comment** / **Update comment**), **Delete my answer**, a link back to the programme.                                           |
 | **Not yet open** | `before` or `unscheduled`                                                                           | "Feedback opens when the session starts". The start time is added only when the talk is public.                                                                                                                                                                          |
-| **Closed**       | `closed`                                                                                            | "Feedback for this session has closed", explaining that feedback closes 24 hours after a session ends. If this device still has a response: **Delete my answer** (§7.4).                                                                                                 |
+| **Closed**       | `closed`                                                                                            | "Feedback for this session has closed", explaining that feedback closes 24 hours after a session ends. If the talk is in this device's cookie list: **Delete my answer** (§7.4).                                                                                         |
 | **Unknown**      | the code is malformed, doesn't resolve in this conference, was rotated, or the talk isn't confirmed | One generic page ("This feedback code isn't valid…") that reveals nothing.                                                                                                                                                                                               |
 
 - **"Public"** means `isProgramPublished(conference)`
@@ -331,8 +339,10 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
   httpOnly, `Secure` outside development, `SameSite=Lax`, **`Path=/f`**, no
   `Domain` (host-only). **30 days, refreshed on every submit.**
   - _Refinement (spec):_ the 30 days are enforced **on the server** from the
-    signed issue time, not only by the browser's `Max-Age`; a copied or
-    preserved cookie older than 30 days is treated as absent.
+    signed time, not only by the browser's `Max-Age`; a copied or preserved
+    cookie more than 30 days past that time is treated as absent. The signed
+    time is the **last submit**, re-stamped on every Submit (the token stays the
+    same), matching §8's "30 days after your last answer".
   - _Refinement (spec):_ each list entry is a truncated HMAC of the talk id
     (8 bytes), not the id, and the list keeps at most the **100** most recent
     entries, so the cookie stays well under the 4 KB browser limit. Past that
@@ -396,9 +406,13 @@ read per write makes a rotated, withdrawn, folded or erased talk refuse taps at
 once.
 
 **Reading this device's own response** (for the Answered state) happens only
-for a talk in the cookie's list, by id, through a `'use cache: remote'` read
-tagged per response (`feedbackResponseTag(id)`). That tag is expired on Submit,
-Delete my answer, Remove and fold, all of which know the ids. _Refinement
+for a talk in the cookie's list, by id, through
+`clientReadUncached.getDocument(id)` (never GROQ or the CDN, which can lag the
+write and cache the old state) inside a `'use cache: remote'` read with a
+`cacheLife` of 5 minutes, tagged per response (`feedbackResponseTag(id)`). That
+tag is expired on Submit and Delete my answer (with `updateTag`, which Next 16
+recommends inside Server Actions), and on Remove (§10.3) and fold (§12.2), all
+of which know the ids. _Refinement
 (spec):_ without the cache, a script holding a valid cookie could reload the
 page for unlimited billable reads. The Closed state needs no read: it offers
 **Delete my answer** whenever the talk is in the cookie's list, and deleting an
@@ -429,9 +443,10 @@ venue IP behind one bucket would refuse most legitimate keynote feedback. Abuse
 is held back by the per-device id, the window, and organizers removing
 responses.
 
-**Cost:** the index, slots and a device's own response come from cached reads,
-so a burst costs one write per response plus the one by-id talk read (§7.4).
-Page loads cost no live reads.
+**Cost:** the index, slots and a device's own response come from cached reads.
+A Submit or Delete costs one write, the by-id talk read (Submit only), and one
+refill read of the response on the next page load. Repeated page loads cost no
+live reads.
 
 ## 8. Privacy copy
 
@@ -484,7 +499,7 @@ conference serving the request, the caller is in its `speakers[]`, and it is
 confirmed. A null result is one uniform refusal, so the procedure reveals
 nothing about talks the caller can't see. (All 29 past talks with Card Counts
 are confirmed in production, so "results only" needs no separate rule: it is a
-confirmed talk whose window has closed and that has no code.) Then:
+confirmed talk with no code for which §5 refuses to mint one.) Then:
 
 - **results:** refused unless feedback is visible (§6), computed on the server;
   hidden comments are filtered out on the server, never in the client;
@@ -573,7 +588,8 @@ On `/admin/proposals/[id]`, in place of `AudienceFeedbackPanel`:
 - **Keep** clears `flaggedAt`; the comment stays visible.
 - **Remove** deletes the whole `feedbackResponse` document, colour and comment,
   after a confirmation naming the count ("Remove 38 responses?"). No undo, no
-  log. Bulk remove deletes in chunks of at most 100 per transaction.
+  log. Bulk remove deletes in chunks of at most 100 per transaction, and expires
+  each removed response's `feedbackResponseTag` (§7.4).
 - A speaker's **flag** sets `flaggedAt` (one-way for speakers; it can't be
   withdrawn). Every speaker of the talk sees "Flagged for organizers" until an
   organizer acts.
@@ -642,12 +658,15 @@ organizers remove a quoted comment with **Remove** (§10.3).
 - **Fold in chunks, each atomic** (_Refinement (spec)_). For each chunk of at
   most 100 responses, read the talk, its other versions (§4.2) and the
   responses, then commit one transaction that:
-  1. on the talk and on each version: `setIfMissing({ feedbackFolded:
-{ greenCount: 0, yellowCount: 0, redCount: 0 } })`, then `inc` the counts
-     by the chunk's colours, set `foldedAt`, and unset `feedbackCode`, each
-     patch guarded by its document's `ifRevisionId`. (`inc` on a missing field
-     does nothing in Sanity; verified on the real `@sanity/mutator` 6.12.0.
-     `setIfMissing` is applied before `inc`.)
+  1. on the talk and on each version: **`set` the absolute totals**
+     (the published talk's `feedbackFolded` counts, 0 where absent, plus this
+     chunk's colours) and `foldedAt`, and unset `feedbackCode`, each patch
+     guarded by its document's `ifRevisionId`. Not `inc`: `inc` on a missing
+     field does nothing in Sanity (verified on the real `@sanity/mutator`
+     6.12.0), and making it work needs `setIfMissing` to run before `set`
+     within one patch, an order the server isn't documented to guarantee.
+     Since every patch is guarded against the read, absolute values are safe,
+     and every version ends with the published totals.
   2. for each response: a no-op `patch` guarded by its `ifRevisionId`, then its
      `delete`. A response removed, deleted or re-coloured since the read fails
      the guard, so it is never counted with a colour it no longer has.
@@ -744,7 +763,9 @@ Per `AGENTS.md` ("Agent discipline"):
   crash between chunks neither double-counts nor loses a response; a second run
   commits nothing. Same for the erasure branch.
 - **Stale draft:** publishing a draft that predates a rotation keeps the new
-  code.
+  code, including a draft created between the write's read and its commit
+  (caught by the sweep, §4.2), and a release version found with the pinned API
+  version.
 - **Studio Duplicate:** asserted on the real exported Studio config.
 - **Visual:** every new or changed component has a story; captures at phone
   width, light and dark, with the dark-mode mechanism of the story file checked.
@@ -759,7 +780,11 @@ Per `AGENTS.md` ("Agent discipline"):
   against ~130k monthly headroom. Every submit is one billable write and there
   is no IP limit, so a sustained scripted flood of submits costs quota for every
   tenant until organizers notice. Each submit also costs one by-id talk read
-  (§7.4). Random codes and repeated page loads cost no live reads (§5.1, §7.4).
+  and one response refill read (§7.4). Random codes and repeated page loads
+  cost no live reads (§5.1, §7.4).
+- **A version published inside a write's sweep:** a draft or release version
+  created and published between a mint, rotation or fold and its sweep (§4.2)
+  can still write an old value back. The window is a few hundred milliseconds.
 - **Document count:** 200–3,000 responses per edition against a 25k or 50k
   limit (Sanity's pages disagree; 7,161 used on 2026-10-17). The 24-month fold
   bounds it.
