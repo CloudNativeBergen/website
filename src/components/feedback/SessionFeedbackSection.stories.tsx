@@ -86,6 +86,15 @@ export const LoadedDark: Story = { globals: { theme: 'dark' } }
 /** Phone width: the QR stacks above the text (the `sm:flex-row` branch off). */
 export const LoadedPhone: Story = {
   parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const qr = await canvas.findByRole('img', { name: /QR code for/ })
+    const state = canvas.getByText(/Opens when your session starts/)
+    // Stacked: the state line starts below the QR, not beside it.
+    expect(state.getBoundingClientRect().top).toBeGreaterThan(
+      qr.getBoundingClientRect().bottom,
+    )
+  },
 }
 
 export const Loading: Story = {
@@ -172,8 +181,8 @@ export const NoCode: Story = {
 let opensWhileShownRequests = 0
 
 /**
- * The page is left up for the room: the session starts 1.5 s after the code
- * loads. The state moves on by the clock, the QR stays on screen, and the
+ * The page is left up for the room: the session starts 3 s after the code
+ * loads (room for a busy CI runner to see "Opens…" first). The state moves on by the clock, the QR stays on screen, and the
  * server is not asked again.
  */
 export const OpensWhileShown: Story = {
@@ -182,7 +191,7 @@ export const OpensWhileShown: Story = {
       handlers: [
         http.post(ENDPOINT, () => {
           opensWhileShownRequests++
-          const opensAt = Date.now() + 1500
+          const opensAt = Date.now() + 3000
           return HttpResponse.json({
             result: {
               data: {
@@ -208,7 +217,7 @@ export const OpensWhileShown: Story = {
     const canvas = within(canvasElement)
     await canvas.findByText(/Opens when your session starts/)
     const qr = await canvas.findByRole('img', { name: /QR code for/ })
-    await waitFor(() => canvas.getByText(/Open until/), { timeout: 5000 })
+    await waitFor(() => canvas.getByText(/Open until/), { timeout: 8000 })
     // The same QR, never blanked or redrawn, and no second request.
     expect(canvas.getByRole('img', { name: /QR code for/ })).toBe(qr)
     expect(opensWhileShownRequests).toBe(1)
@@ -232,10 +241,16 @@ export const WakesAfterSleep: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 300))
     await canvas.findByText(/Opens when your session starts/)
+    // Let the first clock tick run, so only the wake can move the state.
+    await settle()
     const realNow = Date.now
     Date.now = () => Date.parse(BEFORE.window.opensAt) + 60_000
     try {
+      await settle()
+      // The clock has passed the start, but nothing re-read it yet.
+      expect(canvas.getByText(/Opens when your session starts/)).toBeVisible()
       document.dispatchEvent(new Event('visibilitychange'))
       expect(await canvas.findByText(/Open until/)).toBeVisible()
     } finally {
