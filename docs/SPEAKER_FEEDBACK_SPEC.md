@@ -764,7 +764,21 @@ mutation-surface snapshots are updated.
 
 ### 13.1 Tickets
 
-Filled in when the slices are filed.
+Every slice is filed under [Session Feedback: implementation](https://github.com/CloudNativeBergen/website/issues/1427), with the dependencies above as native blocking edges.
+
+| Slice | Issue |
+| ----- | ----- |
+| F1a   | #1428 |
+| F1b   | #1429 |
+| F1c   | #1430 |
+| F2    | #1431 |
+| F3    | #1432 |
+| F4    | #1433 |
+| F5    | #1434 |
+| F6    | #1435 |
+| F7    | #1436 |
+| F8    | #1437 |
+| F9    | #1438 |
 
 ## 14. Verification
 
