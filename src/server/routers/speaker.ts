@@ -23,6 +23,7 @@ import {
   updateSpeaker,
   getOrganizers,
   getSpeakers,
+  getSpeakersUncached,
   getOrgSpeakerDirectory,
   getDuplicateSpeakerCandidateRecords,
   getSpeakerTicketGrantState,
@@ -130,7 +131,7 @@ async function syncConfirmedSpeakerAudience(
   conferenceId: string,
   options?: { requireNonEmpty?: boolean },
 ) {
-  const { speakers, err } = await getSpeakers(
+  const { speakers, err } = await getSpeakersUncached(
     conferenceId,
     [Status.confirmed],
     false,

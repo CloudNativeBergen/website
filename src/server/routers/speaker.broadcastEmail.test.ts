@@ -11,7 +11,7 @@
  */
 
 const h = vi.hoisted(() => ({
-  getSpeakers: vi.fn(),
+  getSpeakersUncached: vi.fn(),
   syncConferenceAudience: vi.fn(),
   sendBroadcastEmail: vi.fn(),
 }))
@@ -37,7 +37,7 @@ vi.mock('@/lib/organization/sanity', async (importOriginal) => ({
 
 vi.mock('@/lib/speaker/sanity', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  getSpeakers: h.getSpeakers,
+  getSpeakersUncached: h.getSpeakersUncached,
 }))
 
 vi.mock('@/lib/email/audience', async (importOriginal) => ({
@@ -115,13 +115,13 @@ describe('speaker.admin.broadcastEmail', () => {
       'Email contains unmerged template variables ({{{CONFERENCE_TITLE}}}). Fill in the missing values or remove the placeholders before sending.',
     )
 
-    expect(h.getSpeakers).not.toHaveBeenCalled()
+    expect(h.getSpeakersUncached).not.toHaveBeenCalled()
     expect(h.syncConferenceAudience).not.toHaveBeenCalled()
     expect(h.sendBroadcastEmail).not.toHaveBeenCalled()
   })
 
   it('refuses when there are no confirmed speakers with email addresses', async () => {
-    h.getSpeakers.mockResolvedValue({
+    h.getSpeakersUncached.mockResolvedValue({
       speakers: [
         {
           _id: 'spk-1',
@@ -155,7 +155,7 @@ describe('speaker.admin.broadcastEmail', () => {
       email: 'ada@example.test',
       proposals: [{ _id: 'p-confirmed', status: 'confirmed' }],
     }
-    h.getSpeakers.mockResolvedValue({
+    h.getSpeakersUncached.mockResolvedValue({
       speakers: [confirmedSpeaker],
       err: null,
     })
