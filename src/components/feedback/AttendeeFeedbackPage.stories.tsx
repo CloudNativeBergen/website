@@ -54,7 +54,7 @@ export const Open: Story = {
     // No promise to change an answer that cannot be given yet (F1c).
     await expect(
       canvas.getByText(
-        'Anonymous. Feedback closes Tuesday 27 October at 10:40.',
+        'Answers are anonymous. Feedback closes Tuesday 27 October at 10:40.',
       ),
     ).toBeInTheDocument()
   },
@@ -71,6 +71,10 @@ export const OpenNotPublic: Story = {
       canvas.getByRole('heading', { level: 1, name: 'How was this session?' }),
     ).toBeInTheDocument()
     await expect(canvas.queryByText(talk.title)).toBeNull()
+    // No closing time for a talk that is not public: it gives the slot away.
+    await expect(
+      canvas.getByText('Answers are anonymous.', { exact: true }),
+    ).toBeInTheDocument()
   },
 }
 
@@ -86,6 +90,7 @@ export const NotYetOpen: Story = {
     const canvas = within(canvasElement)
     await expect(
       canvas.getByRole('heading', {
+        level: 2, // under the talk's h1
         name: 'Feedback opens when the session starts',
       }),
     ).toBeInTheDocument()
@@ -101,6 +106,12 @@ export const NotYetOpenNotPublic: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
+      canvas.getByRole('heading', {
+        level: 1, // no talk heading, so the state's own is the h1
+        name: 'Feedback opens when the session starts',
+      }),
+    ).toBeInTheDocument()
+    await expect(
       canvas.getByText('Scan the code again during the session.'),
     ).toBeInTheDocument()
     await expect(canvas.queryByText(talk.title)).toBeNull()
@@ -113,6 +124,7 @@ export const Closed: Story = {
     const canvas = within(canvasElement)
     await expect(
       canvas.getByRole('heading', {
+        level: 2,
         name: 'Feedback for this session has closed',
       }),
     ).toBeInTheDocument()
@@ -125,7 +137,10 @@ export const Unknown: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
-      canvas.getByRole('heading', { name: "This feedback code isn't valid" }),
+      canvas.getByRole('heading', {
+        level: 1,
+        name: "This feedback code isn't valid",
+      }),
     ).toBeInTheDocument()
     await expect(canvas.queryAllByRole('button')).toHaveLength(0)
   },
@@ -137,6 +152,7 @@ export const Unavailable: Story = {
     const canvas = within(canvasElement)
     await expect(
       canvas.getByRole('heading', {
+        level: 1,
         name: "Feedback isn't available right now",
       }),
     ).toBeInTheDocument()

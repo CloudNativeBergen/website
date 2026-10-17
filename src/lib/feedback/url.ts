@@ -19,7 +19,9 @@ export function feedbackCodeUrl(
  */
 export const ATTENDEE_PAGE_LIVE: boolean = true
 
-const FEEDBACK_PATH = /^\/f(\/|$)/
+// Case-insensitive: codes are, so an attendee typing `/F/K7M2QX` must be
+// kept out of analytics on the not-found page it lands on.
+const FEEDBACK_PATH = /^\/f(\/|$)/i
 
 /** Is this the attendee page, `/f` or anything under it? */
 export function isFeedbackPath(pathname: string | null | undefined): boolean {

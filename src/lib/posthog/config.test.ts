@@ -49,6 +49,8 @@ describe('isAnalyticsExcludedPath', () => {
   it('excludes the attendee feedback page, whose URL is the Feedback Code (speaker feedback §7.1)', () => {
     expect(isAnalyticsExcludedPath('/f')).toBe(true)
     expect(isAnalyticsExcludedPath('/f/k7m2qx')).toBe(true)
+    // Typed with caps lock: the code still resolves, so it is still the code.
+    expect(isAnalyticsExcludedPath('/F/K7M2QX')).toBe(true)
     // Only the `/f` segment, not every path that starts with an f.
     expect(isAnalyticsExcludedPath('/faq')).toBe(false)
     expect(isAnalyticsExcludedPath('/foo/f/k7m2qx')).toBe(false)

@@ -1477,7 +1477,17 @@ describe('proposal router', () => {
           action: Action.withdraw,
           reason: 'I can no longer attend the conference.',
         }),
-      ).rejects.toBeTruthy()
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to update proposal status',
+      })
+      // The write was attempted and failed: the refusal is that failure.
+      expect(updateProposalStatus).toHaveBeenCalledWith(
+        'proposal-1',
+        Status.withdrawn,
+        'I can no longer attend the conference.',
+        undefined,
+      )
       expect(expired()).toEqual([])
     })
 
@@ -1522,7 +1532,11 @@ describe('proposal router', () => {
 
       await expect(
         createAdminCaller().proposal.admin.delete({ id: 'proposal-1' }),
-      ).rejects.toBeTruthy()
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to delete proposal',
+      })
+      expect(deleteProposal).toHaveBeenCalledWith('proposal-1')
       expect(expired()).toEqual([])
     })
   })

@@ -327,6 +327,18 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
   })
 })
 
+describe('resolveFeedbackPage — Closed never reveals a non-public talk', () => {
+  it('withholds the title and speakers after the window when the program was never published', async () => {
+    expect(
+      await resolveFeedbackPage(
+        { ...CONF, programDate: null },
+        'k7m2qx',
+        new Date('2026-10-28T14:40:00.000Z'),
+      ),
+    ).toEqual({ state: 'closed', talk: null })
+  })
+})
+
 describe('feedbackCodeIndex — the one cached read', () => {
   it('is tagged per conference and lives at most 5 minutes', async () => {
     await feedbackCodeIndex('conf-A')

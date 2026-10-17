@@ -94,7 +94,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
                 key={colour}
                 type="button"
                 disabled
-                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:grayscale ${className}`}
+                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:ring-1 disabled:ring-gray-300 disabled:grayscale dark:disabled:ring-gray-700 ${className}`}
               >
                 <Icon className="size-9 shrink-0" aria-hidden="true" />
                 {label}
@@ -104,7 +104,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
           <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
             {/* §7.2's "You can change your answer until …" returns with the
                 buttons (F1c); until then there is no answer to change. */}
-            Anonymous.
+            Answers are anonymous.
             {page.closesAt &&
               ` Feedback closes ${formatSessionInstant(page.closesAt)}.`}
           </p>

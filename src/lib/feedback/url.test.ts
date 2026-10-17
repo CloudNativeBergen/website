@@ -6,6 +6,8 @@ describe('isFeedbackPath', () => {
     expect(isFeedbackPath('/f')).toBe(true)
     expect(isFeedbackPath('/f/k7m2qx')).toBe(true)
     expect(isFeedbackPath('/f/k7m2qx/')).toBe(true)
+    // Codes are case-insensitive, so a URL typed with caps lock is one too.
+    expect(isFeedbackPath('/F/K7M2QX')).toBe(true)
   })
 
   it('is not a path that merely starts with an f, or has /f deeper down', () => {
@@ -57,6 +59,12 @@ describe('redactFeedbackCode — no code reaches Vercel Analytics (§7.1)', () =
     ]) {
       expect(redactFeedbackCode({ url })).toEqual({ url })
     }
+  })
+
+  it('redacts a capitalised URL too', () => {
+    expect(redactFeedbackCode({ url: 'https://a.dev/F/K7M2QX' })).toEqual({
+      url: 'https://a.dev/f/[code]',
+    })
   })
 
   it('redacts a URL it cannot parse rather than letting it through', () => {

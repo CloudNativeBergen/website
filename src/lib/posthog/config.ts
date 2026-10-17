@@ -66,10 +66,13 @@ const EXCLUDED_PATH_PREFIXES = [
 ] as const
 
 export function isAnalyticsExcludedPath(pathname: string): boolean {
+  // Case-insensitive, like the Feedback Code itself: `/F/K7M2QX` (typed with
+  // caps lock) must not slip past and send the code to PostHog.
+  const path = pathname.toLowerCase()
   return EXCLUDED_PATH_PREFIXES.some(
     (prefix) =>
-      pathname === prefix ||
-      pathname.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`),
+      path === prefix ||
+      path.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`),
   )
 }
 
