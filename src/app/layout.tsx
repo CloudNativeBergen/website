@@ -286,9 +286,13 @@ export default function RootLayout({
                 <Suspense>
                   <SessionProviderWrapper>{children}</SessionProviderWrapper>
                 </Suspense>
-                <HiddenOnFeedbackPage>
-                  <InstallPrompt />
-                </HiddenOnFeedbackPage>
+                {/* Its own boundary: the gate reads the path, which would
+                    otherwise block every route's prerender. */}
+                <Suspense>
+                  <HiddenOnFeedbackPage>
+                    <InstallPrompt />
+                  </HiddenOnFeedbackPage>
+                </Suspense>
                 <ServiceWorkerRegistrar />
               </div>
             </PwaInstallProvider>
