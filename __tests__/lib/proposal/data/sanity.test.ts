@@ -587,6 +587,10 @@ describe('deleteProposal reports the deleted talk’s conference (speaker feedba
   // tenant's host.
   beforeEach(() => {
     vi.clearAllMocks()
+    // A test whose lookup throws leaves its queued answers unread;
+    // clearAllMocks keeps queued once-values, so reset them.
+    mockFetch.mockReset()
+    mockWriteFetch.mockReset()
     mockTxCommit.mockResolvedValue({})
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -614,7 +618,14 @@ describe('deleteProposal reports the deleted talk’s conference (speaker feedba
   })
 
   it('refuses the delete when the conference lookup fails, before writing anything', async () => {
-    noReferences()
+    // A proposal WITH a thread, so the cascade has commits of its own that a
+    // late lookup would let through.
+    mockFetch
+      .mockResolvedValueOnce([]) // referencing docs
+      .mockResolvedValueOnce(['conv-1']) // conversationIds
+      .mockResolvedValueOnce(['msg-1']) // messageIds
+      .mockResolvedValueOnce([]) // messageNotificationIds
+      .mockResolvedValueOnce([]) // preferenceIds
     const failure = new Error('lookup down')
     mockWriteFetch.mockRejectedValueOnce(failure)
 
@@ -622,7 +633,9 @@ describe('deleteProposal reports the deleted talk’s conference (speaker feedba
       err: failure,
       conferenceId: null,
     })
-    // Deleting without knowing what to expire would leave the code resolving.
+    // Deleting without knowing what to expire would leave the code resolving,
+    // and a half-done cascade would delete the thread but keep the talk.
+    expect(mockTransaction).not.toHaveBeenCalled()
     expect(mockTxCommit).not.toHaveBeenCalled()
   })
 

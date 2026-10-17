@@ -52,7 +52,10 @@ export function AttendeeFeedbackPage({
   page: AttendeeFeedbackState
 }) {
   return (
-    <div className="min-h-dvh bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+    <div
+      data-shell-fit="viewport"
+      className="min-h-dvh bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100"
+    >
       <header className="flex justify-center px-4 pt-8">
         <ConferenceLogo
           conference={logo}
@@ -91,7 +94,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
                 key={colour}
                 type="button"
                 disabled
-                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:grayscale ${className}`}
               >
                 <Icon className="size-9 shrink-0" aria-hidden="true" />
                 {label}
@@ -99,8 +102,11 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
             ))}
           </div>
           <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
-            Anonymous. You can change your answer until{' '}
-            {formatSessionInstant(page.closesAt)}.
+            {/* §7.2's "You can change your answer until …" returns with the
+                buttons (F1c); until then there is no answer to change. */}
+            Anonymous.
+            {page.closesAt &&
+              ` Feedback closes ${formatSessionInstant(page.closesAt)}.`}
           </p>
         </>
       )
@@ -115,7 +121,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
             title="Feedback opens when the session starts"
           >
             {page.opensAt
-              ? `It opens ${formatSessionInstant(page.opensAt)}. Scan the code again then.`
+              ? `It opens on ${formatSessionInstant(page.opensAt)}. Scan the code again then.`
               : 'Scan the code again during the session.'}
           </Notice>
         </>

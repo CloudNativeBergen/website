@@ -194,7 +194,6 @@ describe('schedule router — the Feedback Code index (speaker feedback §5.1)',
     )
 
   it('expires it when an official day is saved', async () => {
-    getScheduleStatusByIdMock.mockResolvedValueOnce(ScheduleStatus.Official)
     await makeCaller().save({
       ...validPayload,
       status: ScheduleStatus.Official,

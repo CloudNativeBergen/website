@@ -590,6 +590,9 @@ export async function deleteProposal(
   let err = null
   let deletedFrom: string | null = null
   try {
+    // FIRST, before any cascade commits: a failed lookup must leave nothing
+    // half-deleted.
+    const conferenceId = await talkConferenceId(proposalId)
     // Find every document that references this proposal. Sanity refuses to
     // delete a document with inbound strong references, so we must handle
     // them up front instead of surfacing a raw 409 to the user.
@@ -743,7 +746,6 @@ export async function deleteProposal(
     }
     // Final transaction: the cascade dependents (strong refs to the proposal)
     // and the proposal itself, atomically.
-    const conferenceId = await talkConferenceId(proposalId)
     await commitDeletes([...cascadeIds, proposalId])
     deletedFrom = conferenceId
   } catch (error) {

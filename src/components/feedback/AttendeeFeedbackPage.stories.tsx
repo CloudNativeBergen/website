@@ -51,8 +51,11 @@ export const Open: Story = {
       // Not wired yet: present, and refusing the tap.
       await expect(canvas.getByRole('button', { name: label })).toBeDisabled()
     }
+    // No promise to change an answer that cannot be given yet (F1c).
     await expect(
-      canvas.getByText(/Anonymous\. You can change your answer until/),
+      canvas.getByText(
+        'Anonymous. Feedback closes Tuesday 27 October at 10:40.',
+      ),
     ).toBeInTheDocument()
   },
 }
@@ -60,7 +63,7 @@ export const Open: Story = {
 /** Not public yet: the buttons, and nothing about the talk. */
 export const OpenNotPublic: Story = {
   args: {
-    page: { state: 'open', talk: null, closesAt: '2026-10-27T09:40:00.000Z' },
+    page: { state: 'open', talk: null, closesAt: null },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
@@ -86,7 +89,9 @@ export const NotYetOpen: Story = {
         name: 'Feedback opens when the session starts',
       }),
     ).toBeInTheDocument()
-    await expect(canvas.getByText(/It opens Monday/)).toBeInTheDocument()
+    await expect(
+      canvas.getByText(/It opens on Monday 26 October at 10:00\./),
+    ).toBeInTheDocument()
   },
 }
 

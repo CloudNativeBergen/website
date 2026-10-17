@@ -13,7 +13,10 @@
  * The index is server-only and never handed to a Client Component: it carries
  * the titles and speakers of talks that are not public yet. What leaves this
  * module is a {@link FeedbackPage}, which holds them only when the talk is
- * public, computed per request since it depends on the time.
+ * public, computed per request since it depends on the time. So does the
+ * window's closing time: the slot's end gives an unannounced session away as
+ * surely as its start (_Refinement_ of §7.2, which names title, speakers and
+ * start time).
  */
 import 'server-only'
 import { cacheLife, cacheTag } from 'next/cache'
@@ -37,13 +40,15 @@ export interface FeedbackTalk {
 export type FeedbackCodeIndex = ReadonlyMap<string, FeedbackTalk>
 
 /**
- * 5 minutes, revalidate and expire (§5.1): the backstop for Studio edits that
- * expire nothing. With both equal, nothing older than 5 minutes is served.
+ * 5 minutes (§5.1): the backstop for Studio edits that expire nothing. Next's
+ * docs require `expire` to be LONGER than `revalidate` (today's check only
+ * refuses shorter), so it is one second longer rather than equal: a stricter
+ * check in a later Next would otherwise throw on every scan.
  */
 export const FEEDBACK_CODE_INDEX_LIFE = {
   stale: 60,
   revalidate: 60 * 5,
-  expire: 60 * 5,
+  expire: 60 * 5 + 1,
 } as const
 
 interface TalkRow {
@@ -147,7 +152,12 @@ export interface PublicFeedbackTalk {
 
 export type FeedbackPage =
   | { state: 'unknown' }
-  | { state: 'open'; talk: PublicFeedbackTalk | null; closesAt: string }
+  | {
+      state: 'open'
+      talk: PublicFeedbackTalk | null
+      /** Only for a public talk: it gives the slot's end away. */
+      closesAt: string | null
+    }
   | {
       state: 'not-yet-open'
       talk: PublicFeedbackTalk | null
@@ -195,7 +205,11 @@ export async function resolveFeedbackPage(
 
   switch (window.state) {
     case 'open':
-      return { state: 'open', talk, closesAt: window.closesAt! }
+      return {
+        state: 'open',
+        talk,
+        closesAt: isPublic ? (window.closesAt ?? null) : null,
+      }
     case 'closed':
       return { state: 'closed', talk }
     default:

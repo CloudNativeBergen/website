@@ -114,6 +114,9 @@ beforeEach(() => {
       speakers: [
         { _key: 's1', ...ref('spk-ada') },
         { _key: 's2', ...ref('spk-bob') },
+        // A reference to a speaker document that no longer exists: it
+        // dereferences to null and must not reach the page as "null".
+        { _key: 's3', ...ref('spk-gone') },
       ],
     }),
     // A draft copy of the same talk: same code, different title. Must count
@@ -225,11 +228,8 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
       'k7m2qx',
       DURING,
     )
-    expect(page).toEqual({
-      state: 'open',
-      talk: null,
-      closesAt: '2026-10-27T09:40:00.000Z',
-    })
+    // The closing time gives the slot's end away, so it goes too.
+    expect(page).toEqual({ state: 'open', talk: null, closesAt: null })
   })
 
   it('hides them when there is no program date at all', async () => {
@@ -332,8 +332,10 @@ describe('feedbackCodeIndex — the one cached read', () => {
     await feedbackCodeIndex('conf-A')
     expect(h.cacheTag).toEqual([feedbackCodeIndexTag('conf-A')])
     expect(h.cacheLife).toEqual([FEEDBACK_CODE_INDEX_LIFE])
-    expect(FEEDBACK_CODE_INDEX_LIFE.expire).toBe(300)
     expect(FEEDBACK_CODE_INDEX_LIFE.revalidate).toBe(300)
+    // Next's docs: expire must be LONGER than revalidate.
+    expect(FEEDBACK_CODE_INDEX_LIFE.expire).toBeGreaterThan(300)
+    expect(FEEDBACK_CODE_INDEX_LIFE.expire).toBeLessThanOrEqual(301)
   })
 
   it('reads two conference-scoped roots and nothing per code', async () => {

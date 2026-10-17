@@ -68,6 +68,15 @@ const config: NextConfig = {
           },
         ],
       },
+      {
+        // The attendee feedback page's path IS the Feedback Code (speaker
+        // feedback spec §7.1). A response header governs the document from
+        // its first byte; the page's `<meta name="referrer">` arrives only
+        // with the streamed metadata, after the CSS, script and font requests
+        // have gone out carrying the full URL.
+        source: '/f/:path*',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+      },
     ]
   },
   // PostHog ingestion proxy (issue #1008): the browser posts to a first-party,
