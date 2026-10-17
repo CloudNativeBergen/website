@@ -125,7 +125,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 15, 2026'
+  const lastUpdated = 'October 17, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -476,6 +476,16 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           confirmed participants — we store the message text,
                           its author, and when it was sent, and display it on
                           the workshop page
+                        </li>
+                        <li>
+                          • <strong>Workshop Sign-up Reminders:</strong> If your
+                          ticket includes workshops and you have not signed up
+                          for one, organizers may email you a reminder, using
+                          the name and email address your ticket is registered
+                          to. We compare that address with workshop sign-ups to
+                          decide who gets it, and keep only when the last
+                          reminder went out and how many people it reached — not
+                          who they were
                         </li>
                       </ul>
                     </div>

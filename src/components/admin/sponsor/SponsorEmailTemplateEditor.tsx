@@ -6,6 +6,7 @@ import { useNotification, AdminPageHeader } from '@/components/admin'
 import { PortableTextEditor } from '@/components/PortableTextEditor'
 import { Input, Dropdown } from '@/components/Form'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
+import { emailBrandColor } from '@/lib/branding/theme'
 import {
   CATEGORY_LABELS,
   LANGUAGE_LABELS,
@@ -208,8 +209,12 @@ export function SponsorEmailTemplateEditor({
   )
 
   const previewHTML = useMemo(
-    () => portableTextToHTML(previewBody as unknown as RenderBlock[]),
-    [previewBody],
+    () =>
+      portableTextToHTML(
+        previewBody as unknown as RenderBlock[],
+        emailBrandColor(conference.theme),
+      ),
+    [previewBody, conference.theme],
   )
 
   const handleInsertVariable = useCallback(

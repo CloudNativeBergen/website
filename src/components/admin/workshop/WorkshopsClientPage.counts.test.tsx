@@ -315,7 +315,8 @@ function renderPage() {
       <WorkshopsClientPage
         conferenceId="conf-1"
         initialWorkshops={SERVER_RENDER}
-        resendDisabledReason={null}
+        reminderDisabledReason={null}
+        lastReminder={null}
       />
     </Providers>,
   )
@@ -460,7 +461,8 @@ describe('the registration card on the page', () => {
         <WorkshopsClientPage
           conferenceId="conf-1"
           initialWorkshops={SERVER_RENDER}
-          resendDisabledReason={null}
+          reminderDisabledReason={null}
+          lastReminder={null}
           workshopRegistrationSponsorStart="2026-06-01T06:00:00.000Z"
           workshopRegistrationStart="2026-06-15T06:30:00.000Z"
           workshopRegistrationEnd="2026-07-01T07:00:00.000Z"
@@ -517,7 +519,8 @@ describe('the ticket holders (#1333)', () => {
         <WorkshopsClientPage
           conferenceId="conf-1"
           initialWorkshops={SERVER_RENDER}
-          resendDisabledReason={null}
+          reminderDisabledReason={null}
+          lastReminder={null}
           ticketsSection={<section aria-label="Workshop tickets" />}
         />
       </Providers>,
@@ -603,7 +606,8 @@ describe('the ticket holders (#1333)', () => {
         <WorkshopsClientPage
           conferenceId={conferenceId}
           initialWorkshops={SERVER_RENDER}
-          resendDisabledReason={null}
+          reminderDisabledReason={null}
+          lastReminder={null}
         />
       </Providers>
     )
@@ -629,7 +633,8 @@ describe('the ticket holders (#1333)', () => {
       <WorkshopsClientPage
         conferenceId={conferenceId}
         initialWorkshops={SERVER_RENDER}
-        resendDisabledReason={null}
+        reminderDisabledReason={null}
+        lastReminder={null}
       />
     )
     // One client for both visits, as in the app.

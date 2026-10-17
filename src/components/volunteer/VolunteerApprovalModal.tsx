@@ -185,6 +185,36 @@ export function VolunteerApprovalModal({
       .join('\n\n')
   }
 
+  const hasRichFormatting = (blocks: PortableTextBlock[]): boolean => {
+    if (!Array.isArray(blocks)) return false
+    return blocks.some((block) => {
+      if (block._type !== 'block') return true
+      const b = block as PortableTextBlock & {
+        style?: string
+        listItem?: string
+        markDefs?: unknown[]
+        children?: Array<{ _type?: string; marks?: string[] }>
+      }
+      if (b.style && b.style !== 'normal') return true
+      if (b.listItem) return true
+      if (Array.isArray(b.markDefs) && b.markDefs.length > 0) return true
+      if (
+        Array.isArray(b.children) &&
+        b.children.some((c) => Array.isArray(c.marks) && c.marks.length > 0)
+      ) {
+        return true
+      }
+      return false
+    })
+  }
+
+  const serializeMessage = (blocks: PortableTextBlock[]): string => {
+    if (hasRichFormatting(blocks)) {
+      return JSON.stringify(blocks)
+    }
+    return extractPlainText(blocks)
+  }
+
   const handleSend = async (data: {
     subject: string
     message: PortableTextBlock[]
@@ -204,13 +234,13 @@ export function VolunteerApprovalModal({
       baseSlackInviteUrl: nextBaseSlack,
     })
 
-    const plainTextMessage = extractPlainText(data.message)
+    const serializedMessage = serializeMessage(data.message)
 
     // Pass empty string "" when cleared so SendVolunteerEmailSchema transforms
     // "" -> null and suppresses the conference fallback CTA button.
     await onSend({
       subject: data.subject,
-      message: plainTextMessage,
+      message: serializedMessage,
       ticketUrl: trimmedTicket,
       slackInviteUrl: trimmedSlack,
     })
@@ -369,7 +399,7 @@ export function VolunteerApprovalModal({
               eventLocation={eventLocation}
               eventDate={eventDate}
               eventUrl={eventUrl}
-              message={extractPlainText(message)}
+              message={serializeMessage(message)}
               socialLinks={socialLinks}
               brandColor={emailBrandColor(conf?.theme)}
               confirmUrl={`${eventUrl.replace(/\/$/, '')}/volunteer/confirm?token=preview`}

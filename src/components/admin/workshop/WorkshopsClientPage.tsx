@@ -16,7 +16,10 @@ import {
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
-import { ResendInstructionsButton } from './ResendInstructionsButton'
+import {
+  WorkshopReminderButton,
+  type LastWorkshopReminder,
+} from './WorkshopReminderButton'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import type {
   WorkshopSignupStatus,
@@ -77,8 +80,10 @@ interface WorkshopsClientPageProps {
   workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
-  /** Why the resend action is unavailable, or null when it can be used. */
-  resendDisabledReason: string | null
+  /** Why the reminder is unavailable, or null when it can be used. */
+  reminderDisabledReason: string | null
+  /** The last reminder, as the conference stores it. */
+  lastReminder: LastWorkshopReminder | null
   /** The "Workshop tickets" section (#1332), rendered by the server page. */
   ticketsSection?: ReactNode
 }
@@ -99,7 +104,8 @@ function WorkshopsClientPageFor({
   workshopRegistrationSponsorStart,
   workshopRegistrationStart,
   workshopRegistrationEnd,
-  resendDisabledReason,
+  reminderDisabledReason,
+  lastReminder,
   ticketsSection,
 }: WorkshopsClientPageProps) {
   const queryClient = useQueryClient()
@@ -482,7 +488,11 @@ function WorkshopsClientPageFor({
         {/* Below the stats, not beside the title: the title row cannot wrap,
             and on a phone the reason text would push the page sideways. */}
         <div className="mt-4 flex justify-end">
-          <ResendInstructionsButton disabledReason={resendDisabledReason} />
+          <WorkshopReminderButton
+            disabledReason={reminderDisabledReason}
+            recipients={holderView}
+            lastSent={lastReminder}
+          />
         </div>
       </AdminPageHeader>
 

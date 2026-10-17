@@ -30,6 +30,7 @@ interface SponsorTemplatePickerProps {
     organizer?: string
     domains: string[]
     prospectusUrl?: string
+    sponsorRegistrationLink?: string
   }
   senderName?: string
   tierName?: string

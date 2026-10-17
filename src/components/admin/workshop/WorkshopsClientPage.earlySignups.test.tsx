@@ -400,7 +400,8 @@ function KeptRoute() {
         <WorkshopsClientPage
           conferenceId="conf-1"
           initialWorkshops={SERVER_RENDER}
-          resendDisabledReason={null}
+          reminderDisabledReason={null}
+          lastReminder={null}
         />
       </Activity>
       {boardOnThePage !== 'none' && (

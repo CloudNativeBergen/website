@@ -1,6 +1,33 @@
 import { z } from 'zod'
 import { VolunteerStatus, Occupation, TShirtSize } from '@/lib/volunteer/types'
 import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
+import { isValidPortableText } from '@/lib/portabletext/validation'
+
+function getMessageTextLength(raw: string): number {
+  const trimmed = raw.trim()
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (isValidPortableText(parsed)) {
+        return parsed.reduce((sum, block, idx) => {
+          const blockText = Array.isArray(block.children)
+            ? block.children
+                .map((child) =>
+                  'text' in child && typeof child.text === 'string'
+                    ? child.text
+                    : '',
+                )
+                .join('')
+            : ''
+          return sum + blockText.length + (idx > 0 ? 1 : 0)
+        }, 0)
+      }
+    } catch {
+      // Fall back to raw length
+    }
+  }
+  return raw.length
+}
 
 export const GetVolunteerByIdSchema = z.object({
   id: z.string(),
@@ -25,7 +52,10 @@ export const SendVolunteerEmailSchema = z.object({
   message: z
     .string()
     .min(1, 'Message is required')
-    .max(20000, 'Message is too long'),
+    .max(200000, 'Message is too long')
+    .refine((val) => getMessageTextLength(val) <= 20000, {
+      message: 'Message is too long',
+    }),
   ticketUrl: z
     .string()
     .trim()

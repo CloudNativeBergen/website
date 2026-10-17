@@ -147,4 +147,30 @@ describe('EmailModal leaves nothing running when it goes away', () => {
       'Failed to create broadcast email: Invalid `from` field: domain not verified',
     )
   })
+
+  it('restores initialValues when Clear Draft is clicked instead of wiping subject to empty', async () => {
+    localStorage.setItem(
+      'email-draft-test-clear',
+      JSON.stringify({
+        subject: 'Edited draft subject',
+        message: [],
+      }),
+    )
+
+    renderModal({
+      storageKey: 'email-draft-test-clear',
+      initialValues: { subject: 'Default Template Subject', message: [] },
+    })
+
+    const subjectInput =
+      await screen.findByPlaceholderText(/Enter email subject/i)
+    expect(subjectInput).toHaveValue('Edited draft subject')
+
+    const clearButton = await screen.findByRole('button', {
+      name: /Clear Draft/i,
+    })
+    fireEvent.click(clearButton)
+
+    expect(subjectInput).toHaveValue('Default Template Subject')
+  })
 })

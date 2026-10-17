@@ -164,6 +164,25 @@ export const workshopAnnouncementsQuerySchema = z.object({
   limit: z.number().int().min(0).max(50).optional().default(50),
 })
 
+/** The longest note an organizer can add to the workshop reminder (#1334). */
+export const WORKSHOP_REMINDER_NOTE_MAX = 1000
+
+/**
+ * The workshop reminder (#1334): an optional plain-text note shown above the
+ * standard text, escaped. Trimmed first, so the limit counts what is sent and
+ * a blank note is no note.
+ */
+export const workshopReminderSchema = z.object({
+  note: z
+    .string()
+    .trim()
+    .max(
+      WORKSHOP_REMINDER_NOTE_MAX,
+      `The note must be ${WORKSHOP_REMINDER_NOTE_MAX.toLocaleString('en-US')} characters or fewer`,
+    )
+    .optional(),
+})
+
 export type WorkshopSignupInput = z.infer<typeof workshopSignupInputSchema>
 
 export const WorkshopSignupIdSchema = z.object({
