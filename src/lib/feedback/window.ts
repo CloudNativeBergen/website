@@ -88,3 +88,19 @@ export function feedbackWindow({
     feedbackVisible: t >= lastEnd || conferenceOver,
   }
 }
+
+/**
+ * The state a window computed earlier has at `now`, from its own instants.
+ * The speaker's page uses it to move "Opens…" to "Open until…" to "Closed"
+ * on the clock, without asking the server again. A window with no slot keeps
+ * its state.
+ */
+export function feedbackWindowStateAt(
+  window: Pick<FeedbackWindow, 'state' | 'opensAt' | 'closesAt'>,
+  now: Date,
+): FeedbackWindowState {
+  if (!window.opensAt || !window.closesAt) return window.state
+  const t = now.getTime()
+  if (t < Date.parse(window.opensAt)) return 'before'
+  return t < Date.parse(window.closesAt) ? 'open' : 'closed'
+}

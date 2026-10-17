@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { feedbackWindow } from './window'
+import { feedbackWindow, feedbackWindowStateAt } from './window'
 
 // Expected instants are worked out by hand from Oslo wall-clock times:
 // CEST (summer) is UTC+2, CET (winter) is UTC+1.
@@ -188,5 +188,38 @@ describe('feedbackWindow', () => {
         now: at('2030-01-01T00:00:00Z'),
       }).feedbackVisible,
     ).toBe(false)
+  })
+})
+
+describe('feedbackWindowStateAt — the state a shown window has at a later time', () => {
+  const shown = feedbackWindow({
+    slots: [slot('2026-06-10', '10:00', '10:40')],
+    conferenceEndDate: '2026-06-11',
+    now: at('2026-06-01T00:00:00Z'),
+  })
+
+  it('moves from before to open to closed at the window’s own instants', () => {
+    expect(shown.state).toBe('before')
+    expect(feedbackWindowStateAt(shown, at('2026-06-10T07:59:59Z'))).toBe(
+      'before',
+    )
+    expect(feedbackWindowStateAt(shown, at('2026-06-10T08:00:00Z'))).toBe(
+      'open',
+    )
+    expect(feedbackWindowStateAt(shown, at('2026-06-11T08:39:59Z'))).toBe(
+      'open',
+    )
+    expect(feedbackWindowStateAt(shown, at('2026-06-11T08:40:00Z'))).toBe(
+      'closed',
+    )
+  })
+
+  it('keeps an unscheduled window unscheduled', () => {
+    expect(
+      feedbackWindowStateAt(
+        { state: 'unscheduled' },
+        at('2030-01-01T00:00:00Z'),
+      ),
+    ).toBe('unscheduled')
   })
 })

@@ -75,9 +75,15 @@ const mayMint = (window: FeedbackWindow) =>
   window.state !== 'closed' &&
   !(window.state === 'unscheduled' && window.feedbackVisible)
 
-function isRevisionConflict(error: unknown): boolean {
-  if ((error as { statusCode?: unknown } | null)?.statusCode === 409)
-    return true
+/**
+ * A write that lost to a concurrent edit and should re-read and try again: a
+ * failed `ifRevisionId` (409), or a version deleted since the read (Sanity
+ * answers a patch of a missing document with 404 and rolls the whole
+ * transaction back).
+ */
+function isRetryable(error: unknown): boolean {
+  const status = (error as { statusCode?: unknown } | null)?.statusCode
+  if (status === 409 || status === 404) return true
   const message = error instanceof Error ? error.message.toLowerCase() : ''
   return message.includes('revision')
 }
@@ -96,7 +102,10 @@ export async function ensureFeedbackCode({
   if (!isPublishedId(talkId)) return { status: 'refused' }
   const client = versionsClient()
   const talk = await client.getDocument<TalkDoc>(talkId)
-  if (!mayHoldCode(talk, conference._id, speakerId)) {
+  // The doc endpoint answers a comma list of ids with the first match, so
+  // the document read must BE the id asked for. The router's id check stops
+  // such ids first; this keeps the module safe on its own.
+  if (talk?._id !== talkId || !mayHoldCode(talk, conference._id, speakerId)) {
     return { status: 'refused' }
   }
 
@@ -151,7 +160,7 @@ async function mint(
       await tx.commit()
       return { code, minted: true }
     } catch (error) {
-      if (!isRevisionConflict(error) || attempt >= MAX_RETRIES) throw error
+      if (!isRetryable(error) || attempt >= MAX_RETRIES) throw error
     }
     const reread = await client.getDocument<TalkDoc>(current._id)
     if (!mayHoldCode(reread, conferenceId, speakerId)) return null
@@ -199,7 +208,7 @@ export async function sweepTalkVersions(
       try {
         await tx.commit()
       } catch (error) {
-        if (!isRevisionConflict(error)) throw error
+        if (!isRetryable(error)) throw error
       }
     }
   } catch (error) {
@@ -214,6 +223,12 @@ export async function sweepTalkVersions(
  * `versions.<release>.<id>` are always asked for by id too, and every revision
  * a guard uses comes from the doc endpoint. A stale revision from GROQ would
  * fail every retry of a write after one finished draft edit.
+ *
+ * Only versions in an `active` release are returned: Sanity locks the
+ * versions of a scheduled release, and patching one would fail the whole
+ * transaction on every attempt. Such a version keeps its old value and, if
+ * published, writes it back: the §15 "version published inside a write"
+ * risk, widened to a scheduled release.
  */
 async function readTalkVersions(
   client: VersionsClient,
@@ -227,18 +242,25 @@ async function readTalkVersions(
       { id: talkId },
       raw,
     ),
-    client.fetch<unknown>('releases::all()._id', {}, raw),
+    client.fetch<unknown>('releases::all(){ _id, state }', {}, raw),
   ])
-  const strings = (value: unknown) =>
-    (Array.isArray(value) ? value : []).filter(
-      (v): v is string => typeof v === 'string',
-    )
+  const releaseOf = (id: string) => /^versions\.([^.]+)\./.exec(id)?.[1]
+  const active = new Set(
+    (Array.isArray(releases) ? releases : [])
+      .filter(
+        (r): r is { _id: string; state: string } =>
+          typeof r?._id === 'string' && r.state === 'active',
+      )
+      .map((r) => r._id.replace(/^_\.releases\./, '')),
+  )
   const ids = new Set([
     `drafts.${talkId}`,
-    ...strings(releases).map(
-      (id) => `versions.${id.replace(/^_\.releases\./, '')}.${talkId}`,
-    ),
-    ...strings(found),
+    ...[...active].map((name) => `versions.${name}.${talkId}`),
+    ...(Array.isArray(found) ? found : []).filter((id): id is string => {
+      if (typeof id !== 'string') return false
+      const release = releaseOf(id)
+      return !release || active.has(release)
+    }),
   ])
   const [published, ...versions] = await client.getDocuments<TalkDoc>([
     talkId,

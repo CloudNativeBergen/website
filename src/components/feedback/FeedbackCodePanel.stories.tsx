@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect, userEvent, within } from 'storybook/test'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
 
 const URL = 'https://2026.cloudnativedays.no/f/k7m2qx'
@@ -49,4 +50,48 @@ export const UnscheduledAfterConference: Story = {
 export const OpenDark: Story = {
   ...Open,
   globals: { theme: 'dark' },
+}
+
+const stubClipboard = (writeText: () => Promise<void>) =>
+  Object.defineProperty(navigator, 'clipboard', {
+    value: { writeText },
+    configurable: true,
+  })
+
+export const CopySucceeded: Story = {
+  args: { window: before },
+  play: async ({ canvasElement }) => {
+    stubClipboard(() => Promise.resolve())
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: /Copy link/ }))
+    expect(await canvas.findByText('Copied')).toBeVisible()
+  },
+}
+
+/** The browser refuses the clipboard: say so, and point at the visible link. */
+export const CopyFailed: Story = {
+  args: { window: before },
+  play: async ({ canvasElement }) => {
+    stubClipboard(() => Promise.reject(new Error('denied')))
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: /Copy link/ }))
+    expect(
+      await canvas.findByText('Couldn’t copy; select the link above'),
+    ).toBeVisible()
+  },
+}
+
+/** A URL too long for any QR code: the box says so instead of pulsing. */
+export const QrCannotBeDrawn: Story = {
+  args: {
+    url: `${URL}?${'x'.repeat(3000)}`,
+    window: before,
+  },
+  play: async ({ canvasElement }) => {
+    expect(
+      await within(canvasElement).findByText(
+        'The QR code could not be drawn. Share the link instead.',
+      ),
+    ).toBeVisible()
+  },
 }

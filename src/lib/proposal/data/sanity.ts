@@ -389,6 +389,9 @@ export async function getProposals({
     && (!defined($statuses) || status in $statuses)
   ]{
     ...,
+    // The Feedback Code is for the talk's speakers only (speaker feedback
+    // spec §9.2), and this list feeds the PUBLIC workshop list whole.
+    "feedbackCode": null,
     speakers[]-> {
       _id, name, email, providers, "image": coalesce(image.asset->url, imageURL), flags, "slug": slug.current,
       ${includePreviousAcceptedTalks ? `${PREVIOUS_ACCEPTED_TALKS_PROJECTION},` : ''}

@@ -90,12 +90,18 @@ function CopyLinkButton({ url }: { url: string }) {
       ) : (
         <ClipboardDocumentIcon className="size-4" />
       )}
-      <span aria-live="polite">
+      {result === 'copied'
+        ? 'Copied'
+        : result === 'failed'
+          ? 'Couldn’t copy; select the link above'
+          : 'Copy link'}
+      {/* Announces the outcome only, not the label coming back. */}
+      <span className="sr-only" aria-live="polite">
         {result === 'copied'
-          ? 'Copied'
+          ? 'Link copied'
           : result === 'failed'
-            ? 'Couldn’t copy; select the link above'
-            : 'Copy link'}
+            ? 'Couldn’t copy the link'
+            : ''}
       </span>
     </button>
   )

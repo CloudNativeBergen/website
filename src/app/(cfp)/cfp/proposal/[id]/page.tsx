@@ -186,7 +186,7 @@ export default async function ProposalViewPage({
       '_id' in proposal.conference &&
       proposal.conference._id === conference._id &&
       (proposal.speakers ?? []).some(
-        (s) => '_id' in s && s._id === session.speaker._id,
+        (s) => s != null && '_id' in s && s._id === session.speaker._id,
       )
 
     return (

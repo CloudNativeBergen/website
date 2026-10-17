@@ -1,5 +1,6 @@
 export {
   feedbackWindow,
+  feedbackWindowStateAt,
   type FeedbackSlot,
   type FeedbackWindow,
   type FeedbackWindowState,

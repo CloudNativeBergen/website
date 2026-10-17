@@ -25,7 +25,9 @@ type Doc = Record<string, unknown> & { _id: string; _rev?: string }
 
 const h = vi.hoisted(() => ({
   dataset: [] as (Record<string, unknown> & { _id: string; _rev?: string })[],
-  releases: [] as string[],
+  releases: [] as { name: string; state: string }[],
+  /** Ids asked of the doc endpoint, in order. */
+  docReads: [] as string[],
   revs: 0,
   commits: 0,
   /** Transactions attempted, committed or not. */
@@ -62,7 +64,10 @@ vi.mock('@/lib/sanity/client', async () => {
   const run = async (query: string, params: Record<string, unknown> = {}) => {
     // groq-js has no `releases::all()`; the store answers it.
     if (query.includes('releases::all()'))
-      return h.releases.map((name) => `_.releases.${name}`)
+      return h.releases.map((r) => ({
+        _id: `_.releases.${r.name}`,
+        state: r.state,
+      }))
     const value = await evaluate(parse(query), {
       dataset: h.groqSnapshot ?? h.dataset,
       params,
@@ -73,8 +78,23 @@ vi.mock('@/lib/sanity/client', async () => {
     structuredClone(h.dataset.find((d) => d._id === id) ?? null)
   const pinned = {
     fetch: run,
-    getDocument: async (id: string) => byId(id) ?? undefined,
-    getDocuments: async (ids: string[]) => ids.map(byId),
+    // The doc endpoint reads a comma-separated LIST of ids from its path and
+    // answers sorted by `_id`; the client returns the first (verified
+    // read-only against production). Modelled so a talkId with a comma reads
+    // what Sanity would read.
+    getDocument: async (id: string) => {
+      h.docReads.push(id)
+      const found = id
+        .split(',')
+        .map(byId)
+        .filter((d) => d !== null)
+        .sort((a, b) => a._id.localeCompare(b._id))
+      return found[0] ?? undefined
+    },
+    getDocuments: async (ids: string[]) => {
+      h.docReads.push(...ids)
+      return ids.map(byId)
+    },
     transaction: () => {
       const tx = real.transaction()
       tx.commit = (async () => {
@@ -103,10 +123,27 @@ vi.mock('@/lib/sanity/client', async () => {
     // All or nothing, as a Sanity transaction is.
     const next = structuredClone(h.dataset)
     for (const m of mutations as Record<string, Record<string, unknown>>[]) {
-      const i = next.findIndex((d) => d._id === m.patch?.id)
-      if (!m.patch || i < 0)
+      if (!m.patch)
         throw Object.assign(new Error('unexpected mutation'), {
           statusCode: 400,
+        })
+      const i = next.findIndex((d) => d._id === m.patch.id)
+      // Sanity answers a patch of a missing document with 404 and rolls the
+      // transaction back (measured on a development dataset).
+      if (i < 0)
+        throw Object.assign(
+          new Error(`The document with the ID "${m.patch.id}" was not found`),
+          { statusCode: 404 },
+        )
+      // A version in a release that is not `active` is locked (Sanity's
+      // documented rule; the status code is MODELLED).
+      const release = /^versions\.([^.]+)\./.exec(String(m.patch.id))?.[1]
+      if (
+        release &&
+        h.releases.find((r) => r.name === release)?.state !== 'active'
+      )
+        throw Object.assign(new Error(`${m.patch.id} is locked`), {
+          statusCode: 409,
         })
       if (m.patch.ifRevisionID && m.patch.ifRevisionID !== next[i]._rev)
         throw Object.assign(new Error('Revision mismatch'), {
@@ -129,12 +166,17 @@ import { feedbackCodeIndexTag } from '@/lib/cache/tags'
 import { sessionFeedbackRouter } from './sessionFeedback'
 
 const t = initTRPC.context<Context>().create()
-function caller(speakerId = 'sp-ada') {
+function caller(speakerId = 'sp-ada', isImpersonating = false) {
   const speaker = { _id: speakerId, name: 'Ada' }
   const user = { email: 'a@example.com', name: 'Ada', picture: '' }
   return t.createCallerFactory(sessionFeedbackRouter)({
     req: { headers: new Headers(), url: 'http://localhost:3000' },
-    session: { expires: '2099-01-01T00:00:00Z', user, speaker },
+    session: {
+      expires: '2099-01-01T00:00:00Z',
+      user,
+      speaker,
+      ...(isImpersonating && { isImpersonating: true }),
+    },
     speaker,
     user,
     workosUser: null,
@@ -179,6 +221,7 @@ beforeEach(() => {
   h.commits = 0
   h.attempts = 0
   h.releases = []
+  h.docReads = []
   h.beforeCommit = []
   h.afterCommit = []
   h.groqSnapshot = null
@@ -239,7 +282,7 @@ describe('ensureCode — minting', () => {
       talk('drafts.talk-1', { title: 'edited' }),
       talk('versions.r1.talk-1'),
     )
-    h.releases = ['r1']
+    h.releases = [{ name: 'r1', state: 'active' }]
     const out = await caller().ensureCode({ talkId: 'talk-1' })
     expect(doc('drafts.talk-1')?.feedbackCode).toBe(out.code)
     expect(doc('drafts.talk-1')?.title).toBe('edited')
@@ -312,7 +355,74 @@ describe('ensureCode — one uniform refusal, and nothing written', () => {
   })
 })
 
+describe('ensureCode — the talk id is an id, nothing else', () => {
+  it.each([
+    ['a comma list of ids', 'talk-1,talk-foreign'],
+    ['a path escape to the query endpoint', '../../query/test?query=*'],
+    ['a query string', 'talk-1?excludeContent=true'],
+    ['a slash', 'talk/1'],
+    ['leading whitespace', ' talk-1'],
+  ])('refuses %s before any read', async (_, talkId) => {
+    await expect(caller().ensureCode({ talkId })).rejects.toBeInstanceOf(
+      TRPCError,
+    )
+    expect(h.docReads).toEqual([])
+    expect(h.commits).toBe(0)
+  })
+
+  it('refuses a talk read that is not the id asked for (the comma list Sanity accepts)', async () => {
+    // Below the router's id check: what the doc endpoint does with a list.
+    const { ensureFeedbackCode } = await import('@/lib/feedback/server')
+    const conference = { _id: 'conf-A', endDate: '2026-06-11' }
+    for (const talkId of ['talk-1,zz-missing', 'talk-1,drafts.talk-1']) {
+      h.dataset.push(talk('drafts.talk-1'))
+      expect(
+        await ensureFeedbackCode({
+          talkId,
+          speakerId: 'sp-ada',
+          conference,
+          now: new Date(),
+        }),
+      ).toEqual({ status: 'refused' })
+    }
+    expect(h.commits).toBe(0)
+  })
+})
+
+describe('ensureCode — impersonation', () => {
+  it('refuses while an organizer impersonates a speaker, before any read', async () => {
+    await expect(
+      caller('sp-ada', true).ensureCode({ talkId: 'talk-1' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.docReads).toEqual([])
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+  })
+})
+
 describe('ensureCode — concurrent writes', () => {
+  it('retries when a draft is deleted between the read and the commit', async () => {
+    h.dataset.push(talk('drafts.talk-1'))
+    h.beforeCommit.push(() => {
+      h.dataset = h.dataset.filter((d) => d._id !== 'drafts.talk-1')
+    })
+    const out = await caller().ensureCode({ talkId: 'talk-1' })
+    expect(out.code).toMatch(CODE)
+    expect(doc('talk-1')?.feedbackCode).toBe(out.code)
+    expect(h.attempts).toBe(2)
+  })
+
+  it('mints past a version in a release that is not active (locked)', async () => {
+    h.dataset.push(talk('versions.rlocked.talk-1'), talk('versions.r1.talk-1'))
+    h.releases = [
+      { name: 'rlocked', state: 'scheduled' },
+      { name: 'r1', state: 'active' },
+    ]
+    const out = await caller().ensureCode({ talkId: 'talk-1' })
+    expect(doc('talk-1')?.feedbackCode).toBe(out.code)
+    expect(doc('versions.r1.talk-1')?.feedbackCode).toBe(out.code)
+    expect(doc('versions.rlocked.talk-1')?.feedbackCode).toBeUndefined()
+  })
+
   it('converges on the code another request minted first', async () => {
     h.beforeCommit.push(() => {
       const i = h.dataset.findIndex((d) => d._id === 'talk-1')

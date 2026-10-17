@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { delay, http, HttpResponse } from 'msw'
+import { expect, waitFor, within } from 'storybook/test'
 import { SessionFeedbackSection } from './SessionFeedbackSection'
 
 const ENDPOINT = '/api/trpc/sessionFeedback.ensureCode'
@@ -118,5 +119,49 @@ export const NoCode: Story = {
         }),
       ],
     },
+  },
+}
+
+let opensWhileShownRequests = 0
+
+/**
+ * The page is left up for the room: the session starts 1.5 s after the code
+ * loads. The state moves on by the clock, the QR stays on screen, and the
+ * server is not asked again.
+ */
+export const OpensWhileShown: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post(ENDPOINT, () => {
+          opensWhileShownRequests++
+          const opensAt = Date.now() + 1500
+          return HttpResponse.json({
+            result: {
+              data: {
+                ...BEFORE,
+                window: {
+                  state: 'before',
+                  opensAt: new Date(opensAt).toISOString(),
+                  lastSlotEnd: new Date(opensAt + 40 * 60_000).toISOString(),
+                  closesAt: new Date(opensAt + 25 * 3_600_000).toISOString(),
+                  feedbackVisible: false,
+                },
+              },
+            },
+          })
+        }),
+      ],
+    },
+  },
+  beforeEach: () => {
+    opensWhileShownRequests = 0
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText(/Opens when your session starts/)
+    await waitFor(() => canvas.getByText(/Open until/), { timeout: 5000 })
+    expect(canvas.getByText(BEFORE.url)).toBeVisible()
+    expect(opensWhileShownRequests).toBe(1)
   },
 }

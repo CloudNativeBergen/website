@@ -1,22 +1,57 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { QrCodeIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
+import { feedbackWindowStateAt, type FeedbackWindow } from '@/lib/feedback'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
+
+/** setTimeout overflows past ~24.8 days; a longer wait just re-arms. */
+const MAX_TIMER_MS = 24 * 60 * 60 * 1000
+
+/**
+ * The window moved on by the clock. A speaker may leave the page up to show
+ * the QR, so "Opens…" becomes "Open until…" and then "Closed" at the
+ * window's own instants, derived here, never refetched: a refetch would
+ * blank the QR on the lectern while it loads, and show an error if it
+ * failed. Re-derived once as soon as the answer arrives too, since a boundary
+ * may have passed while the request was in flight.
+ */
+function useWindowOnTheClock(
+  computed: FeedbackWindow | undefined,
+): FeedbackWindow | undefined {
+  const [now, setNow] = useState<number | null>(null)
+  const opensAt = computed?.opensAt
+  const closesAt = computed?.closesAt
+  useEffect(() => {
+    if (!opensAt || !closesAt) return
+    const current = Date.now()
+    const next = [Date.parse(opensAt), Date.parse(closesAt)].find(
+      (t) => t > current,
+    )
+    const wait =
+      now === null ? 0 : next === undefined ? null : next - current + 50
+    if (wait === null) return
+    const timer = setTimeout(
+      () => setNow(Date.now()),
+      Math.min(wait, MAX_TIMER_MS),
+    )
+    return () => clearTimeout(timer)
+  }, [opensAt, closesAt, now])
+  if (!computed || now === null) return computed
+  return { ...computed, state: feedbackWindowStateAt(computed, new Date(now)) }
+}
 
 /**
  * The speaker's Session Feedback section (speaker feedback spec §9.1), shown
  * at the top of `/cfp/proposal/[id]` for a confirmed talk. Its code is minted
  * on mount by `sessionFeedback.ensureCode`, never during render.
  *
- * Only the **Feedback Code** tab exists so far; the **Session Feedback**
- * results tab comes with F3. Until then a talk the server will not give a
- * code (its window closed before it ever had one) shows nothing.
+ * Only the **Feedback Code** tab exists so far, shown as the section's
+ * heading; the **Session Feedback** results tab comes with F3, and with it a
+ * real tab list. Until then a talk the server will not give a code (its
+ * window closed before it ever had one) shows nothing.
  */
-/** setTimeout overflows past ~24.8 days; a longer wait just re-arms. */
-const MAX_TIMER_MS = 24 * 60 * 60 * 1000
-
 export function SessionFeedbackSection({ talkId }: { talkId: string }) {
   const { mutate, data, error, isPending, isIdle } =
     api.sessionFeedback.ensureCode.useMutation()
@@ -30,59 +65,25 @@ export function SessionFeedbackSection({ talkId }: { talkId: string }) {
     mutate({ talkId })
   }, [mutate, talkId])
 
-  // A speaker may leave the page up to show the QR. Ask again just after the
-  // window's next boundary, so "Opens…" becomes "Open until…" and then
-  // "Closed" without a reload. The code exists by then: no write.
-  const opensAt = data?.window.opensAt
-  const closesAt = data?.window.closesAt
-  useEffect(() => {
-    const now = Date.now()
-    const next = [opensAt, closesAt]
-      .map((iso) => (iso ? Date.parse(iso) : NaN))
-      .find((t) => t > now)
-    if (next === undefined) return
-    const timer = setTimeout(
-      () => mutate({ talkId }),
-      Math.min(next - now + 1000, MAX_TIMER_MS),
-    )
-    return () => clearTimeout(timer)
-  }, [mutate, talkId, opensAt, closesAt])
+  const shownWindow = useWindowOnTheClock(data?.window)
 
   if (error?.data?.code === 'NOT_FOUND') return null
   if (data && (!data.code || !data.url)) return null
 
   return (
     <section
-      aria-labelledby="session-feedback-heading"
+      aria-label="Session Feedback"
       className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6 dark:border-gray-700 dark:bg-gray-800"
     >
-      <h2 id="session-feedback-heading" className="sr-only">
-        Session Feedback
-      </h2>
-      <div
-        role="tablist"
-        aria-label="Session Feedback"
-        className="mb-5 flex gap-6 border-b border-gray-200 dark:border-gray-700"
-      >
-        <button
-          type="button"
-          role="tab"
-          id="session-feedback-tab-code"
-          aria-selected="true"
-          aria-controls="session-feedback-panel-code"
-          className="-mb-px inline-flex items-center gap-1.5 border-b-2 border-brand-cloud-blue px-1 pb-2 text-sm font-medium text-brand-cloud-blue dark:border-blue-400 dark:text-blue-400"
-        >
+      <div className="mb-5 flex border-b border-gray-200 dark:border-gray-700">
+        <h2 className="-mb-px inline-flex items-center gap-1.5 border-b-2 border-brand-cloud-blue px-1 pb-2 text-sm font-medium text-brand-cloud-blue dark:border-blue-400 dark:text-blue-400">
           <QrCodeIcon className="size-4" aria-hidden="true" />
           Feedback Code
-        </button>
+        </h2>
       </div>
-      <div
-        role="tabpanel"
-        id="session-feedback-panel-code"
-        aria-labelledby="session-feedback-tab-code"
-      >
-        {data?.code && data.url ? (
-          <FeedbackCodePanel url={data.url} window={data.window} />
+      <div>
+        {data?.code && data.url && shownWindow ? (
+          <FeedbackCodePanel url={data.url} window={shownWindow} />
         ) : error ? (
           <div className="space-y-3">
             <p className="text-sm text-red-700 dark:text-red-400">
@@ -105,17 +106,20 @@ export function SessionFeedbackSection({ talkId }: { talkId: string }) {
 }
 
 function FeedbackCodeSkeleton() {
+  const bar = 'animate-pulse rounded bg-gray-100 dark:bg-gray-700'
+  // The panel's shape, so the form below does not jump when the code arrives.
   return (
     <div
       className="flex flex-col gap-5 sm:flex-row sm:items-center"
       aria-busy="true"
       aria-label="Loading your Feedback Code"
     >
-      <div className="size-44 shrink-0 animate-pulse rounded-md bg-gray-100 dark:bg-gray-700" />
-      <div className="w-full max-w-md space-y-3">
-        <div className="h-4 w-2/3 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
-        <div className="h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
-        <div className="h-4 w-1/2 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+      <div className={`size-44 shrink-0 rounded-md ${bar}`} />
+      <div className="w-full max-w-xl space-y-3">
+        <div className={`h-5 w-3/4 ${bar}`} />
+        <div className={`h-10 w-full ${bar}`} />
+        <div className={`h-5 w-2/3 ${bar}`} />
+        <div className={`h-8 w-28 ${bar}`} />
       </div>
     </div>
   )
