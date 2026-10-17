@@ -249,8 +249,8 @@ export function instrumentResendClient(
   }
 
   // BATCH is a third send API: one call, an ARRAY of messages, each with its own
-  // `from`. Used by the workshop instructions resend
-  // (`lib/workshop/resend-instructions.ts`); each message is guarded.
+  // `from`. Used by the workshop reminder (`lib/workshop/reminder.ts`); each
+  // message is guarded.
   const batch = client.batch
   if (batch) {
     for (const method of ['send', 'create'] as const) {

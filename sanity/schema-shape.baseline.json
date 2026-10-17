@@ -247,9 +247,13 @@
     "venueName": "string",
     "venueTravelInfo": "text",
     "visibility": "string",
+    "volunteerRegistrationLink": "string",
+    "volunteerSlackInviteUrl": "string",
     "workshopRegistrationEnd": "datetime",
     "workshopRegistrationSponsorStart": "datetime",
-    "workshopRegistrationStart": "datetime"
+    "workshopRegistrationStart": "datetime",
+    "workshopReminderLastSentAt": "datetime",
+    "workshopReminderLastSentCount": "number"
   },
   "organization": {
     "analyticsPosthogToken": "string",

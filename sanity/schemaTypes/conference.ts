@@ -656,6 +656,27 @@ export default defineType({
       fieldset: 'registration',
       description: 'When workshop registration closes',
     }),
+    // The last workshop reminder (#1334, docs/WORKSHOP_TICKETS_SPEC.md §7):
+    // written by the reminder on /admin/workshops after a send that reached at
+    // least one person, and shown in its dialog. Never edited by hand.
+    defineField({
+      name: 'workshopReminderLastSentAt',
+      title: 'Workshop Reminder Last Sent',
+      type: 'datetime',
+      fieldset: 'registration',
+      readOnly: true,
+      description:
+        'When the last reminder to workshop ticket holders who had not signed up went out. Set by the reminder on the workshops admin page.',
+    }),
+    defineField({
+      name: 'workshopReminderLastSentCount',
+      title: 'Workshop Reminder Last Sent To',
+      type: 'number',
+      fieldset: 'registration',
+      readOnly: true,
+      description:
+        'How many people the last workshop reminder was sent to. Set by the reminder on the workshops admin page.',
+    }),
 
     // === Ticketing & Integrations ===
     // Provider selector (CaaS, Tito second-provider proof): which ticketing
