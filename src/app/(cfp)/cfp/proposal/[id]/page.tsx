@@ -17,6 +17,7 @@ import { ProposalGuidanceSidebar } from '@/components/cfp/ProposalGuidanceSideba
 import { PostConferenceVideoPanel } from '@/components/cfp/PostConferenceVideoPanel'
 import { PostConferenceAudienceFeedbackPanel } from '@/components/cfp/PostConferenceAudienceFeedbackPanel'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
+import { SessionFeedbackSection } from '@/components/feedback'
 import { ProposalMessagesSection } from '@/components/messaging'
 import { getUnreadCountsByProposalIds } from '@/lib/messaging/sanity'
 import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
@@ -174,6 +175,16 @@ export default async function ProposalViewPage({
       session.speaker._id,
     )
 
+    // Session Feedback (speaker feedback spec §9.1): confirmed talks only, and
+    // only on the host of the talk's own conference — a speaker can open any
+    // of their proposals from any tenant's host, and the code always belongs
+    // to the talk's conference. Full width above the form, so it shows on a
+    // phone too (the sidebar is `hidden lg:block`).
+    const showSessionFeedback =
+      proposal.status === 'confirmed' &&
+      '_id' in proposal.conference &&
+      proposal.conference._id === conference._id
+
     return (
       <div className="mx-auto max-w-7xl">
         <div className="mb-6">
@@ -187,6 +198,12 @@ export default async function ProposalViewPage({
           </p>
           {unreadMessagesLink}
         </div>
+
+        {showSessionFeedback && (
+          <div className="mb-6">
+            <SessionFeedbackSection talkId={proposal._id} />
+          </div>
+        )}
 
         <div className="flex gap-6">
           <div className="flex-1 space-y-6">
