@@ -162,7 +162,7 @@ describe('/admin/workshops — feature gate', () => {
   })
 })
 
-describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
+describe('/admin/workshops — the workshop reminder (#1334, was #1298)', () => {
   beforeEach(() => {
     stubOwnTicketingSecret('org-A')
     mockGetOrganizationById.mockResolvedValue({
@@ -173,16 +173,16 @@ describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
     })
   })
 
-  async function resendDisabledReason() {
+  async function reminderDisabledReason() {
     const page = (await WorkshopAdminPage()) as {
-      props: { resendDisabledReason: string | null }
+      props: { reminderDisabledReason: string | null }
     }
-    return page.props.resendDisabledReason
+    return page.props.reminderDisabledReason
   }
 
-  it('offers the resend once the portal link works and registration is open', async () => {
+  it('offers the reminder once the portal link works and registration is open', async () => {
     mockWorkshopPortalUrl.mockResolvedValue('https://2026.example.org/workshop')
-    await expect(resendDisabledReason()).resolves.toBeNull()
+    await expect(reminderDisabledReason()).resolves.toBeNull()
   })
 
   it('names the main host while its portal link does not work', async () => {
@@ -195,14 +195,14 @@ describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
       },
       error: null,
     })
-    await expect(resendDisabledReason()).resolves.toBe(
+    await expect(reminderDisabledReason()).resolves.toBe(
       'Available once attendees can sign in on 2026.example.org, the conference’s first domain.',
     )
   })
 
   it('says the conference needs a domain when it has none', async () => {
     mockWorkshopPortalUrl.mockResolvedValue(null)
-    await expect(resendDisabledReason()).resolves.toBe(
+    await expect(reminderDisabledReason()).resolves.toBe(
       'Available once the conference has a domain attendees can sign in on.',
     )
   })
@@ -217,10 +217,10 @@ describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
       },
       error: null,
     })
-    await expect(resendDisabledReason()).resolves.toMatch(/has closed/)
+    await expect(reminderDisabledReason()).resolves.toMatch(/has closed/)
   })
 
-  // Fixing the host would not bring the resend back, so the reason must not
+  // Fixing the host would not bring the reminder back, so the reason must not
   // say it would — and the closed check needs no sign-in lookup.
   it('says registration has closed even when the main host cannot sign in', async () => {
     mockWorkshopPortalUrl.mockResolvedValue(null)
@@ -233,10 +233,39 @@ describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
       },
       error: null,
     })
-    await expect(resendDisabledReason()).resolves.toBe(
+    await expect(reminderDisabledReason()).resolves.toBe(
       'Workshop registration has closed.',
     )
     expect(mockWorkshopPortalUrl).not.toHaveBeenCalled()
+  })
+
+  async function lastReminder() {
+    const page = (await WorkshopAdminPage()) as {
+      props: { lastReminder: { at: string; count: number } | null }
+    }
+    return page.props.lastReminder
+  }
+
+  it('hands the dialog the last reminder the conference stores', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue('https://2026.example.org/workshop')
+    mockGetConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-1',
+        organization: { _ref: 'org-A', _type: 'reference' },
+        workshopReminderLastSentAt: '2026-10-10T12:00:00.000Z',
+        workshopReminderLastSentCount: 37,
+      },
+      error: null,
+    })
+    await expect(lastReminder()).resolves.toEqual({
+      at: '2026-10-10T12:00:00.000Z',
+      count: 37,
+    })
+  })
+
+  it('hands it none when no reminder has been sent', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue('https://2026.example.org/workshop')
+    await expect(lastReminder()).resolves.toBeNull()
   })
 })
 

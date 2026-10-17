@@ -8,7 +8,7 @@ import { WorkshopsClientPage } from '@/components/admin/workshop/WorkshopsClient
 import { getWorkshopsByConference } from '@/lib/workshop/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopMainHost } from '@/lib/workshop/sign-in'
-import { resendPortal } from '@/lib/workshop/resend-instructions'
+import { reminderPortal } from '@/lib/workshop/reminder'
 import { WorkshopTickets } from '@/components/admin/workshop/tickets'
 
 export default async function WorkshopAdminPage() {
@@ -72,10 +72,10 @@ export default async function WorkshopAdminPage() {
   if (loadError) return loadError
 
   const workshops = await getWorkshopsByConference(conference._id)
-  // The resend action (#1298), refused for the reasons the server refuses it.
+  // The reminder (#1334), refused for the reasons the server refuses it.
   const mainHost = workshopMainHost(conference)
-  const { blocker } = await resendPortal(conference)
-  const resendDisabledReason =
+  const { blocker } = await reminderPortal(conference)
+  const reminderDisabledReason =
     blocker === 'portal-unavailable'
       ? mainHost
         ? `Available once attendees can sign in on ${mainHost}, the conference’s first domain.`
@@ -95,7 +95,15 @@ export default async function WorkshopAdminPage() {
         conference.workshopRegistrationStart ?? undefined
       }
       workshopRegistrationEnd={conference.workshopRegistrationEnd ?? undefined}
-      resendDisabledReason={resendDisabledReason}
+      reminderDisabledReason={reminderDisabledReason}
+      lastReminder={
+        conference.workshopReminderLastSentAt
+          ? {
+              at: conference.workshopReminderLastSentAt,
+              count: conference.workshopReminderLastSentCount ?? 0,
+            }
+          : null
+      }
       ticketsSection={<WorkshopTickets conference={conference} />}
     />
   )
