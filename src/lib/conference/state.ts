@@ -148,11 +148,14 @@ export function canAcceptProposals(conference: {
 /**
  * Check if the program has been published
  */
-export function isProgramPublished(conference: Conference): boolean {
+export function isProgramPublished(
+  conference: { programDate?: Conference['programDate'] | null },
+  now: Date = new Date(),
+): boolean {
   if (!conference.programDate) {
     return false
   }
-  return new Date() >= new Date(conference.programDate)
+  return now >= new Date(conference.programDate)
 }
 
 /**
