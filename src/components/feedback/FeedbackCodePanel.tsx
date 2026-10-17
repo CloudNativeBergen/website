@@ -29,19 +29,23 @@ function codeState(window: FeedbackWindow): { text: string; live: boolean } {
 }
 
 function QrCode({ url }: { url: string }) {
-  const [src, setSrc] = useState<string | null>(null)
+  // Keyed by the URL it was drawn for, so a new URL never shows the old QR
+  // or the old failure, without resetting state inside the effect.
+  const [drawn, setDrawn] = useState<{ url: string; src: string | null }>()
   useEffect(() => {
     let cancelled = false
     import('qrcode')
       .then(({ default: QRCode }) =>
         QRCode.toDataURL(url, { width: 352, margin: 1 }),
       )
-      .then((dataUrl) => !cancelled && setSrc(dataUrl))
-      .catch(() => !cancelled && setSrc(null))
+      .then((src) => !cancelled && setDrawn({ url, src }))
+      .catch(() => !cancelled && setDrawn({ url, src: null }))
     return () => {
       cancelled = true
     }
   }, [url])
+  const src = drawn?.url === url ? drawn.src : undefined
+  const failed = src === null
   return (
     <div className="size-44 shrink-0 rounded-md bg-white p-1 ring-1 ring-gray-200 dark:ring-gray-700">
       {src ? (
@@ -50,6 +54,10 @@ function QrCode({ url }: { url: string }) {
           alt={`QR code for ${url}`}
           className="size-full [image-rendering:pixelated]"
         />
+      ) : failed ? (
+        <p className="flex size-full items-center p-3 text-center text-sm text-gray-600">
+          The QR code could not be drawn. Share the link instead.
+        </p>
       ) : (
         <div className="size-full animate-pulse rounded bg-gray-100" />
       )}
@@ -58,29 +66,37 @@ function QrCode({ url }: { url: string }) {
 }
 
 function CopyLinkButton({ url }: { url: string }) {
-  const [copied, setCopied] = useState(false)
+  const [result, setResult] = useState<'copied' | 'failed' | null>(null)
   useEffect(() => {
-    if (!copied) return
-    const timer = setTimeout(() => setCopied(false), 2000)
+    if (!result) return
+    const timer = setTimeout(() => setResult(null), 2500)
     return () => clearTimeout(timer)
-  }, [copied])
+  }, [result])
   return (
     <button
       type="button"
       onClick={() =>
-        navigator.clipboard
-          .writeText(url)
-          .then(() => setCopied(true))
-          .catch(() => setCopied(false))
+        // `clipboard` is absent outside a secure context, and writeText can be
+        // refused; either way the URL stays visible to copy by hand.
+        Promise.resolve()
+          .then(() => navigator.clipboard.writeText(url))
+          .then(() => setResult('copied'))
+          .catch(() => setResult('failed'))
       }
       className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
     >
-      {copied ? (
+      {result === 'copied' ? (
         <CheckIcon className="size-4 text-green-600 dark:text-green-400" />
       ) : (
         <ClipboardDocumentIcon className="size-4" />
       )}
-      <span aria-live="polite">{copied ? 'Copied' : 'Copy link'}</span>
+      <span aria-live="polite">
+        {result === 'copied'
+          ? 'Copied'
+          : result === 'failed'
+            ? 'Couldn’t copy; select the link above'
+            : 'Copy link'}
+      </span>
     </button>
   )
 }

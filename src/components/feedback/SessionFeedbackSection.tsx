@@ -14,6 +14,9 @@ import { FeedbackCodePanel } from './FeedbackCodePanel'
  * results tab comes with F3. Until then a talk the server will not give a
  * code (its window closed before it ever had one) shows nothing.
  */
+/** setTimeout overflows past ~24.8 days; a longer wait just re-arms. */
+const MAX_TIMER_MS = 24 * 60 * 60 * 1000
+
 export function SessionFeedbackSection({ talkId }: { talkId: string }) {
   const { mutate, data, error, isPending, isIdle } =
     api.sessionFeedback.ensureCode.useMutation()
@@ -26,6 +29,24 @@ export function SessionFeedbackSection({ talkId }: { talkId: string }) {
     requested.current = talkId
     mutate({ talkId })
   }, [mutate, talkId])
+
+  // A speaker may leave the page up to show the QR. Ask again just after the
+  // window's next boundary, so "Opens…" becomes "Open until…" and then
+  // "Closed" without a reload. The code exists by then: no write.
+  const opensAt = data?.window.opensAt
+  const closesAt = data?.window.closesAt
+  useEffect(() => {
+    const now = Date.now()
+    const next = [opensAt, closesAt]
+      .map((iso) => (iso ? Date.parse(iso) : NaN))
+      .find((t) => t > now)
+    if (next === undefined) return
+    const timer = setTimeout(
+      () => mutate({ talkId }),
+      Math.min(next - now + 1000, MAX_TIMER_MS),
+    )
+    return () => clearTimeout(timer)
+  }, [mutate, talkId, opensAt, closesAt])
 
   if (error?.data?.code === 'NOT_FOUND') return null
   if (data && (!data.code || !data.url)) return null
