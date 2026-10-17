@@ -149,6 +149,13 @@ life, or folded totals would be lost after their documents were deleted.
   during a write, the write re-reads and retries up to 3 times. For a mint, it
   first re-reads the published talk and, if another request's code already
   won, returns that code, so concurrent first views still converge.
+- **A mint guards the published talk too:** its patch on the published talk
+  carries `ifRevisionId` from the request's first read (not a bare
+  `setIfMissing`), and the version patches use `setIfMissing`. A request that
+  lost the race therefore fails its guard and takes the re-read-and-return
+  path, instead of writing its own code onto a draft whose published talk holds
+  another. "Stale" in the sweep means "differs from the published talk after
+  the commit".
 - Production had 0 talk drafts and 0 release versions on 2026-10-17, but
   organizers can create one at any time. The remaining risk, a version created
   and published inside one write's sweep, is in §15.
@@ -617,6 +624,11 @@ will reach a dead page. Existing responses are kept." Rotation mints a new code
 (§5), writes it to the draft too (§4.2), and expires the index tag immediately
 (§5.1).
 
+Rotation is **refused, and not offered**, when the talk has no `feedbackCode`
+(never minted, folded, or its only speaker erased) or when §5 would refuse to
+mint one (its window has closed). _Refinement (spec):_ otherwise an organizer
+could restart collection on a talk erasure or the fold had closed.
+
 ## 11. Notifications
 
 Decided on [#1423](https://github.com/CloudNativeBergen/website/issues/1423).
@@ -727,7 +739,7 @@ mutation-surface snapshots are updated.
 | F1a | **The code.** `talk.feedbackCode` and the draft-patching rule (§4.2); published-only reads and the exported schedule filter (§4.4); the ensure-code mutation and minting rules, Duplicate guard (§5); `feedbackWindow` and the slot query (§6); the speaker section with its access guard (§9.1) and a minimal **Feedback Code** tab (QR, state, Copy link). Demo: a speaker of a confirmed, scheduled talk sees their QR. | —      |
 | F1b | **The attendee page, read side.** The code index, its tag and every expiry path so far (mint, status change, proposal delete, schedule changes) (§5.1); `/f/<code>` with Open (buttons not yet wired), Not yet open, Closed and Unknown, chrome and analytics exclusions (§7.1, §7.2). Demo: scanning the QR shows the right state; nothing is collected.                                                                  | F1a    |
 | F1c | **Scan and tap.** The `feedbackResponse` type and the proposal-delete cascade (§4.1); the cookie and deterministic id (§7.3); the Submit action with every guard and the patch/create write (§7.4) and a plain thank-you screen; the `/privacy` section without "Your rights", and the cookie inventory (§8). Demo: scanning the QR records a colour, and a second tap from the same phone changes it.                     | F1b    |
-| F2  | **Comment, change, delete:** the Answered state (§7.2) with the comment box, Change answer, Delete my answer (including after the window, R1), and the "Your rights" copy (§8).                                                                                                                                                                                                                                            | F1c    |
+| F2  | **Comment, change, delete:** the Answered state (§7.2) with the comment box, Change answer, Delete my answer (including after the window, R1) on the Answered, Closed and Not yet open states whenever the talk is in the cookie's list, and the "Your rights" copy (§8).                                                                                                                                                  | F1c    |
 | F3  | **Speaker results:** the totals function (§4.3); the **Session Feedback** tab with live polling and comments, visibility and hidden filtering on the server (§9.1, §9.3, without the flag button); the dashboard chip (§9.4); replacing the old panel and card display, past editions results-only (§9.5).                                                                                                                 | F2     |
 | F4  | **Code downloads and Present:** PNG, SVG, Print sheet, Present (§9.2).                                                                                                                                                                                                                                                                                                                                                     | F1a    |
 | F5  | **Admin page:** `/admin/feedback` with stats, the ranked table, expanding rows, Hide/Unhide/Remove (§10.1, §10.3), and the nav entry (without the badge).                                                                                                                                                                                                                                                                  | F3     |
@@ -744,7 +756,7 @@ Filled in when the slices are filed.
 
 Per `AGENTS.md` ("Agent discipline"):
 
-- **Guards are sabotage-proven:** for each refusal in §7.4, §9.1 and §10.3,
+- **Guards are sabotage-proven:** for each refusal in §7.4, §9.1, §10.3 and §10.4 (rotation),
   remove the guard, show the specific test fails on a value (the write
   happening), restore.
 - **Guard before fetch:** a test asserts no talk-specific read or write runs for
