@@ -100,7 +100,7 @@ export function SessionFeedbackSection({ talkId }: { talkId: string }) {
           <FeedbackCodePanel url={data.url} window={shownWindow} />
         ) : error ? (
           <div className="space-y-3">
-            <p className="text-sm text-red-700 dark:text-red-400">
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
               Your Feedback Code could not be loaded.
             </p>
             <button

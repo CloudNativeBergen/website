@@ -67,8 +67,9 @@ function QrCode({ url }: { url: string }) {
 
 function CopyLinkButton({ url }: { url: string }) {
   const [result, setResult] = useState<'copied' | 'failed' | null>(null)
+  // "Copied" fades; the failure stays, since it tells the speaker what to do.
   useEffect(() => {
-    if (!result) return
+    if (result !== 'copied') return
     const timer = setTimeout(() => setResult(null), 2500)
     return () => clearTimeout(timer)
   }, [result])

@@ -28,6 +28,8 @@ const h = vi.hoisted(() => ({
   releases: [] as { name: string; state: string }[],
   /** The API version the code pinned its client to. */
   apiVersion: '',
+  /** The release listing fails, as a network or API error would. */
+  releasesFail: false,
   /** Ids asked of the doc endpoint, in order. */
   docReads: [] as string[],
   revs: 0,
@@ -65,6 +67,10 @@ vi.mock('@/lib/sanity/client', async () => {
   })
   const run = async (query: string, params: Record<string, unknown> = {}) => {
     // groq-js has no `releases::all()`; the store answers it.
+    if (query.includes('releases::all()') && h.releasesFail)
+      throw Object.assign(new Error('503 releases unavailable'), {
+        statusCode: 503,
+      })
     if (query.includes('releases::all()'))
       return h.releases.map((r) => ({
         _id: `_.releases.${r.name}`,
@@ -237,6 +243,7 @@ beforeEach(() => {
   h.commits = 0
   h.attempts = 0
   h.releases = []
+  h.releasesFail = false
   h.docReads = []
   h.beforeCommit = []
   h.afterCommit = []
@@ -425,6 +432,20 @@ describe('ensureCode — concurrent writes', () => {
     expect(out.code).toMatch(CODE)
     expect(doc('talk-1')?.feedbackCode).toBe(out.code)
     expect(h.attempts).toBe(2)
+  })
+
+  it('still mints when the release listing fails, and says so', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.dataset.push(talk('drafts.talk-1'), talk('versions.r1.talk-1'))
+    h.releases = [{ name: 'r1', state: 'active' }]
+    h.releasesFail = true
+    const out = await caller().ensureCode({ talkId: 'talk-1' })
+    expect(doc('talk-1')?.feedbackCode).toBe(out.code)
+    expect(doc('drafts.talk-1')?.feedbackCode).toBe(out.code)
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('could not list releases'),
+    )
+    error.mockRestore()
   })
 
   it('mints past a version in a release that is not active (locked)', async () => {

@@ -242,7 +242,11 @@ async function readTalkVersions(
       { id: talkId },
       raw,
     ),
-    client.fetch<unknown>('releases::all(){ _id, state }', {}, raw),
+    // A failed listing is "unknown", handled below: the mint goes ahead
+    // without release versions rather than failing for the speaker.
+    client
+      .fetch<unknown>('releases::all(){ _id, state }', {}, raw)
+      .catch(() => null),
   ])
   const releaseOf = (id: string) => /^versions\.([^.]+)\./.exec(id)?.[1]
   if (
