@@ -106,6 +106,7 @@ export function SessionFeedbackSection({ talkId }: { talkId: string }) {
             <button
               type="button"
               onClick={() => mutate({ talkId })}
+              disabled={isPending}
               className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               Try again

@@ -51,7 +51,7 @@ function QrCode({ url }: { url: string }) {
       {src ? (
         <img
           src={src}
-          alt="QR code for the feedback link below"
+          alt="QR code for the feedback link"
           className="size-full [image-rendering:pixelated]"
         />
       ) : failed ? (
