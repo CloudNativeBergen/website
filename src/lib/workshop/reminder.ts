@@ -41,11 +41,12 @@ import {
   resolveEmailSender,
   retryWithBackoff,
 } from '@/lib/email/config'
-import { renderWorkshopSignupInstructions } from '@/lib/email/workshop'
+import { renderWorkshopReminder } from '@/lib/email/workshop'
+import { clientWrite } from '@/lib/sanity/client'
 import { readTicketHolders } from './holders'
 import { workshopPortalUrl } from './sign-in'
 
-export const RESEND_WINDOW_MS = 60 * 60 * 1000
+export const REMINDER_WINDOW_MS = 60 * 60 * 1000
 /** Resend's batch API limit. */
 export const BATCH_SIZE = 100
 
@@ -110,7 +111,7 @@ export async function reminderPortal(
 
 export async function sendWorkshopReminder(
   conference: Conference & { _id: string },
-  _options: { note?: string },
+  { note }: { note?: string },
   now: number = Date.now(),
 ): Promise<ReminderOutcome> {
   const portal = await reminderPortal(conference, now)
@@ -118,10 +119,10 @@ export async function sendWorkshopReminder(
   const { portalUrl } = portal
 
   const previous = lastReminder.get(conference._id)
-  if (previous !== undefined && now - previous < RESEND_WINDOW_MS) {
+  if (previous !== undefined && now - previous < REMINDER_WINDOW_MS) {
     return {
       kind: 'rate-limited',
-      retryAfterMs: previous + RESEND_WINDOW_MS - now,
+      retryAfterMs: previous + REMINDER_WINDOW_MS - now,
     }
   }
 
@@ -132,6 +133,16 @@ export async function sendWorkshopReminder(
   const release = () => {
     if (lastReminder.get(conference._id) === now)
       lastReminder.delete(conference._id)
+  }
+
+  // The sender before the ticket read: a press that cannot send reads nothing.
+  let client: Awaited<ReturnType<typeof resolveEmailSender>>['client']
+  try {
+    ;({ client } = await resolveEmailSender(conference.organization?._ref))
+  } catch (error) {
+    console.error('Workshop reminder: no email sender:', error)
+    release()
+    return { kind: 'email-unavailable' }
   }
 
   // Fresh, not the shared 30 s memo: this mails every holder without a
@@ -156,14 +167,6 @@ export async function sendWorkshopReminder(
     return { kind: 'sent', sent: 0, failed: 0, unconfirmed: 0 }
   }
 
-  let client: Awaited<ReturnType<typeof resolveEmailSender>>['client']
-  try {
-    ;({ client } = await resolveEmailSender(conference.organization?._ref))
-  } catch (error) {
-    console.error('Workshop reminder: no email sender:', error)
-    release()
-    return { kind: 'email-unavailable' }
-  }
   let sent = 0
   let failed = 0
   let unconfirmed = 0
@@ -175,13 +178,13 @@ export async function sendWorkshopReminder(
       // As registered, minus padding: the provider can hand back an address
       // with whitespace around it, which Resend rejects.
       const userEmail = ticket.registeredEmail.trim() || ticket.email
-      return renderWorkshopSignupInstructions({
+      return renderWorkshopReminder({
         userEmail,
         userName: tickets.find((t) => t.name)?.name || userEmail,
         conference,
-        ticketCategory: ticket.category,
         portalUrl,
-        resent: true,
+        note,
+        now,
       })
     })
     try {
@@ -233,5 +236,29 @@ export async function sendWorkshopReminder(
   // waiting the hour. Anything unconfirmed keeps the hour, so a second press
   // cannot double-send what may have gone.
   if (sent === 0 && unconfirmed === 0) release()
+  if (sent > 0) await storeLastReminder(conference._id, now, sent)
   return { kind: 'sent', sent, failed, unconfirmed }
+}
+
+/**
+ * The last send, for the dialog: once, after the send, never retried. A
+ * failure is logged and nothing else: the emails have gone, and the organizer
+ * is told what was sent either way.
+ */
+async function storeLastReminder(
+  conferenceId: string,
+  now: number,
+  sent: number,
+): Promise<void> {
+  try {
+    await clientWrite
+      .patch(conferenceId)
+      .set({
+        workshopReminderLastSentAt: new Date(now).toISOString(),
+        workshopReminderLastSentCount: sent,
+      })
+      .commit()
+  } catch (error) {
+    console.error('Workshop reminder: the last send was not stored:', error)
+  }
 }

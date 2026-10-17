@@ -11,6 +11,7 @@ import type { Conference } from '@/lib/conference/types'
 import { resolveConferenceFrom, resolveConferenceContact } from './from'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { resolveEmailBrandPalette } from '@/lib/branding/email'
+import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 
 /**
  * What the confirmation email reads of a conference: the sender fields, the
@@ -49,11 +50,18 @@ export interface WorkshopSignupInstructionsRequest {
    * domain. The email then says online sign-up is not available yet.
    */
   portalUrl: string | null
-  /**
-   * The organizer's resend (#1298), not the ticket-sold email: no purchase
-   * thank-you, and it says the sign-up page is now ready.
-   */
-  resent?: boolean
+}
+
+export interface WorkshopReminderRequest {
+  userEmail: string
+  userName: string
+  conference: Conference
+  /** The portal link: the reminder is refused without one. */
+  portalUrl: string
+  /** The organizer's note, plain text. Blank is no note. */
+  note?: string
+  /** The moment of the send, which decides what the email says of the window. */
+  now: number
 }
 
 export async function sendBasicWorkshopConfirmation({
@@ -171,17 +179,13 @@ export async function sendBasicWorkshopConfirmation({
   }
 }
 
-/**
- * The sign-up instructions email, rendered: shared by the ticket-sold
- * delivery and the organizer's batch resend so both say the same thing.
- */
+/** The sign-up instructions email of the ticket-sold delivery, rendered. */
 export function renderWorkshopSignupInstructions({
   userEmail,
   userName,
   conference,
   ticketCategory,
   portalUrl,
-  resent = false,
 }: WorkshopSignupInstructionsRequest): {
   from: string
   to: string[]
@@ -286,9 +290,9 @@ export function renderWorkshopSignupInstructions({
             <table width="600" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
               <tr>
                 <td style="padding: 40px;">
-                  <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">${resent ? `Workshop sign-up for ${conference.title}` : `Welcome to ${conference.title}!`}</h2>
+                  <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">Welcome to ${conference.title}!</h2>
                   <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${safeName},</p>
-                  <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${resent ? `Here are the sign-up instructions for the workshops your <strong>${safeCategory}</strong> ticket includes, with the link to the workshop sign-up page.` : `Thank you for purchasing your <strong>${safeCategory}</strong> ticket!`}</p>
+                  <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Thank you for purchasing your <strong>${safeCategory}</strong> ticket!</p>
 
                   <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: ${brand.accent};">${heading}</h3>
                   <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${lede}</p>
@@ -303,6 +307,121 @@ ${steps}
               <tr>
                 <td style="padding: 24px 40px; background-color: #F9FAFB; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
                   <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${conference.organizer}. All rights reserved.</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `
+
+  return { from: fromEmail, to: [userEmail], subject, html }
+}
+
+/**
+ * The organizer's reminder to a workshop ticket holder who has not signed up
+ * (#1334, spec `docs/WORKSHOP_TICKETS_SPEC.md` §7), rendered.
+ *
+ * IT ASKS, IT NEVER STATES. Someone can sign up between the press and the
+ * read, so it says "if you haven't picked your workshops yet" and never that
+ * the recipient has no seat.
+ *
+ * THE WINDOW AT THE MOMENT OF THE SEND, by the rule sign-up itself applies
+ * (`workshopRegistrationWindow`, without early access: the reminder goes to
+ * ticket holders, not to sponsors' guests). Before it, the email names the
+ * opening; during it, the closing, when one is set. After it there is no
+ * reminder: the send is refused, and this throws rather than invite anyone.
+ *
+ * The organizer's note is shown above the standard text, escaped, so a note
+ * containing HTML reads as typed. Without one the standard text is the same.
+ */
+export function renderWorkshopReminder({
+  userEmail,
+  userName,
+  conference,
+  portalUrl,
+  note,
+  now,
+}: WorkshopReminderRequest): {
+  from: string
+  to: string[]
+  subject: string
+  html: string
+} {
+  const window = workshopRegistrationWindow(conference, {
+    now: new Date(now),
+    earlyAccess: false,
+  })
+  if (window.status === 'closed') {
+    throw new Error('No workshop reminder after registration has closed')
+  }
+  const pending = window.status === 'not-open-yet'
+  const endsAt = conference.workshopRegistrationEnd
+  // The same wording and zone the /workshop page shows this attendee.
+  const when = formatRegistrationInstant
+
+  const fromEmail = resolveConferenceFrom(conference)
+  const contactEmail = resolveConferenceContact(conference)
+  const brand = resolveEmailBrandPalette(emailBrandColor(conference?.theme))
+  // The ticket provider supplies these; the HTML gets them escaped.
+  const safeName = escapeHtml(userName)
+  const safeEmail = escapeHtml(userEmail)
+  const safeNote = escapeHtml(note?.trim() ?? '').replace(/\r?\n/g, '<br>')
+
+  const subject = pending
+    ? `Workshop sign-up opens ${when(window.opensAt)} - ${conference.title}`
+    : `Have you picked your workshops? - ${conference.title}`
+
+  const ask = pending
+    ? `sign-up opens on <strong>${when(window.opensAt)}</strong>, and you can pick them from then on.`
+    : endsAt
+      ? `sign-up is open until <strong>${when(endsAt)}</strong>.`
+      : 'sign-up is open now.'
+
+  const noteBlock = safeNote
+    ? `
+                  <div data-organizer-note style="background-color: ${brand.cardBackground}; border-left: 4px solid ${brand.accent}; padding: 16px; margin: 0 0 24px 0;"><p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;">${safeNote}</p></div>`
+    : ''
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F9FAFB; color: #334155;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #F9FAFB; padding: 40px 20px;">
+        <tr>
+          <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+              <tr>
+                <td style="padding: 40px;">
+                  <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">Workshops at ${conference.title}</h2>
+                  <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${safeName},</p>${noteBlock}
+                  <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Your ticket includes workshops. If you haven&apos;t picked your workshops yet, ${ask}</p>
+                  <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Workshops have limited seats and are first-come, first-served. Sign in on the workshop sign-up page with the email address your ticket is registered to: <strong>${safeEmail}</strong></p>
+
+                  <table width="100%" cellpadding="0" cellspacing="0" style="margin: 32px 0;">
+                    <tr>
+                      <td align="center">
+                        <a href="${portalUrl}" style="display: inline-block; background-color: ${brand.accent}; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">${pending ? 'View Workshop Signup Page' : 'Pick Your Workshops'}</a>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 20px; color: #334155;">Or open this link: <a href="${portalUrl}" style="color: ${brand.accent}; text-decoration: none;">${portalUrl}</a></p>
+
+                  <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions or need assistance, please contact us at <a href="mailto:${contactEmail}" style="color: ${brand.accent}; text-decoration: none;">${contactEmail}</a>.</p>
+
+                  <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">See you at the conference!</p>
+                  <p style="margin: 8px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference.organizer}</strong></p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 24px 40px; background-color: #F9FAFB; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+                  <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date(now).getFullYear()} ${conference.organizer}. All rights reserved.</p>
                 </td>
               </tr>
             </table>

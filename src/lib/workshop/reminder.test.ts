@@ -263,15 +263,239 @@ describe('sendWorkshopReminder', () => {
     })
   })
 
-  it('says it is the sign-up link now ready — not a second purchase thank-you', async () => {
-    await remind(conference, 0)
+  describe('the wording', () => {
+    const OPENED = '2026-10-01T08:00:00Z'
+    const CLOSES = '2026-10-20T15:00:00Z' // 17:00 in Oslo (CEST)
+    const OPENS = '2026-11-02T08:00:00Z' // 09:00 in Oslo (CET)
+    const DURING = Date.parse('2026-10-10T12:00:00Z')
+    const open = {
+      ...(conference as object),
+      workshopRegistrationStart: OPENED,
+      workshopRegistrationEnd: CLOSES,
+    } as never
+    const pending = {
+      ...(conference as object),
+      workshopRegistrationStart: OPENS,
+      workshopRegistrationEnd: '2026-11-20T15:00:00Z',
+    } as never
 
-    const { html } = emails()[0]
-    expect(html).toContain(
-      'Here are the sign-up instructions for the workshops',
-    )
-    expect(html).not.toContain('Thank you for purchasing')
-    expect(html).not.toContain('Welcome to')
+    async function emailFor(
+      target: never,
+      now: number,
+      note?: string,
+    ): Promise<BatchEmail> {
+      batchSend.mockClear()
+      __resetReminderRateLimit()
+      await sendWorkshopReminder(target, { note }, now)
+      return emails()[0]
+    }
+
+    it('while sign-up is open: asks conditionally and names when it closes, in the conference zone', async () => {
+      const { subject, html } = await emailFor(open, DURING)
+
+      expect(subject).toBe('Have you picked your workshops? - CNDN 2026')
+      expect(html).toContain('Your ticket includes workshops.')
+      expect(html).toContain('If you haven&apos;t picked your workshops yet')
+      expect(html).toContain('Tuesday, October 20, 2026 at 5:00 PM')
+      expect(html).toContain(`href="${PORTAL}"`)
+      expect(html).not.toContain('opens on')
+    })
+
+    it('before sign-up opens: names when it opens, and no closing time', async () => {
+      const { subject, html } = await emailFor(pending, DURING)
+
+      expect(subject).toBe(
+        'Workshop sign-up opens Monday, November 2, 2026 at 9:00 AM - CNDN 2026',
+      )
+      expect(html).toContain('If you haven&apos;t picked your workshops yet')
+      expect(html).toContain('Monday, November 2, 2026 at 9:00 AM')
+      expect(html).not.toContain('Friday, November 20, 2026')
+      expect(html).not.toContain('closes')
+    })
+
+    it('open with no end set: makes no claim about when it closes', async () => {
+      const { html } = await emailFor(
+        { ...(open as object), workshopRegistrationEnd: undefined } as never,
+        DURING,
+      )
+
+      expect(html).toContain('If you haven&apos;t picked your workshops yet')
+      expect(html).not.toContain('closes')
+    })
+
+    // Someone can sign up between the press and the read (spec §7).
+    it('never tells the recipient they have no seat, and is no purchase thank-you', async () => {
+      for (const target of [open, pending]) {
+        const { html } = await emailFor(target, DURING)
+        expect(html).not.toMatch(/haven&apos;t signed up|not signed up|no seat/i)
+        expect(html).not.toContain('Thank you for purchasing')
+      }
+    })
+
+    it('shows the organizer’s note above the standard text, escaped — HTML in it is text', async () => {
+      const note = 'Bring a laptop.\n<b>Doors</b> open at 8 & coffee is free'
+      const { html } = await emailFor(open, DURING, note)
+
+      expect(html).toContain(
+        'Bring a laptop.<br>&lt;b&gt;Doors&lt;/b&gt; open at 8 &amp; coffee is free',
+      )
+      expect(html).not.toContain('<b>Doors</b>')
+      expect(html.indexOf('Bring a laptop.')).toBeLessThan(
+        html.indexOf('Your ticket includes workshops.'),
+      )
+    })
+
+    it('with no note, the standard text is the same as with one, minus the note', async () => {
+      const plain = await emailFor(open, DURING)
+      const noted = await emailFor(open, DURING, 'See you there')
+
+      expect(plain.html).not.toContain('data-organizer-note')
+      expect(noted.html.replace(/\s*<div data-organizer-note[^]*?<\/div>/, '')).toBe(
+        plain.html,
+      )
+      expect(plain.subject).toBe(noted.subject)
+    })
+  })
+
+  describe('the last send, stored on the conference', () => {
+    const AT = Date.parse('2026-10-10T12:00:00Z')
+
+    it('holds the time and the number sent after a send that reached someone', async () => {
+      batchSend.mockResolvedValueOnce({
+        data: { data: [{ id: 'em-0' }], errors: [{ index: 1, message: 'bad' }] },
+        error: null,
+      })
+
+      await expect(remind(conference, AT)).resolves.toEqual({
+        kind: 'sent',
+        sent: 1,
+        failed: 1,
+        unconfirmed: 0,
+      })
+      expect(lastSendWrite).toHaveBeenCalledTimes(1)
+      expect(lastSendWrite).toHaveBeenCalledWith('conference-1', {
+        workshopReminderLastSentAt: '2026-10-10T12:00:00.000Z',
+        workshopReminderLastSentCount: 1,
+      })
+    })
+
+    it.each([
+      [
+        'every address rejected',
+        () =>
+          batchSend.mockResolvedValueOnce({
+            data: null,
+            error: { name: 'validation_error', message: 'no', statusCode: 422 },
+          }),
+      ],
+      [
+        'the provider never answered',
+        () =>
+          batchSend.mockResolvedValue({
+            data: null,
+            error: { name: 'application_error', message: 'down', statusCode: null },
+          }),
+      ],
+      [
+        'nobody to remind',
+        () => fetchEventTicketCandidates.mockResolvedValueOnce([]),
+      ],
+    ])('is left unchanged by a send that reached nobody: %s', async (_label, arrange) => {
+      arrange()
+
+      await expect(remind(conference, AT)).resolves.toMatchObject({
+        kind: 'sent',
+        sent: 0,
+      })
+      expect(lastSendWrite).not.toHaveBeenCalled()
+      batchSend.mockReset()
+    })
+
+    it('a failing write changes nothing the organizer is told, and sends nothing again', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+      lastSendWrite.mockRejectedValueOnce(new Error('Sanity is down'))
+
+      try {
+        await expect(remind(conference, AT)).resolves.toEqual({
+          kind: 'sent',
+          sent: 2,
+          failed: 0,
+          unconfirmed: 0,
+        })
+        expect(batchSend).toHaveBeenCalledTimes(1)
+        expect(lastSendWrite).toHaveBeenCalledTimes(1)
+      } finally {
+        logged.mockRestore()
+      }
+    })
+  })
+
+  describe('refusals: the success case with one condition changed', () => {
+    const closed = {
+      ...(conference as object),
+      workshopRegistrationEnd: new Date(-1).toISOString(),
+    } as never
+
+    it('the success case they start from sends', async () => {
+      await expect(remind()).resolves.toMatchObject({ kind: 'sent', sent: 2 })
+    })
+
+    it.each<[string, () => unknown, never, string]>([
+      [
+        'no portal link',
+        () => workshopPortalUrl.mockResolvedValue(null),
+        conference,
+        'portal-unavailable',
+      ],
+      ['registration closed', () => {}, closed, 'registration-closed'],
+      [
+        'no email sender',
+        () =>
+          senderAvailable.mockImplementationOnce(() => {
+            throw new Error('credentials lookup failed')
+          }),
+        conference,
+        'email-unavailable',
+      ],
+      [
+        'ticketing switched off for the organization',
+        () => ticketingDenied.mockResolvedValueOnce(true),
+        conference,
+        'ticketing-unavailable',
+      ],
+      [
+        'a reminder within the hour',
+        () => remind(conference, -1),
+        conference,
+        'rate-limited',
+      ],
+    ])('%s: sends nothing and reads no ticket', async (_label, change, target, kind) => {
+      await change()
+      batchSend.mockClear()
+      fetchEventTicketCandidates.mockClear()
+
+      await expect(remind(target, 0)).resolves.toMatchObject({ kind })
+      expect(batchSend).not.toHaveBeenCalled()
+      expect(fetchEventTicketCandidates).not.toHaveBeenCalled()
+    })
+
+    it('the sign-ups cannot be read: sends nothing, and spends no quota', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+      signups.mockRejectedValueOnce(new Error('Sanity is down'))
+
+      try {
+        await expect(remind()).resolves.toEqual({
+          kind: 'ticketing-unavailable',
+        })
+        expect(batchSend).not.toHaveBeenCalled()
+        await expect(remind(conference, 1)).resolves.toMatchObject({
+          kind: 'sent',
+          sent: 2,
+        })
+      } finally {
+        logged.mockRestore()
+      }
+    })
   })
 
   it('sends in batches of 100, paced, each with its own idempotency key', async () => {
@@ -292,16 +516,6 @@ describe('sendWorkshopReminder', () => {
     expect(options.every((o) => o.batchValidation === 'permissive')).toBe(true)
     expect(new Set(options.map((o) => o.idempotencyKey)).size).toBe(3)
     expect(pause.mock.calls).toEqual([[500], [500]])
-  })
-
-  it('refuses while the main host cannot sign in — before reading any ticket', async () => {
-    workshopPortalUrl.mockResolvedValue(null)
-
-    await expect(
-      remind(conference, 0),
-    ).resolves.toEqual({ kind: 'portal-unavailable' })
-    expect(fetchEventTicketCandidates).not.toHaveBeenCalled()
-    expect(batchSend).not.toHaveBeenCalled()
   })
 
   it('refuses when the ticket list cannot be read, and sends nothing', async () => {
@@ -429,20 +643,6 @@ describe('sendWorkshopReminder', () => {
     ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
   })
 
-  it('refuses once registration has closed, before reading any ticket', async () => {
-    const closed = {
-      ...(conference as object),
-      workshopRegistrationEnd: new Date(-1).toISOString(),
-    } as never
-
-    await expect(remind(closed, 0)).resolves.toEqual({
-      kind: 'registration-closed',
-    })
-    expect(fetchEventTicketCandidates).not.toHaveBeenCalled()
-  })
-
-  // Closed wins over an unavailable host: fixing the host would not help, so
-  // the organizer must not be told it would. Decided before the portal lookup.
   it('says registration has closed even when the main host cannot sign in — without asking', async () => {
     workshopPortalUrl.mockResolvedValue(null)
     const closed = {
@@ -484,7 +684,7 @@ describe('sendWorkshopReminder', () => {
     ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
   })
 
-  it('lets only one of two concurrent resends send', async () => {
+  it('lets only one of two concurrent presses send', async () => {
     const outcomes = await Promise.all([
       remind(conference, 0),
       remind(conference, 0),
