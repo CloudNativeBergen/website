@@ -44,6 +44,7 @@ import {
 import { renderWorkshopReminder } from '@/lib/email/workshop'
 import { clientWrite } from '@/lib/sanity/client'
 import { readTicketHolders } from './holders'
+import { workshopRegistrationWindow } from './registration-window'
 import { workshopPortalUrl } from './sign-in'
 
 export const REMINDER_WINDOW_MS = 60 * 60 * 1000
@@ -76,11 +77,11 @@ export type ReminderOutcome =
   | { kind: 'ticketing-unavailable' }
   | { kind: 'rate-limited'; retryAfterMs: number }
 
-/** conference id → when its last reminder was accepted. */
-const lastReminder = new Map<string, number>()
+/** conference id → when the hour it holds was reserved (the rate limit). */
+const reservedAt = new Map<string, number>()
 
 export function __resetReminderRateLimit(): void {
-  lastReminder.clear()
+  reservedAt.clear()
 }
 
 /**
@@ -99,10 +100,13 @@ export async function reminderPortal(
   | { blocker: 'registration-closed' | 'portal-unavailable' }
   | { blocker: null; portalUrl: string }
 > {
-  const endsAt = conference.workshopRegistrationEnd
-  if (endsAt && new Date(endsAt).getTime() < now) {
-    return { blocker: 'registration-closed' }
-  }
+  // The rule sign-up applies, and the one the email is worded by: an email
+  // rendered for this moment never meets a window that has closed.
+  const window = workshopRegistrationWindow(conference, {
+    now: new Date(now),
+    earlyAccess: false,
+  })
+  if (window.status === 'closed') return { blocker: 'registration-closed' }
   const portalUrl = await workshopPortalUrl(conference)
   return portalUrl
     ? { blocker: null, portalUrl }
@@ -118,7 +122,7 @@ export async function sendWorkshopReminder(
   if (portal.blocker) return { kind: portal.blocker }
   const { portalUrl } = portal
 
-  const previous = lastReminder.get(conference._id)
+  const previous = reservedAt.get(conference._id)
   if (previous !== undefined && now - previous < REMINDER_WINDOW_MS) {
     return {
       kind: 'rate-limited',
@@ -128,11 +132,11 @@ export async function sendWorkshopReminder(
 
   // Reserve the hour NOW, before the next await, so a concurrent press sees
   // it; released if the holders cannot be read.
-  lastReminder.set(conference._id, now)
+  reservedAt.set(conference._id, now)
 
   const release = () => {
-    if (lastReminder.get(conference._id) === now)
-      lastReminder.delete(conference._id)
+    if (reservedAt.get(conference._id) === now)
+      reservedAt.delete(conference._id)
   }
 
   // The sender before the ticket read: a press that cannot send reads nothing.
