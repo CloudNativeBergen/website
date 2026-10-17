@@ -11,6 +11,7 @@ import {
   isListedWorkshop,
 } from '@/lib/workshop/listed'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { expireFeedbackCodeIndex } from '@/lib/feedback/cache'
 import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
 import { convertStringToPortableTextBlocks } from '../utils/validation'
@@ -735,12 +736,35 @@ export async function deleteProposal(
     }
     // Final transaction: the cascade dependents (strong refs to the proposal)
     // and the proposal itself, atomically.
+    const conferenceId = await talkConferenceId(proposalId)
     await commitDeletes([...cascadeIds, proposalId])
+    // A deleted talk's Feedback Code must stop resolving at once (speaker
+    // feedback spec §5.1).
+    if (conferenceId) expireFeedbackCodeIndex(conferenceId)
   } catch (error) {
     console.error('Error deleting proposal:', error)
     err = error as Error
   }
   return { err }
+}
+
+/**
+ * The conference of a talk about to be deleted, for the cache expiry after
+ * the delete. Never throws: a failed lookup must not fail the delete, and the
+ * index's own short life recovers the missed expiry.
+ */
+async function talkConferenceId(proposalId: string): Promise<string | null> {
+  try {
+    return await clientWrite.fetch<string | null>(
+      // groq-global-scoped: by-id read of the proposal both callers have already proven ownership of.
+      groq`*[_id == $proposalId][0].conference._ref`,
+      { proposalId },
+      { cache: 'no-store' },
+    )
+  } catch (error) {
+    console.error('Could not read the conference of a deleted talk:', error)
+    return null
+  }
 }
 
 export async function updateProposalStatus(
@@ -780,6 +804,14 @@ export async function updateProposalStatus(
   } catch (error) {
     err = error as Error
   }
+
+  // A talk that is no longer confirmed must stop resolving its Feedback Code
+  // at once, and one that just became confirmed must start (speaker feedback
+  // spec §5.1). The TALK's conference: the caller may be on another host.
+  const conference = updatedProposal.conference as
+    { _ref?: string; _id?: string } | undefined
+  const conferenceId = conference?._ref ?? conference?._id
+  if (!err && conferenceId) expireFeedbackCodeIndex(conferenceId)
 
   return { proposal: updatedProposal, err }
 }

@@ -247,13 +247,29 @@ describe('the tags it revalidates', () => {
     })
   })
 
-  it('busts EXACTLY the conference tag for a conference target', async () => {
+  it('busts EXACTLY the conference tag and its Feedback Code index for a conference target', async () => {
     const response = await POST(
       request({ targets: [{ type: 'conference', id: 'conf-9' }] }),
     )
 
     expect(response.status).toBe(200)
-    expect(revalidatedTags()).toEqual(['sanity:conference-conf-9'])
+    expect(revalidatedTags()).toEqual([
+      'sanity:conference-conf-9',
+      'sanity:feedback-code-index-conf-9',
+    ])
+  })
+
+  it('EXPIRES the Feedback Code index at once, and keeps the default profile for the rest', async () => {
+    // Speaker erasure prints `sanity:conference-<id>` for the operator, who
+    // invalidates it here. The index holds speaker names on the attendee
+    // page, so it must not be served stale while it refreshes (speaker
+    // feedback spec §5.1).
+    await POST(request({ targets: [{ type: 'conference', id: 'conf-9' }] }))
+
+    expect(revalidateTagMock.mock.calls).toEqual([
+      ['sanity:conference-conf-9', 'default'],
+      ['sanity:feedback-code-index-conf-9', { expire: 0 }],
+    ])
   })
 
   it('busts EXACTLY the domain tag, normalized, for a domain target', async () => {
@@ -265,7 +281,7 @@ describe('the tags it revalidates', () => {
     expect(revalidatedTags()).toEqual(['domain:oslo.example.com'])
   })
 
-  it('busts one tag per target, in order, for a mixed batch', async () => {
+  it('busts each target’s tags, in order, for a mixed batch', async () => {
     await POST(
       request({
         targets: [
@@ -279,6 +295,7 @@ describe('the tags it revalidates', () => {
     expect(revalidatedTags()).toEqual([
       'sanity:organization-org-A',
       'sanity:conference-conf-9',
+      'sanity:feedback-code-index-conf-9',
       'domain:oslo.example.com',
     ])
   })

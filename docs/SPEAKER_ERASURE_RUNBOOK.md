@@ -293,9 +293,12 @@ it prints the tags rather than pretending. Invalidate them:
 - `content:speakers`
 - `content:speaker-detail`
 - `sanity:conference-<id>` for each conference listed
+- `sanity:feedback-code-index-<id>` for each conference listed (the attendee
+  feedback page shows speaker names from it)
 
 Use the existing cache-invalidation route
-(`src/app/api/provisioning/cache/invalidate`) or a redeploy. Then check the
+(`src/app/api/provisioning/cache/invalidate`) or a redeploy. A `conference`
+target there covers both conference tags. Then check the
 public profile in a **Safari Private tab** — a stale PWA service worker will
 otherwise serve you an old bundle and you will report a failure that is not one.
 

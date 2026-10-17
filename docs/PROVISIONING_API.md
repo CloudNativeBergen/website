@@ -176,6 +176,7 @@ Content-Type: application/json
 
 - **1 to 20 targets** per call (`MAX_INVALIDATION_TARGETS`).
 - The caller names a **document**, never a tag. Which cache tag that implies is this app's decision, so the tag structure stays ours to change — and the broad `content:*` tags (which bust every tenant at once) are not in the vocabulary and cannot be reached.
+- A `conference` target busts that conference's tag and also **expires at once** (`{ expire: 0 }`) its Feedback Code index (`sanity:feedback-code-index-<id>`, `docs/SPEAKER_FEEDBACK_SPEC.md` §5.1), so the response lists two tags for it. Every other tag is revalidated with the `'default'` profile.
 - Ids are validated by **shape only** (`[A-Za-z0-9._-]{1,200}`); hostnames are lowercased and validated with the same helper the `domains[]` editor uses, so the computed tag is byte-identical to the one the cached read registered.
 - **No `Idempotency-Key`.** Invalidation is naturally idempotent — revalidating a tag twice is indistinguishable from once — so a key would add a required header and a stored receipt to protect nothing.
 

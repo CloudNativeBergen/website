@@ -70,6 +70,7 @@
  * read here is deliberately unscoped and annotated `groq-global:`.
  */
 
+import { feedbackCodeIndexTag } from '@/lib/cache/tags'
 import {
   clientReadUncached as clientRead,
   clientWrite,
@@ -1796,7 +1797,10 @@ async function revalidateErasureTags(
 ): Promise<EraseSpeakerResult['cache']> {
   const tags = [
     ...CACHE_TAGS,
-    ...plan.affectedConferenceIds.map((id) => `sanity:conference-${id}`),
+    ...plan.affectedConferenceIds.flatMap((id) => [
+      `sanity:conference-${id}`,
+      feedbackCodeIndexTag(id),
+    ]),
   ]
   if (!revalidate) {
     return {

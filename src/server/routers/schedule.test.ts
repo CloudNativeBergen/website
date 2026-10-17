@@ -33,6 +33,7 @@ vi.mock('@/lib/schedule/validation', () => ({
 import { revalidateTag } from 'next/cache'
 import { scheduleRouter } from './schedule'
 import { ScheduleStatus } from '@/lib/schedule/types'
+import { feedbackCodeIndexTag } from '@/lib/cache/tags'
 
 const revalidateTagMock = revalidateTag as unknown as Mock
 
@@ -108,9 +109,19 @@ describe('schedule router — tenant-scoped cache invalidation (#618)', () => {
     )
   })
 
-  it('revalidates exactly once — the scoped tag only', async () => {
+  it('revalidates the scoped tag and the Feedback Code index only', async () => {
     await makeCaller().save(validPayload)
-    expect(revalidateTagMock).toHaveBeenCalledTimes(1)
+    expect(revalidateTagMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('expires the conference’s Feedback Code index at once (speaker feedback §5.1)', async () => {
+    await makeCaller().save(validPayload)
+    // `{ expire: 0 }`, not a profile: a moved slot must not keep opening or
+    // closing the old window while the index refreshes in the background.
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      feedbackCodeIndexTag(CONFERENCE_ID),
+      { expire: 0 },
+    )
   })
 
   it('does not revalidate anything when the save fails', async () => {

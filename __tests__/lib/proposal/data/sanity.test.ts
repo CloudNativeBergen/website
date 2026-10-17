@@ -64,6 +64,9 @@ vi.mock('next-sanity', () => ({
     ),
 }))
 
+const { revalidateTag } = vi.hoisted(() => ({ revalidateTag: vi.fn() }))
+vi.mock('next/cache', () => ({ revalidateTag }))
+
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
     fetch: mockFetch,
@@ -88,6 +91,7 @@ import {
   updateProposalStatus,
 } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
+import { feedbackCodeIndexTag } from '@/lib/cache/tags'
 
 describe('deleteProposal', () => {
   beforeEach(() => {
@@ -578,5 +582,105 @@ describe('schedule resolution — official documents only', () => {
     expect(workshop.room).toBe('New Room')
     expect(workshop.startTime).toBe('13:00')
     expect(workshop.scheduleInfo?.timeSlot?.startTime).toBe('13:00')
+  })
+})
+
+describe('the Feedback Code index follows the talk (speaker feedback §5.1)', () => {
+  // A withdrawn or deleted talk must stop resolving at once, so both writers
+  // expire the index of the TALK's conference (never the host's: a speaker
+  // can act on their own proposal from another tenant's host).
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockTxCommit.mockResolvedValue({})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  it('a status change expires the index of the talk’s conference with expire 0', async () => {
+    mockPatchCommit.mockResolvedValueOnce({
+      _id: 'proposal-1',
+      conference: { _type: 'reference', _ref: 'conf-talk' },
+    })
+
+    await updateProposalStatus('proposal-1', Status.withdrawn, 'Sick')
+
+    expect(revalidateTag).toHaveBeenCalledWith(
+      feedbackCodeIndexTag('conf-talk'),
+      { expire: 0 },
+    )
+  })
+
+  it('a failed status change expires nothing', async () => {
+    mockPatchCommit.mockRejectedValueOnce(new Error('409'))
+    await updateProposalStatus('proposal-1', Status.withdrawn, 'Sick')
+    expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('a delete expires the index of the talk’s conference, after the commit', async () => {
+    mockFetch
+      .mockResolvedValueOnce([]) // referencing docs
+      .mockResolvedValueOnce([]) // conversationIds
+      .mockResolvedValueOnce([]) // messageNotificationIds
+    mockWriteFetch.mockResolvedValueOnce('conf-talk')
+    const order: string[] = []
+    mockTxCommit.mockImplementationOnce(async () => {
+      order.push('commit')
+      return {}
+    })
+    revalidateTag.mockImplementationOnce((tag: string) => {
+      order.push(tag)
+    })
+
+    const { err } = await deleteProposal('proposal-1')
+
+    expect(err).toBeNull()
+    expect(mockWriteFetch).toHaveBeenCalledWith(
+      expect.stringContaining('_id == $proposalId'),
+      { proposalId: 'proposal-1' },
+      { cache: 'no-store' },
+    )
+    expect(revalidateTag).toHaveBeenCalledWith(
+      feedbackCodeIndexTag('conf-talk'),
+      { expire: 0 },
+    )
+    expect(order).toEqual(['commit', feedbackCodeIndexTag('conf-talk')])
+  })
+
+  it('a delete still succeeds when the conference lookup fails', async () => {
+    mockFetch
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+    mockWriteFetch.mockRejectedValueOnce(new Error('lookup down'))
+
+    const { err } = await deleteProposal('proposal-1')
+
+    expect(err).toBeNull()
+    expect(mockTxCommit).toHaveBeenCalledTimes(1)
+    expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('a blocked delete expires nothing', async () => {
+    mockFetch.mockResolvedValueOnce([{ _id: 'schedule-1', _type: 'schedule' }])
+    mockWriteFetch.mockResolvedValue('conf-talk')
+
+    const { err } = await deleteProposal('proposal-1')
+
+    expect(err).toBeInstanceOf(ProposalDeletionBlockedError)
+    expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('a delete whose commit fails expires nothing', async () => {
+    mockFetch
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+    mockWriteFetch.mockResolvedValueOnce('conf-talk')
+    mockTxCommit.mockRejectedValueOnce(new Error('commit failed'))
+
+    const { err } = await deleteProposal('proposal-1')
+
+    expect(err).toBeTruthy()
+    expect(revalidateTag).not.toHaveBeenCalled()
   })
 })

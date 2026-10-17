@@ -498,6 +498,9 @@ describe('cache revalidation is reported honestly', () => {
       'content:speakers',
       'content:speaker-detail',
       'sanity:conference-conf-1',
+      // The attendee feedback page shows speaker names from this index
+      // (speaker feedback spec §5.1).
+      'sanity:feedback-code-index-conf-1',
     ])
     expect(result.cache.revalidated).toBe(true)
   })

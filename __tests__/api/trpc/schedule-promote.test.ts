@@ -18,6 +18,8 @@ import { clientWrite } from '@/lib/sanity/client'
 import { getTalkStatuses } from '@/lib/schedule/sanity'
 import { notifyScheduleChanges } from '@/lib/reminders'
 import { Status as ProposalStatus } from '@/lib/proposal/types'
+import { revalidateTag } from 'next/cache'
+import { feedbackCodeIndexTag } from '@/lib/cache/tags'
 
 vi.mock('@/lib/conference/sanity')
 vi.mock('@/lib/reminders', () => ({ notifyScheduleChanges: vi.fn() }))
@@ -212,5 +214,39 @@ describe('schedule.action promote — speaker alerts', () => {
     await expect(
       createCaller().schedule.action({ id: 'draft-1', action: 'promote' }),
     ).resolves.toMatchObject({ success: true })
+  })
+})
+
+describe('schedule.action promote — the Feedback Code index (speaker feedback §5.1)', () => {
+  it('expires the conference’s index at once, after the commit', async () => {
+    wireFetch(null)
+    const order: string[] = []
+    commit.mockImplementation(async () => {
+      order.push('commit')
+    })
+    vi.mocked(revalidateTag).mockImplementation((tag) => {
+      order.push(String(tag))
+    })
+
+    await createCaller().schedule.action({ id: 'draft-1', action: 'promote' })
+
+    expect(revalidateTag).toHaveBeenCalledWith(feedbackCodeIndexTag('conf-1'), {
+      expire: 0,
+    })
+    expect(order.indexOf('commit')).toBeLessThan(
+      order.indexOf(feedbackCodeIndexTag('conf-1')),
+    )
+  })
+
+  it('expires nothing when the publish is refused', async () => {
+    wireFetch(null)
+    vi.mocked(getTalkStatuses).mockResolvedValue({
+      'talk-a': ProposalStatus.submitted,
+    })
+
+    await expect(
+      createCaller().schedule.action({ id: 'draft-1', action: 'promote' }),
+    ).rejects.toThrow(/Strict Block/)
+    expect(revalidateTag).not.toHaveBeenCalled()
   })
 })
