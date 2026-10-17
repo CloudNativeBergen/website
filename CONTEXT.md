@@ -119,5 +119,5 @@ The green, yellow and red totals from physical feedback cards collected in the r
 _Avoid_: audience feedback, paper votes
 
 **Feedback Code**:
-The QR code for one session, shown to its speakers in the speaker dashboard, that opens the Feedback Response form.
-_Avoid_: feedback link, session QR
+The short code for one session, unique within its conference, that opens the Feedback Response form on the conference's own domain. Its speakers get it as a QR code in the speaker dashboard; only organizers can rotate it, which retires the old code.
+_Avoid_: feedback link, session QR, short link (a marketing redirect)
