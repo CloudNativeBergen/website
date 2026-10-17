@@ -183,6 +183,7 @@ export default async function ProposalViewPage({
     // sidebar is `hidden lg:block`).
     const showSessionFeedback =
       proposal.status === 'confirmed' &&
+      proposal.conference != null &&
       '_id' in proposal.conference &&
       proposal.conference._id === conference._id &&
       (proposal.speakers ?? []).some(

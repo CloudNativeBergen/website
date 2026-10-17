@@ -1,12 +1,36 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { delay, http, HttpResponse } from 'msw'
-import { expect, waitFor, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { SessionFeedbackSection } from './SessionFeedbackSection'
 
 const ENDPOINT = '/api/trpc/sessionFeedback.ensureCode'
 
 const answer = (data: unknown) =>
   http.post(ENDPOINT, () => HttpResponse.json({ result: { data } }))
+
+/** A tRPC error answer, counting how often it was asked. */
+const failWith = (code: string, httpStatus: number, hits: { n: number }) =>
+  http.post(ENDPOINT, () => {
+    hits.n++
+    return HttpResponse.json(
+      { error: { message: code, code: -32000, data: { code, httpStatus } } },
+      { status: httpStatus },
+    )
+  })
+
+/** Wait for the one ensureCode answer, then for the section to be gone. */
+const expectNothingRendered = async (
+  canvasElement: HTMLElement,
+  hits: { n: number },
+) => {
+  const canvas = within(canvasElement)
+  await waitFor(() => expect(hits.n).toBe(1))
+  await waitFor(() =>
+    expect(
+      canvas.queryByRole('region', { name: 'Session Feedback' }),
+    ).toBeNull(),
+  )
+}
 
 const BEFORE = {
   code: 'k7m2qx',
@@ -75,28 +99,32 @@ export const Loading: Story = {
       ],
     },
   },
-}
-
-export const LoadFailed: Story = {
-  parameters: {
-    msw: {
-      handlers: [
-        http.post(ENDPOINT, () =>
-          HttpResponse.json(
-            {
-              error: {
-                message: 'Internal error',
-                code: -32603,
-                data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
-              },
-            },
-            { status: 500 },
-          ),
-        ),
-      ],
-    },
+  play: async ({ canvasElement }) => {
+    expect(await within(canvasElement).findByRole('status')).toHaveTextContent(
+      'Loading your Feedback Code',
+    )
   },
 }
+
+const loadFailedHits = { n: 0 }
+
+/** Any other failure keeps the section, says so, and can be retried. */
+export const LoadFailed: Story = {
+  parameters: {
+    msw: { handlers: [failWith('INTERNAL_SERVER_ERROR', 500, loadFailedHits)] },
+  },
+  beforeEach: () => {
+    loadFailedHits.n = 0
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Your Feedback Code could not be loaded.')
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(loadFailedHits.n).toBe(2))
+  },
+}
+
+const refusedHits = { n: 0 }
 
 /**
  * A missing, foreign, unconfirmed or someone else's talk: the server answers
@@ -104,38 +132,41 @@ export const LoadFailed: Story = {
  */
 export const Refused: Story = {
   parameters: {
-    msw: {
-      handlers: [
-        http.post(ENDPOINT, () =>
-          HttpResponse.json(
-            {
-              error: {
-                message: 'Talk not found',
-                code: -32004,
-                data: { code: 'NOT_FOUND', httpStatus: 404 },
-              },
-            },
-            { status: 404 },
-          ),
-        ),
-      ],
-    },
+    msw: { handlers: [failWith('NOT_FOUND', 404, refusedHits)] },
   },
+  beforeEach: () => {
+    refusedHits.n = 0
+  },
+  play: ({ canvasElement }) =>
+    expectNothingRendered(canvasElement, refusedHits),
 }
+
+const noCodeHits = { n: 0 }
 
 /** A talk whose window closed before it ever had a code: nothing renders. */
 export const NoCode: Story = {
   parameters: {
     msw: {
       handlers: [
-        answer({
-          code: null,
-          url: null,
-          window: { ...BEFORE.window, state: 'closed' },
+        http.post(ENDPOINT, () => {
+          noCodeHits.n++
+          return HttpResponse.json({
+            result: {
+              data: {
+                code: null,
+                url: null,
+                window: { ...BEFORE.window, state: 'closed' },
+              },
+            },
+          })
         }),
       ],
     },
   },
+  beforeEach: () => {
+    noCodeHits.n = 0
+  },
+  play: ({ canvasElement }) => expectNothingRendered(canvasElement, noCodeHits),
 }
 
 let opensWhileShownRequests = 0
@@ -189,6 +220,16 @@ export const OpensWhileShown: Story = {
  * sleeps, so coming back to the tab must re-read the clock.
  */
 export const WakesAfterSleep: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        answer(BEFORE),
+        // next-auth's SessionProvider refetches the session on
+        // visibilitychange too; answer it so the run stays quiet.
+        http.get('/api/auth/session', () => HttpResponse.json({})),
+      ],
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await canvas.findByText(/Opens when your session starts/)
