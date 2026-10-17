@@ -811,7 +811,7 @@ export async function updateProposalStatus(
   const conference = updatedProposal.conference as
     { _ref?: string; _id?: string } | undefined
   const conferenceId = conference?._ref ?? conference?._id
-  if (!err && conferenceId) expireFeedbackCodeIndex(conferenceId)
+  if (conferenceId) expireFeedbackCodeIndex(conferenceId)
 
   return { proposal: updatedProposal, err }
 }
