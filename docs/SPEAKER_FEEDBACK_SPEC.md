@@ -519,7 +519,16 @@ conference serving the request, the caller is in its `speakers[]`, and it is
 confirmed. A null result is one uniform refusal, so the procedure reveals
 nothing about talks the caller can't see. (All 29 past talks with Card Counts
 are confirmed in production, so "results only" needs no separate rule: it is a
-confirmed talk with no code for which §5 refuses to mint one.) Then:
+confirmed talk with no code for which §5 refuses to mint one.)
+
+**Ensure-code and rotation read the published talk with `getDocument`**
+through the pinned client (§4.2), not GROQ, and check conference,
+`speakers[]` (ensure-code) and status on that document, with the same uniform
+refusal for a missing or foreign talk. Their `ifRevisionId` comes from that
+read, and the re-read after a failed guard also goes through the doc endpoint.
+_Refinement (spec):_ a speaker confirms the talk on this same page, and a GROQ
+read lagging that write by about a second would refuse the QR or hand the mint a
+stale revision that fails every retry. Then:
 
 - **results:** refused unless feedback is visible (§6), computed on the server;
   hidden comments are filtered out on the server, never in the client;
@@ -635,8 +644,12 @@ Decided on [#1423](https://github.com/CloudNativeBergen/website/issues/1423).
 
 ### 11.1 Summary when the window closes
 
-- A **daily cron** finds confirmed talks whose window closed since its last run,
-  with at least one response and no `feedbackSummarySentAt`.
+- A **daily cron** finds confirmed talks whose window has closed, with no
+  `feedbackSummarySentAt` and at least one `feedbackResponse`. _Refinement
+  (spec):_ no "since its last run" lookback; the cron keeps no state, and a
+  fixed lookback would silently skip a day's talks after one failed run. The
+  claim marker already makes it one send per talk, and past editions drop out
+  because they have no response documents.
   _Implementation detail:_ a step in the existing daily `cleanup-notifications`
   cron (04:00) or a new route in `vercel.json`.
 - **Claim, then send** (_Refinement (spec)_): the cron first sets
