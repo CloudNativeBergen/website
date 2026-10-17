@@ -26,6 +26,8 @@ type Doc = Record<string, unknown> & { _id: string; _rev?: string }
 const h = vi.hoisted(() => ({
   dataset: [] as (Record<string, unknown> & { _id: string; _rev?: string })[],
   releases: [] as { name: string; state: string }[],
+  /** The API version the code pinned its client to. */
+  apiVersion: '',
   /** Ids asked of the doc endpoint, in order. */
   docReads: [] as string[],
   revs: 0,
@@ -109,7 +111,12 @@ vi.mock('@/lib/sanity/client', async () => {
   }
   return {
     clientReadUncached: { fetch: run },
-    clientWrite: { withConfig: () => pinned },
+    clientWrite: {
+      withConfig: (config: { apiVersion: string }) => {
+        h.apiVersion = config.apiVersion
+        return pinned
+      },
+    },
   }
 
   async function commit(mutations: unknown[]) {
@@ -135,6 +142,15 @@ vi.mock('@/lib/sanity/client', async () => {
           new Error(`The document with the ID "${m.patch.id}" was not found`),
           { statusCode: 404 },
         )
+      // Below 2025-02-19 the API does not handle `versions.**` (spec §4.2);
+      // MODELLED as a refused write, like `versionedSanityStore`.
+      if (
+        String(m.patch.id).startsWith('versions.') &&
+        h.apiVersion < '2025-02-19'
+      )
+        throw Object.assign(new Error(`${m.patch.id}: unknown API version`), {
+          statusCode: 400,
+        })
       // A version in a release that is not `active` is locked (Sanity's
       // documented rule; the status code is MODELLED).
       const release = /^versions\.([^.]+)\./.exec(String(m.patch.id))?.[1]

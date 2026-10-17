@@ -245,6 +245,17 @@ async function readTalkVersions(
     client.fetch<unknown>('releases::all(){ _id, state }', {}, raw),
   ])
   const releaseOf = (id: string) => /^versions\.([^.]+)\./.exec(id)?.[1]
+  if (
+    !Array.isArray(releases) &&
+    Array.isArray(found) &&
+    found.some((id) => typeof id === 'string' && releaseOf(id))
+  ) {
+    // Release versions exist but the release list did not load: they are
+    // left out of this write and its sweep, so say so.
+    console.error(
+      `[feedback] could not list releases; skipping release versions of ${talkId}`,
+    )
+  }
   const active = new Set(
     (Array.isArray(releases) ? releases : [])
       .filter(

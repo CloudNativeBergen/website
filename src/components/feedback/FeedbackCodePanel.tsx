@@ -73,29 +73,32 @@ function CopyLinkButton({ url }: { url: string }) {
     return () => clearTimeout(timer)
   }, [result])
   return (
-    <button
-      type="button"
-      onClick={() =>
-        // `clipboard` is absent outside a secure context, and writeText can be
-        // refused; either way the URL stays visible to copy by hand.
-        Promise.resolve()
-          .then(() => navigator.clipboard.writeText(url))
-          .then(() => setResult('copied'))
-          .catch(() => setResult('failed'))
-      }
-      className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-    >
-      {result === 'copied' ? (
-        <CheckIcon className="size-4 text-green-600 dark:text-green-400" />
-      ) : (
-        <ClipboardDocumentIcon className="size-4" />
-      )}
-      {result === 'copied'
-        ? 'Copied'
-        : result === 'failed'
-          ? 'Couldn’t copy; select the link above'
-          : 'Copy link'}
-      {/* Announces the outcome only, not the label coming back. */}
+    <>
+      <button
+        type="button"
+        onClick={() =>
+          // `clipboard` is absent outside a secure context, and writeText can be
+          // refused; either way the URL stays visible to copy by hand.
+          Promise.resolve()
+            .then(() => navigator.clipboard.writeText(url))
+            .then(() => setResult('copied'))
+            .catch(() => setResult('failed'))
+        }
+        className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+      >
+        {result === 'copied' ? (
+          <CheckIcon className="size-4 text-green-600 dark:text-green-400" />
+        ) : (
+          <ClipboardDocumentIcon className="size-4" />
+        )}
+        {result === 'copied'
+          ? 'Copied'
+          : result === 'failed'
+            ? 'Couldn’t copy; select the link above'
+            : 'Copy link'}
+      </button>
+      {/* Outside the button, so its name stays its label; announces the
+          outcome only, not the label coming back. */}
       <span className="sr-only" aria-live="polite">
         {result === 'copied'
           ? 'Link copied'
@@ -103,7 +106,7 @@ function CopyLinkButton({ url }: { url: string }) {
             ? 'Couldn’t copy the link'
             : ''}
       </span>
-    </button>
+    </>
   )
 }
 

@@ -160,8 +160,29 @@ export const OpensWhileShown: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await canvas.findByText(/Opens when your session starts/)
+    const qr = await canvas.findByRole('img', { name: /QR code for/ })
     await waitFor(() => canvas.getByText(/Open until/), { timeout: 5000 })
-    expect(canvas.getByText(BEFORE.url)).toBeVisible()
+    // The same QR, never blanked or redrawn, and no second request.
+    expect(canvas.getByRole('img', { name: /QR code for/ })).toBe(qr)
     expect(opensWhileShownRequests).toBe(1)
+  },
+}
+
+/**
+ * The laptop slept through the session start: timers do not run while it
+ * sleeps, so coming back to the tab must re-read the clock.
+ */
+export const WakesAfterSleep: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText(/Opens when your session starts/)
+    const realNow = Date.now
+    Date.now = () => Date.parse(BEFORE.window.opensAt) + 60_000
+    try {
+      document.dispatchEvent(new Event('visibilitychange'))
+      expect(await canvas.findByText(/Open until/)).toBeVisible()
+    } finally {
+      Date.now = realNow
+    }
   },
 }

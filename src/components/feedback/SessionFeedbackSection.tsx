@@ -38,6 +38,20 @@ function useWindowOnTheClock(
     )
     return () => clearTimeout(timer)
   }, [opensAt, closesAt, now])
+  // Timers do not run while a laptop sleeps, so a page left up through the
+  // session start would keep its old state: re-read the clock on return.
+  useEffect(() => {
+    if (!opensAt || !closesAt) return
+    const tick = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now())
+    }
+    document.addEventListener('visibilitychange', tick)
+    window.addEventListener('focus', tick)
+    return () => {
+      document.removeEventListener('visibilitychange', tick)
+      window.removeEventListener('focus', tick)
+    }
+  }, [opensAt, closesAt])
   if (!computed || now === null) return computed
   return { ...computed, state: feedbackWindowStateAt(computed, new Date(now)) }
 }
@@ -110,10 +124,10 @@ function FeedbackCodeSkeleton() {
   // The panel's shape, so the form below does not jump when the code arrives.
   return (
     <div
+      role="status"
       className="flex flex-col gap-5 sm:flex-row sm:items-center"
-      aria-busy="true"
-      aria-label="Loading your Feedback Code"
     >
+      <span className="sr-only">Loading your Feedback Code</span>
       <div className={`size-44 shrink-0 rounded-md ${bar}`} />
       <div className="w-full max-w-xl space-y-3">
         <div className={`h-5 w-3/4 ${bar}`} />

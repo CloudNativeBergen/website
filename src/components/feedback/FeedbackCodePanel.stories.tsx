@@ -52,16 +52,26 @@ export const OpenDark: Story = {
   globals: { theme: 'dark' },
 }
 
-const stubClipboard = (writeText: () => Promise<void>) =>
+/**
+ * Replace the clipboard for one story. The test runner reuses one page for
+ * every story, so the returned cleanup restores the real one.
+ */
+const stubClipboard = (writeText: () => Promise<void>) => {
+  const real = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText },
     configurable: true,
   })
+  return () => {
+    if (real) Object.defineProperty(navigator, 'clipboard', real)
+    else delete (navigator as { clipboard?: unknown }).clipboard
+  }
+}
 
 export const CopySucceeded: Story = {
   args: { window: before },
+  beforeEach: () => stubClipboard(() => Promise.resolve()),
   play: async ({ canvasElement }) => {
-    stubClipboard(() => Promise.resolve())
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getByRole('button', { name: /Copy link/ }))
     expect(await canvas.findByText('Copied')).toBeVisible()
@@ -71,8 +81,8 @@ export const CopySucceeded: Story = {
 /** The browser refuses the clipboard: say so, and point at the visible link. */
 export const CopyFailed: Story = {
   args: { window: before },
+  beforeEach: () => stubClipboard(() => Promise.reject(new Error('denied'))),
   play: async ({ canvasElement }) => {
-    stubClipboard(() => Promise.reject(new Error('denied')))
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getByRole('button', { name: /Copy link/ }))
     expect(
