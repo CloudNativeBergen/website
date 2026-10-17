@@ -16,8 +16,8 @@ appears:
   reviewed (§16).
 - **Implementation detail:** an engineering choice that changes nothing an
   attendee, speaker or organizer can observe. Named helpers, field names,
-  procedure names and file locations in this spec are implementation details
-  unless marked otherwise; an implementer may pick better ones.
+  procedure names, tags and file locations in this spec are implementation
+  details unless marked otherwise; an implementer may pick better ones.
 
 ## 1. What this delivers
 
@@ -106,7 +106,8 @@ absent; the type is read-only in Studio and written only by the server.
 reference from `feedbackResponse` would otherwise block `deleteProposal`
 (`BLOCKING_TYPE_DESCRIPTIONS`, `src/lib/proposal/data/sanity.ts`).
 `feedbackResponse` joins `NON_BLOCKING_TYPES` and is cascade-deleted in chunks
-of `PROPOSAL_DELETE_CHUNK_SIZE`, like the proposal's conversation.
+of `PROPOSAL_DELETE_CHUNK_SIZE` **before** the proposal itself (the reference is
+strong), and the code index is expired (§5.1).
 
 ### 4.2 Additive `talk` fields
 
@@ -120,6 +121,13 @@ every change here is additive anyway.
 | `feedbackSummarySentAt` | datetime                                               | Claimed before the summary goes out (§11.1).     |
 
 `audienceFeedback` (Card Counts) is unchanged.
+
+**Server writes to these three fields also patch `drafts.<talkId>` when it
+exists.** _Refinement (spec):_ a talk draft is a full copy, so publishing a
+draft that predates a mint, rotation or fold would write the old value back:
+a rotated-out code would come back to life, or folded totals would be lost after
+their documents were deleted. Production had 0 talk drafts on 2026-10-17, but
+organizers can create one at any time.
 
 ### 4.3 Totals
 
@@ -138,12 +146,14 @@ can't disagree.
 
 _Refinement (spec):_ the Sanity clients use an API version that returns
 `drafts.*` documents, and schedules have a `status` (`draft | official |
-archived`) with drafts coexisting with official ones. Every query in this
-feature, including the slot query, the code lookup, the minter's seed and the
-totals, filters out `drafts.**` and `versions.**` ids, and the slot query uses
-`OFFICIAL_SCHEDULE_FILTER` (`src/lib/speaker/sanity.ts`). Otherwise an
-organizer's draft schedule would open windows, and `drafts.<talkId>` would
-match a code twice.
+archived`) with drafts coexisting with official ones. Every **read** in this
+feature (the slot query, the code index, the totals) filters out `drafts.**`
+and `versions.**` ids, and the slot query uses `OFFICIAL_SCHEDULE_FILTER`
+(`src/lib/speaker/sanity.ts`, exported for this). Otherwise an organizer's draft
+schedule would open windows, and `drafts.<talkId>` would match a code twice.
+
+The **minter's seed** is the exception: it includes drafts, so a new code is
+never one a draft already holds (the `/go` minter's rule).
 
 ## 5. Feedback Code
 
@@ -155,24 +165,29 @@ Decided on [#1418](https://github.com/CloudNativeBergen/website/issues/1418).
   seeded with the conference's existing codes (`createShortCodeMinter`). The
   space is 31⁶ against about 100 codes per conference.
 - **The talk's own conference, always.** _Refinement (spec):_ a speaker can
-  open any of their proposals from any tenant's host
-  (`src/lib/proposal/data/sanity.ts`, the owner arm of `getProposal`). Minting,
-  the uniqueness seed, the "edition ended" check and the domain in the URL all
-  use **`talk.conference`**, never the host's conference. A code is minted only
-  when the talk's conference is the one serving the request, so a speaker sees
-  the section for another tenant's talk only on that tenant's host.
+  open any of their proposals from any tenant's host (the owner arm of
+  `getProposal`, `src/lib/proposal/data/sanity.ts`). Minting, the uniqueness
+  seed, the window and the domain in the URL all use **`talk.conference`**,
+  never the host's conference. A code is minted only when the talk's conference
+  is the one serving the request, so a speaker sees the section for another
+  tenant's talk only on that tenant's host.
 - **Minted when first needed:** the first time a speaker of a **confirmed** talk
   opens the speaker section (§9) and the talk has none. _Refinement (spec):_
-  this happens in a mutation the section calls on mount, not during render,
-  because a Server Component render can't invalidate the lookup cache. The
-  write is `setIfMissing`; the caller then reads the talk by id and shows
-  whichever code won, so two concurrent first views converge on one code.
-- **Never for an ended edition.** _Refinement (spec):_ no code is minted once
-  `talk.conference` has ended. This implements the decided "no code for an
-  edition that ended before launch" and is equivalent afterwards: a code minted
-  after the conference ends could never open, since every window has closed.
+  this happens in an **ensure-code mutation** the section calls on mount, not
+  during render, because a Server Component render can't expire a cache tag.
+  The mutation reads the talk first and writes only if there is no code
+  (`setIfMissing`), then reads the talk by id and returns whichever code won,
+  so two concurrent first views converge on one code. It expires the index tag
+  only when it actually minted, so a repeat call costs no write and no cache
+  flush.
+- **Not once the talk's window has closed.** _Refinement (spec):_ no code is
+  minted for a talk whose Feedback Window has closed, or, for a talk with no
+  slot, once its conference is over. This implements the decided "no code for
+  an edition that ended before launch"
+  ([#1421](https://github.com/CloudNativeBergen/website/issues/1421)) without
+  refusing a code during the last hours of a window that is still open.
 - **URL:** `<conferenceBaseUrl(talk.conference)>/f/<code>`
-  (`src/lib/conference/baseUrl.ts`). The proposal projection must add the
+  (`src/lib/conference/baseUrl.ts`). The proposal projection adds the
   conference's `domains` for this.
 - **Rotation:** organizers only, from the talk's admin panel (§10.4). The old
   code stops resolving at once; responses are kept.
@@ -181,24 +196,34 @@ Decided on [#1418](https://github.com/CloudNativeBergen/website/issues/1418).
   entirely**; update the helper's `/go`-specific docstring. Assert it against
   the real exported Studio config, not the helper alone.
 
-### 5.1 Code lookup and caching
+### 5.1 Code index and caching
 
-_Refinement (spec):_ the lookup follows the `/go` short-link pattern
-(`src/lib/marketing/short-link.ts`), not a per-code cache entry.
+_Refinement (spec):_ the lookup follows the `/go` short-link index
+(`conferenceShortCodeIndex`, `src/lib/marketing/short-link.ts`), not a per-code
+cache entry, and **not the CDN client**: Sanity's CDN keeps its own cache that
+`revalidateTag` can't reach, so a refill right after an expiry could read the
+old index back from it. This refines #1417's "read through the CDN": the cost is
+the same (one read per cache refresh), and expiries take effect.
 
 - The code's shape is checked with `normalizeShortCode` first; a malformed code
   is Unknown with no read.
-- A code resolves against a **per-conference code index** (code → talk id,
-  status, title, speakers, public flag), read through the CDN client
-  ([#1417](https://github.com/CloudNativeBergen/website/issues/1417)) and cached
-  under its own tag (`feedbackCodeIndexTag(conferenceId)` in
-  `src/lib/cache/tags.ts`, not `conferenceTag`, which would flush the whole
-  site on every mint). A flood of random codes then costs no Sanity reads.
+- A code resolves against a **per-conference index**: code → talk id, for
+  **confirmed, published talks only**. It is read with `clientReadUncached`
+  inside `'use cache: remote'` (plain `'use cache'` is per-instance memory) and
+  tagged `feedbackCodeIndexTag(conferenceId)` (`src/lib/cache/tags.ts`; not
+  `conferenceTag`, which would flush the whole site on every mint). A flood of
+  random codes costs no Sanity reads. The index is server-only and never passed
+  to a Client Component.
+- The talk's title, speakers and slots for the page come from a second cached
+  read under the same tag. "Public" (§7.2) is computed **per request** from the
+  cached conference and slots, never stored in the cache, since it depends on
+  the time and on `programDate`.
 - The tag is expired with `revalidateTag(tag, { expire: 0 })` (immediate, not
   the default stale-while-revalidate) on: **mint**, **rotation**, a **talk
-  status change** (so a withdrawn talk stops resolving), and a **schedule
-  save** (§6). Studio edits outside these paths are picked up by a short
-  `cacheLife` on the index.
+  status change** (so a withdrawn talk stops resolving), **proposal delete**,
+  **speaker erasure** and **fold** (§12), and **schedule changes** through both
+  `schedule.save` and `schedule.action` (promote/archive). Studio edits outside
+  these paths are picked up by a short `cacheLife` on the index.
 
 ## 6. Feedback Window
 
@@ -215,9 +240,8 @@ Decided on [#1419](https://github.com/CloudNativeBergen/website/issues/1419).
 - **No slot:** no window. The page says feedback opens when the session starts.
 - **Moves follow automatically:** the code belongs to the talk, not a slot. A
   talk removed from the schedule closes.
-- **Freshness:** the window is recomputed on every request from a cached
-  schedule read; a schedule edit takes effect once that cache refreshes. The
-  schedule save path expires it (§5.1).
+- **Freshness:** the window is recomputed on every request from the cached slot
+  read (§5.1), which schedule changes expire.
 - **Speaker visibility:** speakers see feedback once the latest slot has ended
   **or** the conference is over. Nothing is stored.
 - **No organizer override.**
@@ -246,11 +270,18 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
 - **English only. Minimal page:** the conference logo at the top
   (`ConferenceLogo` with `pickConferenceLogoProps()`), no navigation or footer,
   dark mode supported.
-- _Refinement (spec):_ the root layout renders analytics on every route. On
-  `/f/**`: no `AnalyticsConsentBar`, no PostHog (add `/f` to
-  `EXCLUDED_PATH_PREFIXES`, `src/lib/posthog/config.ts`), no Pirsch script and
-  no `InstallPrompt`. Otherwise §8's "no consent prompt" would be false and code
-  URLs would reach analytics.
+- _Refinement (spec):_ the root layout renders analytics on every route, and it
+  can't see the path. On `/f/**`:
+  - no PostHog and no consent bar: add `/f` to `EXCLUDED_PATH_PREFIXES`
+    (`src/lib/posthog/config.ts`), which both already follow;
+  - no Pirsch script and no `InstallPrompt`: put them behind a `usePathname`
+    client gate, like `AnalyticsRouteGate`;
+  - Vercel `<Analytics />` and `<SpeedInsights />` redact the code from `/f/`
+    paths in `beforeSend`.
+
+  Otherwise §8's "no consent prompt" would be false and codes would reach
+  analytics.
+
 - _Refinement (spec):_ `noindex`.
 
 ### 7.2 States
@@ -271,19 +302,25 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
   renders (the cookie is sent to `/f/<code>`), so a reload shows Answered.
 - Colour is never the only signal: every button has an icon and words.
 
-### 7.3 Device token and deterministic id
+### 7.3 Device cookie and deterministic id
 
-- **Cookie:** a random 128-bit token plus an HMAC over it, signed with a server
-  secret. httpOnly, `Secure` outside development, `SameSite=Lax`,
-  **`Path=/f`**, no `Domain` (host-only), **30 days**.
-  _Refinement (spec):_ the `hostCookie()` helper's `__Host-` prefix requires
-  `Path=/`, which contradicts the decided `/f` scope, so this cookie does not
-  use the prefix; it is still host-only because no `Domain` is set.
+- **Cookie:** a random 128-bit token, the list of talk ids this device has
+  answered, and an HMAC over both, signed with a server secret. httpOnly,
+  `Secure` outside development, `SameSite=Lax`, **`Path=/f`**, no `Domain`
+  (host-only). **30 days, refreshed on every submit.**
+  - _Refinement (spec):_ the `hostCookie()` helper's `__Host-` prefix requires
+    `Path=/`, which contradicts the decided `/f` scope, so this cookie does not
+    use the prefix; it is still host-only because no `Domain` is set.
+  - _Refinement (spec):_ the answered-talk list means the page reads a response
+    only for a talk this device has actually answered. Without it, one real
+    submit would give a script a valid cookie for unlimited billable reads on
+    every code for 30 days. The list holds talk ids only, nothing about the
+    person.
 - **Issued on the first submit**, not on the first scan. _Refinement (spec):_
   a page render can't set a cookie (`cookies().set` works only in Server
   Actions and Route Handlers), and a token is only needed once there is
   something to tie it to.
-- A token that fails verification is replaced, never trusted.
+- A cookie that fails verification is replaced, never trusted.
 - **Response id:** a hash of the token and the talk id, so the same device and
   talk always map to the same document. _Implementation detail:_
   `feedbackResponse.` + the first 32 hex characters of SHA-256 over
@@ -295,43 +332,46 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
 
 ### 7.4 Submit, change, comment, delete
 
-_Refinement (spec):_ these are **Server Actions colocated with
-`/f/[code]`**, not tRPC procedures. A `Path=/f` cookie is never sent to
-`/api/trpc`, and a tRPC procedure here has no way to set a cookie, so with tRPC
-every tap would mint a new token and create a new response. Server Actions post
-to the page's own URL, so the cookie arrives and can be set. The conference
-comes from the host, never from the client.
+_Refinement (spec):_ these are **Server Actions colocated with `/f/[code]`**,
+not tRPC procedures. A `Path=/f` cookie is never sent to `/api/trpc`, and a tRPC
+procedure here has no way to set a cookie, so with tRPC every tap would mint a
+new token and create a new response. Server Actions post to the page's own URL,
+so the cookie arrives and can be set. Next's default Server Action origin check
+(Origin must match Host) plus the `SameSite=Lax`, host-only cookie covers CSRF;
+`serverActions.allowedOrigins` must never be widened. Each action takes **only
+the code** (and the colour and comment for Submit); the conference comes from
+the host and the talk id from the index, never from the client.
 
 - **Submit** (colour, optional comment): sets colour and comment. "Change
   answer" and "Send comment" are the same action with the current or new
   colour.
-- **Delete my answer:** deletes this device's response. **Allowed for as long as
-  the cookie is valid**, including after the window closes (_Decided in review_,
-  R1). It is refused only once the talk has been folded (§12).
+- **Delete my answer:** deletes this device's response and drops the talk from
+  the cookie's list. **Allowed for as long as the cookie is valid**, including
+  after the window closes (_Decided in review_, R1).
 
-**The write** (_Refinement (spec):_ `createOrReplace` takes no revision guard):
-a new response is a `create` on the deterministic id; on a 409 (a concurrent
-first submit from the same device) it falls through to the update path. An
-existing response is a `patch(id).ifRevisionId(rev)` that sets `colour`,
-`comment` and `submittedAt` and **never touches `hiddenAt` or `flaggedAt`**, so
-an attendee can't un-hide a comment by resubmitting or rewording it. On a
-revision conflict it retries once. Concurrent resubmissions from one device are
-last-write-wins. The existing response is read by id through the doc endpoint
-(`getDocument`), never by GROQ, so a write right after a write sees it. When the
-token was minted in this same request, the by-id read is skipped (no document
-can exist yet).
+**The write** (_Refinement (spec):_ `createOrReplace` would overwrite the
+moderation fields): a field-scoped `patch(id).set({ colour, comment,
+submittedAt })` (or `unset` of an emptied comment), which by construction never
+touches `hiddenAt` or `flaggedAt`, so an attendee can't un-hide a comment by
+resubmitting or rewording it. If the document doesn't exist, a `create` on the
+deterministic id; on a 409 (a concurrent first submit from the same device) it
+falls back to the patch. Concurrent resubmissions from one device are
+last-write-wins. Whether a response exists is read by id through the doc
+endpoint (`getDocument`), never by GROQ, so a write right after a write sees it,
+and only for a talk in the cookie's list.
 
 **Refused before any write or talk-specific read** (guard before fetch), in
 this order:
 
-1. The code must resolve, through the index (§5.1), to a **confirmed** talk of
-   the current conference.
-2. Submit: the window must be open. Delete: the cookie must be valid and the
-   talk not folded.
+1. The code must resolve, through the index (§5.1), to a confirmed, published
+   talk of the current conference. A folded or erased talk has no code, so it
+   doesn't resolve.
+2. Submit: the window must be open. Delete: the cookie must be valid and list
+   this talk.
 3. Submit: exactly one valid colour; comment ≤ 1,000 characters after trimming.
-4. The device token must be one the server minted. A missing or invalid token
-   means "no response from this device" on every path, never an error that
-   differs by talk.
+4. The cookie must be one the server signed. A missing or invalid cookie means
+   "no response from this device" on every path, never an error that differs
+   by talk.
 
 Refusals 1 and 2 return the same responses the page states use; a code from
 another tenant is indistinguishable from an unknown code.
@@ -345,8 +385,9 @@ venue IP behind one bucket would refuse most legitimate keynote feedback. Abuse
 is held back by the per-device id, the window, and organizers removing
 responses.
 
-**Cost:** the code index and the schedule come from cached CDN reads, so a
-burst costs one write per response, plus one by-id read for a returning device.
+**Cost:** the index and slots come from cached reads, so a burst costs one write
+per response, plus one by-id read for a device that has already answered that
+talk.
 
 ## 8. Privacy copy
 
@@ -357,19 +398,20 @@ added to the page's existing cookie inventory.
 
 - **What:** a colour and an optional comment about a session, given anonymously
   by scanning its QR code. No name, email or IP address is collected.
-- **Cookie:** a 30-day, strictly necessary cookie, used only on `/f` pages, so
-  you can change or delete your own answer and so answers aren't counted twice.
-  No consent prompt.
+- **Cookie:** a strictly necessary cookie, used only on `/f` pages and kept for
+  30 days after your last answer, so you can change or delete your own answer
+  and so answers aren't counted twice. No consent prompt.
 - **Who sees it:** the session's speakers see totals and comments; organizers
   see everything and can hide or remove comments.
 - **Purpose and legal basis:** helping speakers and organizers improve
   sessions; legitimate interest.
 - **Retention:** 24 months after the conference ends; then comments and
   individual answers are deleted and only per-session totals remain.
-- **Your rights:** delete your answer yourself from the same browser, through
-  the session's QR link, for 30 days after you answered. After that we can't
-  tell which answer is yours; contact the organizers quoting the comment and
-  they will remove it.
+- **Your rights** (added in the slice that ships Delete my answer): delete your
+  answer yourself from the same browser, through the session's QR link, for 30
+  days after your last answer, unless the organizers have replaced that code.
+  After that we can't tell which answer is yours; contact the organizers quoting
+  the comment and they will remove it.
 - **Processors:** Sanity (storage) and Resend (speaker summary emails), both
   already in `src/lib/legal/subprocessors.ts`. No new subprocessor.
 
@@ -392,16 +434,16 @@ Two tabs: **Session Feedback** and **Feedback Code**. It opens on the code
 until feedback is visible (§6), then on the results.
 
 _Refinement (spec):_ every speaker-side procedure (ensure code, results, flag)
-is refused, before any talk-specific read, unless:
+starts with **one scoped query** that returns the talk only if it belongs to the
+conference serving the request, the caller is in its `speakers[]`, and it is
+confirmed (or, for results only, its conference ended before launch and it has
+Card Counts). A null result is one uniform refusal, so the procedure reveals
+nothing about talks the caller can't see. Then:
 
-1. the talk belongs to the conference serving the request;
-2. the caller is in the talk's `speakers[]`;
-3. the talk is confirmed, or (results only) its conference ended before launch
-   and it has Card Counts;
-4. for a flag: the response belongs to that talk, has a comment and is not
-   hidden.
-
-Hidden comments are filtered out **on the server**, never in the client.
+- **results:** refused unless feedback is visible (§6), computed on the server;
+  hidden comments are filtered out on the server, never in the client;
+- **flag:** the response must belong to that talk, have a comment and not be
+  hidden.
 
 ### 9.2 Feedback Code tab
 
@@ -497,7 +539,8 @@ response id belongs to a talk of the current conference.
 
 Confirmation: "/f/<code> stops working now. Printed sheets and slides showing it
 will reach a dead page. Existing responses are kept." Rotation mints a new code
-(§5) and expires the index tag immediately (§5.1).
+(§5), writes it to the draft too (§4.2), and expires the index tag immediately
+(§5.1).
 
 ## 11. Notifications
 
@@ -515,8 +558,9 @@ Decided on [#1423](https://github.com/CloudNativeBergen/website/issues/1423).
   other speakers get the summary twice.
 - Each speaker of the talk **who isn't erased** (`erasedAt` unset) gets **one
   bell notification and one email**: totals per colour (Card Counts so far plus
-  scanned), response and comment counts, and a link to `/cfp/proposal/<id>`
-  opening the Session Feedback tab. Counts only, never comment text.
+  scanned), response and comment counts, and a link to
+  `<conferenceBaseUrl(talk.conference)>/cfp/proposal/<id>` opening the Session
+  Feedback tab (the cron has no request host). Counts only, never comment text.
 - _Implementation detail:_ a new `NotificationType` `session_feedback_summary`
   through `createNotificationsOnce`; the email is separate from the hub, a
   template in `src/components/email/` sent through Resend (`src/lib/email/`),
@@ -527,12 +571,14 @@ Decided on [#1423](https://github.com/CloudNativeBergen/website/issues/1423).
 ### 11.2 A flag notifies organizers
 
 The speaker flag action emits a bell notification inline to the conference's
-organizers, excluding the flagging speaker, linking to `/admin/feedback`. It
-carries the talk title and **never the comment text** (_Refinement (spec):_
-notifications live for 90 days, so a copied comment would outlive Remove, the
-fold and erasure). Never-fail: a notification failure doesn't fail the flag.
-Speakers aren't told how a flag was resolved. _Implementation detail:_
-`NotificationType` `session_feedback_flagged`.
+organizers, excluding the flagging speaker, linking to `/admin/feedback`, but
+only when `flaggedAt` goes from unset to set (a revision-guarded write), so a
+Keep followed by a re-flag notifies once per flag, not per click. It carries the
+talk title and **never the comment text** (_Refinement (spec):_ notifications
+live for 90 days, so a copied comment would outlive Remove, the fold and
+erasure). Never-fail: a notification failure doesn't fail the flag. Speakers
+aren't told how a flag was resolved. _Implementation detail:_ `NotificationType`
+`session_feedback_flagged`.
 
 ## 12. Retention and erasure
 
@@ -547,15 +593,13 @@ organizers remove a quoted comment with **Remove** (§10.3).
 
 - A daily cron step finds talks whose conference ended more than 24 months ago
   and that still have `feedbackResponse` documents.
-- For each talk: read its responses once, add each colour's count to
-  `feedbackFolded` (creating it if absent, setting `foldedAt`) with a revision
-  guard on the talk, then delete exactly those documents in chunks of at most
-  100 per transaction.
-- **Fold before delete, and idempotent:** a crash after the fold and before the
-  deletes must not count those responses twice. _Implementation detail:_
-  record the folded document ids' count and `foldedAt` watermark so a re-run
-  only deletes responses with `submittedAt ≤ foldedAt` without re-adding them,
-  and a re-run over a talk with no responses plans nothing.
+- **Fold in chunks, each atomic** (_Refinement (spec)_): for each chunk of at
+  most 100 responses, one transaction `inc`s the talk's `feedbackFolded`
+  counts by that chunk's colours (also on the draft, §4.2), sets `foldedAt`,
+  and deletes exactly those ids, guarded by the talk's revision. A crash leaves
+  only unfolded responses, which the next run folds; nothing is counted twice
+  or lost, and a run over a talk with no responses plans nothing.
+- The index tag is expired after a fold (§5.1).
 - After the fold, every surface reads `feedbackFolded` through the totals
   function (§4.3).
 
@@ -567,16 +611,16 @@ pure plan step in `buildErasurePlan`):
 
 - Talks where the erased speaker is the **only non-erased speaker**
   (_Refinement (spec):_ "only entry" would never fold a talk whose co-speakers
-  were all erased) are folded early, exactly as §12.2, and their
-  `feedbackCode` is **unset**, so no new responses arrive about the erased
-  person.
+  were all erased) have their `feedbackCode` **unset** (talk and draft) in the
+  erasure transaction, and the index tag is expired at once, so no new
+  responses arrive about the erased person. Then their responses are folded
+  exactly as §12.2, in chunks **after** the erasure transaction, like the
+  image-asset delete, so a large talk can't fail the erasure itself.
 - **Co-spoken** talks with another non-erased speaker keep their feedback (the
   module's rule: never destroy data belonging to someone who requested
   nothing). An organizer removes any comment naming the erased person by hand.
-- The response deletes run in chunks **after** the erasure transaction, like
-  the image-asset delete, so a large talk can't fail the erasure itself.
-- The branch keeps the module's fixed-point property: a second run plans
-  nothing.
+- Fixed point: once the code is unset nothing new arrives, and the chunked fold
+  converges, so a second run plans nothing.
 
 ## 13. Slices
 
@@ -587,18 +631,19 @@ Every UI slice ships its Storybook stories and is visually checked with
 `AGENTS.md`. Every new tRPC endpoint is mocked in the affected UI tests and the
 mutation-surface snapshots are updated.
 
-| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | After  |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| F1a | **The code, nothing collected yet.** `talk.feedbackCode` and the `feedbackResponse` type with its proposal-delete cascade (§4); published-only queries (§4.4); minting through the ensure-code mutation, the code index and its tag expiries, the Duplicate guard (§5); `feedbackWindow` and the slot query (§6); the speaker section with its access guards (§9.1) and a minimal **Feedback Code** tab (QR, state, Copy link). Demo: a speaker of a confirmed, scheduled talk sees their QR. | —      |
-| F1b | **Scan and tap.** `/f/<code>` with Open, Not yet open, Closed and Unknown, chrome and analytics exclusions (§7.1, §7.2); the cookie and deterministic id (§7.3); the Submit action with every guard and the create/patch write (§7.4) and a plain thank-you screen; the `/privacy` section and cookie inventory (§8). Demo: scanning the QR records a colour.                                                                                                                                 | F1a    |
-| F2  | **Comment, change, delete:** the Answered state (§7.2) with the comment box, Change answer, Delete my answer (including after the window, R1), and the moderation-preserving update (§7.4).                                                                                                                                                                                                                                                                                                   | F1b    |
-| F3  | **Speaker results:** the totals function (§4.3); the **Session Feedback** tab with live polling and comments, hidden ones filtered on the server (§9.3, without the flag button); the dashboard chip (§9.4); replacing the old panel and card display, past editions results-only (§9.5).                                                                                                                                                                                                     | F2     |
-| F4  | **Code downloads and Present:** PNG, SVG, Print sheet, Present (§9.2).                                                                                                                                                                                                                                                                                                                                                                                                                        | F1a    |
-| F5  | **Admin page:** `/admin/feedback` with stats, the ranked table, expanding rows, Hide/Unhide/Remove (§10.1, §10.3), and the nav entry (without the badge).                                                                                                                                                                                                                                                                                                                                     | F3     |
-| F6  | **Talk admin panel:** totals with inline Card Counts replacing `AudienceFeedbackPanel`, the responses-over-time chart with bulk Remove, Rotate Feedback Code (§10.2, §10.4).                                                                                                                                                                                                                                                                                                                  | F5     |
-| F7  | **Flags:** the speaker flag button and marker (§9.3, §10.3), the flagged box with Keep (§10.1), the nav badge (§10.1), the organizer notification (§11.2).                                                                                                                                                                                                                                                                                                                                    | F5     |
-| F8  | **Summary notification:** the cron step, claim-then-send, bell and email (§11.1).                                                                                                                                                                                                                                                                                                                                                                                                             | F3     |
-| F9  | **Retention fold and speaker erasure** (§12.2, §12.3).                                                                                                                                                                                                                                                                                                                                                                                                                                        | F3, F5 |
+| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                      | After  |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| F1a | **The code.** `talk.feedbackCode` and the draft-patching rule (§4.2); published-only reads and the exported schedule filter (§4.4); the ensure-code mutation and minting rules, Duplicate guard (§5); `feedbackWindow` and the slot query (§6); the speaker section with its access guard (§9.1) and a minimal **Feedback Code** tab (QR, state, Copy link). Demo: a speaker of a confirmed, scheduled talk sees their QR. | —      |
+| F1b | **The attendee page, read side.** The code index, its tag and every expiry path so far (mint, status change, proposal delete, schedule changes) (§5.1); `/f/<code>` with Open (buttons not yet wired), Not yet open, Closed and Unknown, chrome and analytics exclusions (§7.1, §7.2). Demo: scanning the QR shows the right state; nothing is collected.                                                                  | F1a    |
+| F1c | **Scan and tap.** The `feedbackResponse` type and the proposal-delete cascade (§4.1); the cookie and deterministic id (§7.3); the Submit action with every guard and the patch/create write (§7.4) and a plain thank-you screen; the `/privacy` section without "Your rights", and the cookie inventory (§8). Demo: scanning the QR records a colour, and a second tap from the same phone changes it.                     | F1b    |
+| F2  | **Comment, change, delete:** the Answered state (§7.2) with the comment box, Change answer, Delete my answer (including after the window, R1), and the "Your rights" copy (§8).                                                                                                                                                                                                                                            | F1c    |
+| F3  | **Speaker results:** the totals function (§4.3); the **Session Feedback** tab with live polling and comments, visibility and hidden filtering on the server (§9.1, §9.3, without the flag button); the dashboard chip (§9.4); replacing the old panel and card display, past editions results-only (§9.5).                                                                                                                 | F2     |
+| F4  | **Code downloads and Present:** PNG, SVG, Print sheet, Present (§9.2).                                                                                                                                                                                                                                                                                                                                                     | F1a    |
+| F5  | **Admin page:** `/admin/feedback` with stats, the ranked table, expanding rows, Hide/Unhide/Remove (§10.1, §10.3), and the nav entry (without the badge).                                                                                                                                                                                                                                                                  | F3     |
+| F6  | **Talk admin panel:** totals with inline Card Counts replacing `AudienceFeedbackPanel`, the responses-over-time chart with bulk Remove, Rotate Feedback Code with its draft patch and expiry (§10.2, §10.4).                                                                                                                                                                                                               | F5     |
+| F7  | **Flags:** the speaker flag button and marker (§9.3, §10.3), the flagged box with Keep (§10.1), the nav badge (§10.1), the organizer notification (§11.2).                                                                                                                                                                                                                                                                 | F5     |
+| F8  | **Summary notification:** the cron step, claim-then-send, bell and email (§11.1).                                                                                                                                                                                                                                                                                                                                          | F3     |
+| F9  | **Retention fold and speaker erasure** (§12.2, §12.3), including their expiries.                                                                                                                                                                                                                                                                                                                                           | F3, F5 |
 
 ### 13.1 Tickets
 
@@ -614,19 +659,25 @@ Per `AGENTS.md` ("Agent discipline"):
 - **Guard before fetch:** a test asserts no talk-specific read or write runs for
   a code of another tenant, and that the refusal is identical to an unknown
   code.
-- **The cookie path end to end:** a test drives the real `/f/<code>` Server
-  Action with a real cookie and shows a second tap updates the same document.
-  A unit test that injects the token directly cannot catch a cookie that never
-  arrives.
+- **The cookie path, in two parts** (_Refinement (spec):_ there is no CI
+  end-to-end harness for this; Playwright in `e2e/` runs auth specs only and
+  isn't in CI, and there is no writable scratch dataset):
+  1. a vitest test of the Server Action module that asserts the `Set-Cookie`
+     attributes (`Path=/f`, httpOnly, `SameSite=Lax`, max-age) and replays the
+     set cookie into a second call, showing it updates the same document;
+  2. a recorded browser run against the slice's Vercel preview (scan, tap,
+     reload shows Answered, tap again changes it), filed in the PR.
 - **Executed GROQ, not mocks,** for the slot query (including a draft schedule
   and a `drafts.` talk that must not count), the code index, the totals and the
   fold.
 - **Deterministic ids:** the same token and talk give the same id; a different
-  token or talk gives a different one; a forged token is replaced.
+  token or talk gives a different one; a forged cookie is replaced.
 - **Concurrency on a real client:** two first submits from one device converge
   on one document; a resubmit never clears `hiddenAt`/`flaggedAt`.
-- **Fixed point:** the fold and the erasure branch, run twice, commit nothing
-  the second time, including after a crash between fold and delete.
+- **Fold:** a crash between chunks neither double-counts nor loses a response;
+  a second run commits nothing. Same for the erasure branch.
+- **Stale draft:** publishing a draft that predates a rotation keeps the new
+  code.
 - **Studio Duplicate:** asserted on the real exported Studio config.
 - **Visual:** every new or changed component has a story; captures at phone
   width, light and dark, with the dark-mode mechanism of the story file checked.
@@ -638,9 +689,10 @@ Per `AGENTS.md` ("Agent discipline"):
   (_Decided in review_, R2); organizers hide it again.
 - **Plan overage:** whether the Growth Non-Profit plan bills overage or
   hard-caps was not verified; the estimate is 10k–30k live requests per edition
-  against ~130k monthly headroom. Every submit is one billable write, and there
-  is no IP limit, so a sustained scripted flood costs quota for every tenant
-  until organizers notice; random codes cost nothing (§5.1).
+  against ~130k monthly headroom. Every submit is one billable write and there
+  is no IP limit, so a sustained scripted flood of submits costs quota for every
+  tenant until organizers notice. Random codes and repeated page loads cost
+  nothing (§5.1, §7.3).
 - **Document count:** 200–3,000 responses per edition against a 25k or 50k
   limit (Sanity's pages disagree; 7,161 used on 2026-10-17). The 24-month fold
   bounds it.
@@ -648,6 +700,9 @@ Per `AGENTS.md` ("Agent discipline"):
 - **A cleared cookie** produces a second response from the same person.
 - **No IP limit:** a scripted flood is only remedied after the fact (Remove,
   bulk by time range). Revisit with proof of attendance if abuse appears.
+- **Exact comment times** in a small room, with live polling, can hint at who
+  wrote a comment. Times are shown as decided
+  ([#1421](https://github.com/CloudNativeBergen/website/issues/1421)).
 
 ## 16. Decided in review
 
