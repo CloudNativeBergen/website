@@ -105,9 +105,12 @@ absent; the type is read-only in Studio and written only by the server.
 **Deleting a proposal** deletes its responses. _Refinement (spec):_ a
 reference from `feedbackResponse` would otherwise block `deleteProposal`
 (`BLOCKING_TYPE_DESCRIPTIONS`, `src/lib/proposal/data/sanity.ts`).
-`feedbackResponse` joins `NON_BLOCKING_TYPES` and is cascade-deleted in chunks
-of `PROPOSAL_DELETE_CHUNK_SIZE` **before** the proposal itself (the reference is
-strong), and the code index is expired (§5.1).
+`feedbackResponse` is excluded from the blocking check and deleted in its own
+chunked step (chunks of `PROPOSAL_DELETE_CHUNK_SIZE`) **before** the proposal's
+final transaction, since the reference is strong. It does not go in
+`NON_BLOCKING_TYPES` (types that are neither blocking nor deleted) or
+`CASCADE_DELETE_TYPES` (deleted in the final, unchunked transaction). The code
+index is expired (§5.1).
 
 ### 4.2 Additive `talk` fields
 
@@ -122,12 +125,16 @@ every change here is additive anyway.
 
 `audienceFeedback` (Card Counts) is unchanged.
 
-**Server writes to these three fields also patch `drafts.<talkId>` when it
-exists.** _Refinement (spec):_ a talk draft is a full copy, so publishing a
-draft that predates a mint, rotation or fold would write the old value back:
-a rotated-out code would come back to life, or folded totals would be lost after
-their documents were deleted. Production had 0 talk drafts on 2026-10-17, but
-organizers can create one at any time.
+**Server writes to these three fields also patch every other version of the
+talk** (`drafts.<talkId>` and any `versions.<release>.<talkId>`, found with
+`sanity::versionOf`), each guarded by its own `ifRevisionId`, in the same
+transaction as the published talk. _Refinement (spec):_ a draft or a release
+version is a full copy, so publishing one that predates a mint, rotation or
+fold would write the old value back: a rotated-out code would come back to
+life, or folded totals would be lost after their documents were deleted. The
+versions are re-read for every write, so one created in between fails the
+guard and the write is retried. Production had 0 talk drafts and 0 release
+versions on 2026-10-17, but organizers can create one at any time.
 
 ### 4.3 Totals
 
@@ -222,8 +229,20 @@ the same (one read per cache refresh), and expiries take effect.
   the default stale-while-revalidate) on: **mint**, **rotation**, a **talk
   status change** (so a withdrawn talk stops resolving), **proposal delete**,
   **speaker erasure** and **fold** (§12), and **schedule changes** through both
-  `schedule.save` and `schedule.action` (promote/archive). Studio edits outside
-  these paths are picked up by a short `cacheLife` on the index.
+  `schedule.save` and `schedule.action` (promote). Studio edits outside these
+  paths are picked up by the index's `cacheLife` of **5 minutes** (revalidate
+  and expire).
+- **Speaker erasure runs from a script** (`scripts/erase-speaker.ts`, no Next
+  request), which prints cache tags for the operator instead of expiring them.
+  `feedbackCodeIndexTag` is added to `revalidateErasureTags`, and to
+  `tagsForTargets` behind `api/provisioning/cache/invalidate`, which must expire
+  it with `{ expire: 0 }`.
+- **A stale index can't cause a wrong write.** A refill right after an expiry
+  goes through GROQ, which can lag a write by about a second, so it can cache an
+  old mapping for one `cacheLife`. Submit therefore re-checks the talk through
+  the doc endpoint before writing (§7.4). At worst a stale index shows a page
+  for a code that then refuses the tap, or shows Unknown for a just-minted code
+  for up to 5 minutes.
 
 ## 6. Feedback Window
 
@@ -277,7 +296,10 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
   - no Pirsch script and no `InstallPrompt`: put them behind a `usePathname`
     client gate, like `AnalyticsRouteGate`;
   - Vercel `<Analytics />` and `<SpeedInsights />` redact the code from `/f/`
-    paths in `beforeSend`.
+    paths in `beforeSend` (supported by the installed `@vercel/analytics` 2.0.1
+    and `@vercel/speed-insights` 2.0.0). Both are client components and the root
+    layout is a Server Component, so they are rendered from a small
+    `'use client'` wrapper that rewrites `event.url`.
 
   Otherwise §8's "no consent prompt" would be false and codes would reach
   analytics.
@@ -304,10 +326,18 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
 
 ### 7.3 Device cookie and deterministic id
 
-- **Cookie:** a random 128-bit token, the list of talk ids this device has
-  answered, and an HMAC over both, signed with a server secret. httpOnly,
-  `Secure` outside development, `SameSite=Lax`, **`Path=/f`**, no `Domain`
-  (host-only). **30 days, refreshed on every submit.**
+- **Cookie:** a random 128-bit token, an issue time, the list of talks this
+  device has answered, and an HMAC over all three, signed with a server secret.
+  httpOnly, `Secure` outside development, `SameSite=Lax`, **`Path=/f`**, no
+  `Domain` (host-only). **30 days, refreshed on every submit.**
+  - _Refinement (spec):_ the 30 days are enforced **on the server** from the
+    signed issue time, not only by the browser's `Max-Age`; a copied or
+    preserved cookie older than 30 days is treated as absent.
+  - _Refinement (spec):_ each list entry is a truncated HMAC of the talk id
+    (8 bytes), not the id, and the list keeps at most the **100** most recent
+    entries, so the cookie stays well under the 4 KB browser limit. Past that
+    limit a browser silently drops the `Set-Cookie`, and the answer could then
+    never be shown or deleted.
   - _Refinement (spec):_ the `hostCookie()` helper's `__Host-` prefix requires
     `Path=/`, which contradicts the decided `/f` scope, so this cookie does not
     use the prefix; it is still host-only because no `Domain` is set.
@@ -356,16 +386,30 @@ touches `hiddenAt` or `flaggedAt`, so an attendee can't un-hide a comment by
 resubmitting or rewording it. If the document doesn't exist, a `create` on the
 deterministic id; on a 409 (a concurrent first submit from the same device) it
 falls back to the patch. Concurrent resubmissions from one device are
-last-write-wins. Whether a response exists is read by id through the doc
-endpoint (`getDocument`), never by GROQ, so a write right after a write sees it,
-and only for a talk in the cookie's list.
+last-write-wins.
+
+**Before writing, Submit re-reads the talk by id through the doc endpoint**
+(`getDocument`) and refuses unless its `feedbackCode` still equals the code,
+it is still confirmed, and it belongs to the current conference. _Refinement
+(spec):_ the cached index can be up to one `cacheLife` stale (§5.1); this one
+read per write makes a rotated, withdrawn, folded or erased talk refuse taps at
+once.
+
+**Reading this device's own response** (for the Answered state) happens only
+for a talk in the cookie's list, by id, through a `'use cache: remote'` read
+tagged per response (`feedbackResponseTag(id)`). That tag is expired on Submit,
+Delete my answer, Remove and fold, all of which know the ids. _Refinement
+(spec):_ without the cache, a script holding a valid cookie could reload the
+page for unlimited billable reads. The Closed state needs no read: it offers
+**Delete my answer** whenever the talk is in the cookie's list, and deleting an
+already-deleted id is harmless.
 
 **Refused before any write or talk-specific read** (guard before fetch), in
 this order:
 
 1. The code must resolve, through the index (§5.1), to a confirmed, published
-   talk of the current conference. A folded or erased talk has no code, so it
-   doesn't resolve.
+   talk of the current conference. Folding and erasure unset the code (§12),
+   so a folded or erased talk doesn't resolve.
 2. Submit: the window must be open. Delete: the cookie must be valid and list
    this talk.
 3. Submit: exactly one valid colour; comment ≤ 1,000 characters after trimming.
@@ -385,9 +429,9 @@ venue IP behind one bucket would refuse most legitimate keynote feedback. Abuse
 is held back by the per-device id, the window, and organizers removing
 responses.
 
-**Cost:** the index and slots come from cached reads, so a burst costs one write
-per response, plus one by-id read for a device that has already answered that
-talk.
+**Cost:** the index, slots and a device's own response come from cached reads,
+so a burst costs one write per response plus the one by-id talk read (§7.4).
+Page loads cost no live reads.
 
 ## 8. Privacy copy
 
@@ -399,8 +443,9 @@ added to the page's existing cookie inventory.
 - **What:** a colour and an optional comment about a session, given anonymously
   by scanning its QR code. No name, email or IP address is collected.
 - **Cookie:** a strictly necessary cookie, used only on `/f` pages and kept for
-  30 days after your last answer, so you can change or delete your own answer
-  and so answers aren't counted twice. No consent prompt.
+  30 days after your last answer, so you can change your own answer (and, from
+  the slice that ships it, delete it) and so answers aren't counted twice. No
+  consent prompt.
 - **Who sees it:** the session's speakers see totals and comments; organizers
   see everything and can hide or remove comments.
 - **Purpose and legal basis:** helping speakers and organizers improve
@@ -436,9 +481,10 @@ until feedback is visible (§6), then on the results.
 _Refinement (spec):_ every speaker-side procedure (ensure code, results, flag)
 starts with **one scoped query** that returns the talk only if it belongs to the
 conference serving the request, the caller is in its `speakers[]`, and it is
-confirmed (or, for results only, its conference ended before launch and it has
-Card Counts). A null result is one uniform refusal, so the procedure reveals
-nothing about talks the caller can't see. Then:
+confirmed. A null result is one uniform refusal, so the procedure reveals
+nothing about talks the caller can't see. (All 29 past talks with Card Counts
+are confirmed in production, so "results only" needs no separate rule: it is a
+confirmed talk whose window has closed and that has no code.) Then:
 
 - **results:** refused unless feedback is visible (§6), computed on the server;
   hidden comments are filtered out on the server, never in the client;
@@ -593,13 +639,25 @@ organizers remove a quoted comment with **Remove** (§10.3).
 
 - A daily cron step finds talks whose conference ended more than 24 months ago
   and that still have `feedbackResponse` documents.
-- **Fold in chunks, each atomic** (_Refinement (spec)_): for each chunk of at
-  most 100 responses, one transaction `inc`s the talk's `feedbackFolded`
-  counts by that chunk's colours (also on the draft, §4.2), sets `foldedAt`,
-  and deletes exactly those ids, guarded by the talk's revision. A crash leaves
+- **Fold in chunks, each atomic** (_Refinement (spec)_). For each chunk of at
+  most 100 responses, read the talk, its other versions (§4.2) and the
+  responses, then commit one transaction that:
+  1. on the talk and on each version: `setIfMissing({ feedbackFolded:
+{ greenCount: 0, yellowCount: 0, redCount: 0 } })`, then `inc` the counts
+     by the chunk's colours, set `foldedAt`, and unset `feedbackCode`, each
+     patch guarded by its document's `ifRevisionId`. (`inc` on a missing field
+     does nothing in Sanity; verified on the real `@sanity/mutator` 6.12.0.
+     `setIfMissing` is applied before `inc`.)
+  2. for each response: a no-op `patch` guarded by its `ifRevisionId`, then its
+     `delete`. A response removed, deleted or re-coloured since the read fails
+     the guard, so it is never counted with a colour it no longer has.
+
+  Any failed guard aborts the whole chunk, which is re-planned. A crash leaves
   only unfolded responses, which the next run folds; nothing is counted twice
   or lost, and a run over a talk with no responses plans nothing.
-- The index tag is expired after a fold (§5.1).
+
+- The code is unset by the first chunk, and the index tag is expired after a
+  fold (§5.1).
 - After the fold, every surface reads `feedbackFolded` through the totals
   function (§4.3).
 
@@ -611,9 +669,10 @@ pure plan step in `buildErasurePlan`):
 
 - Talks where the erased speaker is the **only non-erased speaker**
   (_Refinement (spec):_ "only entry" would never fold a talk whose co-speakers
-  were all erased) have their `feedbackCode` **unset** (talk and draft) in the
-  erasure transaction, and the index tag is expired at once, so no new
-  responses arrive about the erased person. Then their responses are folded
+  were all erased) have their `feedbackCode` **unset** (talk and every version)
+  in the erasure transaction. Submit's re-check of the talk (§7.4) refuses taps
+  from that moment, whatever the index still caches; the index tag is expired
+  through the erasure's cache step (§5.1). Then their responses are folded
   exactly as §12.2, in chunks **after** the erasure transaction, like the
   image-asset delete, so a large talk can't fail the erasure itself.
 - **Co-spoken** talks with another non-erased speaker keep their feedback (the
@@ -665,8 +724,13 @@ Per `AGENTS.md` ("Agent discipline"):
   1. a vitest test of the Server Action module that asserts the `Set-Cookie`
      attributes (`Path=/f`, httpOnly, `SameSite=Lax`, max-age) and replays the
      set cookie into a second call, showing it updates the same document;
-  2. a recorded browser run against the slice's Vercel preview (scan, tap,
-     reload shows Answered, tap again changes it), filed in the PR.
+  2. a recorded browser run (scan, tap, reload shows Answered, tap again changes
+     it, delete), filed in the **F2** PR. A Vercel preview resolves to the live
+     production conference, and no real window is open before the event, so the
+     run needs a **test conference with a slot open now**, set up by the user
+     (production writes are the user's call); the test responses are deleted
+     afterwards. If none is available, the PR says so and the box stays
+     unticked.
 - **Executed GROQ, not mocks,** for the slot query (including a draft schedule
   and a `drafts.` talk that must not count), the code index, the totals and the
   fold.
@@ -674,8 +738,11 @@ Per `AGENTS.md` ("Agent discipline"):
   token or talk gives a different one; a forged cookie is replaced.
 - **Concurrency on a real client:** two first submits from one device converge
   on one document; a resubmit never clears `hiddenAt`/`flaggedAt`.
-- **Fold:** a crash between chunks neither double-counts nor loses a response;
-  a second run commits nothing. Same for the erasure branch.
+- **Fold:** on the real `@sanity/mutator` (`serialize()` of the built
+  transaction), a first fold of a talk with no `feedbackFolded` counts every
+  response; a response removed between plan and commit aborts the chunk; a
+  crash between chunks neither double-counts nor loses a response; a second run
+  commits nothing. Same for the erasure branch.
 - **Stale draft:** publishing a draft that predates a rotation keeps the new
   code.
 - **Studio Duplicate:** asserted on the real exported Studio config.
@@ -691,8 +758,8 @@ Per `AGENTS.md` ("Agent discipline"):
   hard-caps was not verified; the estimate is 10k–30k live requests per edition
   against ~130k monthly headroom. Every submit is one billable write and there
   is no IP limit, so a sustained scripted flood of submits costs quota for every
-  tenant until organizers notice. Random codes and repeated page loads cost
-  nothing (§5.1, §7.3).
+  tenant until organizers notice. Each submit also costs one by-id talk read
+  (§7.4). Random codes and repeated page loads cost no live reads (§5.1, §7.4).
 - **Document count:** 200–3,000 responses per edition against a 25k or 50k
   limit (Sanity's pages disagree; 7,161 used on 2026-10-17). The 24-month fold
   bounds it.
