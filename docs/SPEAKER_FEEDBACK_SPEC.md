@@ -60,19 +60,19 @@ score (`sanity/schemaTypes/review.ts`). Avoid "rating" too.
 
 ## 3. Decision index
 
-| Area                                    | Decided on                                                                                                                                                                                                                 |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Scope and standing decisions            | [Speaker feedback via session QR codes](https://github.com/CloudNativeBergen/website/issues/1415) (map Notes)                                                                                                              |
-| Sanity quota, limits, burst behaviour   | [Research: Sanity quota and storage cost of anonymous Feedback Responses](https://github.com/CloudNativeBergen/website/issues/1416) (`docs/research/speaker-feedback-sanity-quota.md` on `research/speaker-feedback-sanity-quota`) |
-| Storage, one answer per device, guards  | [Decide where Feedback Responses are stored and how repeat submissions are limited](https://github.com/CloudNativeBergen/website/issues/1417)                                                                              |
-| Feedback Code                           | [Decide the Feedback Code URL and what it reveals](https://github.com/CloudNativeBergen/website/issues/1418)                                                                                                               |
-| Feedback Window                         | [Decide how the feedback window is computed from the schedule](https://github.com/CloudNativeBergen/website/issues/1419)                                                                                                   |
-| Attendee page                           | [Prototype the attendee Feedback Response form](https://github.com/CloudNativeBergen/website/issues/1420) (branch `prototype/speaker-feedback-attendee-form`)                                                               |
-| Speaker view                            | [Prototype the speaker's Feedback Code and Session Feedback view](https://github.com/CloudNativeBergen/website/issues/1421) (branch `prototype/speaker-feedback-speaker-view`)                                             |
-| Admin page and talk panel               | [Prototype the admin Session Feedback page](https://github.com/CloudNativeBergen/website/issues/1422) (branch `prototype/speaker-feedback-admin`)                                                                          |
-| Notifications                           | [Decide whether and how speakers are notified of their Session Feedback](https://github.com/CloudNativeBergen/website/issues/1423)                                                                                         |
-| Privacy, retention, erasure             | [Decide privacy, retention and erasure for Session Feedback](https://github.com/CloudNativeBergen/website/issues/1424)                                                                                                     |
-| Refinements and slicing                 | [Write the speaker feedback spec and implementation tickets](https://github.com/CloudNativeBergen/website/issues/1425)                                                                                                     |
+| Area                                   | Decided on                                                                                                                                                                                                                         |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scope and standing decisions           | [Speaker feedback via session QR codes](https://github.com/CloudNativeBergen/website/issues/1415) (map Notes)                                                                                                                      |
+| Sanity quota, limits, burst behaviour  | [Research: Sanity quota and storage cost of anonymous Feedback Responses](https://github.com/CloudNativeBergen/website/issues/1416) (`docs/research/speaker-feedback-sanity-quota.md` on `research/speaker-feedback-sanity-quota`) |
+| Storage, one answer per device, guards | [Decide where Feedback Responses are stored and how repeat submissions are limited](https://github.com/CloudNativeBergen/website/issues/1417)                                                                                      |
+| Feedback Code                          | [Decide the Feedback Code URL and what it reveals](https://github.com/CloudNativeBergen/website/issues/1418)                                                                                                                       |
+| Feedback Window                        | [Decide how the feedback window is computed from the schedule](https://github.com/CloudNativeBergen/website/issues/1419)                                                                                                           |
+| Attendee page                          | [Prototype the attendee Feedback Response form](https://github.com/CloudNativeBergen/website/issues/1420) (branch `prototype/speaker-feedback-attendee-form`)                                                                      |
+| Speaker view                           | [Prototype the speaker's Feedback Code and Session Feedback view](https://github.com/CloudNativeBergen/website/issues/1421) (branch `prototype/speaker-feedback-speaker-view`)                                                     |
+| Admin page and talk panel              | [Prototype the admin Session Feedback page](https://github.com/CloudNativeBergen/website/issues/1422) (branch `prototype/speaker-feedback-admin`)                                                                                  |
+| Notifications                          | [Decide whether and how speakers are notified of their Session Feedback](https://github.com/CloudNativeBergen/website/issues/1423)                                                                                                 |
+| Privacy, retention, erasure            | [Decide privacy, retention and erasure for Session Feedback](https://github.com/CloudNativeBergen/website/issues/1424)                                                                                                             |
+| Refinements and slicing                | [Write the speaker feedback spec and implementation tickets](https://github.com/CloudNativeBergen/website/issues/1425)                                                                                                             |
 
 ## 4. Data model
 
@@ -81,16 +81,16 @@ score (`sanity/schemaTypes/review.ts`). Avoid "rating" too.
 One document per Feedback Response
 ([#1417](https://github.com/CloudNativeBergen/website/issues/1417)).
 
-| Field         | Type                          | Notes                                                                       |
-| ------------- | ----------------------------- | --------------------------------------------------------------------------- |
-| `_id`         | string                        | Deterministic, §7.3. Never chosen by the client.                            |
-| `talk`        | reference → `talk`            | Required.                                                                   |
-| `conference`  | reference → `conference`      | Required; the talk's conference. Every read is scoped by it.                |
-| `colour`      | `'green' \| 'yellow' \| 'red'` | Required.                                                                   |
-| `comment`     | string, ≤ 1,000 characters    | Optional. Trimmed; an empty comment is stored as absent.                    |
-| `submittedAt` | datetime                      | Server time of the latest submission from this device.                      |
-| `flaggedAt`   | datetime                      | Set when a speaker flags the comment; cleared by Keep, Hide or Remove (§10). |
-| `hiddenAt`    | datetime                      | Set when an organizer hides the comment; cleared by Unhide.                 |
+| Field         | Type                           | Notes                                                                        |
+| ------------- | ------------------------------ | ---------------------------------------------------------------------------- |
+| `_id`         | string                         | Deterministic, §7.3. Never chosen by the client.                             |
+| `talk`        | reference → `talk`             | Required.                                                                    |
+| `conference`  | reference → `conference`       | Required; the talk's conference. Every read is scoped by it.                 |
+| `colour`      | `'green' \| 'yellow' \| 'red'` | Required.                                                                    |
+| `comment`     | string, ≤ 1,000 characters     | Optional. Trimmed; an empty comment is stored as absent.                     |
+| `submittedAt` | datetime                       | Server time of the latest submission from this device.                       |
+| `flaggedAt`   | datetime                       | Set when a speaker flags the comment; cleared by Keep, Hide or Remove (§10). |
+| `hiddenAt`    | datetime                       | Set when an organizer hides the comment; cleared by Unhide.                  |
 
 No IP address, user agent, device token or anything else that identifies the
 attendee is stored
@@ -104,11 +104,11 @@ server.
 `talk` is not one of the append-only `conference`/`organization` types, but
 every change here is additive anyway.
 
-| Field                   | Type                                     | Notes                                                                                                                         |
-| ----------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `feedbackCode`          | string                                   | §5. Read-only in Studio.                                                                                                      |
-| `feedbackFolded`        | object `{greenCount, yellowCount, redCount, foldedAt}` | Scanned totals kept after the retention fold (§12.2) or an erasure fold (§12.3). Read-only in Studio.                          |
-| `feedbackSummarySentAt` | datetime                                 | Set once when the summary notification goes out (§11.1).                                                                      |
+| Field                   | Type                                                   | Notes                                                                                                 |
+| ----------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `feedbackCode`          | string                                                 | §5. Read-only in Studio.                                                                              |
+| `feedbackFolded`        | object `{greenCount, yellowCount, redCount, foldedAt}` | Scanned totals kept after the retention fold (§12.2) or an erasure fold (§12.3). Read-only in Studio. |
+| `feedbackSummarySentAt` | datetime                                               | Set once when the summary notification goes out (§11.1).                                              |
 
 `audienceFeedback` (Card Counts) is unchanged.
 
@@ -176,7 +176,7 @@ Decided on [#1419](https://github.com/CloudNativeBergen/website/issues/1419).
   talk's slots (`SCHEDULE_INFO_PROJECTION` and `confirmedSessionsForSpeaker`
   return only the first). Add one pure function
   `feedbackWindow(slots, now) → { state: 'unscheduled' | 'before' | 'open' |
-  'closed', opensAt?, closesAt?, lastSlotEnd?, feedbackVisible }` fed by a
+'closed', opensAt?, closesAt?, lastSlotEnd?, feedbackVisible }` fed by a
   scoped query for the talk's slots, and use it for the page, the speaker
   section, the admin panel and the summary cron.
 
@@ -198,13 +198,13 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
 
 ### 7.2 States
 
-| State                   | Shown when                                                       | Content                                                                                                                                        |
-| ----------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Open**                | window open                                                      | Talk title and speakers (if public), "How was this session?", three full-width buttons: **Loved it** (green, smiling face), **It was OK** (yellow, minus circle), **Not for me** (red, frowning face). Footer: "Anonymous. You can change your answer until <closesAt>." |
-| **Answered**            | open, and this device has a response                             | "Thanks! You answered <label>", **Change answer**, the comment box ("Comment for the speaker (optional)", 1,000-character counter, **Send comment** / **Update comment**), **Delete my answer**, a link back to the programme. |
-| **Not yet open**        | `before` or `unscheduled`                                        | "Feedback opens when the session starts". The start time is added only when the talk is public.                                                |
-| **Closed**              | `closed`                                                         | "Feedback for this session has closed", explaining that feedback closes 24 hours after a session ends.                                         |
-| **Unknown**             | the code doesn't resolve in this conference, or was rotated, or the talk isn't confirmed | One generic page ("This feedback code isn't valid…") that reveals nothing.                                                                     |
+| State            | Shown when                                                                               | Content                                                                                                                                                                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Open**         | window open                                                                              | Talk title and speakers (if public), "How was this session?", three full-width buttons: **Loved it** (green, smiling face), **It was OK** (yellow, minus circle), **Not for me** (red, frowning face). Footer: "Anonymous. You can change your answer until <closesAt>." |
+| **Answered**     | open, and this device has a response                                                     | "Thanks! You answered <label>", **Change answer**, the comment box ("Comment for the speaker (optional)", 1,000-character counter, **Send comment** / **Update comment**), **Delete my answer**, a link back to the programme.                                           |
+| **Not yet open** | `before` or `unscheduled`                                                                | "Feedback opens when the session starts". The start time is added only when the talk is public.                                                                                                                                                                          |
+| **Closed**       | `closed`                                                                                 | "Feedback for this session has closed", explaining that feedback closes 24 hours after a session ends.                                                                                                                                                                   |
+| **Unknown**      | the code doesn't resolve in this conference, or was rotated, or the talk isn't confirmed | One generic page ("This feedback code isn't valid…") that reveals nothing.                                                                                                                                                                                               |
 
 "Public" means the talk is on the conference's public programme. The title and
 speakers never appear otherwise, so an early-shared code can't reveal an
@@ -485,17 +485,17 @@ Every UI slice ships its Storybook stories and is visually checked with
 `pnpm shoot` at phone width (and desktop for admin), light and dark, per
 `AGENTS.md`.
 
-| #   | Slice                                                                                                                                                                                                                                                                                                                       | After      |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| F1  | **Tracer bullet: scan and tap.** `feedbackResponse` type and `talk.feedbackCode` (§4); minting, uniqueness, lookup cache and Duplicate guard (§5); `feedbackWindow` and the slot query (§6); `/f/<code>` with every state and the one-tap colour submit, the device cookie and deterministic id, all guards (§7, without the comment box and delete); the `/privacy` section (§8); a minimal Feedback Code tab on the speaker page (QR, state, Copy link) so a speaker can get the code. | —          |
-| F2  | **Comment, change, delete:** the Answered state (§7.2), Send/Update comment, Change answer, Delete my answer, and preserving moderation state across resubmits (§7.4).                                                                                                                                                         | F1         |
-| F3  | **Speaker results:** the one totals function (§4.3); the Session Feedback tab with live polling and comments (§9.3, without the flag button); the dashboard chip (§9.4); replacing the old panel and card display, past editions results-only (§9.5).                                                                         | F1         |
-| F4  | **Code downloads and Present:** PNG, SVG, Print sheet, Present (§9.2).                                                                                                                                                                                                                                                        | F1         |
-| F5  | **Admin page:** `/admin/feedback` with stats, the ranked table, expanding rows, Hide/Unhide/Remove (§10.1, §10.3), and the nav entry (without the badge).                                                                                                                                                                   | F3         |
-| F6  | **Talk admin panel:** totals with inline Card Counts replacing `AudienceFeedbackPanel`, the responses-over-time chart with bulk Remove, Rotate Feedback Code (§10.2, §10.4).                                                                                                                                                  | F5         |
-| F7  | **Flags:** the speaker flag button and marker (§9.3, §10.3), the flagged box with Keep (§10.1), the nav badge (§10.1), the organizer notification (§11.2).                                                                                                                                                                    | F2, F5     |
-| F8  | **Summary notification:** the cron step, bell and email (§11.1).                                                                                                                                                                                                                                                              | F3         |
-| F9  | **Retention fold and speaker erasure** (§12.2, §12.3).                                                                                                                                                                                                                                                                        | F3, F5     |
+| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | After  |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| F1  | **Tracer bullet: scan and tap.** `feedbackResponse` type and `talk.feedbackCode` (§4); minting, uniqueness, lookup cache and Duplicate guard (§5); `feedbackWindow` and the slot query (§6); `/f/<code>` with every state and the one-tap colour submit, the device cookie and deterministic id, all guards (§7, without the comment box and delete); the `/privacy` section (§8); a minimal Feedback Code tab on the speaker page (QR, state, Copy link) so a speaker can get the code. | —      |
+| F2  | **Comment, change, delete:** the Answered state (§7.2), Send/Update comment, Change answer, Delete my answer, and preserving moderation state across resubmits (§7.4).                                                                                                                                                                                                                                                                                                                   | F1     |
+| F3  | **Speaker results:** the one totals function (§4.3); the Session Feedback tab with live polling and comments (§9.3, without the flag button); the dashboard chip (§9.4); replacing the old panel and card display, past editions results-only (§9.5).                                                                                                                                                                                                                                    | F1     |
+| F4  | **Code downloads and Present:** PNG, SVG, Print sheet, Present (§9.2).                                                                                                                                                                                                                                                                                                                                                                                                                   | F1     |
+| F5  | **Admin page:** `/admin/feedback` with stats, the ranked table, expanding rows, Hide/Unhide/Remove (§10.1, §10.3), and the nav entry (without the badge).                                                                                                                                                                                                                                                                                                                                | F3     |
+| F6  | **Talk admin panel:** totals with inline Card Counts replacing `AudienceFeedbackPanel`, the responses-over-time chart with bulk Remove, Rotate Feedback Code (§10.2, §10.4).                                                                                                                                                                                                                                                                                                             | F5     |
+| F7  | **Flags:** the speaker flag button and marker (§9.3, §10.3), the flagged box with Keep (§10.1), the nav badge (§10.1), the organizer notification (§11.2).                                                                                                                                                                                                                                                                                                                               | F2, F5 |
+| F8  | **Summary notification:** the cron step, bell and email (§11.1).                                                                                                                                                                                                                                                                                                                                                                                                                         | F3     |
+| F9  | **Retention fold and speaker erasure** (§12.2, §12.3).                                                                                                                                                                                                                                                                                                                                                                                                                                   | F3, F5 |
 
 ### 13.1 Tickets
 
