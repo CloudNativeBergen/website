@@ -121,3 +121,7 @@ _Avoid_: audience feedback, paper votes
 **Feedback Code**:
 The short code for one session, unique within its conference, that opens the Feedback Response form on the conference's own domain. Its speakers get it as a QR code in the speaker dashboard; only organizers can rotate it, which retires the old code.
 _Avoid_: feedback link, session QR, short link (a marketing redirect)
+
+**Feedback Window**:
+The time a session accepts Feedback Responses: from the start of its earliest scheduled slot until 24 hours after its latest slot ends. A session with no slot has no window.
+_Avoid_: feedback period, voting window
