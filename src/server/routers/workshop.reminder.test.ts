@@ -202,6 +202,14 @@ describe('workshop.admin.sendReminder', () => {
     })
   })
 
+  it('says "1 minute", not "1 minutes", when under a minute is left', async () => {
+    remind.mockResolvedValue({ kind: 'rate-limited', retryAfterMs: 20_000 })
+
+    await expect(caller().admin.sendReminder({})).rejects.toMatchObject({
+      message: expect.stringMatching(/Try again in 1 minute\.$/),
+    })
+  })
+
   it('FORBIDs a tenant without workshops before anything is sent', async () => {
     mockGetOrganizationById.mockResolvedValue({
       _id: ORG_ID,

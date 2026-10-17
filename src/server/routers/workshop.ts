@@ -1446,7 +1446,7 @@ export const workshopRouter = router({
             )
             throw new TRPCError({
               code: 'TOO_MANY_REQUESTS',
-              message: `A reminder went out less than an hour ago. Try again in ${minutes} minutes.`,
+              message: `A reminder went out less than an hour ago. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
             })
           }
         }
