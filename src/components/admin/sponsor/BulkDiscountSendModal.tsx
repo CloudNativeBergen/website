@@ -386,7 +386,10 @@ export function BulkDiscountSendModal({
             },
           })
 
-          const personalizedSubject = processTemplateVariables(subject, vars)
+          const personalizedSubject = processTemplateVariables(
+            subject,
+            vars,
+          ).trim()
           const personalizedBodyText = processTemplateVariables(
             messageText,
             vars,
@@ -730,13 +733,20 @@ export function BulkDiscountSendModal({
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Variables like{' '}
+                Supported variables:{' '}
                 <code className="font-mono">{'{{{SPONSOR_NAME}}}'}</code>,{' '}
-                <code className="font-mono">{'{{{CONTACT_NAMES}}}'}</code>, and{' '}
-                <code className="font-mono">{'{{{CONFERENCE_TITLE}}}'}</code>{' '}
-                are supported. Each email will automatically include a formatted
-                discount code card with the sponsor&apos;s assigned codes and
-                ticket registration link.
+                <code className="font-mono">{'{{{CONTACT_NAMES}}}'}</code>,{' '}
+                <code className="font-mono">{'{{{TIER_NAME}}}'}</code>,{' '}
+                <code className="font-mono">{'{{{CONFERENCE_TITLE}}}'}</code>,{' '}
+                <code className="font-mono">{'{{{CONFERENCE_DATE}}}'}</code>,{' '}
+                <code className="font-mono">{'{{{CONFERENCE_CITY}}}'}</code>,{' '}
+                <code className="font-mono">{'{{{CONFERENCE_URL}}}'}</code>, and{' '}
+                <code className="font-mono">
+                  {'{{{SPONSOR_REGISTRATION_URL}}}'}
+                </code>
+                . Each email will automatically include a formatted discount
+                code card with the sponsor&apos;s assigned codes and ticket
+                registration link.
               </p>
               {unmergedVariables.length > 0 && (
                 <p

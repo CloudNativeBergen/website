@@ -345,12 +345,20 @@ export function EmailModal({
       setAutoSaveEnabled(false)
       isInitializingRef.current = true
 
-      const currentStorageKey = storageKey
-      initializedKeysRef.current.delete(currentStorageKey)
-
       storage.clearStorage()
-      setSubject('')
-      setRichTextValue([])
+      lastAutoSaveRef.current = null
+      setSubject(initialValues.subject || '')
+
+      const initialMessage = initialValues.message
+      if (Array.isArray(initialMessage)) {
+        setRichTextValue(initialMessage)
+      } else if (initialMessage) {
+        setRichTextValue(convertStringToPortableTextBlocks(initialMessage))
+      } else {
+        setRichTextValue([])
+      }
+      setEditorRemountKey((prev) => prev + 1)
+
       onClearDraft?.()
       showNotification({
         type: 'success',

@@ -11,6 +11,20 @@ import {
   brandedTintOr,
   resolveEmailBrandPalette,
 } from '@/lib/branding/email'
+import { isValidPortableText } from '@/lib/portabletext/validation'
+import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
+import type { PortableTextBlock } from '@portabletext/types'
+
+function tryParsePortableText(message: string): PortableTextBlock[] | null {
+  const trimmed = message.trim()
+  if (!trimmed.startsWith('[')) return null
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    return isValidPortableText(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
 
 export interface VolunteerApprovalTemplateProps {
   volunteerName: string
@@ -55,6 +69,11 @@ export const VolunteerApprovalTemplate: React.FC<
   confirmUrl,
 }) => {
   const brand = resolveEmailBrandPalette(brandColor)
+  const portableBlocks = message ? tryParsePortableText(message) : null
+  const richHtml = portableBlocks
+    ? portableTextToHTML(portableBlocks, brandColor)
+    : ''
+
   return (
     <BaseEmailTemplate
       title={`Welcome to the ${eventName} Volunteer Team!`}
@@ -77,9 +96,15 @@ export const VolunteerApprovalTemplate: React.FC<
           borderColor="#CBD5E1"
           borderLeftColor={brandedOr(brand, '#1D4ED8')}
         >
-          {message.split(/\n\n+/).map((paragraph, idx) => (
-            <EmailText key={idx}>{paragraph}</EmailText>
-          ))}
+          {portableBlocks ? (
+            <div dangerouslySetInnerHTML={{ __html: richHtml }} />
+          ) : (
+            message
+              .split(/\n\n+/)
+              .map((paragraph, idx) => (
+                <EmailText key={idx}>{paragraph}</EmailText>
+              ))
+          )}
         </EmailSection>
       )}
 

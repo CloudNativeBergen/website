@@ -1332,22 +1332,16 @@ export async function updateSpeaker(
   return { speaker: updatedSpeaker, err, committed }
 }
 
-export async function getSpeakers(
-  conferenceId?: string,
-  statuses: Status[] = [Status.confirmed],
-  includeProposalsFromOtherConferences: boolean = false,
-  orgId?: string | null,
+async function querySpeakers(
+  conferenceId: string | undefined,
+  statuses: Status[],
+  includeProposalsFromOtherConferences: boolean,
+  orgId: string | null | undefined,
+  options?: { uncached?: boolean },
 ): Promise<{
   speakers: (Speaker & { proposals: ProposalExisting[] })[]
   err: Error | null
 }> {
-  'use cache'
-  cacheLife('hours')
-  cacheTag('content:speakers')
-  if (conferenceId) {
-    cacheTag(conferenceTag(conferenceId))
-  }
-
   let speakers: (Speaker & { proposals: ProposalExisting[] })[] = []
   let err = null
 
@@ -1423,22 +1417,55 @@ export async function getSpeakers(
     if (conferenceId) params.conferenceId = conferenceId
     if (orgId) params.orgId = orgId
 
-    // API-CDN (#918). `cache: 'no-store'` here was DEAD ON ARRIVAL: this
-    // function declares `'use cache'`, so Next's data cache is governed by
-    // `cacheLife('hours')` above and the fetch option changes nothing about it.
-    // What it DID do was force every one of those hourly cache misses onto the
-    // metered live API. `clientReadCached` is the SAME authenticated client on a
-    // different host — same token, same access rights — so nothing about what
-    // this may read changes; only the quota line, which is 10x cheaper. The
-    // staleness argument is settled by the wrapper: a caller here already
-    // accepts an answer up to an HOUR old, which is orders of magnitude more
-    // stale than anything apicdn can serve.
-    speakers = await clientReadCached.fetch(query, params)
+    const client = options?.uncached ? clientReadUncached : clientReadCached
+    speakers = await client.fetch(query, params)
   } catch (error) {
     err = error as Error
   }
 
   return { speakers, err }
+}
+
+export async function getSpeakers(
+  conferenceId?: string,
+  statuses: Status[] = [Status.confirmed],
+  includeProposalsFromOtherConferences: boolean = false,
+  orgId?: string | null,
+): Promise<{
+  speakers: (Speaker & { proposals: ProposalExisting[] })[]
+  err: Error | null
+}> {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:speakers')
+  if (conferenceId) {
+    cacheTag(conferenceTag(conferenceId))
+  }
+
+  return querySpeakers(
+    conferenceId,
+    statuses,
+    includeProposalsFromOtherConferences,
+    orgId,
+  )
+}
+
+export async function getSpeakersUncached(
+  conferenceId?: string,
+  statuses: Status[] = [Status.confirmed],
+  includeProposalsFromOtherConferences: boolean = false,
+  orgId?: string | null,
+): Promise<{
+  speakers: (Speaker & { proposals: ProposalExisting[] })[]
+  err: Error | null
+}> {
+  return querySpeakers(
+    conferenceId,
+    statuses,
+    includeProposalsFromOtherConferences,
+    orgId,
+    { uncached: true },
+  )
 }
 
 /** One row of {@link getOrgSpeakerDirectory} — the shape `speaker.admin.list` returns. */
