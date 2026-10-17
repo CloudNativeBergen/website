@@ -133,13 +133,22 @@ version is a full copy, so publishing one that predates a mint, rotation or
 fold would write the old value back: a rotated-out code would come back to
 life, or folded totals would be lost after their documents were deleted.
 
-- The version lookup runs with `withConfig({ apiVersion: '2025-02-19',
-perspective: 'raw' })`, as `src/lib/sanity/orphaned-asset.ts` does; the
-  default clients' API version never returns `versions.**`.
-- **After the commit, a sweep** re-reads `drafts.<id>` and the versions and
-  re-patches any that still carry a stale value, repeating until none does. A
-  revision guard can't catch a version created between the read and the
-  commit, because it isn't in the transaction.
+- The version lookup, **the write transaction** and the sweep all run through
+  one client pinned with `withConfig({ apiVersion: '2025-02-19' })`, with
+  `perspective: 'raw'` on each fetch (as `src/lib/sanity/orphaned-asset.ts`
+  does per fetch). The default clients' API version doesn't handle
+  `versions.**`.
+- **After the commit, a sweep** re-reads `drafts.<id>` with `getDocument`, lists
+  the releases, and fetches each `versions.<release>.<id>` by id through the doc
+  endpoint (never GROQ, which can lag the commit by about a second, exactly the
+  case the sweep exists for). It re-patches any that still carry a stale value,
+  at most **3** times, and logs when the cap is hit. A revision guard can't
+  catch a version created between the read and the commit, because it isn't in
+  the transaction.
+- **A failed version guard is retried, not surfaced.** When someone edits a draft
+  during a write, the write re-reads and retries up to 3 times. For a mint, it
+  first re-reads the published talk and, if another request's code already
+  won, returns that code, so concurrent first views still converge.
 - Production had 0 talk drafts and 0 release versions on 2026-10-17, but
   organizers can create one at any time. The remaining risk, a version created
   and published inside one write's sweep, is in §15.
@@ -266,7 +275,9 @@ Decided on [#1419](https://github.com/CloudNativeBergen/website/issues/1419).
   which is DST-correct.
 - **No slot:** no window. The page says feedback opens when the session starts.
 - **Moves follow automatically:** the code belongs to the talk, not a slot. A
-  talk removed from the schedule closes.
+  talk removed from the schedule stops accepting answers and shows Not yet open
+  (it is `unscheduled` again); a talk moved later shows Not yet open until its
+  new slot.
 - **Freshness:** the window is recomputed on every request from the cached slot
   read (§5.1), which schedule changes expire.
 - **Speaker visibility:** speakers see feedback once the latest slot has ended
@@ -320,7 +331,7 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
 | ---------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Open**         | window open, no response from this device                                                           | Talk title and speakers (if public), "How was this session?", three full-width buttons: **Loved it** (green, smiling face), **It was OK** (yellow, minus circle), **Not for me** (red, frowning face). Footer: "Anonymous. You can change your answer until <closesAt>." |
 | **Answered**     | window open, this device has a response                                                             | "Thanks! You answered <label>", **Change answer**, the comment box ("Comment for the speaker (optional)", 1,000-character counter, **Send comment** / **Update comment**), **Delete my answer**, a link back to the programme.                                           |
-| **Not yet open** | `before` or `unscheduled`                                                                           | "Feedback opens when the session starts". The start time is added only when the talk is public.                                                                                                                                                                          |
+| **Not yet open** | `before` or `unscheduled`                                                                           | "Feedback opens when the session starts". The start time is added only when the talk is public. If the talk is in this device's cookie list (it was answered before a move or removal): **Delete my answer** (§7.4).                                                     |
 | **Closed**       | `closed`                                                                                            | "Feedback for this session has closed", explaining that feedback closes 24 hours after a session ends. If the talk is in this device's cookie list: **Delete my answer** (§7.4).                                                                                         |
 | **Unknown**      | the code is malformed, doesn't resolve in this conference, was rotated, or the talk isn't confirmed | One generic page ("This feedback code isn't valid…") that reveals nothing.                                                                                                                                                                                               |
 
@@ -373,10 +384,10 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
 ### 7.4 Submit, change, comment, delete
 
 _Refinement (spec):_ these are **Server Actions colocated with `/f/[code]`**,
-not tRPC procedures. A `Path=/f` cookie is never sent to `/api/trpc`, and a tRPC
-procedure here has no way to set a cookie, so with tRPC every tap would mint a
-new token and create a new response. Server Actions post to the page's own URL,
-so the cookie arrives and can be set. Next's default Server Action origin check
+not tRPC procedures. The decided `Path=/f` cookie is never sent to
+`/api/trpc`, so with tRPC every tap would arrive without its token, mint a new
+one and create a new response. Server Actions post to the page's own URL, so the
+cookie arrives. Next's default Server Action origin check
 (Origin must match Host) plus the `SameSite=Lax`, host-only cookie covers CSRF;
 `serverActions.allowedOrigins` must never be widened. Each action takes **only
 the code** (and the colour and comment for Submit); the conference comes from
@@ -410,9 +421,11 @@ for a talk in the cookie's list, by id, through
 `clientReadUncached.getDocument(id)` (never GROQ or the CDN, which can lag the
 write and cache the old state) inside a `'use cache: remote'` read with a
 `cacheLife` of 5 minutes, tagged per response (`feedbackResponseTag(id)`). That
-tag is expired on Submit and Delete my answer (with `updateTag`, which Next 16
-recommends inside Server Actions), and on Remove (§10.3) and fold (§12.2), all
-of which know the ids. _Refinement
+tag is expired on Submit and Delete my answer with `updateTag` (Server Actions
+only), and on Remove (§10.3) with `revalidateTag(tag, { expire: 0 })`, since
+Remove runs in the `/api/trpc` Route Handler where `updateTag` throws. A folded
+talk needs no expiry: its code is unset, so the page shows Unknown and never
+reads the response. _Refinement
 (spec):_ without the cache, a script holding a valid cookie could reload the
 page for unlimited billable reads. The Closed state needs no read: it offers
 **Delete my answer** whenever the talk is in the cookie's list, and deleting an
