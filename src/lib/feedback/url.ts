@@ -11,3 +11,10 @@ export function feedbackCodeUrl(
 ): string {
   return `${conferenceBaseUrl(conference)}/f/${code}`
 }
+
+/**
+ * Whether `/f/<code>` serves the attendee page yet. F1a hands out the code
+ * and its QR; the page arrives with F1b (#1429), which sets this to `true`.
+ * Until then the speaker section stays hidden, so no printed QR leads to a 404.
+ */
+export const ATTENDEE_PAGE_LIVE: boolean = false

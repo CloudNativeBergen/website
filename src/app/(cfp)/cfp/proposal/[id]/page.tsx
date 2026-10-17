@@ -18,6 +18,7 @@ import { PostConferenceVideoPanel } from '@/components/cfp/PostConferenceVideoPa
 import { PostConferenceAudienceFeedbackPanel } from '@/components/cfp/PostConferenceAudienceFeedbackPanel'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
 import { SessionFeedbackSection } from '@/components/feedback'
+import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
 import { ProposalMessagesSection } from '@/components/messaging'
 import { getUnreadCountsByProposalIds } from '@/lib/messaging/sanity'
 import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
@@ -182,6 +183,7 @@ export default async function ProposalViewPage({
     // three. Full width above the form, so it shows on a phone too (the
     // sidebar is `hidden lg:block`).
     const showSessionFeedback =
+      ATTENDEE_PAGE_LIVE &&
       proposal.status === 'confirmed' &&
       proposal.conference != null &&
       '_id' in proposal.conference &&

@@ -5,4 +5,4 @@ export {
   type FeedbackWindow,
   type FeedbackWindowState,
 } from './window'
-export { feedbackCodeUrl } from './url'
+export { ATTENDEE_PAGE_LIVE, feedbackCodeUrl } from './url'

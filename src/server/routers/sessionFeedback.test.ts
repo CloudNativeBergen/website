@@ -434,30 +434,62 @@ describe('ensureCode — concurrent writes', () => {
     expect(h.attempts).toBe(2)
   })
 
-  it('still mints when the release listing fails, and says so', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('mints nothing while the release list does not load, then mints into the release version once it does', async () => {
     h.dataset.push(talk('drafts.talk-1'), talk('versions.r1.talk-1'))
     h.releases = [{ name: 'r1', state: 'active' }]
     h.releasesFail = true
+    await expect(
+      caller().ensureCode({ talkId: 'talk-1' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(h.attempts).toBe(0)
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+
+    h.releasesFail = false
     const out = await caller().ensureCode({ talkId: 'talk-1' })
+    expect(out.code).toMatch(CODE)
     expect(doc('talk-1')?.feedbackCode).toBe(out.code)
     expect(doc('drafts.talk-1')?.feedbackCode).toBe(out.code)
-    expect(error).toHaveBeenCalledWith(
-      expect.stringContaining('could not list releases'),
-    )
-    error.mockRestore()
+    expect(doc('versions.r1.talk-1')?.feedbackCode).toBe(out.code)
   })
 
-  it('mints past a version in a release that is not active (locked)', async () => {
+  it('mints no code while a version waits in a scheduled release, and mints once the release is published', async () => {
     h.dataset.push(talk('versions.rlocked.talk-1'), talk('versions.r1.talk-1'))
     h.releases = [
       { name: 'rlocked', state: 'scheduled' },
       { name: 'r1', state: 'active' },
     ]
+    // GROQ has not seen the scheduled version yet; it is read by id.
+    h.groqSnapshot = h.dataset.filter(
+      (d) => d._id !== 'versions.rlocked.talk-1',
+    )
+    const blocked = await caller().ensureCode({ talkId: 'talk-1' })
+    expect(blocked).toMatchObject({ code: null, url: null })
+    expect(blocked.window.state).toBe('before')
+    expect(h.attempts).toBe(0)
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+
+    // Publishing the release replaces the talk and removes the version.
+    h.groqSnapshot = null
+    h.dataset = h.dataset.filter((d) => d._id !== 'versions.rlocked.talk-1')
+    h.releases[0].state = 'published'
     const out = await caller().ensureCode({ talkId: 'talk-1' })
+    expect(out.code).toMatch(CODE)
     expect(doc('talk-1')?.feedbackCode).toBe(out.code)
     expect(doc('versions.r1.talk-1')?.feedbackCode).toBe(out.code)
-    expect(doc('versions.rlocked.talk-1')?.feedbackCode).toBeUndefined()
+  })
+
+  it('logs a version locked in a release while the write ran', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.releases = [{ name: 'rlocked', state: 'scheduled' }]
+    h.afterCommit.push(() => {
+      h.dataset.push(talk('versions.rlocked.talk-1'))
+    })
+    const out = await caller().ensureCode({ talkId: 'talk-1' })
+    expect(out.code).toMatch(CODE)
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('a locked release holds a stale version'),
+    )
+    error.mockRestore()
   })
 
   it('converges on the code another request minted first', async () => {

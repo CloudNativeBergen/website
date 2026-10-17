@@ -120,6 +120,7 @@ export async function ensureFeedbackCode({
 
   const outcome = await mint(client, talk, conference._id, speakerId)
   if (!outcome) return { status: 'refused' }
+  if (outcome.code === null) return { status: 'ok', code: null, window }
   if (outcome.minted) {
     await sweepTalkVersions(client, talk._id)
     expireFeedbackCodeIndex(conference._id)
@@ -133,19 +134,34 @@ export async function ensureFeedbackCode({
  * `setIfMissing`, in one transaction. A request that lost the race fails its
  * guard, re-reads, and returns the code that won, so concurrent first views
  * converge on one code. `null` when the talk stopped qualifying meanwhile.
+ *
+ * No code (`code: null`) while a version of the talk waits in a release that
+ * is not `active`: Sanity locks a scheduled release's versions, so it would
+ * keep its copy without the code and, once published, erase the code the
+ * speaker already printed. The next view after the release mints. Throws
+ * when the release list does not load: which versions exist is then unknown.
  */
 async function mint(
   client: VersionsClient,
   talk: TalkDoc,
   conferenceId: string,
   speakerId: string,
-): Promise<{ code: string; minted: boolean } | null> {
+): Promise<{ code: string | null; minted: boolean } | null> {
   let current = talk
   for (let attempt = 0; ; attempt++) {
+    const { versions, locked, releasesListed } = await readTalkVersions(
+      client,
+      current._id,
+    )
+    if (!releasesListed) {
+      throw new Error(
+        `[feedback] could not list releases; not minting a code for ${current._id}`,
+      )
+    }
+    if (locked.length > 0) return { code: null, minted: false }
     const code = createShortCodeMinter(
       await conferenceFeedbackCodes(conferenceId),
     )()
-    const { versions } = await readTalkVersions(client, current._id)
     const tx = client
       .transaction()
       .patch(current._id, (p) =>
@@ -188,9 +204,18 @@ export async function sweepTalkVersions(
 ): Promise<void> {
   try {
     for (let patches = 0; ; patches++) {
-      const { published, versions } = await readTalkVersions(client, talkId)
+      const { published, versions, locked } = await readTalkVersions(
+        client,
+        talkId,
+      )
       const code = published?.feedbackCode
       if (!code) return
+      if (patches === 0 && locked.some((d) => d.feedbackCode !== code)) {
+        // Locked while this write ran; publishing it would erase the code.
+        console.error(
+          `[feedback] a locked release holds a stale version of ${talkId}`,
+        )
+      }
       const stale = versions.filter((d) => d.feedbackCode !== code)
       if (stale.length === 0) return
       if (patches >= MAX_SWEEP_PATCHES) {
@@ -224,16 +249,21 @@ export async function sweepTalkVersions(
  * a guard uses comes from the doc endpoint. A stale revision from GROQ would
  * fail every retry of a write after one finished draft edit.
  *
- * Only versions in an `active` release are returned: Sanity locks the
- * versions of a scheduled release, and patching one would fail the whole
- * transaction on every attempt. Such a version keeps its old value and, if
- * published, writes it back: the §15 "version published inside a write"
- * risk, widened to a scheduled release.
+ * `versions` holds the draft and the versions in an `active` release, which
+ * a write patches. `locked` holds the versions in any other release: Sanity
+ * locks a scheduled release's versions, and patching one would fail the whole
+ * transaction on every attempt. `releasesListed` is false when the release
+ * list did not load; release versions are then left out of both.
  */
 async function readTalkVersions(
   client: VersionsClient,
   talkId: string,
-): Promise<{ published: TalkDoc | null; versions: TalkDoc[] }> {
+): Promise<{
+  published: TalkDoc | null
+  versions: TalkDoc[]
+  locked: TalkDoc[]
+  releasesListed: boolean
+}> {
   const raw = { cache: 'no-store', perspective: 'raw' } as const
   const [found, releases] = await Promise.all([
     client.fetch<unknown>(
@@ -242,47 +272,56 @@ async function readTalkVersions(
       { id: talkId },
       raw,
     ),
-    // A failed listing is "unknown", handled below: the mint goes ahead
-    // without release versions rather than failing for the speaker.
     client
       .fetch<unknown>('releases::all(){ _id, state }', {}, raw)
       .catch(() => null),
   ])
+  const releasesListed = Array.isArray(releases)
   const releaseOf = (id: string) => /^versions\.([^.]+)\./.exec(id)?.[1]
-  if (
-    !Array.isArray(releases) &&
-    Array.isArray(found) &&
-    found.some((id) => typeof id === 'string' && releaseOf(id))
-  ) {
-    // Release versions exist but the release list did not load: they are
-    // left out of this write and its sweep, so say so.
+  const stateOf = new Map(
+    (releasesListed ? releases : [])
+      .filter(
+        (r): r is { _id: string; state: string } =>
+          typeof r?._id === 'string' && typeof r.state === 'string',
+      )
+      .map((r) => [r._id.replace(/^_\.releases\./, ''), r.state]),
+  )
+  if (!releasesListed && Array.isArray(found) && found.some(isReleaseId)) {
     console.error(
       `[feedback] could not list releases; skipping release versions of ${talkId}`,
     )
   }
-  const active = new Set(
-    (Array.isArray(releases) ? releases : [])
-      .filter(
-        (r): r is { _id: string; state: string } =>
-          typeof r?._id === 'string' && r.state === 'active',
-      )
-      .map((r) => r._id.replace(/^_\.releases\./, '')),
-  )
   const ids = new Set([
     `drafts.${talkId}`,
-    ...[...active].map((name) => `versions.${name}.${talkId}`),
-    ...(Array.isArray(found) ? found : []).filter((id): id is string => {
-      if (typeof id !== 'string') return false
-      const release = releaseOf(id)
-      return !release || active.has(release)
-    }),
+    // Asked for by id too, since GROQ can lag; a release that ended holds
+    // no versions.
+    ...[...stateOf]
+      .filter(([, state]) => !ENDED_RELEASE_STATES.has(state))
+      .map(([name]) => `versions.${name}.${talkId}`),
+    ...(Array.isArray(found) ? found : []).filter(
+      (id): id is string =>
+        typeof id === 'string' && (releasesListed || !isReleaseId(id)),
+    ),
   ])
-  const [published, ...versions] = await client.getDocuments<TalkDoc>([
+  const [published, ...rest] = await client.getDocuments<TalkDoc>([
     talkId,
     ...ids,
   ])
+  const docs = rest.filter((d): d is NonNullable<typeof d> => !!d)
+  const writable = (d: TalkDoc) => {
+    const release = releaseOf(d._id)
+    return !release || stateOf.get(release) === 'active'
+  }
   return {
     published: published ?? null,
-    versions: versions.filter((d): d is NonNullable<typeof d> => !!d),
+    versions: docs.filter(writable),
+    locked: docs.filter((d) => !writable(d)),
+    releasesListed,
   }
 }
+
+const isReleaseId = (id: unknown) =>
+  typeof id === 'string' && id.startsWith('versions.')
+
+/** Releases whose versions are gone: published or archived. */
+const ENDED_RELEASE_STATES = new Set(['published', 'archived'])
