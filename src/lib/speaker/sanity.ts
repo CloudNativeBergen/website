@@ -58,7 +58,7 @@ const ORGANIZER_ORG_IDS_FIELD =
  * so a missing status counts as official — the same fallback `getScheduleData`
  * applies in `src/lib/schedule/server.ts`.
  */
-const OFFICIAL_SCHEDULE_FILTER = '(status == "official" || !defined(status))'
+export const OFFICIAL_SCHEDULE_FILTER = '(status == "official" || !defined(status))'
 
 /**
  * MINIMAL projection for the two hot login queries (`findSpeakerByProvider`,
