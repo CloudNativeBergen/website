@@ -28,6 +28,12 @@
  *   workshop early-access links of that conference (#1346). Creating and
  *   revoking a link, and every path that removes a sponsor from a conference,
  *   must expire it with `{ expire: 0 }`.
+ * - `feedbackCodeIndexTag(conferenceId)` — the per-CONFERENCE tag on the
+ *   Feedback Code index (speaker feedback spec §5.1): code → talk id for the
+ *   conference's confirmed, published talks. Expire it with `{ expire: 0 }` on
+ *   a mint, a rotation, a talk status change, a proposal delete, a speaker
+ *   erasure, a fold and a schedule change. Not `conferenceTag`, which would
+ *   flush the whole site on every mint.
  * - `organizationTag(orgId)` — the per-ORGANIZATION-document tag, for cached
  *   reads keyed on the tenant itself rather than one of its conference
  *   editions (plan/entitlement resolution). Mutations that edit an
@@ -72,4 +78,12 @@ export function shortLinkIndexTag(conferenceId: string): string {
  */
 export function earlyAccessLinksTag(conferenceId: string): string {
   return `sanity:workshop-early-access-${conferenceId}`
+}
+
+/**
+ * The Feedback Code index of one conference (speaker feedback spec §5.1).
+ * Expire it with `{ expire: 0 }`: a just-minted code must resolve at once.
+ */
+export function feedbackCodeIndexTag(conferenceId: string): string {
+  return `sanity:feedback-code-index-${conferenceId}`
 }

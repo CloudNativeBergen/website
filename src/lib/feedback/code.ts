@@ -1,0 +1,223 @@
+/**
+ * THE FEEDBACK CODE (speaker feedback spec §4.2, §5, §9.1).
+ *
+ * A confirmed talk gets its code the first time one of its speakers opens the
+ * Session Feedback section, through the ensure-code mutation the section calls
+ * on mount (a Server Component render cannot expire a cache tag).
+ *
+ * Every read of the talk goes through the doc endpoint (`getDocument`) on the
+ * pinned client, never GROQ: a speaker confirms the talk on the same page, and
+ * a GROQ read lagging that write by about a second would refuse the code or
+ * hand the write a stale revision that fails every retry.
+ */
+import 'server-only'
+import {
+  createShortCodeMinter,
+  normalizeShortCode,
+} from '@/lib/marketing/short-code'
+import { expireFeedbackCodeIndex } from './cache'
+import {
+  conferenceFeedbackCodes,
+  getFeedbackSlots,
+  versionsClient,
+} from './sanity'
+import { feedbackWindow, type FeedbackWindow } from './window'
+
+interface TalkDoc {
+  _id: string
+  _rev: string
+  _type: string
+  status?: string
+  conference?: { _ref?: string }
+  speakers?: { _ref?: string }[]
+  feedbackCode?: string
+}
+
+type VersionsClient = ReturnType<typeof versionsClient>
+
+export type EnsureFeedbackCodeResult =
+  /** Missing, foreign, not the caller's, or not confirmed: one answer for all. */
+  | { status: 'refused' }
+  /** `code` is null when none exists and §5 refuses to mint one. */
+  | { status: 'ok'; code: string | null; window: FeedbackWindow }
+
+/** How often a write that lost a revision guard re-reads and tries again. */
+const MAX_RETRIES = 3
+/** How often the post-commit sweep may re-patch a stale version. */
+const MAX_SWEEP_PATCHES = 3
+
+const isPublishedId = (id: string) =>
+  !id.startsWith('drafts.') && !id.startsWith('versions.')
+
+/**
+ * The talk is a confirmed talk of the conference serving the request, and
+ * the caller is one of its speakers. Checked on the PUBLISHED document only.
+ */
+function mayHoldCode(
+  talk: TalkDoc | null | undefined,
+  conferenceId: string,
+  speakerId: string,
+): talk is TalkDoc {
+  return (
+    talk?._type === 'talk' &&
+    talk.status === 'confirmed' &&
+    talk.conference?._ref === conferenceId &&
+    (talk.speakers ?? []).some((s) => s._ref === speakerId)
+  )
+}
+
+/**
+ * §5: no code once the talk's window has closed, or, for a talk with no
+ * slot, once its conference is over (for an unscheduled talk
+ * `feedbackVisible` is exactly "the conference is over").
+ */
+const mayMint = (window: FeedbackWindow) =>
+  window.state !== 'closed' &&
+  !(window.state === 'unscheduled' && window.feedbackVisible)
+
+function isRevisionConflict(error: unknown): boolean {
+  if ((error as { statusCode?: unknown } | null)?.statusCode === 409)
+    return true
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  return message.includes('revision')
+}
+
+export async function ensureFeedbackCode({
+  talkId,
+  speakerId,
+  conference,
+  now,
+}: {
+  talkId: string
+  speakerId: string
+  conference: { _id: string; endDate?: string | null }
+  now: Date
+}): Promise<EnsureFeedbackCodeResult> {
+  if (!isPublishedId(talkId)) return { status: 'refused' }
+  const client = versionsClient()
+  const talk = await client.getDocument<TalkDoc>(talkId)
+  if (!mayHoldCode(talk, conference._id, speakerId)) {
+    return { status: 'refused' }
+  }
+
+  const window = feedbackWindow({
+    slots: await getFeedbackSlots(conference._id, talk._id),
+    conferenceEndDate: conference.endDate,
+    now,
+  })
+  const existing = normalizeShortCode(talk.feedbackCode)
+  if (existing) return { status: 'ok', code: existing, window }
+  if (!mayMint(window)) return { status: 'ok', code: null, window }
+
+  const outcome = await mint(client, talk, conference._id, speakerId)
+  if (!outcome) return { status: 'refused' }
+  if (outcome.minted) {
+    await sweepTalkVersions(client, talk._id, outcome.code)
+    expireFeedbackCodeIndex(conference._id)
+  }
+  return { status: 'ok', code: outcome.code, window }
+}
+
+/**
+ * Write a fresh code to the published talk, guarded by the revision this
+ * request read (not a bare `setIfMissing`), and to every other version with
+ * `setIfMissing`, in one transaction. A request that lost the race fails its
+ * guard, re-reads, and returns the code that won, so concurrent first views
+ * converge on one code. `null` when the talk stopped qualifying meanwhile.
+ */
+async function mint(
+  client: VersionsClient,
+  talk: TalkDoc,
+  conferenceId: string,
+  speakerId: string,
+): Promise<{ code: string; minted: boolean } | null> {
+  let current = talk
+  for (let attempt = 0; ; attempt++) {
+    const code = createShortCodeMinter(
+      await conferenceFeedbackCodes(conferenceId),
+    )()
+    const versions = await client.fetch<{ _id: string; _rev: string }[]>(
+      // groq-global-scoped: the versions of ONE talk, whose conference was checked on its published document
+      `*[sanity::versionOf($id) && _id != $id]{ _id, _rev }`,
+      { id: current._id },
+      { cache: 'no-store', perspective: 'raw' },
+    )
+    const tx = client
+      .transaction()
+      .patch(current._id, (p) =>
+        p.ifRevisionId(current._rev).set({ feedbackCode: code }),
+      )
+    for (const v of versions ?? []) {
+      tx.patch(v._id, (p) =>
+        p.ifRevisionId(v._rev).setIfMissing({ feedbackCode: code }),
+      )
+    }
+    try {
+      await tx.commit()
+      return { code, minted: true }
+    } catch (error) {
+      if (!isRevisionConflict(error) || attempt >= MAX_RETRIES) throw error
+    }
+    const reread = await client.getDocument<TalkDoc>(current._id)
+    if (!mayHoldCode(reread, conferenceId, speakerId)) return null
+    const won = normalizeShortCode(reread.feedbackCode)
+    if (won) return { code: won, minted: false }
+    current = reread
+  }
+}
+
+/**
+ * §4.2's post-commit sweep. A revision guard cannot catch a version created
+ * between the version lookup and the commit, because it is not in the
+ * transaction, and the GROQ lookup can lag a write by about a second. So
+ * re-read `drafts.<id>` and every release's `versions.<release>.<id>` BY ID
+ * through the doc endpoint, and re-patch any whose code differs from the
+ * published one. At most {@link MAX_SWEEP_PATCHES} times; logged at the cap.
+ *
+ * Never throws: the write it follows has committed.
+ */
+export async function sweepTalkVersions(
+  client: VersionsClient,
+  talkId: string,
+  code: string,
+): Promise<void> {
+  try {
+    for (let patches = 0; ; patches++) {
+      const releaseIds = await client.fetch<unknown>(
+        'releases::all()._id',
+        {},
+        { cache: 'no-store', perspective: 'raw' },
+      )
+      const names = (Array.isArray(releaseIds) ? releaseIds : [])
+        .filter((id): id is string => typeof id === 'string')
+        .map((id) => id.replace(/^_\.releases\./, ''))
+      const docs = await client.getDocuments<TalkDoc>([
+        `drafts.${talkId}`,
+        ...names.map((name) => `versions.${name}.${talkId}`),
+      ])
+      const stale = docs.filter(
+        (d): d is NonNullable<typeof d> => !!d && d.feedbackCode !== code,
+      )
+      if (stale.length === 0) return
+      if (patches >= MAX_SWEEP_PATCHES) {
+        console.error(
+          `[feedback] gave up sweeping stale versions of ${talkId} after ${MAX_SWEEP_PATCHES} patches`,
+        )
+        return
+      }
+      const tx = client.transaction()
+      for (const d of stale) {
+        tx.patch(d._id, (p) =>
+          p.ifRevisionId(d._rev).set({ feedbackCode: code }),
+        )
+      }
+      try {
+        await tx.commit()
+      } catch (error) {
+        if (!isRevisionConflict(error)) throw error
+      }
+    }
+  } catch (error) {
+    console.error(`[feedback] sweeping versions of ${talkId} failed`, error)
+  }
+}
