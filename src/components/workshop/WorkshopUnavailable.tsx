@@ -1,6 +1,7 @@
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
+import { ContentCard } from '@/components/ContentCard'
 import { BackgroundImage } from '@/components/BackgroundImage'
 
 /**
@@ -28,7 +29,7 @@ export function WorkshopUnavailable({
       <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-          <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
+          <h1 className="font-display text-5xl font-bold tracking-tighter text-brand-cloud-blue sm:text-7xl dark:text-blue-400">
             Workshop Signup
           </h1>
           <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">
@@ -37,23 +38,25 @@ export function WorkshopUnavailable({
               {registrationClosed ? 'has closed.' : 'is not available yet.'}
             </p>
           </div>
-          <p className="mt-6 text-base text-gray-700 dark:text-gray-300">
-            {registrationClosed ? '' : 'Please check back later. '}If you have a
-            workshop ticket and need help, contact the organizers at{' '}
-            <a
-              href={`mailto:${contactEmail}`}
-              className="font-medium break-words text-blue-600 underline hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              {contactEmail}
-            </a>
-            .
-          </p>
-          <div className="mt-10">
-            <Button href={`mailto:${contactEmail}`} variant="outline">
-              <EnvelopeIcon className="mr-2 size-5" />
-              Contact the organizers
-            </Button>
-          </div>
+          <ContentCard className="[&>*:first-child]:mt-0">
+            <p className="mt-6 text-base text-gray-700 dark:text-gray-300">
+              {registrationClosed ? '' : 'Please check back later. '}If you have
+              a workshop ticket and need help, contact the organizers at{' '}
+              <a
+                href={`mailto:${contactEmail}`}
+                className="font-medium break-words text-blue-600 underline hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                {contactEmail}
+              </a>
+              .
+            </p>
+            <div className="mt-10">
+              <Button href={`mailto:${contactEmail}`} variant="outline">
+                <EnvelopeIcon className="mr-2 size-5" />
+                Contact the organizers
+              </Button>
+            </div>
+          </ContentCard>
         </div>
       </Container>
     </div>
