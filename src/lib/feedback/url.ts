@@ -13,11 +13,12 @@ export function feedbackCodeUrl(
 }
 
 /**
- * Whether `/f/<code>` serves the attendee page yet. F1a handed out the code
- * and its QR behind this; F1b (#1429) added the page and set it to `true`.
- * Setting it back to `false` hides the speaker section again.
+ * Whether speakers are shown their Feedback Code yet. F1b (#1429) added the
+ * attendee page, but its answer buttons stay disabled until the Submit action
+ * lands, so the section stays hidden: a printed QR must not lead to a form
+ * that cannot be answered. F1c (#1430) sets this to `true` with the buttons.
  */
-export const ATTENDEE_PAGE_LIVE: boolean = true
+export const ATTENDEE_PAGE_LIVE: boolean = false
 
 // Case-insensitive: codes are, so an attendee typing `/F/K7M2QX` must be
 // kept out of analytics on the not-found page it lands on.
