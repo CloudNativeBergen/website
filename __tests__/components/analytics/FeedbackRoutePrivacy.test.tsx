@@ -41,7 +41,9 @@ beforeEach(() => {
 describe('HiddenOnFeedbackPage', () => {
   it('renders nothing of what it wraps on the attendee page', () => {
     h.pathname = '/f/k7m2qx'
-    render(<HiddenOnFeedbackPage>pirsch and install prompt</HiddenOnFeedbackPage>)
+    render(
+      <HiddenOnFeedbackPage>pirsch and install prompt</HiddenOnFeedbackPage>,
+    )
     expect(screen.queryByText('pirsch and install prompt')).toBeNull()
   })
 
@@ -60,9 +62,9 @@ describe('VercelInsights', () => {
     render(<VercelInsights />)
 
     for (const props of [h.analyticsProps[0], h.speedProps[0]]) {
-      expect(
-        props.beforeSend?.({ url: 'https://a.dev/f/k7m2qx?x=1' }),
-      ).toEqual({ url: 'https://a.dev/f/[code]' })
+      expect(props.beforeSend?.({ url: 'https://a.dev/f/k7m2qx?x=1' })).toEqual(
+        { url: 'https://a.dev/f/[code]' },
+      )
       expect(props.beforeSend?.({ url: 'https://a.dev/program' })).toEqual({
         url: 'https://a.dev/program',
       })
