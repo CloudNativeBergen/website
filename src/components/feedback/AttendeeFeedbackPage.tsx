@@ -56,13 +56,17 @@ export function AttendeeFeedbackPage({
       data-shell-fit="viewport"
       className="min-h-dvh bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100"
     >
-      <header className="flex justify-center px-4 pt-8">
-        <ConferenceLogo
-          conference={logo}
-          variant="horizontal"
-          className="h-10 w-auto max-w-full text-brand-slate-gray dark:text-white"
-        />
-      </header>
+      {/* No logo when the conference could not be read: the platform's own
+          mark on a tenant's domain would be another brand. */}
+      {logo && (
+        <header className="flex justify-center px-4 pt-8">
+          <ConferenceLogo
+            conference={logo}
+            variant="horizontal"
+            className="h-10 w-auto max-w-full text-brand-slate-gray dark:text-white"
+          />
+        </header>
+      )}
       <main className="mx-auto max-w-md px-4 pt-10 pb-12">
         <PageState page={page} />
       </main>
@@ -94,7 +98,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
                 key={colour}
                 type="button"
                 disabled
-                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:ring-1 disabled:ring-gray-300 disabled:grayscale dark:disabled:ring-gray-700 ${className}`}
+                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:ring-1 disabled:ring-black/10 disabled:grayscale disabled:ring-inset dark:disabled:ring-white/15 ${className}`}
               >
                 <Icon className="size-9 shrink-0" aria-hidden="true" />
                 {label}

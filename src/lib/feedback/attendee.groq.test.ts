@@ -327,6 +327,36 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
   })
 })
 
+describe('resolveFeedbackPage — the request’s own clock', () => {
+  it('judges "public" at `now`, not at the wall clock', async () => {
+    // Published by `now`, not yet by the real clock: only `now` can show it.
+    const page = await resolveFeedbackPage(
+      { ...CONF, programDate: '2099-01-01' },
+      'k7m2qx',
+      new Date('2099-06-01T00:00:00.000Z'),
+    )
+    expect(page).toMatchObject({
+      state: 'closed',
+      talk: { title: 'Kubernetes for everyone' },
+    })
+  })
+})
+
+describe('resolveFeedbackPage — stored codes are normalized', () => {
+  it('resolves a code stored in uppercase (a Studio edit)', async () => {
+    h.dataset.push(
+      talk('talk-upper', 'conf-A', { feedbackCode: 'ABC234' }),
+      day('day-upper', 'conf-A', '2026-10-26', 'official', [
+        slot('talk-upper', '10:00', '10:40'),
+      ]),
+    )
+    expect(await resolveFeedbackPage(CONF, 'abc234', DURING)).toMatchObject({
+      state: 'open',
+      talk: { title: 'Title of talk-upper' },
+    })
+  })
+})
+
 describe('resolveFeedbackPage — Closed never reveals a non-public talk', () => {
   it('withholds the title and speakers after the window when the program was never published', async () => {
     expect(

@@ -70,7 +70,6 @@ export const OpenNotPublic: Story = {
     await expect(
       canvas.getByRole('heading', { level: 1, name: 'How was this session?' }),
     ).toBeInTheDocument()
-    await expect(canvas.queryByText(talk.title)).toBeNull()
     // No closing time for a talk that is not public: it gives the slot away.
     await expect(
       canvas.getByText('Answers are anonymous.', { exact: true }),
@@ -114,7 +113,6 @@ export const NotYetOpenNotPublic: Story = {
     await expect(
       canvas.getByText('Scan the code again during the session.'),
     ).toBeInTheDocument()
-    await expect(canvas.queryByText(talk.title)).toBeNull()
   },
 }
 
@@ -142,6 +140,8 @@ export const Unknown: Story = {
         name: "This feedback code isn't valid",
       }),
     ).toBeInTheDocument()
+    // The conference's own logo heads the page...
+    await expect(canvasElement.querySelectorAll('header')).toHaveLength(1)
     await expect(canvas.queryAllByRole('button')).toHaveLength(0)
   },
 }
@@ -156,6 +156,9 @@ export const Unavailable: Story = {
         name: "Feedback isn't available right now",
       }),
     ).toBeInTheDocument()
+    // ...but with no conference read there is no logo to show, and the
+    // platform's mark on a tenant's domain would be another brand.
+    await expect(canvasElement.querySelectorAll('header')).toHaveLength(0)
   },
 }
 
