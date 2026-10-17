@@ -489,7 +489,8 @@ added to the page's existing cookie inventory.
   individual answers are deleted and only per-session totals remain.
 - **Your rights** (added in the slice that ships Delete my answer): delete your
   answer yourself from the same browser, through the session's QR link, for 30
-  days after your last answer, unless the organizers have replaced that code.
+  days after your last answer, unless the organizers have replaced that code or
+  the session was withdrawn.
   After that we can't tell which answer is yours; contact the organizers quoting
   the comment and they will remove it.
 - **Processors:** Sanity (storage) and Resend (speaker summary emails), both
@@ -513,8 +514,8 @@ sidebar.
 Two tabs: **Session Feedback** and **Feedback Code**. It opens on the code
 until feedback is visible (§6), then on the results.
 
-_Refinement (spec):_ every speaker-side procedure (ensure code, results, flag)
-starts with **one scoped query** that returns the talk only if it belongs to the
+_Refinement (spec):_ the results and flag procedures start with **one scoped
+query** that returns the talk only if it belongs to the
 conference serving the request, the caller is in its `speakers[]`, and it is
 confirmed. A null result is one uniform refusal, so the procedure reveals
 nothing about talks the caller can't see. (All 29 past talks with Card Counts
@@ -820,6 +821,9 @@ Per `AGENTS.md` ("Agent discipline"):
   tenant until organizers notice. Each submit also costs one by-id talk read
   and one response refill read (§7.4). Random codes and repeated page loads
   cost no live reads (§5.1, §7.4).
+- **Late summaries:** the summary cron has no lookback, so an edition that ends
+  after F1c ships but before F8 ships gets its summaries when F8 ships. Ship F8
+  before the next edition, or accept the delay.
 - **A version published inside a write's sweep:** a draft or release version
   created and published between a mint, rotation or fold and its sweep (§4.2)
   can still write an old value back. The window is a few hundred milliseconds.
