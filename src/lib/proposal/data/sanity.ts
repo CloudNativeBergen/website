@@ -295,7 +295,7 @@ export async function getProposal({
         _id
       },
       conference-> {
-        _id, title, startDate, endDate
+        _id, title, startDate, endDate, domains
       },
       topics[]-> {
         _id, title, color, slug, description

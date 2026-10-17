@@ -241,6 +241,14 @@ export default defineType({
       ],
     }),
     defineField({
+      name: 'feedbackCode',
+      title: 'Feedback Code',
+      type: 'string',
+      description:
+        'The /f/<code> short code attendees scan to give Session Feedback. Minted by the app the first time a speaker of a confirmed talk opens it; never edit it here.',
+      readOnly: true,
+    }),
+    defineField({
       name: 'audienceFeedback',
       title: 'Audience Feedback',
       type: 'object',
