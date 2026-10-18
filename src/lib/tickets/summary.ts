@@ -254,74 +254,111 @@ export async function exportParticipants(
     }
 
     if (seats.length > 0) {
-      for (const seat of seats) {
-        let grantsWorkshop = seat.class.grantsWorkshop
-        const categoriesList = [seat.ticket.category]
-        let hasPaidAddOn = false
+      interface SeatAssignment {
+        seat: (typeof seats)[0]
+        grantsWorkshop: boolean
+        categoriesList: string[]
+        hasPaidAddOn: boolean
+      }
 
-        // If the seat itself doesn't grant workshop, look for a matching or unnamed add-on in the bundle
-        if (!grantsWorkshop && availableWorkshopAddOns.length > 0) {
-          const seatName = getName(seat.ticket)
+      const assignments: SeatAssignment[] = seats.map((seat) => ({
+        seat,
+        grantsWorkshop: seat.class.grantsWorkshop,
+        categoriesList: [seat.ticket.category],
+        hasPaidAddOn: false,
+      }))
 
-          // 1. Exact match on full name
-          let chosenIdx = seatName.full
-            ? availableWorkshopAddOns.findIndex((a) => {
-                const aName = getName(a.ticket)
-                return aName.full === seatName.full
-              })
-            : -1
+      // Pass 1: exact or compatible name match for named seats
+      for (const assignment of assignments) {
+        if (assignment.grantsWorkshop || availableWorkshopAddOns.length === 0)
+          continue
+        const seatName = getName(assignment.seat.ticket)
+        if (!seatName.first) continue
 
-          // 2. Match on first name (if compatible)
-          if (chosenIdx === -1 && seatName.first) {
-            chosenIdx = availableWorkshopAddOns.findIndex((a) => {
-              const aName = getName(a.ticket)
-              if (!aName.first) return false
-              if (aName.first !== seatName.first) return false
-              return (
-                !aName.last || !seatName.last || aName.last === seatName.last
-              )
-            })
-          }
+        let matchIdx = seatName.full
+          ? availableWorkshopAddOns.findIndex(
+              (a) => getName(a.ticket).full === seatName.full,
+            )
+          : -1
 
-          // 3. Unnamed add-on (add-on has no attendee name, or seat has no name)
-          if (chosenIdx === -1) {
-            chosenIdx = availableWorkshopAddOns.findIndex((a) => {
-              const aName = getName(a.ticket)
-              return !aName.full || !seatName.full
-            })
-          }
-
-          if (chosenIdx !== -1) {
-            const addOn = availableWorkshopAddOns.splice(chosenIdx, 1)[0]
-            grantsWorkshop = true
-            if (addOn.ticket.category) {
-              categoriesList.push(addOn.ticket.category)
-            }
-            if (addOn.isPaid) {
-              hasPaidAddOn = true
-            }
-          }
+        if (matchIdx === -1) {
+          matchIdx = availableWorkshopAddOns.findIndex((a) => {
+            const aName = getName(a.ticket)
+            if (!aName.first || aName.first !== seatName.first) return false
+            return !aName.last || !seatName.last || aName.last === seatName.last
+          })
         }
 
-        if (workshopOnly && !grantsWorkshop) continue
+        if (matchIdx !== -1) {
+          const addOn = availableWorkshopAddOns.splice(matchIdx, 1)[0]
+          assignment.grantsWorkshop = true
+          if (addOn.ticket.category) {
+            assignment.categoriesList.push(addOn.ticket.category)
+          }
+          if (addOn.isPaid) {
+            assignment.hasPaidAddOn = true
+          }
+        }
+      }
 
-        const isComp = !seat.isPaid && !hasPaidAddOn
+      // Pass 2: unnamed add-ons assigned to remaining ungranted seats
+      for (const assignment of assignments) {
+        if (assignment.grantsWorkshop || availableWorkshopAddOns.length === 0)
+          continue
+        const unnamedIdx = availableWorkshopAddOns.findIndex(
+          (a) => !getName(a.ticket).full,
+        )
+        if (unnamedIdx !== -1) {
+          const addOn = availableWorkshopAddOns.splice(unnamedIdx, 1)[0]
+          assignment.grantsWorkshop = true
+          if (addOn.ticket.category) {
+            assignment.categoriesList.push(addOn.ticket.category)
+          }
+          if (addOn.isPaid) {
+            assignment.hasPaidAddOn = true
+          }
+        }
+      }
+
+      // Pass 3: unnamed (TBA) seats take remaining named add-ons if no named seat took them
+      for (const assignment of assignments) {
+        if (assignment.grantsWorkshop || availableWorkshopAddOns.length === 0)
+          continue
+        const seatName = getName(assignment.seat.ticket)
+        if (!seatName.full && availableWorkshopAddOns.length > 0) {
+          const addOn = availableWorkshopAddOns.splice(0, 1)[0]
+          assignment.grantsWorkshop = true
+          if (addOn.ticket.category) {
+            assignment.categoriesList.push(addOn.ticket.category)
+          }
+          if (addOn.isPaid) {
+            assignment.hasPaidAddOn = true
+          }
+        }
+      }
+
+      for (const assignment of assignments) {
+        if (workshopOnly && !assignment.grantsWorkshop) continue
+
+        const isComp = !assignment.seat.isPaid && !assignment.hasPaidAddOn
         const uniqueCategories = Array.from(
-          new Set(categoriesList.filter(Boolean)),
+          new Set(assignment.categoriesList.filter(Boolean)),
         )
         const categories = uniqueCategories.join(', ')
 
         const firstName =
-          seat.ticket.crm?.first_name || seat.ticket.customer_name || ''
-        const lastName = seat.ticket.crm?.last_name || ''
+          assignment.seat.ticket.crm?.first_name ||
+          assignment.seat.ticket.customer_name ||
+          ''
+        const lastName = assignment.seat.ticket.crm?.last_name || ''
 
         result.push({
           firstName,
           lastName,
-          email: canonicalEmail(seat.ticket.crm?.email),
+          email: canonicalEmail(assignment.seat.ticket.crm?.email),
           categories,
           isComp,
-          grantsWorkshop,
+          grantsWorkshop: assignment.grantsWorkshop,
         })
       }
     }

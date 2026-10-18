@@ -524,6 +524,56 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     expect(bob?.categories).toBe('Regular, Workshop upgrade')
   })
 
+  it('does not allow an unnamed TBA seat to steal a named add-on from a later attendee', async () => {
+    const confWithUpgrade = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: '',
+          last_name: '',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+    ])
+
+    const res = await exportParticipants(confWithUpgrade, false)
+
+    expect(res).toHaveLength(2)
+    const tba = res.find((p) => p.firstName === '')
+    const bob = res.find((p) => p.firstName === 'Bob')
+    expect(tba?.grantsWorkshop).toBe(false)
+    expect(bob?.grantsWorkshop).toBe(true)
+    expect(bob?.categories).toBe('Regular, Workshop upgrade')
+  })
+
   it('exports surplus or unattached workshop add-ons when workshopOnly is true', async () => {
     const confWithUpgrade = {
       ...conference,
