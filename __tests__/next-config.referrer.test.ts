@@ -9,6 +9,16 @@
 import { describe, expect, it } from 'vitest'
 import config from '../next.config'
 
+describe('next.config rewrites', () => {
+  it('serves a caps-lock Feedback Code URL from the attendee page, never the 404', async () => {
+    const rewrites = await config.rewrites?.()
+    expect(Array.isArray(rewrites) ? rewrites : []).toContainEqual({
+      source: '/F/:code',
+      destination: '/f/:code',
+    })
+  })
+})
+
 describe('next.config headers', () => {
   it('sends Referrer-Policy: no-referrer on /f/<code>, and only there', async () => {
     const rules = (await config.headers?.()) ?? []

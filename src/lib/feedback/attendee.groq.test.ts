@@ -302,6 +302,22 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
         slot('talk-open', '15:00', '15:40'),
       ]),
     )
+    // One window from the EARLIEST start to 24 h after the LATEST end:
+    // before the first slot it is not yet open, during it already open.
+    expect(
+      await resolveFeedbackPage(
+        CONF,
+        'k7m2qx',
+        new Date('2026-10-26T08:00:00.000Z'),
+      ),
+    ).toMatchObject({
+      state: 'not-yet-open',
+      opensAt: '2026-10-26T09:00:00.000Z',
+    })
+    expect(await resolveFeedbackPage(CONF, 'k7m2qx', DURING)).toMatchObject({
+      state: 'open',
+      closesAt: '2026-10-28T14:40:00.000Z',
+    })
     const later = await resolveFeedbackPage(
       CONF,
       'k7m2qx',

@@ -71,5 +71,7 @@ describe('redactFeedbackCode — no code reaches Vercel Analytics (§7.1)', () =
     expect(redactFeedbackCode({ url: '/f/k7m2qx' })).toEqual({
       url: '/f/[code]',
     })
+    // ...and leaves any other one alone.
+    expect(redactFeedbackCode({ url: '/program' })).toEqual({ url: '/program' })
   })
 })

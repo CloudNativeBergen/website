@@ -162,6 +162,21 @@ export const Unavailable: Story = {
   },
 }
 
+/** The conference was read but its index was not: its own logo still shows. */
+export const UnavailableWithLogo: Story = {
+  args: { page: { state: 'unavailable' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('heading', {
+        level: 1,
+        name: "Feedback isn't available right now",
+      }),
+    ).toBeInTheDocument()
+    await expect(canvasElement.querySelectorAll('header')).toHaveLength(1)
+  },
+}
+
 /** A long unbroken title and many speakers must wrap, never scroll sideways. */
 export const LongTitle: Story = {
   parameters: { viewport: { defaultViewport: 'phone' } },

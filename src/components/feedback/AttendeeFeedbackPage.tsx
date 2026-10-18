@@ -98,7 +98,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
                 key={colour}
                 type="button"
                 disabled
-                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:ring-1 disabled:ring-black/10 disabled:grayscale disabled:ring-inset dark:disabled:ring-white/15 ${className}`}
+                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-600 disabled:shadow-none dark:disabled:bg-gray-800 dark:disabled:text-gray-300 ${className}`}
               >
                 <Icon className="size-9 shrink-0" aria-hidden="true" />
                 {label}
