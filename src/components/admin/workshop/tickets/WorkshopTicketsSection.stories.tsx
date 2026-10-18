@@ -310,7 +310,9 @@ export const WithEarlyAccess: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const boxes = canvas.getAllByRole('checkbox', { name: 'Early access' })
+    const boxes = canvas.getAllByRole('checkbox', {
+      name: /^Early access for /,
+    })
     await expect(boxes.some((box) => (box as HTMLInputElement).checked)).toBe(
       true,
     )

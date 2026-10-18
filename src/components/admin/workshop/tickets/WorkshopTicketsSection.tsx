@@ -301,6 +301,7 @@ function EarlyAccessToggle({ type }: { type: WorkshopTicketType }) {
       <input
         id={id}
         type="checkbox"
+        aria-label={`Early access for ${type.typeName}`}
         checked={!!type.earlyAccess}
         disabled={busy || (!grants && !type.earlyAccess)}
         onChange={(event) =>

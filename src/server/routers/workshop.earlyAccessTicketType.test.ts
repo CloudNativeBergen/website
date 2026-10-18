@@ -109,7 +109,7 @@ describe('workshop.admin.setEarlyAccessTicketType', () => {
     expect(stored()).toEqual(['Two-day pass'])
     expect(h.revalidateTag.mock.calls).toEqual([
       ['admin:settings', 'default'],
-      [conferenceTag(CONF), 'default'],
+      [conferenceTag(CONF), { expire: 0 }],
     ])
   })
 

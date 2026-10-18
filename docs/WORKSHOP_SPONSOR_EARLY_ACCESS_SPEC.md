@@ -351,4 +351,5 @@ them (`typeKey`: case and spacing folded).
   "Ticket: _type_". Narrowing the list to a sponsor leaves type-only sign-ups out.
 - An unset or empty list changes nothing.
 - Known gap: the portal reads the list from the cached conference. A save from the admin page
-  expires that cache. An edit in Sanity Studio takes effect when the cache expires.
+  expires that cache at once (`{ expire: 0 }`). Only an edit in Sanity Studio waits until the
+  cache expires.

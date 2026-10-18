@@ -1804,7 +1804,8 @@ export const workshopRouter = router({
           throw error
         }
         revalidateTag('admin:settings', 'default')
-        revalidateTag(conferenceTag(conferenceId), 'default')
+        // At once, not a profile: the portal must not serve the old list.
+        revalidateTag(conferenceTag(conferenceId), { expire: 0 })
         return { success: true }
       }),
   }),
