@@ -392,10 +392,17 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
 - A cookie that fails verification is replaced, never trusted.
 - **Response id:** a hash of the token and the talk id, so the same device and
   talk always map to the same document. _Implementation detail:_
-  `feedbackResponse.` + the first 32 hex characters of SHA-256 over
-  `<token>:<talk _id>`; signing follows the module-private `sign()` pattern of
-  `src/lib/volunteer/token.ts`, with a secret documented in
-  `docs/TENANT_SECRETS.md` if it is new.
+  `feedbackResponse-` + the first 32 hex characters of SHA-256 over
+  `<token>:<talk _id>` (_Refinement (F1c):_ a hyphen, not a dot: a dotted id
+  is a path id, which Studio and tokenless reads treat as private); signing
+  follows the module-private `sign()` pattern of `src/lib/volunteer/token.ts`.
+  _Refinement (F1c):_ no new secret: the cookie is signed with
+  `INVITATION_TOKEN_SECRET` under its own HMAC labels, so rotating that secret
+  invalidates every device cookie.
+- _Refinement (F1c):_ the cookie path is case-sensitive in browsers, so a
+  device that opened a hand-typed `/F/<code>` (which F1b rewrites to the page)
+  is never sent its cookie back there, and each tap is a new response. Printed
+  codes and links are lower case. Accepted.
 - A device that clears its cookies produces a new response. That noise is
   accepted ([#1417](https://github.com/CloudNativeBergen/website/issues/1417)).
 
@@ -422,9 +429,10 @@ the host and the talk id from the index, never from the client.
 moderation fields): a field-scoped `patch(id).set({ colour, comment,
 submittedAt })` (or `unset` of an emptied comment), which by construction never
 touches `hiddenAt` or `flaggedAt`, so an attendee can't un-hide a comment by
-resubmitting or rewording it. If the document doesn't exist, a `create` on the
-deterministic id; on a 409 (a concurrent first submit from the same device) it
-falls back to the patch. Concurrent resubmissions from one device are
+resubmitting or rewording it. _Refinement (F1c):_ the patch rides in one
+transaction after a `createIfNotExists` on the deterministic id, so a concurrent
+first submit from the same device needs no 409 fallback: the second create does
+nothing and its patch applies. Concurrent resubmissions from one device are
 last-write-wins.
 
 **Before writing, Submit re-reads the talk by id through the doc endpoint**
@@ -856,7 +864,24 @@ Per `AGENTS.md` ("Agent discipline"):
   limit (Sanity's pages disagree; 7,161 used on 2026-10-17). The 24-month fold
   bounds it.
 - **A domain change mid-edition** breaks printed codes; a reprint fixes it.
+- **A withdrawal racing a tap** (_Refinement (F1c)_): Submit re-reads the talk
+  and then commits the response, so a withdrawal, rotation or erasure that
+  lands between the two still records that one answer. Guarding the commit on
+  the talk's revision would write the talk on every tap and make concurrent
+  taps fail each other. The window is one Sanity round trip; Remove clears it.
+- **Remove is not final for the device that answered** (_Refinement (F1c)_):
+  the same cookie and talk give the same id, so that device's next tap
+  recreates a removed response (like R2's delete-and-resubmit). Organizers
+  remove it again. Decide whether F5 needs a tombstone before comments matter.
+- **A cookie can list an answer that was never saved** (_Refinement (F1c)_):
+  after a failed commit the cookie is still set, because a commit whose reply
+  was lost may have applied, and a new token would count the device twice. A
+  read of the response (F2) must treat a missing document as "no answer yet".
 - **A cleared cookie** produces a second response from the same person.
+  So do two tabs of one browser answering at once before it has a cookie
+  (_Refinement (F1c)_): each mints its own token. Serializing submits across
+  tabs (Web Locks) was tried and dropped: one stalled request then froze the
+  buttons in every tab.
 - **No IP limit:** a scripted flood is only remedied after the fact (Remove,
   bulk by time range). Revisit with proof of attendance if abuse appears.
 - **Exact comment times** in a small room, with live polling, can hint at who

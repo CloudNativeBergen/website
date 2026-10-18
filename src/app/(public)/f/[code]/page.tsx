@@ -9,6 +9,7 @@ import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
 import { pickConferenceLogoProps } from '@/lib/conference/logo'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveFeedbackPage } from '@/lib/feedback/server'
+import { submitFeedbackAnswer } from './actions'
 
 /**
  * The code is the whole URL (speaker feedback spec §7.1): never indexed, and
@@ -39,8 +40,17 @@ export default async function FeedbackCodePage({
   const resolution = await getConferenceForCurrentDomain()
 
   // A failed read is not "no conference here" (`guard.ts`).
+  // Bound to THIS page's code: the client sends only the colour.
+  const submit = submitFeedbackAnswer.bind(null, code)
+
   if (isConferenceUnavailable(resolution)) {
-    return <AttendeeFeedbackPage logo={null} page={{ state: 'unavailable' }} />
+    return (
+      <AttendeeFeedbackPage
+        logo={null}
+        page={{ state: 'unavailable' }}
+        submit={submit}
+      />
+    )
   }
   if (isUnknownHost(resolution)) notFound()
 
@@ -60,6 +70,7 @@ export default async function FeedbackCodePage({
     <AttendeeFeedbackPage
       logo={pickConferenceLogoProps(conference)}
       page={page}
+      submit={submit}
     />
   )
 }

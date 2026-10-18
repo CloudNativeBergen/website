@@ -7,6 +7,7 @@ export {
 } from './window'
 export {
   ATTENDEE_PAGE_LIVE,
+  DEVICE_COOKIE_DAYS,
   feedbackCodeUrl,
   isFeedbackPath,
   dropFeedbackVitals,

@@ -166,6 +166,13 @@ export type FeedbackPage =
     }
   | { state: 'closed'; talk: PublicFeedbackTalk | null }
 
+/** The talk a scanned code resolves to, as Submit needs it (§7.4). */
+export interface FeedbackTarget {
+  talkId: string
+  /** The normalized code. */
+  code: string
+}
+
 /**
  * What a scanned code shows on the conference serving the request (§7.2).
  *
@@ -179,19 +186,33 @@ export type FeedbackPage =
  * then, so an early-shared code cannot reveal an unannounced acceptance.
  */
 export async function resolveFeedbackPage(
-  conference: {
-    _id: string
-    endDate?: string | null
-    programDate?: string | null
-  },
+  conference: FeedbackConference,
   rawCode: string,
   now: Date,
 ): Promise<FeedbackPage> {
-  const code = normalizeShortCode(rawCode)
-  if (!code) return { state: 'unknown' }
+  return (await resolveFeedbackTarget(conference, rawCode, now)).page
+}
+
+export type FeedbackConference = {
+  _id: string
+  endDate?: string | null
+  programDate?: string | null
+}
+
+/**
+ * {@link resolveFeedbackPage}, with the talk the code resolves to. The target
+ * is server-only: it never reaches the page.
+ */
+export async function resolveFeedbackTarget(
+  conference: FeedbackConference,
+  rawCode: unknown,
+  now: Date,
+): Promise<{ page: FeedbackPage; target: FeedbackTarget | null }> {
+  const code = normalizeShortCode(typeof rawCode === 'string' ? rawCode : null)
+  if (!code) return { page: { state: 'unknown' }, target: null }
 
   const entry = (await feedbackCodeIndex(conference._id)).get(code)
-  if (!entry) return { state: 'unknown' }
+  if (!entry) return { page: { state: 'unknown' }, target: null }
 
   const isPublic = isProgramPublished(conference, now) && entry.slots.length > 0
   const talk = isPublic
@@ -203,20 +224,27 @@ export async function resolveFeedbackPage(
     now,
   })
 
+  const target = { talkId: entry.talkId, code }
   switch (window.state) {
     case 'open':
       return {
-        state: 'open',
-        talk,
-        closesAt: isPublic ? (window.closesAt ?? null) : null,
+        page: {
+          state: 'open',
+          talk,
+          closesAt: isPublic ? (window.closesAt ?? null) : null,
+        },
+        target,
       }
     case 'closed':
-      return { state: 'closed', talk }
+      return { page: { state: 'closed', talk }, target }
     default:
       return {
-        state: 'not-yet-open',
-        talk,
-        opensAt: isPublic ? (window.opensAt ?? null) : null,
+        page: {
+          state: 'not-yet-open',
+          talk,
+          opensAt: isPublic ? (window.opensAt ?? null) : null,
+        },
+        target,
       }
   }
 }

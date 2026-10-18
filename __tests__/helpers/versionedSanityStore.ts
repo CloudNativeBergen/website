@@ -88,6 +88,8 @@ export interface VersionedSanityStore {
   readonly reads: RecordedRead[]
   /** The mutations of each COMMITTED write, as the client serialized them. */
   readonly commits: SerializedMutation[][]
+  /** Every id read through the doc endpoint (`getDocument`/`getDocuments`), in order. */
+  readonly docReads: string[]
   /** What happened, in order: `read` and `commit`, for asserting a race ran. */
   readonly events: string[]
   /** Store a document as it is, replacing one with the same id. No commit. */
@@ -146,6 +148,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
   let reads: RecordedRead[] = []
   let commits: SerializedMutation[][] = []
   let events: string[] = []
+  let docReads: string[] = []
   let hooks: Array<() => unknown> = []
   let afterHooks: Array<() => unknown> = []
   let unpatchable = new Set<string>()
@@ -277,12 +280,16 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     fetch: fetchAs('write', apiVersion),
     // The doc endpoint reads the document store, past the search store's lag
     // (Sanity: "the absolute latest possible version of a document").
-    getDocument: async (id: string) =>
-      structuredClone(documents.find((d) => d._id === id)) ?? null,
-    getDocuments: async (ids: string[]) =>
-      ids.map(
+    getDocument: async (id: string) => {
+      docReads.push(id)
+      return structuredClone(documents.find((d) => d._id === id)) ?? null
+    },
+    getDocuments: async (ids: string[]) => {
+      docReads.push(...ids)
+      return ids.map(
         (id) => structuredClone(documents.find((d) => d._id === id)) ?? null,
-      ),
+      )
+    },
     transaction: () => {
       const tx = real.transaction()
       tx.commit = (async () => {
@@ -322,6 +329,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       reads = []
       commits = []
       events = []
+      docReads = []
       hooks = []
       afterHooks = []
       unpatchable = new Set()
@@ -352,6 +360,9 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     },
     get events() {
       return events
+    },
+    get docReads() {
+      return docReads
     },
     beforeNextCommit(hook) {
       hooks.push(hook)

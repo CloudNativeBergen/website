@@ -1,4 +1,8 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
 import {
+  ArrowPathIcon,
   ClockIcon,
   ExclamationTriangleIcon,
   FaceFrownIcon,
@@ -9,30 +13,43 @@ import {
 } from '@heroicons/react/24/outline'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
-import type { FeedbackPage, PublicFeedbackTalk } from '@/lib/feedback/server'
+import {
+  FEEDBACK_COLOUR_LABELS,
+  type FeedbackColour,
+} from '@/lib/feedback/colour'
+import type { PublicFeedbackTalk, SubmitOutcome } from '@/lib/feedback/server'
 import { formatSessionInstant } from '@/lib/time'
 
-/** The page the attendee sees, or `unavailable` when it could not be read. */
-export type AttendeeFeedbackState = FeedbackPage | { state: 'unavailable' }
+/**
+ * The page the attendee sees: a state of the code, `unavailable` when it
+ * could not be read, or `answered` after a tap.
+ */
+export type AttendeeFeedbackState = SubmitOutcome
+
+/** Submit (speaker feedback spec §7.4), bound to the page's code. */
+export type SubmitAnswer = (colour: FeedbackColour) => Promise<SubmitOutcome>
 
 const ANSWERS = [
   {
     colour: 'green',
-    label: 'Loved it',
+    label: FEEDBACK_COLOUR_LABELS.green,
     Icon: FaceSmileIcon,
-    className: 'bg-green-600 text-white',
+    className: 'bg-green-700 text-white',
+    iconClassName: 'text-green-600 dark:text-green-500',
   },
   {
     colour: 'yellow',
-    label: 'It was OK',
+    label: FEEDBACK_COLOUR_LABELS.yellow,
     Icon: MinusCircleIcon,
     className: 'bg-yellow-400 text-yellow-950',
+    iconClassName: 'text-yellow-500 dark:text-yellow-400',
   },
   {
     colour: 'red',
-    label: 'Not for me',
+    label: FEEDBACK_COLOUR_LABELS.red,
     Icon: FaceFrownIcon,
     className: 'bg-red-600 text-white',
+    iconClassName: 'text-red-600 dark:text-red-500',
   },
 ] as const
 
@@ -41,16 +58,23 @@ const ANSWERS = [
  * conference logo and one state, nothing else. The talk's title and speakers
  * arrive only for a public talk; the resolver never hands them over otherwise.
  *
- * The answer buttons are not wired yet (F1b): they render disabled, with a
- * line saying so, until the Submit action lands (F1c).
+ * A tap calls `submit`, and the page shows what it answers: a thank-you, or
+ * the state the code is in now (closed since the page loaded, say). A failed
+ * save keeps the buttons, with a line saying the answer couldn't be confirmed.
  */
 export function AttendeeFeedbackPage({
   logo,
-  page,
+  page: initial,
+  submit,
 }: {
   logo: ConferenceLogoData | null
   page: AttendeeFeedbackState
+  submit: SubmitAnswer
 }) {
+  const [page, setPage] = useState(initial)
+  // Whatever a tap leads to takes focus, so a screen reader announces it: the
+  // tapped button is gone from the page.
+  const [afterTap, setAfterTap] = useState(false)
   return (
     <div
       data-shell-fit="viewport"
@@ -68,54 +92,53 @@ export function AttendeeFeedbackPage({
         </header>
       )}
       <main className="mx-auto max-w-md px-4 pt-10 pb-12">
-        <PageState page={page} />
+        <PageState
+          page={page}
+          submit={submit}
+          announce={afterTap}
+          onAnswer={(next) => {
+            setPage(next)
+            setAfterTap(true)
+          }}
+        />
       </main>
     </div>
   )
 }
 
-function PageState({ page }: { page: AttendeeFeedbackState }) {
+function PageState({
+  page,
+  submit,
+  announce,
+  onAnswer,
+}: {
+  page: AttendeeFeedbackState
+  submit: SubmitAnswer
+  announce: boolean
+  onAnswer: (next: AttendeeFeedbackState) => void
+}) {
   // The talk's title is the page's h1 when it is shown; the state's own
   // heading is the h1 otherwise.
   const level = 'talk' in page && page.talk ? ('h2' as const) : ('h1' as const)
   switch (page.state) {
-    case 'open': {
-      const Question = level
+    case 'open':
       return (
         <>
           <TalkHeading talk={page.talk} />
-          <Question className="text-xl font-semibold">
-            How was this session?
-          </Question>
-          {/* Until the Submit action lands (F1c), say so rather than offer
-              buttons that look live and do nothing. */}
-          <p
-            id="answering-unavailable"
-            className="mt-1 text-sm text-gray-600 dark:text-gray-400"
-          >
-            Answering isn&apos;t available yet.
-          </p>
-          <div className="mt-5 flex flex-col gap-3">
-            {ANSWERS.map(({ colour, label, Icon, className }) => (
-              <button
-                key={colour}
-                type="button"
-                disabled
-                aria-describedby="answering-unavailable"
-                className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-600 disabled:shadow-none dark:disabled:bg-gray-800 dark:disabled:text-gray-300 ${className}`}
-              >
-                <Icon className="size-9 shrink-0" aria-hidden="true" />
-                {label}
-              </button>
-            ))}
-          </div>
-          <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
-            {/* §7.2's "You can change your answer until …" returns with the
-                buttons (F1c); until then there is no answer to change. */}
-            Answers are anonymous.
-            {page.closesAt &&
-              ` Feedback closes ${formatSessionInstant(page.closesAt)}.`}
-          </p>
+          <AnswerForm
+            level={level}
+            closesAt={page.closesAt}
+            submit={submit}
+            onAnswer={onAnswer}
+          />
+        </>
+      )
+    case 'answered': {
+      const answer = ANSWERS.find((a) => a.colour === page.colour)
+      return (
+        <>
+          <TalkHeading talk={page.talk} />
+          <Thanks level={level} answer={answer} announce={announce} />
         </>
       )
     }
@@ -124,6 +147,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
         <>
           <TalkHeading talk={page.talk} />
           <Notice
+            announce={announce}
             level={level}
             Icon={ClockIcon}
             title="Feedback opens when the session starts"
@@ -139,6 +163,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
         <>
           <TalkHeading talk={page.talk} />
           <Notice
+            announce={announce}
             level={level}
             Icon={LockClosedIcon}
             title="Feedback for this session has closed"
@@ -150,6 +175,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
     case 'unknown':
       return (
         <Notice
+          announce={announce}
           level={level}
           Icon={QuestionMarkCircleIcon}
           title="This feedback code isn't valid"
@@ -161,6 +187,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
     case 'unavailable':
       return (
         <Notice
+          announce={announce}
           level={level}
           Icon={ExclamationTriangleIcon}
           title="Feedback isn't available right now"
@@ -169,6 +196,140 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
         </Notice>
       )
   }
+}
+
+function AnswerForm({
+  level: Question,
+  closesAt,
+  submit,
+  onAnswer,
+}: {
+  level: 'h1' | 'h2'
+  closesAt: string | null
+  submit: SubmitAnswer
+  onAnswer: (next: SubmitOutcome) => void
+}) {
+  const [tapped, setTapped] = useState<FeedbackColour | null>(null)
+  const [failed, setFailed] = useState(false)
+  // Plain state, not `useTransition`: with it, `isPending` never cleared
+  // after a failed save in the dark story (cause not pinned down), leaving
+  // every button disabled. Nothing else can hold this flag.
+  const [pending, setPending] = useState(false)
+  // One tap at a time, checked synchronously so a double tap can't send two.
+  const busy = useRef(false)
+
+  const answer = async (colour: FeedbackColour) => {
+    if (busy.current) return
+    busy.current = true
+    setTapped(colour)
+    setFailed(false)
+    setPending(true)
+    let next: SubmitOutcome
+    try {
+      next = await submit(colour)
+    } catch {
+      next = { state: 'unavailable' }
+    }
+    busy.current = false
+    setPending(false)
+    // Not confirmed: keep the buttons. Tapping again is safe, as a retry under
+    // the same cookie lands on the same response.
+    if (next.state === 'unavailable') setFailed(true)
+    else onAnswer(next)
+  }
+
+  return (
+    <>
+      <Question className="text-xl font-semibold">
+        How was this session?
+      </Question>
+      <div className="mt-5 flex flex-col gap-3" aria-busy={pending}>
+        {ANSWERS.map(({ colour, label, Icon, className }) => {
+          const saving = pending && tapped === colour
+          const ShownIcon = saving ? ArrowPathIcon : Icon
+          return (
+            <button
+              key={colour}
+              type="button"
+              // `aria-disabled`, not `disabled`: a disabled button drops focus to
+              // the body, and after a failed save a keyboard or screen reader
+              // user must still be on the answer they tapped.
+              aria-disabled={pending}
+              onClick={() => answer(colour)}
+              className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs transition-opacity focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait dark:focus-visible:outline-white ${pending && !saving ? 'opacity-50' : ''} ${className}`}
+            >
+              <ShownIcon
+                className={`size-9 shrink-0 ${saving ? 'animate-spin motion-reduce:animate-none' : ''}`}
+                aria-hidden="true"
+              />
+              {label}
+            </button>
+          )
+        })}
+      </div>
+      {failed && (
+        <p
+          role="alert"
+          className="mt-4 text-center text-sm font-medium text-red-700 dark:text-red-400"
+        >
+          We couldn&apos;t confirm your answer. Please try again.
+        </p>
+      )}
+      <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
+        Anonymous. You can change your answer until{' '}
+        {/* The closing time gives the slot away, so it is shown only for a
+            public talk. */}
+        {closesAt
+          ? `${formatSessionInstant(closesAt)}.`
+          : '24 hours after the session ends.'}
+      </p>
+    </>
+  )
+}
+
+/**
+ * The plain thank-you after a tap (F1c). The answer's own icon and words say
+ * what was recorded; focus moves to the heading so a screen reader announces
+ * it. Changing the answer is a new scan and tap until F2 adds the Answered
+ * state.
+ */
+function Thanks({
+  level: Heading,
+  answer,
+  announce,
+}: {
+  level: 'h1' | 'h2'
+  answer: (typeof ANSWERS)[number] | undefined
+  /** Take focus on mount: the thank-you replaced the buttons after a tap. */
+  announce: boolean
+}) {
+  const heading = useFocusOnMount(announce)
+  const Icon = answer?.Icon ?? FaceSmileIcon
+  return (
+    <div className="flex flex-col items-center text-center">
+      <Icon
+        className={`size-12 ${answer?.iconClassName ?? ''}`}
+        aria-hidden="true"
+      />
+      <Heading
+        ref={heading}
+        tabIndex={announce ? -1 : undefined}
+        className="mt-4 text-lg font-semibold text-balance focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
+      >
+        Thanks!
+      </Heading>
+      <p className="mt-2 text-gray-600 dark:text-gray-400">
+        You answered{' '}
+        <strong className="text-gray-900 dark:text-white">
+          {answer?.label}
+        </strong>
+        .
+      </p>
+      <p className="mt-8 text-sm text-gray-600 dark:text-gray-400">
+        Changed your mind? Scan the code again and tap another answer.
+      </p>
+    </div>
+  )
 }
 
 function TalkHeading({ talk }: { talk: PublicFeedbackTalk | null }) {
@@ -191,20 +352,37 @@ function Notice({
   level: Heading,
   Icon,
   title,
+  announce = false,
   children,
 }: {
   level: 'h1' | 'h2'
   Icon: typeof ClockIcon
   title: string
+  /** Take focus on mount: this notice replaced the buttons after a tap. */
+  announce?: boolean
   children: React.ReactNode
 }) {
+  const heading = useFocusOnMount(announce)
   return (
     <div className="flex flex-col items-center text-center">
       <Icon className="size-12 text-gray-400" aria-hidden="true" />
-      <Heading className="mt-4 text-lg font-semibold text-balance">
+      <Heading
+        ref={heading}
+        tabIndex={announce ? -1 : undefined}
+        className="mt-4 text-lg font-semibold text-balance focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
+      >
         {title}
       </Heading>
       <p className="mt-2 text-gray-600 dark:text-gray-400">{children}</p>
     </div>
   )
+}
+
+/** A ref that focuses its element once, on mount, when `enabled`. */
+function useFocusOnMount(enabled: boolean) {
+  const ref = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (enabled) ref.current?.focus()
+  }, [enabled])
+  return ref
 }

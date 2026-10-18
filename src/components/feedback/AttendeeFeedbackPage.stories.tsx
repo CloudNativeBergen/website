@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, within } from 'storybook/test'
-import { AttendeeFeedbackPage } from './AttendeeFeedbackPage'
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
+import { AttendeeFeedbackPage, type SubmitAnswer } from './AttendeeFeedbackPage'
 
 const talk = {
   title: 'Kubernetes for everyone: running clusters nobody has to babysit',
@@ -17,13 +17,18 @@ const meta = {
     docs: {
       description: {
         component:
-          'The attendee page a Feedback Code’s QR opens, `/f/<code>`: the conference logo and one state. The title and speakers appear only for a public talk. The answer buttons are disabled until the Submit action lands (F1c). Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The attendee page a Feedback Code’s QR opens, `/f/<code>`: the conference logo and one state. The title and speakers appear only for a public talk. A tap calls the Submit action (a mock here) and shows a thank-you, the state the code is in now, or a line saying the answer couldn’t be confirmed. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
   args: {
     logo: { title: 'Cloud Native Days Norway' },
     page: { state: 'open', talk, closesAt: '2026-10-27T09:40:00.000Z' },
+    submit: fn<SubmitAnswer>(async (colour) => ({
+      state: 'answered',
+      colour,
+      talk,
+    })),
   },
 } satisfies Meta<typeof AttendeeFeedbackPage>
 
@@ -31,7 +36,7 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Open: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     // The talk is the page's h1; the question sits under it.
     await expect(
@@ -43,36 +48,27 @@ export const Open: Story = {
     await expect(
       canvas.getByText('Ada Lovelace, Grace Hopper'),
     ).toBeInTheDocument()
-    // Not wired yet (F1c), and the page says so.
-    await expect(
-      canvas.getByText("Answering isn't available yet."),
-    ).toBeInTheDocument()
     const buttons = ['Loved it', 'It was OK', 'Not for me'].map((label) =>
       canvas.getByRole('button', { name: label }),
     )
-    for (const button of buttons) {
-      // Not wired yet: present, refusing the tap, and saying why.
-      await expect(button).toBeDisabled()
-      await expect(button).toHaveAccessibleDescription(
-        "Answering isn't available yet.",
-      )
-    }
-    // One neutral fill for all three: no option may read as the primary
-    // action while none can be chosen.
+    for (const button of buttons) await expect(button).toBeEnabled()
+    // Three colours, each with its icon and words: colour is never the only
+    // signal.
     const fills = buttons.map((b) => getComputedStyle(b).backgroundColor)
-    await expect(new Set(fills).size).toBe(1)
-    // ...and an actual fill, not three equally unstyled buttons.
-    await expect(fills[0]).not.toBe('rgba(0, 0, 0, 0)')
-    // No promise to change an answer that cannot be given yet (F1c).
+    await expect(new Set(fills).size).toBe(3)
+    for (const button of buttons) {
+      await expect(button.querySelector('svg')).not.toBeNull()
+    }
     await expect(
       canvas.getByText(
-        'Answers are anonymous. Feedback closes Tuesday 27 October at 10:40.',
+        'Anonymous. You can change your answer until Tuesday 27 October at 10:40.',
       ),
     ).toBeInTheDocument()
+    await expect(args.submit).not.toHaveBeenCalled()
   },
 }
 
-/** Not public yet: the buttons, and nothing about the talk. */
+/** Not public yet: the buttons, and nothing about the talk or its times. */
 export const OpenNotPublic: Story = {
   args: {
     page: { state: 'open', talk: null, closesAt: null },
@@ -84,8 +80,96 @@ export const OpenNotPublic: Story = {
     ).toBeInTheDocument()
     // No closing time for a talk that is not public: it gives the slot away.
     await expect(
-      canvas.getByText('Answers are anonymous.', { exact: true }),
+      canvas.getByText(
+        'Anonymous. You can change your answer until 24 hours after the session ends.',
+      ),
     ).toBeInTheDocument()
+  },
+}
+
+/** A tap: the colour goes to Submit, and a plain thank-you replaces the form. */
+export const Answered: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Loved it' }))
+    await expect(args.submit).toHaveBeenCalledTimes(1)
+    await expect(args.submit).toHaveBeenCalledWith('green')
+    const thanks = await canvas.findByRole('heading', {
+      level: 2,
+      name: 'Thanks!',
+    })
+    // Announced: focus moves to the thank-you.
+    await waitFor(() => expect(thanks).toHaveFocus())
+    await expect(thanks.parentElement).toHaveTextContent(
+      'You answered Loved it.',
+    )
+    // Still under the talk's heading, and nothing left to tap.
+    await expect(
+      canvas.getByRole('heading', { level: 1, name: talk.title }),
+    ).toBeInTheDocument()
+    await expect(canvas.queryAllByRole('button')).toHaveLength(0)
+  },
+}
+
+/** Feedback closed while the page was open: the tap shows the Closed state. */
+export const AnsweredAfterClosing: Story = {
+  args: {
+    submit: fn<SubmitAnswer>(async () => ({ state: 'closed', talk })),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Not for me' }))
+    await expect(args.submit).toHaveBeenCalledWith('red')
+    const closed = await canvas.findByRole('heading', {
+      name: 'Feedback for this session has closed',
+    })
+    // The tapped button is gone: focus moves to what replaced it.
+    await waitFor(() => expect(closed).toHaveFocus())
+    await expect(canvas.queryByText('Thanks!')).toBeNull()
+  },
+}
+
+/** The save failed: the buttons stay, with a line saying so. */
+export const NotSaved: Story = {
+  args: {
+    submit: fn<SubmitAnswer>(async () => ({ state: 'unavailable' })),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'It was OK' }))
+    await expect(args.submit).toHaveBeenCalledWith('yellow')
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      "We couldn't confirm your answer. Please try again.",
+    )
+    const tapped = canvas.getByRole('button', { name: 'It was OK' })
+    await waitFor(() =>
+      expect(tapped).toHaveAttribute('aria-disabled', 'false'),
+    )
+    // Focus stays on the answer that was tapped, not dropped to the page.
+    await expect(tapped).toHaveFocus()
+    await expect(canvas.queryByText('Thanks!')).toBeNull()
+  },
+}
+
+/** While the answer is saved: one tap at a time. */
+export const Saving: Story = {
+  args: {
+    submit: fn<SubmitAnswer>(() => new Promise(() => {})),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Loved it' }))
+    for (const label of ['Loved it', 'It was OK', 'Not for me']) {
+      await waitFor(() =>
+        expect(canvas.getByRole('button', { name: label })).toHaveAttribute(
+          'aria-disabled',
+          'true',
+        ),
+      )
+    }
+    // A second tap while the first is saved sends nothing.
+    await userEvent.click(canvas.getByRole('button', { name: 'Not for me' }))
+    await expect(args.submit).toHaveBeenCalledTimes(1)
   },
 }
 
@@ -218,6 +302,10 @@ export const LongTitle: Story = {
 }
 
 export const OpenDark: Story = { ...Open, globals: { theme: 'dark' } }
+
+export const AnsweredDark: Story = { ...Answered, globals: { theme: 'dark' } }
+
+export const NotSavedDark: Story = { ...NotSaved, globals: { theme: 'dark' } }
 
 export const NotYetOpenDark: Story = {
   ...NotYetOpen,
