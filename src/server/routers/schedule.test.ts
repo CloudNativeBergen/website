@@ -456,7 +456,22 @@ describe('schedule.admin.addTalk', () => {
     ).rejects.toThrowError(/Schedule was modified by another user/)
   })
 
-  it('allows confirmed talk on an official schedule', async () => {
+  it('rejects when both proposalId and placeholder are specified', async () => {
+    await expect(
+      makeCaller().admin.addTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        startTime: '09:00',
+        endTime: '10:00',
+        proposalId: 'talk-1',
+        placeholder: 'Break',
+      }),
+    ).rejects.toThrowError(
+      /Must specify either proposalId or placeholder, but not both/,
+    )
+  })
+
+  it('allows confirmed talk on an official schedule and expires feedback index', async () => {
     const officialSchedule = {
       ...dummySchedule,
       status: ScheduleStatus.Official,
@@ -478,6 +493,15 @@ describe('schedule.admin.addTalk', () => {
     })
 
     expect(res.success).toBe(true)
+    expect(clientWriteFetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('conference._ref == $conferenceId'),
+      expect.objectContaining({ id: 'sched-1', conferenceId: CONFERENCE_ID }),
+    )
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      feedbackCodeIndexTag(CONFERENCE_ID),
+      { expire: 0 },
+    )
   })
 })
 
@@ -608,5 +632,27 @@ describe('schedule.admin.removeTalk', () => {
         talkKey: 'nonexistent-key',
       }),
     ).rejects.toThrowError(/Track or talk index out of bounds/)
+  })
+
+  it('expires feedback code index when removing a talk from an official schedule', async () => {
+    const officialScheduleWithTalks = {
+      ...dummyScheduleWithTalks,
+      status: ScheduleStatus.Official,
+    }
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(officialScheduleWithTalks),
+    )
+
+    const res = await makeCaller().admin.removeTalk({
+      scheduleId: 'sched-1',
+      trackIndex: 0,
+      talkIndex: 0,
+    })
+
+    expect(res.success).toBe(true)
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      feedbackCodeIndexTag(CONFERENCE_ID),
+      { expire: 0 },
+    )
   })
 })

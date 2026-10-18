@@ -349,12 +349,16 @@ export const scheduleRouter = router({
               .regex(HHMM_PATTERN, 'Time must be HH:MM (24h)'),
             endTime: z.string().regex(HHMM_PATTERN, 'Time must be HH:MM (24h)'),
             proposalId: z.string().optional(),
-            placeholder: z.string().optional(),
+            placeholder: z.string().trim().min(1).max(200).optional(),
             expectedRevision: z.string().optional(),
           })
-          .refine((data) => data.proposalId || data.placeholder, {
-            message: 'Either proposalId or placeholder must be specified',
-          }),
+          .refine(
+            (data) => Boolean(data.proposalId) !== Boolean(data.placeholder),
+            {
+              message:
+                'Must specify either proposalId or placeholder, but not both',
+            },
+          ),
       )
       .mutation(async ({ input, ctx }) => {
         const { conference, error } = await getConferenceForCurrentDomain()
@@ -465,6 +469,9 @@ export const scheduleRouter = router({
         }
 
         revalidateTag(conferenceTag(conference._id), 'default')
+        if (doc.status !== ScheduleStatus.Draft) {
+          expireFeedbackCodeIndex(conference._id)
+        }
         return { success: true, schedule }
       }),
 
@@ -573,6 +580,9 @@ export const scheduleRouter = router({
         }
 
         revalidateTag(conferenceTag(conference._id), 'default')
+        if (doc.status !== ScheduleStatus.Draft) {
+          expireFeedbackCodeIndex(conference._id)
+        }
         return { success: true, schedule }
       }),
   }),
