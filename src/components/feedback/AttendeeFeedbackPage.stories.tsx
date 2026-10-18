@@ -362,7 +362,19 @@ export const DeleteNotDone: Story = {
   },
 }
 
-/** Closed, and this device answered: Delete my answer stays on offer (R1). */
+/** Closed, and this device answered: Delete my answer on offer (R1), untapped. */
+export const ClosedCanDelete: Story = {
+  args: { page: { state: 'closed', talk, canDelete: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('button', { name: 'Delete my answer' }),
+    ).toBeInTheDocument()
+    await expect(canvas.queryByRole('status')).toBeNull()
+  },
+}
+
+/** Closed, and this device answered: Delete my answer deletes it (R1). */
 export const ClosedWithDelete: Story = {
   args: {
     page: { state: 'closed', talk, canDelete: true },
@@ -653,6 +665,11 @@ export const CommentNearLimitDark: Story = {
 export const ChangingDark: Story = { ...Changing, globals: { theme: 'dark' } }
 
 export const DeletedDark: Story = { ...Deleted, globals: { theme: 'dark' } }
+
+export const ClosedCanDeleteDark: Story = {
+  ...ClosedCanDelete,
+  globals: { theme: 'dark' },
+}
 
 export const ClosedWithDeleteDark: Story = {
   ...ClosedWithDelete,
