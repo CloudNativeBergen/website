@@ -17,7 +17,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The attendee page a Feedback Code’s QR opens, `/f/<code>`: the conference logo and one state. The title and speakers appear only for a public talk. A tap calls the Submit action (a mock here) and shows a thank-you, the state the code is in now, or a line saying the answer wasn’t saved. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The attendee page a Feedback Code’s QR opens, `/f/<code>`: the conference logo and one state. The title and speakers appear only for a public talk. A tap calls the Submit action (a mock here) and shows a thank-you, the state the code is in now, or a line saying the answer couldn’t be confirmed. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
@@ -139,7 +139,7 @@ export const NotSaved: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'It was OK' }))
     await expect(args.submit).toHaveBeenCalledWith('yellow')
     await expect(await canvas.findByRole('alert')).toHaveTextContent(
-      "Your answer wasn't saved. Please try again.",
+      "We couldn't confirm your answer. Please try again.",
     )
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: 'It was OK' })).toBeEnabled(),

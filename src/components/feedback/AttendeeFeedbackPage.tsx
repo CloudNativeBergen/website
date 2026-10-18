@@ -60,7 +60,7 @@ const ANSWERS = [
  *
  * A tap calls `submit`, and the page shows what it answers: a thank-you, or
  * the state the code is in now (closed since the page loaded, say). A failed
- * save keeps the buttons, with a line saying the answer wasn't saved.
+ * save keeps the buttons, with a line saying the answer couldn't be confirmed.
  */
 export function AttendeeFeedbackPage({
   logo,
@@ -210,7 +210,8 @@ function AnswerForm({
       next = { state: 'unavailable' }
     }
     setPending(false)
-    // Not saved: keep the buttons, so the attendee can tap again.
+    // Not confirmed: keep the buttons. Tapping again is safe, as a retry under
+    // the same cookie lands on the same response.
     if (next.state === 'unavailable') setFailed(true)
     else onAnswer(next)
   }
@@ -246,7 +247,7 @@ function AnswerForm({
           role="alert"
           className="mt-4 text-center text-sm font-medium text-red-700 dark:text-red-400"
         >
-          Your answer wasn&apos;t saved. Please try again.
+          We couldn&apos;t confirm your answer. Please try again.
         </p>
       )}
       <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
