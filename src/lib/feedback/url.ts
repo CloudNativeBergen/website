@@ -13,12 +13,11 @@ export function feedbackCodeUrl(
 }
 
 /**
- * Whether speakers are shown their Feedback Code yet. F1b (#1429) added the
- * attendee page, but its answer buttons stay disabled until the Submit action
- * lands, so the section stays hidden: a printed QR must not lead to a form
- * that cannot be answered. F1c (#1430) sets this to `true` with the buttons.
+ * Whether speakers are shown their Feedback Code. Off until the attendee page
+ * could take an answer (F1c, #1430, spec §16 R3), so no printed QR led to a
+ * form that could not be answered.
  */
-export const ATTENDEE_PAGE_LIVE: boolean = false
+export const ATTENDEE_PAGE_LIVE: boolean = true
 
 // Case-insensitive: codes are, so an attendee typing `/F/K7M2QX` must be
 // kept out of analytics on the not-found page it lands on.

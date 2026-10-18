@@ -57,11 +57,7 @@ export async function submitFeedback({
   cookie: string | undefined
   now: Date
 }): Promise<{ outcome: SubmitOutcome; cookie?: string }> {
-  const { page, target } = await resolveFeedbackTarget(
-    conference,
-    rawCode,
-    now,
-  )
+  const { page, target } = await resolveFeedbackTarget(conference, rawCode, now)
   if (!target || page.state !== 'open') return { outcome: page }
   if (!isFeedbackColour(colour)) return { outcome: page }
   const device = readDeviceCookie(cookie, now)

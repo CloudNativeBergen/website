@@ -11,17 +11,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   resolution: {} as Record<string, unknown>,
   resolve: vi.fn(),
+  submit: vi.fn(),
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND')
   }),
 }))
 
 vi.mock('next/navigation', () => ({ notFound: h.notFound }))
-vi.mock('next/server', () => ({ connection: async () => {} }))
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  connection: async () => {},
+}))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: async () => h.resolution,
 }))
-vi.mock('@/lib/feedback/server', () => ({ resolveFeedbackPage: h.resolve }))
+vi.mock('@/lib/feedback/server', () => ({
+  resolveFeedbackPage: h.resolve,
+  submitFeedback: h.submit,
+  deviceCookie: () => ({ name: 'konf_feedback', options: {} }),
+}))
+vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 
 import FeedbackCodePage from '@/app/(public)/f/[code]/page'
 
@@ -71,6 +80,24 @@ describe('/f/[code]', () => {
     h.resolve.mockRejectedValue(new Error('Sanity down'))
     const element = await render()
     expect(element.props.page).toEqual({ state: 'unavailable' })
+  })
+})
+
+describe('/f/[code] Submit', () => {
+  it('is bound to the page’s own code: the client sends only the colour', async () => {
+    h.resolve.mockResolvedValue({ state: 'open', talk: null, closesAt: null })
+    h.submit.mockResolvedValue({
+      outcome: { state: 'answered', colour: 'red' },
+    })
+    const element = await render('ABC234')
+
+    expect(await element.props.submit('red')).toEqual({
+      state: 'answered',
+      colour: 'red',
+    })
+    expect(h.submit).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'ABC234', colour: 'red' }),
+    )
   })
 })
 

@@ -3,8 +3,11 @@
 import { cookies } from 'next/headers'
 import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { deviceCookie } from '@/lib/feedback/device'
-import { submitFeedback, type SubmitOutcome } from '@/lib/feedback/submit'
+import {
+  deviceCookie,
+  submitFeedback,
+  type SubmitOutcome,
+} from '@/lib/feedback/server'
 
 /**
  * Submit on `/f/<code>` (speaker feedback spec §7.4). A Server Action, not a

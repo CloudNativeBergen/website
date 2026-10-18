@@ -6,3 +6,5 @@ export {
   type FeedbackPage,
   type PublicFeedbackTalk,
 } from './attendee'
+export { submitFeedback, type SubmitOutcome } from './submit'
+export { deviceCookie } from './device'

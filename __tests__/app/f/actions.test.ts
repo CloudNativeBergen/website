@@ -214,7 +214,11 @@ describe('a second tap from the same phone', () => {
 
     await submitFeedbackAnswer('k7m2qx', 'red')
 
-    expect(responses().map((r) => r.colour).sort()).toEqual(['green', 'red'])
+    expect(
+      responses()
+        .map((r) => r.colour)
+        .sort(),
+    ).toEqual(['green', 'red'])
   })
 
   it('never clears what organizers and speakers set on the response', async () => {
