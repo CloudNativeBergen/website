@@ -66,7 +66,14 @@ function useWindowOnTheClock(
  * real tab list. Until then a talk the server will not give a code (its
  * window closed before it ever had one) shows nothing.
  */
-export function SessionFeedbackSection({ talkId }: { talkId: string }) {
+export function SessionFeedbackSection({
+  talkId,
+  title,
+}: {
+  talkId: string
+  /** The talk's title, for the print sheet and the download file names. */
+  title: string
+}) {
   const { mutate, data, error, isPending, isIdle } =
     api.sessionFeedback.ensureCode.useMutation()
 
@@ -97,7 +104,11 @@ export function SessionFeedbackSection({ talkId }: { talkId: string }) {
       </div>
       <div>
         {data?.code && data.url && shownWindow ? (
-          <FeedbackCodePanel url={data.url} window={shownWindow} />
+          <FeedbackCodePanel
+            url={data.url}
+            title={title}
+            window={shownWindow}
+          />
         ) : error ? (
           <div className="space-y-3">
             <p role="alert" className="text-sm text-red-700 dark:text-red-400">

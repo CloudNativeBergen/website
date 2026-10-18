@@ -57,8 +57,11 @@ export async function renderFeedbackQrSvg(url: string): Promise<string> {
   return QRCode.toString(url, { ...QR_OPTIONS, type: 'svg' })
 }
 
-/** The symbol as a PNG data URL, `SLIDE_PNG_WIDTH` pixels square. */
-export async function renderFeedbackQrPng(url: string): Promise<string> {
+/** The symbol as a PNG data URL, `width` pixels square: a slide's by default. */
+export async function renderFeedbackQrPng(
+  url: string,
+  width = SLIDE_PNG_WIDTH,
+): Promise<string> {
   const { default: QRCode } = await import('qrcode')
-  return QRCode.toDataURL(url, { ...QR_OPTIONS, width: SLIDE_PNG_WIDTH })
+  return QRCode.toDataURL(url, { ...QR_OPTIONS, width })
 }

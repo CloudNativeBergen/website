@@ -13,3 +13,10 @@ export {
   dropFeedbackVitals,
   redactFeedbackCode,
 } from './url'
+export {
+  FEEDBACK_PROMPT,
+  feedbackCodeDisplayUrl,
+  feedbackCodeFileName,
+  renderFeedbackQrPng,
+  renderFeedbackQrSvg,
+} from './code-assets'

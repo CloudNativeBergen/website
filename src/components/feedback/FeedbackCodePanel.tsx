@@ -1,9 +1,26 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { CheckIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  ArrowDownTrayIcon,
+  CheckIcon,
+  ClipboardDocumentIcon,
+  PhotoIcon,
+  PresentationChartBarIcon,
+  PrinterIcon,
+} from '@heroicons/react/24/outline'
 import type { FeedbackWindow } from '@/lib/feedback'
+import {
+  feedbackCodeFileName,
+  renderFeedbackQrPng,
+  renderFeedbackQrSvg,
+} from '@/lib/feedback/code-assets'
 import { formatRegistrationInstant } from '@/lib/time'
+import { FeedbackPresentView } from './FeedbackPresentView'
+import { FeedbackPrintSheetPortal } from './FeedbackPrintSheet'
+
+const BUTTON =
+  'inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
 
 /** The code's state line (speaker feedback spec §9.2). */
 function codeState(window: FeedbackWindow): { text: string; live: boolean } {
@@ -85,7 +102,7 @@ function CopyLinkButton({ url }: { url: string }) {
             .then(() => setResult('copied'))
             .catch(() => setResult('failed'))
         }
-        className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        className={BUTTON}
       >
         {result === 'copied' ? (
           <CheckIcon className="size-4 text-green-600 dark:text-green-400" />
@@ -111,16 +128,135 @@ function CopyLinkButton({ url }: { url: string }) {
   )
 }
 
+/** Hand the browser a file to save. */
+function saveFile(name: string, href: string) {
+  const link = document.createElement('a')
+  link.href = href
+  link.download = name
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
+
+/**
+ * PNG for slides, SVG, Print sheet and Present (speaker feedback spec §9.2).
+ * The files are drawn on the spot from the URL; nothing is fetched. A URL
+ * no QR can hold fails every one of them the same way, and says so.
+ */
+function CodeActions({ url, title }: { url: string; title: string }) {
+  const [failed, setFailed] = useState(false)
+  const [presenting, setPresenting] = useState(false)
+  const [printing, setPrinting] = useState(false)
+  const fail = useCallback(() => {
+    setFailed(true)
+    setPrinting(false)
+  }, [])
+  const stopPresenting = useCallback(() => setPresenting(false), [])
+  const stopPrinting = useCallback(() => setPrinting(false), [])
+
+  const download = (
+    ext: 'png' | 'svg',
+    render: () => Promise<string>,
+    toHref: (file: string) => string,
+  ) =>
+    render()
+      .then((file) => {
+        setFailed(false)
+        const href = toHref(file)
+        saveFile(feedbackCodeFileName(url, title, ext), href)
+        // Safari reads the blob after the click returns: revoke it later.
+        if (href.startsWith('blob:')) {
+          setTimeout(() => URL.revokeObjectURL(href), 1000)
+        }
+      })
+      .catch(fail)
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={BUTTON}
+          onClick={() =>
+            download(
+              'png',
+              () => renderFeedbackQrPng(url),
+              (file) => file,
+            )
+          }
+        >
+          <PhotoIcon className="size-4" aria-hidden="true" />
+          PNG for slides
+        </button>
+        <button
+          type="button"
+          className={BUTTON}
+          onClick={() =>
+            download(
+              'svg',
+              () => renderFeedbackQrSvg(url),
+              (file) =>
+                URL.createObjectURL(
+                  new Blob([file], { type: 'image/svg+xml' }),
+                ),
+            )
+          }
+        >
+          <ArrowDownTrayIcon className="size-4" aria-hidden="true" />
+          SVG
+        </button>
+        <button
+          type="button"
+          className={BUTTON}
+          disabled={printing}
+          onClick={() => {
+            setFailed(false)
+            setPrinting(true)
+          }}
+        >
+          <PrinterIcon className="size-4" aria-hidden="true" />
+          Print sheet
+        </button>
+        <button
+          type="button"
+          className={BUTTON}
+          onClick={() => setPresenting(true)}
+        >
+          <PresentationChartBarIcon className="size-4" aria-hidden="true" />
+          Present
+        </button>
+        <CopyLinkButton url={url} />
+      </div>
+      {failed && (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+          The QR code could not be drawn. Share the link instead.
+        </p>
+      )}
+      {presenting && <FeedbackPresentView url={url} onClose={stopPresenting} />}
+      {printing && (
+        <FeedbackPrintSheetPortal
+          url={url}
+          title={title}
+          onDone={stopPrinting}
+          onFailed={fail}
+        />
+      )}
+    </>
+  )
+}
+
 /**
  * The Feedback Code tab (speaker feedback spec §9.2): the QR code for the
- * attendee URL, its state, and Copy link. Downloads, Print sheet and Present
- * come later (F4).
+ * attendee URL, its state, the downloads, Print sheet, Present and Copy link.
  */
 export function FeedbackCodePanel({
   url,
+  title,
   window,
 }: {
   url: string
+  /** The talk's title, for the print sheet and the file names. */
+  title: string
   window: FeedbackWindow
 }) {
   const state = codeState(window)
@@ -142,7 +278,7 @@ export function FeedbackCodePanel({
         <p className="font-mono text-sm break-all text-gray-700 dark:text-gray-300">
           {url}
         </p>
-        <CopyLinkButton url={url} />
+        <CodeActions url={url} title={title} />
       </div>
     </div>
   )

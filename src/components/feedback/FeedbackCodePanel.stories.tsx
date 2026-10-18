@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
 
 const URL = 'https://2026.cloudnativedays.no/f/k7m2qx'
@@ -12,11 +12,15 @@ const meta = {
     docs: {
       description: {
         component:
-          'The Feedback Code tab of the speaker’s Session Feedback section: the QR code for the attendee URL, the code’s state from the Feedback Window, and Copy link. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The Feedback Code tab of the speaker’s Session Feedback section: the QR code for the attendee URL, the code’s state from the Feedback Window, PNG for slides, SVG, Print sheet, Present and Copy link. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
-  args: { url: URL, window: { state: 'unscheduled', feedbackVisible: false } },
+  args: {
+    url: URL,
+    title: 'Kubernetes: the hard parts',
+    window: { state: 'unscheduled', feedbackVisible: false },
+  },
 } satisfies Meta<typeof FeedbackCodePanel>
 
 export default meta
@@ -103,5 +107,134 @@ export const QrCannotBeDrawn: Story = {
         'The QR code could not be drawn. Share the link instead.',
       ),
     ).toBeVisible()
+  },
+}
+
+/**
+ * Catch what the browser is handed to save. The test runner reuses one page
+ * for every story, so the returned cleanup restores the real click.
+ */
+const saved: { name: string; href: string }[] = []
+const stubDownloads = () => {
+  saved.length = 0
+  const real = HTMLAnchorElement.prototype.click
+  HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+    saved.push({ name: this.download, href: this.href })
+  }
+  return () => {
+    HTMLAnchorElement.prototype.click = real
+  }
+}
+
+/** PNG for slides: a PNG named after the code and the talk. */
+export const DownloadPng: Story = {
+  args: { window: before },
+  beforeEach: stubDownloads,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'PNG for slides' }),
+    )
+    await waitFor(() => expect(saved).toHaveLength(1))
+    expect(saved[0].name).toBe(
+      'feedback-code-k7m2qx-kubernetes-the-hard-parts.png',
+    )
+    expect(saved[0].href.startsWith('data:image/png;base64,')).toBe(true)
+  },
+}
+
+/** SVG: a vector file, still the symbol for this URL. */
+export const DownloadSvg: Story = {
+  args: { window: before },
+  beforeEach: stubDownloads,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'SVG' }))
+    await waitFor(() => expect(saved).toHaveLength(1))
+    expect(saved[0].name).toBe(
+      'feedback-code-k7m2qx-kubernetes-the-hard-parts.svg',
+    )
+    const svg = await (await fetch(saved[0].href)).text()
+    expect(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')).toBe(true)
+    expect(svg).toContain('stroke="#000000"')
+  },
+}
+
+/** Replace the print dialog for one story. */
+const printed = { n: 0 }
+const stubPrint = () => {
+  printed.n = 0
+  const real = window.print
+  window.print = () => void printed.n++
+  return () => {
+    window.print = real
+  }
+}
+
+/**
+ * Print sheet: the sheet is mounted into `<body>` (hidden on screen, shown
+ * alone by the print stylesheet), the dialog opens once its QR has loaded,
+ * and the sheet leaves with `afterprint`.
+ */
+export const PrintSheet: Story = {
+  args: { window: before },
+  beforeEach: stubPrint,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Print sheet' }))
+    await waitFor(() => expect(printed.n).toBe(1))
+    const sheet = document.querySelector('[data-feedback-print]')
+    expect(sheet).not.toBeNull()
+    expect(sheet).toHaveTextContent('How was this session?')
+    expect(sheet).toHaveTextContent('Kubernetes: the hard parts')
+    expect(sheet).toHaveTextContent('2026.cloudnativedays.no/f/k7m2qx')
+    expect(sheet).not.toBeVisible()
+    window.dispatchEvent(new Event('afterprint'))
+    await waitFor(() =>
+      expect(document.querySelector('[data-feedback-print]')).toBeNull(),
+    )
+    expect(printed.n).toBe(1)
+  },
+}
+
+/** Present: full screen, and Esc or Close brings the page back. */
+export const PresentAndClose: Story = {
+  args: { window: before },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const open = () =>
+      userEvent.click(canvas.getByRole('button', { name: 'Present' }))
+    await open()
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Feedback Code on screen',
+    })
+    expect(dialog).toHaveTextContent('How was this session?')
+    expect(dialog).toHaveTextContent('2026.cloudnativedays.no/f/k7m2qx')
+    expect(within(dialog).getByRole('button', { name: /Close/ })).toHaveFocus()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await open()
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: /Close/,
+      }),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  },
+}
+
+/** A URL no QR can hold: every action says so, and the link stays. */
+export const DownloadFailed: Story = {
+  args: { url: `${URL}?${'x'.repeat(3000)}`, window: before },
+  beforeEach: stubDownloads,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'PNG for slides' }),
+    )
+    expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'The QR code could not be drawn. Share the link instead.',
+    )
+    expect(saved).toHaveLength(0)
   },
 }
