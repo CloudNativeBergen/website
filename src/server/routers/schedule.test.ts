@@ -381,6 +381,16 @@ describe('schedule.admin.addTalk', () => {
     ).rejects.toThrowError(
       /Proposal not found or belongs to another conference/,
     )
+
+    expect(clientWriteFetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('conference._ref == $conferenceId'),
+      expect.objectContaining({
+        id: 'foreign-talk',
+        conferenceId: CONFERENCE_ID,
+      }),
+    )
+    expect(saveScheduleMock).not.toHaveBeenCalled()
   })
 
   it('refuses unconfirmed talk on an official schedule', async () => {
@@ -405,6 +415,45 @@ describe('schedule.admin.addTalk', () => {
         proposalId: 'talk-unconfirmed',
       }),
     ).rejects.toThrowError(/Cannot add talk to official schedule/)
+  })
+
+  it('refuses unconfirmed talk on an official schedule with missing status (legacy)', async () => {
+    const legacyOfficialSchedule = {
+      ...dummySchedule,
+      status: undefined,
+    }
+    clientWriteFetchMock
+      .mockResolvedValueOnce(structuredClone(legacyOfficialSchedule))
+      .mockResolvedValueOnce({
+        _id: 'talk-unconfirmed',
+        conferenceRef: CONFERENCE_ID,
+        status: 'submitted',
+      })
+
+    await expect(
+      makeCaller().admin.addTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        startTime: '09:00',
+        endTime: '10:00',
+        proposalId: 'talk-unconfirmed',
+      }),
+    ).rejects.toThrowError(/Cannot add talk to official schedule/)
+  })
+
+  it('refuses addTalk when expectedRevision does not match current schedule revision', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(structuredClone(dummySchedule))
+
+    await expect(
+      makeCaller().admin.addTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        startTime: '09:00',
+        endTime: '10:00',
+        placeholder: 'Break',
+        expectedRevision: 'stale-rev',
+      }),
+    ).rejects.toThrowError(/Schedule was modified by another user/)
   })
 
   it('allows confirmed talk on an official schedule', async () => {
@@ -489,6 +538,50 @@ describe('schedule.admin.removeTalk', () => {
     )
   })
 
+  it('removes a talk by talkKey', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(dummyScheduleWithTalks),
+    )
+
+    const res = await makeCaller().admin.removeTalk({
+      scheduleId: 'sched-1',
+      trackIndex: 0,
+      talkKey: 'talk-1',
+    })
+
+    expect(res.success).toBe(true)
+    expect(saveScheduleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tracks: [
+          expect.objectContaining({
+            talks: [
+              expect.objectContaining({
+                startTime: '09:00',
+              }),
+            ],
+          }),
+        ],
+      }),
+      expect.anything(),
+      expect.anything(),
+    )
+  })
+
+  it('refuses removeTalk when expectedRevision does not match current schedule revision', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(dummyScheduleWithTalks),
+    )
+
+    await expect(
+      makeCaller().admin.removeTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        talkIndex: 0,
+        expectedRevision: 'stale-rev',
+      }),
+    ).rejects.toThrowError(/Schedule was modified by another user/)
+  })
+
   it('refuses when talk index is out of bounds', async () => {
     clientWriteFetchMock.mockResolvedValueOnce(
       structuredClone(dummyScheduleWithTalks),
@@ -499,6 +592,20 @@ describe('schedule.admin.removeTalk', () => {
         scheduleId: 'sched-1',
         trackIndex: 0,
         talkIndex: 5,
+      }),
+    ).rejects.toThrowError(/Track or talk index out of bounds/)
+  })
+
+  it('refuses when talkKey is not found', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(dummyScheduleWithTalks),
+    )
+
+    await expect(
+      makeCaller().admin.removeTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        talkKey: 'nonexistent-key',
       }),
     ).rejects.toThrowError(/Track or talk index out of bounds/)
   })

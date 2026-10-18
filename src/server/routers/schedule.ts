@@ -350,6 +350,7 @@ export const scheduleRouter = router({
             endTime: z.string().regex(HHMM_PATTERN, 'Time must be HH:MM (24h)'),
             proposalId: z.string().optional(),
             placeholder: z.string().optional(),
+            expectedRevision: z.string().optional(),
           })
           .refine((data) => data.proposalId || data.placeholder, {
             message: 'Either proposalId or placeholder must be specified',
@@ -375,6 +376,17 @@ export const scheduleRouter = router({
           })
         }
 
+        if (
+          input.expectedRevision &&
+          doc._rev &&
+          doc._rev !== input.expectedRevision
+        ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Schedule was modified by another user.',
+          })
+        }
+
         if (!doc.tracks || !doc.tracks[input.trackIndex]) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -397,7 +409,9 @@ export const scheduleRouter = router({
             })
           }
 
-          if (doc.status === ScheduleStatus.Official) {
+          const isOfficial =
+            !doc.status || doc.status === ScheduleStatus.Official
+          if (isOfficial) {
             if (
               proposal.status !== ProposalStatus.accepted &&
               proposal.status !== ProposalStatus.confirmed
@@ -456,11 +470,21 @@ export const scheduleRouter = router({
 
     removeTalk: adminProcedure
       .input(
-        z.object({
-          scheduleId: z.string(),
-          trackIndex: z.number().int().min(0),
-          talkIndex: z.number().int().min(0),
-        }),
+        z
+          .object({
+            scheduleId: z.string(),
+            trackIndex: z.number().int().min(0),
+            talkIndex: z.number().int().min(0).optional(),
+            talkKey: z.string().optional(),
+            expectedRevision: z.string().optional(),
+          })
+          .refine(
+            (data) =>
+              data.talkIndex !== undefined || data.talkKey !== undefined,
+            {
+              message: 'Either talkIndex or talkKey must be provided',
+            },
+          ),
       )
       .mutation(async ({ input, ctx }) => {
         const { conference, error } = await getConferenceForCurrentDomain()
@@ -483,18 +507,43 @@ export const scheduleRouter = router({
         }
 
         if (
-          !doc.tracks ||
-          !doc.tracks[input.trackIndex] ||
-          !doc.tracks[input.trackIndex].talks ||
-          !doc.tracks[input.trackIndex].talks[input.talkIndex]
+          input.expectedRevision &&
+          doc._rev &&
+          doc._rev !== input.expectedRevision
         ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Schedule was modified by another user.',
+          })
+        }
+
+        if (!doc.tracks || !doc.tracks[input.trackIndex]) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Track or talk index out of bounds.',
           })
         }
 
-        doc.tracks[input.trackIndex].talks.splice(input.talkIndex, 1)
+        const track = doc.tracks[input.trackIndex]
+        const talks = track.talks || []
+
+        let targetIndex: number
+        if (input.talkKey !== undefined) {
+          targetIndex = talks.findIndex(
+            (t) => (t as unknown as { _key?: string })._key === input.talkKey,
+          )
+        } else {
+          targetIndex = input.talkIndex!
+        }
+
+        if (targetIndex < 0 || targetIndex >= talks.length) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Track or talk index out of bounds.',
+          })
+        }
+
+        track.talks.splice(targetIndex, 1)
 
         const validTalkIds = await getValidTalkIds(conference._id)
         const validationError = validateSchedulePayload(doc, validTalkIds)
