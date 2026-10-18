@@ -25,6 +25,38 @@ import { useFeedbackQrPng } from './useFeedbackQrPng'
  * attached yet when the request is made (Headless UI's portal renders
  * nothing until its server hand-off is done).
  */
+/**
+ * Successive views' requests and exits run one after another: a Present,
+ * Close, Present within the browser's grant time would otherwise have two
+ * requests in flight, the second granted against the first's session and
+ * closed by the first's exit.
+ */
+let queue: Promise<void> = Promise.resolve()
+function enqueue(task: () => Promise<unknown>): Promise<void> {
+  queue = queue.then(task).then(
+    () => undefined,
+    () => undefined,
+  )
+  return queue
+}
+
+/**
+ * The previous view's exit may still be in flight, with its own enter event
+ * still queued ahead of it: resolve once nothing is full screen, however
+ * many changes that takes.
+ */
+function whenNothingIsFullscreen(): Promise<void> {
+  return new Promise((resolve) => {
+    const check = () => {
+      if (document.fullscreenElement) return
+      document.removeEventListener('fullscreenchange', check)
+      resolve()
+    }
+    document.addEventListener('fullscreenchange', check)
+    check()
+  })
+}
+
 export function FeedbackPresentView({
   url,
   onClose,
@@ -41,41 +73,32 @@ export function FeedbackPresentView({
     // previous instance's exit can land after this one mounted (Close, then
     // Present at once), and that stale change must not close the new view.
     let entered = false
-    // That exit may still be in flight, with the previous view's own enter
-    // event still queued ahead of it: wait until nothing is full screen
-    // before asking, however many changes that takes.
-    const exited = new Promise<void>((resolve) => {
-      const check = () => {
-        if (document.fullscreenElement) return
-        document.removeEventListener('fullscreenchange', check)
-        resolve()
-      }
-      document.addEventListener('fullscreenchange', check)
-      check()
-    })
     // The request settles after this effect; keep the promise so a close
     // before it settles still leaves full screen once it is entered.
-    const entering = exited
-      .then(
-        () =>
-          root.requestFullscreen?.() ??
-          Promise.reject(new Error('unavailable')),
-      )
-      .then(() => {
-        entered = document.fullscreenElement === root
-      })
-      .catch(() => {})
+    const entering = enqueue(() =>
+      whenNothingIsFullscreen()
+        .then(
+          () =>
+            root.requestFullscreen?.() ??
+            Promise.reject(new Error('unavailable')),
+        )
+        .then(() => {
+          entered = document.fullscreenElement === root
+        }),
+    )
     const onFullscreen = () => {
       if (entered && !document.fullscreenElement) onClose()
     }
     document.addEventListener('fullscreenchange', onFullscreen)
     return () => {
       document.removeEventListener('fullscreenchange', onFullscreen)
-      void entering.then(() => {
-        if (entered && document.fullscreenElement === root) {
-          document.exitFullscreen().catch(() => {})
-        }
-      })
+      enqueue(() =>
+        entering.then(() =>
+          entered && document.fullscreenElement === root
+            ? document.exitFullscreen()
+            : undefined,
+        ),
+      )
     }
   }, [onClose])
 

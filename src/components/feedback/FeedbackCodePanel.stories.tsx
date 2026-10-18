@@ -333,6 +333,41 @@ export const PresentAndClose: Story = {
       within(reopened).getByRole('button', { name: 'Close' }),
     )
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    // Esc then Enter: the next view opens while the browser still reports
+    // the previous one's full screen, its enter event lands late, and only
+    // then its exit. Replayed through the `fullscreenElement` accessor with
+    // a request that is "granted" at once: the new view must wait for the
+    // exit before asking, or it is granted against the old session and
+    // closed by that exit.
+    const accessor = Object.getOwnPropertyDescriptor(
+      Document.prototype,
+      'fullscreenElement',
+    )
+    expect(accessor?.configurable).toBe(true)
+    let pretend: Element | null = document.documentElement
+    Object.defineProperty(Document.prototype, 'fullscreenElement', {
+      configurable: true,
+      get: () => pretend,
+    })
+    const request = Element.prototype.requestFullscreen
+    Element.prototype.requestFullscreen = () => Promise.resolve()
+    try {
+      await userEvent.click(present)
+      const next = await screen.findByRole('dialog')
+      document.dispatchEvent(new Event('fullscreenchange')) // the old enter
+      pretend = null
+      document.dispatchEvent(new Event('fullscreenchange')) // the old exit
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(
+        next,
+        'survives an exit that lands after it opened',
+      ).toBeInTheDocument()
+      await userEvent.click(within(next).getByRole('button', { name: 'Close' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    } finally {
+      Object.defineProperty(Document.prototype, 'fullscreenElement', accessor!)
+      Element.prototype.requestFullscreen = request
+    }
   },
 }
 

@@ -201,10 +201,9 @@ function CodeActions({ url, title }: { url: string; title: string }) {
           type="button"
           className={BUTTON}
           // Not `disabled`: that would drop focus from the button that was
-          // just pressed. It just refuses a second press while printing.
+          // just pressed. A second press changes nothing: printing is on.
           aria-disabled={printing}
           onClick={() => {
-            if (printing) return
             setFailed(false)
             setPrinting(true)
           }}
