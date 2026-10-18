@@ -89,7 +89,10 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
           </Question>
           {/* Until the Submit action lands (F1c), say so rather than offer
               buttons that look live and do nothing. */}
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          <p
+            id="answering-unavailable"
+            className="mt-1 text-sm text-gray-600 dark:text-gray-400"
+          >
             Answering isn&apos;t available yet.
           </p>
           <div className="mt-5 flex flex-col gap-3">
@@ -98,6 +101,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
                 key={colour}
                 type="button"
                 disabled
+                aria-describedby="answering-unavailable"
                 className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-600 disabled:shadow-none dark:disabled:bg-gray-800 dark:disabled:text-gray-300 ${className}`}
               >
                 <Icon className="size-9 shrink-0" aria-hidden="true" />

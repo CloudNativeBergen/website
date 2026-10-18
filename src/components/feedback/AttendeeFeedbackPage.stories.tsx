@@ -47,10 +47,20 @@ export const Open: Story = {
     await expect(
       canvas.getByText("Answering isn't available yet."),
     ).toBeInTheDocument()
-    for (const label of ['Loved it', 'It was OK', 'Not for me']) {
-      // Not wired yet: present, and refusing the tap.
-      await expect(canvas.getByRole('button', { name: label })).toBeDisabled()
+    const buttons = ['Loved it', 'It was OK', 'Not for me'].map((label) =>
+      canvas.getByRole('button', { name: label }),
+    )
+    for (const button of buttons) {
+      // Not wired yet: present, refusing the tap, and saying why.
+      await expect(button).toBeDisabled()
+      await expect(button).toHaveAccessibleDescription(
+        "Answering isn't available yet.",
+      )
     }
+    // One neutral fill for all three: no option may read as the primary
+    // action while none can be chosen.
+    const fills = buttons.map((b) => getComputedStyle(b).backgroundColor)
+    await expect(new Set(fills).size).toBe(1)
     // No promise to change an answer that cannot be given yet (F1c).
     await expect(
       canvas.getByText(
@@ -209,6 +219,11 @@ export const OpenDark: Story = { ...Open, globals: { theme: 'dark' } }
 
 export const NotYetOpenDark: Story = {
   ...NotYetOpen,
+  globals: { theme: 'dark' },
+}
+
+export const UnavailableDark: Story = {
+  ...Unavailable,
   globals: { theme: 'dark' },
 }
 

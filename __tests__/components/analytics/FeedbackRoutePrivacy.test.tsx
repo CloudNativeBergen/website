@@ -39,7 +39,15 @@ beforeEach(() => {
 })
 
 describe('HiddenOnFeedbackPage', () => {
-  it('renders nothing of what it wraps on the attendee page', () => {
+  it('renders nothing of what it wraps on the attendee page, in any case', () => {
+    // `/F/K7M2QX` (caps lock) is rewritten to the page; the browser path
+    // `usePathname` reports keeps the capitals.
+    h.pathname = '/F/K7M2QX'
+    render(
+      <HiddenOnFeedbackPage>pirsch and install prompt</HiddenOnFeedbackPage>,
+    )
+    expect(screen.queryByText('pirsch and install prompt')).toBeNull()
+    cleanup()
     h.pathname = '/f/k7m2qx'
     render(
       <HiddenOnFeedbackPage>pirsch and install prompt</HiddenOnFeedbackPage>,

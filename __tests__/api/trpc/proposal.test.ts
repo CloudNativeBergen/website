@@ -1461,6 +1461,35 @@ describe('proposal router', () => {
       ])
     })
 
+    it('a newly confirmed talk expires it too, so its code starts resolving', async () => {
+      const accepted = {
+        ...mockProposal,
+        _rev: 'rev-accepted',
+        status: Status.accepted,
+      }
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: accepted as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {
+          ...accepted,
+          status: Status.confirmed,
+          conference: { _type: 'reference', _ref: 'conf-of-the-talk' },
+        } as any,
+        err: null,
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.confirm,
+      })
+
+      expect(expired()).toEqual([
+        [feedbackCodeIndexTag('conf-of-the-talk'), { expire: 0 }],
+      ])
+    })
+
     it('a failed status change expires nothing', async () => {
       vi.mocked(getProposalSanity).mockResolvedValue({
         proposal: mockProposal as any,

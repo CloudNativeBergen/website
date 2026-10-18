@@ -539,6 +539,18 @@ describe('cache revalidation is reported honestly', () => {
   })
 
   it('reports revalidated:false with the tags when no revalidate is supplied', async () => {
+    // The production path: `scripts/erase-speaker.ts` passes no callback and
+    // PRINTS these for the operator, so they must include the talk's
+    // conference and its Feedback Code index.
+    world.referencing = [
+      {
+        _id: 'talk-1',
+        _type: 'talk',
+        _rev: 'r1',
+        conference: ref('conf-of-the-talk', 'c'),
+        speakers: [ref(SPEAKER, 's1')],
+      },
+    ]
     const result = await eraseSpeakerInPlace({
       speakerId: SPEAKER,
       actor: 'op',
@@ -546,6 +558,10 @@ describe('cache revalidation is reported honestly', () => {
     expect(result.cache.revalidated).toBe(false)
     expect(result.cache.error).toContain('runbook')
     expect(result.cache.tags).toContain('content:speaker-detail')
+    expect(result.cache.tags).toContain('sanity:conference-conf-of-the-talk')
+    expect(result.cache.tags).toContain(
+      'sanity:feedback-code-index-conf-of-the-talk',
+    )
   })
 
   it('does not claim success when revalidate throws', async () => {

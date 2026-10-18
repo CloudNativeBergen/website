@@ -40,6 +40,8 @@ describe('/f/[code]', () => {
     h.resolution = { conference: {}, status: 'unavailable' }
     const element = await render()
     expect(element.props.page).toEqual({ state: 'unavailable' })
+    // No conference read, so no logo: never another brand on this domain.
+    expect(element.props.logo).toBeNull()
     expect(h.resolve).not.toHaveBeenCalled()
   })
 
@@ -57,6 +59,9 @@ describe('/f/[code]', () => {
       'ABC234',
       expect.any(Date),
     )
+    // `now` is the request's time, not a fixed or cached instant.
+    const now = h.resolve.mock.calls[0][2] as Date
+    expect(Math.abs(now.getTime() - Date.now())).toBeLessThan(5_000)
     expect(element.props.page).toEqual({ state: 'closed', talk: null })
     expect(element.props.logo).toMatchObject({ title: 'Conf A' })
   })
