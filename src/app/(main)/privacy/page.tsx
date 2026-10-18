@@ -10,6 +10,8 @@ import {
   resolveSubprocessorDisclosure,
 } from '@/lib/legal'
 import {
+  SessionFeedbackCookieNote,
+  SessionFeedbackPrivacy,
   SharedWorkshopLoginNotice,
   SubprocessorList,
   WorkshopEarlyAccessCookieNote,
@@ -1230,6 +1232,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         the profile if you ask us to erase it.
                       </p>
                     </div>
+
+                    {/* Session Feedback (speaker feedback spec §8) */}
+                    <SessionFeedbackPrivacy />
 
                     {/* Website Usage (Analytics) */}
                     <div className="rounded-lg border border-teal-200 bg-teal-50 p-6 dark:border-teal-800 dark:bg-teal-900/20">
@@ -2486,6 +2491,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                     */}
                     <WorkshopSignInCookieNote signInHost={signInHost} />
                     <WorkshopEarlyAccessCookieNote />
+                    <SessionFeedbackCookieNote />
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                       <strong>localStorage:</strong> We use your browser’s
                       localStorage to save personal bookmarks on your device.

@@ -19,6 +19,12 @@ export function feedbackCodeUrl(
  */
 export const ATTENDEE_PAGE_LIVE: boolean = true
 
+/**
+ * How long the attendee's device cookie lasts after their last answer (spec
+ * §7.3, §8): the cookie itself and the /privacy copy both read it.
+ */
+export const DEVICE_COOKIE_DAYS = 30
+
 // Case-insensitive: codes are, so an attendee typing `/F/K7M2QX` must be
 // kept out of analytics on the not-found page it lands on.
 const FEEDBACK_PATH = /^\/f(\/|$)/i

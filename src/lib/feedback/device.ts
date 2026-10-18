@@ -15,12 +15,13 @@
  */
 import 'server-only'
 import crypto from 'crypto'
+import { DEVICE_COOKIE_DAYS } from './url'
 
 const COOKIE_LABEL = 'konf.feedback-device.v1'
 const TALK_LABEL = 'konf.feedback-talk.v1'
 
-/** 30 days after the last answer (§7.3, §8). */
-export const DEVICE_COOKIE_MAX_AGE = 30 * 24 * 60 * 60
+/** 30 days after the last answer (§7.3, §8), in seconds. */
+export const DEVICE_COOKIE_MAX_AGE = DEVICE_COOKIE_DAYS * 24 * 60 * 60
 export const MAX_ANSWERED_TALKS = 100
 
 /**
