@@ -1,14 +1,15 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { useEffect } from 'react'
 import { isFeedbackPath } from '@/lib/feedback'
 
 /**
- * Set once the attendee page has rendered in this browser document; never
- * reset. Module state is per document in the browser, but one server process
- * renders every visitor, so it is only ever set in the browser.
+ * Whether the attendee page has rendered in this browser document; never
+ * reset. Written only by an effect, so only ever in the browser: one server
+ * process renders every visitor.
  */
-let feedbackPageSeen = false
+const feedbackPage = { seen: false }
 
 /**
  * Renders its children everywhere except on the attendee feedback page
@@ -28,6 +29,8 @@ export function HiddenOnFeedbackPage({
   children: React.ReactNode
 }) {
   const onFeedbackPage = isFeedbackPath(usePathname())
-  if (onFeedbackPage && typeof window !== 'undefined') feedbackPageSeen = true
-  return onFeedbackPage || feedbackPageSeen ? null : children
+  useEffect(() => {
+    if (onFeedbackPage) feedbackPage.seen = true
+  }, [onFeedbackPage])
+  return onFeedbackPage || feedbackPage.seen ? null : children
 }
