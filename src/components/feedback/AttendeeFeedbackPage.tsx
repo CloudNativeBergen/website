@@ -72,6 +72,9 @@ export function AttendeeFeedbackPage({
   submit: SubmitAnswer
 }) {
   const [page, setPage] = useState(initial)
+  // Whatever a tap leads to takes focus, so a screen reader announces it: the
+  // tapped button is gone from the page.
+  const [afterTap, setAfterTap] = useState(false)
   return (
     <div
       data-shell-fit="viewport"
@@ -89,7 +92,15 @@ export function AttendeeFeedbackPage({
         </header>
       )}
       <main className="mx-auto max-w-md px-4 pt-10 pb-12">
-        <PageState page={page} submit={submit} onAnswer={setPage} />
+        <PageState
+          page={page}
+          submit={submit}
+          announce={afterTap}
+          onAnswer={(next) => {
+            setPage(next)
+            setAfterTap(true)
+          }}
+        />
       </main>
     </div>
   )
@@ -98,10 +109,12 @@ export function AttendeeFeedbackPage({
 function PageState({
   page,
   submit,
+  announce,
   onAnswer,
 }: {
   page: AttendeeFeedbackState
   submit: SubmitAnswer
+  announce: boolean
   onAnswer: (next: AttendeeFeedbackState) => void
 }) {
   // The talk's title is the page's h1 when it is shown; the state's own
@@ -134,6 +147,7 @@ function PageState({
         <>
           <TalkHeading talk={page.talk} />
           <Notice
+            announce={announce}
             level={level}
             Icon={ClockIcon}
             title="Feedback opens when the session starts"
@@ -149,6 +163,7 @@ function PageState({
         <>
           <TalkHeading talk={page.talk} />
           <Notice
+            announce={announce}
             level={level}
             Icon={LockClosedIcon}
             title="Feedback for this session has closed"
@@ -160,6 +175,7 @@ function PageState({
     case 'unknown':
       return (
         <Notice
+          announce={announce}
           level={level}
           Icon={QuestionMarkCircleIcon}
           title="This feedback code isn't valid"
@@ -171,6 +187,7 @@ function PageState({
     case 'unavailable':
       return (
         <Notice
+          announce={announce}
           level={level}
           Icon={ExclamationTriangleIcon}
           title="Feedback isn't available right now"
@@ -283,8 +300,7 @@ function Thanks({
   level: 'h1' | 'h2'
   answer: (typeof ANSWERS)[number] | undefined
 }) {
-  const heading = useRef<HTMLHeadingElement>(null)
-  useEffect(() => heading.current?.focus(), [])
+  const heading = useFocusOnMount(true)
   const Icon = answer?.Icon ?? FaceSmileIcon
   return (
     <div className="flex flex-col items-center text-center">
@@ -333,20 +349,37 @@ function Notice({
   level: Heading,
   Icon,
   title,
+  announce = false,
   children,
 }: {
   level: 'h1' | 'h2'
   Icon: typeof ClockIcon
   title: string
+  /** Take focus on mount: this notice replaced the buttons after a tap. */
+  announce?: boolean
   children: React.ReactNode
 }) {
+  const heading = useFocusOnMount(announce)
   return (
     <div className="flex flex-col items-center text-center">
       <Icon className="size-12 text-gray-400" aria-hidden="true" />
-      <Heading className="mt-4 text-lg font-semibold text-balance">
+      <Heading
+        ref={heading}
+        tabIndex={announce ? -1 : undefined}
+        className="mt-4 text-lg font-semibold text-balance outline-none"
+      >
         {title}
       </Heading>
       <p className="mt-2 text-gray-600 dark:text-gray-400">{children}</p>
     </div>
   )
+}
+
+/** A ref that focuses its element once, on mount, when `enabled`. */
+function useFocusOnMount(enabled: boolean) {
+  const ref = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (enabled) ref.current?.focus()
+  }, [enabled])
+  return ref
 }

@@ -120,11 +120,11 @@ export const AnsweredAfterClosing: Story = {
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getByRole('button', { name: 'Not for me' }))
     await expect(args.submit).toHaveBeenCalledWith('red')
-    await expect(
-      await canvas.findByRole('heading', {
-        name: 'Feedback for this session has closed',
-      }),
-    ).toBeInTheDocument()
+    const closed = await canvas.findByRole('heading', {
+      name: 'Feedback for this session has closed',
+    })
+    // The tapped button is gone: focus moves to what replaced it.
+    await waitFor(() => expect(closed).toHaveFocus())
     await expect(canvas.queryByText('Thanks!')).toBeNull()
   },
 }

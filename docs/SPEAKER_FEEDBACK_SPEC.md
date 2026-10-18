@@ -868,7 +868,7 @@ Per `AGENTS.md` ("Agent discipline"):
   and then commits the response, so a withdrawal, rotation or erasure that
   lands between the two still records that one answer. Guarding the commit on
   the talk's revision would write the talk on every tap and make concurrent
-  taps fail each other. The window is well under a second; Remove clears it.
+  taps fail each other. The window is one Sanity round trip; Remove clears it.
 - **Remove is not final for the device that answered** (_Refinement (F1c)_):
   the same cookie and talk give the same id, so that device's next tap
   recreates a removed response (like R2's delete-and-resubmit). Organizers
@@ -878,6 +878,10 @@ Per `AGENTS.md` ("Agent discipline"):
   was lost may have applied, and a new token would count the device twice. A
   read of the response (F2) must treat a missing document as "no answer yet".
 - **A cleared cookie** produces a second response from the same person.
+  So do two tabs of one browser answering at once before it has a cookie
+  (_Refinement (F1c)_): each mints its own token. Serializing submits across
+  tabs (Web Locks) was tried and dropped: one stalled request then froze the
+  buttons in every tab.
 - **No IP limit:** a scripted flood is only remedied after the fact (Remove,
   bulk by time range). Revisit with proof of attendance if abuse appears.
 - **Exact comment times** in a small room, with live polling, can hint at who
