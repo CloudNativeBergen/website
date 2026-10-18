@@ -29,6 +29,7 @@ import {
   registrationWindowFor,
   resolveEarlyAccess,
 } from '@/lib/workshop/early-access'
+import { earlyAccessTicketTypeOf } from '@/lib/workshop/early-access/ticket'
 import { refreshWorkshopPortal, signOutOfWorkshop } from './actions'
 
 /** Is `url` on `host` (a Host header value), compared as URLs compare hosts? */
@@ -138,9 +139,8 @@ export default async function WorkshopPage({
   // make, so this page can never show a signup form the API would refuse (or
   // the reverse). It no longer skips the ticket check for a conference without
   // ticketing ids: no ticketing means nobody can be shown to hold a ticket.
+  const access = await decideWorkshopPortalAccess({ conference, user })
   {
-    const access = await decideWorkshopPortalAccess({ conference, user })
-
     // Unreachable after the gate above, but the decision is the authority.
     if (!access.allowed && access.denial === 'feature-disabled') {
       notFound()
@@ -172,19 +172,30 @@ export default async function WorkshopPage({
     conference,
     new Date(),
     async () => {
+      // A LIVE LINK names its sponsor, as `workshop.signup` records it; the
+      // ticket type (from the tickets the decision above already read) is
+      // the fallback when there is no live link.
+      const ticketType = earlyAccessTicketTypeOf(
+        access.allowed ? access.eligibleTickets : [],
+        conference.workshopEarlyAccessTicketTypes,
+      )
+      // The banner reads "early access through …".
+      const byType = ticketType
+        ? { sponsorName: `your “${ticketType}” ticket` }
+        : null
+      const token = earlyAccessTokenOf(await cookies())
+      if (!token) return byType
       try {
-        return await resolveEarlyAccess(
-          conference._id,
-          earlyAccessTokenOf(await cookies()),
-        )
+        return (await resolveEarlyAccess(conference._id, token)) ?? byType
       } catch (error) {
         // THE PAGE ONLY DECIDES WHAT IS SHOWN: when the links cannot be read,
-        // the person sees the portal as everyone does. For a person who does
-        // have early access that is wrong until a later view: they see the
-        // banner naming the official opening and no workshop to sign up for,
-        // and nothing tells them why.
+        // the person sees the portal as everyone does (or as their ticket
+        // type admits). For a person who does have early access by link that
+        // is wrong until a later view: they see the banner naming the
+        // official opening and no workshop to sign up for, and nothing tells
+        // them why.
         console.error('[workshop] early-access links could not be read', error)
-        return null
+        return byType
       }
     },
   )

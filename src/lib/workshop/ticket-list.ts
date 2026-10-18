@@ -44,6 +44,8 @@ export interface WorkshopTicketType {
    * carry-over must not overwrite a stored answer.
    */
   builtInGrantedOthersSetToNo: string[]
+  /** Holders may sign up from the sponsor start time, with no link. */
+  earlyAccess?: boolean
 }
 
 /** A stored workshop answer whose `typeName` matches no provider type. */
@@ -96,13 +98,21 @@ export interface WorkshopTicketList {
    */
   builtInGranted: string[]
   orphaned: OrphanedWorkshopEntry[]
+  /**
+   * Early-access type names, as configured, that match no provider type: a
+   * type renamed or removed there. Listed so they can be removed. Empty when
+   * the provider lists no types, as for `orphaned`.
+   */
+  orphanedEarlyAccess: string[]
 }
 
 export function buildWorkshopTicketList(
   typeNames: readonly string[],
   ticketTypeRoles?: readonly TicketTypeRole[] | null,
+  earlyAccessTypes?: readonly string[] | null,
 ): WorkshopTicketList {
   const roles = ticketTypeRoles ?? []
+  const early = new Set((earlyAccessTypes ?? []).map(typeKey))
   const configured = marksWorkshopAccess(roles)
   // Taking this name's entries away leaves nothing marked: the question the
   // save asks of the stored document, asked here of the same roles.
@@ -155,6 +165,7 @@ export function buildWorkshopTicketList(
         builtInGrants: builtInOnce.has(key),
         builtInGrantedOthers: builtInOthers(key, false),
         builtInGrantedOthersSetToNo: builtInOthers(key, true),
+        ...(early.has(key) && { earlyAccess: true }),
       }
     }),
     builtInGranted,
@@ -167,6 +178,10 @@ export function buildWorkshopTicketList(
     // a workshop answer: there is nothing here to remove from it. And a
     // provider that lists NO types says nothing about which entries are
     // orphaned: every one would look it, so none is called it.
+    orphanedEarlyAccess:
+      typeNames.length === 0
+        ? []
+        : (earlyAccessTypes ?? []).filter((name) => !listed.has(typeKey(name))),
     orphaned:
       typeNames.length === 0
         ? []

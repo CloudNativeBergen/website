@@ -14,6 +14,16 @@ export function EarlyAccessBadge({
   earlyAccess: SignupEarlyAccess | undefined
 }) {
   if (!earlyAccess) return null
+  if (earlyAccess.ticketType) {
+    return (
+      <span
+        title={`Signed up early with a “${earlyAccess.ticketType}” ticket`}
+        className="inline-block max-w-[min(16rem,100%)] truncate rounded-full bg-blue-100 px-2.5 py-0.5 align-middle text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+      >
+        Ticket: {earlyAccess.ticketType}
+      </span>
+    )
+  }
   const name = earlyAccess.sponsor?.name
   return (
     <span
@@ -24,7 +34,7 @@ export function EarlyAccessBadge({
             ? 'Signed up through the early-access link of a sponsor of this conference that has no name'
             : 'Signed up through the early-access link of a sponsor that is no longer in this conference'
       }
-      className={`inline-block max-w-64 truncate rounded-full px-2.5 py-0.5 align-middle text-xs font-medium ${
+      className={`inline-block max-w-[min(16rem,100%)] truncate rounded-full px-2.5 py-0.5 align-middle text-xs font-medium ${
         name
           ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
           : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'

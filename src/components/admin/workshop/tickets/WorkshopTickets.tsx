@@ -109,8 +109,13 @@ async function loadWorkshopTickets(conference: Conference) {
 
   return (
     <WorkshopTicketsSection
-      list={buildWorkshopTicketList(typeNames, roles)}
+      list={buildWorkshopTicketList(
+        typeNames,
+        roles,
+        conference.workshopEarlyAccessTicketTypes,
+      )}
       providerLabel={providerLabel}
+      sponsorStartSet={!!conference.workshopRegistrationSponsorStart}
     />
   )
 }

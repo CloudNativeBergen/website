@@ -2074,6 +2074,17 @@ export default defineType({
       validation: (Rule) => Rule.custom(safeLinkRule),
       description: 'A site path (e.g. /info) or a full http(s) URL.',
     }),
+    defineField({
+      // Ticket types whose holders may sign up for workshops from the sponsor
+      // start time, with no early-access link. Matched to the provider's type
+      // name as `workshopAccessOf` matches it. Edited on /admin/workshops.
+      name: 'workshopEarlyAccessTicketTypes',
+      title: 'Workshop Early Access Ticket Types',
+      type: 'array',
+      of: [{ type: 'string' }],
+      description:
+        'Holders of these ticket types can sign up for workshops from Sponsor Early Access Opens. No link needed.',
+    }),
   ],
 
   preview: {

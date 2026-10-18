@@ -31,6 +31,7 @@ import { TicketHolderContext, type TicketHolderView } from '../holders'
 
 const h = vi.hoisted(() => ({
   mutate: vi.fn(),
+  earlyMutate: vi.fn(),
   refresh: vi.fn(),
   isPending: false,
 }))
@@ -44,6 +45,13 @@ vi.mock('@/lib/trpc/client', () => ({
         },
       },
     }),
+    workshop: {
+      admin: {
+        setEarlyAccessTicketType: {
+          useMutation: () => ({ mutate: h.earlyMutate, isPending: false }),
+        },
+      },
+    },
     tickets: {
       admin: {
         setWorkshopAccess: {
@@ -98,6 +106,51 @@ beforeEach(() => {
   h.isPending = false
 })
 afterEach(cleanup)
+
+describe('early access by ticket type', () => {
+  const SPONSOR = 'Sponsor discount (workshop upgrade)'
+  const roles = [
+    { typeName: SPONSOR, grantsWorkshop: true },
+    { typeName: SPEAKER, grantsWorkshop: false },
+  ]
+  const early = () =>
+    screen.getAllByRole('checkbox', { name: /^Early access for / })
+
+  it('turns on only for a type that grants workshop access', () => {
+    render(
+      <WorkshopTicketsSection
+        list={buildWorkshopTicketList([SPONSOR, SPEAKER], roles)}
+        providerLabel="Checkin.no"
+        sponsorStartSet
+      />,
+    )
+    const [sponsor, speaker] = early()
+    expect(sponsor).toHaveAccessibleName(`Early access for ${SPONSOR}`)
+    expect(speaker).toBeDisabled()
+    expect(
+      screen.getByText('Only for types that grant workshop access.'),
+    ).toBeInTheDocument()
+    fireEvent.click(sponsor)
+    expect(h.earlyMutate).toHaveBeenCalledWith({
+      typeName: SPONSOR,
+      earlyAccess: true,
+    })
+    expect(screen.queryByText(/No sponsor start time is set/)).toBeNull()
+  })
+
+  it('shows what is stored, and says when no sponsor start time is set', () => {
+    render(
+      <WorkshopTicketsSection
+        list={buildWorkshopTicketList([SPONSOR, SPEAKER], roles, [
+          'sponsor DISCOUNT (workshop upgrade)',
+        ])}
+        providerLabel="Checkin.no"
+      />,
+    )
+    expect(early()[0]).toBeChecked()
+    expect(screen.getByText(/No sponsor start time is set/)).toBeInTheDocument()
+  })
+})
 
 describe('a list nobody has configured', () => {
   it('says so, and names the types the built-in list lets in', () => {

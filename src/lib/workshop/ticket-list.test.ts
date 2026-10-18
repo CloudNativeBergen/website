@@ -143,6 +143,7 @@ describe('a conference that has marked nothing', () => {
       types: [],
       builtInGranted: [],
       orphaned: [],
+      orphanedEarlyAccess: [],
     })
   })
 
@@ -166,7 +167,26 @@ describe('a conference that has marked nothing', () => {
       types: [],
       builtInGranted: [],
       orphaned: [],
+      orphanedEarlyAccess: [],
     })
+  })
+})
+
+describe('early-access types the provider no longer lists', () => {
+  it('lists them as configured, folded names matching a type are not', () => {
+    const list = buildWorkshopTicketList(
+      ['Two-day pass'],
+      [{ typeName: 'Two-day pass', grantsWorkshop: true }],
+      ['two-day PASS', 'Old pass'],
+    )
+    expect(list.orphanedEarlyAccess).toEqual(['Old pass'])
+    expect(list.types[0].earlyAccess).toBe(true)
+  })
+
+  it('lists none when the provider lists no types', () => {
+    expect(
+      buildWorkshopTicketList([], [], ['Old pass']).orphanedEarlyAccess,
+    ).toEqual([])
   })
 })
 

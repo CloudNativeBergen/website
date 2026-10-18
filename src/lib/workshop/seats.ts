@@ -75,6 +75,8 @@ export interface SignUpRequest extends Pick<
   conferenceId: string
   /** The sponsor whose early-access link admitted this sign-up (#1346). */
   earlyAccessSponsorId?: string
+  /** The ticket type that admitted this sign-up early, with no link. */
+  earlyAccessTicketType?: string
 }
 
 /**
@@ -332,7 +334,12 @@ export async function signUpForWorkshop(
   request: SignUpRequest,
   { whenFull }: { whenFull: 'waitlist' | 'refuse' },
 ): Promise<SignUpOutcome> {
-  const { workshopId, conferenceId, earlyAccessSponsorId } = request
+  const {
+    workshopId,
+    conferenceId,
+    earlyAccessSponsorId,
+    earlyAccessTicketType,
+  } = request
   const _id = signupDocumentId(conferenceId, workshopId, request.userWorkOSId)
   const outcome = await decideAndCommit<
     { refused: 'already-signed-up' | 'full' | 'not-found' },
@@ -389,6 +396,7 @@ export async function signUpForWorkshop(
             _weak: true,
           },
         }),
+        ...(earlyAccessTicketType && { earlyAccessTicketType }),
       })
       return { done: _id }
     },

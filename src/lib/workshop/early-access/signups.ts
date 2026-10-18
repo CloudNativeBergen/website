@@ -32,7 +32,7 @@ const SPONSOR_OF_THIS_CONFERENCE = `select(earlyAccessSponsor->conference._ref =
  * that binds `$conferenceId` ({@link SignupEarlyAccess}): `null` for a sign-up
  * that is not early, `{ sponsor }` for one that is.
  */
-export const EARLY_ACCESS_OF_SIGNUP = `select(defined(earlyAccessSponsor._ref) => { "sponsor": ${SPONSOR_OF_THIS_CONFERENCE} })`
+export const EARLY_ACCESS_OF_SIGNUP = `select(defined(earlyAccessSponsor._ref) => { "sponsor": ${SPONSOR_OF_THIS_CONFERENCE} }, defined(earlyAccessTicketType) => { "sponsor": null, "ticketType": earlyAccessTicketType })`
 
 /** One row of the "Early sign-ups" list on `/admin/workshops`. */
 export interface EarlySignupRow {
@@ -71,14 +71,14 @@ export interface EarlySignups {
 // THE WORKSHOP IS READ ONLY IF IT IS ONE OF THE CONFERENCE'S, as the sponsor
 // is: a sign-up that points at another conference's workshop (a bad write)
 // never carries that workshop's title.
-const NARROWED_SIGNUPS = `*[_type == "workshopSignup" && conference._ref == $conferenceId && defined(earlyAccessSponsor._ref) && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (!defined($sponsorId) || earlyAccessSponsor._ref == $sponsorId)] | order(coalesce(signedUpAt, _createdAt) desc) {
+const NARROWED_SIGNUPS = `*[_type == "workshopSignup" && conference._ref == $conferenceId && (defined(earlyAccessSponsor._ref) || defined(earlyAccessTicketType)) && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (!defined($sponsorId) || earlyAccessSponsor._ref == $sponsorId)] | order(coalesce(signedUpAt, _createdAt) desc) {
   _id,
   userName,
   userEmail,
   status,
   "signedUpAt": coalesce(signedUpAt, _createdAt),
   "workshop": select(workshop->conference._ref == $conferenceId => workshop->{ _id, title }),
-  "earlyAccess": { "sponsor": ${SPONSOR_OF_THIS_CONFERENCE} }
+  "earlyAccess": select(defined(earlyAccessSponsor._ref) => { "sponsor": ${SPONSOR_OF_THIS_CONFERENCE} }, { "sponsor": null, "ticketType": earlyAccessTicketType })
 }`
 const SPONSORS_TO_NARROW_TO = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (_id == $sponsorId || _id in *[_type == "workshopSignup" && conference._ref == $conferenceId && defined(earlyAccessSponsor._ref) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].earlyAccessSponsor._ref)] | order(sponsor->name asc, _id asc) { _id, "name": sponsor->name }`
 

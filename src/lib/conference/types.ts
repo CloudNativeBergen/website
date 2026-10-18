@@ -211,6 +211,11 @@ export interface Conference {
    * `workshopRegistrationStart`; see `workshopRegistrationWindow`.
    */
   workshopRegistrationSponsorStart?: string
+  /**
+   * Ticket types whose holders get early access with no link: they may sign
+   * up from `workshopRegistrationSponsorStart`. Unset is none.
+   */
+  workshopEarlyAccessTicketTypes?: string[] | null
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
   /**

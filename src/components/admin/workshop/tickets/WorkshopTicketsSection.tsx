@@ -1,6 +1,16 @@
 'use client'
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from 'react'
+import { useRouter } from 'next/navigation'
+import { api } from '@/lib/trpc/client'
+import { useNotification } from '@/components/admin/NotificationProvider'
 import {
   ExclamationTriangleIcon,
   TicketIcon,
@@ -9,6 +19,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import type {
   OrphanedWorkshopEntry,
   WorkshopTicketList,
+  WorkshopTicketType,
 } from '@/lib/workshop/ticket-list'
 import { WORKSHOP_TICKETS_ANCHOR } from './anchor'
 import { BuiltInListConfirm, Question } from './Question'
@@ -106,6 +117,8 @@ export interface WorkshopTicketsSectionProps {
    * so the section names no cause it does not know.
    */
   causeUnknown?: boolean
+  /** "Sponsor Early Access Opens" is set: early access can take effect. */
+  sponsorStartSet?: boolean
 }
 
 /**
@@ -121,6 +134,7 @@ export function WorkshopTicketsSection({
   list,
   providerLabel,
   causeUnknown = false,
+  sponsorStartSet = false,
 }: WorkshopTicketsSectionProps) {
   if (!list) {
     return (
@@ -171,7 +185,9 @@ export function WorkshopTicketsSection({
         )
       }
     >
-      {(notSet.length > 0 || list.orphaned.length > 0) && (
+      {(notSet.length > 0 ||
+        list.orphaned.length > 0 ||
+        list.orphanedEarlyAccess.length > 0) && (
         // A labelled region, NOT a live one: it holds buttons and questions,
         // and a live region would be read out again whole on every change.
         <section
@@ -208,6 +224,17 @@ export function WorkshopTicketsSection({
               ))}
             </ul>
           )}
+          {list.orphanedEarlyAccess.length > 0 && (
+            <ul className="mt-1 divide-y divide-amber-200 dark:divide-amber-900">
+              {list.orphanedEarlyAccess.map((typeName) => (
+                <OrphanedEarlyAccess
+                  key={typeName}
+                  typeName={typeName}
+                  providerLabel={providerLabel}
+                />
+              ))}
+            </ul>
+          )}
         </section>
       )}
 
@@ -223,6 +250,13 @@ export function WorkshopTicketsSection({
         </div>
       )}
 
+      <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+        Early access lets holders sign up from “Sponsor Early Access Opens”,
+        with no link.
+        {!sponsorStartSet &&
+          ' No sponsor start time is set, so early access has no effect yet.'}
+      </p>
+
       <ul className="mt-2 divide-y divide-gray-100 dark:divide-gray-800">
         {list.types.map((type, index) => (
           <li key={`${index}:${type.typeName}`}>
@@ -233,10 +267,106 @@ export function WorkshopTicketsSection({
               row
               basedOn={list.version}
             />
+            <EarlyAccessToggle type={type} />
           </li>
         ))}
       </ul>
     </WorkshopTicketsFrame>
+  )
+}
+
+/**
+ * "Early access" for one ticket type: its holders may sign up from the
+ * sponsor start time, with no link. Only a type that grants workshop access
+ * can be turned on; one that is on can always be turned off.
+ */
+function EarlyAccessToggle({ type }: { type: WorkshopTicketType }) {
+  const router = useRouter()
+  const { showNotification } = useNotification()
+  const [refreshing, startRefresh] = useTransition()
+  const mutation = api.workshop.admin.setEarlyAccessTicketType.useMutation({
+    onSuccess: () => startRefresh(() => router.refresh()),
+    onError: (error) =>
+      showNotification({
+        type: 'error',
+        title: 'Could not save early access',
+        message: error.message,
+      }),
+  })
+  const grants = type.access === 'granted'
+  const id = useId()
+  const busy = mutation.isPending || refreshing
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 pb-3 text-sm">
+      <input
+        id={id}
+        type="checkbox"
+        aria-label={`Early access for ${type.typeName}`}
+        checked={!!type.earlyAccess}
+        disabled={busy || (!grants && !type.earlyAccess)}
+        onChange={(event) =>
+          mutation.mutate({
+            typeName: type.typeName,
+            earlyAccess: event.target.checked,
+          })
+        }
+        className="size-4 rounded border-gray-300 text-indigo-600 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800"
+      />
+      <label htmlFor={id} className="text-gray-700 dark:text-gray-300">
+        Early access
+      </label>
+      {!grants && (
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          Only for types that grant workshop access.
+        </span>
+      )}
+    </div>
+  )
+}
+
+/**
+ * An early-access type name that matches no provider type: renamed or removed
+ * there. It admits nobody whose ticket no longer carries the name, so it is
+ * removed with no question.
+ */
+function OrphanedEarlyAccess({
+  typeName,
+  providerLabel,
+}: {
+  typeName: string
+  providerLabel: string
+}) {
+  const router = useRouter()
+  const { showNotification } = useNotification()
+  const [refreshing, startRefresh] = useTransition()
+  const mutation = api.workshop.admin.setEarlyAccessTicketType.useMutation({
+    onSuccess: () => startRefresh(() => router.refresh()),
+    onError: (error) =>
+      showNotification({
+        type: 'error',
+        title: 'Could not remove early access',
+        message: error.message,
+      }),
+  })
+  const busy = mutation.isPending || refreshing
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+      <p className="min-w-0 flex-1 basis-60 text-sm text-amber-800 dark:text-amber-300">
+        “{typeName}” is set to early access, but {providerLabel} lists no ticket
+        type with that name. It may have been renamed there.
+      </p>
+      <button
+        type="button"
+        onClick={() => {
+          if (!busy) mutation.mutate({ typeName, earlyAccess: false })
+        }}
+        aria-disabled={busy}
+        aria-label={`Remove early access for "${typeName}"`}
+        className="min-h-11 rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
+      >
+        {busy ? 'Removing…' : 'Remove early access'}
+      </button>
+    </li>
   )
 }
 
