@@ -176,21 +176,24 @@ interface ResponseDoc {
 
 /**
  * The comment as stored after the write. Sanity answers a `returnDocuments`
- * commit with a document per mutation, but a `createIfNotExists` that did
- * nothing may carry none (MODELLED as present in the test store); the
- * fallback is one by-id read, or, failing that, what this tap sent.
+ * commit with a document per mutation, but may carry none for a mutation
+ * that changed nothing (undocumented); the fallback is one by-id read. If
+ * that fails too: what this tap sent is what is stored, when it sent one;
+ * after a colour-only tap the comment is UNKNOWN (`undefined`), never "no
+ * comment", so the page keeps what it last knew instead of showing an empty
+ * box over a stored comment.
  */
 async function storedComment(
   stored: ResponseDoc | undefined,
   id: string,
   sent: string | null | undefined,
-): Promise<string | null> {
+): Promise<string | null | undefined> {
   if (!stored) {
     try {
       stored = (await clientWrite.getDocument<ResponseDoc>(id)) ?? undefined
     } catch (error) {
       console.error('Could not read back a Feedback Response', error)
-      return sent ?? null
+      return sent
     }
   }
   return typeof stored?.comment === 'string' ? stored.comment : null

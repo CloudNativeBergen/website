@@ -13,13 +13,17 @@ const talk = {
 
 /**
  * Submit as the server answers it: the colour, and the comment as STORED: a
- * colour-only tap leaves it as it was, `''` empties it.
+ * colour-only tap leaves it as it was, `''` empties it. One instance per
+ * story that sends anything, so no story depends on another's run.
  */
-let storedComment: string | null = null
-const submitAnswered = fn<SubmitAnswer>(async (colour, comment) => {
-  if (comment !== undefined) storedComment = comment.trim() || null
-  return { state: 'answered', colour, comment: storedComment, talk }
-})
+const answeringServer = (stored: string | null = null) => {
+  let comment = stored
+  return fn<SubmitAnswer>(async (colour, sent) => {
+    if (sent !== undefined) comment = sent.trim() || null
+    return { state: 'answered', colour, comment, talk }
+  })
+}
+const submitAnswered = answeringServer()
 
 const openPage = {
   state: 'open',
@@ -44,11 +48,6 @@ const meta = {
   title: 'Systems/Proposals/Session Feedback/AttendeeFeedbackPage',
   component: AttendeeFeedbackPage,
   tags: ['autodocs'],
-  // The stub's stored comment is module state: reset it per story, since the
-  // test-runner plays every story in one page.
-  beforeEach: () => {
-    storedComment = null
-  },
   parameters: {
     layout: 'fullscreen',
     viewport: { defaultViewport: 'phone' },
@@ -130,9 +129,22 @@ async function confirmDelete(canvas: ReturnType<typeof within>) {
   await userEvent.click(canvas.getByRole('button', { name: 'Delete' }))
 }
 
-/** The only status line in the attendee's own state (the page's is sr-only until a delete). */
-const stateStatus = (canvas: ReturnType<typeof within>) =>
+/**
+ * The status lines, in DOM order: the page's (sr-only until a delete), the
+ * comment form's, and the delete control's.
+ */
+const commentStatus = (canvas: ReturnType<typeof within>) =>
+  canvas.getAllByRole('status')[1]
+const deleteStatus = (canvas: ReturnType<typeof within>) =>
   canvas.getAllByRole('status').at(-1)!
+
+/** Root font size doubled: 200 % text, as a browser's text zoom gives it. */
+const largeText: Story['decorators'] = [
+  (StoryFn) => {
+    document.documentElement.style.fontSize = '200%'
+    return <StoryFn />
+  },
+]
 
 /** A tap: the colour goes to Submit, and the Answered state replaces the form. */
 export const Answered: Story = {
@@ -243,6 +255,39 @@ export const ChangeAnswer: Story = {
   },
 }
 
+/**
+ * THE STALE TAB (adversarial round 2): this tab believes there is no comment,
+ * another tab sent one. A colour change brings the stored comment back; the
+ * untouched box follows it, and Update comment re-sends THAT comment rather
+ * than an empty box that would erase it.
+ */
+export const ChangeAnswerStale: Story = {
+  args: {
+    page: { ...answeredPage, comment: null },
+    submit: answeringServer('Great demo'),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const box = canvas.getByLabelText('Comment for the speaker (optional)')
+    await expect(box).toHaveValue('')
+    await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Not for me' }))
+    await expect(args.submit.mock.calls[0]).toEqual(['red'])
+    await waitFor(() => expect(box).toHaveValue('Great demo'))
+    await expect(
+      canvas.getByRole('button', { name: 'Update comment' }),
+    ).toBeInTheDocument()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Update comment' }),
+    )
+    await expect(args.submit).toHaveBeenLastCalledWith('red', 'Great demo')
+    await waitFor(() =>
+      expect(commentStatus(canvas)).toHaveTextContent('Comment updated.'),
+    )
+    await expect(canvas.queryByText('Comment removed.')).toBeNull()
+  },
+}
+
 /** The grid open: the recorded answer is the pressed one. */
 export const Changing: Story = {
   args: { page: answeredPage },
@@ -286,7 +331,7 @@ export const ChangeAnswerKept: Story = {
  * nothing was entered by a tap), and editing the box clears the line.
  */
 export const SendComment: Story = {
-  args: { page: { ...answeredPage, comment: null } },
+  args: { page: { ...answeredPage, comment: null }, submit: answeringServer() },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     const box = canvas.getByLabelText('Comment for the speaker (optional)')
@@ -299,7 +344,7 @@ export const SendComment: Story = {
       'More of the demo, less of the slides.',
     )
     await waitFor(() =>
-      expect(stateStatus(canvas)).toHaveTextContent('Comment sent.'),
+      expect(commentStatus(canvas)).toHaveTextContent('Comment sent.'),
     )
     const update = canvas.getByRole('button', { name: 'Update comment' })
     await expect(document.activeElement).toBe(update)
@@ -309,13 +354,13 @@ export const SendComment: Story = {
     await expect(box).toHaveValue('More of the demo, less of the slides.')
     await expect(canvas.getByText(/You answered/)).toHaveTextContent('Loved it')
     await userEvent.type(box, '!')
-    await expect(stateStatus(canvas)).toHaveTextContent('')
+    await expect(commentStatus(canvas)).toHaveTextContent('')
   },
 }
 
 /** Emptying a SAVED comment says "removed"; an empty box with nothing saved sends nothing. */
 export const CommentRemoved: Story = {
-  args: { page: answeredPage },
+  args: { page: answeredPage, submit: answeringServer(answeredPage.comment) },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     const box = canvas.getByLabelText('Comment for the speaker (optional)')
@@ -325,14 +370,18 @@ export const CommentRemoved: Story = {
     )
     await expect(args.submit).toHaveBeenCalledWith('green', '')
     await waitFor(() =>
-      expect(stateStatus(canvas)).toHaveTextContent('Comment removed.'),
+      expect(commentStatus(canvas)).toHaveTextContent('Comment removed.'),
     )
-    // Nothing saved any more: sending the empty box again is not a removal.
+    // Nothing saved any more: sending the empty box again is not a removal,
+    // and the hint is not styled as a success.
     await userEvent.click(canvas.getByRole('button', { name: 'Send comment' }))
     await expect(args.submit).toHaveBeenCalledTimes(1)
-    await expect(stateStatus(canvas)).toHaveTextContent(
-      'Nothing to send: the box is empty.',
+    await waitFor(() =>
+      expect(commentStatus(canvas)).toHaveTextContent(
+        'Nothing to send: the box is empty.',
+      ),
     )
+    await expect(commentStatus(canvas).className).not.toMatch(/green/)
   },
 }
 
@@ -390,7 +439,7 @@ export const CommentNotSent: Story = {
     await userEvent.type(box, 'Hello')
     await userEvent.click(canvas.getByRole('button', { name: 'Send comment' }))
     await waitFor(() =>
-      expect(stateStatus(canvas)).toHaveTextContent(
+      expect(commentStatus(canvas)).toHaveTextContent(
         "We couldn't send your comment. Please try again.",
       ),
     )
@@ -418,6 +467,54 @@ export const DeleteConfirmation: Story = {
     await expect(
       canvas.queryByRole('button', { name: 'Delete my answer' }),
     ).toBeNull()
+  },
+}
+
+/** The armed confirmation closes when another action is taken, and on Escape. */
+export const DeleteConfirmationCloses: Story = {
+  // Its own server: Update comment sends, and must not feed another story.
+  args: { page: answeredPage, submit: answeringServer(answeredPage.comment) },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const arm = () =>
+      userEvent.click(canvas.getByRole('button', { name: 'Delete my answer' }))
+    await arm()
+    await userEvent.keyboard('{Escape}')
+    await expect(canvas.queryByRole('group')).toBeNull()
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        canvas.getByRole('button', { name: 'Delete my answer' }),
+      ),
+    )
+    await arm()
+    await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
+    await expect(canvas.queryByRole('button', { name: 'Cancel' })).toBeNull()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Keep my answer' }),
+    )
+    await arm()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Update comment' }),
+    )
+    await expect(canvas.queryByRole('button', { name: 'Cancel' })).toBeNull()
+    await expect(args.remove).not.toHaveBeenCalled()
+  },
+}
+
+/** While a comment is sent, the delete control is held but does not spin. */
+export const SendingComment: Story = {
+  args: {
+    page: answeredPage,
+    submit: fn<SubmitAnswer>(() => new Promise(() => {})),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Update comment' }),
+    )
+    const remove = canvas.getByRole('button', { name: 'Delete my answer' })
+    await waitFor(() => expect(remove).toHaveAttribute('aria-disabled', 'true'))
+    await expect(remove.querySelector('.animate-spin')).toBeNull()
   },
 }
 
@@ -531,6 +628,14 @@ export const DeleteRefusedOnClosed: Story = {
       canvas.queryByRole('button', { name: 'Delete my answer' }),
     ).toBeNull()
     await expect(canvas.queryByText(/has been deleted/)).toBeNull()
+    // The control went away under a notice that stayed: focus on its heading.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        canvas.getByRole('heading', {
+          name: 'Feedback for this session has closed',
+        }),
+      ),
+    )
   },
 }
 
@@ -546,11 +651,13 @@ export const DeleteNotDone: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await confirmDelete(canvas)
+    // Next to the delete control, not under the comment form.
     await waitFor(() =>
-      expect(stateStatus(canvas)).toHaveTextContent(
+      expect(deleteStatus(canvas)).toHaveTextContent(
         "We couldn't delete your answer. Please try again.",
       ),
     )
+    await expect(commentStatus(canvas)).toHaveTextContent('')
     const confirm = canvas.getByRole('button', { name: 'Delete' })
     await waitFor(() =>
       expect(confirm).toHaveAttribute('aria-disabled', 'false'),
@@ -606,6 +713,13 @@ export const ClosedWithDelete: Story = {
     await expect(
       canvas.queryByRole('button', { name: 'Delete my answer' }),
     ).toBeNull()
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        canvas.getByRole('heading', {
+          name: 'Feedback for this session has closed',
+        }),
+      ),
+    )
   },
 }
 
@@ -638,6 +752,13 @@ export const NotYetOpenWithDelete: Story = {
     await expect(
       canvas.queryByRole('button', { name: 'Delete my answer' }),
     ).toBeNull()
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        canvas.getByRole('heading', {
+          name: 'Feedback opens when the session starts',
+        }),
+      ),
+    )
   },
 }
 
@@ -868,7 +989,33 @@ export const CommentNearLimitDark: Story = {
 
 export const ChangingDark: Story = { ...Changing, globals: { theme: 'dark' } }
 
+/** 320 px at 200 % text: the grid's labels wrap instead of clipping. */
+export const ChangingLargeText: Story = {
+  ...Changing,
+  decorators: largeText,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
+    for (const button of canvas.getAllByRole('button')) {
+      await expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth)
+    }
+    await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    )
+  },
+}
+
+export const DeleteConfirmationLargeText: Story = {
+  ...DeleteConfirmation,
+  decorators: largeText,
+}
+
 export const DeletedDark: Story = { ...Deleted, globals: { theme: 'dark' } }
+
+export const ChangeAnswerStaleDark: Story = {
+  ...ChangeAnswerStale,
+  globals: { theme: 'dark' },
+}
 
 export const DeleteConfirmationDark: Story = {
   ...DeleteConfirmation,

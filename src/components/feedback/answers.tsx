@@ -132,13 +132,14 @@ export function AnswerButtons({
               current === undefined ? undefined : current === colour
             }
             onClick={() => onTap(colour)}
-            className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs transition-opacity focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait aria-pressed:ring-4 aria-pressed:ring-gray-900/40 dark:focus-visible:outline-white dark:aria-pressed:ring-white/60 ${pending && !saving ? 'opacity-50' : ''} ${className}`}
+            className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-5 py-3 text-xl font-bold shadow-xs transition-opacity focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait aria-pressed:ring-4 aria-pressed:ring-gray-900/40 dark:focus-visible:outline-white dark:aria-pressed:ring-white/60 ${pending && !saving ? 'opacity-50' : ''} ${className}`}
           >
             <ShownIcon
               className={`size-9 shrink-0 ${saving ? 'animate-spin motion-reduce:animate-none' : ''}`}
               aria-hidden="true"
             />
-            {label}
+            {/* Wraps at 320 px with large text instead of clipping. */}
+            <span className="min-w-0 text-left wrap-anywhere">{label}</span>
           </button>
         )
       })}

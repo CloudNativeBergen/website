@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ClockIcon,
   ExclamationTriangleIcon,
@@ -60,6 +60,9 @@ export function AttendeeFeedbackPage({
   // it: the tapped button is gone from the page.
   const [afterTap, setAfterTap] = useState(false)
   const [notice, setNotice] = useState<DeleteNotice | null>(null)
+  // Counts delete outcomes: a Notice that stays mounted across one (Closed
+  // before and after) takes focus on each.
+  const [deletes, setDeletes] = useState(0)
   return (
     <div
       data-shell-fit="viewport"
@@ -92,10 +95,24 @@ export function AttendeeFeedbackPage({
           submit={submit}
           remove={remove}
           announce={afterTap}
+          deletes={deletes}
           onOutcome={(next, afterDelete) => {
-            setPage(next)
+            setPage((previous) =>
+              // A comment the server could not read back after a
+              // colour-only tap is UNKNOWN: keep what this page last knew.
+              next.state === 'answered' && next.comment === undefined
+                ? {
+                    ...next,
+                    comment:
+                      previous.state === 'answered'
+                        ? (previous.comment ?? null)
+                        : null,
+                  }
+                : next,
+            )
             setAfterTap(true)
             setNotice(afterDelete ?? null)
+            if (afterDelete) setDeletes((n) => n + 1)
           }}
         />
       </main>
@@ -113,12 +130,14 @@ function PageState({
   submit,
   remove,
   announce,
+  deletes,
   onOutcome,
 }: {
   page: AttendeeFeedbackState
   submit: SubmitAnswer
   remove: DeleteAnswer
   announce: boolean
+  deletes: number
   onOutcome: (next: AttendeeFeedbackState, afterDelete?: DeleteNotice) => void
 }) {
   // The talk's title is the page's h1 when it is shown; the state's own
@@ -158,6 +177,7 @@ function PageState({
           <TalkHeading talk={page.talk} />
           <Notice
             announce={announce}
+            refocus={deletes}
             level={level}
             Icon={ClockIcon}
             title="Feedback opens when the session starts"
@@ -177,6 +197,7 @@ function PageState({
           <TalkHeading talk={page.talk} />
           <Notice
             announce={announce}
+            refocus={deletes}
             level={level}
             Icon={LockClosedIcon}
             title="Feedback for this session has closed"
@@ -290,6 +311,7 @@ function Notice({
   Icon,
   title,
   announce = false,
+  refocus = 0,
   children,
 }: {
   level: 'h1' | 'h2'
@@ -297,9 +319,16 @@ function Notice({
   title: string
   /** Take focus on mount: this notice replaced the buttons after a tap. */
   announce?: boolean
+  /** Take focus again each time this changes: a delete under this notice. */
+  refocus?: number
   children: React.ReactNode
 }) {
   const heading = useFocusOnMount(announce)
+  useEffect(() => {
+    // Delete my answer unmounted under a notice that stays: focus would
+    // otherwise drop to the body.
+    if (refocus > 0) heading.current?.focus()
+  }, [refocus, heading])
   return (
     <div className="flex flex-col items-center text-center">
       <Icon className="size-12 text-gray-400" aria-hidden="true" />

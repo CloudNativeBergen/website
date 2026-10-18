@@ -30,8 +30,11 @@ export type AttendeeFeedbackState =
   | {
       state: 'answered'
       colour: FeedbackColour
-      /** As stored: trimmed, `null` when there is none. */
-      comment: string | null
+      /**
+       * As stored: trimmed, `null` when there is none, `undefined` when it
+       * could not be read back after a colour-only tap (keep the last known).
+       */
+      comment: string | null | undefined
       /** Only for a public talk. */
       talk: PublicFeedbackTalk | null
     }

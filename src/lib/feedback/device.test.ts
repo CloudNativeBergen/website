@@ -17,6 +17,12 @@ import {
 } from './device'
 
 const NOW = new Date('2026-10-26T09:30:00.000Z')
+
+const flipBit = (signature: string) => {
+  const bytes = Buffer.from(signature, 'base64url')
+  bytes[0] ^= 1
+  return bytes.toString('base64url')
+}
 const later = (seconds: number) => new Date(NOW.getTime() + seconds * 1000)
 
 describe('feedbackResponseId', () => {
@@ -106,8 +112,9 @@ describe('the device cookie', () => {
     const reSigned = `${Buffer.from(JSON.stringify(forged)).toString('base64url')}.${signature}`
     for (const bad of [
       reSigned,
-      // One character of the signature changed, whatever it was.
-      `${payload}.${signature.slice(0, -1)}${signature.endsWith('A') ? 'B' : 'A'}`,
+      // One bit of the signature flipped: a changed last CHARACTER could
+      // land on padding bits and still verify.
+      `${payload}.${flipBit(signature)}`,
       payload,
       '',
       'a.b',

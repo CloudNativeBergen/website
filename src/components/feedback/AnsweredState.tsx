@@ -38,8 +38,13 @@ const ANNOUNCE_LEFT = 100
  * Every action here is Submit or Delete my answer, one at a time; what they
  * answer with replaces the page, so a window that closed meanwhile shows
  * Closed. Change answer sends the colour ONLY: the stored comment stays as
- * it is, whatever this tab believes it to be, and what is typed in the box
- * stays a draft until Send or Update comment.
+ * it is, whatever this tab believes it to be.
+ *
+ * THE BOX SHOWS THE STORED COMMENT until the attendee edits it: `edit` is
+ * `null` while untouched, so when the server tells this tab a comment it did
+ * not know of (another tab sent it; a colour change brought it back), the
+ * box follows, and Update comment re-sends that comment rather than an
+ * empty box that would erase it. An edit is kept until it is sent.
  */
 export function AnsweredState({
   level: Heading,
@@ -60,10 +65,16 @@ export function AnsweredState({
   const heading = useFocusOnMount(announce)
   const answer = ANSWERS.find((a) => a.colour === page.colour)
   const Icon = answer?.Icon ?? FaceSmileIcon
+  const stored = page.comment ?? ''
+  const hadComment = !!page.comment
+  const [edit, setEdit] = useState<string | null>(null)
+  const draft = edit ?? stored
   const [changing, setChanging] = useState(false)
   const [tapped, setTapped] = useState<FeedbackColour | null>(null)
-  const [draft, setDraft] = useState(page.comment ?? '')
-  const [status, setStatus] = useState<StatusLine | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [commentStatus, setCommentStatus] = useState<StatusLine | null>(null)
+  const [deleteStatus, setDeleteStatus] = useState<StatusLine | null>(null)
   const { pending, run } = useOneAtATime()
   const answerId = useId()
   const pickId = useId()
@@ -86,13 +97,20 @@ export function AnsweredState({
     wasChanging.current = changing
   }, [changing, heading])
 
+  /** Clear, then set on the next task: the same words are announced again. */
+  const announceComment = (status: StatusLine) => {
+    setCommentStatus(null)
+    setTimeout(() => setCommentStatus(status), 0)
+  }
+
   const change = async (colour: FeedbackColour) => {
     setTapped(colour)
-    setStatus(null)
+    setCommentStatus(null)
+    setConfirming(false)
     const next = await run(() => submit(colour), { state: 'unavailable' })
     if (!next) return
     if (next.state === 'unavailable') {
-      setStatus({
+      setCommentStatus({
         kind: 'error',
         text: "We couldn't confirm your answer. Please try again.",
       })
@@ -111,22 +129,24 @@ export function AnsweredState({
     setChanging(false)
   }
 
-  const hadComment = page.comment !== null
-
   const sendComment = async (event: React.FormEvent) => {
     event.preventDefault()
     if (pending) return
+    setConfirming(false)
     if (!draft.trim() && !hadComment) {
-      setStatus({ kind: 'ok', text: 'Nothing to send: the box is empty.' })
+      announceComment({
+        kind: 'neutral',
+        text: 'Nothing to send: the box is empty.',
+      })
       return
     }
-    setStatus(null)
+    setCommentStatus(null)
     const next = await run(() => submit(page.colour, draft), {
       state: 'unavailable',
     })
     if (!next) return
     if (next.state === 'unavailable') {
-      setStatus({
+      setCommentStatus({
         kind: 'error',
         text: "We couldn't send your comment. Please try again.",
       })
@@ -140,9 +160,24 @@ export function AnsweredState({
         : hadComment
           ? 'Comment removed.'
           : ''
-      setStatus(text ? { kind: 'ok', text } : null)
+      setCommentStatus(text ? { kind: 'ok', text } : null)
+      // Sent: the box follows the stored comment again.
+      setEdit(null)
     }
     onOutcome(next)
+  }
+
+  const erase = async () => {
+    // Cleared BEFORE the wait, so a second failure is announced again.
+    setDeleteStatus(null)
+    setDeleting(true)
+    await eraseAnswer({
+      run,
+      remove,
+      onDelete: onOutcome,
+      onFailed: () => setDeleteStatus({ kind: 'error', text: DELETE_FAILED }),
+    })
+    setDeleting(false)
   }
 
   const length = draft.length
@@ -211,7 +246,8 @@ export function AnsweredState({
             aria-disabled={pending}
             onClick={() => {
               if (pending) return
-              setStatus(null)
+              setCommentStatus(null)
+              setConfirming(false)
               setChanging(true)
             }}
             className={SECONDARY_BUTTON}
@@ -232,8 +268,10 @@ export function AnsweredState({
           maxLength={MAX_COMMENT_LENGTH}
           value={draft}
           onChange={(event) => {
-            setDraft(event.target.value)
-            setStatus(null)
+            const value = event.target.value
+            // Back to exactly the stored text counts as untouched.
+            setEdit(value === stored ? null : value)
+            setCommentStatus(null)
           }}
           aria-describedby={counterId}
           className={`mt-2 block w-full rounded-lg ${CONTROL_BORDER} bg-white px-3 py-2 text-base text-gray-900 shadow-xs focus:border-gray-900 focus:outline-2 focus:outline-offset-0 focus:outline-gray-900 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-white dark:focus:outline-white`}
@@ -263,24 +301,22 @@ export function AnsweredState({
             {hadComment ? 'Update comment' : 'Send comment'}
           </button>
         </div>
+        <Status status={commentStatus} className="mt-3" />
       </form>
 
-      <Status status={status} className="mt-4" />
-
-      <div className="mt-8 flex flex-col items-center">
+      <div className="mt-8 flex flex-col items-center gap-3">
         <DeleteControl
           pending={pending}
+          deleting={deleting}
           hasComment={hadComment}
-          onOpen={() => setStatus(null)}
-          onConfirm={() =>
-            eraseAnswer({
-              run,
-              remove,
-              onDelete: onOutcome,
-              onFailed: () => setStatus({ kind: 'error', text: DELETE_FAILED }),
-            })
-          }
+          confirming={confirming}
+          onConfirmingChange={(open) => {
+            setDeleteStatus(null)
+            setConfirming(open)
+          }}
+          onConfirm={erase}
         />
+        <Status status={deleteStatus} />
       </div>
 
       <div className="mt-8 flex justify-center border-t border-gray-300 pt-6 dark:border-gray-700">

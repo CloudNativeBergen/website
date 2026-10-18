@@ -60,14 +60,7 @@ function DeleteButton({
       onClick={onClick}
       className={`${SECONDARY_BUTTON} text-red-700 dark:text-red-400`}
     >
-      {pending ? (
-        <ArrowPathIcon
-          className="size-5 animate-spin motion-reduce:animate-none"
-          aria-hidden="true"
-        />
-      ) : (
-        <TrashIcon className="size-5" aria-hidden="true" />
-      )}
+      <TrashIcon className="size-5" aria-hidden="true" />
       Delete my answer
     </button>
   )
@@ -78,22 +71,29 @@ function DeleteButton({
  * with Delete and Cancel. The comment goes with the answer and cannot be
  * recovered, so one tap near the thumb's resting zone must not be enough.
  * Focus moves to Cancel when the confirmation opens (a second tap of the
- * same spot deletes nothing) and back to the button on Cancel; no modal.
+ * same spot deletes nothing) and back to the button when it closes, by
+ * Cancel, Escape, or another action the owner took meanwhile; no modal.
+ *
+ * `pending` is the page's shared one-at-a-time flag (every control is
+ * `aria-disabled` under it); `deleting` is this control's own delete in
+ * flight, the only thing that spins here.
  */
 export function DeleteControl({
   pending,
+  deleting,
   hasComment,
+  confirming,
+  onConfirmingChange,
   onConfirm,
-  onOpen,
 }: {
   pending: boolean
+  deleting: boolean
   /** Known only on Answered; the wording says what goes. */
   hasComment: boolean | null
+  confirming: boolean
+  onConfirmingChange: (confirming: boolean) => void
   onConfirm: () => void
-  /** The confirmation opened: a chance to clear other status lines. */
-  onOpen?: () => void
 }) {
-  const [confirming, setConfirming] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const cancel = useRef<HTMLButtonElement>(null)
   const wasConfirming = useRef(false)
@@ -111,9 +111,7 @@ export function DeleteControl({
         ref={trigger}
         pending={pending}
         onClick={() => {
-          if (pending) return
-          onOpen?.()
-          setConfirming(true)
+          if (!pending) onConfirmingChange(true)
         }}
       />
     )
@@ -122,6 +120,12 @@ export function DeleteControl({
     <div
       role="group"
       aria-labelledby={questionId}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && !pending) {
+          event.preventDefault()
+          onConfirmingChange(false)
+        }
+      }}
       className={`w-full rounded-lg ${CONTROL_BORDER} px-4 py-4 text-center`}
     >
       <p id={questionId} className="text-sm font-medium">
@@ -138,7 +142,7 @@ export function DeleteControl({
           }}
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-700 px-4 text-sm font-semibold text-white transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait aria-disabled:opacity-50 dark:bg-red-600 dark:focus-visible:outline-white"
         >
-          {pending && (
+          {deleting && (
             <ArrowPathIcon
               className="size-5 animate-spin motion-reduce:animate-none"
               aria-hidden="true"
@@ -151,7 +155,7 @@ export function DeleteControl({
           type="button"
           aria-disabled={pending}
           onClick={() => {
-            if (!pending) setConfirming(false)
+            if (!pending) onConfirmingChange(false)
           }}
           className={SECONDARY_BUTTON}
         >
@@ -175,21 +179,29 @@ export function DeleteAnswerButton({
   onDelete: (next: AttendeeFeedbackState, notice: DeleteNotice) => void
 }) {
   const [status, setStatus] = useState<StatusLine | null>(null)
+  const [confirming, setConfirming] = useState(false)
   const { pending, run } = useOneAtATime()
   return (
     <div className="mt-8 flex flex-col items-center gap-4">
       <DeleteControl
         pending={pending}
+        deleting={pending}
         hasComment={null}
-        onOpen={() => setStatus(null)}
-        onConfirm={() =>
+        confirming={confirming}
+        onConfirmingChange={(open) => {
+          setStatus(null)
+          setConfirming(open)
+        }}
+        onConfirm={() => {
+          // Cleared BEFORE the wait, so a second failure is announced again.
+          setStatus(null)
           eraseAnswer({
             run,
             remove,
             onDelete,
             onFailed: () => setStatus({ kind: 'error', text: DELETE_FAILED }),
           })
-        }
+        }}
       />
       <Status status={status} />
     </div>

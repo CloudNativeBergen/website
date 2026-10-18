@@ -386,7 +386,7 @@ describe('the comment (F2)', () => {
   })
 
   it('refuses anything but a string, before any write', async () => {
-    for (const comment of [42, ['hi'], { text: 'hi' }]) {
+    for (const comment of [null, 42, ['hi'], { text: 'hi' }]) {
       expect(
         await submitFeedbackAnswer(
           'k7m2qx',
@@ -410,6 +410,44 @@ describe('the comment (F2)', () => {
       comment: 'ruder',
       hiddenAt: '2026-10-26T09:35:00.000Z',
     })
+  })
+
+  it('is read back by id when the commit answers with no documents', async () => {
+    await submitFeedbackAnswer('k7m2qx', 'green', 'Stays put')
+    request(deviceCookieFromResponse())
+    store().withholdReturnedDocuments()
+    const [{ _id }] = responses()
+    // A colour-only tap: nothing sent says what the comment is.
+    expect(await submitFeedbackAnswer('k7m2qx', 'red')).toMatchObject({
+      colour: 'red',
+      comment: 'Stays put',
+    })
+    expect(store().docReads).toEqual(['talk-open', 'talk-open', _id])
+  })
+
+  it('is unknown, not "none", when the read-back fails after a colour-only tap', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await submitFeedbackAnswer('k7m2qx', 'green', 'Stays put')
+    request(deviceCookieFromResponse())
+    store().withholdReturnedDocuments()
+    const original = store().clients.clientWrite as {
+      getDocument: (id: string) => Promise<unknown>
+    }
+    const real = original.getDocument
+    vi.spyOn(original, 'getDocument').mockImplementation((id: string) =>
+      id.startsWith('feedbackResponse-')
+        ? Promise.reject(new Error('503: read refused'))
+        : real(id),
+    )
+    const outcome = await submitFeedbackAnswer('k7m2qx', 'red')
+    expect(outcome).toMatchObject({ state: 'answered', colour: 'red' })
+    expect((outcome as { comment?: unknown }).comment).toBeUndefined()
+    // What was sent is still authoritative when something WAS sent.
+    request(deviceCookieFromResponse())
+    expect(
+      await submitFeedbackAnswer('k7m2qx', 'red', 'New text'),
+    ).toMatchObject({ comment: 'New text' })
+    expect(responses()[0]).toMatchObject({ comment: 'New text' })
   })
 
   it('expires the response’s own cache tag after the write, so a reload shows the new answer', async () => {

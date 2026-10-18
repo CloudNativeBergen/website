@@ -118,6 +118,12 @@ export interface VersionedSanityStore {
   beforeEachRead(hook: (read: RecordedRead) => unknown): void
   /** Make every commit reject until the next `reset()`. */
   failWrites(error?: Error): void
+  /**
+   * Until the next `reset()`, a `commit({ returnDocuments: true })` answers
+   * with NO documents: what Sanity may do for a mutation that changed
+   * nothing (undocumented), so the reader's fallback is exercised.
+   */
+  withholdReturnedDocuments(): void
   /** The module shape of `@/lib/sanity/client` the code under test imports. */
   readonly clients: Record<
     'clientReadUncached' | 'clientReadCached' | 'clientWrite',
@@ -155,6 +161,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
   let unreadable: ((read: RecordedRead) => boolean) | null = null
   let readHook: ((read: RecordedRead) => unknown) | null = null
   let writeFailure: Error | null = null
+  let withholdDocuments = false
   let revCounter = 0
 
   let lagging = new Map<string, Doc | null>()
@@ -204,7 +211,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
   const apply = async (
     apiVersion: string,
     mutations: SerializedMutation[],
-  ): Promise<Doc[]> => {
+  ): Promise<{ docs: Doc[]; results: (Doc | undefined)[] }> => {
     const hook = hooks.shift()
     if (hook) await hook()
     if (writeFailure) throw writeFailure
@@ -212,10 +219,18 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     // Applied to a copy: a transaction that throws leaves the dataset as it was.
     const next = structuredClone(documents)
     const touched: string[] = []
+    // One entry per mutation, the document AS IT IS right after that
+    // mutation: a `createIfNotExists` of an existing document carries the
+    // document before the patch that follows it. MODELLED: Sanity's HTTP docs
+    // do not document the per-entry shape of `results[].document`.
+    const results: (Doc | undefined)[] = []
+    const after = (id: string) =>
+      structuredClone(next.find((d) => d._id === id))
     for (const mutation of mutations) {
       if ('delete' in mutation) {
         const at = next.findIndex((d) => d._id === mutation.delete.id)
         if (at !== -1) next.splice(at, 1)
+        results.push(undefined)
         continue
       }
       if (!('patch' in mutation)) {
@@ -228,12 +243,13 @@ export function createVersionedSanityStore(): VersionedSanityStore {
             statusCode: 409,
           })
         }
-        const after = new Mutation({ mutations: [mutation] }).apply(
+        const applied = new Mutation({ mutations: [mutation] }).apply(
           at === -1 ? null : next[at],
         )
-        if (after && at === -1) next.push({ ...after, _rev: rev })
-        else if (after) next[at] = { ...after, _rev: rev }
+        if (applied && at === -1) next.push({ ...applied, _rev: rev })
+        else if (applied) next[at] = { ...applied, _rev: rev }
         touched.push(body._id)
+        results.push(after(body._id))
         continue
       }
       const { id, ifRevisionID } = mutation.patch
@@ -259,6 +275,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       const patched = new Mutation({ mutations: [mutation] }).apply(next[at])
       next[at] = { ...(patched as Doc), _rev: rev }
       touched.push(id)
+      results.push(after(id))
     }
     for (const mutation of mutations) {
       if (
@@ -271,9 +288,12 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     documents = next
     commits.push(mutations)
     events.push('commit')
-    const after = afterHooks.shift()
-    if (after) await after()
-    return touched.flatMap((id) => next.filter((d) => d._id === id))
+    const afterHook = afterHooks.shift()
+    if (afterHook) await afterHook()
+    return {
+      docs: touched.flatMap((id) => next.filter((d) => d._id === id)),
+      results,
+    }
   }
 
   const writer = (apiVersion: string) => ({
@@ -294,14 +314,14 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       // the document as it is after the whole transaction, including a
       // `createIfNotExists` that did nothing, where Sanity may send none.
       tx.commit = (async (options?: { returnDocuments?: boolean }) => {
-        const touched = await apply(
+        const { docs, results } = await apply(
           apiVersion,
           tx.serialize() as SerializedMutation[],
         )
-        if (options?.returnDocuments) return touched
+        if (options?.returnDocuments) return withholdDocuments ? [] : results
         return {
           transactionId: `tx-${commits.length}`,
-          documentIds: touched.map((doc) => doc._id),
+          documentIds: docs.map((doc) => doc._id),
         }
       }) as typeof tx.commit
       return tx
@@ -315,9 +335,9 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     patch: (id: string) => {
       const patch = real.patch(id)
       patch.commit = (async () => {
-        const [doc] = await apply(apiVersion, [
-          { patch: patch.serialize() as PatchBody },
-        ])
+        const {
+          docs: [doc],
+        } = await apply(apiVersion, [{ patch: patch.serialize() as PatchBody }])
         return doc
       }) as typeof patch.commit
       return patch
@@ -354,6 +374,10 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       unreadable = null
       readHook = null
       writeFailure = null
+      withholdDocuments = false
+    },
+    withholdReturnedDocuments() {
+      withholdDocuments = true
     },
     put(document) {
       documents = [
