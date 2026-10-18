@@ -32,15 +32,26 @@ export function isFeedbackPath(pathname: string | null | undefined): boolean {
 /**
  * Vercel Analytics' and Speed Insights' `beforeSend` (spec §7.1): the path of
  * the attendee page IS the Feedback Code, so it is replaced, and the query
- * and fragment go with it. Every other URL passes through untouched.
+ * and fragment go with it. Speed Insights' `route` is replaced too: it is
+ * built from the raw path, so a percent-encoded code (`/f/%6b7m2qx`, which
+ * still resolves) survives its own parameter matching. Every other URL and
+ * route passes through untouched.
  */
-export function redactFeedbackCode<T extends { url: string }>(event: T): T {
+export function redactFeedbackCode<
+  T extends { url: string; route?: string | null },
+>(event: T): T {
+  const redacted =
+    event.route && isFeedbackPath(event.route)
+      ? { ...event, route: '/f/[code]' }
+      : event
   let url: URL
   try {
     url = new URL(event.url)
   } catch {
-    return isFeedbackPath(event.url) ? { ...event, url: '/f/[code]' } : event
+    return isFeedbackPath(event.url)
+      ? { ...redacted, url: '/f/[code]' }
+      : redacted
   }
-  if (!isFeedbackPath(url.pathname)) return event
-  return { ...event, url: `${url.origin}/f/[code]` }
+  if (!isFeedbackPath(url.pathname)) return redacted
+  return { ...redacted, url: `${url.origin}/f/[code]` }
 }

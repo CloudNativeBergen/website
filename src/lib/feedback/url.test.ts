@@ -51,6 +51,27 @@ describe('redactFeedbackCode — no code reaches Vercel Analytics (§7.1)', () =
     })
   })
 
+  it('redacts the route too: Speed Insights builds it from the raw path', () => {
+    // `/f/%6b7m2qx` resolves (Next decodes the param), but Speed Insights
+    // matches the DECODED code against the ENCODED path, fails, and reports
+    // the path itself as the route.
+    expect(
+      redactFeedbackCode({
+        type: 'vital',
+        url: 'https://a.dev/f/%6b7m2qx',
+        route: '/f/%6b7m2qx',
+      }),
+    ).toEqual({
+      type: 'vital',
+      url: 'https://a.dev/f/[code]',
+      route: '/f/[code]',
+    })
+    // Any other route is left alone.
+    expect(
+      redactFeedbackCode({ url: 'https://a.dev/program', route: '/program' }),
+    ).toEqual({ url: 'https://a.dev/program', route: '/program' })
+  })
+
   it('leaves every other URL exactly as it was', () => {
     for (const url of [
       'https://a.dev/program?day=2',
