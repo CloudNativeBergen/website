@@ -30,7 +30,12 @@ import { normalizeShortCode } from '@/lib/marketing/short-code'
 import { resolveFeedbackTarget, type FeedbackConference } from './attendee'
 import { expireFeedbackResponse } from './cache'
 import { isFeedbackColour } from './colour'
-import { feedbackResponseId, readDeviceCookie, recordAnswer } from './device'
+import {
+  feedbackResponseId,
+  readDeviceCookie,
+  recordAnswer,
+  type DeviceCookie,
+} from './device'
 import { MAX_COMMENT_LENGTH } from './comment'
 import { attendeeState, type AttendeeFeedbackState } from './page'
 
@@ -71,7 +76,7 @@ export async function submitFeedback({
   comment?: unknown
   cookie: string | undefined
   now: Date
-}): Promise<{ outcome: AttendeeFeedbackState; cookie?: string }> {
+}): Promise<{ outcome: AttendeeFeedbackState; cookie?: DeviceCookie }> {
   const { page, target } = await resolveFeedbackTarget(conference, rawCode, now)
   if (!target) return { outcome: page }
   // Reading the cookie is no fetch, so the order of §7.4 holds; an invalid
@@ -129,7 +134,7 @@ export async function submitFeedback({
       .commit()
   } catch (error) {
     console.error('Could not save a Feedback Response', error)
-    return { outcome: { state: 'unavailable' }, cookie: next.value }
+    return { outcome: { state: 'unavailable' }, cookie: next.cookie }
   }
   // A commit whose answer was lost may have applied too, but what the page
   // would then show is the stale answer, not a wrong one; the expiry rides on
@@ -137,6 +142,6 @@ export async function submitFeedback({
   expireFeedbackResponse(id)
   return {
     outcome: { state: 'answered', colour, comment, talk: page.talk },
-    cookie: next.value,
+    cookie: next.cookie,
   }
 }

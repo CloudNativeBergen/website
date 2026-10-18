@@ -23,6 +23,7 @@ import {
   feedbackResponseId,
   forgetAnswer,
   readDeviceCookie,
+  type DeviceCookie,
 } from './device'
 import { attendeeState, type DeleteOutcome } from './page'
 
@@ -41,7 +42,7 @@ export async function deleteFeedback({
   code: unknown
   cookie: string | undefined
   now: Date
-}): Promise<{ outcome: DeleteOutcome; cookie?: string }> {
+}): Promise<{ outcome: DeleteOutcome; cookie?: DeviceCookie }> {
   const { page, target } = await resolveFeedbackTarget(conference, rawCode, now)
   if (!target) return { outcome: { deleted: false, page } }
   const device = readDeviceCookie(cookie, now)
@@ -62,12 +63,12 @@ export async function deleteFeedback({
     return { outcome: { deleted: false, page: { state: 'unavailable' } } }
   }
   expireFeedbackResponse(id)
-  const next = forgetAnswer(device, target.talkId)
+  const next = forgetAnswer(device, target.talkId, now)
   return {
     outcome: {
       deleted: true,
       page: attendeeState(page, next.device, target.talkId),
     },
-    cookie: next.value,
+    cookie: next.cookie,
   }
 }

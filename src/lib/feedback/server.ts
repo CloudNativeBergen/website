@@ -13,4 +13,4 @@ export {
 } from './page'
 export { submitFeedback } from './submit'
 export { deleteFeedback } from './delete'
-export { deviceCookie } from './device'
+export { deviceCookie, type DeviceCookie } from './device'

@@ -145,7 +145,7 @@ export function recordAnswer(
   device: Device | null,
   talkId: string,
   now: Date,
-): { device: Device; value: string } {
+): { device: Device; cookie: DeviceCookie } {
   const entry = talkEntry(talkId)
   const next: Device = {
     token: device?.token ?? crypto.randomBytes(16).toString('base64url'),
@@ -155,22 +155,40 @@ export function recordAnswer(
       ...(device?.answered ?? []).filter((e) => e !== entry),
     ].slice(0, MAX_ANSWERED_TALKS),
   }
-  return { device: next, value: signed(next) }
+  return {
+    device: next,
+    cookie: { value: signed(next), maxAge: DEVICE_COOKIE_MAX_AGE },
+  }
+}
+
+/** The cookie to set: its value and how long the browser should keep it. */
+export interface DeviceCookie {
+  value: string
+  /** Seconds; `0` means the cookie is to be deleted. */
+  maxAge: number
 }
 
 /**
  * The cookie after this device deletes its answer about `talkId` (§7.4): the
  * same token, the talk gone from the list, and the signed time kept, so the
- * 30 days still run from the last ANSWER (§8), not from a deletion.
+ * 30 days still run from the last ANSWER (§8), not from a deletion. The
+ * browser is told only the time LEFT of those 30 days, so it does not keep
+ * a cookie the server would already treat as absent.
  */
 export function forgetAnswer(
   device: Device,
   talkId: string,
-): { device: Device; value: string } {
+  now: Date,
+): { device: Device; cookie: DeviceCookie } {
   const entry = talkEntry(talkId)
   const next: Device = {
     ...device,
     answered: device.answered.filter((e) => e !== entry),
   }
-  return { device: next, value: signed(next) }
+  const left =
+    device.at + DEVICE_COOKIE_MAX_AGE - Math.floor(now.getTime() / 1000)
+  return {
+    device: next,
+    cookie: { value: signed(next), maxAge: Math.max(0, left) },
+  }
 }

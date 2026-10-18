@@ -308,8 +308,11 @@ describe('Delete my answer', () => {
     expect(responses().map((r) => r._id)).toEqual([_id])
   })
 
-  it('sets the cookie with the same attributes as Submit', async () => {
+  it('sets the cookie with Submit’s attributes but only the time LEFT since the last answer (§8)', async () => {
     const cookie = await answered()
+    // Ten days later: the browser must not keep the cookie past the 30 days
+    // the last ANSWER started, which the server enforces from the signed time.
+    vi.setSystemTime(new Date(DURING.getTime() + 10 * 24 * 60 * 60 * 1000))
     request(cookie)
     await deleteFeedbackAnswer('k7m2qx')
     const lines = writtenCookies()
@@ -320,12 +323,29 @@ describe('Delete my answer', () => {
       [
         'Expires=Wed, 25 Nov 2026 09:30:00 GMT',
         'HttpOnly',
-        'Max-Age=2592000',
+        'Max-Age=1728000',
         'Path=/f',
         'SameSite=lax',
         'Secure',
       ].sort(),
     )
+  })
+
+  it('deletes the cookie instead when the 30 days are up at the moment of the delete', async () => {
+    const cookie = await answered()
+    vi.setSystemTime(new Date(DURING.getTime() + 30 * 24 * 60 * 60 * 1000))
+    request(cookie)
+    expect(await deleteFeedbackAnswer('k7m2qx')).toMatchObject({
+      deleted: true,
+    })
+    expect(responses()).toEqual([])
+    // Next serializes a `cookies().delete` as the epoch `Expires`, which is
+    // how a browser is told to drop a cookie; there is no `Max-Age` on it.
+    const [line] = writtenCookies()
+    expect(line).toMatch(/^konf_feedback=;/)
+    expect(line).toContain('Expires=Thu, 01 Jan 1970 00:00:00 GMT')
+    expect(line).not.toMatch(/Max-Age=[1-9]/)
+    expect(line).toContain('Path=/f')
   })
 
   it('works after the window has closed (R1), showing Closed without Delete', async () => {

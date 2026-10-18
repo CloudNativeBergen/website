@@ -9,6 +9,7 @@ import {
   submitFeedback,
   type AttendeeFeedbackState,
   type DeleteOutcome,
+  type DeviceCookie,
   type FeedbackConference,
 } from '@/lib/feedback/server'
 
@@ -53,14 +54,16 @@ export async function deleteFeedbackAnswer(
 
 /**
  * The conference serving the Host and this device's cookie, around one
- * action; the cookie the action hands back is set with the decided options.
+ * action; the cookie the action hands back is set with the decided options
+ * and the lifetime the action chose (Submit: 30 days; Delete: what is left
+ * of them), or deleted when nothing is left.
  */
 async function withDevice<Outcome>(
   action: (
     conference: FeedbackConference,
     cookie: string | undefined,
     now: Date,
-  ) => Promise<{ outcome: Outcome; cookie?: string }>,
+  ) => Promise<{ outcome: Outcome; cookie?: DeviceCookie }>,
   refuse: (state: { state: 'unavailable' | 'unknown' }) => Outcome,
 ): Promise<Outcome> {
   const resolution = await getConferenceForCurrentDomain()
@@ -76,6 +79,10 @@ async function withDevice<Outcome>(
     store.get(name)?.value,
     new Date(),
   )
-  if (cookie) store.set(name, cookie, options)
+  if (cookie?.maxAge) {
+    store.set(name, cookie.value, { ...options, maxAge: cookie.maxAge })
+  } else if (cookie) {
+    store.delete({ name, path: options.path })
+  }
   return outcome
 }
