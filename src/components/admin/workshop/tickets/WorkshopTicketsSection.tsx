@@ -185,7 +185,9 @@ export function WorkshopTicketsSection({
         )
       }
     >
-      {(notSet.length > 0 || list.orphaned.length > 0) && (
+      {(notSet.length > 0 ||
+        list.orphaned.length > 0 ||
+        list.orphanedEarlyAccess.length > 0) && (
         // A labelled region, NOT a live one: it holds buttons and questions,
         // and a live region would be read out again whole on every change.
         <section
@@ -218,6 +220,17 @@ export function WorkshopTicketsSection({
                   builtInGranted={list.builtInGranted}
                   providerLabel={providerLabel}
                   basedOn={list.version}
+                />
+              ))}
+            </ul>
+          )}
+          {list.orphanedEarlyAccess.length > 0 && (
+            <ul className="mt-1 divide-y divide-amber-200 dark:divide-amber-900">
+              {list.orphanedEarlyAccess.map((typeName) => (
+                <OrphanedEarlyAccess
+                  key={typeName}
+                  typeName={typeName}
+                  providerLabel={providerLabel}
                 />
               ))}
             </ul>
@@ -307,6 +320,52 @@ function EarlyAccessToggle({ type }: { type: WorkshopTicketType }) {
         </span>
       )}
     </div>
+  )
+}
+
+/**
+ * An early-access type name that matches no provider type: renamed or removed
+ * there. It admits nobody whose ticket no longer carries the name, so it is
+ * removed with no question.
+ */
+function OrphanedEarlyAccess({
+  typeName,
+  providerLabel,
+}: {
+  typeName: string
+  providerLabel: string
+}) {
+  const router = useRouter()
+  const { showNotification } = useNotification()
+  const [refreshing, startRefresh] = useTransition()
+  const mutation = api.workshop.admin.setEarlyAccessTicketType.useMutation({
+    onSuccess: () => startRefresh(() => router.refresh()),
+    onError: (error) =>
+      showNotification({
+        type: 'error',
+        title: 'Could not remove early access',
+        message: error.message,
+      }),
+  })
+  const busy = mutation.isPending || refreshing
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+      <p className="min-w-0 flex-1 basis-60 text-sm text-amber-800 dark:text-amber-300">
+        “{typeName}” is set to early access, but {providerLabel} lists no ticket
+        type with that name. It may have been renamed there.
+      </p>
+      <button
+        type="button"
+        onClick={() => {
+          if (!busy) mutation.mutate({ typeName, earlyAccess: false })
+        }}
+        aria-disabled={busy}
+        aria-label={`Remove early access for "${typeName}"`}
+        className="min-h-11 rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
+      >
+        {busy ? 'Removing…' : 'Remove early access'}
+      </button>
+    </li>
   )
 }
 

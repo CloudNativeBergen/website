@@ -110,7 +110,7 @@ export const AFew: Story = {
     await expect(
       canvas.getByRole('heading', { name: 'Early sign-ups' }),
     ).toBeVisible()
-    await expect(canvas.getByText('5 early sign-ups')).toBeVisible()
+    await expect(canvas.getByText('6 early sign-ups')).toBeVisible()
     // The removed sponsor's sign-up: once as a card, once as a table row.
     await expect(canvas.getAllByText('early access')).toHaveLength(2)
     await userEvent.selectOptions(
@@ -126,7 +126,7 @@ export const AFewMobile: Story = {
   ...mobile,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByText('5 early sign-ups')).toBeVisible()
+    await expect(canvas.getByText('6 early sign-ups')).toBeVisible()
     await expectCards(canvasElement)
   },
 }

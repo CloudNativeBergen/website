@@ -98,6 +98,12 @@ export interface WorkshopTicketList {
    */
   builtInGranted: string[]
   orphaned: OrphanedWorkshopEntry[]
+  /**
+   * Early-access type names, as configured, that match no provider type: a
+   * type renamed or removed there. Listed so they can be removed. Empty when
+   * the provider lists no types, as for `orphaned`.
+   */
+  orphanedEarlyAccess: string[]
 }
 
 export function buildWorkshopTicketList(
@@ -172,6 +178,10 @@ export function buildWorkshopTicketList(
     // a workshop answer: there is nothing here to remove from it. And a
     // provider that lists NO types says nothing about which entries are
     // orphaned: every one would look it, so none is called it.
+    orphanedEarlyAccess:
+      typeNames.length === 0
+        ? []
+        : (earlyAccessTypes ?? []).filter((name) => !listed.has(typeKey(name))),
     orphaned:
       typeNames.length === 0
         ? []

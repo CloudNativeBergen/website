@@ -612,11 +612,29 @@ describe('early access by ticket type, with no link', () => {
     expect(linkLookups()).toEqual([])
   })
 
-  it('with a live cookie too, the type admits it and the link is not looked up', async () => {
+  it('with a live cookie too, the link is looked up and both the sponsor and the type are recorded', async () => {
     byTicket([TWO_DAY])
+    expect(await attempt(LIVE)).toEqual(EARLY())
+    expect(recorded()).toBe(TWO_DAY)
+    expect(linkLookups()).toEqual([LIVE])
+  })
+
+  it('with a revoked cookie, the type still admits and only the type is recorded', async () => {
+    byTicket([TWO_DAY])
+    expect(await attempt(REVOKED)).toEqual(ORDINARY)
+    expect(recorded()).toBe(TWO_DAY)
+  })
+
+  it('when the link cannot be checked, the type still admits and only the type is recorded', async () => {
+    byTicket([TWO_DAY])
+    store().failReadsThat((read) => 'linkToken' in read.params)
     expect(await attempt(LIVE)).toEqual(ORDINARY)
     expect(recorded()).toBe(TWO_DAY)
-    expect(linkLookups()).toEqual([])
+  })
+
+  it('a holder of an eligible type that is not chosen, while another is, is told the official opening', async () => {
+    byTicket(['Sponsor discount (workshop upgrade)'])
+    expect(await attempt()).toEqual(OPENS_OFFICIALLY)
   })
 
   it('a chosen type that does not grant workshops admits nobody early', async () => {

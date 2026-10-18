@@ -342,9 +342,13 @@ them (`typeKey`: case and spacing folded).
 - The ticket must still grant workshops. The type is checked against the tickets the portal gate
   already read (`decideWorkshopPortalAccess` returns them), so it costs no extra lookup.
   Capacity, the closing time and the duplicate check are unchanged.
-- The type is asked before the link. A sign-up admitted by type records `earlyAccessTicketType`
-  (the configured name) and no sponsor. The early sign-ups list shows it as "Ticket: _type_".
-  Narrowing the list to a sponsor leaves these sign-ups out.
+- With no cookie, the type is the only check and costs no lookup. With a cookie, the link is
+  looked up as well: a live link records the sponsor, and a matching type records
+  `earlyAccessTicketType` (the configured name), so a sponsor person holding a chosen type keeps
+  the sponsor attribution. When the type admits, a failed lookup or a link that is not live does
+  not refuse: the sign-up goes ahead with only the type. The portal banner names the sponsor when
+  the link is live, else the ticket. The early sign-ups list shows a type-only sign-up as
+  "Ticket: _type_". Narrowing the list to a sponsor leaves type-only sign-ups out.
 - An unset or empty list changes nothing.
 - Known gap: the portal reads the list from the cached conference. A save from the admin page
   expires that cache. An edit in Sanity Studio takes effect when the cache expires.

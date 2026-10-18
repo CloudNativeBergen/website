@@ -644,9 +644,12 @@ export const workshopRouter = router({
         // conference has an early-access window and the official opening has
         // not passed. A revoke takes effect on the next attempt.
         //
-        // EARLY ACCESS BY TICKET TYPE is asked first: the tickets are the ones
-        // the gate above already read, so it costs no lookup. A match admits
-        // and records the type; the link is then not looked up.
+        // EARLY ACCESS BY TICKET TYPE costs no lookup: the tickets are the
+        // ones the gate above already read. A request with the cookie still
+        // has its link looked up, so a sponsor person holding a configured
+        // type keeps the sponsor attribution: both are recorded. When the
+        // type admits, a failed lookup or a dead link does not refuse: the
+        // sign-up goes ahead with only the type.
         const { registration, access } = await registrationWindowFor<{
           sponsor?: { _id: string }
           ticketType?: string
@@ -655,16 +658,17 @@ export const workshopRouter = router({
             eligibleTickets,
             conference.workshopEarlyAccessTicketTypes,
           )
-          if (ticketType) return { ticketType }
+          const byType = ticketType ? { ticketType } : null
           const token = earlyAccessTokenOf(ctx.req.cookies)
-          if (!token) return null
+          if (!token) return byType
           let found: Awaited<ReturnType<typeof findEarlyAccessSponsor>>
           try {
             found = await findEarlyAccessSponsor(conference._id, token)
           } catch (error) {
+            console.error('[workshop] early-access lookup failed', error)
+            if (byType) return byType
             // NEVER ADMITS, and never names the official opening to a
             // person whose early access was simply not checked.
-            console.error('[workshop] early-access lookup failed', error)
             throw new TRPCError({
               code: 'SERVICE_UNAVAILABLE',
               message:
@@ -678,8 +682,9 @@ export const workshopRouter = router({
             await expireEarlyAccessLinksIfTheyDisagree(conference._id, token, {
               live: false,
             })
+            return byType
           }
-          return found ? { sponsor: found } : null
+          return { sponsor: found, ...byType }
         })
         if (registration.status === 'not-open-yet') {
           throw new TRPCError({
@@ -1745,7 +1750,10 @@ export const workshopRouter = router({
      */
     setEarlyAccessTicketType: workshopAdminProcedure
       .input(
-        z.object({ typeName: z.string().min(1), earlyAccess: z.boolean() }),
+        z.object({
+          typeName: z.string().min(1).max(200),
+          earlyAccess: z.boolean(),
+        }),
       )
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()

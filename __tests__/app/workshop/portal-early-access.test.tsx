@@ -490,6 +490,44 @@ describe('a person with early access', () => {
   })
 })
 
+describe('early access by ticket type', () => {
+  const byTicket = () =>
+    mockGetConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-1',
+        title: 'CNDN',
+        organization: { _ref: 'org-platform', _type: 'reference' },
+        ...INSIDE_THE_WINDOW,
+        workshopEarlyAccessTicketTypes: ['Workshop + Conference (2 days)'],
+      },
+      error: null,
+    })
+
+  it('a holder of the chosen type with no cookie: the open form and the ticket line', async () => {
+    byTicket()
+    await request({})
+
+    const portal = await view()
+
+    expect(portal.banners).toEqual([])
+    expect(portal.status).toEqual([
+      'You have early access through your “Workshop + Conference (2 days)” ticket',
+    ])
+    expect(portal.text).not.toContain(OPENS_OFFICIALLY)
+    expect(portal.list).toMatchObject({ earlyAccess: true })
+  })
+
+  it('with a live cookie too, the line names the sponsor', async () => {
+    byTicket()
+    await request({ earlyAccess: LIVE })
+
+    const portal = await view()
+
+    expect(portal.status).toEqual(['You have early access through Acme AS'])
+    expect(portal.list).toMatchObject({ earlyAccess: true })
+  })
+})
+
 describe('a person without early access, inside the window', () => {
   it.each([
     ['no cookie', undefined],

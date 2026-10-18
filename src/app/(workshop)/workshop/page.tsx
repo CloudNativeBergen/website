@@ -172,27 +172,30 @@ export default async function WorkshopPage({
     conference,
     new Date(),
     async () => {
-      // BY TICKET TYPE first, as `workshop.signup` asks it: from the tickets
-      // the decision above already read.
+      // A LIVE LINK names its sponsor, as `workshop.signup` records it; the
+      // ticket type (from the tickets the decision above already read) is
+      // the fallback when there is no live link.
       const ticketType = earlyAccessTicketTypeOf(
         access.allowed ? access.eligibleTickets : [],
         conference.workshopEarlyAccessTicketTypes,
       )
       // The banner reads "early access through …".
-      if (ticketType) return { sponsorName: `your “${ticketType}” ticket` }
+      const byType = ticketType
+        ? { sponsorName: `your “${ticketType}” ticket` }
+        : null
+      const token = earlyAccessTokenOf(await cookies())
+      if (!token) return byType
       try {
-        return await resolveEarlyAccess(
-          conference._id,
-          earlyAccessTokenOf(await cookies()),
-        )
+        return (await resolveEarlyAccess(conference._id, token)) ?? byType
       } catch (error) {
         // THE PAGE ONLY DECIDES WHAT IS SHOWN: when the links cannot be read,
-        // the person sees the portal as everyone does. For a person who does
-        // have early access that is wrong until a later view: they see the
-        // banner naming the official opening and no workshop to sign up for,
-        // and nothing tells them why.
+        // the person sees the portal as everyone does (or as their ticket
+        // type admits). For a person who does have early access by link that
+        // is wrong until a later view: they see the banner naming the
+        // official opening and no workshop to sign up for, and nothing tells
+        // them why.
         console.error('[workshop] early-access links could not be read', error)
-        return null
+        return byType
       }
     },
   )
