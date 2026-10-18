@@ -10,11 +10,12 @@ import {
   getScheduleStatusById,
 } from '@/lib/schedule/sanity'
 import { validateSchedulePayload } from '@/lib/schedule/validation'
+import { HHMM_PATTERN } from '@/lib/schedule/time'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { expireFeedbackCodeIndex } from '@/lib/feedback/server'
-import type { ConferenceSchedule } from '@/lib/conference/types'
+import type { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 import { ScheduleStatus } from '@/lib/schedule/types'
 import { Status as ProposalStatus } from '@/lib/proposal/types'
 import { z } from 'zod'
@@ -335,6 +336,255 @@ export const scheduleRouter = router({
           expireFeedbackCodeIndex(conference._id)
         }
         return { success: true }
+      }),
+
+    addTalk: adminProcedure
+      .input(
+        z
+          .object({
+            scheduleId: z.string(),
+            trackIndex: z.number().int().min(0),
+            startTime: z
+              .string()
+              .regex(HHMM_PATTERN, 'Time must be HH:MM (24h)'),
+            endTime: z.string().regex(HHMM_PATTERN, 'Time must be HH:MM (24h)'),
+            proposalId: z.string().optional(),
+            placeholder: z.string().trim().min(1).max(200).optional(),
+            expectedRevision: z.string().optional(),
+          })
+          .refine(
+            (data) => Boolean(data.proposalId) !== Boolean(data.placeholder),
+            {
+              message:
+                'Must specify either proposalId or placeholder, but not both',
+            },
+          ),
+      )
+      .mutation(async ({ input, ctx }) => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+
+        const doc = await clientWrite.fetch<ConferenceSchedule | null>(
+          `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
+          { id: input.scheduleId, conferenceId: conference._id },
+        )
+        if (!doc) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Schedule not found',
+          })
+        }
+
+        if (
+          input.expectedRevision &&
+          doc._rev &&
+          doc._rev !== input.expectedRevision
+        ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Schedule was modified by another user.',
+          })
+        }
+
+        if (!doc.tracks || !doc.tracks[input.trackIndex]) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Track index out of bounds.',
+          })
+        }
+
+        if (input.proposalId) {
+          const proposal = await clientWrite.fetch<{
+            _id: string
+            status?: string | null
+          } | null>(
+            `*[_type == "talk" && _id == $id && conference._ref == $conferenceId][0]{ _id, status }`,
+            { id: input.proposalId, conferenceId: conference._id },
+          )
+          if (!proposal) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Proposal not found or belongs to another conference.',
+            })
+          }
+
+          const isOfficial =
+            !doc.status || doc.status === ScheduleStatus.Official
+          if (isOfficial) {
+            if (
+              proposal.status !== ProposalStatus.accepted &&
+              proposal.status !== ProposalStatus.confirmed
+            ) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: `Cannot add talk to official schedule. Talk status is ${proposal.status}, expected accepted or confirmed.`,
+              })
+            }
+          }
+        }
+
+        const newTalk = {
+          _key: crypto.randomUUID(),
+          startTime: input.startTime,
+          endTime: input.endTime,
+          ...(input.proposalId
+            ? { talk: { _ref: input.proposalId, _type: 'reference' } }
+            : { placeholder: input.placeholder }),
+        } as unknown as TrackTalk
+
+        const track = doc.tracks[input.trackIndex]
+        track.talks = [...(track.talks || []), newTalk].sort((a, b) =>
+          a.startTime.localeCompare(b.startTime),
+        )
+
+        const validTalkIds = await getValidTalkIds(conference._id)
+        const validationError = validateSchedulePayload(doc, validTalkIds)
+        if (validationError) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: validationError })
+        }
+
+        const {
+          schedule,
+          error: saveError,
+          conflict,
+        } = await saveScheduleToSanity(doc, conference, {
+          actorId: ctx.speaker?._id,
+        })
+
+        if (conflict) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: saveError || 'This schedule was changed concurrently.',
+          })
+        }
+        if (saveError || !schedule) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: saveError || 'Failed to save schedule',
+          })
+        }
+
+        revalidateTag(conferenceTag(conference._id), 'default')
+        if (doc.status !== ScheduleStatus.Draft) {
+          expireFeedbackCodeIndex(conference._id)
+        }
+        return { success: true, schedule }
+      }),
+
+    removeTalk: adminProcedure
+      .input(
+        z
+          .object({
+            scheduleId: z.string(),
+            trackIndex: z.number().int().min(0),
+            talkIndex: z.number().int().min(0).optional(),
+            talkKey: z.string().optional(),
+            expectedRevision: z.string().optional(),
+          })
+          .refine(
+            (data) =>
+              data.talkIndex !== undefined || data.talkKey !== undefined,
+            {
+              message: 'Either talkIndex or talkKey must be provided',
+            },
+          ),
+      )
+      .mutation(async ({ input, ctx }) => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+
+        const doc = await clientWrite.fetch<ConferenceSchedule | null>(
+          `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
+          { id: input.scheduleId, conferenceId: conference._id },
+        )
+        if (!doc) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Schedule not found',
+          })
+        }
+
+        if (
+          input.expectedRevision &&
+          doc._rev &&
+          doc._rev !== input.expectedRevision
+        ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Schedule was modified by another user.',
+          })
+        }
+
+        if (!doc.tracks || !doc.tracks[input.trackIndex]) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Track or talk index out of bounds.',
+          })
+        }
+
+        const track = doc.tracks[input.trackIndex]
+        const talks = track.talks || []
+
+        let targetIndex: number
+        if (input.talkKey !== undefined) {
+          targetIndex = talks.findIndex(
+            (t) => (t as unknown as { _key?: string })._key === input.talkKey,
+          )
+        } else {
+          targetIndex = input.talkIndex!
+        }
+
+        if (targetIndex < 0 || targetIndex >= talks.length) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Track or talk index out of bounds.',
+          })
+        }
+
+        track.talks.splice(targetIndex, 1)
+
+        const validTalkIds = await getValidTalkIds(conference._id)
+        const validationError = validateSchedulePayload(doc, validTalkIds)
+        if (validationError) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: validationError })
+        }
+
+        const {
+          schedule,
+          error: saveError,
+          conflict,
+        } = await saveScheduleToSanity(doc, conference, {
+          actorId: ctx.speaker?._id,
+        })
+
+        if (conflict) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: saveError || 'This schedule was changed concurrently.',
+          })
+        }
+        if (saveError || !schedule) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: saveError || 'Failed to save schedule',
+          })
+        }
+
+        revalidateTag(conferenceTag(conference._id), 'default')
+        if (doc.status !== ScheduleStatus.Draft) {
+          expireFeedbackCodeIndex(conference._id)
+        }
+        return { success: true, schedule }
       }),
   }),
 
