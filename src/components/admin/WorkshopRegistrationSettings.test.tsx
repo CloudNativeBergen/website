@@ -24,6 +24,7 @@ const mutate = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    useUtils: () => ({}),
     workshop: {
       admin: {
         updateRegistrationTimes: {

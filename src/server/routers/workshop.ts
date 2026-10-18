@@ -82,6 +82,11 @@ function logFailedConfirmationEmails(
 }
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { workshopAdminProcedure } from '../workshopAdmin'
+import {
+  earlyAccessBulkRefusal,
+  earlyAccessBulkTargets,
+  sendEarlyAccessBulk,
+} from './sponsorEarlyAccess'
 import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { type FullSeats, WorkshopSignupStatus } from '@/lib/workshop/types'
 import {
@@ -1508,6 +1513,57 @@ export const workshopRouter = router({
             cause: error,
           })
         }
+      }),
+
+    /**
+     * How many sponsors a bulk early-access send would mail now, and the
+     * refusal that holds for all of them: what the confirm dialog says.
+     */
+    earlyAccessBulkPreview: workshopAdminProcedure
+      .input(z.object({ onlyUnsent: z.boolean().default(true) }))
+      .query(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const { domain } = await getConferenceForCurrentDomain()
+        const targets = await earlyAccessBulkTargets(conferenceId, input)
+        return {
+          count: targets.length,
+          refusal: await earlyAccessBulkRefusal(conferenceId, domain),
+        }
+      }),
+
+    /**
+     * Send the early-access email to many sponsors (#1347): the given ones,
+     * or every Closed Won sponsor of the conference. Stops at a budget and
+     * answers how many are left; with `onlyUnsent`, running it again
+     * continues where it stopped.
+     */
+    sendEarlyAccessBulk: workshopAdminProcedure
+      .input(
+        z.object({
+          sponsorIds: z.array(z.string().min(1).max(200)).max(500).optional(),
+          onlyUnsent: z.boolean().default(true),
+        }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        const { conference, domain, error } =
+          await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        return sendEarlyAccessBulk({
+          conference,
+          domain,
+          orgId: ctx.orgId,
+          actor: {
+            id: ctx.speaker._id ?? null,
+            names: [ctx.speaker.name, ctx.user?.name],
+          },
+          sponsorIds: input.sponsorIds,
+          onlyUnsent: input.onlyUnsent,
+        })
       }),
 
     updateRegistrationTimes: workshopAdminProcedure

@@ -11,11 +11,26 @@ import {
   EARLY_ACCESS_SEND_REFUSALS,
   earlyAccessAttachments,
   earlyAccessCardHtml,
+  earlyAccessGreeting,
 } from '@/lib/sponsor-crm/early-access-email'
+import type { PortableTextBlock } from '@portabletext/types'
+import type { Conference } from '@/lib/conference/types'
+import type { ContactPerson, SponsorEmailTemplate } from '@/lib/sponsor/types'
+import { clientReadUncached } from '@/lib/sanity/client'
+import { scopedFetch } from '@/lib/sanity/scoped'
+import {
+  sendSponsorCommunication,
+  type SendSponsorCommunicationResult,
+} from '@/lib/sponsor-crm/communication-send'
+import {
+  COMMUNICATION_KIND_LABELS,
+  defaultRecipientKey,
+} from '@/lib/sponsor-crm/communication'
 import type { ConferenceTheme } from '@/lib/branding/theme'
 import {
   createEarlyAccessLink,
   decideEarlyAccessSend,
+  earlyAccessConferenceRefusal,
   earlyAccessPortalUrl,
   earlyAccessUrl,
   expireEarlyAccessLinks,
@@ -272,6 +287,276 @@ export async function prepareEarlyAccessSend(
      */
     notWritten: () => notWritten,
   }
+}
+
+/**
+ * SEND THE EARLY-ACCESS EMAIL TO ONE SPONSOR: the one path behind the
+ * "Workshop early access" kind of `sponsor.crm.sendCommunication` and behind
+ * a bulk send (`workshop.admin.sendEarlyAccessBulk`). Refuses as
+ * {@link prepareEarlyAccessSend} does, by throwing, before anything is
+ * written or sent; otherwise answers the send primitive's result.
+ *
+ * Unset recipients, subject or message start from what the Send modal starts
+ * from: the primary contact, "Workshop early access: <conference>" and the
+ * built-in greeting. The caller has proven the sponsor belongs to the
+ * request's conference and has asked the workshop gate.
+ */
+export async function sendEarlyAccess({
+  conference,
+  domain,
+  orgId,
+  actorId,
+  sponsorForConferenceId,
+  recipientKeys,
+  subject,
+  message,
+  template,
+  senderNames,
+}: {
+  conference: Conference
+  domain: string | undefined
+  orgId: string | null | undefined
+  actorId: string | null
+  sponsorForConferenceId: string
+  recipientKeys?: readonly string[]
+  subject?: string
+  message?: PortableTextBlock[]
+  template?: SponsorEmailTemplate
+  senderNames?: readonly (string | undefined)[]
+}): Promise<SendSponsorCommunicationResult & { copiesBehind: number }> {
+  const earlyAccess = await prepareEarlyAccessSend(
+    conference,
+    domain,
+    sponsorForConferenceId,
+  )
+  if (!recipientKeys || !message) {
+    const sponsor = await scopedFetch<{
+      name?: string
+      contactPersons?: ContactPerson[]
+    } | null>(
+      clientReadUncached,
+      { conferenceId: conference._id },
+      `*[_type == "sponsorForConference" && _id == $id][0]{ "name": sponsor->name, contactPersons }`,
+      { id: sponsorForConferenceId },
+    )
+    const primary = defaultRecipientKey(sponsor?.contactPersons)
+    recipientKeys ??= primary ? [primary] : []
+    message ??= earlyAccessGreeting(
+      sponsor?.name ?? 'your company',
+      conference.title,
+    ) as unknown as PortableTextBlock[]
+  }
+  const result = await sendSponsorCommunication({
+    conference,
+    orgId,
+    actorId,
+    sponsorForConferenceId,
+    kind: 'workshop-early-access',
+    recipientKeys,
+    subject:
+      subject ??
+      `${COMMUNICATION_KIND_LABELS['workshop-early-access']}: ${conference.title}`,
+    message,
+    template,
+    senderNames,
+    appendLate: earlyAccess.appendLate,
+  })
+  return { ...result, copiesBehind: earlyAccess.notWritten().length }
+}
+
+/** At most this many sponsors are mailed by one bulk call. */
+export const BULK_MAX_SENDS = 25
+/**
+ * No new send is started after this much wall-clock time since the call
+ * began; the budget is checked before each send starts. A send that starts
+ * just inside it can still run on (Resend retry backoff included), which is
+ * what the tRPC route's `maxDuration` gives headroom for. A call that stops
+ * early says which sponsors are left, and running it again continues.
+ */
+export const BULK_TIME_BUDGET_MS = 8_000
+
+export interface EarlyAccessBulkResult {
+  /** `copiesBehind`: unpublished copies that did not get the link. */
+  sent: { id: string; name: string; copiesBehind: number }[]
+  skipped: { id: string; name: string; reason: string }[]
+  /** Sponsors that were due and not tried: the budget ran out. */
+  remaining: number
+  /** Their ids, for "Run again", so a run never starves on the same few. */
+  remainingIds: string[]
+}
+
+const NOT_DEFINITIVE =
+  'The provider did not confirm delivery. The email may have arrived, and Run again will send it again.'
+
+/** Has the sponsor a SENT early-access email on its activity timeline? */
+async function earlyAccessAlreadySent(conferenceId: string, id: string) {
+  const sponsor = await scopedFetch<{ sent: boolean } | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "sponsorForConference" && _id == $id][0]{
+      "sent": count(*[_type == "sponsorActivity" && sponsorForConference._ref == ^._id && sponsorForConference->conference._ref == $conferenceId && communicationKind == "workshop-early-access" && deliveryStatus == "sent"]) > 0
+    }`,
+    { id },
+  )
+  return sponsor?.sent === true
+}
+
+/**
+ * THE SPONSORS A BULK SEND IS FOR: the given ids, or every Closed Won sponsor
+ * of the conference. A given id outside the conference refuses the whole
+ * batch, without saying which (as `assertAllOwned` in `@/lib/sponsor-crm/bulk`).
+ * `onlyUnsent` leaves out a sponsor that has a SENT early-access email on its
+ * activity timeline: the audit record `sendSponsorCommunication` writes.
+ */
+export async function earlyAccessBulkTargets(
+  conferenceId: string,
+  { sponsorIds, onlyUnsent }: { sponsorIds?: string[]; onlyUnsent: boolean },
+) {
+  sponsorIds?.forEach(refuseUnpublishedCopy)
+  const sponsors = await scopedFetch<
+    { _id: string; name?: string; status?: string; sent: boolean }[]
+  >(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "sponsorForConference" && ${
+      sponsorIds ? '_id in $ids' : 'status == "closed-won"'
+    } && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
+      _id, "name": sponsor->name, status,
+      "sent": count(*[_type == "sponsorActivity" && sponsorForConference._ref == ^._id && sponsorForConference->conference._ref == $conferenceId && communicationKind == "workshop-early-access" && deliveryStatus == "sent"]) > 0
+    } | order(lower(name) asc)`,
+    { ids: sponsorIds ?? [] },
+  )
+  if (sponsorIds && sponsors.length !== new Set(sponsorIds).size) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `Nothing was sent: ${new Set(sponsorIds).size - sponsors.length} of the chosen sponsors are not in this conference.`,
+    })
+  }
+  return sponsors
+    .filter((s) => !(onlyUnsent && s.sent))
+    .map((s) => ({
+      id: s._id,
+      name: s.name ?? 'Unnamed sponsor',
+      status: s.status,
+    }))
+}
+
+/**
+ * The refusal that holds for every sponsor of the conference, asked once,
+ * before a bulk send: from localhost, no early-access window, the window
+ * over, no working portal. `null`: sponsors may be mailed.
+ */
+export async function earlyAccessBulkRefusal(
+  conferenceId: string,
+  domain: string | undefined,
+): Promise<string | null> {
+  const live = await readConferenceLive(conferenceId)
+  const refused =
+    earlyAccessConferenceRefusal(live, domain, new Date()) ??
+    ((await earlyAccessPortalUrl(live)) ? null : 'no-portal')
+  return refused && EARLY_ACCESS_SEND_REFUSALS[refused]
+}
+
+/**
+ * MAIL MANY SPONSORS, ONE AT A TIME, WITHIN A BUDGET ({@link BULK_MAX_SENDS},
+ * {@link BULK_TIME_BUDGET_MS}). A conference-level refusal refuses the call;
+ * a sponsor's own refusal or failed send is listed and the next one is tried.
+ */
+export async function sendEarlyAccessBulk({
+  conference,
+  domain,
+  orgId,
+  actor,
+  sponsorIds,
+  onlyUnsent,
+}: {
+  conference: Conference
+  domain: string | undefined
+  orgId: string | null | undefined
+  actor: { id: string | null; names: readonly (string | undefined)[] }
+  sponsorIds?: string[]
+  onlyUnsent: boolean
+}): Promise<EarlyAccessBulkResult> {
+  const started = Date.now()
+  const targets = await earlyAccessBulkTargets(conference._id, {
+    sponsorIds,
+    onlyUnsent,
+  })
+  const refusal = await earlyAccessBulkRefusal(conference._id, domain)
+  if (refusal) {
+    throw new TRPCError({ code: 'PRECONDITION_FAILED', message: refusal })
+  }
+
+  const out: EarlyAccessBulkResult = {
+    sent: [],
+    skipped: [],
+    remaining: 0,
+    remainingIds: [],
+  }
+  let tried = 0
+  let next = 0
+  for (; next < targets.length; next++) {
+    const { id, name, status } = targets[next]
+    if (
+      tried >= BULK_MAX_SENDS ||
+      Date.now() - started >= BULK_TIME_BUDGET_MS
+    ) {
+      break
+    }
+    if (status !== 'closed-won') {
+      out.skipped.push({
+        id,
+        name,
+        reason: EARLY_ACCESS_SEND_REFUSALS['not-won'],
+      })
+      tried++
+      continue
+    }
+    // ponytail: a concurrent run is narrowed to one send, not closed. The
+    // real fix is an ifRevisionId claim on the sponsorForConference, as
+    // createEarlyAccessLink does.
+    if (onlyUnsent && (await earlyAccessAlreadySent(conference._id, id))) {
+      continue
+    }
+    tried++
+    try {
+      const result = await sendEarlyAccess({
+        conference,
+        domain,
+        orgId,
+        actorId: actor.id,
+        sponsorForConferenceId: id,
+        senderNames: actor.names,
+      })
+      if (result.ok)
+        out.sent.push({ id, name, copiesBehind: result.copiesBehind })
+      else
+        out.skipped.push({
+          id,
+          name,
+          reason:
+            result.reason === 'not-found'
+              ? notFoundMessage('sponsorForConference')
+              : result.reason === 'bad-recipients'
+                ? 'No primary contact with an email address.'
+                : result.reason === 'send-failed' && !result.definitive
+                  ? `${result.message} ${NOT_DEFINITIVE}`
+                  : result.message,
+        })
+    } catch (error) {
+      out.skipped.push({
+        id,
+        name,
+        reason: error instanceof TRPCError ? error.message : 'The send failed.',
+      })
+      if (!(error instanceof TRPCError)) {
+        console.error('[sendEarlyAccessBulk] a send failed:', error)
+      }
+    }
+  }
+  out.remainingIds = targets.slice(next).map((t) => t.id)
+  out.remaining = out.remainingIds.length
+  return out
 }
 
 export const sponsorEarlyAccessRouter = router({

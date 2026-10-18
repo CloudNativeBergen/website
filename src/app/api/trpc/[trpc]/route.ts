@@ -15,4 +15,8 @@ const handler = (req: NextRequest) =>
     },
   })
 
+// Raises the limit only: a bulk early-access send stops starting sends at
+// BULK_TIME_BUDGET_MS, and one that started near it needs the headroom.
+export const maxDuration = 60
+
 export { handler as GET, handler as POST }

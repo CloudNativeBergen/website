@@ -97,9 +97,12 @@ export function WorkshopRegistrationSettings({
     setOpened(current)
   }
 
+  const utils = api.useUtils()
   const updateRegistrationTimes =
     api.workshop.admin.updateRegistrationTimes.useMutation({
       onSuccess: () => {
+        // The bulk send's count and refusal follow these times.
+        void utils.workshop.admin.earlyAccessBulkPreview.invalidate()
         setIsOpen(false)
         setError(null)
         showNotification({

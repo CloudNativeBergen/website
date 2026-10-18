@@ -4,8 +4,8 @@ import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
-  prepareEarlyAccessSend,
   refuseUnpublishedCopy,
+  sendEarlyAccess,
   sponsorEarlyAccessRouter,
 } from './sponsorEarlyAccess'
 import { requireWorkshopsEnabled } from '../workshopAdmin'
@@ -2806,8 +2806,10 @@ export const sponsorRouter = router({
         let contract: ContractSendPlan | undefined
         let registration:
           Awaited<ReturnType<typeof prepareRegistrationSend>> | undefined
-        let earlyAccess:
-          Awaited<ReturnType<typeof prepareEarlyAccessSend>> | undefined
+        // Unpublished copies of the sponsor that did not get the early-access
+        // link's token. Known once the send has run, whether or not the email
+        // went out: the link is stored either way.
+        let copiesBehind = 0
         let subject = input.subject
         let result: Awaited<ReturnType<typeof sendSponsorCommunication>>
         try {
@@ -2867,18 +2869,6 @@ export const sponsorRouter = router({
                 )
               : undefined
 
-          // Workshop early-access kind (#1347): refused here, before anything
-          // is written or sent. The link itself is created (or the stored one
-          // answered) by `appendLate`, once nothing can refuse the send.
-          earlyAccess =
-            input.kind === 'workshop-early-access'
-              ? await prepareEarlyAccessSend(
-                  conference,
-                  domain,
-                  input.sponsorForConferenceId,
-                )
-              : undefined
-
           // A template applied in the composer before the link was known keeps
           // the merge field as text; the final merge happens here, so no
           // sponsor ever receives the placeholder.
@@ -2892,41 +2882,58 @@ export const sponsorRouter = router({
             ) as unknown as PortableTextBlock[]
           }
 
-          result = await sendSponsorCommunication({
-            conference,
-            orgId: ctx.orgId,
-            actorId: ctx.speaker._id ?? null,
-            sponsorForConferenceId: input.sponsorForConferenceId,
-            kind: input.kind,
-            recipientKeys: input.recipientKeys,
-            subject,
-            message,
-            template,
-            senderNames: [ctx.speaker.name, ctx.user?.name],
-            ...(discount && {
-              appendHtml: discount.html,
-              attachments: discount.attachments,
-            }),
-            ...(registration && {
-              appendHtml: registration.html,
-              attachments: registration.attachments,
-              portalUrl: registration.portalUrl,
-            }),
-            ...(earlyAccess && { appendLate: earlyAccess.appendLate }),
-            ...(contract && {
-              // The recipients the plan resolved and reserved the agreement
-              // for — never re-resolved from keys at send time.
-              recipientKeys: [],
-              serverRecipients: contract.recipients,
-              appendHtml: contract.appendHtml,
-              attachments: contract.attachments,
-              contractVariables: {
-                signerName: contract.signer?.name,
-                signerEmail: contract.signer?.email,
-                contractValue: contract.contractValue,
-              },
-            }),
-          })
+          // Workshop early-access kind (#1347): the one path a bulk send
+          // takes too. Refused there, before anything is written or sent.
+          if (input.kind === 'workshop-early-access') {
+            const sent = await sendEarlyAccess({
+              conference,
+              domain,
+              orgId: ctx.orgId,
+              actorId: ctx.speaker._id ?? null,
+              sponsorForConferenceId: input.sponsorForConferenceId,
+              recipientKeys: input.recipientKeys,
+              subject,
+              message,
+              template,
+              senderNames: [ctx.speaker.name, ctx.user?.name],
+            })
+            copiesBehind = sent.copiesBehind
+            result = sent
+          } else
+            result = await sendSponsorCommunication({
+              conference,
+              orgId: ctx.orgId,
+              actorId: ctx.speaker._id ?? null,
+              sponsorForConferenceId: input.sponsorForConferenceId,
+              kind: input.kind,
+              recipientKeys: input.recipientKeys,
+              subject,
+              message,
+              template,
+              senderNames: [ctx.speaker.name, ctx.user?.name],
+              ...(discount && {
+                appendHtml: discount.html,
+                attachments: discount.attachments,
+              }),
+              ...(registration && {
+                appendHtml: registration.html,
+                attachments: registration.attachments,
+                portalUrl: registration.portalUrl,
+              }),
+              ...(contract && {
+                // The recipients the plan resolved and reserved the agreement
+                // for — never re-resolved from keys at send time.
+                recipientKeys: [],
+                serverRecipients: contract.recipients,
+                appendHtml: contract.appendHtml,
+                attachments: contract.attachments,
+                contractVariables: {
+                  signerName: contract.signer?.name,
+                  signerEmail: contract.signer?.email,
+                  contractValue: contract.contractValue,
+                },
+              }),
+            })
         } catch (error) {
           // The primitive or pre-send setup THREW before the provider was
           // reached: nothing went out either way, so release any held claims.
@@ -2934,11 +2941,6 @@ export const sponsorRouter = router({
           await contract?.release?.()
           throw error
         }
-
-        // Unpublished copies of the sponsor that did not get the early-access
-        // link's token. Known once the primitive has run, whether or not the
-        // email went out: the link is stored either way.
-        const copiesBehind = earlyAccess?.notWritten().length ?? 0
 
         if (!result.ok) {
           // Nothing went out, so the codes are nobody's again — and the
