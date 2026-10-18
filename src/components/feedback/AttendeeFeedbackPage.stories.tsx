@@ -169,7 +169,10 @@ function flattenToApp(canvasElement: HTMLElement) {
 async function expectWholeWords(buttons: HTMLElement[]) {
   for (const button of buttons) {
     const text = button.querySelector('span')!.firstChild as Text
-    const edge = button.getBoundingClientRect().right
+    // The inner edge: text in the button's padding is already a spill.
+    const edge =
+      button.getBoundingClientRect().right -
+      parseFloat(getComputedStyle(button).paddingRight)
     for (const match of text.data.matchAll(/\S+/g)) {
       const range = document.createRange()
       range.setStart(text, match.index)
@@ -664,9 +667,21 @@ export const ChangeAnswerWhileTyping: Story = {
     const box = canvas.getByLabelText('Comment for the speaker (optional)')
     await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
     await userEvent.click(canvas.getByRole('button', { name: 'Not for me' }))
+    // Every text the comment form's status line shows: a keystroke clears
+    // the line, so only a record of all of them can say it never appeared.
+    const shown: string[] = []
+    const watch = new MutationObserver(() =>
+      shown.push(formStatus(canvasElement).textContent ?? ''),
+    )
+    watch.observe(formStatus(canvasElement), {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    })
     const typed = 'the slides were clear and the demo worked'
     // About 1.2 s of typing: it spans the moment the change resolves.
     await userEvent.type(box, typed, { delay: 30 })
+    watch.disconnect()
     await expect(args.submit).toHaveBeenCalledTimes(1)
     await expect(args.submit.mock.calls[0]).toEqual(['red'])
     await waitFor(() =>
@@ -676,6 +691,7 @@ export const ChangeAnswerWhileTyping: Story = {
     )
     await expect(box).toHaveValue(typed)
     await expect(document.activeElement).toBe(box)
+    await expect(shown).not.toContain('Showing your saved comment.')
     await expect(formStatus(canvasElement)).toHaveTextContent('')
   },
 }
