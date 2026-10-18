@@ -226,7 +226,8 @@ export async function exportParticipants(
   const anonymous: typeof classified = []
 
   for (const item of classified) {
-    // One person per address, as the workshop gate tells them apart.
+    // Group by address to pair add-ons with seats; each admitting seat still
+    // exports as its own row, even when one person holds several.
     const e = canonicalEmail(item.ticket.crm?.email)
     if (!e) {
       anonymous.push(item)
