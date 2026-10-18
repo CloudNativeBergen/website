@@ -11,6 +11,7 @@ import {
   MAX_ANSWERED_TALKS,
   answeredOn,
   feedbackResponseId,
+  forgetAnswer,
   readDeviceCookie,
   recordAnswer,
 } from './device'
@@ -124,5 +125,41 @@ describe('the device cookie', () => {
       device = readDeviceCookie(value, NOW)
     }
     expect(device!.answered).toHaveLength(2)
+  })
+})
+
+describe('forgetAnswer (Delete my answer, §7.4)', () => {
+  it('drops the talk from the list and keeps the token', () => {
+    const first = recordAnswer(null, 'talk-1', NOW)
+    const both = recordAnswer(first.device, 'talk-2', NOW)
+    const after = forgetAnswer(
+      readDeviceCookie(both.value, later(60))!,
+      'talk-1',
+    )
+    expect(after.device.token).toBe(first.device.token)
+    const device = readDeviceCookie(after.value, later(120))
+    expect(device?.token).toBe(first.device.token)
+    expect(device && answeredOn(device, 'talk-1')).toBe(false)
+    expect(device && answeredOn(device, 'talk-2')).toBe(true)
+  })
+
+  it('does not restart the 30 days: they run from the last ANSWER', () => {
+    const { value } = recordAnswer(null, 'talk-1', NOW)
+    const at = later(DEVICE_COOKIE_MAX_AGE - 10)
+    const after = forgetAnswer(readDeviceCookie(value, at)!, 'talk-1')
+    expect(
+      readDeviceCookie(after.value, later(DEVICE_COOKIE_MAX_AGE)),
+    ).not.toBeNull()
+    expect(
+      readDeviceCookie(after.value, later(DEVICE_COOKIE_MAX_AGE + 1)),
+    ).toBeNull()
+  })
+
+  it('leaves a list without the talk as it was', () => {
+    const { device } = recordAnswer(null, 'talk-1', NOW)
+    const after = forgetAnswer(device, 'talk-9')
+    expect(readDeviceCookie(after.value, later(60))?.answered).toEqual(
+      device.answered,
+    )
   })
 })
