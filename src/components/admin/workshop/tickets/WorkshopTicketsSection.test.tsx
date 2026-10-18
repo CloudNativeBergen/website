@@ -113,7 +113,8 @@ describe('early access by ticket type', () => {
     { typeName: SPONSOR, grantsWorkshop: true },
     { typeName: SPEAKER, grantsWorkshop: false },
   ]
-  const early = () => screen.getAllByRole('checkbox', { name: /^Early access for / })
+  const early = () =>
+    screen.getAllByRole('checkbox', { name: /^Early access for / })
 
   it('turns on only for a type that grants workshop access', () => {
     render(
