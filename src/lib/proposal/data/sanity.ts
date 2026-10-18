@@ -577,11 +577,22 @@ async function describeBlockingProjects(
     : (BLOCKING_TYPE_DESCRIPTIONS.videoProject ?? 'a saved studio video')
 }
 
+/**
+ * Delete a proposal and its cascade. `conferenceId` is the deleted talk's
+ * conference, read before the delete, so the caller can expire caches keyed on
+ * it (the Feedback Code index, speaker feedback spec §5.1). This module is
+ * also bundled into client components, so it cannot expire them itself.
+ * `null` when nothing was deleted.
+ */
 export async function deleteProposal(
   proposalId: string,
-): Promise<{ err: Error | null }> {
+): Promise<{ err: Error | null; conferenceId?: string | null }> {
   let err = null
+  let deletedFrom: string | null = null
   try {
+    // FIRST, before any cascade commits: a failed lookup must leave nothing
+    // half-deleted.
+    const conferenceId = await talkConferenceId(proposalId)
     // Find every document that references this proposal. Sanity refuses to
     // delete a document with inbound strong references, so we must handle
     // them up front instead of surfacing a raw 409 to the user.
@@ -736,11 +747,27 @@ export async function deleteProposal(
     // Final transaction: the cascade dependents (strong refs to the proposal)
     // and the proposal itself, atomically.
     await commitDeletes([...cascadeIds, proposalId])
+    deletedFrom = conferenceId
   } catch (error) {
     console.error('Error deleting proposal:', error)
     err = error as Error
   }
-  return { err }
+  return { err, conferenceId: deletedFrom }
+}
+
+/**
+ * The conference of a talk about to be deleted, for the caller's cache
+ * expiry after the delete. A failed lookup fails the delete before anything
+ * is written: deleting without knowing what to expire would leave the talk's
+ * Feedback Code resolving.
+ */
+async function talkConferenceId(proposalId: string): Promise<string | null> {
+  return clientWrite.fetch<string | null>(
+    // groq-global-scoped: by-id read of the proposal both callers have already proven ownership of.
+    groq`*[_id == $proposalId][0].conference._ref`,
+    { proposalId },
+    { cache: 'no-store' },
+  )
 }
 
 export async function updateProposalStatus(

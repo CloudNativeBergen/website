@@ -28,7 +28,8 @@ export function versionsClient() {
   return clientWrite.withConfig({ apiVersion: VERSIONS_API_VERSION })
 }
 
-const PUBLISHED_ONLY =
+/** Published documents only (§4.4): no drafts, no Content Release versions. */
+export const PUBLISHED_ONLY =
   '!(_id in path("drafts.**")) && !(_id in path("versions.**"))'
 
 /**

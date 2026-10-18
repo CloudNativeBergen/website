@@ -1,3 +1,4 @@
+import { expireFeedbackCodeIndex } from '@/lib/feedback/server'
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { v4 as uuidv4 } from 'uuid'
@@ -1641,7 +1642,8 @@ export const proposalRouter = router({
 
         // Handle deletion separately
         if (status === Status.deleted) {
-          const { err: deleteError } = await deleteProposal(id)
+          const { err: deleteError, conferenceId: deletedFrom } =
+            await deleteProposal(id)
           if (deleteError) {
             if (deleteError instanceof ProposalDeletionBlockedError) {
               throw new TRPCError({
@@ -1655,6 +1657,9 @@ export const proposalRouter = router({
               cause: deleteError,
             })
           }
+          // A deleted talk's Feedback Code stops resolving at once (speaker
+          // feedback spec §5.1).
+          if (deletedFrom) expireFeedbackCodeIndex(deletedFrom)
           return { proposalStatus: Status.deleted }
         }
 
@@ -1694,6 +1699,22 @@ export const proposalRouter = router({
               : 'Failed to update proposal status',
             cause: updateErr,
           })
+        }
+
+        // A talk that stops being confirmed must stop resolving its Feedback
+        // Code at once, and a newly confirmed one must start (speaker feedback
+        // spec §5.1). Only confirmed talks are in the index, so no other
+        // transition flushes it. The TALK's conference: the owner arm admits
+        // a proposal of another tenant.
+        const talkConference = updatedProposal.conference
+        const talkConferenceId =
+          talkConference && '_ref' in talkConference
+            ? talkConference._ref
+            : talkConference?._id
+        const touchesConfirmed =
+          proposal.status === Status.confirmed || status === Status.confirmed
+        if (talkConferenceId && touchesConfirmed) {
+          expireFeedbackCodeIndex(talkConferenceId)
         }
 
         // Publish status change event for notifications
@@ -2068,7 +2089,9 @@ export const proposalRouter = router({
       try {
         // OWNERSHIP (#730): unguarded, this deleted any proposal in the dataset.
         await requireDocumentInCurrentOrg(input.id, 'talk')
-        const { err } = await deleteProposal(input.id)
+        const { err, conferenceId: deletedFrom } = await deleteProposal(
+          input.id,
+        )
 
         if (err) {
           if (err instanceof ProposalDeletionBlockedError) {
@@ -2084,6 +2107,7 @@ export const proposalRouter = router({
           })
         }
 
+        if (deletedFrom) expireFeedbackCodeIndex(deletedFrom)
         return { success: true }
       } catch (error) {
         if (error instanceof TRPCError) throw error

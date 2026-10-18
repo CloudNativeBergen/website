@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
-import { conferenceTag, domainTag, organizationTag } from './tags'
+import {
+  conferenceTag,
+  domainTag,
+  feedbackCodeIndexTag,
+  organizationTag,
+} from './tags'
 
 /**
  * EXTERNAL CACHE INVALIDATION — the target vocabulary (RunKonf/platform#36).
@@ -31,7 +36,7 @@ import { conferenceTag, domainTag, organizationTag } from './tags'
  *     nothing — a genuine no-op that returns the same 200 as a real hit, with
  *     nothing to compare against. There is no lookup to leak.
  *
- * EXTENDING IT. Add a member to the union and a `case` to {@link tagForTarget}.
+ * EXTENDING IT. Add a member to the union and a `case` to {@link revalidationsForTarget}.
  * Do not widen an existing member to accept a tag NAME: the point of the union
  * is that the caller names a DOCUMENT and this app decides which tag that
  * implies, so the tag structure stays this repo's to change.
@@ -87,28 +92,52 @@ export const InvalidationRequestSchema = z.object({
 })
 
 /**
- * The ONE tag a target implies. Every branch delegates to `@/lib/cache/tags` —
+ * One tag to revalidate, and how: the `'default'` profile (stale-while-
+ * revalidate), or `{ expire: 0 }` for a tag whose stale value must not be
+ * served while it refreshes.
+ */
+export interface TagRevalidation {
+  tag: string
+  profile: 'default' | { expire: 0 }
+}
+
+/**
+ * The tags a target implies. Every branch delegates to `@/lib/cache/tags` —
  * the tag strings are not restated here, because a second copy is exactly how
  * an invalidation quietly starts missing the read it is supposed to bust.
+ *
+ * A conference target also expires that conference's Feedback Code index
+ * (speaker feedback spec §5.1): it is cached apart from `conferenceTag`, it
+ * shows speaker names on the attendee page, and speaker erasure relies on this
+ * target to clear them. Expired at once, as every other expiry of it is.
  */
-export function tagForTarget(target: InvalidationTarget): string {
+export function revalidationsForTarget(
+  target: InvalidationTarget,
+): TagRevalidation[] {
   switch (target.type) {
     case 'organization':
-      return organizationTag(target.id)
+      return [{ tag: organizationTag(target.id), profile: 'default' }]
     case 'conference':
-      return conferenceTag(target.id)
+      return [
+        { tag: conferenceTag(target.id), profile: 'default' },
+        { tag: feedbackCodeIndexTag(target.id), profile: { expire: 0 } },
+      ]
     case 'domain':
-      return domainTag(target.domain)
+      return [{ tag: domainTag(target.domain), profile: 'default' }]
   }
 }
 
 /**
- * The de-duplicated tags for a batch, in first-seen order. Duplicates in the
- * payload (kontroll patching the same org twice in one flush) must not be
- * charged twice against the platform's revalidation budget.
+ * The de-duplicated revalidations for a batch, in first-seen order. Duplicates
+ * in the payload (kontroll patching the same org twice in one flush) must not
+ * be charged twice against the platform's revalidation budget.
  */
-export function tagsForTargets(
+export function revalidationsForTargets(
   targets: readonly InvalidationTarget[],
-): string[] {
-  return [...new Set(targets.map(tagForTarget))]
+): TagRevalidation[] {
+  const byTag = new Map<string, TagRevalidation>()
+  for (const r of targets.flatMap(revalidationsForTarget)) {
+    if (!byTag.has(r.tag)) byTag.set(r.tag, r)
+  }
+  return [...byTag.values()]
 }

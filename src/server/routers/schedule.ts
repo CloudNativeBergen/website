@@ -13,6 +13,7 @@ import { validateSchedulePayload } from '@/lib/schedule/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
+import { expireFeedbackCodeIndex } from '@/lib/feedback/server'
 import type { ConferenceSchedule } from '@/lib/conference/types'
 import { ScheduleStatus } from '@/lib/schedule/types'
 import { Status as ProposalStatus } from '@/lib/proposal/types'
@@ -145,6 +146,12 @@ export const scheduleRouter = router({
       // `fetchConferenceData`) now carries `sanity:conference-<id>`, so the
       // scoped tag alone fully invalidates this tenant.
       revalidateTag(conferenceTag(conference._id), 'default')
+      // A moved, added or removed slot opens, closes or moves a Feedback Window
+      // (speaker feedback spec §5.1). Not for a draft: drafts never open one,
+      // and the editor autosaves them every few seconds.
+      if (payload.status !== ScheduleStatus.Draft) {
+        expireFeedbackCodeIndex(conference._id)
+      }
 
       return { schedule }
     }),
@@ -321,6 +328,12 @@ export const scheduleRouter = router({
           })
         }
         await clientWrite.delete(input.id)
+        // A legacy day with no status reads as official, so deleting it can
+        // close Feedback Windows (speaker feedback spec §5.1). Official days
+        // are refused above; drafts and archived days never held a window.
+        if (!doc.status) {
+          expireFeedbackCodeIndex(conference._id)
+        }
         return { success: true }
       }),
   }),
@@ -431,6 +444,7 @@ export const scheduleRouter = router({
 
         await tx.commit()
         revalidateTag(conferenceTag(conference._id), 'default')
+        expireFeedbackCodeIndex(conference._id)
 
         // SCHEDULE-CHANGE ALERTS. Publishing is now the ONLY write that changes
         // the public program — draft saves auto-fork and Live mode is read-only

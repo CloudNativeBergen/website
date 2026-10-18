@@ -19,6 +19,7 @@ import {
   instantToOsloLocalInput,
   osloLocalInputToIso,
   isCalendarDate,
+  formatSessionInstant,
 } from '@/lib/time'
 
 describe('time.ts', () => {
@@ -351,5 +352,18 @@ describe('formatRegistrationInstant', () => {
     ['2026-12-01T08:00:00Z', 'Tuesday, December 1, 2026 at 9:00 AM'], // CET
   ])('shows %s in Oslo time', (instant, expected) => {
     expect(formatRegistrationInstant(instant)).toBe(expected)
+  })
+})
+
+describe('formatSessionInstant', () => {
+  it('reads like the programme: Oslo wall clock, 24-hour, no year', () => {
+    // 09:40Z on 2026-10-27 is 10:40 in Oslo (CET, after the DST change).
+    expect(formatSessionInstant('2026-10-27T09:40:00.000Z')).toBe(
+      'Tuesday 27 October at 10:40',
+    )
+    // Summer time: 08:00Z is 10:00 CEST, not 09:00.
+    expect(formatSessionInstant('2026-06-10T08:00:00.000Z')).toBe(
+      'Wednesday 10 June at 10:00',
+    )
   })
 })

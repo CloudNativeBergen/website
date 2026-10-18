@@ -71,6 +71,10 @@
  */
 
 import {
+  revalidationsForTargets,
+  type TagRevalidation,
+} from '@/lib/cache/invalidation'
+import {
   clientReadUncached as clientRead,
   clientWrite,
 } from '@/lib/sanity/client'
@@ -673,6 +677,18 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
         break
       }
 
+      case 'talk': {
+        // `talk.speakers[]` anonymises in place (see `default`), but the
+        // talk's conference has the name cached: its pages, and the Feedback
+        // Code index behind the attendee page (speaker feedback spec §5.1).
+        const conferenceRef = (doc.conference as { _ref?: unknown } | null)
+          ?._ref
+        if (typeof conferenceRef === 'string') {
+          affectedConferenceIds.add(conferenceRef)
+        }
+        break
+      }
+
       case 'imageGallery': {
         // UNTAG ONLY (owner decision, 2026-08-14). Conference photography is
         // group photography: deleting the frame would destroy an image of other
@@ -1200,7 +1216,10 @@ export interface EraseSpeakerOptions {
    * Next.js request/action scope — a `tsx` script has none. Omit and the
    * wrapper reports the tags it could not revalidate instead of pretending.
    */
-  revalidate?: (tag: string) => void | Promise<void>
+  revalidate?: (
+    tag: string,
+    profile: TagRevalidation['profile'],
+  ) => void | Promise<void>
   /**
    * Commit although a handle of theirs is shared only through another
    * speaker's profile links (`plan.sharedByLinkOnly`): the operator has
@@ -1794,10 +1813,19 @@ async function revalidateErasureTags(
   plan: ErasurePlan,
   revalidate: EraseSpeakerOptions['revalidate'],
 ): Promise<EraseSpeakerResult['cache']> {
-  const tags = [
-    ...CACHE_TAGS,
-    ...plan.affectedConferenceIds.map((id) => `sanity:conference-${id}`),
+  // Each affected conference as the invalidation endpoint's `conference`
+  // target, so the operator's runbook step and this path agree on the tags
+  // and their profiles (the Feedback Code index is expired at once).
+  const revalidations: TagRevalidation[] = [
+    ...CACHE_TAGS.map((tag) => ({ tag, profile: 'default' as const })),
+    ...revalidationsForTargets(
+      plan.affectedConferenceIds.map((id) => ({
+        type: 'conference' as const,
+        id,
+      })),
+    ),
   ]
+  const tags = revalidations.map((r) => r.tag)
   if (!revalidate) {
     return {
       tags,
@@ -1808,7 +1836,7 @@ async function revalidateErasureTags(
     }
   }
   try {
-    for (const tag of tags) await revalidate(tag)
+    for (const { tag, profile } of revalidations) await revalidate(tag, profile)
     return { tags, revalidated: true, error: null }
   } catch (error) {
     return { tags, revalidated: false, error: (error as Error).message }

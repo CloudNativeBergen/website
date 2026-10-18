@@ -259,7 +259,7 @@ the same (one read per cache refresh), and expiries take effect.
 - **Speaker erasure runs from a script** (`scripts/erase-speaker.ts`, no Next
   request), which prints cache tags for the operator instead of expiring them.
   `feedbackCodeIndexTag` is added to `revalidateErasureTags`, and to
-  `tagsForTargets` behind `api/provisioning/cache/invalidate`, which must expire
+  `revalidationsForTargets` behind `api/provisioning/cache/invalidate`, which must expire
   it with `{ expire: 0 }`.
 - **A stale index can't cause a wrong write.** A refill right after an expiry
   goes through GROQ, which can lag a write by about a second, so it can cache an
@@ -321,11 +321,20 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
     (`src/lib/posthog/config.ts`), which both already follow;
   - no Pirsch script and no `InstallPrompt`: put them behind a `usePathname`
     client gate, like `AnalyticsRouteGate`;
-  - Vercel `<Analytics />` and `<SpeedInsights />` redact the code from `/f/`
-    paths in `beforeSend` (supported by the installed `@vercel/analytics` 2.0.1
-    and `@vercel/speed-insights` 2.0.0). Both are client components and the root
-    layout is a Server Component, so they are rendered from a small
-    `'use client'` wrapper that rewrites `event.url`.
+  - Vercel `<Analytics />` redacts the code from `/f/` paths in `beforeSend`
+    (supported by the installed `@vercel/analytics` 2.0.1). Both it and
+    `<SpeedInsights />` are client components and the root layout is a Server
+    Component, so they are rendered from a small `'use client'` wrapper.
+  - _Refinement (F1b):_ `<SpeedInsights />` sends **no metric at all** from
+    `/f/`: its served script copies back only the `url` that `beforeSend`
+    returns and keeps its own `route`, built from the raw path, so a
+    percent-encoded code (`/f/%6b7m2qx`, which resolves) would be sent as the
+    route. `beforeSend` returns `null` instead.
+  - _Refinement (F1b):_ `Referrer-Policy: no-referrer` is sent as a response
+    header on `/f/**` (the page's metadata is streamed after its first
+    sub-resource requests), and `/F/<code>` and `/f/<code>/<more>` are
+    rewritten to `/f/<code>` so they never reach the not-found page and its
+    links.
 
   Otherwise §8's "no consent prompt" would be false and codes would reach
   analytics.
@@ -346,6 +355,8 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
   (`src/lib/conference/state.ts`) and the talk has a slot in an official
   schedule (§4.4). The title, speakers and start time never appear otherwise,
   so an early-shared code can't reveal an unannounced acceptance.
+  _Refinement (F1b):_ nor does the closing time in the Open footer, which
+  gives the slot's end away as surely as the start.
 - Whether this device has a response is decided **on the server** when the page
   renders (the cookie is sent to `/f/<code>`), so a reload shows Answered.
 - Colour is never the only signal: every button has an icon and words.
@@ -862,3 +873,8 @@ Per `AGENTS.md` ("Agent discipline"):
   brings a hidden comment back as a new one. The user accepted this as a known
   gap rather than adding a tombstone document; the page is never told a comment
   was hidden (§7.4, §15).
+- **R3. The speaker's QR waits for F1c.** F1b's note on #1429 asked to show
+  speakers their Feedback Code once `/f/<code>` existed. Because the F1b page
+  cannot take an answer (its buttons are disabled until Submit, F1c), the user
+  chose to keep `ATTENDEE_PAGE_LIVE` off until F1c, so no printed QR leads to
+  a form that cannot be answered (§9.1).

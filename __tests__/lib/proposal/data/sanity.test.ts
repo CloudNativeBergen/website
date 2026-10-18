@@ -580,3 +580,83 @@ describe('schedule resolution — official documents only', () => {
     expect(workshop.scheduleInfo?.timeSlot?.startTime).toBe('13:00')
   })
 })
+
+describe('deleteProposal reports the deleted talk’s conference (speaker feedback §5.1)', () => {
+  // The routers expire that conference's Feedback Code index with it. Never
+  // the host's: a speaker can delete their own proposal from another
+  // tenant's host.
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // A test whose lookup throws leaves its queued answers unread;
+    // clearAllMocks keeps queued once-values, so reset them.
+    mockFetch.mockReset()
+    mockWriteFetch.mockReset()
+    mockTxCommit.mockResolvedValue({})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  const noReferences = () =>
+    mockFetch
+      .mockResolvedValueOnce([]) // referencing docs
+      .mockResolvedValueOnce([]) // conversationIds
+      .mockResolvedValueOnce([]) // messageNotificationIds
+
+  it('returns the conference read by id before the delete', async () => {
+    noReferences()
+    mockWriteFetch.mockResolvedValueOnce('conf-talk')
+
+    expect(await deleteProposal('proposal-1')).toEqual({
+      err: null,
+      conferenceId: 'conf-talk',
+    })
+    expect(mockWriteFetch).toHaveBeenCalledWith(
+      expect.stringContaining('_id == $proposalId'),
+      { proposalId: 'proposal-1' },
+      { cache: 'no-store' },
+    )
+  })
+
+  it('refuses the delete when the conference lookup fails, before writing anything', async () => {
+    // A proposal WITH a thread, so the cascade has commits of its own that a
+    // late lookup would let through.
+    mockFetch
+      .mockResolvedValueOnce([]) // referencing docs
+      .mockResolvedValueOnce(['conv-1']) // conversationIds
+      .mockResolvedValueOnce(['msg-1']) // messageIds
+      .mockResolvedValueOnce([]) // messageNotificationIds
+      .mockResolvedValueOnce([]) // preferenceIds
+    const failure = new Error('lookup down')
+    mockWriteFetch.mockRejectedValueOnce(failure)
+
+    expect(await deleteProposal('proposal-1')).toEqual({
+      err: failure,
+      conferenceId: null,
+    })
+    // Deleting without knowing what to expire would leave the code resolving,
+    // and a half-done cascade would delete the thread but keep the talk.
+    expect(mockTransaction).not.toHaveBeenCalled()
+    expect(mockTxCommit).not.toHaveBeenCalled()
+  })
+
+  it('reports none when the delete is blocked', async () => {
+    mockFetch.mockResolvedValueOnce([{ _id: 'schedule-1', _type: 'schedule' }])
+    mockWriteFetch.mockResolvedValue('conf-talk')
+
+    const result = await deleteProposal('proposal-1')
+
+    expect(result.err).toBeInstanceOf(ProposalDeletionBlockedError)
+    expect(result.conferenceId ?? null).toBeNull()
+  })
+
+  it('reports none when the commit fails', async () => {
+    noReferences()
+    mockWriteFetch.mockResolvedValueOnce('conf-talk')
+    mockTxCommit.mockRejectedValueOnce(new Error('commit failed'))
+
+    const result = await deleteProposal('proposal-1')
+
+    expect(result.err).toBeTruthy()
+    expect(result.conferenceId).toBeNull()
+  })
+})
