@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowPathIcon,
   ClockIcon,
@@ -194,22 +194,25 @@ function AnswerForm({
 }) {
   const [tapped, setTapped] = useState<FeedbackColour | null>(null)
   const [failed, setFailed] = useState(false)
-  const [pending, startTransition] = useTransition()
+  // Plain state, not `useTransition`: with it, `isPending` never cleared
+  // after a failed save in the dark story (cause not pinned down), leaving
+  // every button disabled. Nothing else can hold this flag.
+  const [pending, setPending] = useState(false)
 
-  const answer = (colour: FeedbackColour) => {
+  const answer = async (colour: FeedbackColour) => {
     setTapped(colour)
     setFailed(false)
-    startTransition(async () => {
-      let next: SubmitOutcome
-      try {
-        next = await submit(colour)
-      } catch {
-        next = { state: 'unavailable' }
-      }
-      // Not saved: keep the buttons, so the attendee can tap again.
-      if (next.state === 'unavailable') setFailed(true)
-      else onAnswer(next)
-    })
+    setPending(true)
+    let next: SubmitOutcome
+    try {
+      next = await submit(colour)
+    } catch {
+      next = { state: 'unavailable' }
+    }
+    setPending(false)
+    // Not saved: keep the buttons, so the attendee can tap again.
+    if (next.state === 'unavailable') setFailed(true)
+    else onAnswer(next)
   }
 
   return (
