@@ -207,7 +207,7 @@ Two limits, both on the same durable, Sanity-backed limiter as provisioning but 
 - `invalidate-attempt`, bucketed by client IP, charged **before** the token is compared — 60/min, 600/hour, 3000/day. The bound on brute-forcing the secret.
 - `invalidate`, a **single global** bucket, charged after authentication and after validation — 60/min, 600/hour, 5000/day. Not keyed on anything the caller can rotate, because `x-forwarded-for` is caller-controlled.
 
-Together with the 20-target cap that is at most **1200 tag revalidations a minute, platform-wide**, no matter what is sent. Without both halves, a holder of the secret could drop every tenant's cached reads in a loop and turn the site into an uncached passthrough to Sanity.
+Together with the 20-target cap that is at most **2400 tag revalidations a minute, platform-wide** (60 calls × 20 targets × at most two tags, since a `conference` target also expires its Feedback Code index), no matter what is sent. Without both halves, a holder of the secret could drop every tenant's cached reads in a loop and turn the site into an uncached passthrough to Sanity.
 
 Both fail **closed** on a limiter outage. When the limit does trip the cost is bounded and self-healing: the caller gets a `429`, and the entry it wanted to bust still revalidates on its own within the hour.
 
