@@ -269,6 +269,7 @@ describe('Delete my answer', () => {
   it('deletes this device’s response, drops the talk from the cookie, and shows the open form', async () => {
     const cookie = await answered('green', 'hi')
     const [{ _id }] = responses()
+    h.updateTag.mockReset() // Submit expired it too; count Delete's own call.
 
     request(cookie)
     expect(await deleteFeedbackAnswer('k7m2qx')).toEqual({
