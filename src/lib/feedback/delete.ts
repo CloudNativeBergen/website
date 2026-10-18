@@ -24,7 +24,7 @@ import {
   forgetAnswer,
   readDeviceCookie,
 } from './device'
-import { attendeeState, type AttendeeFeedbackState } from './page'
+import { attendeeState, type DeleteOutcome } from './page'
 
 /**
  * What the attendee sees after the delete, and the device cookie to set:
@@ -41,12 +41,17 @@ export async function deleteFeedback({
   code: unknown
   cookie: string | undefined
   now: Date
-}): Promise<{ outcome: AttendeeFeedbackState; cookie?: string }> {
+}): Promise<{ outcome: DeleteOutcome; cookie?: string }> {
   const { page, target } = await resolveFeedbackTarget(conference, rawCode, now)
-  if (!target) return { outcome: page }
+  if (!target) return { outcome: { deleted: false, page } }
   const device = readDeviceCookie(cookie, now)
   if (!device || !answeredOn(device, target.talkId)) {
-    return { outcome: attendeeState(page, null, target.talkId) }
+    return {
+      outcome: {
+        deleted: false,
+        page: attendeeState(page, null, target.talkId),
+      },
+    }
   }
 
   const id = feedbackResponseId(device.token, target.talkId)
@@ -54,12 +59,15 @@ export async function deleteFeedback({
     await clientWrite.delete(id)
   } catch (error) {
     console.error('Could not delete a Feedback Response', error)
-    return { outcome: { state: 'unavailable' } }
+    return { outcome: { deleted: false, page: { state: 'unavailable' } } }
   }
   expireFeedbackResponse(id)
   const next = forgetAnswer(device, target.talkId)
   return {
-    outcome: attendeeState(page, next.device, target.talkId),
+    outcome: {
+      deleted: true,
+      page: attendeeState(page, next.device, target.talkId),
+    },
     cookie: next.value,
   }
 }

@@ -273,9 +273,12 @@ describe('Delete my answer', () => {
 
     request(cookie)
     expect(await deleteFeedbackAnswer('k7m2qx')).toEqual({
-      state: 'open',
-      talk: { title: 'Title of talk-open', speakers: [] },
-      closesAt: '2026-10-27T09:40:00.000Z',
+      deleted: true,
+      page: {
+        state: 'open',
+        talk: { title: 'Title of talk-open', speakers: [] },
+        closesAt: '2026-10-27T09:40:00.000Z',
+      },
     })
     expect(responses()).toEqual([])
     expect(store().commits.at(-1)).toEqual([{ delete: { id: _id } }])
@@ -289,7 +292,9 @@ describe('Delete my answer', () => {
     expect(await pageState()).toMatchObject({ state: 'open' })
     const commits = store().commits.length
     request(after)
-    await deleteFeedbackAnswer('k7m2qx')
+    expect(await deleteFeedbackAnswer('k7m2qx')).toMatchObject({
+      deleted: false,
+    })
     expect(store().commits).toHaveLength(commits)
   })
 
@@ -328,9 +333,12 @@ describe('Delete my answer', () => {
     vi.setSystemTime(AFTER)
     request(cookie)
     expect(await deleteFeedbackAnswer('k7m2qx')).toEqual({
-      state: 'closed',
-      talk: { title: 'Title of talk-open', speakers: [] },
-      canDelete: false,
+      deleted: true,
+      page: {
+        state: 'closed',
+        talk: { title: 'Title of talk-open', speakers: [] },
+        canDelete: false,
+      },
     })
     expect(responses()).toEqual([])
   })
@@ -342,8 +350,8 @@ describe('Delete my answer', () => {
     )
     request(cookie)
     expect(await deleteFeedbackAnswer('k7m2qx')).toMatchObject({
-      state: 'not-yet-open',
-      canDelete: false,
+      deleted: true,
+      page: { state: 'not-yet-open', canDelete: false },
     })
     expect(responses()).toEqual([])
   })
@@ -371,7 +379,8 @@ describe('Delete my answer', () => {
     request(cookie)
     store().failWrites(new Error('503: write refused'))
     expect(await deleteFeedbackAnswer('k7m2qx')).toEqual({
-      state: 'unavailable',
+      deleted: false,
+      page: { state: 'unavailable' },
     })
     expect(responses()).toHaveLength(1)
     expect(writtenCookies()).toEqual([])
@@ -394,7 +403,7 @@ describe('Delete my answer refuses, before any write or talk-specific read', () 
     request(cookie)
     const foreign = await deleteFeedbackAnswer('zzz234')
     const never = await deleteFeedbackAnswer('nnnn23')
-    expect(foreign).toEqual({ state: 'unknown' })
+    expect(foreign).toEqual({ deleted: false, page: { state: 'unknown' } })
     expect(foreign).toEqual(never)
     nothingHappened()
     for (const read of store().reads) {
@@ -413,16 +422,40 @@ describe('Delete my answer refuses, before any write or talk-specific read', () 
 
     for (const sent of [undefined, reSigned]) {
       request(sent)
+      // Refused with the page's state, and NOT reported as deleted: a stale
+      // page must never say the answer went while it survives.
       expect(await deleteFeedbackAnswer('k7m2qx')).toEqual({
-        state: 'open',
-        talk: { title: 'Title of talk-open', speakers: [] },
-        closesAt: '2026-10-27T09:40:00.000Z',
+        deleted: false,
+        page: {
+          state: 'open',
+          talk: { title: 'Title of talk-open', speakers: [] },
+          closesAt: '2026-10-27T09:40:00.000Z',
+        },
       })
     }
     vi.setSystemTime(new Date('2026-10-26T15:10:00.000Z'))
     request(cookie)
-    expect(await deleteFeedbackAnswer('abc234')).toMatchObject({
-      state: 'open',
+    expect(await deleteFeedbackAnswer('abc234')).toEqual({
+      deleted: false,
+      page: {
+        state: 'open',
+        talk: { title: 'Title of talk-later', speakers: [] },
+        closesAt: '2026-10-27T15:40:00.000Z',
+      },
+    })
+    nothingHappened()
+    expect(responses()).toHaveLength(1)
+  })
+
+  it('refuses, not deleted, once the code was rotated after the answer', async () => {
+    const cookie = await answered()
+    store().put({ ...store().doc('talk-open')!, feedbackCode: 'ghj789' })
+    store().reset(store().all())
+    h.updateTag.mockReset()
+    request(cookie)
+    expect(await deleteFeedbackAnswer('k7m2qx')).toEqual({
+      deleted: false,
+      page: { state: 'unknown' },
     })
     nothingHappened()
     expect(responses()).toHaveLength(1)
@@ -430,10 +463,14 @@ describe('Delete my answer refuses, before any write or talk-specific read', () 
 
   it('is Unknown on a host no conference claims, and Unavailable when it could not be read', async () => {
     h.resolution = { conference: {}, status: 'not-found' }
-    expect(await deleteFeedbackAnswer('k7m2qx')).toEqual({ state: 'unknown' })
+    expect(await deleteFeedbackAnswer('k7m2qx')).toEqual({
+      deleted: false,
+      page: { state: 'unknown' },
+    })
     h.resolution = { conference: {}, status: 'unavailable' }
     expect(await deleteFeedbackAnswer('k7m2qx')).toEqual({
-      state: 'unavailable',
+      deleted: false,
+      page: { state: 'unavailable' },
     })
     expect(store().reads).toEqual([])
     nothingHappened()

@@ -19,11 +19,16 @@ const submitAnswered = fn<SubmitAnswer>(async (colour, comment) => ({
   talk,
 }))
 
-/** Delete my answer while the window is open: the open form again. */
-const removeToOpen = fn<DeleteAnswer>(async () => ({
+const openPage = {
   state: 'open',
   talk,
   closesAt: '2026-10-27T09:40:00.000Z',
+} as const
+
+/** Delete my answer while the window is open: the open form again. */
+const removeToOpen = fn<DeleteAnswer>(async () => ({
+  deleted: true,
+  page: openPage,
 }))
 
 const answeredPage = {
@@ -352,11 +357,63 @@ export const Deleted: Story = {
   },
 }
 
+/**
+ * The page was stale (the cookie had expired, say): the server refused and
+ * deleted nothing. The page's current state replaces Answered, and NOTHING
+ * says the answer was deleted.
+ */
+export const DeleteRefused: Story = {
+  args: {
+    page: answeredPage,
+    remove: fn<DeleteAnswer>(async () => ({ deleted: false, page: openPage })),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Delete my answer' }),
+    )
+    await expect(args.remove).toHaveBeenCalledTimes(1)
+    const question = await canvas.findByRole('heading', {
+      level: 2,
+      name: 'How was this session?',
+    })
+    await waitFor(() => expect(question).toHaveFocus())
+    await expect(canvas.queryByRole('status')).toBeNull()
+    await expect(canvas.queryByText(/has been deleted/)).toBeNull()
+  },
+}
+
+/** Closed and stale: the refusal shows Closed again, with no "deleted" line. */
+export const DeleteRefusedOnClosed: Story = {
+  args: {
+    page: { state: 'closed', talk, canDelete: true },
+    remove: fn<DeleteAnswer>(async () => ({
+      deleted: false,
+      page: { state: 'closed', talk, canDelete: false },
+    })),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Delete my answer' }),
+    )
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole('button', { name: 'Delete my answer' }),
+      ).toBeNull(),
+    )
+    await expect(canvas.queryByText(/has been deleted/)).toBeNull()
+  },
+}
+
 /** The delete failed: Answered stays, with a line saying so. */
 export const DeleteNotDone: Story = {
   args: {
     page: answeredPage,
-    remove: fn<DeleteAnswer>(async () => ({ state: 'unavailable' })),
+    remove: fn<DeleteAnswer>(async () => ({
+      deleted: false,
+      page: { state: 'unavailable' },
+    })),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
@@ -390,9 +447,8 @@ export const ClosedWithDelete: Story = {
   args: {
     page: { state: 'closed', talk, canDelete: true },
     remove: fn<DeleteAnswer>(async () => ({
-      state: 'closed',
-      talk,
-      canDelete: false,
+      deleted: true,
+      page: { state: 'closed', talk, canDelete: false },
     })),
   },
   play: async ({ canvasElement, args }) => {
@@ -427,10 +483,13 @@ export const NotYetOpenWithDelete: Story = {
       canDelete: true,
     },
     remove: fn<DeleteAnswer>(async () => ({
-      state: 'not-yet-open',
-      talk,
-      opensAt: '2026-10-26T15:00:00.000Z',
-      canDelete: false,
+      deleted: true,
+      page: {
+        state: 'not-yet-open',
+        talk,
+        opensAt: '2026-10-26T15:00:00.000Z',
+        canDelete: false,
+      },
     })),
   },
   play: async ({ canvasElement, args }) => {

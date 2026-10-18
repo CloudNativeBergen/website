@@ -11,7 +11,10 @@ import {
   FEEDBACK_COLOUR_LABELS,
   type FeedbackColour,
 } from '@/lib/feedback/colour'
-import type { AttendeeFeedbackState } from '@/lib/feedback/server'
+import type {
+  AttendeeFeedbackState,
+  DeleteOutcome,
+} from '@/lib/feedback/server'
 
 /**
  * What the attendee page's actions look like from the client, bound to the
@@ -23,8 +26,11 @@ export type SubmitAnswer = (
   comment?: string,
 ) => Promise<AttendeeFeedbackState>
 
-/** Delete my answer (§7.4), bound to the page's code. */
-export type DeleteAnswer = () => Promise<AttendeeFeedbackState>
+/**
+ * Delete my answer (§7.4), bound to the page's code. `deleted` is true only
+ * once the delete committed; a refusal brings the page's current state.
+ */
+export type DeleteAnswer = () => Promise<DeleteOutcome>
 
 /** The three answers (§7.2): each with its icon and words, never colour alone. */
 export const ANSWERS = [

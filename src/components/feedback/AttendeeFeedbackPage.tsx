@@ -115,7 +115,6 @@ function PageState({
   // The talk's title is the page's h1 when it is shown; the state's own
   // heading is the h1 otherwise.
   const level = 'talk' in page && page.talk ? ('h2' as const) : ('h1' as const)
-  const onDelete = (next: AttendeeFeedbackState) => onOutcome(next, true)
   switch (page.state) {
     case 'open':
       return (
@@ -159,7 +158,7 @@ function PageState({
               : 'Scan the code again during the session.'}
           </Notice>
           {page.canDelete && (
-            <DeleteAnswerButton remove={remove} onDelete={onDelete} />
+            <DeleteAnswerButton remove={remove} onDelete={onOutcome} />
           )}
         </>
       )
@@ -176,7 +175,7 @@ function PageState({
             Thank you for coming. Feedback closes 24 hours after a session ends.
           </Notice>
           {page.canDelete && (
-            <DeleteAnswerButton remove={remove} onDelete={onDelete} />
+            <DeleteAnswerButton remove={remove} onDelete={onOutcome} />
           )}
         </>
       )
@@ -228,7 +227,7 @@ function AnswerForm({
   const answer = async (colour: FeedbackColour) => {
     setTapped(colour)
     setFailed(false)
-    const next = await run(() => submit(colour))
+    const next = await run(() => submit(colour), { state: 'unavailable' })
     if (!next) return
     // Not confirmed: keep the buttons. Tapping again is safe, as a retry under
     // the same cookie lands on the same response.

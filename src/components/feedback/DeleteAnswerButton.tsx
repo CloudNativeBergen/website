@@ -11,7 +11,9 @@ export const DELETE_FAILED = "We couldn't delete your answer. Please try again."
 /**
  * Delete my answer (speaker feedback spec §7.4), under whichever
  * one-at-a-time guard the caller holds. A failed delete keeps the page as it
- * is and reports; anything else replaces the page.
+ * is and reports; anything else replaces the page, and only a delete the
+ * server confirmed is announced as one: a refusal (an expired cookie, a
+ * rotated code) shows the page's current state and no "deleted" line.
  */
 export async function eraseAnswer({
   run,
@@ -21,13 +23,16 @@ export async function eraseAnswer({
 }: {
   run: RunAction
   remove: DeleteAnswer
-  onDelete: (next: AttendeeFeedbackState) => void
+  onDelete: (next: AttendeeFeedbackState, deleted: boolean) => void
   onFailed: () => void
 }) {
-  const next = await run(remove)
+  const next = await run(remove, {
+    deleted: false,
+    page: { state: 'unavailable' },
+  })
   if (!next) return
-  if (next.state === 'unavailable') onFailed()
-  else onDelete(next)
+  if (next.page.state === 'unavailable') onFailed()
+  else onDelete(next.page, next.deleted)
 }
 
 export function DeleteButton({
@@ -67,7 +72,7 @@ export function DeleteAnswerButton({
   onDelete,
 }: {
   remove: DeleteAnswer
-  onDelete: (next: AttendeeFeedbackState) => void
+  onDelete: (next: AttendeeFeedbackState, deleted: boolean) => void
 }) {
   const [failed, setFailed] = useState(false)
   const { pending, run } = useOneAtATime()

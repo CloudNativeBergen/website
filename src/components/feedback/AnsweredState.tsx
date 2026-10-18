@@ -45,7 +45,7 @@ export function AnsweredState({
   announce: boolean
   submit: SubmitAnswer
   remove: DeleteAnswer
-  /** The page's next state; `deleted` when Delete my answer led there. */
+  /** The page's next state; `deleted` only when a delete was CONFIRMED. */
   onOutcome: (next: AttendeeFeedbackState, deleted?: boolean) => void
 }) {
   const heading = useFocusOnMount(announce)
@@ -68,7 +68,9 @@ export function AnsweredState({
   const change = async (colour: FeedbackColour) => {
     setTapped(colour)
     begin()
-    const next = await run(() => submit(colour, page.comment ?? undefined))
+    const next = await run(() => submit(colour, page.comment ?? undefined), {
+      state: 'unavailable',
+    })
     if (!next) return
     if (next.state === 'unavailable') {
       setFailed("We couldn't confirm your answer. Please try again.")
@@ -86,7 +88,9 @@ export function AnsweredState({
   const sendComment = async (event: React.FormEvent) => {
     event.preventDefault()
     begin()
-    const next = await run(() => submit(page.colour, draft))
+    const next = await run(() => submit(page.colour, draft), {
+      state: 'unavailable',
+    })
     if (!next) return
     if (next.state === 'unavailable') {
       setFailed("We couldn't send your comment. Please try again.")
@@ -216,7 +220,7 @@ export function AnsweredState({
             eraseAnswer({
               run,
               remove,
-              onDelete: (next) => onOutcome(next, true),
+              onDelete: onOutcome,
               onFailed: () => setFailed(DELETE_FAILED),
             })
           }}

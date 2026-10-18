@@ -138,13 +138,15 @@ describe('/f/[code] Submit', () => {
 describe('/f/[code] Delete my answer', () => {
   it('is bound to the page’s own code: the client sends nothing', async () => {
     h.remove.mockResolvedValue({
-      outcome: { state: 'closed', talk: null, canDelete: false },
+      outcome: {
+        deleted: true,
+        page: { state: 'closed', talk: null, canDelete: false },
+      },
     })
     const element = await render('ABC234')
     expect(await element.props.remove()).toEqual({
-      state: 'closed',
-      talk: null,
-      canDelete: false,
+      deleted: true,
+      page: { state: 'closed', talk: null, canDelete: false },
     })
     expect(h.remove).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'ABC234' }),

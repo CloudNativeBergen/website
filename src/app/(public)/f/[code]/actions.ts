@@ -8,6 +8,7 @@ import {
   deviceCookie,
   submitFeedback,
   type AttendeeFeedbackState,
+  type DeleteOutcome,
   type FeedbackConference,
 } from '@/lib/feedback/server'
 
@@ -26,8 +27,10 @@ export async function submitFeedbackAnswer(
   colour: string,
   comment?: string,
 ): Promise<AttendeeFeedbackState> {
-  return withDevice((conference, cookie, now) =>
-    submitFeedback({ conference, code, colour, comment, cookie, now }),
+  return withDevice(
+    (conference, cookie, now) =>
+      submitFeedback({ conference, code, colour, comment, cookie, now }),
+    (state) => state,
   )
 }
 
@@ -35,13 +38,16 @@ export async function submitFeedbackAnswer(
  * Delete my answer on `/f/<code>` (speaker feedback spec §7.4, R1): deletes
  * this device's response about the code's talk and drops the talk from the
  * cookie's list. Takes only the code, like Submit, and answers with the state
- * the page would show on a reload.
+ * the page would show on a reload, and whether anything was deleted: a stale
+ * page is refused with its current state, never told its answer went.
  */
 export async function deleteFeedbackAnswer(
   code: string,
-): Promise<AttendeeFeedbackState> {
-  return withDevice((conference, cookie, now) =>
-    deleteFeedback({ conference, code, cookie, now }),
+): Promise<DeleteOutcome> {
+  return withDevice(
+    (conference, cookie, now) =>
+      deleteFeedback({ conference, code, cookie, now }),
+    (page) => ({ deleted: false, page }),
   )
 }
 
@@ -49,16 +55,19 @@ export async function deleteFeedbackAnswer(
  * The conference serving the Host and this device's cookie, around one
  * action; the cookie the action hands back is set with the decided options.
  */
-async function withDevice(
+async function withDevice<Outcome>(
   action: (
     conference: FeedbackConference,
     cookie: string | undefined,
     now: Date,
-  ) => Promise<{ outcome: AttendeeFeedbackState; cookie?: string }>,
-): Promise<AttendeeFeedbackState> {
+  ) => Promise<{ outcome: Outcome; cookie?: string }>,
+  refuse: (state: { state: 'unavailable' | 'unknown' }) => Outcome,
+): Promise<Outcome> {
   const resolution = await getConferenceForCurrentDomain()
-  if (isConferenceUnavailable(resolution)) return { state: 'unavailable' }
-  if (isUnknownHost(resolution)) return { state: 'unknown' }
+  if (isConferenceUnavailable(resolution)) {
+    return refuse({ state: 'unavailable' })
+  }
+  if (isUnknownHost(resolution)) return refuse({ state: 'unknown' })
 
   const store = await cookies()
   const { name, options } = deviceCookie()

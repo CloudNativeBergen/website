@@ -40,6 +40,18 @@ export type AttendeeFeedbackState =
       canDelete: boolean
     })
 
+/**
+ * What Delete my answer answers with (§7.4): `deleted` is true ONLY after the
+ * delete committed. A refusal carries the page state a reload would show and
+ * `deleted: false`, so a stale page (an expired cookie, a rotated code) is
+ * never told its answer went. Refusals 1 and 2 stay indistinguishable: the
+ * page states are the same ones the page itself shows.
+ */
+export interface DeleteOutcome {
+  deleted: boolean
+  page: AttendeeFeedbackState
+}
+
 /** The code's state with what the cookie adds to it, short of a read. */
 export function attendeeState(
   page: FeedbackPage,

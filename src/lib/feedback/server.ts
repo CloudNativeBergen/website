@@ -6,7 +6,11 @@ export {
   type FeedbackPage,
   type PublicFeedbackTalk,
 } from './attendee'
-export { resolveAttendeeState, type AttendeeFeedbackState } from './page'
+export {
+  resolveAttendeeState,
+  type AttendeeFeedbackState,
+  type DeleteOutcome,
+} from './page'
 export { submitFeedback } from './submit'
 export { deleteFeedback } from './delete'
 export { deviceCookie } from './device'
