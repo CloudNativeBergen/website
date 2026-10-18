@@ -158,9 +158,9 @@ export function Failed({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** What a status line says, and whether it is good news. */
+/** What a status line says, and whether it is good news, bad, or neither. */
 export interface StatusLine {
-  kind: 'ok' | 'error'
+  kind: 'ok' | 'error' | 'neutral'
   text: string
 }
 
@@ -183,7 +183,9 @@ export function Status({
       className={`min-h-5 text-center text-sm font-medium ${
         status?.kind === 'error'
           ? 'text-red-700 dark:text-red-400'
-          : 'text-green-700 dark:text-green-400'
+          : status?.kind === 'ok'
+            ? 'text-green-700 dark:text-green-400'
+            : ''
       } ${className}`}
     >
       {status?.text ?? ''}

@@ -80,7 +80,7 @@ export function AttendeeFeedbackPage({
         {/* Always in the DOM, so the text set after a delete is announced;
             neutral on a refusal, whatever its reason (§7.4). */}
         <Status
-          status={notice ? { kind: 'ok', text: NOTICES[notice] } : null}
+          status={notice ? { kind: 'neutral', text: NOTICES[notice] } : null}
           className={
             notice
               ? 'mb-6 rounded-lg bg-gray-100 px-4 py-3 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
