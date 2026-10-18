@@ -235,10 +235,16 @@ export class TitoProvider implements TicketingProvider {
     accountSlug: string,
     eventSlug: string,
     resource: 'tickets' | 'releases',
+    queryParams?: Record<string, string>,
   ): Promise<T[]> {
     const PAGE_CAP = 100
     const items: T[] = []
     let page: number | undefined = 1
+    const extraParams = queryParams
+      ? Object.entries(queryParams)
+          .map(([k, v]) => `&${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+          .join('')
+      : ''
     for (let guard = 0; page; guard++) {
       if (guard >= PAGE_CAP) {
         throw new Error(
@@ -248,7 +254,7 @@ export class TitoProvider implements TicketingProvider {
       const data: Partial<Record<typeof resource, T[]>> & {
         meta?: TitoMeta
       } = await this.get(
-        `/${accountSlug}/${eventSlug}/${resource}?page[number]=${page}`,
+        `/${accountSlug}/${eventSlug}/${resource}?page[number]=${page}${extraParams}`,
       )
       items.push(...(data[resource] ?? []))
       page = data.meta?.next_page ?? undefined
@@ -272,15 +278,18 @@ export class TitoProvider implements TicketingProvider {
       accountSlug,
       eventSlug,
       'tickets',
+      { view: 'extended' },
     )) {
       // Exclude void, voided, cancelled, and refunded tickets or registrations.
       // Tito's list excludes void tickets by default, but we enforce this explicitly
       // to guarantee cancelled seats are never admitted or counted.
+      const ticketState = t.state?.toLowerCase()
       const regState = t.registration?.state?.toLowerCase()
       const isCancelled =
-        t.state === 'void' ||
-        t.state === 'voided' ||
-        t.state === 'cancelled' ||
+        ticketState === 'void' ||
+        ticketState === 'voided' ||
+        ticketState === 'cancelled' ||
+        ticketState === 'refunded' ||
         regState === 'cancelled' ||
         regState === 'customer_cancelled' ||
         regState === 'refunded' ||
@@ -312,13 +321,15 @@ export class TitoProvider implements TicketingProvider {
       regState === 'ready_to_process' ||
       t.registration?.paid === false
 
+    const ticketState = t.state?.toLowerCase()
     // In Tito Admin API, `t.state` on the ticket tracks attendee data completion
     // ('incomplete' / 'complete'). When registration data is present, the registration's
     // completed/paid status decides whether the ticket is settled. When registration is
-    // absent (minimal wire payloads / legacy mocks), fall back to t.state === 'complete'.
+    // absent (minimal wire payloads / legacy mocks), fall back to ticketState === 'complete'.
     const paid =
       !isPendingPayment &&
-      (isRegistrationComplete || (!t.registration && t.state === 'complete'))
+      (isRegistrationComplete ||
+        (!t.registration && ticketState === 'complete'))
 
     const priceStr = String(t.price ?? '0')
     const owesPrice = !paid && parseTicketAmount(t.price) > 0

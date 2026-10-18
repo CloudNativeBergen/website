@@ -419,42 +419,41 @@ describe('TitoProvider — fetchEventTickets', () => {
   })
 
   it('excludes cancelled, refunded and voided tickets and registrations', async () => {
-    vi.stubGlobal(
-      'fetch',
-      stubTitoFetch({
-        ticketPages: [
+    let requestedUrl = ''
+    vi.stubGlobal('fetch', async (url: string) => {
+      requestedUrl = url
+      return ok({
+        tickets: [
+          { id: 1, email: 'active@example.com', state: 'complete' },
           {
-            tickets: [
-              { id: 1, email: 'active@example.com', state: 'complete' },
-              {
-                id: 2,
-                email: 'ticket-cancelled@example.com',
-                state: 'cancelled',
-              },
-              { id: 3, email: 'ticket-voided@example.com', state: 'voided' },
-              {
-                id: 4,
-                email: 'reg-cancelled@example.com',
-                state: 'complete',
-                registration: { state: 'cancelled' },
-              },
-              {
-                id: 5,
-                email: 'reg-refunded@example.com',
-                state: 'complete',
-                registration: { state: 'refunded' },
-              },
-            ],
-            nextPage: null,
+            id: 2,
+            email: 'ticket-cancelled@example.com',
+            state: 'cancelled',
+          },
+          { id: 3, email: 'ticket-voided@example.com', state: 'voided' },
+          { id: 4, email: 'ticket-refunded@example.com', state: 'refunded' },
+          {
+            id: 5,
+            email: 'reg-cancelled@example.com',
+            state: 'complete',
+            registration: { state: 'cancelled' },
+          },
+          {
+            id: 6,
+            email: 'reg-refunded@example.com',
+            state: 'complete',
+            registration: { state: 'refunded' },
           },
         ],
-      }),
-    )
+        meta: { next_page: null },
+      })
+    })
 
     const tickets = await getTicketingProvider('tito', CREDS).fetchEventTickets(
       TITO_REF,
     )
 
+    expect(requestedUrl).toContain('view=extended')
     expect(tickets.map((t) => t.crm.email)).toEqual(['active@example.com'])
   })
 

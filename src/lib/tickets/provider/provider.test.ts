@@ -693,6 +693,35 @@ describe('CheckinProvider — operations', () => {
     expect(tickets.map((t) => t.order_date)).toEqual(['2026-01-01', ''])
   })
 
+  it('excludes credited or negative sum rows from active tickets', async () => {
+    const fetchSpy = stubCheckinFetch({
+      eventTickets: [
+        { id: 1, order_id: 100, category: 'Conf', sum: '1000', sum_left: '0' },
+        { id: 2, order_id: 101, category: 'Conf', sum: '-1000', sum_left: '0' },
+        {
+          id: 3,
+          order_id: 102,
+          category: 'Conf',
+          sum: '1000',
+          sum_left: '-500',
+        },
+      ],
+      allEventOrderUsers: {
+        data: [],
+        hasNextPage: false,
+      },
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const tickets = await getTicketingProvider(
+      'checkin',
+      CREDS,
+    ).fetchEventTickets({ customerId: 42, eventId: 7 })
+
+    expect(tickets).toHaveLength(1)
+    expect(tickets[0].id).toBe(1)
+  })
+
   it('fetchPublicTicketTypes maps the event + ticket list', async () => {
     const fetchSpy = stubCheckinFetch({
       findEventById: {

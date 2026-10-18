@@ -246,29 +246,60 @@ export async function exportParticipants(
     // Unassigned workshop add-ons that can grant workshop access to a seat
     const availableWorkshopAddOns = addOns.filter((g) => g.class.grantsWorkshop)
 
+    const getName = (t: (typeof group)[0]['ticket']) => {
+      const first = (t.crm?.first_name || '').trim().toLowerCase()
+      const last = (t.crm?.last_name || '').trim().toLowerCase()
+      const full = `${first} ${last}`.trim()
+      return { first, last, full }
+    }
+
     if (seats.length > 0) {
       for (const seat of seats) {
         let grantsWorkshop = seat.class.grantsWorkshop
         const categoriesList = [seat.ticket.category]
         let hasPaidAddOn = false
 
-        // If the seat itself doesn't grant workshop, look for an available workshop add-on in the bundle
+        // If the seat itself doesn't grant workshop, look for a matching or unnamed add-on in the bundle
         if (!grantsWorkshop && availableWorkshopAddOns.length > 0) {
-          const seatFirst = seat.ticket.crm?.first_name?.trim().toLowerCase()
-          const matchIdx = seatFirst
-            ? availableWorkshopAddOns.findIndex(
-                (a) =>
-                  a.ticket.crm?.first_name?.trim().toLowerCase() === seatFirst,
-              )
+          const seatName = getName(seat.ticket)
+
+          // 1. Exact match on full name
+          let chosenIdx = seatName.full
+            ? availableWorkshopAddOns.findIndex((a) => {
+                const aName = getName(a.ticket)
+                return aName.full === seatName.full
+              })
             : -1
-          const chosenIdx = matchIdx !== -1 ? matchIdx : 0
-          const addOn = availableWorkshopAddOns.splice(chosenIdx, 1)[0]
-          grantsWorkshop = true
-          if (addOn.ticket.category) {
-            categoriesList.push(addOn.ticket.category)
+
+          // 2. Match on first name (if compatible)
+          if (chosenIdx === -1 && seatName.first) {
+            chosenIdx = availableWorkshopAddOns.findIndex((a) => {
+              const aName = getName(a.ticket)
+              if (!aName.first) return false
+              if (aName.first !== seatName.first) return false
+              return (
+                !aName.last || !seatName.last || aName.last === seatName.last
+              )
+            })
           }
-          if (addOn.isPaid) {
-            hasPaidAddOn = true
+
+          // 3. Unnamed add-on (add-on has no attendee name, or seat has no name)
+          if (chosenIdx === -1) {
+            chosenIdx = availableWorkshopAddOns.findIndex((a) => {
+              const aName = getName(a.ticket)
+              return !aName.full || !seatName.full
+            })
+          }
+
+          if (chosenIdx !== -1) {
+            const addOn = availableWorkshopAddOns.splice(chosenIdx, 1)[0]
+            grantsWorkshop = true
+            if (addOn.ticket.category) {
+              categoriesList.push(addOn.ticket.category)
+            }
+            if (addOn.isPaid) {
+              hasPaidAddOn = true
+            }
           }
         }
 
@@ -293,8 +324,10 @@ export async function exportParticipants(
           grantsWorkshop,
         })
       }
-    } else if (workshopOnly) {
-      // Standalone workshop add-ons without an admitting conference ticket
+    }
+
+    // Surplus or standalone workshop add-ons (when seats don't consume all add-ons, or seats.length === 0)
+    if (workshopOnly && availableWorkshopAddOns.length > 0) {
       for (const addOn of availableWorkshopAddOns) {
         const firstName =
           addOn.ticket.crm?.first_name || addOn.ticket.customer_name || ''
