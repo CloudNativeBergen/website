@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { parseTicketAmount } from '@/lib/tickets/amount'
 import type {
   EventTicket,
   EventTicketWithoutDate,
@@ -309,8 +310,13 @@ export class CheckinProvider implements TicketingProvider {
         ...ticket,
         order_date: orderDateMap.get(ticket.order_id) || '',
       }))
-      if (options?.rawAmounts) return dated
-      return toPerTicketAmounts(dated, this.amountBasis)
+      // Filter out any credited or cancelled rows (e.g. credit notes with negative sums)
+      const activeTickets = dated.filter(
+        (t) =>
+          parseTicketAmount(t.sum) >= 0 && parseTicketAmount(t.sum_left) >= 0,
+      )
+      if (options?.rawAmounts) return activeTickets
+      return toPerTicketAmounts(activeTickets, this.amountBasis)
     } catch (error) {
       console.error('Failed to fetch event tickets with dates:', error)
       throw new Error(

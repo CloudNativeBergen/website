@@ -238,37 +238,84 @@ export async function exportParticipants(
 
   const result: ExportedParticipant[] = []
 
-  const addGroup = (group: typeof classified) => {
-    const grantsWorkshop = group.some((g) => g.class.grantsWorkshop)
-    const admitsConference = group.some((g) => g.class.admits)
-    if (workshopOnly && !grantsWorkshop) return
-    if (!workshopOnly && !admitsConference) return
+  const processGroup = (group: typeof classified) => {
+    // Separate admitting tickets (physical seats) from non-admitting add-ons
+    const seats = group.filter((g) => g.class.admits)
+    const addOns = group.filter((g) => !g.class.admits)
 
-    // Paid if ANY ticket in their bundle satisfies isPaidTicket (including comp: 'unknown' with sum > 0)
-    const isComp = !group.some((g) => g.isPaid)
+    // Unassigned workshop add-ons that can grant workshop access to a seat
+    const availableWorkshopAddOns = addOns.filter((g) => g.class.grantsWorkshop)
 
-    // Deduplicate categories in case they bought 5 of the same ticket
-    const uniqueCategories = Array.from(
-      new Set(group.map((g) => g.ticket.category).filter(Boolean)),
-    )
-    const categories = uniqueCategories.join(', ')
+    if (seats.length > 0) {
+      for (const seat of seats) {
+        let grantsWorkshop = seat.class.grantsWorkshop
+        const categoriesList = [seat.ticket.category]
+        let hasPaidAddOn = false
 
-    const first = group[0].ticket
-    result.push({
-      firstName: first.crm?.first_name || '',
-      lastName: first.crm?.last_name || '',
-      email: canonicalEmail(first.crm?.email),
-      categories,
-      isComp,
-      grantsWorkshop,
-    })
+        // If the seat itself doesn't grant workshop, look for an available workshop add-on in the bundle
+        if (!grantsWorkshop && availableWorkshopAddOns.length > 0) {
+          const seatFirst = seat.ticket.crm?.first_name?.trim().toLowerCase()
+          const matchIdx = seatFirst
+            ? availableWorkshopAddOns.findIndex(
+                (a) =>
+                  a.ticket.crm?.first_name?.trim().toLowerCase() === seatFirst,
+              )
+            : -1
+          const chosenIdx = matchIdx !== -1 ? matchIdx : 0
+          const addOn = availableWorkshopAddOns.splice(chosenIdx, 1)[0]
+          grantsWorkshop = true
+          if (addOn.ticket.category) {
+            categoriesList.push(addOn.ticket.category)
+          }
+          if (addOn.isPaid) {
+            hasPaidAddOn = true
+          }
+        }
+
+        if (workshopOnly && !grantsWorkshop) continue
+
+        const isComp = !seat.isPaid && !hasPaidAddOn
+        const uniqueCategories = Array.from(
+          new Set(categoriesList.filter(Boolean)),
+        )
+        const categories = uniqueCategories.join(', ')
+
+        const firstName =
+          seat.ticket.crm?.first_name || seat.ticket.customer_name || ''
+        const lastName = seat.ticket.crm?.last_name || ''
+
+        result.push({
+          firstName,
+          lastName,
+          email: canonicalEmail(seat.ticket.crm?.email),
+          categories,
+          isComp,
+          grantsWorkshop,
+        })
+      }
+    } else if (workshopOnly) {
+      // Standalone workshop add-ons without an admitting conference ticket
+      for (const addOn of availableWorkshopAddOns) {
+        const firstName =
+          addOn.ticket.crm?.first_name || addOn.ticket.customer_name || ''
+        const lastName = addOn.ticket.crm?.last_name || ''
+        result.push({
+          firstName,
+          lastName,
+          email: canonicalEmail(addOn.ticket.crm?.email),
+          categories: addOn.ticket.category || '',
+          isComp: !addOn.isPaid,
+          grantsWorkshop: true,
+        })
+      }
+    }
   }
 
   for (const group of byEmail.values()) {
-    addGroup(group)
+    processGroup(group)
   }
   for (const anon of anonymous) {
-    addGroup([anon])
+    processGroup([anon])
   }
 
   return result

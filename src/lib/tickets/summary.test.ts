@@ -443,7 +443,7 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     ])
   })
 
-  it('exports addresses that differ only in padding or case as one person', async () => {
+  it('normalizes addresses that differ only in padding or case when joining add-ons to seats', async () => {
     h.fetchEventTickets.mockResolvedValue([
       ticket({
         id: 1,
@@ -454,7 +454,7 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
       ticket({
         id: 2,
         order_id: 101,
-        category: 'Speaker ticket',
+        category: 'Workshop upgrade',
         crm: crm('ada@example.com\t'),
       }),
     ])
@@ -462,6 +462,53 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     const res = await exportParticipants(conference, true)
 
     expect(res.map((p) => p.email)).toEqual(['ada@example.com'])
+  })
+
+  it('exports one row per admitting seat when a buyer purchases multiple tickets under one email', async () => {
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        category: 'Regular',
+        sum: '2500',
+        crm: {
+          first_name: 'Alice',
+          last_name: 'Smith',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        category: 'Regular',
+        sum: '2500',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Regular',
+        sum: '2500',
+        crm: {
+          first_name: 'To Be',
+          last_name: 'Announced',
+          email: 'buyer@company.com',
+        },
+      }),
+    ])
+
+    const res = await exportParticipants(conference, false)
+
+    expect(res).toHaveLength(3)
+    expect(res.map((p) => [p.firstName, p.lastName, p.email])).toEqual([
+      ['Alice', 'Smith', 'buyer@company.com'],
+      ['Bob', 'Jones', 'buyer@company.com'],
+      ['To Be', 'Announced', 'buyer@company.com'],
+    ])
   })
 })
 
