@@ -51,8 +51,8 @@ interface TalkDoc {
 }
 
 /**
- * What the attendee sees after the tap, and the device cookie to set (only
- * when the answer was saved).
+ * What the attendee sees after the tap, and the device cookie to set: on
+ * every attempted write, saved or not, never on a refusal.
  */
 export async function submitFeedback({
   conference,
@@ -72,22 +72,32 @@ export async function submitFeedback({
   if (!isFeedbackColour(colour)) return { outcome: page }
   const device = readDeviceCookie(cookie, now)
 
+  let talk: TalkDoc | undefined
   try {
-    const talk = await clientWrite.getDocument<TalkDoc>(target.talkId)
-    if (
-      talk?._id !== target.talkId ||
-      talk.status !== 'confirmed' ||
-      talk.conference?._ref !== conference._id ||
-      normalizeShortCode(
-        typeof talk.feedbackCode === 'string' ? talk.feedbackCode : null,
-      ) !== target.code
-    ) {
-      return { outcome: { state: 'unknown' } }
-    }
+    talk = await clientWrite.getDocument<TalkDoc>(target.talkId)
+  } catch (error) {
+    console.error('Could not read the talk of a Feedback Code', error)
+    return { outcome: { state: 'unavailable' } }
+  }
+  if (
+    talk?._id !== target.talkId ||
+    talk.status !== 'confirmed' ||
+    talk.conference?._ref !== conference._id ||
+    normalizeShortCode(
+      typeof talk.feedbackCode === 'string' ? talk.feedbackCode : null,
+    ) !== target.code
+  ) {
+    return { outcome: { state: 'unknown' } }
+  }
 
-    const next = recordAnswer(device, target.talkId, now)
-    const id = feedbackResponseId(next.device.token, target.talkId)
-    const submittedAt = now.toISOString()
+  // The cookie is set whatever the write's outcome: a commit that was applied
+  // but whose answer was lost looks like a failure here, and a retry under a
+  // new token would count this phone twice. Under this token the retry lands
+  // on the same response.
+  const next = recordAnswer(device, target.talkId, now)
+  const id = feedbackResponseId(next.device.token, target.talkId)
+  const submittedAt = now.toISOString()
+  try {
     await clientWrite
       .transaction()
       .createIfNotExists({
@@ -100,12 +110,12 @@ export async function submitFeedback({
       })
       .patch(id, (patch) => patch.set({ colour, submittedAt }))
       .commit()
-    return {
-      outcome: { state: 'answered', colour, talk: page.talk },
-      cookie: next.value,
-    }
   } catch (error) {
     console.error('Could not save a Feedback Response', error)
-    return { outcome: { state: 'unavailable' } }
+    return { outcome: { state: 'unavailable' }, cookie: next.value }
+  }
+  return {
+    outcome: { state: 'answered', colour, talk: page.talk },
+    cookie: next.value,
   }
 }

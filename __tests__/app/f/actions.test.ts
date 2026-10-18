@@ -396,12 +396,51 @@ describe('the talk is read again by id before the write', () => {
 })
 
 describe('a failed write', () => {
-  it('is Unavailable, and sets no cookie for an answer that was not saved', async () => {
+  beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    store().failWrites()
+  })
+
+  it('is Unavailable, and the retry from this phone lands on the same response', async () => {
+    store().beforeNextCommit(() => {
+      throw new Error('503: write refused')
+    })
     expect(await submitFeedbackAnswer('k7m2qx', 'green')).toEqual({
       state: 'unavailable',
     })
+    expect(responses()).toHaveLength(0)
+
+    request(deviceCookieFromResponse())
+    await submitFeedbackAnswer('k7m2qx', 'red')
+    expect(responses().map((r) => r.colour)).toEqual(['red'])
+  })
+
+  it('never counts one phone twice when a commit was applied but its answer was lost', async () => {
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+    expect(await submitFeedbackAnswer('k7m2qx', 'green')).toEqual({
+      state: 'unavailable',
+    })
+    // The write went through; the attendee could not know.
+    expect(responses()).toHaveLength(1)
+
+    request(deviceCookieFromResponse())
+    await submitFeedbackAnswer('k7m2qx', 'green')
+    expect(responses()).toHaveLength(1)
+  })
+
+  it('sets no cookie when the talk could not be read, before any write', async () => {
+    const original = store().clients.clientWrite as {
+      getDocument: (id: string) => Promise<unknown>
+    }
+    const spy = vi
+      .spyOn(original, 'getDocument')
+      .mockRejectedValueOnce(new Error('503: read refused'))
+    expect(await submitFeedbackAnswer('k7m2qx', 'green')).toEqual({
+      state: 'unavailable',
+    })
+    expect(spy).toHaveBeenCalledWith('talk-open')
+    expect(store().commits).toHaveLength(0)
     expect(writtenCookies()).toEqual([])
   })
 })
