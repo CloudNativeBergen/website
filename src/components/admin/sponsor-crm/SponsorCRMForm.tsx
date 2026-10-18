@@ -504,7 +504,21 @@ export function SponsorCRMForm({
           ) : view === 'communications' && sponsor ? (
             <SponsorCommunicationsPanel
               sponsorForConferenceId={sponsor._id}
-              onSend={onSendEmail}
+              onSend={(kind) => {
+                // The empty state of a filtered tab sends that kind, not a
+                // generic information email.
+                const send =
+                  kind === 'workshop-early-access'
+                    ? onSendEarlyAccess
+                    : kind === 'registration'
+                      ? onSendRegistration
+                      : kind === 'discount'
+                        ? onSendDiscountCodes
+                        : kind === 'contract' && onSendContract
+                          ? () => onSendContract({})
+                          : undefined
+                ;(send ?? onSendEmail)?.()
+              }}
             />
           ) : view === 'messages' && sponsor ? (
             // Sponsor↔organizer thread (messaging G2b): ensured on

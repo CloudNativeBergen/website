@@ -26,7 +26,8 @@ export function SponsorCommunicationsPanel({
 }: {
   sponsorForConferenceId: string
   /** Opens the Send modal; omitted when the host cannot supply the sender. */
-  onSend?: () => void
+  /** Opens the Send modal for the kind the panel is filtered to (none ⇒ information). */
+  onSend?: (kind?: CommunicationKind) => void
 }) {
   const [kind, setKind] = useState<CommunicationKind | undefined>(undefined)
   const [pageCount, setPageCount] = useState(1)
@@ -154,13 +155,11 @@ export function SponsorCommunicationsPanel({
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Emails sent to this sponsor from the CRM&apos;s Send action are
             recorded here, with who received them and exactly what they said.
-            Contract, registration and discount-code emails join this list as
-            they move onto the same path.
           </p>
           {onSend && (
             <button
               type="button"
-              onClick={onSend}
+              onClick={() => onSend(kind)}
               className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-brand-cloud-blue px-3 py-1.5 text-sm font-semibold text-white shadow-xs hover:bg-primary-700 dark:bg-indigo-600 dark:hover:bg-indigo-500"
             >
               <PaperAirplaneIcon className="h-4 w-4" />
