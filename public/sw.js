@@ -155,6 +155,11 @@ self.addEventListener('message', (event) => {
 /**
  * Network-first for navigations. Never caches the (possibly authed) HTML; on
  * network failure serves the precached `/offline` page.
+ *
+ * The offline page is shown at the URL that failed. For the attendee feedback
+ * page, `/f/<code>`, that URL is the Feedback Code, and the fallback has
+ * neither that route's Referrer-Policy header nor its referrer meta, so it
+ * never sends a referrer itself.
  */
 async function handleNavigate(request) {
   try {
@@ -162,13 +167,19 @@ async function handleNavigate(request) {
   } catch (e) {
     const cache = await caches.open(PRECACHE)
     const offline = await cache.match(OFFLINE_URL)
-    return (
-      offline ||
-      new Response('You are offline.', {
+    if (!offline) {
+      return new Response('You are offline.', {
         status: 503,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       })
-    )
+    }
+    const headers = new Headers(offline.headers)
+    headers.set('Referrer-Policy', 'no-referrer')
+    return new Response(offline.body, {
+      status: offline.status,
+      statusText: offline.statusText,
+      headers,
+    })
   }
 }
 
