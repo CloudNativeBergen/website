@@ -141,9 +141,12 @@ export const NotSaved: Story = {
     await expect(await canvas.findByRole('alert')).toHaveTextContent(
       "We couldn't confirm your answer. Please try again.",
     )
+    const tapped = canvas.getByRole('button', { name: 'It was OK' })
     await waitFor(() =>
-      expect(canvas.getByRole('button', { name: 'It was OK' })).toBeEnabled(),
+      expect(tapped).toHaveAttribute('aria-disabled', 'false'),
     )
+    // Focus stays on the answer that was tapped, not dropped to the page.
+    await expect(tapped).toHaveFocus()
     await expect(canvas.queryByText('Thanks!')).toBeNull()
   },
 }
@@ -153,14 +156,20 @@ export const Saving: Story = {
   args: {
     submit: fn<SubmitAnswer>(() => new Promise(() => {})),
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getByRole('button', { name: 'Loved it' }))
     for (const label of ['Loved it', 'It was OK', 'Not for me']) {
       await waitFor(() =>
-        expect(canvas.getByRole('button', { name: label })).toBeDisabled(),
+        expect(canvas.getByRole('button', { name: label })).toHaveAttribute(
+          'aria-disabled',
+          'true',
+        ),
       )
     }
+    // A second tap while the first is saved sends nothing.
+    await userEvent.click(canvas.getByRole('button', { name: 'Not for me' }))
+    await expect(args.submit).toHaveBeenCalledTimes(1)
   },
 }
 

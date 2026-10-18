@@ -59,10 +59,10 @@ export function SessionFeedbackCookieNote() {
       <strong>Session feedback:</strong> If you answer a session&apos;s feedback
       QR code, this site sets one strictly necessary cookie, sent only to the
       feedback pages. It holds a random identifier for your browser and which
-      sessions you have answered (as unreadable codes, not their names), nothing
-      about you. It is how you can change your own answer, and it expires{' '}
-      {DEVICE_COOKIE_DAYS} days after your last answer. Clearing this
-      site&apos;s cookies removes it.
+      sessions you have answered (as unreadable codes, not their names), and the
+      time of your last answer; nothing about you. It is how you can change your
+      own answer, and it expires {DEVICE_COOKIE_DAYS} days after your last
+      answer. Clearing this site&apos;s cookies removes it.
     </p>
   )
 }

@@ -864,6 +864,19 @@ Per `AGENTS.md` ("Agent discipline"):
   limit (Sanity's pages disagree; 7,161 used on 2026-10-17). The 24-month fold
   bounds it.
 - **A domain change mid-edition** breaks printed codes; a reprint fixes it.
+- **A withdrawal racing a tap** (_Refinement (F1c)_): Submit re-reads the talk
+  and then commits the response, so a withdrawal, rotation or erasure that
+  lands between the two still records that one answer. Guarding the commit on
+  the talk's revision would write the talk on every tap and make concurrent
+  taps fail each other. The window is well under a second; Remove clears it.
+- **Remove is not final for the device that answered** (_Refinement (F1c)_):
+  the same cookie and talk give the same id, so that device's next tap
+  recreates a removed response (like R2's delete-and-resubmit). Organizers
+  remove it again. Decide whether F5 needs a tombstone before comments matter.
+- **A cookie can list an answer that was never saved** (_Refinement (F1c)_):
+  after a failed commit the cookie is still set, because a commit whose reply
+  was lost may have applied, and a new token would count the device twice. A
+  read of the response (F2) must treat a missing document as "no answer yet".
 - **A cleared cookie** produces a second response from the same person.
 - **No IP limit:** a scripted flood is only remedied after the fact (Remove,
   bulk by time range). Revisit with proof of attendance if abuse appears.

@@ -46,11 +46,12 @@ describe('Session Feedback on /privacy', () => {
     )
   })
 
-  it('does not yet promise deleting your own answer (F2)', () => {
+  it('promises changing your own answer, and not yet deleting it (F2)', () => {
     for (const component of [
       SessionFeedbackPrivacy,
       SessionFeedbackCookieNote,
     ]) {
+      expect(text(component)).toMatch(/change your own answer/)
       expect(text(component)).not.toMatch(/delete (it|your|my)/i)
     }
   })

@@ -34,7 +34,7 @@ const ANSWERS = [
     colour: 'green',
     label: FEEDBACK_COLOUR_LABELS.green,
     Icon: FaceSmileIcon,
-    className: 'bg-green-600 text-white',
+    className: 'bg-green-700 text-white',
     iconClassName: 'text-green-600 dark:text-green-500',
   },
   {
@@ -198,8 +198,12 @@ function AnswerForm({
   // after a failed save in the dark story (cause not pinned down), leaving
   // every button disabled. Nothing else can hold this flag.
   const [pending, setPending] = useState(false)
+  // One tap at a time, checked synchronously so a double tap can't send two.
+  const busy = useRef(false)
 
   const answer = async (colour: FeedbackColour) => {
+    if (busy.current) return
+    busy.current = true
     setTapped(colour)
     setFailed(false)
     setPending(true)
@@ -209,6 +213,7 @@ function AnswerForm({
     } catch {
       next = { state: 'unavailable' }
     }
+    busy.current = false
     setPending(false)
     // Not confirmed: keep the buttons. Tapping again is safe, as a retry under
     // the same cookie lands on the same response.
@@ -229,9 +234,12 @@ function AnswerForm({
             <button
               key={colour}
               type="button"
-              disabled={pending}
+              // `aria-disabled`, not `disabled`: a disabled button drops focus to
+              // the body, and after a failed save a keyboard or screen reader
+              // user must still be on the answer they tapped.
+              aria-disabled={pending}
               onClick={() => answer(colour)}
-              className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs transition-opacity focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-gray-900 disabled:cursor-wait dark:focus-visible:outline-white ${pending && !saving ? 'opacity-50' : ''} ${className}`}
+              className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs transition-opacity focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait dark:focus-visible:outline-white ${pending && !saving ? 'opacity-50' : ''} ${className}`}
             >
               <ShownIcon
                 className={`size-9 shrink-0 ${saving ? 'animate-spin motion-reduce:animate-none' : ''}`}
