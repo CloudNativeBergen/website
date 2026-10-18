@@ -68,7 +68,14 @@ export function AnsweredState({
   const Icon = answer?.Icon ?? FaceSmileIcon
   const stored = page.comment ?? ''
   const hadComment = !!page.comment
-  const [edit, setEdit] = useState<string | null>(null)
+  const [edit, setEditState] = useState<string | null>(null)
+  // The edit as it is NOW, for code that resumes after a wait: a closure
+  // would read the edit as it was at the tap.
+  const editNow = useRef<string | null>(null)
+  const setEdit = (value: string | null) => {
+    editNow.current = value
+    setEditState(value)
+  }
   const draft = edit ?? stored
   const [changing, setChanging] = useState(false)
   const [tapped, setTapped] = useState<FeedbackColour | null>(null)
@@ -85,19 +92,37 @@ export function AnsweredState({
   const grid = useRef<HTMLDivElement>(null)
   const changeButton = useRef<HTMLButtonElement>(null)
   const wasChanging = useRef(false)
+  const changeStatusLine = useRef<HTMLParagraphElement>(null)
   // Where focus goes when the grid closes: back to Change answer on Keep,
   // to the heading (which now names the new answer) after a change.
   const afterClose = useRef<'change' | 'heading'>('change')
+  // What had focus when a colour was tapped: after the change, the heading
+  // takes focus only if focus has not moved on since (into the box, say).
+  const focusAtTap = useRef<Element | null>(null)
 
   useEffect(() => {
     if (changing) {
       grid.current?.querySelector('button')?.focus()
     } else if (wasChanging.current) {
-      if (afterClose.current === 'heading') heading.current?.focus()
-      else changeButton.current?.focus()
+      if (afterClose.current === 'change') changeButton.current?.focus()
+      else {
+        // The tapped button is gone, so focus that stayed on it is on the
+        // body now.
+        const now = document.activeElement
+        if (!now || now === document.body || now === focusAtTap.current) {
+          heading.current?.focus()
+        }
+      }
     }
     wasChanging.current = changing
   }, [changing, heading])
+
+  // Under the grid, the failure can sit below the fold on a short screen.
+  useEffect(() => {
+    if (changeStatus?.kind === 'error') {
+      changeStatusLine.current?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [changeStatus])
 
   /** Clear, then set on the next task: the same words are announced again. */
   const announceComment = (status: StatusLine) => {
@@ -107,6 +132,7 @@ export function AnsweredState({
 
   const change = async (colour: FeedbackColour) => {
     setTapped(colour)
+    focusAtTap.current = document.activeElement
     setCommentStatus(null)
     setChangeStatus(null)
     setConfirming(false)
@@ -124,8 +150,11 @@ export function AnsweredState({
     if (next.state === 'answered') {
       afterClose.current = 'heading'
       setChanging(false)
-      // A comment this tab did not know of has filled the untouched box.
-      if (edit === null && (next.comment ?? '') !== stored) {
+      // A comment this tab did not know of has filled the untouched box: the
+      // box as it is NOW (typed in during the wait, it stays as typed), and
+      // `undefined` (unread) keeps the comment this tab has.
+      const shown = next.comment === undefined ? stored : (next.comment ?? '')
+      if (editNow.current === null && shown !== stored) {
         setCommentStatus({
           kind: 'neutral',
           text: 'Showing your saved comment.',
@@ -174,8 +203,11 @@ export function AnsweredState({
           : ''
       setCommentStatus(text ? { kind: 'ok', text } : null)
       // Sent: the box follows the stored comment again, unless it was typed
-      // in meanwhile; that newer text stays, unsent.
-      setEdit((current) => (current === sent ? null : current))
+      // in meanwhile; that newer text stays, unsent. When the only change
+      // the server made was a trim, the box keeps the text as typed:
+      // swapping the trimmed text in would move the caret.
+      const trimmedOnly = sent !== sent.trim() && next.comment === sent.trim()
+      if (editNow.current === sent && !trimmedOnly) setEdit(null)
     }
     onOutcome(next)
   }
@@ -240,7 +272,11 @@ export function AnsweredState({
             current={page.colour}
             onTap={change}
           />
-          <Status status={changeStatus} className="mt-3" />
+          <Status
+            ref={changeStatusLine}
+            status={changeStatus}
+            className="mt-3"
+          />
           <div className="mt-3 text-center">
             <button
               type="button"

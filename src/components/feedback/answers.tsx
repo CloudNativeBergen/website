@@ -110,11 +110,14 @@ export function AnswerButtons({
   ref?: React.Ref<HTMLDivElement>
 }) {
   return (
+    // A container, so the buttons can judge their width in rem: narrow in
+    // rem means the text is large for the space (320 px at 200 %), and the
+    // icon then sits above the label, which gets the whole width.
     <div
       ref={ref}
       role={labelledBy ? 'group' : undefined}
       aria-labelledby={labelledBy}
-      className="mt-5 flex flex-col gap-3"
+      className="@container mt-5 flex flex-col gap-3"
       aria-busy={pending}
     >
       {ANSWERS.map(({ colour, label, Icon, className }) => {
@@ -132,15 +135,15 @@ export function AnswerButtons({
               current === undefined ? undefined : current === colour
             }
             onClick={() => onTap(colour)}
-            className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-5 py-3 text-xl font-bold shadow-xs transition-opacity focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait aria-pressed:ring-4 aria-pressed:ring-gray-900/40 dark:focus-visible:outline-white dark:aria-pressed:ring-white/60 ${pending && !saving ? 'opacity-50' : ''} ${className}`}
+            className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-5 py-3 text-xl font-bold shadow-xs transition-opacity focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait aria-pressed:ring-4 aria-pressed:ring-gray-900/40 @max-[14rem]:flex-col @max-[14rem]:items-start @max-[14rem]:gap-2 @max-[14rem]:py-4 dark:focus-visible:outline-white dark:aria-pressed:ring-white/60 ${pending && !saving ? 'opacity-50' : ''} ${className}`}
           >
             <ShownIcon
-              className={`size-9 shrink-0 ${saving ? 'animate-spin motion-reduce:animate-none' : ''}`}
+              className={`size-9 shrink-0 @max-[14rem]:size-8 ${saving ? 'animate-spin motion-reduce:animate-none' : ''}`}
               aria-hidden="true"
             />
-            {/* Wraps between words at 320 px with large text, never inside
-                one, and never clips. */}
-            <span className="min-w-0 text-left wrap-break-word">{label}</span>
+            {/* Wraps between words, never inside one: with the icon above it
+                at 320 px and 200 % the label has the full width. */}
+            <span className="min-w-0 text-left">{label}</span>
           </button>
         )
       })}
@@ -174,12 +177,15 @@ export interface StatusLine {
 export function Status({
   status,
   className = '',
+  ref,
 }: {
   status: StatusLine | null
   className?: string
+  ref?: React.Ref<HTMLParagraphElement>
 }) {
   return (
     <p
+      ref={ref}
       role="status"
       aria-live="polite"
       className={`min-h-5 text-center text-sm font-medium ${

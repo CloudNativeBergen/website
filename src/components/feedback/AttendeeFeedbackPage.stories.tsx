@@ -133,13 +133,62 @@ async function confirmDelete(canvas: ReturnType<typeof within>) {
 const formStatus = (canvasElement: HTMLElement) =>
   canvasElement.querySelector('form [role="status"]')!
 
-/** Root font size doubled: 200 % text, as a browser's text zoom gives it. */
-const largeText: Story['decorators'] = [
-  (StoryFn) => {
+/**
+ * 320 x 568 with the root font size doubled: 200 % text, as a browser's text
+ * zoom gives it. Undone after the story, so it never leaks into the next.
+ */
+const largeText = {
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  beforeEach: () => {
     document.documentElement.style.fontSize = '200%'
-    return <StoryFn />
+    return () => {
+      document.documentElement.style.fontSize = ''
+    }
   },
-]
+} satisfies Story
+
+/**
+ * App geometry: drop the Storybook decorator's padding between the canvas
+ * and the page, so the page is as wide as the viewport, as in the app.
+ */
+function flattenToApp(canvasElement: HTMLElement) {
+  let el =
+    canvasElement.querySelector<HTMLElement>('[data-shell-fit]')?.parentElement
+  while (el && el !== canvasElement) {
+    el.style.padding = '0'
+    el.style.margin = '0'
+    el = el.parentElement
+  }
+}
+
+/**
+ * Every word of every answer label on ONE line, inside its button: a label
+ * may wrap between words, never inside one (overflow-wrap breaks a word
+ * that is wider than its line, so no-overflow alone proves nothing).
+ */
+async function expectWholeWords(buttons: HTMLElement[]) {
+  for (const button of buttons) {
+    const text = button.querySelector('span')!.firstChild as Text
+    const edge = button.getBoundingClientRect().right
+    for (const match of text.data.matchAll(/\S+/g)) {
+      const range = document.createRange()
+      range.setStart(text, match.index)
+      range.setEnd(text, match.index + match[0].length)
+      const rects = [...range.getClientRects()].filter((r) => r.width > 0)
+      const lines = new Set(rects.map((r) => Math.round(r.top))).size
+      await expect({ word: match[0], lines }).toEqual({
+        word: match[0],
+        lines: 1,
+      })
+      for (const r of rects) await expect(r.right).toBeLessThanOrEqual(edge)
+    }
+  }
+}
+
+const answerButtons = (canvas: ReturnType<typeof within>) =>
+  ['Loved it', 'It was OK', 'Not for me'].map((name) =>
+    canvas.getByRole('button', { name }),
+  )
 
 /** A tap: the colour goes to Submit, and the Answered state replaces the form. */
 export const Answered: Story = {
@@ -581,6 +630,108 @@ export const SendCommentWhileTyping: Story = {
     await expect(
       canvas.getByRole('button', { name: 'Update comment' }),
     ).toBeInTheDocument()
+  },
+}
+
+/**
+ * ADVERSARIAL ROUND 4: a stale tab changes its colour on a slow server, and
+ * the attendee starts typing a comment while it is in flight. When the change
+ * resolves, focus stays in the box (the heading takes it only if focus had
+ * not moved since the tap), every keystroke is kept, and the box, which is
+ * the attendee's own text now, is not called the saved comment.
+ */
+export const ChangeAnswerWhileTyping: Story = {
+  args: {
+    page: { ...answeredPage, comment: null },
+    submit: fn<SubmitAnswer>(
+      (colour) =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                state: 'answered',
+                colour,
+                comment: 'Great demo',
+                talk,
+              }),
+            300,
+          ),
+        ),
+    ),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const box = canvas.getByLabelText('Comment for the speaker (optional)')
+    await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Not for me' }))
+    const typed = 'the slides were clear and the demo worked'
+    // About 1.2 s of typing: it spans the moment the change resolves.
+    await userEvent.type(box, typed, { delay: 30 })
+    await expect(args.submit).toHaveBeenCalledTimes(1)
+    await expect(args.submit.mock.calls[0]).toEqual(['red'])
+    await waitFor(() =>
+      expect(
+        canvas.getByRole('heading', { level: 2, name: 'Thanks!' }),
+      ).toHaveAccessibleDescription('You answered Not for me.'),
+    )
+    await expect(box).toHaveValue(typed)
+    await expect(document.activeElement).toBe(box)
+    await expect(formStatus(canvasElement)).toHaveTextContent('')
+  },
+}
+
+/**
+ * A colour change whose answer could not read the comment back (`undefined`):
+ * this tab keeps its comment, and since the box did not change, nothing says
+ * it now shows the saved comment.
+ */
+export const ChangeAnswerCommentUnread: Story = {
+  args: {
+    page: answeredPage,
+    submit: fn<SubmitAnswer>(async (colour) => ({
+      state: 'answered',
+      colour,
+      comment: undefined,
+      talk,
+    })),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const box = canvas.getByLabelText('Comment for the speaker (optional)')
+    await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Not for me' }))
+    const thanks = await canvas.findByRole('heading', {
+      level: 2,
+      name: 'Thanks!',
+    })
+    await waitFor(() =>
+      expect(thanks).toHaveAccessibleDescription('You answered Not for me.'),
+    )
+    await waitFor(() => expect(document.activeElement).toBe(thanks))
+    await expect(box).toHaveValue(answeredPage.comment)
+    await expect(formStatus(canvasElement)).toHaveTextContent('')
+  },
+}
+
+/**
+ * Sent with spaces around it: the server stores it trimmed, and the box keeps
+ * the text as typed rather than swapping the trimmed text in under the caret.
+ */
+export const SendCommentTrimmed: Story = {
+  args: {
+    page: { ...answeredPage, comment: null },
+    submit: answeringServer(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const box = canvas.getByLabelText('Comment for the speaker (optional)')
+    await userEvent.type(box, '  hi  ')
+    await userEvent.click(canvas.getByRole('button', { name: 'Send comment' }))
+    await waitFor(() =>
+      expect(formStatus(canvasElement)).toHaveTextContent('Comment sent.'),
+    )
+    await expect(args.submit).toHaveBeenCalledWith('green', '  hi  ')
+    await expect(box).toHaveValue('  hi  ')
   },
 }
 
@@ -1073,39 +1224,78 @@ export const CommentNearLimitDark: Story = {
 
 export const ChangingDark: Story = { ...Changing, globals: { theme: 'dark' } }
 
-/** 320 px at 200 % text: the grid's labels wrap instead of clipping. */
+/** 320 px at 200 % text, in app geometry: the grid's labels keep every word whole. */
 export const ChangingLargeText: Story = {
   ...Changing,
-  decorators: largeText,
+  ...largeText,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    flattenToApp(canvasElement)
     await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
-    for (const button of canvas.getAllByRole('button')) {
-      await expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth)
-    }
+    await expectWholeWords(answerButtons(canvas))
     await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       window.innerWidth,
     )
   },
 }
 
-/** The Open form at 320 px and 200 % text: words wrap, never split or clip. */
+/** The Open form at 320 px and 200 % text, in app geometry: words wrap, never split or clip. */
 export const OpenLargeText: Story = {
-  decorators: largeText,
+  ...largeText,
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    for (const button of canvas.getAllByRole('button')) {
-      await expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth)
-    }
+    flattenToApp(canvasElement)
+    await expectWholeWords(answerButtons(within(canvasElement)))
     await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       window.innerWidth,
     )
+  },
+}
+
+/** The normal size keeps the icon beside the label: the stacked layout is for large text only. */
+export const OpenWholeWords: Story = {
+  play: async ({ canvasElement }) => {
+    flattenToApp(canvasElement)
+    const buttons = answerButtons(within(canvasElement))
+    await expectWholeWords(buttons)
+    for (const button of buttons) {
+      await expect(getComputedStyle(button).flexDirection).toBe('row')
+    }
   },
 }
 
 export const DeleteConfirmationLargeText: Story = {
   ...DeleteConfirmation,
-  decorators: largeText,
+  ...largeText,
+}
+
+/**
+ * A failed change at 320 px and 200 % text, the tapped button flush with
+ * the bottom of the screen: the failure under the grid is scrolled into
+ * view, not left below the fold.
+ */
+export const ChangeAnswerFailsLargeText: Story = {
+  ...largeText,
+  args: {
+    page: answeredPage,
+    submit: fn<SubmitAnswer>(async () => ({ state: 'unavailable' })),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    flattenToApp(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
+    const tapped = canvas.getByRole('button', { name: 'Not for me' })
+    tapped.scrollIntoView({ block: 'end' })
+    await userEvent.click(tapped)
+    const error = await canvas.findByText(
+      "We couldn't confirm your answer. Please try again.",
+    )
+    await waitFor(() =>
+      expect(error.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        window.innerHeight,
+      ),
+    )
+    await expect(document.activeElement).toBe(tapped)
+  },
 }
 
 export const DeletedDark: Story = { ...Deleted, globals: { theme: 'dark' } }
@@ -1153,3 +1343,13 @@ export const UnavailableDark: Story = {
 }
 
 export const UnknownDark: Story = { ...Unknown, globals: { theme: 'dark' } }
+
+export const OpenLargeTextDark: Story = {
+  ...OpenLargeText,
+  globals: { theme: 'dark' },
+}
+
+export const ChangingLargeTextDark: Story = {
+  ...ChangingLargeText,
+  globals: { theme: 'dark' },
+}
