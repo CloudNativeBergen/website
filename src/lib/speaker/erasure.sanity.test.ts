@@ -505,6 +505,39 @@ describe('cache revalidation is reported honestly', () => {
     expect(result.cache.revalidated).toBe(true)
   })
 
+  it('revalidates the conference of every talk the speaker is on, not only conferences that name them', async () => {
+    // An ordinary speaker: referenced by their talk alone. The talk's
+    // conference shows their name on its pages and on the attendee feedback
+    // page (speaker feedback spec §5.1), so both its tags must go.
+    world.referencing = [
+      {
+        _id: 'talk-1',
+        _type: 'talk',
+        _rev: 'r1',
+        conference: ref('conf-of-the-talk', 'c'),
+        speakers: [ref(SPEAKER, 's1')],
+      },
+    ]
+    const seen: unknown[] = []
+    const result = await eraseSpeakerInPlace({
+      speakerId: SPEAKER,
+      actor: 'op',
+      revalidate: (tag, profile) => {
+        seen.push([tag, profile])
+      },
+    })
+
+    expect(seen).toEqual([
+      ['content:speakers', 'default'],
+      ['content:speaker-detail', 'default'],
+      ['sanity:conference-conf-of-the-talk', 'default'],
+      ['sanity:feedback-code-index-conf-of-the-talk', { expire: 0 }],
+    ])
+    expect(result.cache.tags).toContain(
+      'sanity:feedback-code-index-conf-of-the-talk',
+    )
+  })
+
   it('reports revalidated:false with the tags when no revalidate is supplied', async () => {
     const result = await eraseSpeakerInPlace({
       speakerId: SPEAKER,

@@ -677,6 +677,18 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
         break
       }
 
+      case 'talk': {
+        // `talk.speakers[]` anonymises in place (see `default`), but the
+        // talk's conference has the name cached: its pages, and the Feedback
+        // Code index behind the attendee page (speaker feedback spec §5.1).
+        const conferenceRef = (doc.conference as { _ref?: unknown } | null)
+          ?._ref
+        if (typeof conferenceRef === 'string') {
+          affectedConferenceIds.add(conferenceRef)
+        }
+        break
+      }
+
       case 'imageGallery': {
         // UNTAG ONLY (owner decision, 2026-08-14). Conference photography is
         // group photography: deleting the frame would destroy an image of other
