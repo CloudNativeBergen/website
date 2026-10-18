@@ -26,6 +26,24 @@ describe('feedbackCodeFileName — says which talk and code a download is', () =
     ).toBe('feedback-code-k7m2qx-kubernetes-the-hard-parts.png')
   })
 
+  it('keeps Norwegian and accented letters readable instead of dropping them', () => {
+    expect(feedbackCodeFileName(URL, 'Sikkerhet på toppen', 'png')).toBe(
+      'feedback-code-k7m2qx-sikkerhet-paa-toppen.png',
+    )
+    expect(feedbackCodeFileName(URL, 'Ærlig talt om Øl', 'svg')).toBe(
+      'feedback-code-k7m2qx-aerlig-talt-om-ol.svg',
+    )
+    expect(feedbackCodeFileName(URL, 'Déjà vu: naïve façades', 'png')).toBe(
+      'feedback-code-k7m2qx-deja-vu-naive-facades.png',
+    )
+  })
+
+  it('falls back to the code alone when nothing of the title survives', () => {
+    expect(feedbackCodeFileName(URL, 'クラウドの話', 'png')).toBe(
+      'feedback-code-k7m2qx.png',
+    )
+  })
+
   it('keeps a long title short and copes with no usable title', () => {
     const long = 'A '.repeat(60)
     const name = feedbackCodeFileName(URL, long, 'svg')
@@ -59,6 +77,9 @@ describe('renderFeedbackQrSvg — dark on light with a quiet zone', () => {
       new RegExp(`<path fill="#ffffff" d="M0 0h${side}v${side}H0z"/><path`),
     )
     expect(svg).toContain('stroke="#000000"')
+    // Keynote and PowerPoint import an SVG without width/height at ~37 pt;
+    // with them it lands at a usable size, and the viewBox keeps it scalable.
+    expect(svg).toContain('width="1024" height="1024"')
     // No module is drawn in the quiet zone: every row starts at x >= margin.
     const dark = svg.match(/stroke="#000000" d="([^"]+)"/)?.[1] ?? ''
     const starts = [...dark.matchAll(/M(\d+) /g)].map((m) => Number(m[1]))

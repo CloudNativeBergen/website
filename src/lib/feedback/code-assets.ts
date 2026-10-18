@@ -31,6 +31,27 @@ export function feedbackCodeDisplayUrl(url: string): string {
 
 const MAX_SLUG = 40
 
+/** Letters NFKD leaves alone, spelled the way Norwegians do in ASCII. */
+const ASCII_SPELLING: Record<string, string> = {
+  æ: 'ae',
+  ø: 'o',
+  å: 'aa',
+  ß: 'ss',
+}
+
+/** `Sikkerhet på toppen` → `sikkerhet-paa-toppen`; a title with nothing ASCII in it gives ''. */
+function slugOf(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[æøåß]/g, (c) => ASCII_SPELLING[c])
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, MAX_SLUG)
+    .replace(/-$/, '')
+}
+
 /**
  * `feedback-code-<code>-<title slug>.<ext>`: both are on the speaker's own
  * page already, so the name leaks nothing, and a speaker with several talks
@@ -42,19 +63,20 @@ export function feedbackCodeFileName(
   ext: 'png' | 'svg',
 ): string {
   const code = url.match(/\/f\/([^/?#]+)/)?.[1]?.toLowerCase()
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, MAX_SLUG)
-    .replace(/-$/, '')
+  const slug = slugOf(title)
   return ['feedback-code', code, slug].filter(Boolean).join('-') + `.${ext}`
 }
 
-/** The symbol as a vector image: `viewBox` in modules, quiet zone included. */
+/** Keynote and PowerPoint import an SVG with no size at about 37 pt. */
+const SVG_SIZE = 1024
+
+/**
+ * The symbol as a vector image: `viewBox` in modules, quiet zone included,
+ * with a `width`/`height` so slide software imports it at a usable size.
+ */
 export async function renderFeedbackQrSvg(url: string): Promise<string> {
   const { default: QRCode } = await import('qrcode')
-  return QRCode.toString(url, { ...QR_OPTIONS, type: 'svg' })
+  return QRCode.toString(url, { ...QR_OPTIONS, type: 'svg', width: SVG_SIZE })
 }
 
 /** The symbol as a PNG data URL, `width` pixels square: a slide's by default. */

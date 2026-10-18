@@ -172,6 +172,43 @@ const stubPrint = () => {
 }
 
 /**
+ * The print stylesheet's rule that shows the sheet alone (`tailwind.css`).
+ * The runner cannot switch the page to print media, so the rule is read off
+ * the loaded stylesheets: deleting it would otherwise pass every story.
+ */
+const expectPrintIsolationRule = () => {
+  const rules: CSSStyleRule[] = []
+  const collect = (list: CSSRuleList, inPrint: boolean) => {
+    for (const rule of list) {
+      if (rule instanceof CSSMediaRule) {
+        collect(rule.cssRules, inPrint || rule.media.mediaText === 'print')
+      } else if (rule instanceof CSSStyleRule && inPrint) {
+        rules.push(rule)
+      }
+    }
+  }
+  for (const sheet of document.styleSheets) {
+    // A cross-origin sheet (the Google Fonts link) refuses `cssRules`.
+    try {
+      collect(sheet.cssRules, false)
+    } catch {
+      continue
+    }
+  }
+  const hides = rules.find(
+    (r) =>
+      r.selectorText ===
+      'body:has([data-feedback-print]) > :not([data-feedback-print])',
+  )
+  expect(hides?.style.getPropertyValue('display')).toBe('none')
+  expect(hides?.style.getPropertyPriority('display')).toBe('important')
+  const centres = rules.find(
+    (r) => r.selectorText === '[data-feedback-print] .text-center',
+  )
+  expect(centres?.style.getPropertyValue('text-align')).toBe('center')
+}
+
+/**
  * Print sheet: the sheet is mounted into `<body>` (hidden on screen, shown
  * alone by the print stylesheet), the dialog opens once its QR has loaded,
  * and the sheet leaves with `afterprint`.
@@ -187,8 +224,14 @@ export const PrintSheet: Story = {
     expect(sheet).not.toBeNull()
     expect(sheet).toHaveTextContent('How was this session?')
     expect(sheet).toHaveTextContent('Kubernetes: the hard parts')
-    expect(sheet).toHaveTextContent('2026.cloudnativedays.no/f/k7m2qx')
+    // Exactly the URL without its scheme, not a substring of the full one.
+    expect(
+      within(sheet as HTMLElement).getByText(
+        '2026.cloudnativedays.no/f/k7m2qx',
+      ),
+    ).toBeInTheDocument()
     expect(sheet).not.toBeVisible()
+    expectPrintIsolationRule()
     window.dispatchEvent(new Event('afterprint'))
     await waitFor(() =>
       expect(document.querySelector('[data-feedback-print]')).toBeNull(),
@@ -197,29 +240,69 @@ export const PrintSheet: Story = {
   },
 }
 
-/** Present: full screen, and Esc or Close brings the page back. */
+/** Count the real fullscreen requests without replacing them. */
+const fullscreenRequests = { n: 0 }
+const countFullscreenRequests = () => {
+  fullscreenRequests.n = 0
+  const real = Element.prototype.requestFullscreen
+  Element.prototype.requestFullscreen = function (
+    this: Element,
+    ...args: Parameters<Element['requestFullscreen']>
+  ) {
+    fullscreenRequests.n++
+    return real.apply(this, args)
+  }
+  return () => {
+    Element.prototype.requestFullscreen = real
+  }
+}
+
+/**
+ * Present: full screen is asked for on the FIRST open (a page where no
+ * dialog has mounted yet has no portal to attach to at that moment), Tab
+ * stays on the only control while full screen is granted (headless Chromium
+ * grants it), and Esc or Close brings the page back and focus to Present.
+ */
 export const PresentAndClose: Story = {
   args: { window: before },
+  beforeEach: countFullscreenRequests,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const open = () =>
-      userEvent.click(canvas.getByRole('button', { name: 'Present' }))
-    await open()
+    const present = canvas.getByRole('button', { name: 'Present' })
+    await userEvent.click(present)
     const dialog = await screen.findByRole('dialog', {
       name: 'Feedback Code on screen',
     })
+    expect(fullscreenRequests.n).toBe(1)
     expect(dialog).toHaveTextContent('How was this session?')
-    expect(dialog).toHaveTextContent('2026.cloudnativedays.no/f/k7m2qx')
-    expect(within(dialog).getByRole('button', { name: /Close/ })).toHaveFocus()
+    expect(
+      within(dialog).getByText('2026.cloudnativedays.no/f/k7m2qx'),
+    ).toBeInTheDocument()
+    const close = within(dialog).getByRole('button', { name: /Close/ })
+    expect(close).toHaveFocus()
+    await waitFor(() =>
+      expect(document.fullscreenElement).toBe(document.documentElement),
+    )
+    // Tab, in both directions, never leaves the dialog while full screen.
+    await userEvent.tab()
+    expect(close).toHaveFocus()
+    await userEvent.tab()
+    expect(close).toHaveFocus()
+    await userEvent.tab({ shift: true })
+    expect(close).toHaveFocus()
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    await open()
+    await waitFor(() => expect(document.fullscreenElement).toBeNull())
+    expect(present).toHaveFocus()
+    await userEvent.click(present)
     await userEvent.click(
       within(await screen.findByRole('dialog')).getByRole('button', {
         name: /Close/,
       }),
     )
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(document.fullscreenElement).toBeNull())
+    expect(present).toHaveFocus()
   },
 }
 

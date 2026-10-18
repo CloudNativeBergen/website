@@ -983,6 +983,11 @@
   body:has([data-feedback-print]) {
     background: white !important;
   }
+  /* The rule further down that left-aligns `.text-center` on paper is for
+     prose; the sheet is a poster and stays centred. */
+  [data-feedback-print] .text-center {
+    text-align: center !important;
+  }
 
   /* Program page specific print styles */
 

@@ -9,11 +9,13 @@ import {
 import { useFeedbackQrPng } from './useFeedbackQrPng'
 
 /**
- * The A4 sheet for the room (speaker feedback spec §9.2): the question, the
+ * The sheet for the room (speaker feedback spec §9.2): the question, the
  * talk title, a large QR and the short URL. Black on white with no `dark:`
  * variant on purpose: it prints from whatever page it was opened on, in
  * either theme. The global print stylesheet hides inline SVG, so the QR is
- * an `<img>`.
+ * an `<img>`. Sized to stay on ONE page of A4 or US Letter with a title of
+ * up to four lines (clamped) even under a browser's default 10 mm margins:
+ * 12 mm padding, a 140 mm QR and 6 mm gaps come to about 255 mm.
  */
 export function FeedbackPrintSheet({
   title,
@@ -27,16 +29,18 @@ export function FeedbackPrintSheet({
   onQrLoad?: () => void
 }) {
   return (
-    <div className="flex min-h-full w-full break-inside-avoid flex-col items-center gap-[8mm] bg-white p-[12mm] text-center font-sans text-black">
-      <h1 className="text-[36pt] leading-[1.15]">{FEEDBACK_PROMPT}</h1>
-      <h2 className="text-[18pt] leading-[1.3] font-medium [overflow-wrap:anywhere]">
+    <div className="flex w-full break-inside-avoid flex-col items-center gap-[6mm] bg-white p-[12mm] text-center font-sans text-black">
+      <h1 className="text-[36pt] leading-[1.15] font-bold">
+        {FEEDBACK_PROMPT}
+      </h1>
+      <h2 className="line-clamp-4 text-[18pt] leading-[1.3] font-medium [overflow-wrap:anywhere]">
         {title}
       </h2>
       <img
         src={qrSrc}
         onLoad={onQrLoad}
         alt="QR code for the feedback link"
-        className="h-auto w-[150mm] max-w-full [image-rendering:pixelated]"
+        className="h-auto w-[140mm] max-w-full [image-rendering:pixelated]"
       />
       <p className="font-mono text-[20pt] [overflow-wrap:anywhere]">
         {feedbackCodeDisplayUrl(url)}
@@ -48,11 +52,16 @@ export function FeedbackPrintSheet({
   )
 }
 
+const AFTERPRINT_FALLBACK_MS = 2 * 60_000
+
 /**
  * Prints the sheet from the page the speaker is on. It is mounted into
  * `<body>` hidden on screen, and the print stylesheet (`tailwind.css`) shows
  * it alone while it is there. `window.print()` runs once the QR has loaded,
- * and the sheet leaves with `afterprint`.
+ * and the sheet leaves with `afterprint`, or after two minutes where that
+ * never fires (iOS Safari), so a later Cmd+P prints the page again. The
+ * `@page` rule travels with the sheet: no browser header or footer, and the
+ * sheet's own padding is the margin.
  */
 export function FeedbackPrintSheetPortal({
   title,
@@ -80,6 +89,11 @@ export function FeedbackPrintSheetPortal({
     printed.current = true
     window.print()
   }, [])
+  // iOS Safari may never fire `afterprint`: let go of the sheet eventually.
+  useEffect(() => {
+    const timer = setTimeout(onDone, AFTERPRINT_FALLBACK_MS)
+    return () => clearTimeout(timer)
+  }, [onDone])
   // A data URL can be complete before React wires `onLoad`.
   useEffect(() => {
     const img = sheet.current?.querySelector('img')
@@ -88,6 +102,7 @@ export function FeedbackPrintSheetPortal({
   if (!src) return null
   return createPortal(
     <div ref={sheet} data-feedback-print="" className="hidden print:block">
+      <style>{'@page { size: auto; margin: 0; }'}</style>
       <FeedbackPrintSheet
         title={title}
         url={url}

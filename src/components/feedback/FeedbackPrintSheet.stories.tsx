@@ -57,3 +57,11 @@ export const LongTitle: Story = {
       'Observability-driven development at scale: tracing, metrics and logs across forty clusters without losing your mind',
   },
 }
+
+/** Longer than four lines: clamped, so the sheet stays on one page. */
+export const TitleTooLong: Story = {
+  args: {
+    title:
+      'A title that goes on and on: platform engineering, developer portals, golden paths, paved roads, internal marketplaces, service catalogues, scorecards and every other thing a platform team gets asked for in its first year',
+  },
+}
