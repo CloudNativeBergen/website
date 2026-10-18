@@ -17,6 +17,7 @@ import conversationPreference from './schemaTypes/conversationPreference'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import dashboardConfig from './schemaTypes/dashboardConfig'
 import domainVerification from './schemaTypes/domainVerification'
+import feedbackResponse from './schemaTypes/feedbackResponse'
 import message from './schemaTypes/message'
 import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
 import emailSignInToken from './schemaTypes/emailSignInToken'
@@ -96,6 +97,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
 
     // Topics & Talks
     talk,
+    feedbackResponse,
     topic,
     review,
     workshopSignup,

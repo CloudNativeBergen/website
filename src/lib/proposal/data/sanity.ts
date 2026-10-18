@@ -498,6 +498,13 @@ const CASCADE_DELETE_TYPES = ['coSpeakerInvitation', 'review', 'workshopSeats']
  */
 const NON_BLOCKING_TYPES = ['notification', 'conversation']
 
+/**
+ * Feedback Responses (speaker feedback spec §4.1) STRONGLY reference their
+ * talk, and a talk can have hundreds: they are deleted in their own chunked
+ * step, before the final transaction, rather than in it (which is unchunked).
+ */
+const CHUNKED_CASCADE_TYPES = ['feedbackResponse']
+
 /** Deletes per transaction when cascading a proposal's thread — keeps each
  * commit well under Sanity's mutation-per-transaction ceiling. */
 const PROPOSAL_DELETE_CHUNK_SIZE = 100
@@ -622,7 +629,8 @@ export async function deleteProposal(
     const blocking = docs.filter(
       (doc) =>
         !CASCADE_DELETE_TYPES.includes(doc._type) &&
-        !NON_BLOCKING_TYPES.includes(doc._type),
+        !NON_BLOCKING_TYPES.includes(doc._type) &&
+        !CHUNKED_CASCADE_TYPES.includes(doc._type),
     )
 
     if (blocking.length > 0) {
@@ -648,6 +656,9 @@ export async function deleteProposal(
     // ref dangles harmlessly); the message thread is handled just below.
     const cascadeIds = docs
       .filter((doc) => CASCADE_DELETE_TYPES.includes(doc._type))
+      .map((doc) => doc._id)
+    const feedbackResponseIds = docs
+      .filter((doc) => CHUNKED_CASCADE_TYPES.includes(doc._type))
       .map((doc) => doc._id)
 
     // Cascade the proposal's message thread: the conversation(s), their
@@ -740,6 +751,12 @@ export async function deleteProposal(
     }
     for (const chunk of chunkArray(
       messageNotificationIds,
+      PROPOSAL_DELETE_CHUNK_SIZE,
+    )) {
+      await commitDeletes(chunk)
+    }
+    for (const chunk of chunkArray(
+      feedbackResponseIds,
       PROPOSAL_DELETE_CHUNK_SIZE,
     )) {
       await commitDeletes(chunk)
