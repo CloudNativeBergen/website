@@ -168,6 +168,7 @@ function PageState({
           <AnswerForm
             level={level}
             closesAt={page.closesAt}
+            announce={announce}
             submit={submit}
             onAnswer={onAnswer}
           />
@@ -337,17 +338,21 @@ function Failed({ children }: { children: React.ReactNode }) {
 function AnswerForm({
   level: Question,
   closesAt,
+  announce,
   submit,
   onAnswer,
 }: {
   level: 'h1' | 'h2'
   closesAt: string | null
+  /** Take focus on mount: the form replaced the Answered state after a delete. */
+  announce: boolean
   submit: SubmitAnswer
   onAnswer: (next: AttendeeFeedbackState) => void
 }) {
   const [tapped, setTapped] = useState<FeedbackColour | null>(null)
   const [failed, setFailed] = useState(false)
   const { pending, run } = useOneAtATime()
+  const question = useFocusOnMount(announce)
 
   const answer = async (colour: FeedbackColour) => {
     setTapped(colour)
@@ -362,7 +367,11 @@ function AnswerForm({
 
   return (
     <>
-      <Question className="text-xl font-semibold">
+      <Question
+        ref={question}
+        tabIndex={announce ? -1 : undefined}
+        className="text-xl font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
+      >
         How was this session?
       </Question>
       <AnswerButtons pending={pending} tapped={tapped} onTap={answer} />

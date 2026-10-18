@@ -244,7 +244,7 @@ export const SendComment: Story = {
     const canvas = within(canvasElement)
     const box = canvas.getByLabelText('Comment for the speaker (optional)')
     await userEvent.type(box, 'More of the demo, less of the slides.')
-    await expect(canvas.getByText('36/1,000')).toBeInTheDocument()
+    await expect(canvas.getByText('37/1,000')).toBeInTheDocument()
     await userEvent.click(canvas.getByRole('button', { name: 'Send comment' }))
     await expect(args.submit).toHaveBeenCalledWith(
       'green',
