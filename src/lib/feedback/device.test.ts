@@ -106,7 +106,8 @@ describe('the device cookie', () => {
     const reSigned = `${Buffer.from(JSON.stringify(forged)).toString('base64url')}.${signature}`
     for (const bad of [
       reSigned,
-      `${payload}.${signature.slice(0, -2)}AA`,
+      // One character of the signature changed, whatever it was.
+      `${payload}.${signature.slice(0, -1)}${signature.endsWith('A') ? 'B' : 'A'}`,
       payload,
       '',
       'a.b',

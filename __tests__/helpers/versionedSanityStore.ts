@@ -289,11 +289,16 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     },
     transaction: () => {
       const tx = real.transaction()
-      tx.commit = (async () => {
+      // `returnDocuments`: the real client answers with one document per
+      // mutation (`results[].document`). MODELLED: every mutation here gets
+      // the document as it is after the whole transaction, including a
+      // `createIfNotExists` that did nothing, where Sanity may send none.
+      tx.commit = (async (options?: { returnDocuments?: boolean }) => {
         const touched = await apply(
           apiVersion,
           tx.serialize() as SerializedMutation[],
         )
+        if (options?.returnDocuments) return touched
         return {
           transactionId: `tx-${commits.length}`,
           documentIds: touched.map((doc) => doc._id),

@@ -21,8 +21,10 @@ import {
   AnswerButtons,
   Failed,
   HEADING_FOCUS,
+  Status,
   useFocusOnMount,
   type DeleteAnswer,
+  type DeleteNotice,
   type SubmitAnswer,
 } from './answers'
 import { useOneAtATime } from './useOneAtATime'
@@ -57,7 +59,7 @@ export function AttendeeFeedbackPage({
   // Whatever an action leads to takes focus, so a screen reader announces
   // it: the tapped button is gone from the page.
   const [afterTap, setAfterTap] = useState(false)
-  const [deleted, setDeleted] = useState(false)
+  const [notice, setNotice] = useState<DeleteNotice | null>(null)
   return (
     <div
       data-shell-fit="viewport"
@@ -75,28 +77,35 @@ export function AttendeeFeedbackPage({
         </header>
       )}
       <main className="mx-auto max-w-md px-4 pt-10 pb-12">
-        {deleted && (
-          <p
-            role="status"
-            className="mb-6 rounded-lg bg-gray-100 px-4 py-3 text-center text-sm font-medium dark:bg-gray-800"
-          >
-            Your answer has been deleted.
-          </p>
-        )}
+        {/* Always in the DOM, so the text set after a delete is announced;
+            neutral on a refusal, whatever its reason (§7.4). */}
+        <Status
+          status={notice ? { kind: 'ok', text: NOTICES[notice] } : null}
+          className={
+            notice
+              ? 'mb-6 rounded-lg bg-gray-100 px-4 py-3 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
+              : 'sr-only'
+          }
+        />
         <PageState
           page={page}
           submit={submit}
           remove={remove}
           announce={afterTap}
-          onOutcome={(next, wasDeleted = false) => {
+          onOutcome={(next, afterDelete) => {
             setPage(next)
             setAfterTap(true)
-            setDeleted(wasDeleted)
+            setNotice(afterDelete ?? null)
           }}
         />
       </main>
     </div>
   )
+}
+
+const NOTICES: Record<DeleteNotice, string> = {
+  deleted: 'Your answer has been deleted.',
+  'nothing-to-delete': 'There was no answer from this browser to delete.',
 }
 
 function PageState({
@@ -110,7 +119,7 @@ function PageState({
   submit: SubmitAnswer
   remove: DeleteAnswer
   announce: boolean
-  onOutcome: (next: AttendeeFeedbackState, deleted?: boolean) => void
+  onOutcome: (next: AttendeeFeedbackState, afterDelete?: DeleteNotice) => void
 }) {
   // The talk's title is the page's h1 when it is shown; the state's own
   // heading is the h1 otherwise.

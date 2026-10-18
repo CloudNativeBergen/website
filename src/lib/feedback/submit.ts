@@ -39,15 +39,23 @@ import {
 import { MAX_COMMENT_LENGTH } from './comment'
 import { attendeeState, type AttendeeFeedbackState } from './page'
 
+const INVALID_COMMENT = Symbol('invalid comment')
+
 /**
- * The comment as it will be stored: `null` for none or blank, `undefined`
- * when it is not a comment at all (not a string, or too long once trimmed).
+ * What the tap says about the comment: `undefined` when it sent none (a
+ * colour-only tap leaves the stored comment UNTOUCHED, so a stale tab's
+ * Change answer never erases what another tab sent), `null` for an
+ * explicitly emptied box (sent as `''`: unset), the trimmed text to store, or
+ * {@link INVALID_COMMENT} when it is not a comment at all (not a string, or
+ * too long once trimmed).
  */
-function normalizeComment(comment: unknown): string | null | undefined {
-  if (comment === undefined || comment === null) return null
-  if (typeof comment !== 'string') return undefined
+function normalizeComment(
+  comment: unknown,
+): string | null | undefined | typeof INVALID_COMMENT {
+  if (comment === undefined) return undefined
+  if (typeof comment !== 'string') return INVALID_COMMENT
   const trimmed = comment.trim()
-  if (trimmed.length > MAX_COMMENT_LENGTH) return undefined
+  if (trimmed.length > MAX_COMMENT_LENGTH) return INVALID_COMMENT
   return trimmed || null
 }
 
@@ -88,7 +96,7 @@ export async function submitFeedback({
   }
   if (!isFeedbackColour(colour)) return { outcome: page }
   const comment = normalizeComment(rawComment)
-  if (comment === undefined) return { outcome: page }
+  if (comment === INVALID_COMMENT) return { outcome: page }
 
   let talk: TalkDoc | undefined
   try {
@@ -115,8 +123,12 @@ export async function submitFeedback({
   const next = recordAnswer(device, target.talkId, now)
   const id = feedbackResponseId(next.device.token, target.talkId)
   const submittedAt = now.toISOString()
+  // What the page is told is what is STORED, read off the commit's own
+  // answer (`returnDocuments`: one document per mutation, no extra read), so
+  // a stale tab that changed the colour sees the comment another tab sent.
+  let stored: ResponseDoc | undefined
   try {
-    await clientWrite
+    const docs = await clientWrite
       .transaction()
       .createIfNotExists({
         _id: id,
@@ -126,12 +138,18 @@ export async function submitFeedback({
         colour,
         submittedAt,
       })
-      .patch(id, (patch) =>
-        comment === null
-          ? patch.set({ colour, submittedAt }).unset(['comment'])
-          : patch.set({ colour, comment, submittedAt }),
-      )
-      .commit()
+      .patch(id, (patch) => {
+        const set = patch.set({
+          colour,
+          submittedAt,
+          ...(typeof comment === 'string' ? { comment } : {}),
+        })
+        return comment === null ? set.unset(['comment']) : set
+      })
+      .commit({ returnDocuments: true })
+    stored = (docs as (ResponseDoc | undefined)[])
+      .filter((doc) => doc?._id === id)
+      .at(-1)
   } catch (error) {
     console.error('Could not save a Feedback Response', error)
     return { outcome: { state: 'unavailable' }, cookie: next.cookie }
@@ -141,7 +159,39 @@ export async function submitFeedback({
   // the confirmed write only.
   expireFeedbackResponse(id)
   return {
-    outcome: { state: 'answered', colour, comment, talk: page.talk },
+    outcome: {
+      state: 'answered',
+      colour,
+      comment: await storedComment(stored, id, comment),
+      talk: page.talk,
+    },
     cookie: next.cookie,
   }
+}
+
+interface ResponseDoc {
+  _id: string
+  comment?: unknown
+}
+
+/**
+ * The comment as stored after the write. Sanity answers a `returnDocuments`
+ * commit with a document per mutation, but a `createIfNotExists` that did
+ * nothing may carry none (MODELLED as present in the test store); the
+ * fallback is one by-id read, or, failing that, what this tap sent.
+ */
+async function storedComment(
+  stored: ResponseDoc | undefined,
+  id: string,
+  sent: string | null | undefined,
+): Promise<string | null> {
+  if (!stored) {
+    try {
+      stored = (await clientWrite.getDocument<ResponseDoc>(id)) ?? undefined
+    } catch (error) {
+      console.error('Could not read back a Feedback Response', error)
+      return sent ?? null
+    }
+  }
+  return typeof stored?.comment === 'string' ? stored.comment : null
 }

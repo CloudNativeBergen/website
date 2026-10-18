@@ -319,9 +319,52 @@ describe('the comment (F2)', () => {
     expect(responses()[0]).not.toHaveProperty('comment')
   })
 
-  it('is no comment at all when the tap sends none (a bare colour change)', async () => {
+  it('is untouched by a tap that sends none (a bare colour change)', async () => {
     expect(await submitFeedbackAnswer('k7m2qx', 'red')).toMatchObject({
       state: 'answered',
+      comment: null,
+    })
+    expect(responses()[0]).not.toHaveProperty('comment')
+
+    request(deviceCookieFromResponse())
+    await submitFeedbackAnswer('k7m2qx', 'green', 'Keep me')
+    request(deviceCookieFromResponse())
+    expect(await submitFeedbackAnswer('k7m2qx', 'yellow')).toMatchObject({
+      state: 'answered',
+      colour: 'yellow',
+      comment: 'Keep me',
+    })
+    expect(responses()[0]).toMatchObject({
+      colour: 'yellow',
+      comment: 'Keep me',
+    })
+  })
+
+  it('survives a stale tab’s colour change, which is told the comment that is stored', async () => {
+    // Tab A and tab B hold the same cookie; B still shows "no comment".
+    await submitFeedbackAnswer('k7m2qx', 'green')
+    const cookie = deviceCookieFromResponse()
+    request(cookie)
+    await submitFeedbackAnswer('k7m2qx', 'green', 'Great demo') // tab A
+    request(cookie)
+    const stale = await submitFeedbackAnswer('k7m2qx', 'red') // tab B
+    expect(stale).toEqual({
+      state: 'answered',
+      colour: 'red',
+      comment: 'Great demo',
+      talk: { title: 'Title of talk-open', speakers: [] },
+    })
+    expect(responses()).toHaveLength(1)
+    expect(responses()[0]).toMatchObject({
+      colour: 'red',
+      comment: 'Great demo',
+    })
+  })
+
+  it('is unset by an explicitly emptied box, sent as an empty string', async () => {
+    await submitFeedbackAnswer('k7m2qx', 'green', 'Great demo')
+    request(deviceCookieFromResponse())
+    expect(await submitFeedbackAnswer('k7m2qx', 'green', '')).toMatchObject({
       comment: null,
     })
     expect(responses()[0]).not.toHaveProperty('comment')

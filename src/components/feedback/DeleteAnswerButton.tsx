@@ -1,9 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { ArrowPathIcon, TrashIcon } from '@heroicons/react/24/outline'
 import type { AttendeeFeedbackState } from '@/lib/feedback/server'
-import { Failed, SECONDARY_BUTTON, type DeleteAnswer } from './answers'
+import {
+  CONTROL_BORDER,
+  SECONDARY_BUTTON,
+  Status,
+  type DeleteAnswer,
+  type DeleteNotice,
+  type StatusLine,
+} from './answers'
 import { useOneAtATime, type RunAction } from './useOneAtATime'
 
 export const DELETE_FAILED = "We couldn't delete your answer. Please try again."
@@ -13,7 +20,8 @@ export const DELETE_FAILED = "We couldn't delete your answer. Please try again."
  * one-at-a-time guard the caller holds. A failed delete keeps the page as it
  * is and reports; anything else replaces the page, and only a delete the
  * server confirmed is announced as one: a refusal (an expired cookie, a
- * rotated code) shows the page's current state and no "deleted" line.
+ * rotated code) shows the page's current state with a neutral line that
+ * tells nothing about why.
  */
 export async function eraseAnswer({
   run,
@@ -23,7 +31,7 @@ export async function eraseAnswer({
 }: {
   run: RunAction
   remove: DeleteAnswer
-  onDelete: (next: AttendeeFeedbackState, deleted: boolean) => void
+  onDelete: (next: AttendeeFeedbackState, notice: DeleteNotice) => void
   onFailed: () => void
 }) {
   const next = await run(remove, {
@@ -32,18 +40,21 @@ export async function eraseAnswer({
   })
   if (!next) return
   if (next.page.state === 'unavailable') onFailed()
-  else onDelete(next.page, next.deleted)
+  else onDelete(next.page, next.deleted ? 'deleted' : 'nothing-to-delete')
 }
 
-export function DeleteButton({
+function DeleteButton({
   pending,
   onClick,
+  ref,
 }: {
   pending: boolean
   onClick: () => void
+  ref?: React.Ref<HTMLButtonElement>
 }) {
   return (
     <button
+      ref={ref}
       type="button"
       aria-disabled={pending}
       onClick={onClick}
@@ -63,34 +74,124 @@ export function DeleteButton({
 }
 
 /**
+ * Delete my answer in two steps, inline: the button, then a confirmation
+ * with Delete and Cancel. The comment goes with the answer and cannot be
+ * recovered, so one tap near the thumb's resting zone must not be enough.
+ * Focus moves to Cancel when the confirmation opens (a second tap of the
+ * same spot deletes nothing) and back to the button on Cancel; no modal.
+ */
+export function DeleteControl({
+  pending,
+  hasComment,
+  onConfirm,
+  onOpen,
+}: {
+  pending: boolean
+  /** Known only on Answered; the wording says what goes. */
+  hasComment: boolean | null
+  onConfirm: () => void
+  /** The confirmation opened: a chance to clear other status lines. */
+  onOpen?: () => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const cancel = useRef<HTMLButtonElement>(null)
+  const wasConfirming = useRef(false)
+  const questionId = useId()
+
+  useEffect(() => {
+    if (confirming) cancel.current?.focus()
+    else if (wasConfirming.current) trigger.current?.focus()
+    wasConfirming.current = confirming
+  }, [confirming])
+
+  if (!confirming) {
+    return (
+      <DeleteButton
+        ref={trigger}
+        pending={pending}
+        onClick={() => {
+          if (pending) return
+          onOpen?.()
+          setConfirming(true)
+        }}
+      />
+    )
+  }
+  return (
+    <div
+      role="group"
+      aria-labelledby={questionId}
+      className={`w-full rounded-lg ${CONTROL_BORDER} px-4 py-4 text-center`}
+    >
+      <p id={questionId} className="text-sm font-medium">
+        {hasComment
+          ? 'Delete your answer and comment? This can’t be undone.'
+          : 'Delete your answer? This can’t be undone.'}
+      </p>
+      <div className="mt-3 flex flex-wrap justify-center gap-3">
+        <button
+          type="button"
+          aria-disabled={pending}
+          onClick={() => {
+            if (!pending) onConfirm()
+          }}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-700 px-4 text-sm font-semibold text-white transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait aria-disabled:opacity-50 dark:bg-red-600 dark:focus-visible:outline-white"
+        >
+          {pending && (
+            <ArrowPathIcon
+              className="size-5 animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+          )}
+          Delete
+        </button>
+        <button
+          ref={cancel}
+          type="button"
+          aria-disabled={pending}
+          onClick={() => {
+            if (!pending) setConfirming(false)
+          }}
+          className={SECONDARY_BUTTON}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
  * Delete my answer on Closed and Not yet open (§7.4, R1): the talk is in the
- * cookie's list, so there may be an answer to delete; a missing one is
- * harmless. Holds its own guard: it is the only action on those pages.
+ * cookie's list, so there may be an answer to delete. Holds its own guard:
+ * it is the only action on those pages.
  */
 export function DeleteAnswerButton({
   remove,
   onDelete,
 }: {
   remove: DeleteAnswer
-  onDelete: (next: AttendeeFeedbackState, deleted: boolean) => void
+  onDelete: (next: AttendeeFeedbackState, notice: DeleteNotice) => void
 }) {
-  const [failed, setFailed] = useState(false)
+  const [status, setStatus] = useState<StatusLine | null>(null)
   const { pending, run } = useOneAtATime()
   return (
-    <div className="mt-8 flex flex-col items-center">
-      <DeleteButton
+    <div className="mt-8 flex flex-col items-center gap-4">
+      <DeleteControl
         pending={pending}
-        onClick={() => {
-          setFailed(false)
+        hasComment={null}
+        onOpen={() => setStatus(null)}
+        onConfirm={() =>
           eraseAnswer({
             run,
             remove,
             onDelete,
-            onFailed: () => setFailed(true),
+            onFailed: () => setStatus({ kind: 'error', text: DELETE_FAILED }),
           })
-        }}
+        }
       />
-      {failed && <Failed>{DELETE_FAILED}</Failed>}
+      <Status status={status} />
     </div>
   )
 }
