@@ -667,6 +667,77 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
       ['To Be', 'Announced', 'buyer@company.com'],
     ])
   })
+
+  it('absorbs a same-name workshop add-on into a seat that already grants the workshop', async () => {
+    const conf = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Two-day', admits: true, grantsWorkshop: true },
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    const bob = { first_name: 'Bob', last_name: 'Jones', email: 'bob@x.com' }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({ id: 1, order_id: 200, category: 'Two-day', crm: bob }),
+      ticket({ id: 2, order_id: 200, category: 'Workshop upgrade', crm: bob }),
+    ])
+
+    const res = await exportParticipants(conf, true)
+
+    expect(res).toHaveLength(1)
+    expect(res[0].categories).toBe('Two-day, Workshop upgrade')
+  })
+
+  it('matches exact full names before first-name-only seats', async () => {
+    const conf = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    const email = 'buyer@company.com'
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        crm: { first_name: 'Bob', last_name: '', email },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        crm: { first_name: 'Bob', last_name: 'Jones', email },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: { first_name: 'Bob', last_name: 'Jones', email },
+      }),
+    ])
+
+    const res = await exportParticipants(conf, false)
+
+    expect(res.map((p) => [p.lastName, p.grantsWorkshop])).toEqual([
+      ['', false],
+      ['Jones', true],
+    ])
+  })
+
+  it('never puts the buyer name on a blank seat', async () => {
+    const email = 'buyer@company.com'
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        customer_name: 'Buyer Person',
+        crm: { first_name: '', last_name: '', email },
+      }),
+    ])
+
+    const res = await exportParticipants(conference, false)
+
+    expect(res[0].firstName).toBe('')
+  })
 })
 
 describe('volunteer free ticket allocation in buildTicketSummary', () => {

@@ -268,37 +268,46 @@ export async function exportParticipants(
         hasPaidAddOn: false,
       }))
 
-      // Pass 1: exact or compatible name match for named seats
+      const consume = (assignment: SeatAssignment, idx: number) => {
+        const addOn = availableWorkshopAddOns.splice(idx, 1)[0]
+        assignment.grantsWorkshop = true
+        if (addOn.ticket.category) {
+          assignment.categoriesList.push(addOn.ticket.category)
+        }
+        if (addOn.isPaid) {
+          assignment.hasPaidAddOn = true
+        }
+      }
+
+      // Pass 1a: exact full-name match across all seats first, so a
+      // first-name-only seat cannot steal an add-on named for another seat.
+      // A seat that already grants the workshop still absorbs its own
+      // same-name add-on, otherwise that add-on is exported as a second row;
+      // ungranted seats go first so they keep priority.
+      const byNeed = [...assignments].sort(
+        (x, y) => Number(x.grantsWorkshop) - Number(y.grantsWorkshop),
+      )
+      for (const assignment of byNeed) {
+        const seatName = getName(assignment.seat.ticket)
+        if (!seatName.first || !seatName.last) continue
+        const matchIdx = availableWorkshopAddOns.findIndex(
+          (a) => getName(a.ticket).full === seatName.full,
+        )
+        if (matchIdx !== -1) consume(assignment, matchIdx)
+      }
+
+      // Pass 1b: compatible (first-name, one side missing last name) match
       for (const assignment of assignments) {
         if (assignment.grantsWorkshop || availableWorkshopAddOns.length === 0)
           continue
         const seatName = getName(assignment.seat.ticket)
         if (!seatName.first) continue
-
-        let matchIdx = seatName.full
-          ? availableWorkshopAddOns.findIndex(
-              (a) => getName(a.ticket).full === seatName.full,
-            )
-          : -1
-
-        if (matchIdx === -1) {
-          matchIdx = availableWorkshopAddOns.findIndex((a) => {
-            const aName = getName(a.ticket)
-            if (!aName.first || aName.first !== seatName.first) return false
-            return !aName.last || !seatName.last || aName.last === seatName.last
-          })
-        }
-
-        if (matchIdx !== -1) {
-          const addOn = availableWorkshopAddOns.splice(matchIdx, 1)[0]
-          assignment.grantsWorkshop = true
-          if (addOn.ticket.category) {
-            assignment.categoriesList.push(addOn.ticket.category)
-          }
-          if (addOn.isPaid) {
-            assignment.hasPaidAddOn = true
-          }
-        }
+        const matchIdx = availableWorkshopAddOns.findIndex((a) => {
+          const aName = getName(a.ticket)
+          if (!aName.first || aName.first !== seatName.first) return false
+          return !aName.last || !seatName.last || aName.last === seatName.last
+        })
+        if (matchIdx !== -1) consume(assignment, matchIdx)
       }
 
       // Pass 2: unnamed add-ons assigned to remaining ungranted seats
@@ -346,10 +355,8 @@ export async function exportParticipants(
         )
         const categories = uniqueCategories.join(', ')
 
-        const firstName =
-          assignment.seat.ticket.crm?.first_name ||
-          assignment.seat.ticket.customer_name ||
-          ''
+        // Never fall back to the buyer's name: it would land on TBA badges.
+        const firstName = assignment.seat.ticket.crm?.first_name || ''
         const lastName = assignment.seat.ticket.crm?.last_name || ''
 
         result.push({
@@ -366,8 +373,7 @@ export async function exportParticipants(
     // Surplus or standalone workshop add-ons (when seats don't consume all add-ons, or seats.length === 0)
     if (workshopOnly && availableWorkshopAddOns.length > 0) {
       for (const addOn of availableWorkshopAddOns) {
-        const firstName =
-          addOn.ticket.crm?.first_name || addOn.ticket.customer_name || ''
+        const firstName = addOn.ticket.crm?.first_name || ''
         const lastName = addOn.ticket.crm?.last_name || ''
         result.push({
           firstName,

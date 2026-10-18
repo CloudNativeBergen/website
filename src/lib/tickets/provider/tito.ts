@@ -51,12 +51,12 @@ interface TitoRelease {
   end_at?: string | null
 }
 
-const TITO_CANCELLED_STATES = new Set([
-  'void',
-  'voided',
+// Ticket and registration states are separate vocabularies in Tito: a ticket
+// is only ever 'void' when cancelled; refunds show as `registration.refunded`.
+const TITO_CANCELLED_TICKET_STATES = new Set(['void'])
+const TITO_CANCELLED_REGISTRATION_STATES = new Set([
   'cancelled',
   'customer_cancelled',
-  'refunded',
   'payment_declined',
   'errored',
 ])
@@ -80,7 +80,9 @@ interface TitoTicket {
     slug?: string
     state?: string | null
     completed_at?: string | null
+    /** Registration type (false = free), NOT payment status. */
     paid?: boolean | null
+    refunded?: boolean | null
   } | null
 }
 
@@ -290,14 +292,17 @@ export class TitoProvider implements TicketingProvider {
       'tickets',
       { view: 'extended' },
     )) {
-      // Exclude void, voided, cancelled, and refunded tickets or registrations.
+      // Exclude void tickets and cancelled or refunded registrations.
       // Tito's list excludes void tickets by default, but we enforce this explicitly
       // to guarantee cancelled seats are never admitted or counted.
       const ticketState = t.state?.toLowerCase()
       const regState = t.registration?.state?.toLowerCase()
       const isCancelled =
-        (ticketState != null && TITO_CANCELLED_STATES.has(ticketState)) ||
-        (regState != null && TITO_CANCELLED_STATES.has(regState))
+        (ticketState != null &&
+          TITO_CANCELLED_TICKET_STATES.has(ticketState)) ||
+        (regState != null &&
+          TITO_CANCELLED_REGISTRATION_STATES.has(regState)) ||
+        t.registration?.refunded === true
       if (isCancelled) continue
       tickets.push(this.mapTicket(t))
     }
@@ -314,14 +319,12 @@ export class TitoProvider implements TicketingProvider {
     const isRegistrationComplete =
       t.registration?.completed_at != null ||
       regState === 'complete' ||
-      regState === 'confirmed' ||
-      t.registration?.paid === true
+      regState === 'confirmed'
 
     const isPendingPayment =
       regState === 'pending' ||
       regState === 'ready' ||
-      regState === 'ready_to_process' ||
-      t.registration?.paid === false
+      regState === 'ready_to_process'
 
     const ticketState = t.state?.toLowerCase()
     // In Tito Admin API, `t.state` on the ticket tracks attendee data completion
