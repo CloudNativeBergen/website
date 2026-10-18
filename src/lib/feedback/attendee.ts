@@ -207,7 +207,13 @@ export async function resolveFeedbackTarget(
   conference: FeedbackConference,
   rawCode: unknown,
   now: Date,
-): Promise<{ page: FeedbackPage; target: FeedbackTarget | null }> {
+): Promise<
+  | { page: { state: 'unknown' }; target: null }
+  | {
+      page: Exclude<FeedbackPage, { state: 'unknown' }>
+      target: FeedbackTarget
+    }
+> {
   const code = normalizeShortCode(typeof rawCode === 'string' ? rawCode : null)
   if (!code) return { page: { state: 'unknown' }, target: null }
 
