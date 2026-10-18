@@ -207,6 +207,22 @@ export const ChangeAnswer: Story = {
   },
 }
 
+/** The grid open: the recorded answer is the pressed one. */
+export const Changing: Story = {
+  args: { page: answeredPage },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
+    await expect(canvas.getByText('Pick a new answer')).toBeInTheDocument()
+    await expect(
+      canvas.getByRole('button', { name: 'Loved it' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await expect(
+      canvas.getByRole('button', { name: 'Keep my answer' }),
+    ).toBeInTheDocument()
+  },
+}
+
 /** Keep my answer: the grid closes with nothing sent. */
 export const ChangeAnswerKept: Story = {
   args: { page: answeredPage },
@@ -633,6 +649,8 @@ export const CommentNearLimitDark: Story = {
   ...CommentNearLimit,
   globals: { theme: 'dark' },
 }
+
+export const ChangingDark: Story = { ...Changing, globals: { theme: 'dark' } }
 
 export const DeletedDark: Story = { ...Deleted, globals: { theme: 'dark' } }
 

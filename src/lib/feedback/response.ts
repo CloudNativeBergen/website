@@ -49,9 +49,7 @@ interface ResponseRow {
  * The response with this id as stored, projected to what the page may learn,
  * or `null` when there is none. Cached per id under {@link feedbackResponseTag}.
  */
-async function readOwnResponse(
-  id: string,
-): Promise<{
+async function readOwnResponse(id: string): Promise<{
   talkId: string | null
   colour: unknown
   comment: unknown
