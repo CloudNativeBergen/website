@@ -329,8 +329,9 @@ export const scheduleRouter = router({
         }
         await clientWrite.delete(input.id)
         // A legacy day with no status reads as official, so deleting it can
-        // close Feedback Windows (speaker feedback spec §5.1).
-        if (doc.status !== ScheduleStatus.Draft) {
+        // close Feedback Windows (speaker feedback spec §5.1). Official days
+        // are refused above; drafts and archived days never held a window.
+        if (!doc.status) {
           expireFeedbackCodeIndex(conference._id)
         }
         return { success: true }

@@ -218,6 +218,16 @@ describe('schedule router — the Feedback Code index (speaker feedback §5.1)',
     ])
   })
 
+  it('leaves it alone when an archived day is deleted: it never held a window', async () => {
+    writeFetchMock.mockResolvedValueOnce({
+      _id: 'day-archived',
+      status: ScheduleStatus.Archived,
+    })
+    await makeCaller().admin.delete({ id: 'day-archived' })
+    expect(writeDeleteMock).toHaveBeenCalledWith('day-archived')
+    expect(feedbackExpiries()).toEqual([])
+  })
+
   it('leaves it alone when a draft day is deleted', async () => {
     writeFetchMock.mockResolvedValueOnce({
       _id: 'day-draft',
