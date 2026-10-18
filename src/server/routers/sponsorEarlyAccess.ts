@@ -18,7 +18,9 @@ import type { Conference } from '@/lib/conference/types'
 import type { ContactPerson, SponsorEmailTemplate } from '@/lib/sponsor/types'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { convertPortableTextToHTML } from '@/lib/email/route-helpers'
 import {
+  renderSponsorEmailHtml,
   sendSponsorCommunication,
   type SendSponsorCommunicationResult,
 } from '@/lib/sponsor-crm/communication-send'
@@ -272,12 +274,7 @@ export async function prepareEarlyAccessSend(
       notWritten = link.notWritten
       const url = earlyAccessUrl(plan.portalUrl, link.token)
       return {
-        html: earlyAccessCardHtml({
-          url,
-          sponsorStart: plan.sponsorStart,
-          officialOpening: plan.officialOpening,
-          theme: conference.theme,
-        }),
+        html: earlyAccessBlockHtml(plan, url, conference.theme),
         attachments: earlyAccessAttachments(url),
       }
     },
@@ -286,6 +283,49 @@ export async function prepareEarlyAccessSend(
      * link has been created: publishing one of them would remove the link.
      */
     notWritten: () => notWritten,
+  }
+}
+
+/** The link card a send appends, and a preview shows. */
+function earlyAccessBlockHtml(
+  plan: EarlyAccessSendPlan,
+  url: string,
+  theme: ConferenceTheme | null | undefined,
+) {
+  return earlyAccessCardHtml({
+    url,
+    sponsorStart: plan.sponsorStart,
+    officialOpening: plan.officialOpening,
+    theme,
+  })
+}
+
+/**
+ * What a send starts from when the caller gives nothing: the primary
+ * contact, "Workshop early access: <conference>" and the built-in greeting.
+ * Read-only.
+ */
+async function earlyAccessDefaults(
+  conference: Conference,
+  sponsorForConferenceId: string,
+) {
+  const sponsor = await scopedFetch<{
+    name?: string
+    contactPersons?: ContactPerson[]
+  } | null>(
+    clientReadUncached,
+    { conferenceId: conference._id },
+    `*[_type == "sponsorForConference" && _id == $id][0]{ "name": sponsor->name, contactPersons }`,
+    { id: sponsorForConferenceId },
+  )
+  const primary = defaultRecipientKey(sponsor?.contactPersons)
+  return {
+    recipientKeys: primary ? [primary] : [],
+    subject: `${COMMUNICATION_KIND_LABELS['workshop-early-access']}: ${conference.title}`,
+    message: earlyAccessGreeting(
+      sponsor?.name ?? 'your company',
+      conference.title,
+    ) as unknown as PortableTextBlock[],
   }
 }
 
@@ -329,22 +369,14 @@ export async function sendEarlyAccess({
     domain,
     sponsorForConferenceId,
   )
-  if (!recipientKeys || !message) {
-    const sponsor = await scopedFetch<{
-      name?: string
-      contactPersons?: ContactPerson[]
-    } | null>(
-      clientReadUncached,
-      { conferenceId: conference._id },
-      `*[_type == "sponsorForConference" && _id == $id][0]{ "name": sponsor->name, contactPersons }`,
-      { id: sponsorForConferenceId },
+  if (!recipientKeys || !message || !subject) {
+    const defaults = await earlyAccessDefaults(
+      conference,
+      sponsorForConferenceId,
     )
-    const primary = defaultRecipientKey(sponsor?.contactPersons)
-    recipientKeys ??= primary ? [primary] : []
-    message ??= earlyAccessGreeting(
-      sponsor?.name ?? 'your company',
-      conference.title,
-    ) as unknown as PortableTextBlock[]
+    recipientKeys ??= defaults.recipientKeys
+    message ??= defaults.message
+    subject ??= defaults.subject
   }
   const result = await sendSponsorCommunication({
     conference,
@@ -353,9 +385,7 @@ export async function sendEarlyAccess({
     sponsorForConferenceId,
     kind: 'workshop-early-access',
     recipientKeys,
-    subject:
-      subject ??
-      `${COMMUNICATION_KIND_LABELS['workshop-early-access']}: ${conference.title}`,
+    subject,
     message,
     template,
     senderNames,
@@ -557,6 +587,56 @@ export async function sendEarlyAccessBulk({
   out.remainingIds = targets.slice(next).map((t) => t.id)
   out.remaining = out.remainingIds.length
   return out
+}
+
+/** Stands in for a link the sponsor does not have yet: a send creates it. */
+export const EARLY_ACCESS_PREVIEW_TOKEN = 'link-created-when-sent'
+
+/**
+ * THE BULK SEND'S EMAIL, AS IT WOULD GO TO THE FIRST SPONSOR it would mail
+ * now: the subject and the body {@link sendEarlyAccess} sends with no
+ * overrides, rendered by the same functions. WRITES NOTHING: a sponsor
+ * without a link is shown a placeholder address (`placeholderLink`).
+ * `null`: no sponsor would be mailed.
+ */
+export async function previewEarlyAccessBulkEmail({
+  conference,
+  domain,
+  onlyUnsent,
+}: {
+  conference: Conference
+  domain: string | undefined
+  onlyUnsent: boolean
+}) {
+  const [target] = (
+    await earlyAccessBulkTargets(conference._id, { onlyUnsent })
+  ).filter((t) => t.status === 'closed-won')
+  if (!target) return null
+  const { refusal, plan } = await decideSendForRequest(
+    conference._id,
+    domain,
+    target.id,
+  )
+  if (refusal) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: refusal.message,
+    })
+  }
+  const { subject, message } = await earlyAccessDefaults(conference, target.id)
+  const { htmlContent } = await convertPortableTextToHTML(message, conference)
+  const url =
+    plan.url ?? earlyAccessUrl(plan.portalUrl, EARLY_ACCESS_PREVIEW_TOKEN)
+  return {
+    sponsorName: target.name,
+    placeholderLink: plan.url === null,
+    subject,
+    html: await renderSponsorEmailHtml(
+      conference,
+      subject,
+      `${htmlContent ?? ''}${earlyAccessBlockHtml(plan, url, conference.theme)}`,
+    ),
+  }
 }
 
 export const sponsorEarlyAccessRouter = router({

@@ -86,6 +86,7 @@ import {
   earlyAccessBulkRefusal,
   earlyAccessBulkTargets,
   sendEarlyAccessBulk,
+  previewEarlyAccessBulkEmail,
 } from './sponsorEarlyAccess'
 import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { type FullSeats, WorkshopSignupStatus } from '@/lib/workshop/types'
@@ -1529,6 +1530,28 @@ export const workshopRouter = router({
           count: targets.length,
           refusal: await earlyAccessBulkRefusal(conferenceId, domain),
         }
+      }),
+
+    /**
+     * The email the bulk send would send, for the first sponsor it would
+     * mail. Writes nothing; `null` when no sponsor would be mailed.
+     */
+    earlyAccessBulkEmailPreview: workshopAdminProcedure
+      .input(z.object({ onlyUnsent: z.boolean().default(true) }))
+      .query(async ({ input }) => {
+        const { conference, domain, error } =
+          await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        return previewEarlyAccessBulkEmail({
+          conference,
+          domain,
+          onlyUnsent: input.onlyUnsent,
+        })
       }),
 
     /**

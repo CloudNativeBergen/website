@@ -205,6 +205,29 @@ function mergedDiffers(
 }
 
 /**
+ * The sponsor email around an already rendered body: what is sent, and what
+ * a preview of a send shows (`workshop.admin.earlyAccessBulkEmailPreview`).
+ */
+export async function renderSponsorEmailHtml(
+  conference: Conference,
+  subject: string,
+  htmlContent: string,
+): Promise<string> {
+  return render(
+    renderEmailTemplate({
+      conference,
+      subject,
+      htmlContent,
+      // A one-to-one transactional email: NO unsubscribe link. `undefined`
+      // would select the template's default — Resend's `{{{RESEND_UNSUBSCRIBE_URL}}}`
+      // merge tag, which only Broadcasts resolve — and the literal tag would
+      // be sent AND frozen into the audit body.
+      unsubscribeUrl: '',
+    }),
+  )
+}
+
+/**
  * THE one way a sponsor email leaves the system (#1261). Resolves recipients
  * from contact keys, renders the exact HTML that is sent, sends it through
  * the tenant's sender, and writes the audit record — for a failure too.
@@ -264,17 +287,10 @@ export async function sendSponsorCommunication(
     : args.attachments
   // Rendered ONCE to a string: the same bytes go to the provider and into the
   // audit record, so "body as sent" is literally true.
-  const html = await render(
-    renderEmailTemplate({
-      conference,
-      subject: args.subject,
-      htmlContent: `${htmlContent ?? ''}${args.appendHtml ?? ''}${late?.html ?? ''}`,
-      // A one-to-one transactional email: NO unsubscribe link. `undefined`
-      // would select the template's default — Resend's `{{{RESEND_UNSUBSCRIBE_URL}}}`
-      // merge tag, which only Broadcasts resolve — and the literal tag would
-      // be sent AND frozen into the audit body.
-      unsubscribeUrl: '',
-    }),
+  const html = await renderSponsorEmailHtml(
+    conference,
+    args.subject,
+    `${htmlContent ?? ''}${args.appendHtml ?? ''}${late?.html ?? ''}`,
   )
 
   const from = resolveConferenceFrom(conference, {
