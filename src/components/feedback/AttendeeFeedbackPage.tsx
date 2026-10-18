@@ -138,7 +138,7 @@ function PageState({
       return (
         <>
           <TalkHeading talk={page.talk} />
-          <Thanks level={level} answer={answer} />
+          <Thanks level={level} answer={answer} announce={announce} />
         </>
       )
     }
@@ -296,11 +296,14 @@ function AnswerForm({
 function Thanks({
   level: Heading,
   answer,
+  announce,
 }: {
   level: 'h1' | 'h2'
   answer: (typeof ANSWERS)[number] | undefined
+  /** Take focus on mount: the thank-you replaced the buttons after a tap. */
+  announce: boolean
 }) {
-  const heading = useFocusOnMount(true)
+  const heading = useFocusOnMount(announce)
   const Icon = answer?.Icon ?? FaceSmileIcon
   return (
     <div className="flex flex-col items-center text-center">
@@ -310,8 +313,8 @@ function Thanks({
       />
       <Heading
         ref={heading}
-        tabIndex={-1}
-        className="mt-4 text-lg font-semibold text-balance outline-none"
+        tabIndex={announce ? -1 : undefined}
+        className="mt-4 text-lg font-semibold text-balance focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
       >
         Thanks!
       </Heading>
@@ -366,7 +369,7 @@ function Notice({
       <Heading
         ref={heading}
         tabIndex={announce ? -1 : undefined}
-        className="mt-4 text-lg font-semibold text-balance outline-none"
+        className="mt-4 text-lg font-semibold text-balance focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
       >
         {title}
       </Heading>
