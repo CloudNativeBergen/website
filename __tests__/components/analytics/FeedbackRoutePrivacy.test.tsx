@@ -66,16 +66,24 @@ describe('HiddenOnFeedbackPage', () => {
 })
 
 describe('VercelInsights', () => {
-  it('hands both Vercel scripts a beforeSend that removes the code', () => {
+  it('redacts the code from Vercel Analytics page views', () => {
     render(<VercelInsights />)
+    const { beforeSend } = h.analyticsProps[0]
+    expect(beforeSend?.({ url: 'https://a.dev/f/k7m2qx?x=1' })).toEqual({
+      url: 'https://a.dev/f/[code]',
+    })
+    expect(beforeSend?.({ url: 'https://a.dev/program' })).toEqual({
+      url: 'https://a.dev/program',
+    })
+  })
 
-    for (const props of [h.analyticsProps[0], h.speedProps[0]]) {
-      expect(props.beforeSend?.({ url: 'https://a.dev/f/k7m2qx?x=1' })).toEqual(
-        { url: 'https://a.dev/f/[code]' },
-      )
-      expect(props.beforeSend?.({ url: 'https://a.dev/program' })).toEqual({
-        url: 'https://a.dev/program',
-      })
-    }
+  it('sends no Speed Insights metric from the attendee page', () => {
+    // Its script ignores a redacted `route` (see `dropFeedbackVitals`).
+    render(<VercelInsights />)
+    const { beforeSend } = h.speedProps[0]
+    expect(beforeSend?.({ url: 'https://a.dev/f/%6b7m2qx' })).toBeNull()
+    expect(beforeSend?.({ url: 'https://a.dev/program' })).toEqual({
+      url: 'https://a.dev/program',
+    })
   })
 })

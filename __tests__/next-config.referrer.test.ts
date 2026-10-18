@@ -17,6 +17,14 @@ describe('next.config rewrites', () => {
       destination: '/f/:code',
     })
   })
+
+  it('serves a Feedback Code URL with extra segments from the attendee page, never the 404', async () => {
+    const rewrites = await config.rewrites?.()
+    expect(Array.isArray(rewrites) ? rewrites : []).toContainEqual({
+      source: '/f/:code/:rest+',
+      destination: '/f/:code',
+    })
+  })
 })
 
 describe('next.config headers', () => {

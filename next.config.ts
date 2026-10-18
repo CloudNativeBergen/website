@@ -91,6 +91,9 @@ const config: NextConfig = {
       // also matches `/f/<code>` and rewrites it to itself. A REWRITE, never a
       // redirect: a redirect matching its own destination would loop.
       { source: '/F/:code', destination: '/f/:code' },
+      // Extra segments after a code (`/f/k7m2qx/oops`) would also reach the
+      // not-found page; they get the session's page instead.
+      { source: '/f/:code/:rest+', destination: '/f/:code' },
     ]
   },
   // PostHog's API paths carry trailing slashes (`/e/`, `/flags/`); the

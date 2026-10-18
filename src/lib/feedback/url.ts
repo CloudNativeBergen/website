@@ -30,28 +30,30 @@ export function isFeedbackPath(pathname: string | null | undefined): boolean {
 }
 
 /**
- * Vercel Analytics' and Speed Insights' `beforeSend` (spec §7.1): the path of
- * the attendee page IS the Feedback Code, so it is replaced, and the query
- * and fragment go with it. Speed Insights' `route` is replaced too: it is
- * built from the raw path, so a percent-encoded code (`/f/%6b7m2qx`, which
- * still resolves) survives its own parameter matching. Every other URL and
- * route passes through untouched.
+ * Vercel Analytics' `beforeSend` (spec §7.1): the path of the attendee page
+ * IS the Feedback Code, so it is replaced, and the query and fragment go with
+ * it. Every other URL passes through untouched.
  */
-export function redactFeedbackCode<
-  T extends { url: string; route?: string | null },
->(event: T): T {
-  const redacted =
-    event.route && isFeedbackPath(event.route)
-      ? { ...event, route: '/f/[code]' }
-      : event
+export function redactFeedbackCode<T extends { url: string }>(event: T): T {
   let url: URL
   try {
     url = new URL(event.url)
   } catch {
-    return isFeedbackPath(event.url)
-      ? { ...redacted, url: '/f/[code]' }
-      : redacted
+    return isFeedbackPath(event.url) ? { ...event, url: '/f/[code]' } : event
   }
-  if (!isFeedbackPath(url.pathname)) return redacted
-  return { ...redacted, url: `${url.origin}/f/[code]` }
+  if (!isFeedbackPath(url.pathname)) return event
+  return { ...event, url: `${url.origin}/f/[code]` }
+}
+
+/**
+ * Speed Insights' `beforeSend`: no metric at all from the attendee page.
+ * Redacting is not enough there. Its script copies back only the returned
+ * `url` and keeps its own `route`, built from the raw path, so a
+ * percent-encoded code (`/f/%6b7m2qx`, which still resolves) would be sent
+ * as the route. A dropped metric (`null`) is never sent.
+ */
+export function dropFeedbackVitals<T extends { url: string }>(
+  event: T,
+): T | null {
+  return redactFeedbackCode(event).url === event.url ? event : null
 }

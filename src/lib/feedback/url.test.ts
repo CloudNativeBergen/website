@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isFeedbackPath, redactFeedbackCode } from './url'
+import { dropFeedbackVitals, isFeedbackPath, redactFeedbackCode } from './url'
 
 describe('isFeedbackPath', () => {
   it('is the /f segment and everything under it', () => {
@@ -51,27 +51,6 @@ describe('redactFeedbackCode — no code reaches Vercel Analytics (§7.1)', () =
     })
   })
 
-  it('redacts the route too: Speed Insights builds it from the raw path', () => {
-    // `/f/%6b7m2qx` resolves (Next decodes the param), but Speed Insights
-    // matches the DECODED code against the ENCODED path, fails, and reports
-    // the path itself as the route.
-    expect(
-      redactFeedbackCode({
-        type: 'vital',
-        url: 'https://a.dev/f/%6b7m2qx',
-        route: '/f/%6b7m2qx',
-      }),
-    ).toEqual({
-      type: 'vital',
-      url: 'https://a.dev/f/[code]',
-      route: '/f/[code]',
-    })
-    // Any other route is left alone.
-    expect(
-      redactFeedbackCode({ url: 'https://a.dev/program', route: '/program' }),
-    ).toEqual({ url: 'https://a.dev/program', route: '/program' })
-  })
-
   it('leaves every other URL exactly as it was', () => {
     for (const url of [
       'https://a.dev/program?day=2',
@@ -94,5 +73,42 @@ describe('redactFeedbackCode — no code reaches Vercel Analytics (§7.1)', () =
     })
     // ...and leaves any other one alone.
     expect(redactFeedbackCode({ url: '/program' })).toEqual({ url: '/program' })
+  })
+})
+
+describe('dropFeedbackVitals — no Speed Insights metric from /f (§7.1)', () => {
+  /**
+   * How `/_vercel/speed-insights/script.js` 0.1.3 applies `beforeSend`
+   * (verbatim from the served script): it copies back the returned `url` ONLY
+   * and keeps its own `route`, which it builds from the raw path, so
+   * `/f/%6b7m2qx` would report the code as its route whatever `beforeSend`
+   * returned for it. Dropping the metric is the only redaction that works.
+   */
+  const send = (
+    beforeSend: typeof dropFeedbackVitals,
+    metrics: { href: string; route: string }[],
+  ) =>
+    metrics
+      .map((e) => {
+        const n = beforeSend({ type: 'vital', url: e.href, route: e.route })
+        return n ? { ...e, href: n.url } : null
+      })
+      .filter((e) => e !== null)
+
+  it('sends nothing at all from the attendee page, however the URL is spelled', () => {
+    expect(
+      send(dropFeedbackVitals, [
+        { href: 'https://a.dev/f/k7m2qx', route: '/f/[code]' },
+        { href: 'https://a.dev/f/%6b7m2qx', route: '/f/%6b7m2qx' },
+        { href: 'https://a.dev/F/K7M2QX', route: '/F/[code]' },
+        { href: 'https://a.dev/f/k7m2qx?x=1#y', route: '/f/[code]' },
+      ]),
+    ).toEqual([])
+  })
+
+  it('passes every other page through untouched', () => {
+    const program = { href: 'https://a.dev/program', route: '/program' }
+    expect(send(dropFeedbackVitals, [program])).toEqual([program])
+    expect(dropFeedbackVitals({ type: 'vital', url: '/f/k7m2qx' })).toBeNull()
   })
 })

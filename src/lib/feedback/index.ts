@@ -9,5 +9,6 @@ export {
   ATTENDEE_PAGE_LIVE,
   feedbackCodeUrl,
   isFeedbackPath,
+  dropFeedbackVitals,
   redactFeedbackCode,
 } from './url'
