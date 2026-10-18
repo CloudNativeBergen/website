@@ -51,6 +51,16 @@ interface TitoRelease {
   end_at?: string | null
 }
 
+const TITO_CANCELLED_STATES = new Set([
+  'void',
+  'voided',
+  'cancelled',
+  'customer_cancelled',
+  'refunded',
+  'payment_declined',
+  'errored',
+])
+
 interface TitoTicket {
   id: number
   registration_id?: number | null
@@ -286,16 +296,8 @@ export class TitoProvider implements TicketingProvider {
       const ticketState = t.state?.toLowerCase()
       const regState = t.registration?.state?.toLowerCase()
       const isCancelled =
-        ticketState === 'void' ||
-        ticketState === 'voided' ||
-        ticketState === 'cancelled' ||
-        ticketState === 'refunded' ||
-        regState === 'cancelled' ||
-        regState === 'customer_cancelled' ||
-        regState === 'refunded' ||
-        regState === 'void' ||
-        regState === 'payment_declined' ||
-        regState === 'errored'
+        (ticketState != null && TITO_CANCELLED_STATES.has(ticketState)) ||
+        (regState != null && TITO_CANCELLED_STATES.has(regState))
       if (isCancelled) continue
       tickets.push(this.mapTicket(t))
     }

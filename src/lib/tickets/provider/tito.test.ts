@@ -434,15 +434,26 @@ describe('TitoProvider — fetchEventTickets', () => {
           { id: 4, email: 'ticket-refunded@example.com', state: 'refunded' },
           {
             id: 5,
+            email: 'ticket-customer-cancelled@example.com',
+            state: 'customer_cancelled',
+          },
+          {
+            id: 6,
             email: 'reg-cancelled@example.com',
             state: 'complete',
             registration: { state: 'cancelled' },
           },
           {
-            id: 6,
+            id: 7,
             email: 'reg-refunded@example.com',
             state: 'complete',
             registration: { state: 'refunded' },
+          },
+          {
+            id: 8,
+            email: 'reg-voided@example.com',
+            state: 'complete',
+            registration: { state: 'voided' },
           },
         ],
         meta: { next_page: null },
