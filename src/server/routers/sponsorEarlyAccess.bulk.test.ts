@@ -77,6 +77,8 @@ vi.mock('@/lib/email/config', async (importOriginal) => ({
 import {
   BULK_MAX_SENDS,
   BULK_TIME_BUDGET_MS,
+  EARLY_ACCESS_PREVIEW_TOKEN,
+  previewEarlyAccessBulkEmail,
   sendEarlyAccessBulk,
 } from './sponsorEarlyAccess'
 
@@ -296,5 +298,65 @@ describe('sendEarlyAccessBulk', () => {
     h.store!.reset([...BASE, ...many])
     const result = await bulk()
     expect(result.remainingIds).toEqual(['sfc-25', 'sfc-26'])
+  })
+})
+
+describe('previewEarlyAccessBulkEmail', () => {
+  const preview = () =>
+    previewEarlyAccessBulkEmail({
+      conference: conference() as never,
+      domain: MAIN_HOST,
+      onlyUnsent: true,
+    })
+
+  it('writes nothing, and shows the email a send then sends', async () => {
+    const shown = await preview()
+    expect(shown).toMatchObject({
+      sponsorName: 'Sponsor sfc-a',
+      placeholderLink: true,
+      subject: 'Workshop early access: Cloud Native Days Bergen',
+    })
+    expect(shown!.html).toContain(EARLY_ACCESS_PREVIEW_TOKEN)
+    expect(h.store!.commits).toHaveLength(0)
+    expect(h.send).not.toHaveBeenCalled()
+
+    await bulk({ sponsorIds: ['sfc-a'] })
+    const [email] = h.send.mock.calls[0]
+    expect(email.subject).toBe(shown!.subject)
+    // The same email, but for the address of the link the send created.
+    const url = email.html.match(/\/workshop\/early-access\/([^"<\s&]+)/)
+    expect(url).not.toBeNull()
+    expect(email.html.replaceAll(url![1], EARLY_ACCESS_PREVIEW_TOKEN)).toBe(
+      shown!.html,
+    )
+
+    // Now the sponsor has a link: the next preview shows it, not a placeholder.
+    h.store!.reset(h.store!.all().filter((d) => d._type !== 'sponsorActivity'))
+    const again = await preview()
+    expect(again!.placeholderLink).toBe(false)
+    expect(again!.html).toBe(email.html)
+  })
+
+  it('answers null when no sponsor would be mailed', async () => {
+    h.store!.reset(BASE)
+    expect(await preview()).toBeNull()
+  })
+
+  it('skips a first sponsor with no default recipient', async () => {
+    h.store!.reset([
+      ...BASE,
+      ...sponsor('sfc-a', { contactPersons: [] }),
+      ...sponsor('sfc-b'),
+    ])
+    expect(await preview()).toMatchObject({ sponsorName: 'Sponsor sfc-b' })
+  })
+
+  it('answers null when no sponsor has a default recipient', async () => {
+    h.store!.reset([
+      ...BASE,
+      ...sponsor('sfc-a', { contactPersons: [] }),
+      ...sponsor('sfc-b', { contactPersons: [] }),
+    ])
+    expect(await preview()).toBeNull()
   })
 })

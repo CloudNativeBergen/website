@@ -31,21 +31,30 @@ const NO_WINDOW_HERE =
  */
 export function WorkshopEarlyAccessBulkButton() {
   const { showNotification } = useNotification()
+  const utils = api.useUtils()
   const [confirming, setConfirming] = useState(false)
   const [summary, setSummary] = useState<EarlyAccessBulkResult | null>(null)
   const preview = api.workshop.admin.earlyAccessBulkPreview.useQuery({
     onlyUnsent: true,
   })
+  const [showEmail, setShowEmail] = useState(false)
+  const email = api.workshop.admin.earlyAccessBulkEmailPreview.useQuery(
+    { onlyUnsent: true },
+    { enabled: confirming && showEmail, staleTime: 0 },
+  )
 
   const send = api.workshop.admin.sendEarlyAccessBulk.useMutation({
     onSuccess: (result) => {
       setConfirming(false)
       setSummary(result)
       void preview.refetch()
+      // The next sponsor in line has changed; reload the email when shown.
+      void utils.workshop.admin.earlyAccessBulkEmailPreview.invalidate()
     },
     onError: (error) => {
       setConfirming(false)
       void preview.refetch()
+      void utils.workshop.admin.earlyAccessBulkEmailPreview.invalidate()
       const refused =
         error.data?.code === 'PRECONDITION_FAILED' ||
         error.data?.code === 'BAD_REQUEST'
@@ -148,14 +157,58 @@ export function WorkshopEarlyAccessBulkButton() {
 
       <ConfirmationModal
         isOpen={confirming}
-        onClose={() => setConfirming(false)}
+        onClose={() => {
+          setConfirming(false)
+          setShowEmail(false)
+        }}
         onConfirm={() => send.mutate({ onlyUnsent: true })}
         isLoading={send.isPending}
         variant="info"
         title="Send early access to sponsors?"
         message={`${sponsors(count)} with a won deal that have not had it get the workshop early-access email, with the standard text and their link, sent to their primary contact. Sponsors without a primary contact are skipped. At most 25 sponsors are sent per run; Run again continues with the rest.`}
         confirmButtonText="Send"
-      />
+      >
+        <AdminButton
+          variant="secondary"
+          disabled={count === 0}
+          aria-expanded={showEmail}
+          onClick={() => setShowEmail((v) => !v)}
+        >
+          {showEmail ? 'Hide email' : 'Preview email'}
+        </AdminButton>
+        {showEmail && (
+          <div className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+            {email.isPending ? (
+              <div className="h-48 animate-pulse rounded-md bg-gray-200 dark:bg-gray-700" />
+            ) : email.error ? (
+              <p>Could not load the preview: {email.error.message}</p>
+            ) : !email.data ? (
+              <p>No sponsor would be sent the email.</p>
+            ) : (
+              <>
+                <p>
+                  As sent to{' '}
+                  <span className="font-medium">{email.data.sponsorName}</span>.
+                  Subject:{' '}
+                  <span className="font-medium">{email.data.subject}</span>
+                </p>
+                {email.data.placeholderLink && (
+                  <p>
+                    This sponsor has no link yet. The address shown is a
+                    placeholder; the send creates the real link.
+                  </p>
+                )}
+                <iframe
+                  title={`Email preview: ${email.data.subject}`}
+                  sandbox=""
+                  srcDoc={email.data.html}
+                  className="h-96 w-full rounded-md border border-gray-200 bg-white dark:border-gray-700"
+                />
+              </>
+            )}
+          </div>
+        )}
+      </ConfirmationModal>
     </div>
   )
 }
