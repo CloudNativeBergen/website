@@ -110,5 +110,14 @@ describe('dropFeedbackVitals — no Speed Insights metric from /f (§7.1)', () =
     const program = { href: 'https://a.dev/program', route: '/program' }
     expect(send(dropFeedbackVitals, [program])).toEqual([program])
     expect(dropFeedbackVitals({ type: 'vital', url: '/f/k7m2qx' })).toBeNull()
+    // A metric captured just after a client-side exit from `/f` can carry
+    // the new page's url and the old page's raw-path route.
+    expect(
+      dropFeedbackVitals({
+        type: 'vital',
+        url: 'https://a.dev/program',
+        route: '/f/%6b7m2qx',
+      }),
+    ).toBeNull()
   })
 })

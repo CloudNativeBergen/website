@@ -1436,9 +1436,9 @@ describe('proposal router', () => {
         .mock.calls.filter(([tag]) => tag.startsWith('sanity:feedback-code'))
     beforeEach(() => vi.mocked(revalidateTag).mockClear())
 
-    it('a status change expires the index of the talk’s conference with expire 0', async () => {
+    it('withdrawing a confirmed talk expires the index of the talk’s conference with expire 0', async () => {
       vi.mocked(getProposalSanity).mockResolvedValue({
-        proposal: mockProposal as any,
+        proposal: { ...mockProposal, status: Status.confirmed } as any,
         proposalError: null,
       })
       vi.mocked(updateProposalStatus).mockResolvedValue({
@@ -1459,6 +1459,32 @@ describe('proposal router', () => {
       expect(expired()).toEqual([
         [feedbackCodeIndexTag('conf-of-the-talk'), { expire: 0 }],
       ])
+    })
+
+    it('a change that never touches "confirmed" leaves it alone', async () => {
+      // Only confirmed talks are in the index; CFP-time transitions
+      // (submit, unsubmit, accept, reject) must not flush it.
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any, // submitted
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {
+          ...mockProposal,
+          status: Status.withdrawn,
+          conference: { _type: 'reference', _ref: 'conf-of-the-talk' },
+        } as any,
+        err: null,
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.withdraw,
+        reason: 'I can no longer attend the conference.',
+      })
+
+      expect(updateProposalStatus).toHaveBeenCalled()
+      expect(expired()).toEqual([])
     })
 
     it('a newly confirmed talk expires it too, so its code starts resolving', async () => {

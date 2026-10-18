@@ -1703,14 +1703,19 @@ export const proposalRouter = router({
 
         // A talk that stops being confirmed must stop resolving its Feedback
         // Code at once, and a newly confirmed one must start (speaker feedback
-        // spec §5.1). The TALK's conference: the owner arm admits a proposal
-        // of another tenant.
+        // spec §5.1). Only confirmed talks are in the index, so no other
+        // transition flushes it. The TALK's conference: the owner arm admits
+        // a proposal of another tenant.
         const talkConference = updatedProposal.conference
         const talkConferenceId =
           talkConference && '_ref' in talkConference
             ? talkConference._ref
             : talkConference?._id
-        if (talkConferenceId) expireFeedbackCodeIndex(talkConferenceId)
+        const touchesConfirmed =
+          proposal.status === Status.confirmed || status === Status.confirmed
+        if (talkConferenceId && touchesConfirmed) {
+          expireFeedbackCodeIndex(talkConferenceId)
+        }
 
         // Publish status change event for notifications
         const statusChangeEvent: ProposalStatusChangeEvent = {

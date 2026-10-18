@@ -29,7 +29,7 @@ vi.mock('@vercel/speed-insights/next', () => ({
   },
 }))
 
-import { HiddenOnFeedbackPage, VercelInsights } from '@/components/analytics'
+import { VercelInsights } from '@/components/analytics'
 
 afterEach(cleanup)
 beforeEach(() => {
@@ -39,29 +39,44 @@ beforeEach(() => {
 })
 
 describe('HiddenOnFeedbackPage', () => {
-  it('renders nothing of what it wraps on the attendee page, in any case', () => {
+  // The gate latches per document, so every test loads a fresh module.
+  async function gate() {
+    vi.resetModules()
+    return (await import('@/components/analytics/HiddenOnFeedbackPage'))
+      .HiddenOnFeedbackPage
+  }
+
+  it('renders nothing of what it wraps on the attendee page, in any case', async () => {
     // `/F/K7M2QX` (caps lock) is rewritten to the page; the browser path
     // `usePathname` reports keeps the capitals.
-    h.pathname = '/F/K7M2QX'
-    render(
-      <HiddenOnFeedbackPage>pirsch and install prompt</HiddenOnFeedbackPage>,
-    )
-    expect(screen.queryByText('pirsch and install prompt')).toBeNull()
-    cleanup()
-    h.pathname = '/f/k7m2qx'
-    render(
-      <HiddenOnFeedbackPage>pirsch and install prompt</HiddenOnFeedbackPage>,
-    )
-    expect(screen.queryByText('pirsch and install prompt')).toBeNull()
+    for (const path of ['/F/K7M2QX', '/f/k7m2qx']) {
+      const Gate = await gate()
+      h.pathname = path
+      render(<Gate>pirsch and install prompt</Gate>)
+      expect(screen.queryByText('pirsch and install prompt')).toBeNull()
+      cleanup()
+    }
   })
 
-  it('renders it everywhere else', () => {
+  it('renders it everywhere else', async () => {
+    const Gate = await gate()
     for (const path of ['/', '/faq', '/program']) {
       h.pathname = path
-      render(<HiddenOnFeedbackPage>wrapped</HiddenOnFeedbackPage>)
+      render(<Gate>wrapped</Gate>)
       expect(screen.getByText('wrapped')).toBeInTheDocument()
       cleanup()
     }
+  })
+
+  it('stays shut after a client-side navigation away from the attendee page', async () => {
+    // A push-notification tap can `router.push` out of `/f/<code>`. Pirsch
+    // mounted on the next page would report the Back navigation to the code.
+    const Gate = await gate()
+    h.pathname = '/f/k7m2qx'
+    const { rerender } = render(<Gate>pirsch</Gate>)
+    h.pathname = '/notifications'
+    rerender(<Gate>pirsch</Gate>)
+    expect(screen.queryByText('pirsch')).toBeNull()
   })
 })
 

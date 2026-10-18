@@ -52,8 +52,11 @@ export function redactFeedbackCode<T extends { url: string }>(event: T): T {
  * percent-encoded code (`/f/%6b7m2qx`, which still resolves) would be sent
  * as the route. A dropped metric (`null`) is never sent.
  */
-export function dropFeedbackVitals<T extends { url: string }>(
-  event: T,
-): T | null {
+export function dropFeedbackVitals<
+  T extends { url: string; route?: string | null },
+>(event: T): T | null {
+  // The route too: a metric captured just after a client-side exit from
+  // `/f` can carry the next page's url and this page's raw-path route.
+  if (event.route && isFeedbackPath(event.route)) return null
   return redactFeedbackCode(event).url === event.url ? event : null
 }
