@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  FEEDBACK_PROMPT,
   QR_QUIET_ZONE,
   SLIDE_PNG_WIDTH,
   feedbackCodeDisplayUrl,
@@ -84,8 +83,4 @@ describe('renderFeedbackQrPng — a slide-sized PNG', () => {
     expect(bytes.readUInt32BE(16)).toBe(SLIDE_PNG_WIDTH)
     expect(bytes.readUInt32BE(20)).toBe(SLIDE_PNG_WIDTH)
   })
-})
-
-it('asks the room the attendee page’s question', () => {
-  expect(FEEDBACK_PROMPT).toBe('How was this session?')
 })

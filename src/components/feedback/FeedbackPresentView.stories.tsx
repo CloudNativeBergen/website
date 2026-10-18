@@ -53,9 +53,19 @@ export const Projector: Story = {
 
 export const Dark: Story = { ...Projector, globals: { theme: 'dark' } }
 
+/** The URL must stay on one line at phone width, or it reads as two. */
 export const Phone: Story = {
-  ...Projector,
   parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async (context) => {
+    await Projector.play?.(context)
+    const url = screen.getByText('2026.cloudnativedays.no/f/k7m2qx')
+    const { fontSize } = getComputedStyle(url)
+    // One line of `leading-tight` is 1.25 em; two would be 2.5 em.
+    expect(url.getBoundingClientRect().height).toBeLessThan(
+      1.5 * parseFloat(fontSize),
+    )
+    expect(url.scrollWidth).toBeLessThanOrEqual(url.clientWidth)
+  },
 }
 
 /** A URL no QR can hold: the screen says so instead of staying blank. */

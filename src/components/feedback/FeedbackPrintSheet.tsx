@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   FEEDBACK_PROMPT,
@@ -10,10 +10,10 @@ import { useFeedbackQrPng } from './useFeedbackQrPng'
 
 /**
  * The A4 sheet for the room (speaker feedback spec §9.2): the question, the
- * talk title, a large QR and the short URL. Styled inline and black on
- * white on purpose: it prints from whatever page it was opened on, in either
- * theme, and the global print stylesheet forces text black and hides inline
- * SVG, so the QR is an `<img>`.
+ * talk title, a large QR and the short URL. Black on white with no `dark:`
+ * variant on purpose: it prints from whatever page it was opened on, in
+ * either theme. The global print stylesheet hides inline SVG, so the QR is
+ * an `<img>`.
  */
 export function FeedbackPrintSheet({
   title,
@@ -26,63 +26,22 @@ export function FeedbackPrintSheet({
   qrSrc: string
   onQrLoad?: () => void
 }) {
-  const text: CSSProperties = {
-    color: '#000',
-    fontFamily: 'system-ui, sans-serif',
-    margin: 0,
-    textAlign: 'center',
-  }
   return (
-    <div
-      style={{
-        background: '#fff',
-        boxSizing: 'border-box',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '8mm',
-        padding: '12mm',
-        width: '100%',
-        minHeight: '100%',
-        breakInside: 'avoid',
-      }}
-    >
-      <h1 style={{ ...text, fontSize: '36pt', lineHeight: 1.15 }}>
-        {FEEDBACK_PROMPT}
-      </h1>
-      <h2
-        style={{
-          ...text,
-          fontSize: '18pt',
-          fontWeight: 500,
-          lineHeight: 1.3,
-          overflowWrap: 'anywhere',
-        }}
-      >
+    <div className="flex min-h-full w-full break-inside-avoid flex-col items-center gap-[8mm] bg-white p-[12mm] text-center font-sans text-black">
+      <h1 className="text-[36pt] leading-[1.15]">{FEEDBACK_PROMPT}</h1>
+      <h2 className="text-[18pt] leading-[1.3] font-medium [overflow-wrap:anywhere]">
         {title}
       </h2>
       <img
         src={qrSrc}
         onLoad={onQrLoad}
         alt="QR code for the feedback link"
-        style={{
-          width: '150mm',
-          maxWidth: '100%',
-          height: 'auto',
-          imageRendering: 'pixelated',
-        }}
+        className="h-auto w-[150mm] max-w-full [image-rendering:pixelated]"
       />
-      <p
-        style={{
-          ...text,
-          fontFamily: 'ui-monospace, monospace',
-          fontSize: '20pt',
-          overflowWrap: 'anywhere',
-        }}
-      >
+      <p className="font-mono text-[20pt] [overflow-wrap:anywhere]">
         {feedbackCodeDisplayUrl(url)}
       </p>
-      <p style={{ ...text, fontSize: '13pt', color: '#444' }}>
+      <p className="text-[13pt] text-gray-600">
         Scan to answer in one tap. It&apos;s anonymous.
       </p>
     </div>

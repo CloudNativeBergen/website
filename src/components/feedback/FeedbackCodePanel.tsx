@@ -18,6 +18,7 @@ import {
 import { formatRegistrationInstant } from '@/lib/time'
 import { FeedbackPresentView } from './FeedbackPresentView'
 import { FeedbackPrintSheetPortal } from './FeedbackPrintSheet'
+import { useFeedbackQrPng } from './useFeedbackQrPng'
 
 const BUTTON =
   'inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
@@ -46,25 +47,11 @@ function codeState(window: FeedbackWindow): { text: string; live: boolean } {
 }
 
 function QrCode({ url }: { url: string }) {
-  // Keyed by the URL it was drawn for, so a new URL never shows the old QR
-  // or the old failure, without resetting state inside the effect.
-  const [drawn, setDrawn] = useState<{ url: string; src: string | null }>()
-  useEffect(() => {
-    let cancelled = false
-    import('qrcode')
-      .then(({ default: QRCode }) =>
-        QRCode.toDataURL(url, { width: 352, margin: 1 }),
-      )
-      .then((src) => !cancelled && setDrawn({ url, src }))
-      .catch(() => !cancelled && setDrawn({ url, src: null }))
-    return () => {
-      cancelled = true
-    }
-  }, [url])
-  const src = drawn?.url === url ? drawn.src : undefined
-  const failed = src === null
+  // Drawn exactly as the downloads are, quiet zone and all, so the speaker
+  // sees what they will get.
+  const { src, failed } = useFeedbackQrPng(url, 352)
   return (
-    <div className="size-44 shrink-0 rounded-md bg-white p-1 ring-1 ring-gray-200 dark:ring-gray-700">
+    <div className="size-44 shrink-0 rounded-md bg-white ring-1 ring-gray-200 dark:ring-gray-700">
       {src ? (
         <img
           src={src}
@@ -154,54 +141,34 @@ function CodeActions({ url, title }: { url: string; title: string }) {
   const stopPresenting = useCallback(() => setPresenting(false), [])
   const stopPrinting = useCallback(() => setPrinting(false), [])
 
-  const download = (
-    ext: 'png' | 'svg',
-    render: () => Promise<string>,
-    toHref: (file: string) => string,
-  ) =>
-    render()
-      .then((file) => {
-        setFailed(false)
-        const href = toHref(file)
-        saveFile(feedbackCodeFileName(url, title, ext), href)
+  const save = (ext: 'png' | 'svg', href: string) => {
+    setFailed(false)
+    saveFile(feedbackCodeFileName(url, title, ext), href)
+  }
+  const downloadPng = () =>
+    renderFeedbackQrPng(url)
+      .then((dataUrl) => save('png', dataUrl))
+      .catch(fail)
+  const downloadSvg = () =>
+    renderFeedbackQrSvg(url)
+      .then((svg) => {
+        const href = URL.createObjectURL(
+          new Blob([svg], { type: 'image/svg+xml' }),
+        )
+        save('svg', href)
         // Safari reads the blob after the click returns: revoke it later.
-        if (href.startsWith('blob:')) {
-          setTimeout(() => URL.revokeObjectURL(href), 1000)
-        }
+        setTimeout(() => URL.revokeObjectURL(href), 1000)
       })
       .catch(fail)
 
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={BUTTON}
-          onClick={() =>
-            download(
-              'png',
-              () => renderFeedbackQrPng(url),
-              (file) => file,
-            )
-          }
-        >
+        <button type="button" className={BUTTON} onClick={downloadPng}>
           <PhotoIcon className="size-4" aria-hidden="true" />
           PNG for slides
         </button>
-        <button
-          type="button"
-          className={BUTTON}
-          onClick={() =>
-            download(
-              'svg',
-              () => renderFeedbackQrSvg(url),
-              (file) =>
-                URL.createObjectURL(
-                  new Blob([file], { type: 'image/svg+xml' }),
-                ),
-            )
-          }
-        >
+        <button type="button" className={BUTTON} onClick={downloadSvg}>
           <ArrowDownTrayIcon className="size-4" aria-hidden="true" />
           SVG
         </button>

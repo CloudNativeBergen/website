@@ -1,9 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, within } from 'storybook/test'
-import { FeedbackPrintSheet } from './FeedbackPrintSheet'
-
-/** The symbol the sheet shows, drawn once per story from the real renderer. */
 import { renderFeedbackQrPng } from '@/lib/feedback/code-assets'
+import { FeedbackPrintSheet } from './FeedbackPrintSheet'
 
 const URL = 'https://2026.cloudnativedays.no/f/k7m2qx'
 
@@ -21,16 +19,11 @@ const meta = {
     },
   },
   args: { title: 'Kubernetes: the hard parts', url: URL, qrSrc: '' },
+  /** The symbol the sheet shows, drawn once per story from the real renderer. */
   loaders: [async () => ({ qrSrc: await renderFeedbackQrPng(URL, 1024) })],
   render: (args, { loaded }) => (
-    <div
-      style={{
-        width: 'min(210mm, 100%)',
-        minHeight: '297mm',
-        margin: '0 auto',
-      }}
-    >
-      <FeedbackPrintSheet {...args} qrSrc={loaded.qrSrc as string} />
+    <div className="mx-auto min-h-[297mm] w-[min(210mm,100%)]">
+      <FeedbackPrintSheet {...args} qrSrc={loaded.qrSrc} />
     </div>
   ),
 } satisfies Meta<typeof FeedbackPrintSheet>
