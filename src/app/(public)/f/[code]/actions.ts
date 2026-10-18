@@ -8,7 +8,7 @@ import {
   deviceCookie,
   submitFeedback,
   type AttendeeFeedbackState,
-  type SubmitOutcome,
+  type FeedbackConference,
 } from '@/lib/feedback/server'
 
 /**
@@ -25,23 +25,10 @@ export async function submitFeedbackAnswer(
   code: string,
   colour: string,
   comment?: string,
-): Promise<SubmitOutcome> {
-  const resolution = await getConferenceForCurrentDomain()
-  if (isConferenceUnavailable(resolution)) return { state: 'unavailable' }
-  if (isUnknownHost(resolution)) return { state: 'unknown' }
-
-  const store = await cookies()
-  const { name, options } = deviceCookie()
-  const { outcome, cookie } = await submitFeedback({
-    conference: resolution.conference,
-    code,
-    colour,
-    comment,
-    cookie: store.get(name)?.value,
-    now: new Date(),
-  })
-  if (cookie) store.set(name, cookie, options)
-  return outcome
+): Promise<AttendeeFeedbackState> {
+  return withDevice((conference, cookie, now) =>
+    submitFeedback({ conference, code, colour, comment, cookie, now }),
+  )
 }
 
 /**
@@ -53,18 +40,33 @@ export async function submitFeedbackAnswer(
 export async function deleteFeedbackAnswer(
   code: string,
 ): Promise<AttendeeFeedbackState> {
+  return withDevice((conference, cookie, now) =>
+    deleteFeedback({ conference, code, cookie, now }),
+  )
+}
+
+/**
+ * The conference serving the Host and this device's cookie, around one
+ * action; the cookie the action hands back is set with the decided options.
+ */
+async function withDevice(
+  action: (
+    conference: FeedbackConference,
+    cookie: string | undefined,
+    now: Date,
+  ) => Promise<{ outcome: AttendeeFeedbackState; cookie?: string }>,
+): Promise<AttendeeFeedbackState> {
   const resolution = await getConferenceForCurrentDomain()
   if (isConferenceUnavailable(resolution)) return { state: 'unavailable' }
   if (isUnknownHost(resolution)) return { state: 'unknown' }
 
   const store = await cookies()
   const { name, options } = deviceCookie()
-  const { outcome, cookie } = await deleteFeedback({
-    conference: resolution.conference,
-    code,
-    cookie: store.get(name)?.value,
-    now: new Date(),
-  })
+  const { outcome, cookie } = await action(
+    resolution.conference,
+    store.get(name)?.value,
+    new Date(),
+  )
   if (cookie) store.set(name, cookie, options)
   return outcome
 }

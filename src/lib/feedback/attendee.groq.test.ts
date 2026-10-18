@@ -41,11 +41,15 @@ vi.mock('@/lib/sanity/client', () => ({
 import {
   FEEDBACK_CODE_INDEX_LIFE,
   feedbackCodeIndex,
-  resolveFeedbackPage,
+  resolveFeedbackTarget,
 } from './attendee'
 import { feedbackCodeIndexTag } from '@/lib/cache/tags'
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
+
+/** The page a code resolves to: what `/f/<code>` shows before the cookie. */
+const pageFor = async (...args: Parameters<typeof resolveFeedbackTarget>) =>
+  (await resolveFeedbackTarget(...args)).page
 
 const talk = (
   id: string,
@@ -131,9 +135,9 @@ beforeEach(() => {
   ]
 })
 
-describe('resolveFeedbackPage', () => {
+describe('resolveFeedbackTarget().page', () => {
   it('shows an open, public talk as Open with its title and speakers', async () => {
-    const page = await resolveFeedbackPage(CONF, 'k7m2qx', DURING)
+    const page = await pageFor(CONF, 'k7m2qx', DURING)
 
     expect(page).toEqual({
       state: 'open',
@@ -147,10 +151,10 @@ describe('resolveFeedbackPage', () => {
   })
 })
 
-describe('resolveFeedbackPage — Unknown reveals nothing', () => {
+describe('resolveFeedbackTarget().page — Unknown reveals nothing', () => {
   it('answers a malformed code with Unknown and NO read', async () => {
     for (const raw of ['', 'k7m2q', 'k7m2qxx', 'k7m2q0', '../x', 'K7M2Q!']) {
-      expect(await resolveFeedbackPage(CONF, raw, DURING)).toEqual({
+      expect(await pageFor(CONF, raw, DURING)).toEqual({
         state: 'unknown',
       })
     }
@@ -158,7 +162,7 @@ describe('resolveFeedbackPage — Unknown reveals nothing', () => {
   })
 
   it('accepts the code in any case, as the minter and index normalize', async () => {
-    const page = await resolveFeedbackPage(CONF, 'K7M2QX', DURING)
+    const page = await pageFor(CONF, 'K7M2QX', DURING)
     expect(page.state).toBe('open')
   })
 
@@ -169,8 +173,8 @@ describe('resolveFeedbackPage — Unknown reveals nothing', () => {
         slot('talk-foreign', '10:00', '10:40'),
       ]),
     )
-    const foreign = await resolveFeedbackPage(CONF, 'zzz234', DURING)
-    const never = await resolveFeedbackPage(CONF, 'nnnn23', DURING)
+    const foreign = await pageFor(CONF, 'zzz234', DURING)
+    const never = await pageFor(CONF, 'nnnn23', DURING)
 
     expect(foreign).toEqual({ state: 'unknown' })
     expect(foreign).toEqual(never)
@@ -183,8 +187,7 @@ describe('resolveFeedbackPage — Unknown reveals nothing', () => {
     }
     // And the foreign talk resolves on its own conference: the fixture is live.
     expect(
-      (await resolveFeedbackPage({ ...CONF, _id: 'conf-B' }, 'zzz234', DURING))
-        .state,
+      (await pageFor({ ...CONF, _id: 'conf-B' }, 'zzz234', DURING)).state,
     ).toBe('open')
   })
 
@@ -195,7 +198,7 @@ describe('resolveFeedbackPage — Unknown reveals nothing', () => {
         feedbackCode: 'abc234',
       }),
     )
-    expect(await resolveFeedbackPage(CONF, 'abc234', DURING)).toEqual({
+    expect(await pageFor(CONF, 'abc234', DURING)).toEqual({
       state: 'unknown',
     })
   })
@@ -205,25 +208,21 @@ describe('resolveFeedbackPage — Unknown reveals nothing', () => {
       talk('drafts.talk-new', 'conf-A', { feedbackCode: 'drft23' }),
       talk('versions.rel1.talk-new', 'conf-A', { feedbackCode: 'vers23' }),
     )
-    expect((await resolveFeedbackPage(CONF, 'drft23', DURING)).state).toBe(
-      'unknown',
-    )
-    expect((await resolveFeedbackPage(CONF, 'vers23', DURING)).state).toBe(
-      'unknown',
-    )
+    expect((await pageFor(CONF, 'drft23', DURING)).state).toBe('unknown')
+    expect((await pageFor(CONF, 'vers23', DURING)).state).toBe('unknown')
   })
 
   it('resolves a code two published talks hold to neither', async () => {
     h.dataset.push(talk('talk-dup', 'conf-A', { feedbackCode: 'k7m2qx' }))
-    expect(await resolveFeedbackPage(CONF, 'k7m2qx', DURING)).toEqual({
+    expect(await pageFor(CONF, 'k7m2qx', DURING)).toEqual({
       state: 'unknown',
     })
   })
 })
 
-describe('resolveFeedbackPage — "public" is computed per request', () => {
+describe('resolveFeedbackTarget().page — "public" is computed per request', () => {
   it('hides the title and speakers before the program is published', async () => {
-    const page = await resolveFeedbackPage(
+    const page = await pageFor(
       { ...CONF, programDate: '2026-10-27' },
       'k7m2qx',
       DURING,
@@ -233,17 +232,13 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
   })
 
   it('hides them when there is no program date at all', async () => {
-    const page = await resolveFeedbackPage(
-      { ...CONF, programDate: null },
-      'k7m2qx',
-      DURING,
-    )
+    const page = await pageFor({ ...CONF, programDate: null }, 'k7m2qx', DURING)
     expect(page.state).toBe('open')
     expect(page).toHaveProperty('talk', null)
   })
 
   it('shows a public talk before its session as Not yet open WITH its start time', async () => {
-    const page = await resolveFeedbackPage(
+    const page = await pageFor(
       CONF,
       'k7m2qx',
       new Date('2026-10-26T08:00:00.000Z'),
@@ -259,7 +254,7 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
   })
 
   it('never gives the start time of a talk that is not public', async () => {
-    const page = await resolveFeedbackPage(
+    const page = await pageFor(
       { ...CONF, programDate: '2026-10-27' },
       'k7m2qx',
       new Date('2026-10-26T08:00:00.000Z'),
@@ -277,7 +272,7 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
         slot('talk-open', '10:00', '10:40'),
       ]),
     )
-    expect(await resolveFeedbackPage(CONF, 'k7m2qx', DURING)).toEqual({
+    expect(await pageFor(CONF, 'k7m2qx', DURING)).toEqual({
       state: 'not-yet-open',
       talk: null,
       opensAt: null,
@@ -291,9 +286,7 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
         slot('talk-open', '10:00', '10:40'),
       ]),
     )
-    expect((await resolveFeedbackPage(CONF, 'k7m2qx', DURING)).state).toBe(
-      'open',
-    )
+    expect((await pageFor(CONF, 'k7m2qx', DURING)).state).toBe('open')
   })
 
   it('is Closed 24 hours after the last slot ends, across days', async () => {
@@ -305,20 +298,16 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
     // One window from the EARLIEST start to 24 h after the LATEST end:
     // before the first slot it is not yet open, during it already open.
     expect(
-      await resolveFeedbackPage(
-        CONF,
-        'k7m2qx',
-        new Date('2026-10-26T08:00:00.000Z'),
-      ),
+      await pageFor(CONF, 'k7m2qx', new Date('2026-10-26T08:00:00.000Z')),
     ).toMatchObject({
       state: 'not-yet-open',
       opensAt: '2026-10-26T09:00:00.000Z',
     })
-    expect(await resolveFeedbackPage(CONF, 'k7m2qx', DURING)).toMatchObject({
+    expect(await pageFor(CONF, 'k7m2qx', DURING)).toMatchObject({
       state: 'open',
       closesAt: '2026-10-28T14:40:00.000Z',
     })
-    const later = await resolveFeedbackPage(
+    const later = await pageFor(
       CONF,
       'k7m2qx',
       new Date('2026-10-28T14:39:00.000Z'),
@@ -328,11 +317,7 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
       closesAt: '2026-10-28T14:40:00.000Z',
     })
     expect(
-      await resolveFeedbackPage(
-        CONF,
-        'k7m2qx',
-        new Date('2026-10-28T14:40:00.000Z'),
-      ),
+      await pageFor(CONF, 'k7m2qx', new Date('2026-10-28T14:40:00.000Z')),
     ).toEqual({
       state: 'closed',
       talk: {
@@ -343,10 +328,10 @@ describe('resolveFeedbackPage — "public" is computed per request', () => {
   })
 })
 
-describe('resolveFeedbackPage — the request’s own clock', () => {
+describe('resolveFeedbackTarget().page — the request’s own clock', () => {
   it('judges "public" at `now`, not at the wall clock', async () => {
     // Published by `now`, not yet by the real clock: only `now` can show it.
-    const page = await resolveFeedbackPage(
+    const page = await pageFor(
       { ...CONF, programDate: '2099-01-01' },
       'k7m2qx',
       new Date('2099-06-01T00:00:00.000Z'),
@@ -358,7 +343,7 @@ describe('resolveFeedbackPage — the request’s own clock', () => {
   })
 })
 
-describe('resolveFeedbackPage — stored codes are normalized', () => {
+describe('resolveFeedbackTarget().page — stored codes are normalized', () => {
   it('resolves a code stored in uppercase (a Studio edit)', async () => {
     h.dataset.push(
       talk('talk-upper', 'conf-A', { feedbackCode: 'ABC234' }),
@@ -366,17 +351,17 @@ describe('resolveFeedbackPage — stored codes are normalized', () => {
         slot('talk-upper', '10:00', '10:40'),
       ]),
     )
-    expect(await resolveFeedbackPage(CONF, 'abc234', DURING)).toMatchObject({
+    expect(await pageFor(CONF, 'abc234', DURING)).toMatchObject({
       state: 'open',
       talk: { title: 'Title of talk-upper' },
     })
   })
 })
 
-describe('resolveFeedbackPage — Closed never reveals a non-public talk', () => {
+describe('resolveFeedbackTarget().page — Closed never reveals a non-public talk', () => {
   it('withholds the title and speakers after the window when the program was never published', async () => {
     expect(
-      await resolveFeedbackPage(
+      await pageFor(
         { ...CONF, programDate: null },
         'k7m2qx',
         new Date('2026-10-28T14:40:00.000Z'),

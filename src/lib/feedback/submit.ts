@@ -31,19 +31,14 @@ import { resolveFeedbackTarget, type FeedbackConference } from './attendee'
 import { expireFeedbackResponse } from './cache'
 import { isFeedbackColour } from './colour'
 import { feedbackResponseId, readDeviceCookie, recordAnswer } from './device'
+import { MAX_COMMENT_LENGTH } from './comment'
 import { attendeeState, type AttendeeFeedbackState } from './page'
-
-/** The comment's limit (§7.2), after trimming. The schema holds the same. */
-export const MAX_COMMENT_LENGTH = 1000
-
-/** What the attendee sees after the tap: Answered, or the code's state now. */
-export type SubmitOutcome = AttendeeFeedbackState
 
 /**
  * The comment as it will be stored: `null` for none or blank, `undefined`
  * when it is not a comment at all (not a string, or too long once trimmed).
  */
-export function normalizeComment(comment: unknown): string | null | undefined {
+function normalizeComment(comment: unknown): string | null | undefined {
   if (comment === undefined || comment === null) return null
   if (typeof comment !== 'string') return undefined
   const trimmed = comment.trim()
@@ -76,19 +71,19 @@ export async function submitFeedback({
   comment?: unknown
   cookie: string | undefined
   now: Date
-}): Promise<{ outcome: SubmitOutcome; cookie?: string }> {
+}): Promise<{ outcome: AttendeeFeedbackState; cookie?: string }> {
   const { page, target } = await resolveFeedbackTarget(conference, rawCode, now)
   if (!target) return { outcome: page }
+  // Reading the cookie is no fetch, so the order of §7.4 holds; an invalid
+  // one is "no response from this device", never an error.
+  const device = readDeviceCookie(cookie, now)
+  // Closed or Not yet open: with Delete my answer when the cookie lists the talk.
   if (page.state !== 'open') {
-    // Closed or Not yet open: with Delete my answer when the cookie lists
-    // the talk. Reading the cookie is no fetch; the order of §7.4 holds.
-    const device = readDeviceCookie(cookie, now)
     return { outcome: attendeeState(page, device, target.talkId) }
   }
   if (!isFeedbackColour(colour)) return { outcome: page }
   const comment = normalizeComment(rawComment)
   if (comment === undefined) return { outcome: page }
-  const device = readDeviceCookie(cookie, now)
 
   let talk: TalkDoc | undefined
   try {

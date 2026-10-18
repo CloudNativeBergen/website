@@ -172,11 +172,16 @@ export const AnsweredOnLoad: Story = {
   },
 }
 
-/** Change answer: the three buttons return, the current one pressed; a tap is Submit with the comment. */
+/** Change answer: the three buttons return, the current one pressed; a tap is Submit with the SAVED comment, and an unsent draft stays a draft. */
 export const ChangeAnswer: Story = {
   args: { page: answeredPage },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
+    // An unsent edit in the box must not ride along with a colour change:
+    // emptied, it would silently delete the saved comment.
+    const box = canvas.getByLabelText('Comment for the speaker (optional)')
+    await userEvent.clear(box)
+    await userEvent.type(box, 'draft, not sent')
     await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
     await expect(
       canvas.getByRole('button', { name: 'Loved it' }),
@@ -189,6 +194,7 @@ export const ChangeAnswer: Story = {
       'red',
       'Great talk, the live demo made it click.',
     )
+    await expect(args.submit).not.toHaveBeenCalledWith('red', 'draft, not sent')
     const thanks = await canvas.findByRole('heading', {
       level: 2,
       name: 'Thanks!',
@@ -198,6 +204,11 @@ export const ChangeAnswer: Story = {
         'You answered Not for me.',
       ),
     )
+    // The draft is still in the box, still unsent.
+    await expect(box).toHaveValue('draft, not sent')
+    await expect(
+      canvas.getByRole('button', { name: 'Update comment' }),
+    ).toBeInTheDocument()
     // The grid is gone again, and the heading names the new answer.
     await expect(canvas.queryByRole('button', { name: 'Loved it' })).toBeNull()
     await waitFor(() => expect(thanks).toHaveFocus())

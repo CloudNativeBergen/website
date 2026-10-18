@@ -67,7 +67,7 @@ describe('ownFeedbackAnswer', () => {
     expect(h.docReads).toEqual([id])
   })
 
-  it('is cached per response for 5 minutes, on the real uncached client', async () => {
+  it('is cached per response for 5 minutes, tagged with the response id', async () => {
     h.docs.set(id, response())
     await ownFeedbackAnswer(device, 'talk-open')
     expect(h.cacheTag).toEqual([feedbackResponseTag(id)])
@@ -109,15 +109,19 @@ describe('ownFeedbackAnswer', () => {
     expect(h.docReads).toEqual([])
   })
 
-  it('refuses a document that is not this response: another id, type, or talk', async () => {
-    for (const bad of [
-      response({ _id: 'feedbackResponse-00000000000000000000000000000000' }),
-      response({ _type: 'talk' }),
-      response({ talk: { _type: 'reference', _ref: 'talk-other' } }),
-      response({ colour: 'blue' }),
-    ]) {
-      h.docs.set(id, bad)
-      expect(await ownFeedbackAnswer(device, 'talk-open')).toBeNull()
+  it('refuses a document that is not this response: another id, type, talk or colour', async () => {
+    for (const [field, value] of [
+      ['_id', 'feedbackResponse-00000000000000000000000000000000'],
+      ['_type', 'talk'],
+      ['talk', { _type: 'reference', _ref: 'talk-other' }],
+      ['colour', 'blue'],
+    ] as const) {
+      // Positive control: the same document with the field as it should be
+      // IS this response, so the refusal below is the field's doing.
+      h.docs.set(id, response())
+      expect(await ownFeedbackAnswer(device, 'talk-open')).not.toBeNull()
+      h.docs.set(id, response({ [field]: value }))
+      expect(await ownFeedbackAnswer(device, 'talk-open'), field).toBeNull()
     }
   })
 })

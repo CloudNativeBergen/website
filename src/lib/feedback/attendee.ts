@@ -2,7 +2,7 @@
  * THE ATTENDEE PAGE'S READ SIDE (speaker feedback spec §5.1, §7.2).
  *
  * `/f/<code>` resolves the conference from the Host and calls
- * {@link resolveFeedbackPage}; everything Sanity is asked comes from ONE cached
+ * {@link resolveFeedbackTarget}; everything Sanity is asked comes from ONE cached
  * entry per conference, {@link feedbackCodeIndex}. It holds code → talk for
  * the conference's confirmed, published talks, with each talk's title,
  * speakers and slots, so a page view never reads per talk and a flood of
@@ -173,6 +173,12 @@ export interface FeedbackTarget {
   code: string
 }
 
+export type FeedbackConference = {
+  _id: string
+  endDate?: string | null
+  programDate?: string | null
+}
+
 /**
  * What a scanned code shows on the conference serving the request (§7.2).
  *
@@ -184,24 +190,8 @@ export interface FeedbackTarget {
  * "Public" is the program being published and the talk having a slot on an
  * official schedule. The title, the speakers and the start time appear only
  * then, so an early-shared code cannot reveal an unannounced acceptance.
- */
-export async function resolveFeedbackPage(
-  conference: FeedbackConference,
-  rawCode: string,
-  now: Date,
-): Promise<FeedbackPage> {
-  return (await resolveFeedbackTarget(conference, rawCode, now)).page
-}
-
-export type FeedbackConference = {
-  _id: string
-  endDate?: string | null
-  programDate?: string | null
-}
-
-/**
- * {@link resolveFeedbackPage}, with the talk the code resolves to. The target
- * is server-only: it never reaches the page.
+ *
+ * The target is server-only: it never reaches the page.
  */
 export async function resolveFeedbackTarget(
   conference: FeedbackConference,

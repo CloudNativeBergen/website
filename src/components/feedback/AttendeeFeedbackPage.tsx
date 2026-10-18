@@ -1,72 +1,34 @@
 'use client'
 
-import { useEffect, useId, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
-  ArrowPathIcon,
   ClockIcon,
   ExclamationTriangleIcon,
-  FaceFrownIcon,
-  FaceSmileIcon,
   LockClosedIcon,
-  MinusCircleIcon,
   QuestionMarkCircleIcon,
-  TrashIcon,
 } from '@heroicons/react/24/outline'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
-import {
-  FEEDBACK_COLOUR_LABELS,
-  type FeedbackColour,
-} from '@/lib/feedback/colour'
+import type { FeedbackColour } from '@/lib/feedback/colour'
 import type {
   AttendeeFeedbackState,
   PublicFeedbackTalk,
 } from '@/lib/feedback/server'
 import { formatSessionInstant } from '@/lib/time'
+import { AnsweredState } from './AnsweredState'
+import { DeleteAnswerButton } from './DeleteAnswerButton'
+import {
+  AnswerButtons,
+  Failed,
+  HEADING_FOCUS,
+  useFocusOnMount,
+  type DeleteAnswer,
+  type SubmitAnswer,
+} from './answers'
+import { useOneAtATime } from './useOneAtATime'
 
 export type { AttendeeFeedbackState }
-
-/**
- * Submit (speaker feedback spec §7.4), bound to the page's code: the colour
- * and the comment. "Change answer" and "Send comment" are this one action.
- */
-export type SubmitAnswer = (
-  colour: FeedbackColour,
-  comment?: string,
-) => Promise<AttendeeFeedbackState>
-
-/** Delete my answer (§7.4), bound to the page's code. */
-export type DeleteAnswer = () => Promise<AttendeeFeedbackState>
-
-/** The comment's limit (§7.2); the server refuses more once trimmed. */
-export const MAX_COMMENT_LENGTH = 1000
-
-/** Where the Answered state's link leads: a full page load, never `next/link`. */
-const PROGRAMME_HREF = '/program'
-
-const ANSWERS = [
-  {
-    colour: 'green',
-    label: FEEDBACK_COLOUR_LABELS.green,
-    Icon: FaceSmileIcon,
-    className: 'bg-green-700 text-white',
-    iconClassName: 'text-green-600 dark:text-green-500',
-  },
-  {
-    colour: 'yellow',
-    label: FEEDBACK_COLOUR_LABELS.yellow,
-    Icon: MinusCircleIcon,
-    className: 'bg-yellow-400 text-yellow-950',
-    iconClassName: 'text-yellow-500 dark:text-yellow-400',
-  },
-  {
-    colour: 'red',
-    label: FEEDBACK_COLOUR_LABELS.red,
-    Icon: FaceFrownIcon,
-    className: 'bg-red-600 text-white',
-    iconClassName: 'text-red-600 dark:text-red-500',
-  },
-] as const
+export type { DeleteAnswer, SubmitAnswer } from './answers'
 
 /**
  * The attendee page, `/f/<code>` (speaker feedback spec §7.1, §7.2): the
@@ -92,8 +54,8 @@ export function AttendeeFeedbackPage({
   remove: DeleteAnswer
 }) {
   const [page, setPage] = useState(initial)
-  // Whatever a tap leads to takes focus, so a screen reader announces it: the
-  // tapped button is gone from the page.
+  // Whatever an action leads to takes focus, so a screen reader announces
+  // it: the tapped button is gone from the page.
   const [afterTap, setAfterTap] = useState(false)
   const [deleted, setDeleted] = useState(false)
   return (
@@ -126,15 +88,10 @@ export function AttendeeFeedbackPage({
           submit={submit}
           remove={remove}
           announce={afterTap}
-          onAnswer={(next) => {
+          onOutcome={(next, wasDeleted = false) => {
             setPage(next)
             setAfterTap(true)
-            setDeleted(false)
-          }}
-          onDelete={(next) => {
-            setPage(next)
-            setAfterTap(true)
-            setDeleted(true)
+            setDeleted(wasDeleted)
           }}
         />
       </main>
@@ -147,19 +104,18 @@ function PageState({
   submit,
   remove,
   announce,
-  onAnswer,
-  onDelete,
+  onOutcome,
 }: {
   page: AttendeeFeedbackState
   submit: SubmitAnswer
   remove: DeleteAnswer
   announce: boolean
-  onAnswer: (next: AttendeeFeedbackState) => void
-  onDelete: (next: AttendeeFeedbackState) => void
+  onOutcome: (next: AttendeeFeedbackState, deleted?: boolean) => void
 }) {
   // The talk's title is the page's h1 when it is shown; the state's own
   // heading is the h1 otherwise.
   const level = 'talk' in page && page.talk ? ('h2' as const) : ('h1' as const)
+  const onDelete = (next: AttendeeFeedbackState) => onOutcome(next, true)
   switch (page.state) {
     case 'open':
       return (
@@ -170,7 +126,7 @@ function PageState({
             closesAt={page.closesAt}
             announce={announce}
             submit={submit}
-            onAnswer={onAnswer}
+            onAnswer={onOutcome}
           />
         </>
       )
@@ -178,14 +134,13 @@ function PageState({
       return (
         <>
           <TalkHeading talk={page.talk} />
-          <Answered
+          <AnsweredState
             level={level}
             page={page}
             announce={announce}
             submit={submit}
             remove={remove}
-            onAnswer={onAnswer}
-            onDelete={onDelete}
+            onOutcome={onOutcome}
           />
         </>
       )
@@ -251,90 +206,6 @@ function PageState({
   }
 }
 
-/**
- * One action in flight at a time, checked synchronously so a double tap can't
- * send two. Plain state, not `useTransition`: with it, `isPending` never
- * cleared after a failed save in the dark story (cause not pinned down),
- * leaving every button disabled. `run` answers `unavailable` for a thrown
- * action, so a lost connection reads like a failed save.
- */
-function useOneAtATime() {
-  const [pending, setPending] = useState(false)
-  const busy = useRef(false)
-  const run = async (
-    action: () => Promise<AttendeeFeedbackState>,
-  ): Promise<AttendeeFeedbackState | null> => {
-    if (busy.current) return null
-    busy.current = true
-    setPending(true)
-    let next: AttendeeFeedbackState
-    try {
-      next = await action()
-    } catch {
-      next = { state: 'unavailable' }
-    }
-    busy.current = false
-    setPending(false)
-    return next
-  }
-  return { pending, run }
-}
-
-function AnswerButtons({
-  pending,
-  tapped,
-  current,
-  onTap,
-}: {
-  pending: boolean
-  /** The colour whose save is in flight. */
-  tapped: FeedbackColour | null
-  /** The recorded answer, marked as pressed while changing it. */
-  current?: FeedbackColour
-  onTap: (colour: FeedbackColour) => void
-}) {
-  return (
-    <div className="mt-5 flex flex-col gap-3" aria-busy={pending}>
-      {ANSWERS.map(({ colour, label, Icon, className }) => {
-        const saving = pending && tapped === colour
-        const ShownIcon = saving ? ArrowPathIcon : Icon
-        return (
-          <button
-            key={colour}
-            type="button"
-            // `aria-disabled`, not `disabled`: a disabled button drops focus to
-            // the body, and after a failed save a keyboard or screen reader
-            // user must still be on the answer they tapped.
-            aria-disabled={pending}
-            aria-pressed={
-              current === undefined ? undefined : current === colour
-            }
-            onClick={() => onTap(colour)}
-            className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs transition-opacity focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait aria-pressed:ring-4 aria-pressed:ring-gray-900/40 dark:focus-visible:outline-white dark:aria-pressed:ring-white/60 ${pending && !saving ? 'opacity-50' : ''} ${className}`}
-          >
-            <ShownIcon
-              className={`size-9 shrink-0 ${saving ? 'animate-spin motion-reduce:animate-none' : ''}`}
-              aria-hidden="true"
-            />
-            {label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function Failed({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="mt-4 text-center text-sm font-medium text-red-700 dark:text-red-400"
-    >
-      {children}
-    </p>
-  )
-}
-
 function AnswerForm({
   level: Question,
   closesAt,
@@ -370,7 +241,7 @@ function AnswerForm({
       <Question
         ref={question}
         tabIndex={announce ? -1 : undefined}
-        className="text-xl font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
+        className={`text-xl font-semibold ${HEADING_FOCUS}`}
       >
         How was this session?
       </Question>
@@ -387,274 +258,6 @@ function AnswerForm({
           : '24 hours after the session ends.'}
       </p>
     </>
-  )
-}
-
-const SECONDARY_BUTTON =
-  'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-semibold transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait aria-disabled:opacity-50 dark:border-gray-600 dark:focus-visible:outline-white'
-
-/**
- * The Answered state (§7.2): what was recorded, Change answer, the comment
- * box, Delete my answer, and the way back to the programme. Focus moves to
- * the heading after a tap so a screen reader announces it, never on a plain
- * page load. Every action here is Submit or Delete my answer; what they
- * answer with replaces the page, so a window that closed meanwhile shows
- * Closed.
- */
-function Answered({
-  level: Heading,
-  page,
-  announce,
-  submit,
-  remove,
-  onAnswer,
-  onDelete,
-}: {
-  level: 'h1' | 'h2'
-  page: Extract<AttendeeFeedbackState, { state: 'answered' }>
-  announce: boolean
-  submit: SubmitAnswer
-  remove: DeleteAnswer
-  onAnswer: (next: AttendeeFeedbackState) => void
-  onDelete: (next: AttendeeFeedbackState) => void
-}) {
-  const heading = useFocusOnMount(announce)
-  const answer = ANSWERS.find((a) => a.colour === page.colour)
-  const Icon = answer?.Icon ?? FaceSmileIcon
-  const [changing, setChanging] = useState(false)
-  const [tapped, setTapped] = useState<FeedbackColour | null>(null)
-  const [comment, setComment] = useState(page.comment ?? '')
-  const [sent, setSent] = useState<string | null>(null)
-  const [failed, setFailed] = useState<string | null>(null)
-  const { pending, run } = useOneAtATime()
-  const commentId = useId()
-  const counterId = useId()
-
-  const change = async (colour: FeedbackColour) => {
-    setTapped(colour)
-    setFailed(null)
-    setSent(null)
-    const next = await run(() => submit(colour, comment))
-    if (!next) return
-    if (next.state === 'unavailable') {
-      setFailed("We couldn't confirm your answer. Please try again.")
-      return
-    }
-    onAnswer(next)
-    if (next.state === 'answered') {
-      // The tapped button goes away with the grid: the heading, which now
-      // names the new answer, takes focus.
-      setChanging(false)
-      heading.current?.focus()
-    }
-  }
-
-  const sendComment = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setFailed(null)
-    setSent(null)
-    const next = await run(() => submit(page.colour, comment))
-    if (!next) return
-    if (next.state === 'unavailable') {
-      setFailed("We couldn't send your comment. Please try again.")
-    } else if (next.state === 'answered') {
-      setSent(next.comment ? 'Comment sent.' : 'Comment removed.')
-      onAnswer(next)
-    } else {
-      onAnswer(next)
-    }
-  }
-
-  const erase = async () => {
-    setFailed(null)
-    setSent(null)
-    const next = await run(remove)
-    if (!next) return
-    if (next.state === 'unavailable') {
-      setFailed("We couldn't delete your answer. Please try again.")
-    } else {
-      onDelete(next)
-    }
-  }
-
-  const hasComment = page.comment !== null
-  const length = comment.length
-  const nearLimit = length >= MAX_COMMENT_LENGTH - 100
-
-  return (
-    <div>
-      <div className="flex flex-col items-center text-center">
-        <Icon
-          className={`size-12 ${answer?.iconClassName ?? ''}`}
-          aria-hidden="true"
-        />
-        <Heading
-          ref={heading}
-          tabIndex={announce ? -1 : undefined}
-          className="mt-4 text-lg font-semibold text-balance focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
-        >
-          Thanks!
-        </Heading>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          You answered{' '}
-          <strong className="text-gray-900 dark:text-white">
-            {answer?.label}
-          </strong>
-          .
-        </p>
-        {sent && (
-          <p
-            role="status"
-            className="mt-2 text-sm font-medium text-green-700 dark:text-green-400"
-          >
-            {sent}
-          </p>
-        )}
-      </div>
-
-      {changing ? (
-        <div className="mt-6">
-          <p className="text-center text-sm font-medium">Pick a new answer</p>
-          <AnswerButtons
-            pending={pending}
-            tapped={tapped}
-            current={page.colour}
-            onTap={change}
-          />
-          <div className="mt-3 text-center">
-            <button
-              type="button"
-              aria-disabled={pending}
-              onClick={() => {
-                if (!pending) setChanging(false)
-              }}
-              className={SECONDARY_BUTTON}
-            >
-              Keep my answer
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-6 text-center">
-          <button
-            type="button"
-            aria-disabled={pending}
-            onClick={() => {
-              if (!pending) setChanging(true)
-            }}
-            className={SECONDARY_BUTTON}
-          >
-            Change answer
-          </button>
-        </div>
-      )}
-
-      <form onSubmit={sendComment} className="mt-8" aria-busy={pending}>
-        <label htmlFor={commentId} className="block text-sm font-medium">
-          Comment for the speaker (optional)
-        </label>
-        <textarea
-          id={commentId}
-          name="comment"
-          rows={4}
-          maxLength={MAX_COMMENT_LENGTH}
-          value={comment}
-          onChange={(event) => setComment(event.target.value)}
-          aria-describedby={counterId}
-          className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 shadow-xs focus:border-gray-900 focus:outline-2 focus:outline-offset-0 focus:outline-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-white dark:focus:outline-white"
-        />
-        <div className="mt-2 flex items-center justify-between gap-4">
-          <p
-            id={counterId}
-            aria-live="polite"
-            className={`text-sm tabular-nums ${nearLimit ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}`}
-          >
-            {length.toLocaleString('en')}/
-            {MAX_COMMENT_LENGTH.toLocaleString('en')}
-          </p>
-          <button
-            type="submit"
-            aria-disabled={pending}
-            onClick={(event) => {
-              if (pending) event.preventDefault()
-            }}
-            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-gray-900 px-4 text-sm font-semibold text-white transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait aria-disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:focus-visible:outline-white"
-          >
-            {hasComment ? 'Update comment' : 'Send comment'}
-          </button>
-        </div>
-      </form>
-
-      {failed && <Failed>{failed}</Failed>}
-
-      <div className="mt-10 flex flex-col items-center gap-4">
-        <DeleteButton pending={pending} onClick={erase} />
-        <a
-          href={PROGRAMME_HREF}
-          className="text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
-        >
-          Back to the programme
-        </a>
-      </div>
-    </div>
-  )
-}
-
-function DeleteButton({
-  pending,
-  onClick,
-}: {
-  pending: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      aria-disabled={pending}
-      onClick={onClick}
-      className={`${SECONDARY_BUTTON} text-red-700 dark:text-red-400`}
-    >
-      {pending ? (
-        <ArrowPathIcon
-          className="size-5 animate-spin motion-reduce:animate-none"
-          aria-hidden="true"
-        />
-      ) : (
-        <TrashIcon className="size-5" aria-hidden="true" />
-      )}
-      Delete my answer
-    </button>
-  )
-}
-
-/**
- * Delete my answer on Closed and Not yet open (§7.4, R1): the talk is in the
- * cookie's list, so there may be an answer to delete; a missing one is
- * harmless. What the action answers with replaces the page.
- */
-function DeleteAnswerButton({
-  remove,
-  onDelete,
-}: {
-  remove: DeleteAnswer
-  onDelete: (next: AttendeeFeedbackState) => void
-}) {
-  const [failed, setFailed] = useState(false)
-  const { pending, run } = useOneAtATime()
-  const erase = async () => {
-    setFailed(false)
-    const next = await run(remove)
-    if (!next) return
-    if (next.state === 'unavailable') setFailed(true)
-    else onDelete(next)
-  }
-  return (
-    <div className="mt-8 flex flex-col items-center">
-      <DeleteButton pending={pending} onClick={erase} />
-      {failed && (
-        <Failed>We couldn&apos;t delete your answer. Please try again.</Failed>
-      )}
-    </div>
   )
 }
 
@@ -695,20 +298,11 @@ function Notice({
       <Heading
         ref={heading}
         tabIndex={announce ? -1 : undefined}
-        className="mt-4 text-lg font-semibold text-balance focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
+        className={`mt-4 text-lg font-semibold text-balance ${HEADING_FOCUS}`}
       >
         {title}
       </Heading>
       <p className="mt-2 text-gray-600 dark:text-gray-400">{children}</p>
     </div>
   )
-}
-
-/** A ref that focuses its element once, on mount, when `enabled`. */
-function useFocusOnMount(enabled: boolean) {
-  const ref = useRef<HTMLHeadingElement>(null)
-  useEffect(() => {
-    if (enabled) ref.current?.focus()
-  }, [enabled])
-  return ref
 }

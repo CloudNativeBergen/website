@@ -51,7 +51,7 @@ export async function deleteFeedback({
 
   const id = feedbackResponseId(device.token, target.talkId)
   try {
-    await clientWrite.transaction().delete(id).commit()
+    await clientWrite.delete(id)
   } catch (error) {
     console.error('Could not delete a Feedback Response', error)
     return { outcome: { state: 'unavailable' } }

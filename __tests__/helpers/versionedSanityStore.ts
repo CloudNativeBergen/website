@@ -301,6 +301,12 @@ export function createVersionedSanityStore(): VersionedSanityStore {
       }) as typeof tx.commit
       return tx
     },
+    // A plain `client.delete(id)`: one `delete` mutation, committed like any
+    // other, so `commits` and `events` see it as a transaction would.
+    delete: async (id: string) => {
+      await apply(apiVersion, [{ delete: { id } }])
+      return { transactionId: `tx-${commits.length}`, results: [] }
+    },
     patch: (id: string) => {
       const patch = real.patch(id)
       patch.commit = (async () => {
