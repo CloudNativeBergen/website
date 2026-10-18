@@ -10,7 +10,9 @@
  * silently, and the answer could never be shown or deleted.
  *
  * Signed with `INVITATION_TOKEN_SECRET` under labels of its own, so no other
- * token the secret signs can pass for one of these. The 30 days are enforced
+ * token the secret signs can pass for one of these. Rotating that secret
+ * invalidates every device cookie: each device's next tap is a new response.
+ * The 30 days are enforced
  * HERE, from the signed time, not only by the browser's `Max-Age`.
  */
 import 'server-only'
