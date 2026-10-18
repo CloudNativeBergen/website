@@ -61,6 +61,8 @@ export const Open: Story = {
     // action while none can be chosen.
     const fills = buttons.map((b) => getComputedStyle(b).backgroundColor)
     await expect(new Set(fills).size).toBe(1)
+    // ...and an actual fill, not three equally unstyled buttons.
+    await expect(fills[0]).not.toBe('rgba(0, 0, 0, 0)')
     // No promise to change an answer that cannot be given yet (F1c).
     await expect(
       canvas.getByText(

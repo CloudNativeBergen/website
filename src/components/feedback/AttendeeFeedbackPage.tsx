@@ -102,7 +102,7 @@ function PageState({ page }: { page: AttendeeFeedbackState }) {
                 type="button"
                 disabled
                 aria-describedby="answering-unavailable"
-                className={`flex h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-600 disabled:shadow-none dark:disabled:bg-gray-800 dark:disabled:text-gray-300 ${className}`}
+                className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-600 disabled:shadow-none dark:disabled:bg-gray-800 dark:disabled:text-gray-300 ${className}`}
               >
                 <Icon className="size-9 shrink-0" aria-hidden="true" />
                 {label}
