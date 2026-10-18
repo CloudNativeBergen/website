@@ -597,6 +597,7 @@ export const EARLY_ACCESS_PREVIEW_TOKEN = 'link-created-when-sent'
  * now: the subject and the body {@link sendEarlyAccess} sends with no
  * overrides, rendered by the same functions. WRITES NOTHING: a sponsor
  * without a link is shown a placeholder address (`placeholderLink`).
+ * Skips a sponsor with no default recipient, which a send would refuse.
  * `null`: no sponsor would be mailed.
  */
 export async function previewEarlyAccessBulkEmail({
@@ -608,10 +609,19 @@ export async function previewEarlyAccessBulkEmail({
   domain: string | undefined
   onlyUnsent: boolean
 }) {
-  const [target] = (
+  const targets = (
     await earlyAccessBulkTargets(conference._id, { onlyUnsent })
   ).filter((t) => t.status === 'closed-won')
-  if (!target) return null
+  let target: (typeof targets)[number] | undefined
+  let defaults: Awaited<ReturnType<typeof earlyAccessDefaults>> | undefined
+  for (const t of targets) {
+    defaults = await earlyAccessDefaults(conference, t.id)
+    if (defaults.recipientKeys.length > 0) {
+      target = t
+      break
+    }
+  }
+  if (!target || !defaults) return null
   const { refusal, plan } = await decideSendForRequest(
     conference._id,
     domain,
@@ -623,7 +633,7 @@ export async function previewEarlyAccessBulkEmail({
       message: refusal.message,
     })
   }
-  const { subject, message } = await earlyAccessDefaults(conference, target.id)
+  const { subject, message } = defaults
   const { htmlContent } = await convertPortableTextToHTML(message, conference)
   const url =
     plan.url ?? earlyAccessUrl(plan.portalUrl, EARLY_ACCESS_PREVIEW_TOKEN)

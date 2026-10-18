@@ -341,4 +341,22 @@ describe('previewEarlyAccessBulkEmail', () => {
     h.store!.reset(BASE)
     expect(await preview()).toBeNull()
   })
+
+  it('skips a first sponsor with no default recipient', async () => {
+    h.store!.reset([
+      ...BASE,
+      ...sponsor('sfc-a', { contactPersons: [] }),
+      ...sponsor('sfc-b'),
+    ])
+    expect(await preview()).toMatchObject({ sponsorName: 'Sponsor sfc-b' })
+  })
+
+  it('answers null when no sponsor has a default recipient', async () => {
+    h.store!.reset([
+      ...BASE,
+      ...sponsor('sfc-a', { contactPersons: [] }),
+      ...sponsor('sfc-b', { contactPersons: [] }),
+    ])
+    expect(await preview()).toBeNull()
+  })
 })

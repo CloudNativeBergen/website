@@ -31,6 +31,7 @@ const NO_WINDOW_HERE =
  */
 export function WorkshopEarlyAccessBulkButton() {
   const { showNotification } = useNotification()
+  const utils = api.useUtils()
   const [confirming, setConfirming] = useState(false)
   const [summary, setSummary] = useState<EarlyAccessBulkResult | null>(null)
   const preview = api.workshop.admin.earlyAccessBulkPreview.useQuery({
@@ -39,7 +40,7 @@ export function WorkshopEarlyAccessBulkButton() {
   const [showEmail, setShowEmail] = useState(false)
   const email = api.workshop.admin.earlyAccessBulkEmailPreview.useQuery(
     { onlyUnsent: true },
-    { enabled: confirming && showEmail },
+    { enabled: confirming && showEmail, staleTime: 0 },
   )
 
   const send = api.workshop.admin.sendEarlyAccessBulk.useMutation({
@@ -47,10 +48,13 @@ export function WorkshopEarlyAccessBulkButton() {
       setConfirming(false)
       setSummary(result)
       void preview.refetch()
+      // The next sponsor in line has changed; reload the email when shown.
+      void utils.workshop.admin.earlyAccessBulkEmailPreview.invalidate()
     },
     onError: (error) => {
       setConfirming(false)
       void preview.refetch()
+      void utils.workshop.admin.earlyAccessBulkEmailPreview.invalidate()
       const refused =
         error.data?.code === 'PRECONDITION_FAILED' ||
         error.data?.code === 'BAD_REQUEST'
