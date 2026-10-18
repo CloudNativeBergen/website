@@ -1546,10 +1546,7 @@ export const workshopRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         const { conference, domain, error } =
-          await getConferenceForCurrentDomain({
-            sponsors: true,
-            includeSponsorRegistrationLink: true,
-          })
+          await getConferenceForCurrentDomain()
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',

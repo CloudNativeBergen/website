@@ -18,17 +18,18 @@ const preview = (data: { count: number; refusal: string | null }) =>
 const sent = http.post(SEND, () =>
   trpc({
     sent: [
-      { id: 'sfc-1', name: 'Acme AS' },
-      { id: 'sfc-2', name: 'Globex' },
+      { id: 'sfc-1', name: 'Acme AS', copiesBehind: 0 },
+      { id: 'sfc-2', name: 'Globex', copiesBehind: 1 },
     ],
     skipped: [
       {
         id: 'sfc-3',
         name: 'Initech',
-        reason: 'Choose at least one recipient with an email address.',
+        reason: 'No primary contact with an email address.',
       },
     ],
     remaining: 4,
+    remainingIds: ['sfc-4', 'sfc-5', 'sfc-6', 'sfc-7'],
   }),
 )
 
@@ -70,8 +71,12 @@ export const Available: Story = {
     ).toBeInTheDocument()
     await expect(page.getByText('Initech')).toBeInTheDocument()
     await expect(
-      page.getByRole('button', { name: 'Run again' }),
+      page.getByText(/1 unpublished copy of this sponsor/),
     ).toBeInTheDocument()
+    await userEvent.click(page.getByRole('button', { name: 'Run again' }))
+    await expect(
+      await page.findByRole('button', { name: 'Run again' }),
+    ).toBeEnabled()
   },
 }
 
@@ -91,7 +96,7 @@ export const NoWindow: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement)
     await expect(
-      await page.findByText(/no early-access period/),
+      await page.findByText(/Sponsor Early Access Opens time above/),
     ).toBeInTheDocument()
     await expect(page.getByRole('button', { name: BUTTON })).toBeDisabled()
   },

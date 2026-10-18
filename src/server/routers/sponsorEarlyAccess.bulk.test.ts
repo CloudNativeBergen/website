@@ -172,11 +172,17 @@ describe('sendEarlyAccessBulk', () => {
     ])
     const first = await bulk()
     expect(first.sent.map((s) => s.id)).toEqual(['sfc-a', 'sfc-b'])
-    expect(first).toMatchObject({ skipped: [], remaining: 0 })
+    expect(first).toMatchObject({ skipped: [], remaining: 0, remainingIds: [] })
+    expect(first.sent[0].copiesBehind).toBe(0)
     expect(sentTo()).toEqual(['sfc-a@x.test', 'sfc-b@x.test'])
 
     const again = await bulk()
-    expect(again).toEqual({ sent: [], skipped: [], remaining: 0 })
+    expect(again).toEqual({
+      sent: [],
+      skipped: [],
+      remaining: 0,
+      remainingIds: [],
+    })
     expect(h.send).toHaveBeenCalledTimes(2)
 
     // Without onlyUnsent, the sent ones are mailed again.
@@ -223,6 +229,10 @@ describe('sendEarlyAccessBulk', () => {
       'sfc-b',
       'sfc-lost',
     ])
+    expect(result.skipped[0].reason).toBe(
+      'No primary contact with an email address.',
+    )
+    expect(result.skipped[1].reason).not.toMatch(/did not confirm/)
     expect(result.skipped[2].reason).toMatch(/won deal/)
     expect(result.remaining).toBe(0)
   })
@@ -235,7 +245,8 @@ describe('sendEarlyAccessBulk', () => {
     const first = await bulk()
     expect(first.sent.map((s) => s.id)).toEqual(['sfc-a'])
     expect(first.remaining).toBe(1)
-    const second = await bulk()
+    expect(first.remainingIds).toEqual(['sfc-b'])
+    const second = await bulk({ sponsorIds: first.remainingIds })
     expect(second.sent.map((s) => s.id)).toEqual(['sfc-b'])
     expect(second.remaining).toBe(0)
   })
@@ -248,5 +259,42 @@ describe('sendEarlyAccessBulk', () => {
     const result = await bulk()
     expect(result.sent).toHaveLength(BULK_MAX_SENDS)
     expect(result.remaining).toBe(2)
+  })
+
+  it('says a send the provider did not confirm may have arrived', async () => {
+    h.send.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'gateway timeout', statusCode: 504 },
+    })
+    const result = await bulk({ sponsorIds: ['sfc-a'] })
+    expect(result.skipped[0].reason).toMatch(
+      /did not confirm delivery\. The email may have arrived/,
+    )
+  })
+
+  it('skips a sponsor a concurrent run mailed after the targets were read', async () => {
+    h.send.mockImplementationOnce(async () => {
+      h.store!.put({
+        _id: 'act-other-run',
+        _type: 'sponsorActivity',
+        sponsorForConference: ref('sfc-b'),
+        communicationKind: 'workshop-early-access',
+        deliveryStatus: 'sent',
+      })
+      return { data: { id: 'msg' }, error: null }
+    })
+    const result = await bulk()
+    expect(result.sent.map((s) => s.id)).toEqual(['sfc-a'])
+    expect(result).toMatchObject({ skipped: [], remaining: 0 })
+    expect(h.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers the ids left, so Run again picks up past the cap', async () => {
+    const many = Array.from({ length: BULK_MAX_SENDS + 2 }, (_, i) =>
+      sponsor(`sfc-${String(i).padStart(2, '0')}`),
+    ).flat()
+    h.store!.reset([...BASE, ...many])
+    const result = await bulk()
+    expect(result.remainingIds).toEqual(['sfc-25', 'sfc-26'])
   })
 })

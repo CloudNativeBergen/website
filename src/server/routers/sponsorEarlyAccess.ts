@@ -367,18 +367,38 @@ export async function sendEarlyAccess({
 /** At most this many sponsors are mailed by one bulk call. */
 export const BULK_MAX_SENDS = 25
 /**
- * No new send is started after this much wall-clock time. The tRPC route sets
- * no `maxDuration`, so a call must finish inside the strictest Vercel default
- * (10 s without fluid compute); one send takes a few seconds at most. A call
- * that stops early says how many are left, and running it again continues.
+ * No new send is started after this much wall-clock time since the call
+ * began; the budget is checked before each send starts. A send that starts
+ * just inside it can still run on (Resend retry backoff included), which is
+ * what the tRPC route's `maxDuration` gives headroom for. A call that stops
+ * early says which sponsors are left, and running it again continues.
  */
 export const BULK_TIME_BUDGET_MS = 8_000
 
 export interface EarlyAccessBulkResult {
-  sent: { id: string; name: string }[]
+  /** `copiesBehind`: unpublished copies that did not get the link. */
+  sent: { id: string; name: string; copiesBehind: number }[]
   skipped: { id: string; name: string; reason: string }[]
   /** Sponsors that were due and not tried: the budget ran out. */
   remaining: number
+  /** Their ids, for "Run again", so a run never starves on the same few. */
+  remainingIds: string[]
+}
+
+const NOT_DEFINITIVE =
+  'The provider did not confirm delivery. The email may have arrived, and Run again will send it again.'
+
+/** Has the sponsor a SENT early-access email on its activity timeline? */
+async function earlyAccessAlreadySent(conferenceId: string, id: string) {
+  const sponsor = await scopedFetch<{ sent: boolean } | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "sponsorForConference" && _id == $id][0]{
+      "sent": count(*[_type == "sponsorActivity" && sponsorForConference._ref == ^._id && sponsorForConference->conference._ref == $conferenceId && communicationKind == "workshop-early-access" && deliveryStatus == "sent"]) > 0
+    }`,
+    { id },
+  )
+  return sponsor?.sent === true
 }
 
 /**
@@ -457,6 +477,7 @@ export async function sendEarlyAccessBulk({
   sponsorIds?: string[]
   onlyUnsent: boolean
 }): Promise<EarlyAccessBulkResult> {
+  const started = Date.now()
   const targets = await earlyAccessBulkTargets(conference._id, {
     sponsorIds,
     onlyUnsent,
@@ -466,25 +487,38 @@ export async function sendEarlyAccessBulk({
     throw new TRPCError({ code: 'PRECONDITION_FAILED', message: refusal })
   }
 
-  const started = Date.now()
-  const out: EarlyAccessBulkResult = { sent: [], skipped: [], remaining: 0 }
+  const out: EarlyAccessBulkResult = {
+    sent: [],
+    skipped: [],
+    remaining: 0,
+    remainingIds: [],
+  }
   let tried = 0
-  for (const { id, name, status } of targets) {
+  let next = 0
+  for (; next < targets.length; next++) {
+    const { id, name, status } = targets[next]
     if (
       tried >= BULK_MAX_SENDS ||
       Date.now() - started >= BULK_TIME_BUDGET_MS
     ) {
       break
     }
-    tried++
     if (status !== 'closed-won') {
       out.skipped.push({
         id,
         name,
         reason: EARLY_ACCESS_SEND_REFUSALS['not-won'],
       })
+      tried++
       continue
     }
+    // ponytail: a concurrent run is narrowed to one send, not closed. The
+    // real fix is an ifRevisionId claim on the sponsorForConference, as
+    // createEarlyAccessLink does.
+    if (onlyUnsent && (await earlyAccessAlreadySent(conference._id, id))) {
+      continue
+    }
+    tried++
     try {
       const result = await sendEarlyAccess({
         conference,
@@ -494,7 +528,8 @@ export async function sendEarlyAccessBulk({
         sponsorForConferenceId: id,
         senderNames: actor.names,
       })
-      if (result.ok) out.sent.push({ id, name })
+      if (result.ok)
+        out.sent.push({ id, name, copiesBehind: result.copiesBehind })
       else
         out.skipped.push({
           id,
@@ -502,7 +537,11 @@ export async function sendEarlyAccessBulk({
           reason:
             result.reason === 'not-found'
               ? notFoundMessage('sponsorForConference')
-              : result.message,
+              : result.reason === 'bad-recipients'
+                ? 'No primary contact with an email address.'
+                : result.reason === 'send-failed' && !result.definitive
+                  ? `${result.message} ${NOT_DEFINITIVE}`
+                  : result.message,
         })
     } catch (error) {
       out.skipped.push({
@@ -515,7 +554,8 @@ export async function sendEarlyAccessBulk({
       }
     }
   }
-  out.remaining = targets.length - tried
+  out.remainingIds = targets.slice(next).map((t) => t.id)
+  out.remaining = out.remainingIds.length
   return out
 }
 

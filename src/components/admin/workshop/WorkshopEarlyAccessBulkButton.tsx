@@ -6,9 +6,17 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
+import {
+  EARLY_ACCESS_SEND_REFUSALS,
+  earlyAccessCopiesBehindNotice,
+} from '@/lib/sponsor-crm/early-access-email'
 import type { EarlyAccessBulkResult } from '@/server/routers/sponsorEarlyAccess'
 
 const sponsors = (n: number) => `${n} ${n === 1 ? 'sponsor' : 'sponsors'}`
+
+/** The organizer is on the workshops page already: point at the field. */
+const NO_WINDOW_HERE =
+  'Set a Sponsor Early Access Opens time above, earlier than the time registration opens for everyone.'
 
 /**
  * "Send early access to sponsors" (#1347): mails the workshop early-access
@@ -38,10 +46,15 @@ export function WorkshopEarlyAccessBulkButton() {
     onError: (error) => {
       setConfirming(false)
       void preview.refetch()
+      const refused =
+        error.data?.code === 'PRECONDITION_FAILED' ||
+        error.data?.code === 'BAD_REQUEST'
       showNotification({
         type: 'error',
-        title: 'Nothing was sent',
-        message: error.message,
+        title: refused ? 'Nothing was sent' : 'The send did not finish',
+        message: refused
+          ? error.message
+          : `${error.message} Some emails may have gone out; the count below is refreshed.`,
       })
     },
   })
@@ -51,10 +64,12 @@ export function WorkshopEarlyAccessBulkButton() {
     ? null
     : preview.error
       ? `Could not count the sponsors: ${preview.error.message}`
-      : (preview.data?.refusal ??
-        (count === 0
-          ? 'Every Closed Won sponsor has been sent early access.'
-          : null))
+      : preview.data?.refusal === EARLY_ACCESS_SEND_REFUSALS['no-window']
+        ? NO_WINDOW_HERE
+        : (preview.data?.refusal ??
+          (count === 0
+            ? 'Every Closed Won sponsor has been sent early access.'
+            : null))
 
   return (
     <div className="flex flex-col items-start gap-2">
@@ -91,6 +106,14 @@ export function WorkshopEarlyAccessBulkButton() {
               `: ${summary.sent.map((s) => s.name).join(', ')}`}
             .
           </p>
+          {summary.sent
+            .filter((s) => s.copiesBehind > 0)
+            .map((s) => (
+              <p key={s.id}>
+                <span className="font-medium">{s.name}</span>:{' '}
+                {earlyAccessCopiesBehindNotice(s.copiesBehind)}
+              </p>
+            ))}
           {summary.skipped.length > 0 && (
             <div>
               <p>Not sent to {sponsors(summary.skipped.length)}:</p>
@@ -109,7 +132,12 @@ export function WorkshopEarlyAccessBulkButton() {
               <AdminButton
                 variant="secondary"
                 disabled={send.isPending}
-                onClick={() => send.mutate({ onlyUnsent: true })}
+                onClick={() =>
+                  send.mutate({
+                    sponsorIds: summary.remainingIds,
+                    onlyUnsent: true,
+                  })
+                }
               >
                 {send.isPending ? 'Sending…' : 'Run again'}
               </AdminButton>
@@ -125,7 +153,7 @@ export function WorkshopEarlyAccessBulkButton() {
         isLoading={send.isPending}
         variant="info"
         title="Send early access to sponsors?"
-        message={`${sponsors(count)} with a won deal that have not had it get the workshop early-access email, with the standard text and their link, sent to their primary contact. Sponsors without a primary contact are skipped.`}
+        message={`${sponsors(count)} with a won deal that have not had it get the workshop early-access email, with the standard text and their link, sent to their primary contact. Sponsors without a primary contact are skipped. At most 25 sponsors are sent per run; Run again continues with the rest.`}
         confirmButtonText="Send"
       />
     </div>
