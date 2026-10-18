@@ -85,7 +85,7 @@ export function FeedbackPresentView({
           </p>
         ) : null}
       </div>
-      <p className="max-w-full font-mono text-[clamp(1.25rem,4.5vmin,3.5rem)] leading-tight break-all">
+      <p className="max-w-full font-mono text-[clamp(1rem,4.5vmin,3.5rem)] leading-tight break-all">
         {feedbackCodeDisplayUrl(url)}
       </p>
     </div>,

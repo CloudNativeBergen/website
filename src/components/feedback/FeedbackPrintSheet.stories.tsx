@@ -23,7 +23,13 @@ const meta = {
   args: { title: 'Kubernetes: the hard parts', url: URL, qrSrc: '' },
   loaders: [async () => ({ qrSrc: await renderFeedbackQrPng(URL, 1024) })],
   render: (args, { loaded }) => (
-    <div style={{ width: '210mm', minHeight: '297mm', margin: '0 auto' }}>
+    <div
+      style={{
+        width: 'min(210mm, 100%)',
+        minHeight: '297mm',
+        margin: '0 auto',
+      }}
+    >
       <FeedbackPrintSheet {...args} qrSrc={loaded.qrSrc as string} />
     </div>
   ),
