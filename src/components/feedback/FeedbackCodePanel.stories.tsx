@@ -337,8 +337,11 @@ export const PresentAndClose: Story = {
 }
 
 /** Every client rect of the code's text sits on one line. */
-const expectCodeUnbroken = (canvas: ReturnType<typeof within>) => {
-  const link = canvas.getByText('2026.cloudnativedays.no/f/k7m2qx')
+const expectCodeUnbroken = (
+  canvas: ReturnType<typeof within>,
+  displayUrl = '2026.cloudnativedays.no/f/k7m2qx',
+) => {
+  const link = canvas.getByText(displayUrl)
   const walker = document.createTreeWalker(link, NodeFilter.SHOW_TEXT)
   let node: Node | null = null
   while ((node = walker.nextNode())) {
@@ -375,6 +378,21 @@ export const PhoneNarrowUrl: Story = {
     const canvas = within(canvasElement)
     await canvas.findByRole('img', { name: /QR code/ })
     expectCodeUnbroken(canvas)
+  },
+}
+
+/**
+ * A shorter tenant host, where a character-level break at 320 px would land
+ * inside the code: `2026.cloudnative.no/f/` is 22 characters, the code the
+ * next six.
+ */
+export const PhoneNarrowUrlShortHost: Story = {
+  args: { url: 'https://2026.cloudnative.no/f/k7m2qx', window: before },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole('img', { name: /QR code/ })
+    expectCodeUnbroken(canvas, '2026.cloudnative.no/f/k7m2qx')
   },
 }
 
