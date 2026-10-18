@@ -71,8 +71,9 @@ function DeleteButton({
  * with Delete and Cancel. The comment goes with the answer and cannot be
  * recovered, so one tap near the thumb's resting zone must not be enough.
  * Focus moves to Cancel when the confirmation opens (a second tap of the
- * same spot deletes nothing) and back to the button when it closes, by
- * Cancel, Escape, or another action the owner took meanwhile; no modal.
+ * same spot deletes nothing) and back to the button ONLY when Cancel or
+ * Escape closed it; an action taken elsewhere that closes it keeps its own
+ * focus. No modal.
  *
  * `pending` is the page's shared one-at-a-time flag (every control is
  * `aria-disabled` under it); `deleting` is this control's own delete in
@@ -85,6 +86,7 @@ export function DeleteControl({
   confirming,
   onConfirmingChange,
   onConfirm,
+  error,
 }: {
   pending: boolean
   deleting: boolean
@@ -93,17 +95,30 @@ export function DeleteControl({
   confirming: boolean
   onConfirmingChange: (confirming: boolean) => void
   onConfirm: () => void
+  /** A failed delete, shown inside the confirmation above its buttons. */
+  error: StatusLine | null
 }) {
   const trigger = useRef<HTMLButtonElement>(null)
   const cancel = useRef<HTMLButtonElement>(null)
-  const wasConfirming = useRef(false)
+  // Set by Cancel and Escape only: the trigger takes focus back when the
+  // confirmation they closed has gone.
+  const returnFocus = useRef(false)
   const questionId = useId()
 
   useEffect(() => {
-    if (confirming) cancel.current?.focus()
-    else if (wasConfirming.current) trigger.current?.focus()
-    wasConfirming.current = confirming
+    if (confirming) {
+      cancel.current?.focus()
+    } else if (returnFocus.current) {
+      returnFocus.current = false
+      trigger.current?.focus()
+    }
   }, [confirming])
+
+  const dismiss = () => {
+    if (pending) return
+    returnFocus.current = true
+    onConfirmingChange(false)
+  }
 
   if (!confirming) {
     return (
@@ -120,19 +135,23 @@ export function DeleteControl({
     <div
       role="group"
       aria-labelledby={questionId}
+      aria-busy={deleting}
       onKeyDown={(event) => {
-        if (event.key === 'Escape' && !pending) {
+        if (event.key === 'Escape') {
           event.preventDefault()
-          onConfirmingChange(false)
+          dismiss()
         }
       }}
       className={`w-full rounded-lg ${CONTROL_BORDER} px-4 py-4 text-center`}
     >
       <p id={questionId} className="text-sm font-medium">
-        {hasComment
+        {hasComment === true
           ? 'Delete your answer and comment? This can’t be undone.'
-          : 'Delete your answer? This can’t be undone.'}
+          : hasComment === false
+            ? 'Delete your answer? This can’t be undone.'
+            : 'Delete your answer and any comment? This can’t be undone.'}
       </p>
+      <Status status={error} className="mt-2" />
       <div className="mt-3 flex flex-wrap justify-center gap-3">
         <button
           type="button"
@@ -148,15 +167,13 @@ export function DeleteControl({
               aria-hidden="true"
             />
           )}
-          Delete
+          {deleting ? 'Deleting…' : 'Delete'}
         </button>
         <button
           ref={cancel}
           type="button"
           aria-disabled={pending}
-          onClick={() => {
-            if (!pending) onConfirmingChange(false)
-          }}
+          onClick={dismiss}
           className={SECONDARY_BUTTON}
         >
           Cancel
@@ -182,7 +199,7 @@ export function DeleteAnswerButton({
   const [confirming, setConfirming] = useState(false)
   const { pending, run } = useOneAtATime()
   return (
-    <div className="mt-8 flex flex-col items-center gap-4">
+    <div className="mt-8 flex flex-col items-center">
       <DeleteControl
         pending={pending}
         deleting={pending}
@@ -202,8 +219,8 @@ export function DeleteAnswerButton({
             onFailed: () => setStatus({ kind: 'error', text: DELETE_FAILED }),
           })
         }}
+        error={status}
       />
-      <Status status={status} />
     </div>
   )
 }

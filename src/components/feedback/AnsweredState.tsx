@@ -44,7 +44,8 @@ const ANNOUNCE_LEFT = 100
  * `null` while untouched, so when the server tells this tab a comment it did
  * not know of (another tab sent it; a colour change brought it back), the
  * box follows, and Update comment re-sends that comment rather than an
- * empty box that would erase it. An edit is kept until it is sent.
+ * empty box that would erase it. An edit is kept until exactly it is sent:
+ * keystrokes made while a send is in flight stay in the box, unsent.
  */
 export function AnsweredState({
   level: Heading,
@@ -74,6 +75,7 @@ export function AnsweredState({
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [commentStatus, setCommentStatus] = useState<StatusLine | null>(null)
+  const [changeStatus, setChangeStatus] = useState<StatusLine | null>(null)
   const [deleteStatus, setDeleteStatus] = useState<StatusLine | null>(null)
   const { pending, run } = useOneAtATime()
   const answerId = useId()
@@ -106,11 +108,13 @@ export function AnsweredState({
   const change = async (colour: FeedbackColour) => {
     setTapped(colour)
     setCommentStatus(null)
+    setChangeStatus(null)
     setConfirming(false)
     const next = await run(() => submit(colour), { state: 'unavailable' })
     if (!next) return
     if (next.state === 'unavailable') {
-      setCommentStatus({
+      // Under the grid, where the tap was; the grid stays.
+      setChangeStatus({
         kind: 'error',
         text: "We couldn't confirm your answer. Please try again.",
       })
@@ -120,6 +124,13 @@ export function AnsweredState({
     if (next.state === 'answered') {
       afterClose.current = 'heading'
       setChanging(false)
+      // A comment this tab did not know of has filled the untouched box.
+      if (edit === null && (next.comment ?? '') !== stored) {
+        setCommentStatus({
+          kind: 'neutral',
+          text: 'Showing your saved comment.',
+        })
+      }
     }
   }
 
@@ -141,7 +152,8 @@ export function AnsweredState({
       return
     }
     setCommentStatus(null)
-    const next = await run(() => submit(page.colour, draft), {
+    const sent = draft
+    const next = await run(() => submit(page.colour, sent), {
       state: 'unavailable',
     })
     if (!next) return
@@ -161,8 +173,9 @@ export function AnsweredState({
           ? 'Comment removed.'
           : ''
       setCommentStatus(text ? { kind: 'ok', text } : null)
-      // Sent: the box follows the stored comment again.
-      setEdit(null)
+      // Sent: the box follows the stored comment again, unless it was typed
+      // in meanwhile; that newer text stays, unsent.
+      setEdit((current) => (current === sent ? null : current))
     }
     onOutcome(next)
   }
@@ -227,6 +240,7 @@ export function AnsweredState({
             current={page.colour}
             onTap={change}
           />
+          <Status status={changeStatus} className="mt-3" />
           <div className="mt-3 text-center">
             <button
               type="button"
@@ -268,9 +282,7 @@ export function AnsweredState({
           maxLength={MAX_COMMENT_LENGTH}
           value={draft}
           onChange={(event) => {
-            const value = event.target.value
-            // Back to exactly the stored text counts as untouched.
-            setEdit(value === stored ? null : value)
+            setEdit(event.target.value)
             setCommentStatus(null)
           }}
           aria-describedby={counterId}
@@ -304,7 +316,7 @@ export function AnsweredState({
         <Status status={commentStatus} className="mt-3" />
       </form>
 
-      <div className="mt-8 flex flex-col items-center gap-3">
+      <div className="mt-8 flex flex-col items-center">
         <DeleteControl
           pending={pending}
           deleting={deleting}
@@ -315,8 +327,8 @@ export function AnsweredState({
             setConfirming(open)
           }}
           onConfirm={erase}
+          error={deleteStatus}
         />
-        <Status status={deleteStatus} />
       </div>
 
       <div className="mt-8 flex justify-center border-t border-gray-300 pt-6 dark:border-gray-700">

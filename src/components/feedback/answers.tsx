@@ -138,8 +138,9 @@ export function AnswerButtons({
               className={`size-9 shrink-0 ${saving ? 'animate-spin motion-reduce:animate-none' : ''}`}
               aria-hidden="true"
             />
-            {/* Wraps at 320 px with large text instead of clipping. */}
-            <span className="min-w-0 text-left wrap-anywhere">{label}</span>
+            {/* Wraps between words at 320 px with large text, never inside
+                one, and never clips. */}
+            <span className="min-w-0 text-left wrap-break-word">{label}</span>
           </button>
         )
       })}

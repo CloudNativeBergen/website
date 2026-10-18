@@ -93,6 +93,41 @@ describe('the stale tab', () => {
     expect(box).toHaveValue('my draft')
   })
 
+  it('keeps keystrokes typed while a send is in flight, unsent', async () => {
+    let finish!: (value: AttendeeFeedbackState) => void
+    const submit = vi.fn(
+      (colour: 'green' | 'yellow' | 'red', sent?: string) =>
+        new Promise<AttendeeFeedbackState>((resolve) => {
+          finish = () =>
+            resolve({
+              state: 'answered',
+              colour,
+              comment: sent?.trim() || null,
+              talk,
+            })
+        }),
+    )
+    render(
+      <AttendeeFeedbackPage
+        logo={null}
+        page={{ state: 'answered', colour: 'green', comment: null, talk }}
+        submit={submit}
+        remove={remove}
+      />,
+    )
+    const box = screen.getByLabelText('Comment for the speaker (optional)')
+    fireEvent.change(box, { target: { value: 'Hello' } })
+    click('Send comment')
+    expect(submit).toHaveBeenCalledWith('green', 'Hello')
+    fireEvent.change(box, { target: { value: 'Hello world' } })
+    finish({ state: 'answered', colour: 'green', comment: 'Hello', talk })
+    await screen.findByText('Comment sent.')
+    expect(box).toHaveValue('Hello world')
+    expect(
+      screen.getByRole('button', { name: 'Update comment' }),
+    ).toBeInTheDocument()
+  })
+
   it('keeps the last known comment when the server could not read it back', async () => {
     const submit = vi.fn(
       async (colour: 'green' | 'yellow' | 'red') =>
