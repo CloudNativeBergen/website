@@ -418,6 +418,86 @@ describe('TitoProvider — fetchEventTickets', () => {
     ])
   })
 
+  it('excludes void tickets and cancelled or refunded registrations', async () => {
+    let requestedUrl = ''
+    vi.stubGlobal('fetch', async (url: string) => {
+      requestedUrl = url
+      return ok({
+        tickets: [
+          { id: 1, email: 'active@example.com', state: 'complete' },
+          { id: 2, email: 'ticket-void@example.com', state: 'void' },
+          ...[
+            'cancelled',
+            'customer_cancelled',
+            'payment_declined',
+            'errored',
+          ].map((state, i) => ({
+            id: 10 + i,
+            email: `reg-${state}@example.com`,
+            state: 'complete',
+            registration: { state },
+          })),
+          {
+            id: 20,
+            email: 'reg-refunded@example.com',
+            state: 'complete',
+            registration: { state: 'complete', refunded: true },
+          },
+        ],
+        meta: { next_page: null },
+      })
+    })
+
+    const tickets = await getTicketingProvider('tito', CREDS).fetchEventTickets(
+      TITO_REF,
+    )
+
+    expect(requestedUrl).toContain('view=extended')
+    expect(tickets.map((t) => t.crm.email)).toEqual(['active@example.com'])
+  })
+
+  it('treats incomplete attendee questionnaire as paid when registration is complete', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubTitoFetch({
+        ticketPages: [
+          {
+            tickets: [
+              {
+                id: 10,
+                email: 'attendee@example.com',
+                release_title: 'Conference Pass',
+                price: '2500.0',
+                state: 'incomplete', // Questionnaire not filled
+                registration: { state: 'complete', paid: true },
+              },
+              {
+                // `paid: false` = free registration type, not unpaid.
+                id: 11,
+                email: 'free@example.com',
+                release_title: 'Free Pass',
+                price: '0.0',
+                state: 'incomplete',
+                registration: { state: 'complete', paid: false },
+              },
+            ],
+            nextPage: null,
+          },
+        ],
+      }),
+    )
+
+    const tickets = await getTicketingProvider('tito', CREDS).fetchEventTickets(
+      TITO_REF,
+    )
+
+    expect(tickets).toHaveLength(2)
+    expect(tickets[0].order?.paid).toBe(true)
+    expect(tickets[1].order?.paid).toBe(true)
+    expect(tickets[0].sum).toBe('2500.0')
+    expect(tickets[0].sum_left).toBe('0')
+  })
+
   it('throws instead of returning partial data when pagination never ends', async () => {
     // Every page reports another next_page — a looping/pathological cursor.
     const fetchSpy = vi.fn(

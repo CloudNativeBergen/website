@@ -443,25 +443,300 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     ])
   })
 
-  it('exports addresses that differ only in padding or case as one person', async () => {
+  it('normalizes addresses that differ only in padding or case when joining add-ons to seats', async () => {
+    const confWithUpgrade = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
     h.fetchEventTickets.mockResolvedValue([
       ticket({
         id: 1,
         order_id: 100,
-        category: 'Speaker ticket',
+        category: 'Regular',
         crm: crm('  Ada@Example.com '),
       }),
       ticket({
         id: 2,
         order_id: 101,
-        category: 'Speaker ticket',
+        category: 'Workshop upgrade',
         crm: crm('ada@example.com\t'),
       }),
     ])
 
-    const res = await exportParticipants(conference, true)
+    const res = await exportParticipants(confWithUpgrade, true)
 
-    expect(res.map((p) => p.email)).toEqual(['ada@example.com'])
+    expect(res).toHaveLength(1)
+    expect(res[0].email).toBe('ada@example.com')
+    expect(res[0].grantsWorkshop).toBe(true)
+    expect(res[0].categories).toBe('Regular, Workshop upgrade')
+  })
+
+  it('does not allow a seat to greedily steal a named workshop add-on for another attendee', async () => {
+    const confWithUpgrade = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: 'Alice',
+          last_name: 'Smith',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+    ])
+
+    const res = await exportParticipants(confWithUpgrade, false)
+
+    expect(res).toHaveLength(2)
+    const alice = res.find((p) => p.firstName === 'Alice')
+    const bob = res.find((p) => p.firstName === 'Bob')
+    expect(alice?.grantsWorkshop).toBe(false)
+    expect(alice?.categories).toBe('Regular')
+    expect(bob?.grantsWorkshop).toBe(true)
+    expect(bob?.categories).toBe('Regular, Workshop upgrade')
+  })
+
+  it('does not allow an unnamed TBA seat to steal a named add-on from a later attendee', async () => {
+    const confWithUpgrade = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: '',
+          last_name: '',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+    ])
+
+    const res = await exportParticipants(confWithUpgrade, false)
+
+    expect(res).toHaveLength(2)
+    const tba = res.find((p) => p.firstName === '')
+    const bob = res.find((p) => p.firstName === 'Bob')
+    expect(tba?.grantsWorkshop).toBe(false)
+    expect(bob?.grantsWorkshop).toBe(true)
+    expect(bob?.categories).toBe('Regular, Workshop upgrade')
+  })
+
+  it('exports surplus or unattached workshop add-ons when workshopOnly is true', async () => {
+    const confWithUpgrade = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: 'Alice',
+          last_name: 'Smith',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: {
+          first_name: 'Charlie',
+          last_name: 'Brown',
+          email: 'buyer@company.com',
+        },
+      }),
+    ])
+
+    const res = await exportParticipants(confWithUpgrade, true)
+
+    expect(res).toHaveLength(2)
+    expect(res.map((p) => p.firstName).sort()).toEqual(['Bob', 'Charlie'])
+    expect(res.every((p) => p.grantsWorkshop)).toBe(true)
+  })
+
+  it('exports one row per admitting seat when a buyer purchases multiple tickets under one email', async () => {
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        category: 'Regular',
+        sum: '2500',
+        crm: {
+          first_name: 'Alice',
+          last_name: 'Smith',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        category: 'Regular',
+        sum: '2500',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Regular',
+        sum: '2500',
+        crm: {
+          first_name: 'To Be',
+          last_name: 'Announced',
+          email: 'buyer@company.com',
+        },
+      }),
+    ])
+
+    const res = await exportParticipants(conference, false)
+
+    expect(res).toHaveLength(3)
+    expect(res.map((p) => [p.firstName, p.lastName, p.email])).toEqual([
+      ['Alice', 'Smith', 'buyer@company.com'],
+      ['Bob', 'Jones', 'buyer@company.com'],
+      ['To Be', 'Announced', 'buyer@company.com'],
+    ])
+  })
+
+  it('absorbs a same-name workshop add-on into a seat that already grants the workshop', async () => {
+    const conf = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Two-day', admits: true, grantsWorkshop: true },
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    const bob = { first_name: 'Bob', last_name: 'Jones', email: 'bob@x.com' }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({ id: 1, order_id: 200, category: 'Two-day', crm: bob }),
+      ticket({ id: 2, order_id: 200, category: 'Workshop upgrade', crm: bob }),
+    ])
+
+    const res = await exportParticipants(conf, true)
+
+    expect(res).toHaveLength(1)
+    expect(res[0].categories).toBe('Two-day, Workshop upgrade')
+  })
+
+  it('matches exact full names before first-name-only seats', async () => {
+    const conf = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    const email = 'buyer@company.com'
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        crm: { first_name: 'Bob', last_name: '', email },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        crm: { first_name: 'Bob', last_name: 'Jones', email },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: { first_name: 'Bob', last_name: 'Jones', email },
+      }),
+    ])
+
+    const res = await exportParticipants(conf, false)
+
+    expect(res.map((p) => [p.lastName, p.grantsWorkshop])).toEqual([
+      ['', false],
+      ['Jones', true],
+    ])
+  })
+
+  it('never puts the buyer name on a blank seat', async () => {
+    const email = 'buyer@company.com'
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        customer_name: 'Buyer Person',
+        crm: { first_name: '', last_name: '', email },
+      }),
+    ])
+
+    const res = await exportParticipants(conference, false)
+
+    expect(res[0].firstName).toBe('')
   })
 })
 

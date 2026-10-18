@@ -226,7 +226,8 @@ export async function exportParticipants(
   const anonymous: typeof classified = []
 
   for (const item of classified) {
-    // One person per address, as the workshop gate tells them apart.
+    // Group by address to pair add-ons with seats; each admitting seat still
+    // exports as its own row, even when one person holds several.
     const e = canonicalEmail(item.ticket.crm?.email)
     if (!e) {
       anonymous.push(item)
@@ -238,37 +239,160 @@ export async function exportParticipants(
 
   const result: ExportedParticipant[] = []
 
-  const addGroup = (group: typeof classified) => {
-    const grantsWorkshop = group.some((g) => g.class.grantsWorkshop)
-    const admitsConference = group.some((g) => g.class.admits)
-    if (workshopOnly && !grantsWorkshop) return
-    if (!workshopOnly && !admitsConference) return
+  const processGroup = (group: typeof classified) => {
+    // Separate admitting tickets (physical seats) from non-admitting add-ons
+    const seats = group.filter((g) => g.class.admits)
+    const addOns = group.filter((g) => !g.class.admits)
 
-    // Paid if ANY ticket in their bundle satisfies isPaidTicket (including comp: 'unknown' with sum > 0)
-    const isComp = !group.some((g) => g.isPaid)
+    // Unassigned workshop add-ons that can grant workshop access to a seat
+    const availableWorkshopAddOns = addOns.filter((g) => g.class.grantsWorkshop)
 
-    // Deduplicate categories in case they bought 5 of the same ticket
-    const uniqueCategories = Array.from(
-      new Set(group.map((g) => g.ticket.category).filter(Boolean)),
-    )
-    const categories = uniqueCategories.join(', ')
+    const getName = (t: (typeof group)[0]['ticket']) => {
+      const first = (t.crm?.first_name || '').trim().toLowerCase()
+      const last = (t.crm?.last_name || '').trim().toLowerCase()
+      const full = `${first} ${last}`.trim()
+      return { first, last, full }
+    }
 
-    const first = group[0].ticket
-    result.push({
-      firstName: first.crm?.first_name || '',
-      lastName: first.crm?.last_name || '',
-      email: canonicalEmail(first.crm?.email),
-      categories,
-      isComp,
-      grantsWorkshop,
-    })
+    if (seats.length > 0) {
+      interface SeatAssignment {
+        seat: (typeof seats)[0]
+        grantsWorkshop: boolean
+        categoriesList: string[]
+        hasPaidAddOn: boolean
+      }
+
+      const assignments: SeatAssignment[] = seats.map((seat) => ({
+        seat,
+        grantsWorkshop: seat.class.grantsWorkshop,
+        categoriesList: [seat.ticket.category],
+        hasPaidAddOn: false,
+      }))
+
+      const consume = (assignment: SeatAssignment, idx: number) => {
+        const addOn = availableWorkshopAddOns.splice(idx, 1)[0]
+        assignment.grantsWorkshop = true
+        if (addOn.ticket.category) {
+          assignment.categoriesList.push(addOn.ticket.category)
+        }
+        if (addOn.isPaid) {
+          assignment.hasPaidAddOn = true
+        }
+      }
+
+      // Pass 1a: exact full-name match across all seats first, so a
+      // first-name-only seat cannot steal an add-on named for another seat.
+      // A seat that already grants the workshop still absorbs its own
+      // same-name add-on, otherwise that add-on is exported as a second row;
+      // ungranted seats go first so they keep priority.
+      const byNeed = [...assignments].sort(
+        (x, y) => Number(x.grantsWorkshop) - Number(y.grantsWorkshop),
+      )
+      for (const assignment of byNeed) {
+        const seatName = getName(assignment.seat.ticket)
+        if (!seatName.first || !seatName.last) continue
+        const matchIdx = availableWorkshopAddOns.findIndex(
+          (a) => getName(a.ticket).full === seatName.full,
+        )
+        if (matchIdx !== -1) consume(assignment, matchIdx)
+      }
+
+      // Pass 1b: compatible (first-name, one side missing last name) match
+      for (const assignment of assignments) {
+        if (assignment.grantsWorkshop || availableWorkshopAddOns.length === 0)
+          continue
+        const seatName = getName(assignment.seat.ticket)
+        if (!seatName.first) continue
+        const matchIdx = availableWorkshopAddOns.findIndex((a) => {
+          const aName = getName(a.ticket)
+          if (!aName.first || aName.first !== seatName.first) return false
+          return !aName.last || !seatName.last || aName.last === seatName.last
+        })
+        if (matchIdx !== -1) consume(assignment, matchIdx)
+      }
+
+      // Pass 2: unnamed add-ons assigned to remaining ungranted seats
+      for (const assignment of assignments) {
+        if (assignment.grantsWorkshop || availableWorkshopAddOns.length === 0)
+          continue
+        const unnamedIdx = availableWorkshopAddOns.findIndex(
+          (a) => !getName(a.ticket).full,
+        )
+        if (unnamedIdx !== -1) {
+          const addOn = availableWorkshopAddOns.splice(unnamedIdx, 1)[0]
+          assignment.grantsWorkshop = true
+          if (addOn.ticket.category) {
+            assignment.categoriesList.push(addOn.ticket.category)
+          }
+          if (addOn.isPaid) {
+            assignment.hasPaidAddOn = true
+          }
+        }
+      }
+
+      // Pass 3: unnamed (TBA) seats take remaining named add-ons if no named seat took them
+      for (const assignment of assignments) {
+        if (assignment.grantsWorkshop || availableWorkshopAddOns.length === 0)
+          continue
+        const seatName = getName(assignment.seat.ticket)
+        if (!seatName.full && availableWorkshopAddOns.length > 0) {
+          const addOn = availableWorkshopAddOns.splice(0, 1)[0]
+          assignment.grantsWorkshop = true
+          if (addOn.ticket.category) {
+            assignment.categoriesList.push(addOn.ticket.category)
+          }
+          if (addOn.isPaid) {
+            assignment.hasPaidAddOn = true
+          }
+        }
+      }
+
+      for (const assignment of assignments) {
+        if (workshopOnly && !assignment.grantsWorkshop) continue
+
+        const isComp = !assignment.seat.isPaid && !assignment.hasPaidAddOn
+        const uniqueCategories = Array.from(
+          new Set(assignment.categoriesList.filter(Boolean)),
+        )
+        const categories = uniqueCategories.join(', ')
+
+        // Never fall back to the buyer's name: it would land on TBA badges.
+        const firstName = assignment.seat.ticket.crm?.first_name || ''
+        const lastName = assignment.seat.ticket.crm?.last_name || ''
+
+        result.push({
+          firstName,
+          lastName,
+          email: canonicalEmail(assignment.seat.ticket.crm?.email),
+          categories,
+          isComp,
+          grantsWorkshop: assignment.grantsWorkshop,
+        })
+      }
+    }
+
+    // Surplus or standalone workshop add-ons (when seats don't consume all add-ons, or seats.length === 0)
+    if (workshopOnly && availableWorkshopAddOns.length > 0) {
+      for (const addOn of availableWorkshopAddOns) {
+        const firstName = addOn.ticket.crm?.first_name || ''
+        const lastName = addOn.ticket.crm?.last_name || ''
+        result.push({
+          firstName,
+          lastName,
+          email: canonicalEmail(addOn.ticket.crm?.email),
+          categories: addOn.ticket.category || '',
+          isComp: !addOn.isPaid,
+          grantsWorkshop: true,
+        })
+      }
+    }
   }
 
   for (const group of byEmail.values()) {
-    addGroup(group)
+    processGroup(group)
   }
   for (const anon of anonymous) {
-    addGroup([anon])
+    processGroup([anon])
   }
 
   return result
