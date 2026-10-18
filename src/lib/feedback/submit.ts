@@ -6,7 +6,8 @@
  * 1. the code resolves, through the conference's index, to a confirmed,
  *    published talk of the conference serving the request;
  * 2. the Feedback Window is open;
- * 3. the colour is exactly one Feedback Colour;
+ * 3. the colour is exactly one Feedback Colour, and the comment, if any, is
+ *    a string of at most {@link MAX_COMMENT_LENGTH} characters once trimmed;
  * 4. the cookie is one this server signed. A missing or invalid one is "no
  *    response from this device": a new token, never an error.
  * Refusals 1 and 2 answer with the page state the attendee would see on a
@@ -15,33 +16,40 @@
  * erased talk refuses at once.
  *
  * THE WRITE is one transaction: `createIfNotExists` on the deterministic id,
- * then a patch that `set`s only the colour and the time. It never touches
- * `hiddenAt` or `flaggedAt`, so an attendee can't un-hide a comment by
- * answering again. Two first taps that race both commit; the second's create
+ * then a patch that `set`s only the colour, the comment and the time (an
+ * emptied comment is `unset`). It never touches `hiddenAt` or `flaggedAt`, so
+ * an attendee can't un-hide a comment by answering or rewording it again.
+ * "Change answer" and "Send comment" are this one action with the current or
+ * the new colour and comment (§7.4). Two first taps that race both commit; the second's create
  * does nothing, and the last write wins. _Implementation detail:_ the spec's
  * create-then-patch-on-409 has the same outcome in two requests.
  */
 import 'server-only'
 import { clientWrite } from '@/lib/sanity/client'
 import { normalizeShortCode } from '@/lib/marketing/short-code'
-import {
-  resolveFeedbackTarget,
-  type FeedbackConference,
-  type FeedbackPage,
-  type PublicFeedbackTalk,
-} from './attendee'
-import { isFeedbackColour, type FeedbackColour } from './colour'
+import { resolveFeedbackTarget, type FeedbackConference } from './attendee'
+import { expireFeedbackResponse } from './cache'
+import { isFeedbackColour } from './colour'
 import { feedbackResponseId, readDeviceCookie, recordAnswer } from './device'
+import { attendeeState, type AttendeeFeedbackState } from './page'
 
-export type SubmitOutcome =
-  | FeedbackPage
-  | { state: 'unavailable' }
-  | {
-      state: 'answered'
-      colour: FeedbackColour
-      /** The heading the tap was made under: only for a public talk. */
-      talk: PublicFeedbackTalk | null
-    }
+/** The comment's limit (§7.2), after trimming. The schema holds the same. */
+export const MAX_COMMENT_LENGTH = 1000
+
+/** What the attendee sees after the tap: Answered, or the code's state now. */
+export type SubmitOutcome = AttendeeFeedbackState
+
+/**
+ * The comment as it will be stored: `null` for none or blank, `undefined`
+ * when it is not a comment at all (not a string, or too long once trimmed).
+ */
+export function normalizeComment(comment: unknown): string | null | undefined {
+  if (comment === undefined || comment === null) return null
+  if (typeof comment !== 'string') return undefined
+  const trimmed = comment.trim()
+  if (trimmed.length > MAX_COMMENT_LENGTH) return undefined
+  return trimmed || null
+}
 
 interface TalkDoc {
   _id: string
@@ -58,18 +66,28 @@ export async function submitFeedback({
   conference,
   code: rawCode,
   colour,
+  comment: rawComment,
   cookie,
   now,
 }: {
   conference: FeedbackConference
   code: unknown
   colour: unknown
+  comment?: unknown
   cookie: string | undefined
   now: Date
 }): Promise<{ outcome: SubmitOutcome; cookie?: string }> {
   const { page, target } = await resolveFeedbackTarget(conference, rawCode, now)
-  if (!target || page.state !== 'open') return { outcome: page }
+  if (!target) return { outcome: page }
+  if (page.state !== 'open') {
+    // Closed or Not yet open: with Delete my answer when the cookie lists
+    // the talk. Reading the cookie is no fetch; the order of §7.4 holds.
+    const device = readDeviceCookie(cookie, now)
+    return { outcome: attendeeState(page, device, target.talkId) }
+  }
   if (!isFeedbackColour(colour)) return { outcome: page }
+  const comment = normalizeComment(rawComment)
+  if (comment === undefined) return { outcome: page }
   const device = readDeviceCookie(cookie, now)
 
   let talk: TalkDoc | undefined
@@ -108,14 +126,22 @@ export async function submitFeedback({
         colour,
         submittedAt,
       })
-      .patch(id, (patch) => patch.set({ colour, submittedAt }))
+      .patch(id, (patch) =>
+        comment === null
+          ? patch.set({ colour, submittedAt }).unset(['comment'])
+          : patch.set({ colour, comment, submittedAt }),
+      )
       .commit()
   } catch (error) {
     console.error('Could not save a Feedback Response', error)
     return { outcome: { state: 'unavailable' }, cookie: next.value }
   }
+  // A commit whose answer was lost may have applied too, but what the page
+  // would then show is the stale answer, not a wrong one; the expiry rides on
+  // the confirmed write only.
+  expireFeedbackResponse(id)
   return {
-    outcome: { state: 'answered', colour, talk: page.talk },
+    outcome: { state: 'answered', colour, comment, talk: page.talk },
     cookie: next.value,
   }
 }

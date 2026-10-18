@@ -280,10 +280,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     fetch: fetchAs('write', apiVersion),
     // The doc endpoint reads the document store, past the search store's lag
     // (Sanity: "the absolute latest possible version of a document").
-    getDocument: async (id: string) => {
-      docReads.push(id)
-      return structuredClone(documents.find((d) => d._id === id)) ?? null
-    },
+    getDocument,
     getDocuments: async (ids: string[]) => {
       docReads.push(...ids)
       return ids.map(
@@ -316,10 +313,19 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     },
   })
 
+  // The doc endpoint on a read client: the document store, past the search
+  // store's lag, as on the writer.
+  const getDocument = async (id: string) => {
+    docReads.push(id)
+    return structuredClone(documents.find((d) => d._id === id)) ?? null
+  }
+
   const reader = (client: 'uncached' | 'cached') => ({
     fetch: fetchAs(client, DEFAULT_API_VERSION),
+    getDocument,
     withConfig: (config: { apiVersion: string }) => ({
       fetch: fetchAs(client, config.apiVersion),
+      getDocument,
     }),
   })
 

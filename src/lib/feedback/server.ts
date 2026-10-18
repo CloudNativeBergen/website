@@ -1,10 +1,8 @@
 export { ensureFeedbackCode, type EnsureFeedbackCodeResult } from './code'
 export { expireFeedbackCodeIndex } from './cache'
 export { conferenceFeedbackCodes, getFeedbackSlots } from './sanity'
-export {
-  resolveFeedbackPage,
-  type FeedbackPage,
-  type PublicFeedbackTalk,
-} from './attendee'
+export { type FeedbackPage, type PublicFeedbackTalk } from './attendee'
+export { resolveAttendeeState, type AttendeeFeedbackState } from './page'
 export { submitFeedback, type SubmitOutcome } from './submit'
+export { deleteFeedback } from './delete'
 export { deviceCookie } from './device'

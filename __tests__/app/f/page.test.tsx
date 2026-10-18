@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   resolution: {} as Record<string, unknown>,
   resolve: vi.fn(),
   submit: vi.fn(),
+  remove: vi.fn(),
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND')
   }),
@@ -26,11 +27,13 @@ vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: async () => h.resolution,
 }))
 vi.mock('@/lib/feedback/server', () => ({
-  resolveFeedbackPage: h.resolve,
+  resolveAttendeeState: h.resolve,
   submitFeedback: h.submit,
+  deleteFeedback: h.remove,
   deviceCookie: () => ({ name: 'konf_feedback', options: {} }),
 }))
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
+import { beginRequest, presentCookie } from '../../helpers/nextHeadersJar'
 
 import FeedbackCodePage from '@/app/(public)/f/[code]/page'
 
@@ -40,6 +43,7 @@ const render = (code = 'k7m2qx') =>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  beginRequest()
   h.resolution = { conference: CONFERENCE, status: 'resolved' }
   h.resolve.mockResolvedValue({ state: 'unknown' })
 })
@@ -60,19 +64,36 @@ describe('/f/[code]', () => {
     expect(h.resolve).not.toHaveBeenCalled()
   })
 
-  it('resolves the code against the HOST’s conference', async () => {
-    h.resolve.mockResolvedValue({ state: 'closed', talk: null })
+  it('resolves the code against the HOST’s conference, with this device’s cookie', async () => {
+    presentCookie('konf_feedback', 'signed-cookie')
+    h.resolve.mockResolvedValue({
+      state: 'closed',
+      talk: null,
+      canDelete: true,
+    })
     const element = await render('ABC234')
-    expect(h.resolve).toHaveBeenCalledWith(
-      CONFERENCE,
-      'ABC234',
-      expect.any(Date),
-    )
+    expect(h.resolve).toHaveBeenCalledWith({
+      conference: CONFERENCE,
+      code: 'ABC234',
+      cookie: 'signed-cookie',
+      now: expect.any(Date),
+    })
     // `now` is the request's time, not a fixed or cached instant.
-    const now = h.resolve.mock.calls[0][2] as Date
+    const { now } = h.resolve.mock.calls[0][0] as { now: Date }
     expect(Math.abs(now.getTime() - Date.now())).toBeLessThan(5_000)
-    expect(element.props.page).toEqual({ state: 'closed', talk: null })
+    expect(element.props.page).toEqual({
+      state: 'closed',
+      talk: null,
+      canDelete: true,
+    })
     expect(element.props.logo).toMatchObject({ title: 'Conf A' })
+  })
+
+  it('passes no cookie when the browser sent none', async () => {
+    await render()
+    expect(h.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ cookie: undefined }),
+    )
   })
 
   it('shows Unavailable, never Unknown, when the index read fails', async () => {
@@ -97,6 +118,36 @@ describe('/f/[code] Submit', () => {
     })
     expect(h.submit).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'ABC234', colour: 'red' }),
+    )
+  })
+
+  it('sends the comment with the colour', async () => {
+    h.submit.mockResolvedValue({ outcome: { state: 'unavailable' } })
+    const element = await render('ABC234')
+    await element.props.submit('green', ' nice ')
+    expect(h.submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'ABC234',
+        colour: 'green',
+        comment: ' nice ',
+      }),
+    )
+  })
+})
+
+describe('/f/[code] Delete my answer', () => {
+  it('is bound to the page’s own code: the client sends nothing', async () => {
+    h.remove.mockResolvedValue({
+      outcome: { state: 'closed', talk: null, canDelete: false },
+    })
+    const element = await render('ABC234')
+    expect(await element.props.remove()).toEqual({
+      state: 'closed',
+      talk: null,
+      canDelete: false,
+    })
+    expect(h.remove).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'ABC234' }),
     )
   })
 })
