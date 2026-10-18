@@ -285,7 +285,11 @@ describe('schedule.admin.addTalk', () => {
         tracks: [
           expect.objectContaining({
             talks: [
-              expect.objectContaining({ startTime: '09:00', endTime: '10:00' }),
+              expect.objectContaining({
+                startTime: '09:00',
+                endTime: '10:00',
+                _key: expect.any(String),
+              }),
               expect.objectContaining({ startTime: '10:00', endTime: '11:00' }),
             ],
           }),
@@ -298,9 +302,13 @@ describe('schedule.admin.addTalk', () => {
       `sanity:conference-${CONFERENCE_ID}`,
       'default',
     )
+    expect(revalidateTagMock).not.toHaveBeenCalledWith(
+      feedbackCodeIndexTag(CONFERENCE_ID),
+      expect.anything(),
+    )
   })
 
-  it('adds a placeholder to an empty track', async () => {
+  it('adds a placeholder to an empty track with generated _key', async () => {
     const emptyTrackSchedule = {
       ...dummySchedule,
       tracks: [{ _key: 'track-0', trackTitle: 'Track 1', talks: [] }],
@@ -327,6 +335,7 @@ describe('schedule.admin.addTalk', () => {
                 startTime: '12:00',
                 endTime: '13:00',
                 placeholder: 'Lunch Break',
+                _key: expect.any(String),
               }),
             ],
           }),
@@ -556,9 +565,18 @@ describe('schedule.admin.removeTalk', () => {
       expect.anything(),
       expect.anything(),
     )
+    expect(clientWriteFetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('conference._ref == $conferenceId'),
+      expect.objectContaining({ id: 'sched-1', conferenceId: CONFERENCE_ID }),
+    )
     expect(revalidateTagMock).toHaveBeenCalledWith(
       `sanity:conference-${CONFERENCE_ID}`,
       'default',
+    )
+    expect(revalidateTagMock).not.toHaveBeenCalledWith(
+      feedbackCodeIndexTag(CONFERENCE_ID),
+      expect.anything(),
     )
   })
 

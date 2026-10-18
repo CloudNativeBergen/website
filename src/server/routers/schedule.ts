@@ -429,6 +429,7 @@ export const scheduleRouter = router({
         }
 
         const newTalk = {
+          _key: crypto.randomUUID(),
           startTime: input.startTime,
           endTime: input.endTime,
           ...(input.proposalId
