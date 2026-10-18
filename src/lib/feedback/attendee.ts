@@ -193,7 +193,7 @@ export async function resolveFeedbackPage(
   return (await resolveFeedbackTarget(conference, rawCode, now)).page
 }
 
-type FeedbackConference = {
+export type FeedbackConference = {
   _id: string
   endDate?: string | null
   programDate?: string | null

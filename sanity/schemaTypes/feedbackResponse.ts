@@ -1,4 +1,5 @@
 import { defineField, defineType } from 'sanity'
+import { FEEDBACK_COLOURS, FEEDBACK_COLOUR_LABELS } from '@/lib/feedback/colour'
 
 /**
  * A Feedback Response (speaker feedback spec §4.1): one anonymous attendee's
@@ -35,11 +36,10 @@ export default defineType({
       title: 'Colour',
       type: 'string',
       options: {
-        list: [
-          { title: 'Loved it', value: 'green' },
-          { title: 'It was OK', value: 'yellow' },
-          { title: 'Not for me', value: 'red' },
-        ],
+        list: FEEDBACK_COLOURS.map((value) => ({
+          title: FEEDBACK_COLOUR_LABELS[value],
+          value,
+        })),
       },
       validation: (Rule) => Rule.required(),
     }),

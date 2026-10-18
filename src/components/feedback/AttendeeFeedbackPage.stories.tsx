@@ -24,7 +24,11 @@ const meta = {
   args: {
     logo: { title: 'Cloud Native Days Norway' },
     page: { state: 'open', talk, closesAt: '2026-10-27T09:40:00.000Z' },
-    submit: fn<SubmitAnswer>(async (colour) => ({ state: 'answered', colour })),
+    submit: fn<SubmitAnswer>(async (colour) => ({
+      state: 'answered',
+      colour,
+      talk,
+    })),
   },
 } satisfies Meta<typeof AttendeeFeedbackPage>
 

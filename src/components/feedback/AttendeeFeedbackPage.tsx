@@ -13,22 +13,18 @@ import {
 } from '@heroicons/react/24/outline'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
-import type { FeedbackColour } from '@/lib/feedback/colour'
+import {
+  FEEDBACK_COLOUR_LABELS,
+  type FeedbackColour,
+} from '@/lib/feedback/colour'
 import type { PublicFeedbackTalk, SubmitOutcome } from '@/lib/feedback/server'
 import { formatSessionInstant } from '@/lib/time'
 
 /**
  * The page the attendee sees: a state of the code, `unavailable` when it
- * could not be read, or `answered` after a tap (with the heading it was
- * tapped under).
+ * could not be read, or `answered` after a tap.
  */
-export type AttendeeFeedbackState =
-  | Exclude<SubmitOutcome, { state: 'answered' }>
-  | {
-      state: 'answered'
-      colour: FeedbackColour
-      talk: PublicFeedbackTalk | null
-    }
+export type AttendeeFeedbackState = SubmitOutcome
 
 /** Submit (speaker feedback spec §7.4), bound to the page's code. */
 export type SubmitAnswer = (colour: FeedbackColour) => Promise<SubmitOutcome>
@@ -36,21 +32,21 @@ export type SubmitAnswer = (colour: FeedbackColour) => Promise<SubmitOutcome>
 const ANSWERS = [
   {
     colour: 'green',
-    label: 'Loved it',
+    label: FEEDBACK_COLOUR_LABELS.green,
     Icon: FaceSmileIcon,
     className: 'bg-green-600 text-white',
     iconClassName: 'text-green-600 dark:text-green-500',
   },
   {
     colour: 'yellow',
-    label: 'It was OK',
+    label: FEEDBACK_COLOUR_LABELS.yellow,
     Icon: MinusCircleIcon,
     className: 'bg-yellow-400 text-yellow-950',
     iconClassName: 'text-yellow-500 dark:text-yellow-400',
   },
   {
     colour: 'red',
-    label: 'Not for me',
+    label: FEEDBACK_COLOUR_LABELS.red,
     Icon: FaceFrownIcon,
     className: 'bg-red-600 text-white',
     iconClassName: 'text-red-600 dark:text-red-500',
@@ -120,12 +116,7 @@ function PageState({
             level={level}
             closesAt={page.closesAt}
             submit={submit}
-            onAnswer={(next) =>
-              // A thank-you keeps the talk's heading above it.
-              onAnswer(
-                next.state === 'answered' ? { ...next, talk: page.talk } : next,
-              )
-            }
+            onAnswer={onAnswer}
           />
         </>
       )

@@ -392,10 +392,17 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
 - A cookie that fails verification is replaced, never trusted.
 - **Response id:** a hash of the token and the talk id, so the same device and
   talk always map to the same document. _Implementation detail:_
-  `feedbackResponse.` + the first 32 hex characters of SHA-256 over
-  `<token>:<talk _id>`; signing follows the module-private `sign()` pattern of
-  `src/lib/volunteer/token.ts`, with a secret documented in
-  `docs/TENANT_SECRETS.md` if it is new.
+  `feedbackResponse-` + the first 32 hex characters of SHA-256 over
+  `<token>:<talk _id>` (_Refinement (F1c):_ a hyphen, not a dot: a dotted id
+  is a path id, which Studio and tokenless reads treat as private); signing
+  follows the module-private `sign()` pattern of `src/lib/volunteer/token.ts`.
+  _Refinement (F1c):_ no new secret: the cookie is signed with
+  `INVITATION_TOKEN_SECRET` under its own HMAC labels, so rotating that secret
+  invalidates every device cookie.
+- _Refinement (F1c):_ the cookie path is case-sensitive in browsers, so a
+  device that opened a hand-typed `/F/<code>` (which F1b rewrites to the page)
+  is never sent its cookie back there, and each tap is a new response. Printed
+  codes and links are lower case. Accepted.
 - A device that clears its cookies produces a new response. That noise is
   accepted ([#1417](https://github.com/CloudNativeBergen/website/issues/1417)).
 
@@ -422,9 +429,10 @@ the host and the talk id from the index, never from the client.
 moderation fields): a field-scoped `patch(id).set({ colour, comment,
 submittedAt })` (or `unset` of an emptied comment), which by construction never
 touches `hiddenAt` or `flaggedAt`, so an attendee can't un-hide a comment by
-resubmitting or rewording it. If the document doesn't exist, a `create` on the
-deterministic id; on a 409 (a concurrent first submit from the same device) it
-falls back to the patch. Concurrent resubmissions from one device are
+resubmitting or rewording it. _Refinement (F1c):_ the patch rides in one
+transaction after a `createIfNotExists` on the deterministic id, so a concurrent
+first submit from the same device needs no 409 fallback: the second create does
+nothing and its patch applies. Concurrent resubmissions from one device are
 last-write-wins.
 
 **Before writing, Submit re-reads the talk by id through the doc endpoint**

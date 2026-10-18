@@ -14,7 +14,7 @@ export function SessionFeedbackPrivacy() {
       className="rounded-lg border border-lime-200 bg-lime-50 p-6 dark:border-lime-800 dark:bg-lime-900/20"
     >
       <h3 className="mb-4 flex items-center text-lg font-semibold text-lime-800 dark:text-lime-200">
-        <ChatBubbleBottomCenterTextIcon className="mr-3 h-5 w-5" />
+        <ChatBubbleBottomCenterTextIcon className="mr-3 size-5" />
         Session Feedback
       </h3>
       <ul className="space-y-2 text-sm text-lime-800 dark:text-lime-200">

@@ -131,6 +131,8 @@ describe('the first tap', () => {
     expect(await submitFeedbackAnswer('k7m2qx', 'green')).toEqual({
       state: 'answered',
       colour: 'green',
+      // The talk is public, so the thank-you keeps its heading.
+      talk: { title: 'Title of talk-open', speakers: [] },
     })
 
     const [response] = responses()
@@ -180,7 +182,7 @@ describe('a second tap from the same phone', () => {
 
     vi.setSystemTime(new Date(DURING.getTime() + 60_000))
     request(cookie)
-    expect(await submitFeedbackAnswer('k7m2qx', 'red')).toEqual({
+    expect(await submitFeedbackAnswer('k7m2qx', 'red')).toMatchObject({
       state: 'answered',
       colour: 'red',
     })
@@ -268,7 +270,7 @@ describe('a second tap from the same phone', () => {
     // finds the response already created.
     request(cookie)
     store().beforeNextCommit(() => submitFeedbackAnswer('k7m2qx', 'red'))
-    expect(await submitFeedbackAnswer('k7m2qx', 'yellow')).toEqual({
+    expect(await submitFeedbackAnswer('k7m2qx', 'yellow')).toMatchObject({
       state: 'answered',
       colour: 'yellow',
     })

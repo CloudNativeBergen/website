@@ -24,14 +24,24 @@
 import 'server-only'
 import { clientWrite } from '@/lib/sanity/client'
 import { normalizeShortCode } from '@/lib/marketing/short-code'
-import { resolveFeedbackTarget, type FeedbackPage } from './attendee'
+import {
+  resolveFeedbackTarget,
+  type FeedbackConference,
+  type FeedbackPage,
+  type PublicFeedbackTalk,
+} from './attendee'
 import { isFeedbackColour, type FeedbackColour } from './colour'
 import { feedbackResponseId, readDeviceCookie, recordAnswer } from './device'
 
 export type SubmitOutcome =
   | FeedbackPage
   | { state: 'unavailable' }
-  | { state: 'answered'; colour: FeedbackColour }
+  | {
+      state: 'answered'
+      colour: FeedbackColour
+      /** The heading the tap was made under: only for a public talk. */
+      talk: PublicFeedbackTalk | null
+    }
 
 interface TalkDoc {
   _id: string
@@ -51,7 +61,7 @@ export async function submitFeedback({
   cookie,
   now,
 }: {
-  conference: Parameters<typeof resolveFeedbackTarget>[0]
+  conference: FeedbackConference
   code: unknown
   colour: unknown
   cookie: string | undefined
@@ -90,7 +100,10 @@ export async function submitFeedback({
       })
       .patch(id, (patch) => patch.set({ colour, submittedAt }))
       .commit()
-    return { outcome: { state: 'answered', colour }, cookie: next.value }
+    return {
+      outcome: { state: 'answered', colour, talk: page.talk },
+      cookie: next.value,
+    }
   } catch (error) {
     console.error('Could not save a Feedback Response', error)
     return { outcome: { state: 'unavailable' } }
