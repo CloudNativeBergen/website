@@ -14,6 +14,16 @@ export function EarlyAccessBadge({
   earlyAccess: SignupEarlyAccess | undefined
 }) {
   if (!earlyAccess) return null
+  if (earlyAccess.ticketType) {
+    return (
+      <span
+        title={`Signed up early with a “${earlyAccess.ticketType}” ticket`}
+        className="inline-block max-w-64 truncate rounded-full bg-blue-100 px-2.5 py-0.5 align-middle text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+      >
+        Ticket: {earlyAccess.ticketType}
+      </span>
+    )
+  }
   const name = earlyAccess.sponsor?.name
   return (
     <span

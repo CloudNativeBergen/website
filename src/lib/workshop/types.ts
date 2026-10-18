@@ -21,6 +21,8 @@ export interface EarlyAccessSponsor {
 export type SignupEarlyAccess = {
   /** `null`: the sponsor is no longer in the conference. */
   sponsor: EarlyAccessSponsor | null
+  /** Admitted by its ticket type, with no link: the type. */
+  ticketType?: string
 } | null
 export type OperatingSystem = 'windows' | 'macos' | 'linux'
 

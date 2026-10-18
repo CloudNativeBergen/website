@@ -327,3 +327,24 @@ arrived.
 
 Slice 2 follows 1. Slices 3 and 4 follow 2 and are independent of each other. #1344 is separate
 from all four and gates only the first production use.
+
+## 13. Early access by ticket type
+
+Organizers can give early access to whole ticket types, with no link. Each row of "Workshop
+tickets" on `/admin/workshops` has an "Early access" checkbox. It can only be turned on for a type
+that grants workshop access. The choice is stored on the conference as
+`workshopEarlyAccessTicketTypes`, the provider's type names, matched as `workshopAccessOf` matches
+them (`typeKey`: case and spacing folded).
+
+- Early access is a live link cookie OR a workshop ticket of a chosen type. Both use the same
+  window (§2): the sponsor start time up to the official opening. Without a sponsor start time
+  the setting has no effect, and the section says so.
+- The ticket must still grant workshops. The type is checked against the tickets the portal gate
+  already read (`decideWorkshopPortalAccess` returns them), so it costs no extra lookup.
+  Capacity, the closing time and the duplicate check are unchanged.
+- The type is asked before the link. A sign-up admitted by type records `earlyAccessTicketType`
+  (the configured name) and no sponsor. The early sign-ups list shows it as "Ticket: _type_".
+  Narrowing the list to a sponsor leaves these sign-ups out.
+- An unset or empty list changes nothing.
+- Known gap: the portal reads the list from the cached conference. A save from the admin page
+  expires that cache. An edit in Sanity Studio takes effect when the cache expires.

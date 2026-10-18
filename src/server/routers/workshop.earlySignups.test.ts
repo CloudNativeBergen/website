@@ -202,6 +202,43 @@ beforeEach(() => {
   h.workshopsEnabled.mockResolvedValue(true)
 })
 
+describe('an early sign-up admitted by its ticket type', () => {
+  const TICKET = 'Sponsor discount (workshop upgrade)'
+  beforeEach(() => {
+    store().reset([
+      ...BASE,
+      signup('su-tik', {
+        at: '2026-06-09T08:06:00Z',
+        earlyAccessTicketType: TICKET,
+      }),
+      signup('su-ada', { via: 'sfc-acme', at: '2026-06-09T08:05:00Z' }),
+    ])
+  })
+
+  it('is listed among the early sign-ups with its type, and not under a sponsor', async () => {
+    const { signups } = await caller().admin.listEarlySignups({})
+    expect(signups.map((row) => [row._id, row.earlyAccess])).toEqual([
+      ['su-tik', { sponsor: null, ticketType: TICKET }],
+      ['su-ada', { sponsor: { _id: 'sfc-acme', name: 'Acme AS' } }],
+    ])
+    const narrowed = await caller().admin.listEarlySignups({
+      sponsorId: 'sfc-acme',
+    })
+    expect(narrowed.signups.map((row) => row._id)).toEqual(['su-ada'])
+  })
+
+  it("carries its type in the dialog's rows", async () => {
+    const { data } = await caller().admin.listSignups({
+      workshopId: WORKSHOP,
+      status: WorkshopSignupStatus.CONFIRMED,
+    })
+    expect(data.find((row) => row._id === 'su-tik')?.earlyAccess).toEqual({
+      sponsor: null,
+      ticketType: TICKET,
+    })
+  })
+})
+
 describe("a sign-up's row in the dialog (workshop.admin.listSignups)", () => {
   it("carries the sponsor's name on an early sign-up, and nothing on any other", async () => {
     const { data } = await caller().admin.listSignups({

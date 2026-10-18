@@ -35,7 +35,7 @@ export type WorkshopPortalDenial =
   'feature-disabled' | 'email-unverified' | 'no-eligible-ticket'
 
 export type WorkshopPortalAccess =
-  | { allowed: true }
+  | { allowed: true; eligibleTickets: TicketCandidate[] }
   | {
       allowed: false
       denial: WorkshopPortalDenial
@@ -91,5 +91,5 @@ export async function decideWorkshopPortalAccess(params: {
     }
   }
 
-  return { allowed: true }
+  return { allowed: true, eligibleTickets: eligibility.eligibleTickets }
 }

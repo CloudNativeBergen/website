@@ -44,6 +44,8 @@ export interface WorkshopTicketType {
    * carry-over must not overwrite a stored answer.
    */
   builtInGrantedOthersSetToNo: string[]
+  /** Holders may sign up from the sponsor start time, with no link. */
+  earlyAccess?: boolean
 }
 
 /** A stored workshop answer whose `typeName` matches no provider type. */
@@ -101,8 +103,10 @@ export interface WorkshopTicketList {
 export function buildWorkshopTicketList(
   typeNames: readonly string[],
   ticketTypeRoles?: readonly TicketTypeRole[] | null,
+  earlyAccessTypes?: readonly string[] | null,
 ): WorkshopTicketList {
   const roles = ticketTypeRoles ?? []
+  const early = new Set((earlyAccessTypes ?? []).map(typeKey))
   const configured = marksWorkshopAccess(roles)
   // Taking this name's entries away leaves nothing marked: the question the
   // save asks of the stored document, asked here of the same roles.
@@ -155,6 +159,7 @@ export function buildWorkshopTicketList(
         builtInGrants: builtInOnce.has(key),
         builtInGrantedOthers: builtInOthers(key, false),
         builtInGrantedOthersSetToNo: builtInOthers(key, true),
+        ...(early.has(key) && { earlyAccess: true }),
       }
     }),
     builtInGranted,

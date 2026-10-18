@@ -596,3 +596,70 @@ describe('the recorded sponsor is a weak reference', () => {
     expect(store().doc(SFC)).toBeDefined()
   })
 })
+
+describe('early access by ticket type, with no link', () => {
+  const TWO_DAY = 'Workshop + Conference (2 days)'
+  const byTicket = (types: string[], times = INSIDE_THE_WINDOW) => {
+    h.times = { ...times, workshopEarlyAccessTicketTypes: types } as never
+  }
+  const recorded = () => mySignups()[0]?.earlyAccessTicketType
+
+  it('a holder of a chosen type signs up early, and the sign-up records the type', async () => {
+    // Stored as configured, matched as the access rule matches names.
+    byTicket(['workshop + conference (2 DAYS)'])
+    expect(await attempt()).toEqual(ORDINARY)
+    expect(recorded()).toBe('workshop + conference (2 DAYS)')
+    expect(linkLookups()).toEqual([])
+  })
+
+  it('with a live cookie too, the type admits it and the link is not looked up', async () => {
+    byTicket([TWO_DAY])
+    expect(await attempt(LIVE)).toEqual(ORDINARY)
+    expect(recorded()).toBe(TWO_DAY)
+    expect(linkLookups()).toEqual([])
+  })
+
+  it('a chosen type that does not grant workshops admits nobody early', async () => {
+    ticketing.fetchEventTickets.mockResolvedValue([
+      {
+        id: 1,
+        order_id: 1,
+        category: TWO_DAY,
+        crm: { email: 'attendee@example.com' },
+      },
+      {
+        id: 2,
+        order_id: 1,
+        category: 'Early Bird',
+        crm: { email: 'attendee@example.com' },
+      },
+    ])
+    byTicket(['Early Bird'])
+    expect(await attempt()).toEqual(OPENS_OFFICIALLY)
+    // The link still admits on its own.
+    expect(await attempt(LIVE)).toEqual(EARLY())
+  })
+
+  it('an empty list changes nothing', async () => {
+    byTicket([])
+    expect(await attempt()).toEqual(OPENS_OFFICIALLY)
+  })
+
+  it('before the sponsor start time, the holder is told the sponsor start time', async () => {
+    byTicket([TWO_DAY], {
+      ...INSIDE_THE_WINDOW,
+      workshopRegistrationSponsorStart: SPONSOR_START_AHEAD,
+    })
+    expect(await attempt()).toEqual(OPENS_FOR_SPONSORS)
+  })
+
+  it('after the official opening nothing is recorded', async () => {
+    byTicket([TWO_DAY], {
+      ...INSIDE_THE_WINDOW,
+      workshopRegistrationStart: SPONSOR_START,
+      workshopRegistrationSponsorStart: '2026-06-01T07:00:00.000Z',
+    })
+    expect(await attempt()).toEqual(ORDINARY)
+    expect(recorded()).toBeUndefined()
+  })
+})

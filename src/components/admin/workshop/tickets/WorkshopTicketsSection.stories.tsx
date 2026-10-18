@@ -40,6 +40,9 @@ const meta = {
         http.post('/api/trpc/tickets.admin.setWorkshopAccess', () =>
           HttpResponse.json({ result: { data: { _id: 'conference' } } }),
         ),
+        http.post('/api/trpc/workshop.admin.setEarlyAccessTicketType', () =>
+          HttpResponse.json({ result: { data: { success: true } } }),
+        ),
       ],
     },
   },
@@ -280,6 +283,21 @@ const CONFIGURED = [
 ]
 
 /** A CONFIGURED LIST: every type has an answer, and nothing needs attention. */
+/** A type with early access on, and a sponsor start time set. */
+export const WithEarlyAccess: Story = {
+  args: {
+    list: buildWorkshopTicketList(TYPES, CONFIGURED, [SPEAKER]),
+    sponsorStartSet: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const boxes = canvas.getAllByRole('checkbox', { name: 'Early access' })
+    await expect(boxes.some((box) => (box as HTMLInputElement).checked)).toBe(
+      true,
+    )
+  },
+}
+
 export const Configured: Story = {
   args: { list: buildWorkshopTicketList(TYPES, CONFIGURED) },
   play: async ({ canvasElement }) => {

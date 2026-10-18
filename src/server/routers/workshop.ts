@@ -100,6 +100,12 @@ import {
   listEarlySignups,
   registrationWindowFor,
 } from '@/lib/workshop/early-access'
+import { earlyAccessTicketTypeOf } from '@/lib/workshop/early-access/ticket'
+import {
+  typeKey,
+  workshopAccessOf,
+  type TicketTypeRole,
+} from '@/lib/tickets/classification'
 import {
   isOrganizerForCurrentOrg,
   type OrganizerSpeaker,
@@ -250,7 +256,7 @@ async function requireWorkshopAttendee(ctx: Context) {
     throw new TRPCError({ code: 'FORBIDDEN', message: access.reason })
   }
 
-  return { actor, conference }
+  return { actor, conference, eligibleTickets: access.eligibleTickets }
 }
 
 /**
@@ -625,7 +631,8 @@ export const workshopRouter = router({
         // Bind the signup to the authenticated WorkOS session. The id/email come
         // from the sealed session cookie (authoritative); the client no longer
         // sends — and cannot spoof — any identity.
-        const { actor, conference } = await requireWorkshopAttendee(ctx)
+        const { actor, conference, eligibleTickets } =
+          await requireWorkshopAttendee(ctx)
         const userWorkOSId = actor.id
         const userEmail = actor.email
         const userName = workshopUserName(actor)
@@ -636,40 +643,44 @@ export const workshopRouter = router({
         // only when it can matter: the request carries the cookie, the
         // conference has an early-access window and the official opening has
         // not passed. A revoke takes effect on the next attempt.
-        const { registration, access: sponsor } = await registrationWindowFor(
-          conference,
-          new Date(),
-          async () => {
-            const token = earlyAccessTokenOf(ctx.req.cookies)
-            if (!token) return null
-            let found: Awaited<ReturnType<typeof findEarlyAccessSponsor>>
-            try {
-              found = await findEarlyAccessSponsor(conference._id, token)
-            } catch (error) {
-              // NEVER ADMITS, and never names the official opening to a
-              // person whose early access was simply not checked.
-              console.error('[workshop] early-access lookup failed', error)
-              throw new TRPCError({
-                code: 'SERVICE_UNAVAILABLE',
-                message:
-                  'We could not check your early access right now. Please try again in a moment.',
-              })
-            }
-            // The link is not live. If the portal page's cached links still
-            // say it is, the page is showing this person an early access
-            // they do not have: make its next view read them again.
-            if (!found) {
-              await expireEarlyAccessLinksIfTheyDisagree(
-                conference._id,
-                token,
-                {
-                  live: false,
-                },
-              )
-            }
-            return found
-          },
-        )
+        //
+        // EARLY ACCESS BY TICKET TYPE is asked first: the tickets are the ones
+        // the gate above already read, so it costs no lookup. A match admits
+        // and records the type; the link is then not looked up.
+        const { registration, access } = await registrationWindowFor<{
+          sponsor?: { _id: string }
+          ticketType?: string
+        }>(conference, new Date(), async () => {
+          const ticketType = earlyAccessTicketTypeOf(
+            eligibleTickets,
+            conference.workshopEarlyAccessTicketTypes,
+          )
+          if (ticketType) return { ticketType }
+          const token = earlyAccessTokenOf(ctx.req.cookies)
+          if (!token) return null
+          let found: Awaited<ReturnType<typeof findEarlyAccessSponsor>>
+          try {
+            found = await findEarlyAccessSponsor(conference._id, token)
+          } catch (error) {
+            // NEVER ADMITS, and never names the official opening to a
+            // person whose early access was simply not checked.
+            console.error('[workshop] early-access lookup failed', error)
+            throw new TRPCError({
+              code: 'SERVICE_UNAVAILABLE',
+              message:
+                'We could not check your early access right now. Please try again in a moment.',
+            })
+          }
+          // The link is not live. If the portal page's cached links still
+          // say it is, the page is showing this person an early access
+          // they do not have: make its next view read them again.
+          if (!found) {
+            await expireEarlyAccessLinksIfTheyDisagree(conference._id, token, {
+              live: false,
+            })
+          }
+          return found ? { sponsor: found } : null
+        })
         if (registration.status === 'not-open-yet') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
@@ -714,7 +725,8 @@ export const workshopRouter = router({
             // sponsor was looked up only inside the early-access window, so a
             // sign-up after the official opening records nothing, cookie or
             // not.
-            earlyAccessSponsorId: sponsor?._id,
+            earlyAccessSponsorId: access?.sponsor?._id,
+            earlyAccessTicketType: access?.ticketType,
           },
           { whenFull: 'waitlist' },
         )
@@ -1723,6 +1735,69 @@ export const workshopRouter = router({
             cause: error,
           })
         }
+      }),
+
+    /**
+     * EARLY ACCESS BY TICKET TYPE, one type at a time: holders of a type that
+     * is on may sign up from the sponsor start time with no link. Only a type
+     * that grants workshop access, by the live answers, can be turned on.
+     * Conditioned on the revision it read, as the times are.
+     */
+    setEarlyAccessTicketType: workshopAdminProcedure
+      .input(
+        z.object({ typeName: z.string().min(1), earlyAccess: z.boolean() }),
+      )
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const stored = await clientReadUncached.fetch<{
+          _rev?: string
+          ticketTypeRoles?: TicketTypeRole[] | null
+          workshopEarlyAccessTicketTypes?: string[] | null
+        } | null>(
+          // groq-global-scoped: keyed by `resolveConferenceId()`'s id, the request's own conference and the one patched below; never client input.
+          `*[_type == "conference" && _id == $id][0]{ _rev, ticketTypeRoles, workshopEarlyAccessTicketTypes }`,
+          { id: conferenceId },
+          { cache: 'no-store' },
+        )
+        if (!stored?._rev) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Conference not found',
+          })
+        }
+        if (
+          input.earlyAccess &&
+          workshopAccessOf(input.typeName, stored.ticketTypeRoles) !== 'granted'
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `“${input.typeName}” does not grant workshop access, so it cannot get early access.`,
+          })
+        }
+        const key = typeKey(input.typeName)
+        const types = (stored.workshopEarlyAccessTicketTypes ?? []).filter(
+          (type) => typeKey(type) !== key,
+        )
+        if (input.earlyAccess) types.push(input.typeName)
+        try {
+          await clientWrite
+            .patch(conferenceId)
+            .ifRevisionId(stored._rev)
+            .set({ workshopEarlyAccessTicketTypes: types })
+            .commit()
+        } catch (error) {
+          if ((error as { statusCode?: number } | null)?.statusCode === 409) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'The conference was changed while you were saving, so nothing was saved. Try again.',
+            })
+          }
+          throw error
+        }
+        revalidateTag('admin:settings', 'default')
+        revalidateTag(conferenceTag(conferenceId), 'default')
+        return { success: true }
       }),
   }),
 })

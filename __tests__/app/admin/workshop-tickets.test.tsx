@@ -175,6 +175,13 @@ vi.mock('@/lib/trpc/client', () => ({
         },
       },
     }),
+    workshop: {
+      admin: {
+        setEarlyAccessTicketType: {
+          useMutation: () => ({ mutate: () => {}, isPending: false }),
+        },
+      },
+    },
     tickets: {
       admin: {
         setWorkshopAccess: {

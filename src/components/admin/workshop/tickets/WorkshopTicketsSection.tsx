@@ -1,6 +1,16 @@
 'use client'
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from 'react'
+import { useRouter } from 'next/navigation'
+import { api } from '@/lib/trpc/client'
+import { useNotification } from '@/components/admin/NotificationProvider'
 import {
   ExclamationTriangleIcon,
   TicketIcon,
@@ -9,6 +19,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import type {
   OrphanedWorkshopEntry,
   WorkshopTicketList,
+  WorkshopTicketType,
 } from '@/lib/workshop/ticket-list'
 import { WORKSHOP_TICKETS_ANCHOR } from './anchor'
 import { BuiltInListConfirm, Question } from './Question'
@@ -106,6 +117,8 @@ export interface WorkshopTicketsSectionProps {
    * so the section names no cause it does not know.
    */
   causeUnknown?: boolean
+  /** "Sponsor Early Access Opens" is set: early access can take effect. */
+  sponsorStartSet?: boolean
 }
 
 /**
@@ -121,6 +134,7 @@ export function WorkshopTicketsSection({
   list,
   providerLabel,
   causeUnknown = false,
+  sponsorStartSet = false,
 }: WorkshopTicketsSectionProps) {
   if (!list) {
     return (
@@ -223,6 +237,13 @@ export function WorkshopTicketsSection({
         </div>
       )}
 
+      <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+        Early access lets holders sign up from “Sponsor Early Access Opens”,
+        with no link.
+        {!sponsorStartSet &&
+          ' No sponsor start time is set, so early access has no effect yet.'}
+      </p>
+
       <ul className="mt-2 divide-y divide-gray-100 dark:divide-gray-800">
         {list.types.map((type, index) => (
           <li key={`${index}:${type.typeName}`}>
@@ -233,10 +254,59 @@ export function WorkshopTicketsSection({
               row
               basedOn={list.version}
             />
+            <EarlyAccessToggle type={type} />
           </li>
         ))}
       </ul>
     </WorkshopTicketsFrame>
+  )
+}
+
+/**
+ * "Early access" for one ticket type: its holders may sign up from the
+ * sponsor start time, with no link. Only a type that grants workshop access
+ * can be turned on; one that is on can always be turned off.
+ */
+function EarlyAccessToggle({ type }: { type: WorkshopTicketType }) {
+  const router = useRouter()
+  const { showNotification } = useNotification()
+  const [refreshing, startRefresh] = useTransition()
+  const mutation = api.workshop.admin.setEarlyAccessTicketType.useMutation({
+    onSuccess: () => startRefresh(() => router.refresh()),
+    onError: (error) =>
+      showNotification({
+        type: 'error',
+        title: 'Could not save early access',
+        message: error.message,
+      }),
+  })
+  const grants = type.access === 'granted'
+  const id = useId()
+  const busy = mutation.isPending || refreshing
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 pb-3 text-sm">
+      <input
+        id={id}
+        type="checkbox"
+        checked={!!type.earlyAccess}
+        disabled={busy || (!grants && !type.earlyAccess)}
+        onChange={(event) =>
+          mutation.mutate({
+            typeName: type.typeName,
+            earlyAccess: event.target.checked,
+          })
+        }
+        className="size-4 rounded border-gray-300 text-indigo-600 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800"
+      />
+      <label htmlFor={id} className="text-gray-700 dark:text-gray-300">
+        Early access
+      </label>
+      {!grants && (
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          Only for types that grant workshop access.
+        </span>
+      )}
+    </div>
   )
 }
 

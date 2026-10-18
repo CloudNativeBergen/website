@@ -29,6 +29,7 @@ import {
   registrationWindowFor,
   resolveEarlyAccess,
 } from '@/lib/workshop/early-access'
+import { earlyAccessTicketTypeOf } from '@/lib/workshop/early-access/ticket'
 import { refreshWorkshopPortal, signOutOfWorkshop } from './actions'
 
 /** Is `url` on `host` (a Host header value), compared as URLs compare hosts? */
@@ -138,9 +139,8 @@ export default async function WorkshopPage({
   // make, so this page can never show a signup form the API would refuse (or
   // the reverse). It no longer skips the ticket check for a conference without
   // ticketing ids: no ticketing means nobody can be shown to hold a ticket.
+  const access = await decideWorkshopPortalAccess({ conference, user })
   {
-    const access = await decideWorkshopPortalAccess({ conference, user })
-
     // Unreachable after the gate above, but the decision is the authority.
     if (!access.allowed && access.denial === 'feature-disabled') {
       notFound()
@@ -172,6 +172,14 @@ export default async function WorkshopPage({
     conference,
     new Date(),
     async () => {
+      // BY TICKET TYPE first, as `workshop.signup` asks it: from the tickets
+      // the decision above already read.
+      const ticketType = earlyAccessTicketTypeOf(
+        access.allowed ? access.eligibleTickets : [],
+        conference.workshopEarlyAccessTicketTypes,
+      )
+      // The banner reads "early access through …".
+      if (ticketType) return { sponsorName: `your “${ticketType}” ticket` }
       try {
         return await resolveEarlyAccess(
           conference._id,

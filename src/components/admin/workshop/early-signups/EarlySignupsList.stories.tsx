@@ -50,6 +50,14 @@ const SIGNUPS = [
     earlyAccess: { sponsor: null },
     signedUpAt: '2026-06-12T09:15:00Z',
   }),
+  // Admitted by its ticket type, with no link.
+  row('su-6', 'Erik Nordmann', {
+    earlyAccess: {
+      sponsor: null,
+      ticketType: 'Sponsor discount (workshop upgrade)',
+    },
+    signedUpAt: '2026-06-12T10:00:00Z',
+  }),
 ]
 
 const meta = {

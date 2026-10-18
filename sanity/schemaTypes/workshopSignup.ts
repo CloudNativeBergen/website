@@ -167,6 +167,15 @@ export default defineType({
       type: 'text',
       rows: 3,
     }),
+    defineField({
+      // Set only for an early sign-up admitted by its ticket type instead of
+      // a sponsor's link: the type, as configured on the conference.
+      name: 'earlyAccessTicketType',
+      title: 'Early Access Ticket Type',
+      type: 'string',
+      readOnly: true,
+      description: 'The ticket type that admitted this early sign-up',
+    }),
   ],
 
   preview: {
