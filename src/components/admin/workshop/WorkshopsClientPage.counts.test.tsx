@@ -111,6 +111,9 @@ async function answer(
       return [ok({ success: true, data, count: data.length }), 200]
     }
     // The "Early sign-ups" list (#1348): this conference has none.
+    // The bulk early-access send (#1347): not what this file is about.
+    case 'workshop.admin.earlyAccessBulkPreview':
+      return [ok({ count: 0, refusal: null }), 200]
     case 'workshop.admin.listEarlySignups':
       return [ok({ signups: [], sponsors: [] }), 200]
     case 'workshop.admin.getSummary': {

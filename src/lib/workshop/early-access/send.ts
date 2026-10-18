@@ -35,6 +35,26 @@ export type EarlyAccessSendDecision =
     }
 
 /**
+ * Steps 1–3 of {@link decideEarlyAccessSend}, the ones that do not depend on
+ * the sponsor: a bulk send asks them once, up front, for the whole batch.
+ * `conference` must be read live, for the reason given there.
+ */
+export function earlyAccessConferenceRefusal(
+  conference: WorkshopRegistrationTimes,
+  domain: string | undefined,
+  now: Date,
+): 'localhost' | 'no-window' | 'opening-passed' | null {
+  if (domain && isLocalhostDomain(domain)) return 'localhost'
+  if (!earlyAccessWindow(conference)) return 'no-window'
+  const early = workshopRegistrationWindow(conference, {
+    now,
+    earlyAccess: true,
+  })
+  if (early.status === 'closed' || !early.early) return 'opening-passed'
+  return null
+}
+
+/**
  * MAY A WORKSHOP EARLY-ACCESS EMAIL BE SENT TO THIS SPONSOR NOW? (#1347, spec
  * §8.) THE ONE DECISION: the Send action refuses with it, and the Send modal
  * shows its answer before the organizer writes anything. Only the deal is
@@ -78,13 +98,8 @@ export async function decideEarlyAccessSend({
   const conference = await readConference()
   const window = earlyAccessWindow(conference)
   if (!window) return { refused: 'no-window' }
-  const early = workshopRegistrationWindow(conference, {
-    now,
-    earlyAccess: true,
-  })
-  if (early.status === 'closed' || !early.early) {
-    return { refused: 'opening-passed' }
-  }
+  const refused = earlyAccessConferenceRefusal(conference, domain, now)
+  if (refused) return { refused }
 
   const sponsor = await readEarlyAccessSponsor(
     conference._id,

@@ -233,6 +233,9 @@ async function answer(procedure: string, input: unknown): Promise<unknown> {
     // The ticket holders (#1333): not what this file is about.
     case 'workshop.admin.ticketHolders':
       return ok({ conferenceId: 'conf-1', available: false })
+    // The bulk early-access send: not what this file is about.
+    case 'workshop.admin.earlyAccessBulkPreview':
+      return ok({ count: 0, refusal: null })
     case 'workshop.admin.listEarlySignups': {
       server.earlyInputs.push(input)
       const { sponsorId = '' } = (input ?? {}) as { sponsorId?: string }

@@ -15,6 +15,7 @@ import {
 } from '@/components/admin/workshop'
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
+import { WorkshopEarlyAccessBulkButton } from './WorkshopEarlyAccessBulkButton'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import {
   WorkshopReminderButton,
@@ -519,6 +520,8 @@ function WorkshopsClientPageFor({
         workshopRegistrationStart={workshopRegistrationStart}
         workshopRegistrationEnd={workshopRegistrationEnd}
       />
+
+      <WorkshopEarlyAccessBulkButton />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {initialWorkshops.length === 0 ? (

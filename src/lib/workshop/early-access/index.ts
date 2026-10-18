@@ -11,6 +11,7 @@ export {
 } from './link'
 export {
   decideEarlyAccessSend,
+  earlyAccessConferenceRefusal,
   type EarlyAccessSendConference,
   type EarlyAccessSendDecision,
   type EarlyAccessSendRefusal,
