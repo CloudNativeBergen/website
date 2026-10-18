@@ -305,7 +305,9 @@ describe('schedule.admin.addTalk', () => {
       ...dummySchedule,
       tracks: [{ _key: 'track-0', trackTitle: 'Track 1', talks: [] }],
     }
-    clientWriteFetchMock.mockResolvedValueOnce(structuredClone(emptyTrackSchedule))
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(emptyTrackSchedule),
+    )
 
     const res = await makeCaller().admin.addTalk({
       scheduleId: 'sched-1',
@@ -376,7 +378,9 @@ describe('schedule.admin.addTalk', () => {
         endTime: '10:00',
         proposalId: 'foreign-talk',
       }),
-    ).rejects.toThrowError(/Proposal not found or belongs to another conference/)
+    ).rejects.toThrowError(
+      /Proposal not found or belongs to another conference/,
+    )
   })
 
   it('refuses unconfirmed talk on an official schedule', async () => {
@@ -457,7 +461,9 @@ describe('schedule.admin.removeTalk', () => {
   }
 
   it('removes a talk by track and talk index', async () => {
-    clientWriteFetchMock.mockResolvedValueOnce(structuredClone(dummyScheduleWithTalks))
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(dummyScheduleWithTalks),
+    )
 
     const res = await makeCaller().admin.removeTalk({
       scheduleId: 'sched-1',
@@ -484,7 +490,9 @@ describe('schedule.admin.removeTalk', () => {
   })
 
   it('refuses when talk index is out of bounds', async () => {
-    clientWriteFetchMock.mockResolvedValueOnce(structuredClone(dummyScheduleWithTalks))
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(dummyScheduleWithTalks),
+    )
 
     await expect(
       makeCaller().admin.removeTalk({
