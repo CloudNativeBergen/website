@@ -31,19 +31,31 @@ export function feedbackCodeDisplayUrl(url: string): string {
 
 const MAX_SLUG = 40
 
-/** Letters NFKD leaves alone, spelled the way Norwegians do in ASCII. */
+/**
+ * Letters NFKD cannot decompose, spelled in ASCII: the Norwegian three the
+ * way Norwegians do, the rest the usual way.
+ */
 const ASCII_SPELLING: Record<string, string> = {
   æ: 'ae',
   ø: 'o',
   å: 'aa',
   ß: 'ss',
+  ł: 'l',
+  đ: 'd',
+  ð: 'd',
+  þ: 'th',
+  œ: 'oe',
 }
+const UNDECOMPOSABLE = new RegExp(
+  `[${Object.keys(ASCII_SPELLING).join('')}]`,
+  'g',
+)
 
 /** `Sikkerhet på toppen` → `sikkerhet-paa-toppen`; a title with nothing ASCII in it gives ''. */
 function slugOf(title: string): string {
   return title
     .toLowerCase()
-    .replace(/[æøåß]/g, (c) => ASCII_SPELLING[c])
+    .replace(UNDECOMPOSABLE, (c) => ASCII_SPELLING[c])
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
     .replace(/[^a-z0-9]+/g, '-')

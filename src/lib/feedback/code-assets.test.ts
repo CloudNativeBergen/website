@@ -38,6 +38,18 @@ describe('feedbackCodeFileName — says which talk and code a download is', () =
     )
   })
 
+  it('spells the other Latin letters NFKD cannot decompose', () => {
+    expect(feedbackCodeFileName(URL, 'Łódź i Đorđe', 'png')).toBe(
+      'feedback-code-k7m2qx-lodz-i-dorde.png',
+    )
+    expect(feedbackCodeFileName(URL, 'Þórður og Guðrún', 'png')).toBe(
+      'feedback-code-k7m2qx-thordur-og-gudrun.png',
+    )
+    expect(feedbackCodeFileName(URL, 'Œuvre complète', 'png')).toBe(
+      'feedback-code-k7m2qx-oeuvre-complete.png',
+    )
+  })
+
   it('falls back to the code alone when nothing of the title survives', () => {
     expect(feedbackCodeFileName(URL, 'クラウドの話', 'png')).toBe(
       'feedback-code-k7m2qx.png',

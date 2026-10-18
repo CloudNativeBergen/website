@@ -37,18 +37,42 @@ export function FeedbackPresentView({
 
   useEffect(() => {
     const root = document.documentElement
+    // Only a leave of full screen THIS instance entered closes it. The
+    // previous instance's exit can land after this one mounted (Close, then
+    // Present at once), and that stale change must not close the new view.
+    let entered = false
+    // That exit may still be in flight, with the previous view's own enter
+    // event still queued ahead of it: wait until nothing is full screen
+    // before asking, however many changes that takes.
+    const exited = new Promise<void>((resolve) => {
+      const check = () => {
+        if (document.fullscreenElement) return
+        document.removeEventListener('fullscreenchange', check)
+        resolve()
+      }
+      document.addEventListener('fullscreenchange', check)
+      check()
+    })
     // The request settles after this effect; keep the promise so a close
     // before it settles still leaves full screen once it is entered.
-    const entering =
-      root.requestFullscreen?.().catch(() => {}) ?? Promise.resolve()
+    const entering = exited
+      .then(
+        () =>
+          root.requestFullscreen?.() ??
+          Promise.reject(new Error('unavailable')),
+      )
+      .then(() => {
+        entered = document.fullscreenElement === root
+      })
+      .catch(() => {})
     const onFullscreen = () => {
-      if (!document.fullscreenElement) onClose()
+      if (entered && !document.fullscreenElement) onClose()
     }
     document.addEventListener('fullscreenchange', onFullscreen)
     return () => {
       document.removeEventListener('fullscreenchange', onFullscreen)
       void entering.then(() => {
-        if (document.fullscreenElement === root) {
+        if (entered && document.fullscreenElement === root) {
           document.exitFullscreen().catch(() => {})
         }
       })
@@ -72,7 +96,10 @@ export function FeedbackPresentView({
         >
           <XMarkIcon className="size-6" aria-hidden="true" />
           Close
-          <kbd className="ml-1 rounded border border-gray-300 px-1.5 font-mono text-sm pointer-coarse:hidden">
+          <kbd
+            aria-hidden="true"
+            className="ml-1 rounded border border-gray-300 px-1.5 font-mono text-sm pointer-coarse:hidden"
+          >
             Esc
           </kbd>
         </button>

@@ -206,6 +206,8 @@ const expectPrintIsolationRule = () => {
     (r) => r.selectorText === '[data-feedback-print] .text-center',
   )
   expect(centres?.style.getPropertyValue('text-align')).toBe('center')
+  // Without `!important` the global left-align rule wins on paper.
+  expect(centres?.style.getPropertyPriority('text-align')).toBe('important')
 }
 
 /**
@@ -278,10 +280,12 @@ export const PresentAndClose: Story = {
     expect(
       within(dialog).getByText('2026.cloudnativedays.no/f/k7m2qx'),
     ).toBeInTheDocument()
-    const close = within(dialog).getByRole('button', { name: /Close/ })
+    const close = within(dialog).getByRole('button', { name: 'Close' })
     expect(close).toHaveFocus()
     await waitFor(() =>
-      expect(document.fullscreenElement).toBe(document.documentElement),
+      expect(document.fullscreenElement, 'full screen on first open').toBe(
+        document.documentElement,
+      ),
     )
     // Tab, in both directions, never leaves the dialog while full screen.
     await userEvent.tab()
@@ -297,12 +301,80 @@ export const PresentAndClose: Story = {
     await userEvent.click(present)
     await userEvent.click(
       within(await screen.findByRole('dialog')).getByRole('button', {
-        name: /Close/,
+        name: 'Close',
       }),
     )
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await waitFor(() => expect(document.fullscreenElement).toBeNull())
     expect(present).toHaveFocus()
+    // Close, then Present at once: the previous view's exit from full
+    // screen can land after the new one mounted and must not close it.
+    // The runner's synthetic clicks carry no user activation, so only the
+    // first request above is ever granted here (the rest are refused) and
+    // the stale change is replayed by hand; a Playwright probe with real
+    // clicks showed the re-entry itself (see the PR).
+    await userEvent.click(present)
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Close',
+      }),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await userEvent.click(present)
+    const reopened = await screen.findByRole('dialog')
+    await waitFor(() => expect(document.fullscreenElement).toBeNull())
+    document.dispatchEvent(new Event('fullscreenchange'))
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(
+      reopened,
+      'survives the previous view’s late exit',
+    ).toBeInTheDocument()
+    await userEvent.click(
+      within(reopened).getByRole('button', { name: 'Close' }),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  },
+}
+
+/** Every client rect of the code's text sits on one line. */
+const expectCodeUnbroken = (canvas: ReturnType<typeof within>) => {
+  const link = canvas.getByText('2026.cloudnativedays.no/f/k7m2qx')
+  const walker = document.createTreeWalker(link, NodeFilter.SHOW_TEXT)
+  let node: Node | null = null
+  while ((node = walker.nextNode())) {
+    if (node.textContent?.includes('k7m2qx')) break
+  }
+  expect(node).not.toBeNull()
+  const range = document.createRange()
+  const start = node!.textContent!.indexOf('k7m2qx')
+  range.setStart(node!, start)
+  range.setEnd(node!, start + 'k7m2qx'.length)
+  const tops = new Set(
+    [...range.getClientRects()].map((r) => Math.round(r.top)),
+  )
+  expect(tops.size).toBe(1)
+  expect(link.scrollWidth).toBeLessThanOrEqual(link.clientWidth)
+}
+
+/** At 393 px the URL may wrap, but never inside the code. */
+export const PhoneUrl: Story = {
+  args: { window: before },
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole('img', { name: /QR code/ })
+    expectCodeUnbroken(canvas)
+  },
+}
+
+/** At 320 px too. */
+export const PhoneNarrowUrl: Story = {
+  args: { window: before },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole('img', { name: /QR code/ })
+    expectCodeUnbroken(canvas)
   },
 }
 

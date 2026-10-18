@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import {
   ArrowDownTrayIcon,
   CheckIcon,
@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import type { FeedbackWindow } from '@/lib/feedback'
 import {
+  feedbackCodeDisplayUrl,
   feedbackCodeFileName,
   renderFeedbackQrPng,
   renderFeedbackQrSvg,
@@ -21,7 +22,7 @@ import { FeedbackPrintSheetPortal } from './FeedbackPrintSheet'
 import { useFeedbackQrPng } from './useFeedbackQrPng'
 
 const BUTTON =
-  'inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+  'inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:aria-disabled:hover:bg-gray-800'
 
 /** The code's state line (speaker feedback spec §9.2). */
 function codeState(window: FeedbackWindow): { text: string; live: boolean } {
@@ -115,6 +116,30 @@ function CopyLinkButton({ url }: { url: string }) {
   )
 }
 
+/**
+ * The URL as the room reads it, without the scheme, and never broken inside
+ * the code: a phone may wrap it, but only after a `/`, so `k7m2qx` stays one
+ * piece. `overflow-wrap: anywhere` is the last resort for a host too long
+ * for any line. Copy link still copies the full `https://` URL.
+ */
+function DisplayUrl({ url }: { url: string }) {
+  const parts = feedbackCodeDisplayUrl(url).split('/')
+  return (
+    <p className="font-mono text-xs [overflow-wrap:anywhere] text-gray-700 sm:text-sm dark:text-gray-300">
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && (
+            <>
+              /<wbr />
+            </>
+          )}
+          {part}
+        </Fragment>
+      ))}
+    </p>
+  )
+}
+
 /** Hand the browser a file to save. */
 function saveFile(name: string, href: string) {
   const link = document.createElement('a')
@@ -175,8 +200,11 @@ function CodeActions({ url, title }: { url: string; title: string }) {
         <button
           type="button"
           className={BUTTON}
-          disabled={printing}
+          // Not `disabled`: that would drop focus from the button that was
+          // just pressed. It just refuses a second press while printing.
+          aria-disabled={printing}
           onClick={() => {
+            if (printing) return
             setFailed(false)
             setPrinting(true)
           }}
@@ -242,9 +270,7 @@ export function FeedbackCodePanel({
           Put this on your last slide or print the sheet for the room. Attendees
           scan it and answer in one tap; it&apos;s anonymous.
         </p>
-        <p className="font-mono text-sm break-all text-gray-700 dark:text-gray-300">
-          {url}
-        </p>
+        <DisplayUrl url={url} />
         <CodeActions url={url} title={title} />
       </div>
     </div>
