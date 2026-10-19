@@ -190,6 +190,11 @@ describe('the capacity notice', () => {
     expect(crossed()).toEqual(['waitlist'])
   })
 
+  it('is raised for the waitlist when an organizer moves the first person there', async () => {
+    await freeSeat('signup-1', 'waitlist')
+    expect(crossed()).toEqual(['waitlist'])
+  })
+
   it('is raised for 80% by a lower capacity', async () => {
     await changeCapacity(WORKSHOP, CONF, 1)
     expect(crossed()).toEqual(['eighty-percent'])

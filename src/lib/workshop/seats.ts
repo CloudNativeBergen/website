@@ -715,6 +715,12 @@ export async function freeSeat(
   }
   const workshopId = signup?.workshop?._ref
   const conferenceId = signup?.conference?._ref
+  // Read before the write, for the capacity notice: the move may start the
+  // waitlist.
+  const seats =
+    how === 'waitlist' && workshopId && conferenceId
+      ? await readSeats(workshopId, conferenceId).catch(() => null)
+      : null
   if (workshopId && conferenceId) {
     // Forgotten in the document store itself, whatever was read and whatever
     // lands first: a confirm of this sign-up committed just before this
@@ -730,4 +736,14 @@ export async function freeSeat(
     tx.patch(_id, { unset: [`recent[signup=="${signupId}"]`] })
   }
   await tx.commit()
+  if (seats && seats !== 'lagging' && workshopId && conferenceId) {
+    const before = seatState(seats, { after: false })
+    reportCapacityThresholds({
+      conferenceId,
+      workshopId,
+      workshopTitle: seats.title ?? '',
+      before,
+      after: { ...before, waitlist: true },
+    })
+  }
 }
