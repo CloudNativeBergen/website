@@ -72,7 +72,7 @@ const meta = {
     },
     msw: { handlers: [answer(BEFORE)] },
   },
-  args: { talkId: 'talk-1' },
+  args: { talkId: 'talk-1', title: 'Kubernetes: the hard parts' },
   beforeEach: runningClockFrom(new Date('2026-10-17T12:00:00Z')),
 } satisfies Meta<typeof SessionFeedbackSection>
 

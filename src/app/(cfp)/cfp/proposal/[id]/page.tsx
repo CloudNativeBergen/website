@@ -208,7 +208,10 @@ export default async function ProposalViewPage({
 
         {showSessionFeedback && (
           <div className="mb-6">
-            <SessionFeedbackSection talkId={proposal._id} />
+            <SessionFeedbackSection
+              talkId={proposal._id}
+              title={proposal.title}
+            />
           </div>
         )}
 

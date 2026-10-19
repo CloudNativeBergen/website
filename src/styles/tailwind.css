@@ -975,6 +975,20 @@
     background: white !important;
   }
 
+  /* The Feedback Code print sheet (src/components/feedback/FeedbackPrintSheet.tsx)
+     is mounted into <body> while printing and is all that prints. */
+  body:has([data-feedback-print]) > :not([data-feedback-print]) {
+    display: none !important;
+  }
+  body:has([data-feedback-print]) {
+    background: white !important;
+  }
+  /* The rule further down that left-aligns `.text-center` on paper is for
+     prose; the sheet is a poster and stays centred. */
+  [data-feedback-print] .text-center {
+    text-align: center !important;
+  }
+
   /* Program page specific print styles */
 
   /* Hide filters, view mode buttons, and other interactive elements */
