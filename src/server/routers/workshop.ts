@@ -146,8 +146,11 @@ const seatsBusy = (): never => {
  */
 const signUpRefused = (
   refused: Extract<SignUpOutcome, { refused: string }>['refused'],
-  { own }: { own: boolean },
+  { own, conferenceId }: { own: boolean; conferenceId: string },
 ): never => {
+  console.warn(
+    `[workshop] signup refused: ${refused} conference=${conferenceId} own=${own}`,
+  )
   switch (refused) {
     // Not of this conference, or not listed (#1301): as the router's own
     // check answers.
@@ -232,7 +235,7 @@ function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
  * page. It runs BEFORE any signup read or write, so a refused caller learns
  * nothing about what exists.
  */
-async function requireWorkshopAttendee(ctx: Context) {
+async function requireWorkshopAttendee(ctx: Context, signUp = false) {
   const actor = requireWorkshopUser(ctx)
 
   const { conference, error } = await getConferenceForCurrentDomain({})
@@ -254,6 +257,11 @@ async function requireWorkshopAttendee(ctx: Context) {
 
   const access = await decideWorkshopPortalAccess({ conference, user: actor })
   if (!access.allowed) {
+    // Logged for a sign-up attempt only, not for every attendee call.
+    if (signUp)
+      console.warn(
+        `[workshop] signup refused: ${access.denial} conference=${conference._id}`,
+      )
     throw new TRPCError({ code: 'FORBIDDEN', message: access.reason })
   }
 
@@ -633,7 +641,7 @@ export const workshopRouter = router({
         // from the sealed session cookie (authoritative); the client no longer
         // sends — and cannot spoof — any identity.
         const { actor, conference, eligibleTickets } =
-          await requireWorkshopAttendee(ctx)
+          await requireWorkshopAttendee(ctx, true)
         const userWorkOSId = actor.id
         const userEmail = actor.email
         const userName = workshopUserName(actor)
@@ -651,16 +659,16 @@ export const workshopRouter = router({
         // type keeps the sponsor attribution: both are recorded. When the
         // type admits, a failed lookup or a dead link does not refuse: the
         // sign-up goes ahead with only the type.
+        const ticketType = earlyAccessTicketTypeOf(
+          eligibleTickets,
+          conference.workshopEarlyAccessTicketTypes,
+        )
+        const token = earlyAccessTokenOf(ctx.req.cookies)
         const { registration, access } = await registrationWindowFor<{
           sponsor?: { _id: string }
           ticketType?: string
         }>(conference, new Date(), async () => {
-          const ticketType = earlyAccessTicketTypeOf(
-            eligibleTickets,
-            conference.workshopEarlyAccessTicketTypes,
-          )
           const byType = ticketType ? { ticketType } : null
-          const token = earlyAccessTokenOf(ctx.req.cookies)
           if (!token) return byType
           let found: Awaited<ReturnType<typeof findEarlyAccessSponsor>>
           try {
@@ -687,6 +695,13 @@ export const workshopRouter = router({
           }
           return { sponsor: found, ...byType }
         })
+        if (registration.status !== 'open') {
+          // One line per refused attempt, never the person (2026-10-19:
+          // sponsors were told "opens tomorrow" and the logs said nothing).
+          console.warn(
+            `[workshop] signup refused: ${registration.status} conference=${conference._id} early-access-cookie=${token !== undefined} early-access-ticket-type=${ticketType !== null} early-access=${access !== null}`,
+          )
+        }
         if (registration.status === 'not-open-yet') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
@@ -737,7 +752,10 @@ export const workshopRouter = router({
           { whenFull: 'waitlist' },
         )
         if ('refused' in outcome) {
-          return signUpRefused(outcome.refused, { own: true })
+          return signUpRefused(outcome.refused, {
+            own: true,
+            conferenceId: conference._id,
+          })
         }
         const { signup } = outcome
         const isWaitlist = signup.status === WorkshopSignupStatus.WAITLIST
@@ -1499,7 +1517,7 @@ export const workshopRouter = router({
             { whenFull: 'refuse' },
           )
           if ('refused' in outcome) {
-            return signUpRefused(outcome.refused, { own: false })
+            return signUpRefused(outcome.refused, { own: false, conferenceId })
           }
           const { signup } = outcome
 
