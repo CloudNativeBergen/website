@@ -32,8 +32,11 @@ export interface ConferenceWithSpeakerData {
   canEditProposals: boolean
   /** Session Feedback chip per confirmed talk (speaker feedback spec §9.4). */
   feedbackChips?: FeedbackChips
-  /** The edition served on this host, where a chip's section can open. */
-  isCurrentConference?: boolean
+  /**
+   * Where a chip's Session Feedback section opens: `''` for this host's
+   * edition, the edition's own origin otherwise, `null` for none.
+   */
+  feedbackLinkOrigin?: string | null
 }
 
 export interface GridPosition {

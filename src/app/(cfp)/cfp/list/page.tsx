@@ -12,6 +12,7 @@ import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
 import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
 import { getSpeakerFeedbackChips } from '@/lib/feedback/server'
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { CompactConferenceCard } from '@/components/cfp/CompactConferenceCard'
 import { SpeakerShareSidebar } from '@/components/cfp/SpeakerShareSidebar'
@@ -204,8 +205,12 @@ export default async function SpeakerDashboard() {
         conference,
         proposals: proposals || [],
         feedbackChips,
-        // The section a chip links to shows only on the talk's own host.
-        isCurrentConference: conference._id === currentConference?._id,
+        // The section a chip links to opens only on the talk's own host (spec
+        // §5): this host for this edition, the edition's own domain otherwise.
+        feedbackLinkOrigin:
+          conference._id === currentConference?._id
+            ? ''
+            : findOutboundOrigin(conference),
         galleryImages,
         workshopStats,
         travelSupport,

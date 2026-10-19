@@ -74,7 +74,7 @@ export function CompactConferenceCard({
               canEdit={data.canEditProposals}
               unreadByProposalId={unreadByProposalId}
               feedbackChips={data.feedbackChips}
-              feedbackLinked={data.isCurrentConference}
+              feedbackLinkOrigin={data.feedbackLinkOrigin}
             />
           )}
 

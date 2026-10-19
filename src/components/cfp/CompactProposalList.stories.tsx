@@ -446,20 +446,25 @@ export const ConferenceEnded: Story = {
     feedbackChips: {
       'talk-1': { kind: 'results', lovedItPercent: 70, total: 60 },
     },
+    // An earlier edition: its section opens on its own host.
+    feedbackLinkOrigin: 'https://2025.cloudnativedays.no',
   },
   parameters: {
     docs: {
       description: {
         story:
-          'After conference ends: shows the Session Feedback chip ("<n>% loved it · <total>", speaker feedback spec §9.4) and the warning for missing slides. Not linked: an earlier edition’s section opens only on its own host.',
+          'After conference ends: shows the Session Feedback chip ("<n>% loved it · <total>", speaker feedback spec §9.4) and the warning for missing slides. An earlier edition’s chip links to its own host, the only one where its section opens (§5).',
       },
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const chip = canvas.getByText(/70% loved it · 60/)
-    expect(chip).toHaveTextContent('70% loved it · 60 responses')
-    expect(chip.closest('a')).toBeNull()
+    expect(
+      canvas.getByRole('link', { name: /70% loved it · 60 responses/ }),
+    ).toHaveAttribute(
+      'href',
+      'https://2025.cloudnativedays.no/cfp/proposal/talk-1#session-feedback',
+    )
   },
 }
 
@@ -493,7 +498,7 @@ export const SessionFeedbackChips: Story = {
   args: {
     proposals: feedbackProposals,
     canEdit: true,
-    feedbackLinked: true,
+    feedbackLinkOrigin: '',
     feedbackChips: {
       'talk-1': { kind: 'results', lovedItPercent: 82, total: 57 },
       'talk-2': { kind: 'code' },

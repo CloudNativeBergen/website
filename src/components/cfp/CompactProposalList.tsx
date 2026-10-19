@@ -55,8 +55,12 @@ interface CompactProposalListProps {
    * computed on the server. A talk without one shows none.
    */
   feedbackChips?: FeedbackChips
-  /** Chips link to the talk's Session Feedback section on this host. */
-  feedbackLinked?: boolean
+  /**
+   * Where a chip's Session Feedback section opens (§5: only on the talk's
+   * own host): `''` for this host, an origin for an earlier edition's host,
+   * absent for no link.
+   */
+  feedbackLinkOrigin?: string | null
 }
 
 const CHIP =
@@ -146,7 +150,7 @@ export function CompactProposalList({
   canEdit,
   unreadByProposalId,
   feedbackChips,
-  feedbackLinked = false,
+  feedbackLinkOrigin,
 }: CompactProposalListProps) {
   const queryString = useImpersonateQueryString()
   const router = useRouter()
@@ -275,9 +279,11 @@ export function CompactProposalList({
                   <FeedbackChipBadge
                     chip={feedbackChip}
                     href={
-                      feedbackLinked
-                        ? `/cfp/proposal/${proposal._id}${queryString}#${SESSION_FEEDBACK_ANCHOR}`
-                        : undefined
+                      feedbackLinkOrigin == null
+                        ? undefined
+                        : feedbackLinkOrigin
+                          ? `${feedbackLinkOrigin}/cfp/proposal/${proposal._id}#${SESSION_FEEDBACK_ANCHOR}`
+                          : `/cfp/proposal/${proposal._id}${queryString}#${SESSION_FEEDBACK_ANCHOR}`
                     }
                   />
                 )}

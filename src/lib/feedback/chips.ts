@@ -14,6 +14,9 @@ import { getConferenceFeedbackSlots, PUBLISHED_ONLY } from './sanity'
 import { talkTotals, type TalkCounts } from './totals'
 import { feedbackWindow, isConferenceOverAt, mayMint } from './window'
 
+/** After the conference is over, by when every Feedback Window has closed. */
+const ALL_WINDOWS_CLOSED_AFTER_MS = 2 * 24 * 60 * 60 * 1000
+
 export type FeedbackChip =
   { kind: 'code' } | { kind: 'results'; lovedItPercent: number; total: number }
 
@@ -43,9 +46,14 @@ export async function getSpeakerFeedbackChips({
     )) ?? []
   if (talks.length === 0) return {}
 
-  // Once the conference is over every talk is visible, wherever it was
-  // scheduled, so the schedule is not read at all.
-  const slots = isConferenceOverAt(conference.endDate, now)
+  // Two days after the conference is over every window has closed (24 h
+  // after a slot on its last day) and every talk is visible, wherever it
+  // was scheduled, so the schedule is not read at all. Sooner, a last-day
+  // talk with no answers yet still needs its window to keep its code chip.
+  const slots = isConferenceOverAt(
+    conference.endDate,
+    new Date(now.getTime() - ALL_WINDOWS_CLOSED_AFTER_MS),
+  )
     ? new Map()
     : await getConferenceFeedbackSlots(conference._id)
   const windows = new Map(

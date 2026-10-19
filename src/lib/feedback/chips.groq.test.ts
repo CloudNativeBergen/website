@@ -166,9 +166,19 @@ describe('getSpeakerFeedbackChips (§9.4)', () => {
     })
   })
 
-  it('needs no schedule once the conference is over: every talk is visible', async () => {
+  it('keeps a last-day talk’s code while its window is still open after the conference is over', async () => {
+    // Over at 2026-06-12 00:00Z (the day after endDate). A last-day session
+    // ending 15:40 Oslo stays open until 2026-06-12 13:40Z.
+    const conference = { _id: 'conf-A', endDate: '2026-06-10' }
+    expect(await chips(new Date('2026-06-11T12:00:00Z'), conference)).toEqual({
+      'talk-early': { kind: 'results', lovedItPercent: 80, total: 5 },
+      'talk-late': { kind: 'code' },
+    })
+  })
+
+  it('needs no schedule once every window has closed: every talk is visible', async () => {
     h.dataset.push(response('talk-late', 'green'))
-    expect(await chips(new Date('2026-06-13T12:00:00Z'))).toEqual({
+    expect(await chips(new Date('2026-06-14T12:00:00Z'))).toEqual({
       'talk-early': { kind: 'results', lovedItPercent: 80, total: 5 },
       'talk-late': { kind: 'results', lovedItPercent: 100, total: 1 },
     })
