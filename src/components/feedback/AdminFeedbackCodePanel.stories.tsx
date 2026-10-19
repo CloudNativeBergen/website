@@ -24,6 +24,20 @@ const before = {
 const noCode = { code: null, url: null, window: before, mayMint: true }
 const withCode = { code: 'k7m2qx', url: URL, window: before, mayMint: false }
 
+/**
+ * Deterministic dates with real timers (AGENTS.md): the clock starts before
+ * the fixtures' 2026-10-26 session and runs at real speed, so every story
+ * sees the same state on any day.
+ */
+const runningClockFrom = (start: Date) => () => {
+  const realNow = Date.now
+  const offset = start.getTime() - realNow()
+  Date.now = () => realNow() + offset
+  return () => {
+    Date.now = realNow
+  }
+}
+
 const meta = {
   title: 'Systems/Proposals/Session Feedback/AdminFeedbackCodePanel',
   component: AdminFeedbackCodePanel,
@@ -54,6 +68,7 @@ const meta = {
     ),
   ],
   args: { talkId: 'talk-1', title: 'Kubernetes: the hard parts' },
+  beforeEach: runningClockFrom(new Date('2026-10-17T12:00:00Z')),
 } satisfies Meta<typeof AdminFeedbackCodePanel>
 
 export default meta
