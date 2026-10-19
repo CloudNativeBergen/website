@@ -8,6 +8,7 @@ import {
   ensureFeedbackCode,
   mintConferenceFeedbackCodes,
   readFeedbackCode,
+  readSpeakerResults,
 } from '@/lib/feedback/server'
 
 /**
@@ -64,6 +65,31 @@ export const sessionFeedbackRouter = router({
       if (result.status === 'refused') throw notFound()
       return toCodeResponse(conference, result)
     }),
+  /**
+   * The talk's Session Feedback for its speakers (§9.1, §9.3), polled by the
+   * section while the window is open. Refused like {@link ensureCode}, before
+   * any response is read. Until feedback is visible (§6) only the window
+   * comes back; hidden comments never do.
+   */
+  results: protectedProcedure.input(talkInput).query(async ({ ctx, input }) => {
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) throw notFound()
+    const result = await readSpeakerResults({
+      talkId: input.talkId,
+      speakerId: ctx.speaker._id,
+      conference,
+      now: new Date(),
+    })
+    if (result.status === 'refused') throw notFound()
+    if (!result.visible)
+      return { visible: false as const, window: result.window }
+    return {
+      visible: true as const,
+      window: result.window,
+      totals: result.totals,
+      comments: result.comments,
+    }
+  }),
   /**
    * An organizer mints a talk's code (#1459), with the same rules as the
    * speaker's first view (§5) but no speaker check. A talk with a code keeps

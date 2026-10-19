@@ -23,5 +23,10 @@ export {
   type DeleteOutcome,
 } from './page'
 export { submitFeedback } from './submit'
+export {
+  readSpeakerResults,
+  type SpeakerComment,
+  type SpeakerResults,
+} from './results'
 export { deleteFeedback } from './delete'
 export { deviceCookie, type DeviceCookie } from './device'

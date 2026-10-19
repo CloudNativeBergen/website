@@ -1,0 +1,76 @@
+/**
+ * SESSION FEEDBACK TOTALS (speaker feedback spec §4.3). The one place counts
+ * are added up, so the speaker section, the dashboard chip and (later) the
+ * admin table, talk panel and summary can never disagree.
+ *
+ * - **scanned** = live `feedbackResponse` documents + `feedbackFolded`
+ * - **combined** = scanned + Card Counts (`audienceFeedback`)
+ *
+ * Hidden comments still count: hiding removes text, not a colour (§10.3).
+ */
+import { FEEDBACK_COLOURS, type FeedbackColour } from './colour'
+
+export type ColourCounts = Record<FeedbackColour, number>
+
+/** The `{greenCount, yellowCount, redCount}` shape of Card Counts and a fold. */
+export interface StoredCounts {
+  greenCount?: number | null
+  yellowCount?: number | null
+  redCount?: number | null
+}
+
+export interface FeedbackTotals {
+  combined: ColourCounts
+  scanned: ColourCounts
+  cards: ColourCounts
+  total: number
+  scannedTotal: number
+  cardsTotal: number
+  /** Whole percent of combined answers that are green; null with none. */
+  lovedItPercent: number | null
+}
+
+/** A hand-typed or missing count, as a whole number of answers. */
+const count = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : 0
+
+const fromStored = (stored: StoredCounts | null | undefined): ColourCounts => ({
+  green: count(stored?.greenCount),
+  yellow: count(stored?.yellowCount),
+  red: count(stored?.redCount),
+})
+
+const sum = (c: ColourCounts) => c.green + c.yellow + c.red
+
+export function feedbackTotals({
+  live,
+  folded,
+  cards,
+}: {
+  /** Live `feedbackResponse` documents per colour. */
+  live: Partial<ColourCounts> | null | undefined
+  folded?: StoredCounts | null
+  cards?: StoredCounts | null
+}): FeedbackTotals {
+  const fold = fromStored(folded)
+  const cardCounts = fromStored(cards)
+  const scanned = {} as ColourCounts
+  const combined = {} as ColourCounts
+  for (const colour of FEEDBACK_COLOURS) {
+    scanned[colour] = count(live?.[colour]) + fold[colour]
+    combined[colour] = scanned[colour] + cardCounts[colour]
+  }
+  const total = sum(combined)
+  return {
+    combined,
+    scanned,
+    cards: cardCounts,
+    total,
+    scannedTotal: sum(scanned),
+    cardsTotal: sum(cardCounts),
+    lovedItPercent:
+      total === 0 ? null : Math.round((combined.green / total) * 100),
+  }
+}

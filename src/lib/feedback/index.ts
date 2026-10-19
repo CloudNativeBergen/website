@@ -7,6 +7,11 @@ export {
 } from './window'
 export { MAX_COMMENT_LENGTH } from './comment'
 export {
+  feedbackTotals,
+  type ColourCounts,
+  type FeedbackTotals,
+} from './totals'
+export {
   ATTENDEE_PAGE_LIVE,
   DEVICE_COOKIE_DAYS,
   feedbackCodeUrl,
