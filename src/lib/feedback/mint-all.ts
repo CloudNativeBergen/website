@@ -25,9 +25,10 @@ export interface MintAllReport {
    * every speaker is erased or gone, and erasure's unset code stays unset
    * (spec §12.3). `changed`: refused when read again by id, after GROQ
    * listed it (no longer confirmed, or its last speaker just erased).
+   * `notReached`: not started within the run's time budget; run it again.
    */
   skipped: (TalkRef & {
-    reason: 'closed' | 'release' | 'noSpeaker' | 'changed'
+    reason: 'closed' | 'release' | 'noSpeaker' | 'changed' | 'notReached'
   })[]
   /** The write threw; the rest of the batch still ran. */
   failed: TalkRef[]
@@ -49,6 +50,18 @@ export async function countTalksWithoutCode(conferenceId: string) {
   }
 }
 
+/**
+ * Talks minted at once. Each mint is several Sanity round trips in a row, and
+ * the tRPC route has 60 seconds (`maxDuration`).
+ */
+const CONCURRENCY = 4
+
+/**
+ * No talk is started after this, so the run reports before the route's limit.
+ * A talk not reached is left for the next run, which mints nothing twice.
+ */
+const BUDGET_MS = 40_000
+
 export async function mintConferenceFeedbackCodes({
   conference,
   now,
@@ -63,15 +76,22 @@ export async function mintConferenceFeedbackCodes({
     failed: [],
   }
   const batch: MintBatch = { codes: new Set() }
-  for (const talk of await getConfirmedTalks(conference._id)) {
+  const startedAt = Date.now()
+  const queue = await getConfirmedTalks(conference._id)
+
+  const mintOne = async (talk: (typeof queue)[number]) => {
     const ref = { talkId: talk._id, title: talk.title ?? 'Untitled talk' }
     if (hasCode(talk)) {
       report.alreadyHad++
-      continue
+      return
     }
     if (!talk.hasLiveSpeaker) {
       report.skipped.push({ ...ref, reason: 'noSpeaker' })
-      continue
+      return
+    }
+    if (Date.now() - startedAt > BUDGET_MS) {
+      report.skipped.push({ ...ref, reason: 'notReached' })
+      return
     }
     try {
       const result = await ensureFeedbackCode({
@@ -99,6 +119,19 @@ export async function mintConferenceFeedbackCodes({
       report.failed.push(ref)
     }
   }
-  if (batch.codes.size > 0) expireFeedbackCodeIndex(conference._id)
+
+  await Promise.all(
+    Array.from({ length: CONCURRENCY }, async () => {
+      for (let talk = queue.shift(); talk; talk = queue.shift()) {
+        await mintOne(talk)
+      }
+    }),
+  )
+  if (report.minted.length > 0) expireFeedbackCodeIndex(conference._id)
+  const byTitle = (a: TalkRef, b: TalkRef) =>
+    a.title.localeCompare(b.title) || a.talkId.localeCompare(b.talkId)
+  report.minted.sort(byTitle)
+  report.skipped.sort(byTitle)
+  report.failed.sort(byTitle)
   return report
 }

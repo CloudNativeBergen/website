@@ -32,6 +32,8 @@ const h = vi.hoisted(() => ({
   releasesFail: false,
   /** Ids asked of the doc endpoint, in order. */
   docReads: [] as string[],
+  /** Each doc-endpoint read with how many commits had landed before it. */
+  readLog: [] as { id: string; commits: number }[],
   revs: 0,
   commits: 0,
   /** Transactions attempted, committed or not. */
@@ -92,6 +94,7 @@ vi.mock('@/lib/sanity/client', async () => {
     // what Sanity would read.
     getDocument: async (id: string) => {
       h.docReads.push(id)
+      h.readLog.push({ id, commits: h.commits })
       const found = id
         .split(',')
         .map(byId)
@@ -245,6 +248,7 @@ beforeEach(() => {
   h.releases = []
   h.releasesFail = false
   h.docReads = []
+  h.readLog = []
   h.beforeCommit = []
   h.afterCommit = []
   h.groqSnapshot = null
@@ -775,7 +779,8 @@ describe('mintAll — every confirmed talk without a code', () => {
     const out = await organizer().mintAll()
     random.mockRestore()
     const codes = out.minted.map((m) => m.code)
-    expect(codes).toEqual(['aaaaaa', 'bbbbbb', 'cccccc'])
+    // Talks mint in parallel, so which talk drew which code may vary.
+    expect([...codes].sort()).toEqual(['aaaaaa', 'bbbbbb', 'cccccc'])
     expect(out.minted.map((m) => doc(m.talkId)?.feedbackCode)).toEqual(codes)
   })
 
@@ -959,5 +964,57 @@ describe('organizers never restart feedback for an erased speaker', () => {
       title: 'talk-erased',
       reason: 'changed',
     })
+  })
+})
+
+describe('organizer mint — races', () => {
+  it('re-checks for a speaker left when a write is retried', async () => {
+    h.dataset.push(
+      talk('talk-co-spoken', { speakers: [ref('sp-gone'), ref('sp-bo')] }),
+    )
+    // The live co-speaker is removed while the mint writes: its guard fails.
+    h.beforeCommit.push(() => {
+      h.dataset = h.dataset.map((d) =>
+        d._id === 'talk-co-spoken'
+          ? { ...d, speakers: [ref('sp-gone')], _rev: 'rev-removed' }
+          : d,
+      )
+    })
+    await expect(
+      organizer().mintCode({ talkId: 'talk-co-spoken' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(doc('talk-co-spoken')?.feedbackCode).toBeUndefined()
+    expect(h.commits).toBe(0)
+  })
+})
+
+describe('mintAll — within the function’s time limit', () => {
+  const extra = Array.from({ length: 8 }, (_, i) => `talk-x${i}`)
+  beforeEach(() => {
+    h.dataset.push(...extra.map((id) => talk(id)))
+  })
+
+  it('works on several talks at once', async () => {
+    await organizer().mintAll()
+    // The first reads of the first four talks come before any commit.
+    const firstReads = h.readLog.filter(
+      (r) => r.id.startsWith('talk-') && r.commits === 0,
+    )
+    expect(new Set(firstReads.map((r) => r.id)).size).toBeGreaterThanOrEqual(4)
+  })
+
+  it('leaves talks it could not start in time for the next run', async () => {
+    // The clock jumps past the budget once the first commit lands.
+    h.beforeCommit.push(() => vi.setSystemTime(new Date(Date.now() + 60_000)))
+    const out = await organizer().mintAll()
+    const notReached = out.skipped.filter((t) => t.reason === 'notReached')
+    expect(notReached.length).toBeGreaterThan(0)
+    for (const t of notReached)
+      expect(doc(t.talkId)?.feedbackCode).toBeUndefined()
+    expect(out.minted.length + notReached.length).toBe(extra.length + 2)
+    const again = await organizer().mintAll()
+    expect(again.minted.map((m) => m.talkId).sort()).toEqual(
+      notReached.map((t) => t.talkId).sort(),
+    )
   })
 })

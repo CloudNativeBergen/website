@@ -13,6 +13,7 @@ const SKIP_REASON: Record<MintAllReport['skipped'][number]['reason'], string> =
     release: 'Waits in a scheduled release',
     noSpeaker: 'No speaker left',
     changed: 'No longer confirmed, or no speaker left',
+    notReached: 'Not reached in time; run it again',
   }
 
 const SECONDARY =

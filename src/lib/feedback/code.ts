@@ -61,9 +61,10 @@ export type ReadFeedbackCodeResult =
     }
 
 /**
- * Several mints in one request (#1459). Each draw also avoids the codes the
- * batch already minted, which a GROQ read lagging those writes would miss,
- * and the code index is left for the caller to expire once at the end.
+ * Several mints in one request (#1459), some at once. Every code the batch
+ * draws or meets is kept here, and each draw avoids them: a GROQ read lags
+ * those writes, and a parallel mint has not written yet. The code index is
+ * left for the caller to expire once at the end.
  */
 export interface MintBatch {
   codes: Set<string>
@@ -232,10 +233,10 @@ export async function ensureFeedbackCode({
   if (!outcome) return { status: 'refused' }
   if (outcome.code === null)
     return { status: 'ok', code: null, window, minted: false }
+  batch?.codes.add(outcome.code)
   if (outcome.minted) {
     await sweepTalkVersions(client, talk._id)
-    if (batch) batch.codes.add(outcome.code)
-    else expireFeedbackCodeIndex(conference._id)
+    if (!batch) expireFeedbackCodeIndex(conference._id)
   }
   return { status: 'ok', code: outcome.code, window, minted: outcome.minted }
 }
@@ -276,6 +277,7 @@ async function mint(
       ...(await conferenceFeedbackCodes(conferenceId)),
       ...(batch?.codes ?? []),
     ])()
+    batch?.codes.add(code)
     const tx = client
       .transaction()
       .patch(current._id, (p) =>
@@ -294,6 +296,9 @@ async function mint(
     }
     const reread = await client.getDocument<TalkDoc>(current._id)
     if (!mayHoldCode(reread, conferenceId, actor)) return null
+    if ('organizer' in actor && !(await hasLiveSpeaker(client, reread))) {
+      return null
+    }
     const won = normalizeShortCode(reread.feedbackCode)
     if (won) return { code: won, minted: false }
     current = reread
