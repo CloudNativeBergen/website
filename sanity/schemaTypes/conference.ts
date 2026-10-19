@@ -677,6 +677,16 @@ export default defineType({
       description:
         'How many people the last workshop reminder was sent to. Set by the reminder on the workshops admin page.',
     }),
+    // The reminder's rate limit: one send an hour per conference, held here so
+    // it holds across serverless instances. Never edited by hand.
+    defineField({
+      name: 'workshopReminderReservedAt',
+      title: 'Workshop Reminder Reserved At',
+      type: 'datetime',
+      fieldset: 'registration',
+      readOnly: true,
+      hidden: true,
+    }),
 
     // === Ticketing & Integrations ===
     // Provider selector (CaaS, Tito second-provider proof): which ticketing

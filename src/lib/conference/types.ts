@@ -225,6 +225,8 @@ export interface Conference {
    */
   workshopReminderLastSentAt?: string
   workshopReminderLastSentCount?: number
+  /** When the reminder's current hour was reserved (its rate limit). */
+  workshopReminderReservedAt?: string
   contactEmail: string
   /**
    * Ticketing vendor selector. ABSENT ⇒ 'checkin' (every legacy conference);

@@ -47,19 +47,47 @@ const signups = vi.fn<() => Promise<HolderSignup[]>>(async () => [])
 const lastSendWrite = vi.fn<
   (id: string, fields: Record<string, unknown>) => Promise<unknown>
 >(async () => ({}))
+/**
+ * The conference's hour reservation, as Sanity holds it: a write conditioned
+ * on a stale revision fails, as `ifRevisionId` does.
+ */
+let stored: { _rev: string; workshopReminderReservedAt?: string }
+const resetReservation = () => (stored = { _rev: 'r0' })
+async function casWrite(rev: string | undefined, apply: () => void) {
+  await Promise.resolve()
+  if (rev !== stored._rev) throw new Error('409: revision mismatch')
+  apply()
+  stored._rev = `r${Number(stored._rev.slice(1)) + 1}`
+}
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
     fetch: async (query: string) =>
       query.includes('"workshopSignup"')
         ? signups()
-        : { ticketTypeRoles: await liveRoles() },
+        : query.includes('workshopReminderReservedAt')
+          ? { ...stored }
+          : { ticketTypeRoles: await liveRoles() },
   },
   clientWrite: {
-    patch: (id: string) => ({
-      set: (fields: Record<string, unknown>) => ({
-        commit: () => lastSendWrite(id, fields),
-      }),
-    }),
+    patch: (id: string) => {
+      let rev: string | undefined
+      const patch = {
+        ifRevisionId: (r: string) => ((rev = r), patch),
+        set: (fields: Record<string, unknown>) => ({
+          commit: () =>
+            'workshopReminderReservedAt' in fields
+              ? casWrite(rev, () => Object.assign(stored, fields))
+              : lastSendWrite(id, fields),
+        }),
+        unset: (keys: string[]) => ({
+          commit: () =>
+            casWrite(rev, () =>
+              keys.forEach((k) => delete (stored as never)[k]),
+            ),
+        }),
+      }
+      return patch
+    },
   },
 }))
 
@@ -102,8 +130,7 @@ const emails = () => batchSend.mock.calls.flatMap(([batch]) => batch)
 /** Recipients, across batches. */
 const recipients = () => emails().map((email) => email.to[0])
 
-const { sendWorkshopReminder, __resetReminderRateLimit } =
-  await import('./reminder')
+const { sendWorkshopReminder } = await import('./reminder')
 
 const PORTAL = 'https://2026.cloudnativedays.no/workshop'
 const HOUR = 60 * 60 * 1000
@@ -148,7 +175,7 @@ const remind = (target: never = conference, now = 0) =>
 
 beforeEach(() => {
   vi.clearAllMocks()
-  __resetReminderRateLimit()
+  resetReservation()
   workshopPortalUrl.mockResolvedValue(PORTAL)
   signups.mockResolvedValue([])
   fetchEventTicketCandidates.mockResolvedValue([
@@ -284,7 +311,7 @@ describe('sendWorkshopReminder', () => {
       note?: string,
     ): Promise<BatchEmail> {
       batchSend.mockClear()
-      __resetReminderRateLimit()
+      resetReservation()
       await sendWorkshopReminder(target, { note }, now)
       return emails()[0]
     }

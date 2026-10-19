@@ -253,7 +253,8 @@
     "workshopRegistrationSponsorStart": "datetime",
     "workshopRegistrationStart": "datetime",
     "workshopReminderLastSentAt": "datetime",
-    "workshopReminderLastSentCount": "number"
+    "workshopReminderLastSentCount": "number",
+    "workshopReminderReservedAt": "datetime"
   },
   "organization": {
     "analyticsPosthogToken": "string",
