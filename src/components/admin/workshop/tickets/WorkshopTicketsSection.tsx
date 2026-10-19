@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -39,42 +40,67 @@ const HEADING_ID = 'workshop-tickets-heading'
  */
 function WorkshopTicketsFrame({
   badge,
-  open = false,
+  open: initiallyOpen = false,
   children,
 }: {
   badge?: ReactNode
-  /** Starts open: something here needs the organizer. */
+  /**
+   * Starts open: something here needs the organizer. Read once, on mount: a
+   * save that settles the last decision must not shut the card mid-work, and
+   * a refresh must not reopen one the organizer closed.
+   */
   open?: boolean
   children: ReactNode
 }) {
+  const [open, setOpen] = useState(initiallyOpen)
+  const contentId = useId()
+  // A link to the card (from the ticket-types page) opens it. After mount:
+  // the server render has no address hash.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.location.hash === `#${WORKSHOP_TICKETS_ANCHOR}`) setOpen(true)
+  }, [])
   return (
     <section
       id={WORKSHOP_TICKETS_ANCHOR}
       aria-labelledby={HEADING_ID}
       className="scroll-mt-24 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
     >
-      {/* Collapsed by default: rarely changed once set. */}
-      <details className="group" open={open}>
-        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 [&::-webkit-details-marker]:hidden">
-          <TicketIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
-          <h3
-            id={HEADING_ID}
-            // Focusable from code only: focus lands here when the control that
-            // held it leaves the page (a removed entry).
-            tabIndex={-1}
-            className="text-lg font-medium text-gray-900 outline-none dark:text-white"
+      {/* Collapsed by default: rarely changed once set. A button inside the
+          heading, not <summary>, which would hide the heading from
+          screen-reader heading navigation. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <TicketIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
+        <h3
+          id={HEADING_ID}
+          // Focusable from code only: focus lands here when the control that
+          // held it leaves the page (a removed entry).
+          tabIndex={-1}
+          className="flex-1 text-lg font-medium text-gray-900 outline-none dark:text-white"
+        >
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={contentId}
+            onClick={() => setOpen((o) => !o)}
+            className="flex w-full items-center gap-2 text-left"
           >
             Workshop tickets
-          </h3>
-          {badge}
-          <ChevronDownIcon className="ml-auto size-5 shrink-0 text-gray-400 transition-transform group-open:rotate-180 dark:text-gray-500" />
-        </summary>
+            {badge}
+            <ChevronDownIcon
+              aria-hidden
+              className={`ml-auto size-5 shrink-0 text-gray-400 transition-transform dark:text-gray-500 ${open ? 'rotate-180' : ''}`}
+            />
+          </button>
+        </h3>
+      </div>
+      <div id={contentId} className={open ? undefined : 'hidden'}>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           Holders of a ticket type that grants workshop access can sign up for
           workshops.
         </p>
         {children}
-      </details>
+      </div>
     </section>
   )
 }

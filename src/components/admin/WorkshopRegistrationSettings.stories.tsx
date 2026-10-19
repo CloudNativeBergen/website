@@ -136,6 +136,10 @@ export const EarlyAccessOpenPhone: Story = {
   parameters: { viewport: { defaultViewport: 'phone' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    // Collapsed by default: open it to measure the rows.
+    await userEvent.click(
+      canvas.getByRole('button', { name: /^Workshop registration/ }),
+    )
     let wrapped = 0
 
     for (const name of [

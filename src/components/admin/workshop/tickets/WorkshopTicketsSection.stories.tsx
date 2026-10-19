@@ -83,6 +83,22 @@ const dark = { theme: 'dark', backgrounds: { default: 'dark' } }
  * where the story has rows, the two buttons of a row must sit one under the
  * other (from 640 up they sit side by side).
  */
+/** Opens the card, collapsed when nothing needs the organizer. */
+const openCard = async (canvasElement: HTMLElement) => {
+  const toggle = within(canvasElement).getByRole('button', {
+    name: /^Workshop tickets/,
+  })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await userEvent.click(toggle)
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+}
+
+/** The buttons that act, not the card's own show/hide toggle. */
+const actions = (canvasElement: HTMLElement) =>
+  within(canvasElement)
+    .queryAllByRole('button')
+    .filter((button) => !button.hasAttribute('aria-expanded'))
+
 const fitsItsWidth: Story['play'] = async ({ canvasElement }) => {
   await expect(
     canvasElement.ownerDocument.documentElement.clientWidth,
@@ -309,6 +325,7 @@ export const WithEarlyAccess: Story = {
     sponsorStartSet: true,
   },
   play: async ({ canvasElement }) => {
+    await openCard(canvasElement)
     const canvas = within(canvasElement)
     const boxes = canvas.getAllByRole('checkbox', {
       name: /^Early access for /,
@@ -322,6 +339,7 @@ export const WithEarlyAccess: Story = {
 export const Configured: Story = {
   args: { list: buildWorkshopTicketList(TYPES, CONFIGURED) },
   play: async ({ canvasElement }) => {
+    await openCard(canvasElement)
     const canvas = within(canvasElement)
     await expect(
       canvas.queryByRole('region', { name: 'Needs a decision' }),
@@ -620,7 +638,7 @@ export const ProviderUnreadable: Story = {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
       'The ticket types could not be read from Checkin.no.',
     )
-    await expect(canvas.queryByRole('button')).not.toBeInTheDocument()
+    await expect(actions(canvasElement)).toEqual([])
   },
 }
 export const ProviderUnreadableDark: Story = {
@@ -653,7 +671,7 @@ export const NoTicketTypes: Story = {
     await expect(
       canvas.getByText(/lists no ticket types for this event/),
     ).toBeVisible()
-    await expect(canvas.queryAllByRole('button')).toHaveLength(0)
+    await expect(actions(canvasElement)).toHaveLength(0)
   },
 }
 export const NoTicketTypesMobileDark: Story = {
@@ -679,7 +697,7 @@ export const TicketingNotConnected: Story = {
     await expect(
       canvas.getByRole('link', { name: 'Open ticket settings' }),
     ).toHaveAttribute('href', '/admin/settings#tickets-registration')
-    await expect(canvas.queryAllByRole('button')).toHaveLength(0)
+    await expect(actions(canvasElement)).toHaveLength(0)
   },
 }
 export const TicketingNotConnectedMobileDark: Story = {

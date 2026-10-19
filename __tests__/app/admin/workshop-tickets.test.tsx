@@ -227,6 +227,12 @@ import WorkshopAdminPage from '@/app/(admin)/admin/workshops/page'
 import { notFound } from 'next/navigation'
 import { prerender } from 'react-dom/static'
 
+/** The buttons that act, not the card's own show/hide toggle. */
+const actions = () =>
+  screen
+    .queryAllByRole('button')
+    .filter((button) => !button.hasAttribute('aria-expanded'))
+
 const ORG_A = 'org-A'
 const CONF_A = 'conf-A'
 const CONFERENCE = {
@@ -289,20 +295,18 @@ async function saved() {
 const row = (typeName: string) =>
   within(screen.getByRole('group', { name: typeName }))
 
-/** The ticket-type rows: groups, but not the card's own `<details>`. */
-const typeRows = () =>
-  screen.queryAllByRole('group').filter((group) => group.tagName !== 'DETAILS')
-
 /**
  * The answer shown for each listed type, in page order: each row's name and
  * its accessible description, which is how the row ties the two together.
  */
 const answers = () =>
-  typeRows().map((group) => [
-    group.getAttribute('aria-label'),
-    document.getElementById(group.getAttribute('aria-describedby')!)!
-      .textContent,
-  ])
+  screen
+    .getAllByRole('group')
+    .map((group) => [
+      group.getAttribute('aria-label'),
+      document.getElementById(group.getAttribute('aria-describedby')!)!
+        .textContent,
+    ])
 
 /** The portal's decision for the one holder of one ticket type. */
 async function gate(category: string) {
@@ -782,7 +786,7 @@ describe('a provider that cannot be read', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'The ticket types could not be read from Checkin.no.',
     )
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(actions()).toHaveLength(0)
     expect(screen.queryByText(/Two-day pass/)).not.toBeInTheDocument()
   })
 })
@@ -810,7 +814,7 @@ describe('a provider that lists no ticket types', () => {
         'Checkin.no lists no ticket types for this event, so there is nothing to set here.',
       ),
     ).toBeVisible()
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(actions()).toHaveLength(0)
     expect(screen.queryByText(/Two-day pass|Day pass/)).not.toBeInTheDocument()
     // The read worked: this is not the unreadable state.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -840,7 +844,7 @@ describe('ticketing that is not ready', () => {
     expect(
       screen.getByRole('link', { name: 'Open ticket settings' }),
     ).toHaveAttribute('href', '/admin/settings#tickets-registration')
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(actions()).toHaveLength(0)
     expect(screen.queryByText(/could not be read/)).not.toBeInTheDocument()
     // Still where the ticket-types page links to.
     expect(
@@ -860,7 +864,7 @@ describe('ticketing that is not ready', () => {
     expect(
       screen.getByText('Ticketing has been turned off for your organization'),
     ).toBeVisible()
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(actions()).toHaveLength(0)
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
     expect(screen.queryByText(/could not be read/)).not.toBeInTheDocument()
   })
@@ -885,7 +889,7 @@ describe('a failure while the section loads', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'This list could not be loaded.The list cannot be shown or changed right now. Reload the page to try again.',
     )
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(actions()).toHaveLength(0)
   })
 
   it('lets a signal of the framework through from the ticket-type read too', async () => {
@@ -1130,8 +1134,8 @@ describe('a live roles read that fails', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'This list could not be loaded.The list cannot be shown or changed right now. Reload the page to try again.',
     )
-    expect(screen.queryAllByRole('button')).toEqual([])
-    expect(typeRows()).toEqual([])
+    expect(actions()).toEqual([])
+    expect(screen.queryAllByRole('group')).toEqual([])
   })
 
   it('leaves the gate deciding from the cached answers, as before', async () => {
@@ -1244,8 +1248,8 @@ describe('a Tito event whose ticket types span two pages', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'The ticket types could not be read from Tito.The list cannot be shown or changed right now. Reload the page to try again.',
     )
-    expect(screen.queryAllByRole('button')).toEqual([])
-    expect(typeRows()).toEqual([])
+    expect(actions()).toEqual([])
+    expect(screen.queryAllByRole('group')).toEqual([])
   })
 })
 

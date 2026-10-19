@@ -29,6 +29,12 @@ import {
 } from './WorkshopTicketsSection'
 import { TicketHolderContext, type TicketHolderView } from '../holders'
 
+/** The buttons that act, not the card's own show/hide toggle. */
+const actions = () =>
+  screen
+    .queryAllByRole('button')
+    .filter((button) => !button.hasAttribute('aria-expanded'))
+
 const h = vi.hoisted(() => ({
   mutate: vi.fn(),
   earlyMutate: vi.fn(),
@@ -376,6 +382,33 @@ describe('a configured list', () => {
     expect(answer('Day pass')).toBe('No workshop access')
   })
 
+  it('stays open once the last decision is made, and keeps a close', () => {
+    const toggle = () =>
+      screen.getByRole('button', { name: /^Workshop tickets/ })
+    const list = (answered: number) => (
+      <WorkshopTicketsSection
+        list={buildWorkshopTicketList(
+          ['Two-day pass', 'Day pass'],
+          roles.slice(0, answered),
+        )}
+        providerLabel="Checkin.no"
+      />
+    )
+    // Opens because "Day pass" needs a decision...
+    const { rerender } = section(
+      ['Two-day pass', 'Day pass'],
+      roles.slice(0, 1),
+    )
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true')
+    // ...and stays open once it is made.
+    rerender(list(2))
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true')
+    // Closed by the organizer, a new decision to make does not reopen it.
+    fireEvent.click(toggle())
+    rerender(list(1))
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false')
+  })
+
   it('saves an answer straight away while another type still grants', () => {
     section(types, roles)
 
@@ -630,7 +663,7 @@ describe('a provider that cannot be read', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'The ticket types could not be read from Tito.The list cannot be shown or changed right now. Reload the page to try again.',
     )
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(actions()).toHaveLength(0)
     // Not the empty list, and not the not-configured state either.
     expect(screen.queryByText(/lists no ticket types/)).not.toBeInTheDocument()
     expect(screen.queryByText(/not configured/i)).not.toBeInTheDocument()
@@ -644,7 +677,7 @@ describe('a provider that cannot be read', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'This list could not be loaded.The list cannot be shown or changed right now. Reload the page to try again.',
     )
-    expect(screen.queryAllByRole('button')).toEqual([])
+    expect(actions()).toEqual([])
   })
 
   it('is told apart from a provider that lists no types', () => {
@@ -664,7 +697,7 @@ describe('a provider that cannot be read', () => {
     // The read worked, so no error; and with nothing to compare the stored
     // answers against, none is offered for removal.
     expect(screen.queryAllByRole('alert')).toEqual([])
-    expect(screen.queryAllByRole('button')).toEqual([])
+    expect(actions()).toEqual([])
     expect(
       screen.queryAllByRole('region', { name: 'Needs a decision' }),
     ).toEqual([])
@@ -688,6 +721,6 @@ describe('while the list is loading', () => {
     // Placeholders only: nothing to read and nothing to press.
     const rows = container.querySelectorAll('ul[aria-hidden] > li')
     expect(rows).toHaveLength(6)
-    expect(screen.queryAllByRole('button')).toEqual([])
+    expect(actions()).toEqual([])
   })
 })
