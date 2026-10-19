@@ -255,6 +255,14 @@ beforeEach(() => {
     talk('talk-other-speakers', { speakers: [ref('sp-bo')] }),
     talk('talk-accepted', { status: 'accepted' }),
     talk('talk-withdrawn', { status: 'withdrawn' }),
+    { _id: 'sp-ada', _rev: 'rev-sp-ada', _type: 'speaker', name: 'Ada' },
+    { _id: 'sp-bo', _rev: 'rev-sp-bo', _type: 'speaker', name: 'Bo' },
+    {
+      _id: 'sp-gone',
+      _rev: 'rev-sp-gone',
+      _type: 'speaker',
+      erasedAt: '2026-05-01T00:00:00Z',
+    },
     {
       _id: 'conf-A',
       _rev: 'rev-conf',
@@ -875,5 +883,59 @@ describe('adminCode — what the talk page shows, never a write', () => {
       caller('sp-ada').adminCode({ talkId: 'talk-1' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect(h.docReads).toEqual([])
+  })
+})
+
+describe('organizers never restart feedback for an erased speaker', () => {
+  // Erasure unsets the code of a talk whose only speaker it erased (spec
+  // §12.3); an organizer's mint must not bring it back (§10.4's rule).
+  beforeEach(() => {
+    h.dataset.push(
+      talk('talk-erased', { speakers: [ref('sp-gone')] }),
+      talk('talk-co-spoken', { speakers: [ref('sp-gone'), ref('sp-bo')] }),
+      talk('talk-speaker-deleted', { speakers: [ref('sp-deleted')] }),
+    )
+  })
+
+  it.each(['talk-erased', 'talk-speaker-deleted'])(
+    'refuses to mint %s, and writes nothing',
+    async (talkId) => {
+      await expect(organizer().mintCode({ talkId })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      })
+      expect(h.attempts).toBe(0)
+      expect(doc(talkId)?.feedbackCode).toBeUndefined()
+    },
+  )
+
+  it('mints for a talk one of whose speakers remains', async () => {
+    const out = await organizer().mintCode({ talkId: 'talk-co-spoken' })
+    expect(out.code).toMatch(CODE)
+  })
+
+  it('leaves the erased speaker’s talk out of the bulk mint and its count', async () => {
+    const out = await organizer().mintAll()
+    expect(doc('talk-erased')?.feedbackCode).toBeUndefined()
+    expect(doc('talk-speaker-deleted')?.feedbackCode).toBeUndefined()
+    expect(doc('talk-co-spoken')?.feedbackCode).toMatch(CODE)
+    expect(out.skipped).toEqual([])
+    expect(await organizer().mintPreview()).toEqual({
+      confirmed: 3,
+      withoutCode: 0,
+    })
+  })
+
+  it('refuses an erased speaker’s talk even when GROQ still lists it', async () => {
+    // GROQ lags the erasure: it still sees the speaker as not erased.
+    h.groqSnapshot = structuredClone(h.dataset).map((d) =>
+      d._id === 'sp-gone' ? { ...d, erasedAt: undefined } : d,
+    )
+    const out = await organizer().mintAll()
+    expect(doc('talk-erased')?.feedbackCode).toBeUndefined()
+    expect(out.skipped).toContainEqual({
+      talkId: 'talk-erased',
+      title: 'talk-erased',
+      reason: 'changed',
+    })
   })
 })

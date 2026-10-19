@@ -114,6 +114,24 @@ function isRetryable(error: unknown): boolean {
 }
 
 /**
+ * At least one of the talk's speakers exists and is not erased. Erasure
+ * unsets the code of a talk it leaves without one (spec §12.3), and an
+ * organizer must not bring it back (§10.4's rule for rotation); a speaker's
+ * own mint needs no check, since an erased speaker cannot sign in.
+ */
+async function hasSpeakerLeft(
+  client: VersionsClient,
+  talk: TalkDoc,
+): Promise<boolean> {
+  const ids = (talk.speakers ?? [])
+    .map((s) => s._ref)
+    .filter((id): id is string => typeof id === 'string')
+  if (ids.length === 0) return false
+  const speakers = await client.getDocuments<{ erasedAt?: string }>(ids)
+  return speakers.some((s) => s && !s.erasedAt)
+}
+
+/**
  * The talk as the code's rules see it: refused (`null`) unless it is a
  * confirmed talk of this conference the actor may hold, with its window and
  * any code it already has.
@@ -135,6 +153,9 @@ async function readTalkForCode(
   // the document read must BE the id asked for. The router's id check stops
   // such ids first; this keeps the module safe on its own.
   if (talk?._id !== talkId || !mayHoldCode(talk, conference._id, actor)) {
+    return null
+  }
+  if ('organizer' in actor && !(await hasSpeakerLeft(client, talk))) {
     return null
   }
   const window = feedbackWindow({
