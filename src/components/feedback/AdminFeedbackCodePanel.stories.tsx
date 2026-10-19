@@ -44,10 +44,11 @@ const meta = {
       ],
     },
   },
-  // The admin talk page's sidebar is 24rem wide (`lg:w-96`) with p-4.
+  // The admin talk page's sidebar is 24rem wide (`lg:w-96`) with p-4; on a
+  // phone it is the full width.
   decorators: [
     (Story) => (
-      <div className="w-96 p-4">
+      <div className="w-full max-w-96 p-4">
         <Story />
       </div>
     ),
@@ -179,13 +180,6 @@ export const Loading: Story = {
 /** On a phone the sidebar stacks below the talk at full width. */
 export const HasCodeMobile: Story = {
   ...HasCode,
-  decorators: [
-    (Story) => (
-      <div className="p-4">
-        <Story />
-      </div>
-    ),
-  ],
   parameters: {
     ...HasCode.parameters,
     layout: 'fullscreen',
