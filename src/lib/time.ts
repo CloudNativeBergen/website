@@ -230,6 +230,23 @@ export function formatSessionInstant(value: string): string {
 }
 
 /**
+ * When an attendee's feedback comment arrived, for its speakers (speaker
+ * feedback spec §9.3), e.g. "Tue 27 Oct, 10:52": the conference's time zone,
+ * a 24-hour clock like the programme, no year.
+ */
+export function formatFeedbackCommentTime(value: string): string {
+  return new Date(value).toLocaleString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: CONFERENCE_TIME_ZONE,
+  })
+}
+
+/**
  * A workshop registration opening or closing instant, in English and in the
  * conference's time zone (e.g. "Thursday, October 1, 2026 at 10:00 AM"). The
  * /workshop page and the sign-up instructions email both use it, so an

@@ -104,3 +104,18 @@ export function feedbackWindowStateAt(
   if (t < Date.parse(window.opensAt)) return 'before'
   return t < Date.parse(window.closesAt) ? 'open' : 'closed'
 }
+
+/**
+ * Whether speakers see their feedback at `now` (§6), from a window computed
+ * earlier: once its last slot has ended, or when the server already said so
+ * (the conference is over).
+ */
+export function feedbackVisibleAt(
+  window: Pick<FeedbackWindow, 'feedbackVisible' | 'lastSlotEnd'>,
+  now: Date,
+): boolean {
+  return (
+    window.feedbackVisible ||
+    (!!window.lastSlotEnd && now.getTime() >= Date.parse(window.lastSlotEnd))
+  )
+}

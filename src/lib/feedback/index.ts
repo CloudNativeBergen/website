@@ -1,4 +1,5 @@
 export {
+  feedbackVisibleAt,
   feedbackWindow,
   feedbackWindowStateAt,
   type FeedbackSlot,
