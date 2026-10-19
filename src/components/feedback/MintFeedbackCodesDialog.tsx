@@ -24,7 +24,8 @@ const PRIMARY =
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`
 
-function previewText({
+/** The confirmation's text for each count, exported for its tests. */
+export function previewText({
   confirmed,
   withoutCode,
   mintable,
@@ -33,18 +34,23 @@ function previewText({
   withoutCode: number
   mintable: number
 }): string {
-  const talks = plural(confirmed, 'confirmed talk', 'confirmed talks')
-  if (withoutCode === 0) return `All ${talks} have a Feedback Code.`
-  const missing = `${withoutCode} of ${talks} ${withoutCode === 1 ? 'has' : 'have'} no Feedback Code yet.`
+  if (confirmed === 0) return 'No talk is confirmed yet.'
+  if (withoutCode === 0)
+    return confirmed === 1
+      ? 'The confirmed talk has a Feedback Code.'
+      : `All ${confirmed} confirmed talks have a Feedback Code.`
+  const one = withoutCode === 1
+  const missing = `${withoutCode} of ${plural(confirmed, 'confirmed talk', 'confirmed talks')} ${one ? 'has' : 'have'} no Feedback Code yet.`
+  const keep = 'Talks with a code keep it.'
   if (mintable === 0)
-    return `${missing} None can get one now: the feedback window has closed or no speaker is left.`
-  const some =
-    mintable === withoutCode
-      ? withoutCode === 1
-        ? 'Mint it'
-        : 'Mint one for each'
-      : `${mintable} can still get one; mint ${mintable === 1 ? 'it' : 'them'}`
-  return `${missing} ${some}, so every room’s sheet can be printed. Talks with a code keep it.`
+    return one
+      ? `${missing} It can’t get one now: its feedback window has closed or no speaker is left.`
+      : `${missing} None of them can get one now: their feedback windows have closed or no speaker is left.`
+  if (mintable === withoutCode)
+    return one
+      ? `${missing} Mint it, so its room’s sheet can be printed. ${keep}`
+      : `${missing} Mint one for each, so every room’s sheet can be printed. ${keep}`
+  return `${missing} ${mintable} of them can still get one; for the rest the feedback window has closed or no speaker is left. ${keep}`
 }
 
 function TalkList({

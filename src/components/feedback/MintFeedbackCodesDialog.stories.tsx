@@ -240,7 +240,7 @@ export const NoneMintable: Story = {
     await waitFor(() =>
       expect(
         screen.getByText(
-          '1 of 43 confirmed talks has no Feedback Code yet. None can get one now: the feedback window has closed or no speaker is left.',
+          '1 of 43 confirmed talks has no Feedback Code yet. It can’t get one now: its feedback window has closed or no speaker is left.',
         ),
       ).toBeVisible(),
     )

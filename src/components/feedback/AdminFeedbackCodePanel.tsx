@@ -42,17 +42,18 @@ export function AdminFeedbackCodePanel({
       )
       heading.current?.focus()
     },
-    // No longer a talk that may hold a code: read again, and the panel goes.
+    // No longer a talk that may hold a code: say so where the button was.
     onError: (error) => {
-      if (error.data?.code === 'NOT_FOUND')
-        void utils.sessionFeedback.adminCode.invalidate({ talkId })
+      if (error.data?.code === 'NOT_FOUND') heading.current?.focus()
     },
   })
+  const refused = mint.error?.data?.code === 'NOT_FOUND'
 
   // An organizer may leave the page up through the session's start.
   const shownWindow = useWindowOnTheClock(code.data?.window)
   // The window may close while the page is up; the offer closes with it.
-  const mayMint = !!code.data?.mayMint && shownWindow?.state !== 'closed'
+  const mayMint =
+    !!code.data?.mayMint && shownWindow?.state !== 'closed' && !refused
 
   if (code.error?.data?.code === 'NOT_FOUND') return null
 
@@ -82,11 +83,13 @@ export function AdminFeedbackCodePanel({
       ) : code.data ? (
         <div className="space-y-3">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {!mayMint
-              ? 'No Feedback Code: the feedback window has closed.'
-              : mint.data && !mint.data.code
-                ? 'No code yet: a version of this talk waits in a scheduled release. Mint again once it is published.'
-                : 'No Feedback Code yet. The speakers get one when they open their talk; mint it now to print the sheet for the room.'}
+            {refused
+              ? 'This talk can no longer get a Feedback Code: it is not confirmed, or no speaker is left.'
+              : !mayMint
+                ? 'No Feedback Code: the feedback window has closed.'
+                : mint.data && !mint.data.code
+                  ? 'No code yet: a version of this talk waits in a scheduled release. Mint again once it is published.'
+                  : 'No Feedback Code yet. The speakers get one when they open their talk; mint it now to print the sheet for the room.'}
           </p>
           {mayMint && (
             <button
@@ -99,7 +102,7 @@ export function AdminFeedbackCodePanel({
               {mint.isPending ? 'Minting…' : 'Mint Feedback Code'}
             </button>
           )}
-          {mint.error && (
+          {mint.error && !refused && (
             <p role="alert" className="text-sm text-red-700 dark:text-red-400">
               The code could not be minted. Try again.
             </p>

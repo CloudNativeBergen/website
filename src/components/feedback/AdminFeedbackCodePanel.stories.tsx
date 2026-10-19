@@ -284,19 +284,13 @@ export const ClosesWhileShown: Story = {
 
 /**
  * The talk stopped qualifying between load and Mint (unconfirmed, or its last
- * speaker erased): the mint is refused, and the panel reads again and goes.
+ * speaker erased): the mint is refused, and the panel says why, in place.
  */
-let refusedReads = 0
 export const MintRefused: Story = {
-  beforeEach: () => {
-    refusedReads = 0
-  },
   parameters: {
     msw: {
       handlers: [
-        http.get(READ, () =>
-          refusedReads++ === 0 ? trpc(noCode) : failWith('NOT_FOUND', 404),
-        ),
+        http.get(READ, () => trpc(noCode)),
         http.post(MINT, () => failWith('NOT_FOUND', 404)),
       ],
     },
@@ -306,11 +300,11 @@ export const MintRefused: Story = {
     await userEvent.click(
       await canvas.findByRole('button', { name: 'Mint Feedback Code' }),
     )
-    await waitFor(() => expect(refusedReads).toBe(2))
-    await waitFor(() =>
-      expect(
-        canvas.queryByRole('region', { name: 'Feedback Code' }),
-      ).toBeNull(),
-    )
+    expect(
+      await canvas.findByText(/can no longer get a Feedback Code/),
+    ).toBeVisible()
+    expect(canvas.queryByRole('button')).toBeNull()
+    expect(canvas.queryByRole('alert')).toBeNull()
+    expect(canvas.getByRole('heading', { name: 'Feedback Code' })).toHaveFocus()
   },
 }

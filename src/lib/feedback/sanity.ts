@@ -121,7 +121,10 @@ export async function getConferenceFeedbackSlots(
   const days = await scopedFetch<
     | {
         date: string | null
-        slots: (Omit<FeedbackSlot, 'date'> & { talkId: string | null })[] | null
+        // A track with no talks yields a null entry.
+        slots:
+          | ((Omit<FeedbackSlot, 'date'> & { talkId: string | null }) | null)[]
+          | null
       }[]
     | null
   >(
@@ -139,7 +142,7 @@ export async function getConferenceFeedbackSlots(
   const byTalk = new Map<string, FeedbackSlot[]>()
   for (const day of days ?? []) {
     for (const s of day.slots ?? []) {
-      if (!s.talkId) continue
+      if (!s?.talkId) continue
       const slots = byTalk.get(s.talkId) ?? []
       slots.push({
         date: day.date,
