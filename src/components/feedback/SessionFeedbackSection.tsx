@@ -14,7 +14,7 @@ const TAB_BASE =
 const SELECTED =
   'border-brand-cloud-blue text-brand-cloud-blue dark:border-blue-400 dark:text-blue-400'
 // Literal class names: Tailwind only generates what it can read here.
-const TAB = `${TAB_BASE} border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-800 data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-brand-cloud-blue data-selected:border-brand-cloud-blue data-selected:text-brand-cloud-blue dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-200 dark:data-selected:border-blue-400 dark:data-selected:text-blue-400`
+const TAB = `${TAB_BASE} border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-800 data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-brand-cloud-blue dark:data-focus:outline-blue-400 data-selected:border-brand-cloud-blue data-selected:text-brand-cloud-blue dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-200 dark:data-selected:border-blue-400 dark:data-selected:text-blue-400`
 
 /** Tab indexes: the results first, as §9.1 names them. */
 const RESULTS_TAB = 0
