@@ -261,7 +261,9 @@ describe('results — what they hold (§4.3, §9.3)', () => {
     })
     const older = response('talk-1', 'green', {
       comment: 'Great demo',
-      submittedAt: '2026-06-10T08:41:00.000Z',
+      // Speakers get the minute, not the second: exact times in a small
+      // room hint at who wrote what (§15).
+      submittedAt: '2026-06-10T08:41:37.123Z',
     })
     h.dataset.push(
       newer,

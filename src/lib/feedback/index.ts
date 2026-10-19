@@ -10,6 +10,7 @@ export {
 export { MAX_COMMENT_LENGTH } from './comment'
 export {
   feedbackTotals,
+  sharePercent,
   type ColourCounts,
   type FeedbackTotals,
 } from './totals'

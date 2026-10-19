@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { FeedbackColour } from '@/lib/feedback/colour'
 import type { SpeakerComment } from '@/lib/feedback/results'
-import type { FeedbackTotals } from '@/lib/feedback/totals'
+import { sharePercent, type FeedbackTotals } from '@/lib/feedback/totals'
 import { formatFeedbackCommentTime } from '@/lib/time'
 import { ANSWERS } from './answers'
 
@@ -102,9 +102,8 @@ export function FeedbackResultsView({
                   <span className="text-2xl font-bold tabular-nums">
                     {totals.combined[colour]}
                   </span>
-                  <span className="text-xs tabular-nums opacity-80">
-                    {Math.round((totals.combined[colour] / totals.total) * 100)}
-                    %
+                  <span className="text-xs tabular-nums">
+                    {sharePercent(totals.combined[colour], totals.total)}%
                   </span>
                 </dd>
                 {breakdown && (

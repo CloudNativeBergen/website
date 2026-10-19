@@ -48,6 +48,16 @@ const fromStored = (stored: StoredCounts | null | undefined): ColourCounts => ({
 
 const sum = (c: ColourCounts) => c.green + c.yellow + c.red
 
+/**
+ * `part` of `total` as a whole percent that never rounds a mixed result to
+ * "all" or "none": 199 of 200 is 99 %, 1 of 201 is 1 %.
+ */
+export function sharePercent(part: number, total: number): number {
+  if (part <= 0) return 0
+  if (part >= total) return 100
+  return Math.min(99, Math.max(1, Math.round((part / total) * 100)))
+}
+
 export function feedbackTotals({
   live,
   folded,
@@ -74,8 +84,7 @@ export function feedbackTotals({
     total,
     scannedTotal: sum(scanned),
     cardsTotal: sum(cardCounts),
-    lovedItPercent:
-      total === 0 ? null : Math.round((combined.green / total) * 100),
+    lovedItPercent: total === 0 ? null : sharePercent(combined.green, total),
   }
 }
 

@@ -11,6 +11,8 @@ import { evaluate, parse } from 'groq-js'
 const h = vi.hoisted(() => ({
   dataset: [] as (Record<string, unknown> & { _id: string })[],
   queries: [] as string[],
+  /** Queries sent through the live (uncached) client. */
+  liveQueries: [] as string[],
 }))
 
 vi.mock('server-only', () => ({}))
@@ -20,7 +22,12 @@ vi.mock('@/lib/sanity/client', () => {
     return (await evaluate(parse(query), { dataset: h.dataset, params })).get()
   }
   return {
-    clientReadUncached: { fetch },
+    clientReadUncached: {
+      fetch: (query: string, params?: Record<string, unknown>) => {
+        h.liveQueries.push(query)
+        return fetch(query, params)
+      },
+    },
     clientReadCached: { fetch },
     clientWrite: {},
   }
@@ -83,6 +90,7 @@ const chips = (now = MIDDAY, conference = CONFERENCE) =>
 beforeEach(() => {
   n = 0
   h.queries = []
+  h.liveQueries = []
   h.dataset = [
     SCHEDULE,
     talk('talk-early', {
@@ -176,13 +184,19 @@ describe('getSpeakerFeedbackChips (§9.4)', () => {
     })
   })
 
-  it('needs no schedule once every window has closed: every talk is visible', async () => {
+  it('reads through the CDN only: a dashboard view costs no live-API quota', async () => {
+    h.dataset.push(response('talk-early', 'green'))
+    await chips()
+    expect(h.queries).toHaveLength(3)
+    expect(h.liveQueries).toEqual([])
+  })
+
+  it('shows every talk’s results long after the conference', async () => {
     h.dataset.push(response('talk-late', 'green'))
-    expect(await chips(new Date('2026-06-14T12:00:00Z'))).toEqual({
+    expect(await chips(new Date('2027-06-14T12:00:00Z'))).toEqual({
       'talk-early': { kind: 'results', lovedItPercent: 80, total: 5 },
       'talk-late': { kind: 'results', lovedItPercent: 100, total: 1 },
     })
-    expect(h.queries.some((q) => q.includes('"schedule"'))).toBe(false)
   })
 
   it('reads nothing more when the speaker has no confirmed talk here', async () => {

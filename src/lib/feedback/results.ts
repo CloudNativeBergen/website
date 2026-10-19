@@ -35,6 +35,17 @@ export type SpeakerResults =
       comments: SpeakerComment[]
     }
 
+/**
+ * A comment's time to the minute: what speakers are shown, and no more
+ * precise, since exact times in a small room hint at who wrote it (§15).
+ */
+function toMinute(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const t = Date.parse(value)
+  if (Number.isNaN(t)) return null
+  return new Date(t - (t % 60_000)).toISOString()
+}
+
 interface ResponseRow {
   _id: string
   colour?: unknown
@@ -91,7 +102,7 @@ export async function readSpeakerResults({
       id: r._id,
       colour: r.colour,
       comment: r.comment,
-      submittedAt: typeof r.submittedAt === 'string' ? r.submittedAt : null,
+      submittedAt: toMinute(r.submittedAt),
     })
   }
   return {

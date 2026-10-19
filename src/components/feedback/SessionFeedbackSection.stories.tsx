@@ -351,7 +351,20 @@ export const ResultsArriveOnTheClock: Story = {
   },
 }
 
+/** A window that closes `ms` after now, its session long over. */
+const closingIn = (ms: number) => {
+  const closes = Date.now() + ms
+  return {
+    state: 'open',
+    opensAt: new Date(closes - 25 * 3_600_000).toISOString(),
+    lastSlotEnd: new Date(closes - 24 * 3_600_000).toISOString(),
+    closesAt: new Date(closes).toISOString(),
+    feedbackVisible: true,
+  }
+}
+
 let closingHits = { n: 0 }
+let closingWindow: ReturnType<typeof closingIn> | null = null
 
 /**
  * The window closes 3 s after the page loads, with the results tab open:
@@ -363,25 +376,17 @@ export const ResultsFinalFetchAtClose: Story = {
     msw: {
       handlers: [
         http.post(ENDPOINT, () => {
-          const closes = Date.now() + 3000
+          closingWindow = closingIn(3000)
           return HttpResponse.json({
-            result: {
-              data: {
-                ...BEFORE,
-                window: {
-                  state: 'open',
-                  opensAt: new Date(closes - 25 * 3_600_000).toISOString(),
-                  lastSlotEnd: new Date(closes - 24 * 3_600_000).toISOString(),
-                  closesAt: new Date(closes).toISOString(),
-                  feedbackVisible: true,
-                },
-              },
-            },
+            result: { data: { ...BEFORE, window: closingWindow } },
           })
         }),
         http.get(RESULTS, () => {
           closingHits.n++
-          return HttpResponse.json({ result: { data: results(LIVE_WINDOW) } })
+          // The server's window is the same one: it closes in step.
+          return HttpResponse.json({
+            result: { data: results(closingWindow) },
+          })
         }),
       ],
     },
@@ -398,6 +403,110 @@ export const ResultsFinalFetchAtClose: Story = {
     })
     await waitFor(() => expect(closingHits.n).toBe(2))
   },
+}
+
+/**
+ * The session was moved later while the page was open: the section loaded
+ * with a window closing in 3 s, but the server's results carry the new one.
+ * The Live badge stays, because the server's window runs the lifecycle.
+ */
+export const ResultsFollowMovedSession: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post(ENDPOINT, () =>
+          HttpResponse.json({
+            result: { data: { ...BEFORE, window: closingIn(3000) } },
+          }),
+        ),
+        http.get(RESULTS, () =>
+          HttpResponse.json({
+            result: { data: results(closingIn(24 * 3_600_000)) },
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(await canvas.findByText('Live')).toBeVisible()
+    await new Promise((resolve) => setTimeout(resolve, 4000))
+    expect(canvas.getByText('Live')).toBeVisible()
+  },
+}
+
+let refreshFailHits = { n: 0 }
+
+/**
+ * A refresh fails after the results loaded (here the final fetch at close):
+ * the loaded results stay, and the tab says they could not be refreshed.
+ */
+export const ResultsRefreshFailed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post(ENDPOINT, () =>
+          HttpResponse.json({
+            result: { data: { ...BEFORE, window: closingIn(3000) } },
+          }),
+        ),
+        http.get(RESULTS, () => {
+          refreshFailHits.n++
+          if (refreshFailHits.n === 1)
+            return HttpResponse.json({
+              result: { data: results(closingIn(3000)) },
+            })
+          return HttpResponse.json(
+            {
+              error: {
+                message: 'x',
+                code: -32603,
+                data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+              },
+            },
+            { status: 500 },
+          )
+        }),
+      ],
+    },
+  },
+  beforeEach: () => {
+    refreshFailHits = { n: 0 }
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(await canvas.findByText('57 responses · 3 comments')).toBeVisible()
+    expect(
+      await canvas.findByText(
+        'Could not refresh. Showing the results loaded earlier.',
+        {},
+        { timeout: 10000 },
+      ),
+    ).toBeVisible()
+    expect(canvas.getByText('57 responses · 3 comments')).toBeVisible()
+  },
+}
+
+/** A keyboard user sees which tab has focus, in light and dark. */
+export const TabsKeyboardFocus: Story = {
+  parameters: ResultsAfterSession.parameters,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const tab = await canvas.findByRole('tab', {
+      name: 'Session Feedback',
+      selected: true,
+    })
+    await userEvent.tab()
+    await waitFor(() => expect(tab).toHaveFocus())
+    await waitFor(() =>
+      expect(getComputedStyle(tab).outlineStyle).not.toBe('none'),
+    )
+  },
+}
+
+export const TabsKeyboardFocusDark: Story = {
+  ...TabsKeyboardFocus,
+  globals: { theme: 'dark' },
 }
 
 const resultsFailedHits = { n: 0 }

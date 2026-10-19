@@ -3,19 +3,15 @@
  * confirmed talks in `/cfp/list`, "Feedback Code" until feedback is visible
  * (§6), then "<n>% loved it · <total>" from the shared totals (§4.3).
  *
- * At most three reads per conference: the speaker's talks, the schedule
- * (skipped once the conference is over, when every talk is visible) and the
- * responses of the visible talks only.
+ * At most three reads per conference, all through the CDN: the speaker's
+ * talks, the schedule and the responses of the visible talks only.
  */
 import 'server-only'
 import { clientReadCached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getConferenceFeedbackSlots, PUBLISHED_ONLY } from './sanity'
 import { talkTotals, type TalkCounts } from './totals'
-import { feedbackWindow, isConferenceOverAt, mayMint } from './window'
-
-/** After the conference is over, by when every Feedback Window has closed. */
-const ALL_WINDOWS_CLOSED_AFTER_MS = 2 * 24 * 60 * 60 * 1000
+import { feedbackWindow, mayMint } from './window'
 
 export type FeedbackChip =
   { kind: 'code' } | { kind: 'results'; lovedItPercent: number; total: number }
@@ -46,16 +42,12 @@ export async function getSpeakerFeedbackChips({
     )) ?? []
   if (talks.length === 0) return {}
 
-  // Two days after the conference is over every window has closed (24 h
-  // after a slot on its last day) and every talk is visible, wherever it
-  // was scheduled, so the schedule is not read at all. Sooner, a last-day
-  // talk with no answers yet still needs its window to keep its code chip.
-  const slots = isConferenceOverAt(
-    conference.endDate,
-    new Date(now.getTime() - ALL_WINDOWS_CLOSED_AFTER_MS),
+  // Always read, through the CDN: a last-day talk with no answers keeps its
+  // code chip until its own window closes, whenever that is.
+  const slots = await getConferenceFeedbackSlots(
+    conference._id,
+    clientReadCached,
   )
-    ? new Map()
-    : await getConferenceFeedbackSlots(conference._id)
   const windows = new Map(
     talks.map((t) => [
       t._id,

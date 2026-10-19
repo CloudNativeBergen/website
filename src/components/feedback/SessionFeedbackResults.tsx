@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FeedbackWindow } from '@/lib/feedback'
 import { api } from '@/lib/trpc/client'
 import { useIdlePolling } from '@/hooks/useIdlePolling'
 import { formatSessionInstant } from '@/lib/time'
 import { FeedbackResultsView } from './FeedbackResultsView'
+import { useWindowOnTheClock } from './useWindowOnTheClock'
 
 /** How often the results refresh while the window is open (§9.3). */
 const RESULTS_POLL_MS = 30_000
@@ -14,55 +15,94 @@ const RESULTS_POLL_MS = 30_000
 function waitingText(window: FeedbackWindow) {
   return window.lastSlotEnd
     ? `Your feedback appears here when your session ends (${formatSessionInstant(window.lastSlotEnd)}).`
-    : 'Your feedback appears here once your session is on the schedule.'
+    : 'Your feedback appears here once your session is on the schedule and has ended, or when the conference is over.'
 }
+
+const RETRY_BUTTON =
+  'rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 aria-disabled:cursor-wait aria-disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
 
 /**
  * The **Session Feedback** tab (speaker feedback spec §9.3). Asks the server
  * only once feedback is visible by the clock, and refreshes every 30 seconds
- * while the window is open, stopping when the speaker is idle or the tab is
- * in the background (`useIdlePolling`). The server decides visibility again
- * and filters hidden comments; a clock ahead of the server's just shows the
- * waiting line until the next refresh.
+ * while the window is open and the tab is shown, stopping when the speaker
+ * is idle or the browser tab is in the background (`useIdlePolling`). The
+ * server decides visibility again and filters hidden comments.
+ *
+ * Once the server has answered, its window (on the clock) runs the
+ * lifecycle, not the one the section loaded with: a session moved while the
+ * page is open keeps polling until its new closing time.
  */
 export function SessionFeedbackResults({
   talkId,
-  window,
+  window: loadedWindow,
+  active,
 }: {
   talkId: string
-  /** The window on the clock (`useWindowOnTheClock`). */
+  /** The window the section loaded with, on the clock. */
   window: FeedbackWindow
+  /** The results tab is the one shown. */
+  active: boolean
 }) {
-  const visible = window.feedbackVisible
-  const live = window.state === 'open'
+  // The server's latest window, once it has answered: it runs the lifecycle.
+  const [serverWindow, setServerWindow] = useState<FeedbackWindow>()
+  const current = useWindowOnTheClock(serverWindow) ?? loadedWindow
+  const visible = current.feedbackVisible
+  const live = current.state === 'open'
+
   const refetchInterval = useIdlePolling({
     intervalMs: RESULTS_POLL_MS,
-    enabled: visible && live,
+    enabled: active && visible && live,
     onResume: () => void refetch(),
   })
+  // Asked for once the loaded window turns visible; after that the server's
+  // answer decides what shows.
   const { data, error, refetch, isFetching } =
     api.sessionFeedback.results.useQuery(
       { talkId },
-      { enabled: visible, refetchInterval },
+      { enabled: loadedWindow.feedbackVisible, refetchInterval },
     )
-
-  // The window closed with the page open (or the laptop asleep): polling
-  // has stopped, so fetch once more for the final counts.
-  const wasLive = useRef(live)
   useEffect(() => {
-    if (wasLive.current && !live && visible) void refetch()
-    wasLive.current = live
-  }, [live, visible, refetch])
+    if (data) setServerWindow(data.window)
+  }, [data])
 
-  if (!visible) return <Waiting window={window} />
-  if (data && !data.visible) return <Waiting window={data.window} />
+  // Polling stops when the window closes (or never ran while the session
+  // was moved later), so fetch once on each change that matters: the final
+  // counts at close, the first results once visible.
+  const previous = useRef({ live, visible })
+  useEffect(() => {
+    const was = previous.current
+    previous.current = { live, visible }
+    if (!loadedWindow.feedbackVisible) return
+    if ((was.live && !live) || (!was.visible && visible)) void refetch()
+  }, [live, visible, loadedWindow.feedbackVisible, refetch])
+
+  if (!loadedWindow.feedbackVisible) return <Waiting window={loadedWindow} />
+  if (data && !data.visible) return <Waiting window={current} />
   if (data)
     return (
-      <FeedbackResultsView
-        totals={data.totals}
-        comments={data.comments}
-        live={live}
-      />
+      <div className="space-y-4">
+        {error && (
+          // A failed refresh keeps what was loaded, and says so.
+          <div className="flex flex-wrap items-center gap-3">
+            <p role="status" className="text-sm text-red-700 dark:text-red-400">
+              Could not refresh. Showing the results loaded earlier.
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              aria-disabled={isFetching}
+              className={RETRY_BUTTON}
+            >
+              Try again
+            </button>
+          </div>
+        )}
+        <FeedbackResultsView
+          totals={data.totals}
+          comments={data.comments}
+          live={live}
+        />
+      </div>
     )
   if (error)
     return (
@@ -74,7 +114,7 @@ export function SessionFeedbackResults({
           type="button"
           onClick={() => void refetch()}
           aria-disabled={isFetching}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 aria-disabled:cursor-wait aria-disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+          className={RETRY_BUTTON}
         >
           Try again
         </button>

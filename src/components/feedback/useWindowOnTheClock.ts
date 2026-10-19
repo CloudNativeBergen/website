@@ -24,15 +24,18 @@ export function useWindowOnTheClock(
   const opensAt = computed?.opensAt
   const closesAt = computed?.closesAt
   const lastSlotEnd = computed?.lastSlotEnd
+  const conferenceOverAt = computed?.conferenceOverAt
+  // Nothing on this window can move by the clock without an instant.
+  const timed = !!(opensAt || conferenceOverAt)
   // A sample belongs to the window it was taken for: a moved session's
   // window is first shown as the server computed it, then sampled afresh.
-  const key = `${opensAt}|${closesAt}`
+  const key = `${opensAt}|${closesAt}|${conferenceOverAt}`
   const [sample, setSample] = useState<{ key: string; at: number } | null>(null)
   const now = sample?.key === key ? sample.at : null
   useEffect(() => {
-    if (!opensAt || !closesAt) return
+    if (!timed) return
     const current = Date.now()
-    const next = [opensAt, lastSlotEnd, closesAt]
+    const next = [opensAt, lastSlotEnd, closesAt, conferenceOverAt]
       .filter((t) => t !== undefined)
       .map((t) => Date.parse(t))
       .sort((a, b) => a - b)
@@ -45,11 +48,11 @@ export function useWindowOnTheClock(
       Math.min(wait, MAX_TIMER_MS),
     )
     return () => clearTimeout(timer)
-  }, [opensAt, lastSlotEnd, closesAt, key, now])
+  }, [timed, opensAt, lastSlotEnd, closesAt, conferenceOverAt, key, now])
   // Timers do not run while a laptop sleeps, so a page left up through the
   // session start would keep its old state: re-read the clock on return.
   useEffect(() => {
-    if (!opensAt || !closesAt) return
+    if (!timed) return
     const tick = () => {
       if (document.visibilityState === 'visible')
         setSample({ key, at: Date.now() })
@@ -60,7 +63,7 @@ export function useWindowOnTheClock(
       document.removeEventListener('visibilitychange', tick)
       window.removeEventListener('focus', tick)
     }
-  }, [opensAt, closesAt, key])
+  }, [timed, key])
   if (!computed || now === null) return computed
   return {
     ...computed,

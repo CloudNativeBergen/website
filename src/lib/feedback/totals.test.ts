@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { feedbackTotals } from './totals'
+import { feedbackTotals, sharePercent } from './totals'
 
 describe('feedbackTotals (speaker feedback spec §4.3)', () => {
   it('adds live responses, folded totals and Card Counts per colour', () => {
@@ -41,6 +41,20 @@ describe('feedbackTotals (speaker feedback spec §4.3)', () => {
     expect(
       feedbackTotals({ live: { green: 2, yellow: 1, red: 0 } }).lovedItPercent,
     ).toBe(67)
+  })
+
+  it('never rounds a mixed result to 100 % or 0 %', () => {
+    // 199 of 200 is 99.5 %, and 1 of 201 is 0.5 %: neither is "all" or "none".
+    expect(
+      feedbackTotals({ live: { green: 199, yellow: 0, red: 1 } })
+        .lovedItPercent,
+    ).toBe(99)
+    expect(
+      feedbackTotals({ live: { green: 1, yellow: 0, red: 200 } })
+        .lovedItPercent,
+    ).toBe(1)
+    expect(sharePercent(0, 5)).toBe(0)
+    expect(sharePercent(5, 5)).toBe(100)
   })
 
   it('has no loved-it share when there is nothing to share', () => {

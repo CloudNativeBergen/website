@@ -14,7 +14,11 @@ const TAB_BASE =
 const SELECTED =
   'border-brand-cloud-blue text-brand-cloud-blue dark:border-blue-400 dark:text-blue-400'
 // Literal class names: Tailwind only generates what it can read here.
-const TAB = `${TAB_BASE} border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-800 focus:outline-none data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-brand-cloud-blue data-selected:border-brand-cloud-blue data-selected:text-brand-cloud-blue dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-200 dark:data-selected:border-blue-400 dark:data-selected:text-blue-400`
+const TAB = `${TAB_BASE} border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-800 data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-brand-cloud-blue data-selected:border-brand-cloud-blue data-selected:text-brand-cloud-blue dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-200 dark:data-selected:border-blue-400 dark:data-selected:text-blue-400`
+
+/** Tab indexes: the results first, as §9.1 names them. */
+const RESULTS_TAB = 0
+const CODE_TAB = 1
 
 /**
  * The speaker's Session Feedback section (speaker feedback spec §9.1), shown
@@ -57,26 +61,25 @@ export function SessionFeedbackSection({
   if (data && shownWindow && (!data.code || !data.url)) {
     // No code while §5 would still give one: a version of the talk waits in
     // a locked release. Nothing to show yet, as before the code exists.
-    if (mayMint(data.window)) return null
+    if (mayMint(shownWindow)) return null
     // No code ever (its window closed before it had one, like every talk of
     // an edition that ended before launch): the results only (§9.5).
     return (
       <SectionShell>
         <SectionHeading />
-        <SessionFeedbackResults talkId={talkId} window={shownWindow} />
+        <SessionFeedbackResults talkId={talkId} window={shownWindow} active />
       </SectionShell>
     )
   }
 
-  if (data?.code && data.url && shownWindow)
+  if (data?.code && data.url && shownWindow) {
+    // The server's answer fixes the opening tab; the speaker's choice wins.
+    const selectedTab =
+      chosenTab ?? (data.window.feedbackVisible ? RESULTS_TAB : CODE_TAB)
     return (
       <SectionShell>
-        <TabGroup
-          // Index 0 is the results. The server's answer fixes the opening tab.
-          selectedIndex={chosenTab ?? (data.window.feedbackVisible ? 0 : 1)}
-          onChange={setChosenTab}
-        >
-          <TabList className="mb-5 flex gap-4 border-b border-gray-200 sm:gap-6 dark:border-gray-700">
+        <TabGroup selectedIndex={selectedTab} onChange={setChosenTab}>
+          <TabList className="mb-5 flex flex-wrap gap-x-4 gap-y-2 border-b border-gray-200 sm:gap-6 dark:border-gray-700">
             <Tab className={TAB}>
               {/* Icons from `sm` up: at 320 px both names fit only without them. */}
               <ChartBarIcon
@@ -93,10 +96,14 @@ export function SessionFeedbackSection({
           <TabPanels>
             {/* Both stay mounted: switching tabs never redraws the QR or
                 drops the results already loaded. */}
-            <TabPanel unmount={false} className="focus:outline-none">
-              <SessionFeedbackResults talkId={talkId} window={shownWindow} />
+            <TabPanel unmount={false}>
+              <SessionFeedbackResults
+                talkId={talkId}
+                window={shownWindow}
+                active={selectedTab === RESULTS_TAB}
+              />
             </TabPanel>
-            <TabPanel unmount={false} className="focus:outline-none">
+            <TabPanel unmount={false}>
               <FeedbackCodePanel
                 url={data.url}
                 title={title}
@@ -107,6 +114,7 @@ export function SessionFeedbackSection({
         </TabGroup>
       </SectionShell>
     )
+  }
 
   return (
     <SectionShell>
