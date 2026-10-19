@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import {
+  ChevronDownIcon,
   ExclamationTriangleIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
@@ -49,24 +50,28 @@ function WorkshopTicketsFrame({
       aria-labelledby={HEADING_ID}
       className="scroll-mt-24 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <TicketIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
-        <h3
-          id={HEADING_ID}
-          // Focusable from code only: focus lands here when the control that
-          // held it leaves the page (a removed entry).
-          tabIndex={-1}
-          className="text-lg font-medium text-gray-900 outline-none dark:text-white"
-        >
-          Workshop tickets
-        </h3>
-        {badge}
-      </div>
-      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        Holders of a ticket type that grants workshop access can sign up for
-        workshops.
-      </p>
-      {children}
+      {/* Collapsed by default: rarely changed once set. */}
+      <details className="group">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 [&::-webkit-details-marker]:hidden">
+          <TicketIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
+          <h3
+            id={HEADING_ID}
+            // Focusable from code only: focus lands here when the control that
+            // held it leaves the page (a removed entry).
+            tabIndex={-1}
+            className="text-lg font-medium text-gray-900 outline-none dark:text-white"
+          >
+            Workshop tickets
+          </h3>
+          {badge}
+          <ChevronDownIcon className="ml-auto size-5 shrink-0 text-gray-400 transition-transform group-open:rotate-180 dark:text-gray-500" />
+        </summary>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Holders of a ticket type that grants workshop access can sign up for
+          workshops.
+        </p>
+        {children}
+      </details>
     </section>
   )
 }
