@@ -14,7 +14,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
 
-const h = vi.hoisted(() => ({ store: null as null | VersionedSanityStore }))
+const h = vi.hoisted(() => ({
+  store: null as null | VersionedSanityStore,
+  report: vi.fn(),
+}))
+vi.mock('./capacity-notice', async (original) => ({
+  ...(await original<typeof import('./capacity-notice')>()),
+  reportCapacityThresholds: h.report,
+}))
 vi.mock('@/lib/sanity/client', async () => {
   const { createVersionedSanityStore } =
     await import('../../../__tests__/helpers/versionedSanityStore')
@@ -25,6 +32,7 @@ vi.mock('@/lib/sanity/client', async () => {
   return h.store.clients
 })
 
+import { crossedThresholds } from './capacity-notice'
 import {
   changeCapacity,
   confirmSignups,
@@ -154,6 +162,37 @@ describe('sign-ups arriving together', () => {
 
     expect(withStatus('confirmed')).toHaveLength(1)
     expect(withStatus('waitlist')).toHaveLength(3)
+  })
+})
+
+describe('the capacity notice', () => {
+  const crossed = () =>
+    h.report.mock.calls.flatMap(([p]) => crossedThresholds(p.before, p.after))
+  beforeEach(() => h.report.mockClear())
+
+  it('is raised for 80% by the sign-up that reaches it, with the counts it left', async () => {
+    await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' })
+    expect(crossed()).toEqual([])
+    await signUpForWorkshop(attendee(2), { whenFull: 'waitlist' })
+    expect(crossed()).toEqual(['eighty-percent'])
+    expect(h.report.mock.calls[1][0]).toMatchObject({
+      conferenceId: CONF,
+      workshopId: WORKSHOP,
+      after: { seatsTaken: 3, capacity: 3, waitlist: false },
+    })
+  })
+
+  it('is raised for the waitlist by the first sign-up that waits, not the second', async () => {
+    store().reset([workshop({ capacity: 1 }), signup(1, 'confirmed')])
+    await signUpForWorkshop(attendee(1), { whenFull: 'waitlist' })
+    expect(crossed()).toEqual(['waitlist'])
+    await signUpForWorkshop(attendee(2), { whenFull: 'waitlist' })
+    expect(crossed()).toEqual(['waitlist'])
+  })
+
+  it('is raised for 80% by a lower capacity', async () => {
+    await changeCapacity(WORKSHOP, CONF, 1)
+    expect(crossed()).toEqual(['eighty-percent'])
   })
 })
 

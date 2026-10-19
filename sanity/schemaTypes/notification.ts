@@ -85,6 +85,9 @@ export default defineType({
             title: 'Workshop Ticket Type Not Set',
             value: 'workshop_ticket_type_not_set',
           },
+          // A workshop reached 80% of capacity, or its waitlist started;
+          // once per workshop per threshold.
+          { title: 'Workshop Filling Up', value: 'workshop_capacity' },
           { title: 'System', value: 'system' },
         ],
         layout: 'dropdown',

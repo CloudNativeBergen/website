@@ -1059,6 +1059,8 @@ export function assertMergeable(
 //     `reminderLogId` / `dayOfLogId` in `src/lib/reminders/marker.ts`)
 //   - once-only not-set notice → `notification.workshop-not-set.<hash>.<recipientId>`
 //     (`@/lib/events/handlers/ticketTypeNotSetNotification`)
+//   - once-only capacity notice → `notification.workshop-capacity.<hash>.<recipientId>`
+//     (`@/lib/events/handlers/workshopCapacityNotification`)
 // A plain reference repoint (the generic path) rewrites the inner ref to the
 // survivor but LEAVES the doc keyed by the loser id. If the survivor already
 // holds the canonical-id sibling for the same conversation, BOTH docs then point
@@ -1081,8 +1083,17 @@ const DETERMINISTIC_ID_PREFIXES = [
   'convpref.',
   'notification.message.',
   'notification.workshop-not-set.',
+  'notification.workshop-capacity.',
   'reminder.',
 ] as const
+
+/** Once-only notices: merged by `readAt`, dropped when the id cannot fit. */
+const ONCE_NOTICE_PREFIXES = [
+  'notification.workshop-not-set.',
+  'notification.workshop-capacity.',
+] as const
+const isOnceNotice = (id: string) =>
+  ONCE_NOTICE_PREFIXES.some((p) => id.startsWith(p))
 
 /** The one deterministic id that appends a segment AFTER the speaker id. */
 const DAY_OF_REMINDER_PREFIX = 'reminder.day-of.'
@@ -1226,10 +1237,7 @@ export function reconcileDeterministicDoc(
   // with it. Dropping the loser's leaves the survivor exactly as the writer
   // would: without a notice for that type. Only this family is treated so; the
   // others keep their behaviour.
-  if (
-    deleteId.startsWith('notification.workshop-not-set.') &&
-    !fitsDocumentId(canonicalId)
-  ) {
+  if (isOnceNotice(deleteId) && !fitsDocumentId(canonicalId)) {
     return { deleteId, canonicalId }
   }
 
@@ -1262,7 +1270,7 @@ export function reconcileDeterministicDoc(
   // Once-only not-set notice: the two documents say the same thing to what is
   // now one person, so having read either is having read it. Nothing else on
   // the survivor's document changes.
-  if (deleteId.startsWith('notification.workshop-not-set.')) {
+  if (isOnceNotice(deleteId)) {
     const mergeSet: Record<string, unknown> = {}
     if (!survivorDoc.readAt && typeof loserDoc.readAt === 'string') {
       mergeSet.readAt = loserDoc.readAt

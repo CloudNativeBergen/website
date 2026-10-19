@@ -37,6 +37,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { Format, Status, isWorkshopFormat } from '@/lib/proposal/types'
+import { type SeatState, reportCapacityThresholds } from './capacity-notice'
 import { isListedWorkshop } from './listed'
 import type {
   FullSeats,
@@ -102,6 +103,7 @@ interface Seats {
   status?: string
   format?: string
   talkRev: string
+  title?: string
   /** `null` when no seat was ever taken through it. */
   guard: Guard | null
   /** When the read was made. */
@@ -113,6 +115,10 @@ interface Seats {
     status: 'confirmed' | 'waitlist'
     userWorkOSId: string
   }[]
+  /** Set by the write: the sign-ups its guard took seats for. */
+  took?: string[]
+  /** Set by the write: it waitlisted a new sign-up. */
+  waitlisted?: boolean
 }
 
 /**
@@ -183,6 +189,7 @@ async function readSeats(
   const workshop = talk as {
     _type?: string
     _rev: string
+    title?: string
     capacity?: number
     status?: string
     format?: string
@@ -202,6 +209,7 @@ async function readSeats(
     status: workshop.status,
     format: workshop.format,
     talkRev: workshop._rev,
+    title: workshop.title,
     signups: read.signups ?? [],
     // Its id is derived from the conference's own.
     guard: (guard as Guard | null) ?? null,
@@ -224,6 +232,7 @@ function guard(
   { took }: { took: string[] },
 ) {
   const _id = seatsDocumentId(conferenceId, workshopId)
+  seats.took = took
   // When the write is sent, not when it was read.
   const at = new Date().toISOString()
   const remembered = {
@@ -256,6 +265,20 @@ function guard(
     writes: 1,
     ...remembered,
   })
+}
+
+/** The seats as `seats` shows them, or as the write it decided leaves them. */
+function seatState(seats: Seats, { after }: { after: boolean }): SeatState {
+  const took = (after && seats.took) || []
+  return {
+    seatsTaken: new Set([...takenIn(seats), ...took]).size,
+    capacity: seats.capacity,
+    waitlist:
+      (after && seats.waitlisted === true) ||
+      seats.signups.some(
+        (s) => s.status === 'waitlist' && !took.includes(s._id),
+      ),
+  }
 }
 
 /**
@@ -304,10 +327,18 @@ async function decideAndCommit<F extends { refused: string }, D>(
       budgeted = true
     }
     const tx = clientWrite.transaction()
+    const before = seatState(seats, { after: false })
     const decision = await decide(seats, tx)
     if ('refused' in decision || tx.serialize().length === 0) return decision
     try {
       await tx.commit()
+      reportCapacityThresholds({
+        conferenceId,
+        workshopId,
+        workshopTitle: seats.title ?? '',
+        before,
+        after: seatState(seats, { after: true }),
+      })
       return decision
     } catch (error) {
       if (!lostTheRace(error)) throw error
@@ -373,6 +404,7 @@ export async function signUpForWorkshop(
       const free = takenIn(seats).size < seats.capacity
       if (!free && whenFull === 'refuse') return { refused: 'full' as const }
       if (free) guard(tx, seats, workshopId, conferenceId, { took: [_id] })
+      else seats.waitlisted = true
       tx.create({
         _id,
         _type: 'workshopSignup',
@@ -639,6 +671,8 @@ export async function changeCapacity(
     // On the revision read: a talk withdrawn or changed meanwhile has the
     // decision made again.
     tx.patch(workshopId, { ifRevisionID: seats.talkRev, set: { capacity } })
+    // As the write leaves it, for the capacity notice.
+    seats.capacity = capacity
     const confirmedAt = new Date().toISOString()
     for (const { _id, _rev } of promoted) {
       // The debt of a promotion email is stored WITH the promotion (#1357):

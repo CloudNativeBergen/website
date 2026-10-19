@@ -109,6 +109,26 @@ export interface WorkshopTicketTypeNotSetEvent {
   }
 }
 
+export type WorkshopCapacityThreshold = 'eighty-percent' | 'waitlist'
+
+/**
+ * Fired when a write to a workshop's seats crosses a threshold: confirmed
+ * seats reach 80% of capacity, or the first sign-up is waitlisted. Raised
+ * through `reportCapacityThresholds` (`@/lib/workshop/capacity-notice`).
+ * Counts only, nothing about the attendees.
+ */
+export interface WorkshopCapacityThresholdEvent {
+  eventType: 'workshop.capacity.threshold'
+  timestamp: Date
+  conferenceId: string
+  workshopId: string
+  workshopTitle: string
+  threshold: WorkshopCapacityThreshold
+  /** As the write left them. */
+  seatsTaken: number
+  capacity: number
+}
+
 /**
  * Map of event types to their corresponding event interfaces
  * This provides type-safe event handling throughout the application
@@ -118,6 +138,7 @@ export interface EventTypeMap {
   'gallery.speaker.tagged': GallerySpeakerTaggedEvent
   'sponsor.status.changed': SponsorStatusChangeEvent
   'workshop.ticket-type.not-set': WorkshopTicketTypeNotSetEvent
+  'workshop.capacity.threshold': WorkshopCapacityThresholdEvent
 }
 
 /**

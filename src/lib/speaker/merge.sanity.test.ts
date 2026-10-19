@@ -485,6 +485,52 @@ describe('mergeSpeakers — a not-set notice and a survivor whose id is too long
   })
 })
 
+describe('mergeSpeakers — a capacity notice moves to the survivor', () => {
+  const HASH = 'b'.repeat(32)
+  const NOTICE_LOSER = `notification.workshop-capacity.${HASH}.${LOSER}`
+
+  beforeEach(() => {
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id')) {
+          if (params.id === SURVIVOR) return Promise.resolve(survivorDoc)
+          if (params.id === LOSER) return Promise.resolve(loserDoc)
+          return Promise.resolve(null)
+        }
+        if (query.includes('references($loserId)')) {
+          return Promise.resolve([
+            {
+              _id: NOTICE_LOSER,
+              _type: 'notification',
+              _rev: 'rev-notice-loser',
+              recipient: { ...ref(LOSER), _weak: true },
+              conference: ref('conf-1'),
+              notificationType: 'workshop_capacity',
+              title: '“Intro to K8s” is 80% full',
+            },
+          ])
+        }
+        if (query.includes('_id in $ids')) return Promise.resolve([])
+        return Promise.resolve(null)
+      },
+    )
+  })
+
+  it('recreates it under the survivor’s id, so the survivor is not notified again', async () => {
+    const { err } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    expect(err).toBeNull()
+    expect(createdDocs.map((d) => d._id)).toContain(
+      `notification.workshop-capacity.${HASH}.${SURVIVOR}`,
+    )
+    expect(deletedIds).toContain(NOTICE_LOSER)
+  })
+})
+
 // --- Issue #1027 items 1-3, in the ONE transaction -------------------------
 
 describe('mergeSpeakers — unreconciled reference sites (#1027 items 1-3)', () => {

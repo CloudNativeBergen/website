@@ -64,7 +64,7 @@ const fitsADocumentId = (organizerId: string) =>
  * treats two names that differ by such a character as two types, each with its
  * own decision to make, so each gets its own notification.
  */
-function displayName(typeName: string): string {
+export function displayName(typeName: string): string {
   return typeName
     .replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ')
     .replace(/\p{Cf}/gu, '')
