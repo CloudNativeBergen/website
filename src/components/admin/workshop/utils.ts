@@ -1,4 +1,5 @@
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
+import { getWorkshopDateTime } from '@/lib/workshop/utils'
 
 export interface WorkshopStats {
   confirmedCount: number
@@ -74,39 +75,42 @@ export interface WorkshopScheduleDay<T> {
 export function groupWorkshopsBySchedule<T extends ProposalWithWorkshopData>(
   workshops: T[],
 ): { days: WorkshopScheduleDay<T>[]; unscheduled: T[] } {
+  type Placed = {
+    w: T
+    date: string
+    room: string
+    start: string
+    end?: string
+  }
   const unscheduled: T[] = []
-  const byDay = new Map<string, T[]>()
+  const byDay = new Map<string, Placed[]>()
   for (const w of workshops) {
-    const s = w.scheduleInfo
-    if (!s?.date || !s.trackTitle || !s.timeSlot?.startTime) {
+    // The track a workshop sits in on the schedule is its room.
+    const { date, startTime, endTime, room } = getWorkshopDateTime(w)
+    if (!date || !room || !startTime) {
       unscheduled.push(w)
       continue
     }
-    byDay.set(s.date, [...(byDay.get(s.date) ?? []), w])
+    const placed = { w, date, room, start: startTime, end: endTime }
+    byDay.set(date, [...(byDay.get(date) ?? []), placed])
   }
 
   const days = [...byDay.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, list]) => {
-      const tracks = [
-        ...new Set(list.map((w) => w.scheduleInfo!.trackTitle!)),
-      ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-      const times = [
-        ...new Set(list.map((w) => w.scheduleInfo!.timeSlot!.startTime)),
-      ].sort()
+      const tracks = [...new Set(list.map((p) => p.room))].sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true }),
+      )
+      const times = [...new Set(list.map((p) => p.start))].sort()
       const slots = times.map((startTime) => {
-        const inSlot = list.filter(
-          (w) => w.scheduleInfo!.timeSlot!.startTime === startTime,
-        )
+        const inSlot = list.filter((p) => p.start === startTime)
         // A row shows one end time only when its workshops agree on it.
-        const ends = new Set(
-          inSlot.map((w) => w.scheduleInfo!.timeSlot!.endTime),
-        )
+        const ends = new Set(inSlot.map((p) => p.end))
         return {
           startTime,
           endTime: ends.size === 1 ? [...ends][0] : undefined,
           cells: tracks.map((t) =>
-            inSlot.filter((w) => w.scheduleInfo!.trackTitle === t),
+            inSlot.filter((p) => p.room === t).map((p) => p.w),
           ),
         }
       })
