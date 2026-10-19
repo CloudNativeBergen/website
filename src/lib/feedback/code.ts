@@ -38,8 +38,62 @@ type VersionsClient = ReturnType<typeof versionsClient>
 export type EnsureFeedbackCodeResult =
   /** Missing, foreign, not the caller's, or not confirmed: one answer for all. */
   | { status: 'refused' }
-  /** `code` is null when none exists and §5 refuses to mint one. */
-  | { status: 'ok'; code: string | null; window: FeedbackWindow }
+  /**
+   * `code` is null when none exists and §5 refuses to mint one. `minted`
+   * says this call wrote it.
+   */
+  | {
+      status: 'ok'
+      code: string | null
+      window: FeedbackWindow
+      minted: boolean
+    }
+
+/** {@link readFeedbackCode}: refused as {@link EnsureFeedbackCodeResult}. */
+export type ReadFeedbackCodeResult =
+  | { status: 'refused' }
+  | {
+      status: 'ok'
+      code: string | null
+      window: FeedbackWindow
+      /** §5 would mint a code now. */
+      mayMint: boolean
+    }
+
+/**
+ * Several mints in one request (#1459), some at once. Every code the batch
+ * draws or meets is kept here, and each draw avoids them: a GROQ read lags
+ * those writes, and a parallel mint has not written yet. The code index is
+ * left for the caller to expire once at the end.
+ */
+export interface MintBatch {
+  codes: Set<string>
+}
+
+/** Ids per doc-endpoint read: the ids travel in the URL. */
+const HELD_CODES_CHUNK = 50
+
+/**
+ * Reserve in the batch every code the talks hold now, read by id. GROQ may
+ * not show a code minted a moment ago, and a talk late in the queue would
+ * otherwise reserve its code only when its own turn comes, after other
+ * talks have drawn.
+ */
+export async function reserveHeldCodes(
+  talkIds: string[],
+  batch: MintBatch,
+): Promise<void> {
+  const client = versionsClient()
+  for (let i = 0; i < talkIds.length; i += HELD_CODES_CHUNK) {
+    const talks = await client.getDocuments<TalkDoc>(
+      talkIds.slice(i, i + HELD_CODES_CHUNK),
+    )
+    for (const talk of talks) {
+      const code = normalizeShortCode(talk?.feedbackCode)
+      if (code) batch.codes.add(code)
+    }
+  }
+}
 
 /** How often a write that lost a revision guard re-reads and tries again. */
 const MAX_RETRIES = 3
@@ -50,19 +104,27 @@ const isPublishedId = (id: string) =>
   !id.startsWith('drafts.') && !id.startsWith('versions.')
 
 /**
+ * Who asks for the code: one of the talk's speakers, or an organizer of the
+ * conference serving the request, whom the caller has already checked.
+ */
+export type FeedbackCodeActor = { speakerId: string } | { organizer: true }
+
+/**
  * The talk is a confirmed talk of the conference serving the request, and
- * the caller is one of its speakers. Checked on the PUBLISHED document only.
+ * the actor may hold its code: an organizer, or one of its speakers. Checked
+ * on the PUBLISHED document only.
  */
 function mayHoldCode(
   talk: TalkDoc | null | undefined,
   conferenceId: string,
-  speakerId: string,
+  actor: FeedbackCodeActor,
 ): talk is TalkDoc {
   return (
     talk?._type === 'talk' &&
     talk.status === 'confirmed' &&
     talk.conference?._ref === conferenceId &&
-    (talk.speakers ?? []).some((s) => s._ref === speakerId)
+    ('organizer' in actor ||
+      (talk.speakers ?? []).some((s) => s._ref === actor.speakerId))
   )
 }
 
@@ -71,7 +133,7 @@ function mayHoldCode(
  * slot, once its conference is over (for an unscheduled talk
  * `feedbackVisible` is exactly "the conference is over").
  */
-const mayMint = (window: FeedbackWindow) =>
+export const mayMint = (window: FeedbackWindow) =>
   window.state !== 'closed' &&
   !(window.state === 'unscheduled' && window.feedbackVisible)
 
@@ -88,44 +150,124 @@ function isRetryable(error: unknown): boolean {
   return message.includes('revision')
 }
 
-export async function ensureFeedbackCode({
-  talkId,
-  speakerId,
-  conference,
-  now,
-}: {
-  talkId: string
-  speakerId: string
-  conference: { _id: string; endDate?: string | null }
-  now: Date
-}): Promise<EnsureFeedbackCodeResult> {
-  if (!isPublishedId(talkId)) return { status: 'refused' }
-  const client = versionsClient()
+/**
+ * At least one of the talk's speakers exists and is not erased. Erasure
+ * unsets the code of a talk it leaves without one (spec §12.3), and an
+ * organizer must not bring it back (§10.4's rule for rotation); a speaker's
+ * own mint needs no check, since an erased speaker cannot sign in.
+ */
+async function hasLiveSpeaker(
+  client: VersionsClient,
+  talk: TalkDoc,
+): Promise<boolean> {
+  const ids = (talk.speakers ?? [])
+    .map((s) => s._ref)
+    .filter((id): id is string => typeof id === 'string')
+  if (ids.length === 0) return false
+  const speakers = await client.getDocuments<{ erasedAt?: string }>(ids)
+  return speakers.some((s) => s && !s.erasedAt)
+}
+
+/**
+ * The talk as the code's rules see it: refused (`null`) unless it is a
+ * confirmed talk of this conference the actor may hold, with its window and
+ * any code it already has.
+ */
+async function readTalkForCode(
+  client: VersionsClient,
+  talkId: string,
+  actor: FeedbackCodeActor,
+  conference: { _id: string; endDate?: string | null },
+  now: Date,
+): Promise<{
+  talk: TalkDoc
+  window: FeedbackWindow
+  existing: string | null
+} | null> {
+  if (!isPublishedId(talkId)) return null
   const talk = await client.getDocument<TalkDoc>(talkId)
   // The doc endpoint answers a comma list of ids with the first match, so
   // the document read must BE the id asked for. The router's id check stops
   // such ids first; this keeps the module safe on its own.
-  if (talk?._id !== talkId || !mayHoldCode(talk, conference._id, speakerId)) {
-    return { status: 'refused' }
+  if (talk?._id !== talkId || !mayHoldCode(talk, conference._id, actor)) {
+    return null
   }
-
+  if ('organizer' in actor && !(await hasLiveSpeaker(client, talk))) {
+    return null
+  }
   const window = feedbackWindow({
     slots: await getFeedbackSlots(conference._id, talk._id),
     conferenceEndDate: conference.endDate,
     now,
   })
-  const existing = normalizeShortCode(talk.feedbackCode)
-  if (existing) return { status: 'ok', code: existing, window }
-  if (!mayMint(window)) return { status: 'ok', code: null, window }
+  return { talk, window, existing: normalizeShortCode(talk.feedbackCode) }
+}
 
-  const outcome = await mint(client, talk, conference._id, speakerId)
+/**
+ * The organizer's view of a talk's code (#1459), without minting one:
+ * `mayMint` says §5 would mint it now. A version waiting in a scheduled
+ * release still refuses the mint itself.
+ */
+export async function readFeedbackCode({
+  talkId,
+  conference,
+  now,
+}: {
+  talkId: string
+  conference: { _id: string; endDate?: string | null }
+  now: Date
+}): Promise<ReadFeedbackCodeResult> {
+  const read = await readTalkForCode(
+    versionsClient(),
+    talkId,
+    { organizer: true },
+    conference,
+    now,
+  )
+  if (!read) return { status: 'refused' }
+  return {
+    status: 'ok',
+    code: read.existing,
+    window: read.window,
+    mayMint: !read.existing && mayMint(read.window),
+  }
+}
+
+export async function ensureFeedbackCode({
+  talkId,
+  actor,
+  conference,
+  now,
+  batch,
+}: {
+  talkId: string
+  actor: FeedbackCodeActor
+  conference: { _id: string; endDate?: string | null }
+  now: Date
+  batch?: MintBatch
+}): Promise<EnsureFeedbackCodeResult> {
+  const client = versionsClient()
+  const read = await readTalkForCode(client, talkId, actor, conference, now)
+  if (!read) return { status: 'refused' }
+  const { talk, window, existing } = read
+  if (existing) {
+    // GROQ may not show it yet: the batch's later draws must avoid it too.
+    batch?.codes.add(existing)
+    return { status: 'ok', code: existing, window, minted: false }
+  }
+  if (!mayMint(window))
+    return { status: 'ok', code: null, window, minted: false }
+
+  const outcome = await mint(client, talk, conference._id, actor, batch)
   if (!outcome) return { status: 'refused' }
-  if (outcome.code === null) return { status: 'ok', code: null, window }
+  if (outcome.code === null)
+    return { status: 'ok', code: null, window, minted: false }
+  batch?.codes.add(outcome.code)
   if (outcome.minted) {
     await sweepTalkVersions(client, talk._id)
-    expireFeedbackCodeIndex(conference._id)
+    if (!batch) expireFeedbackCodeIndex(conference._id)
   }
-  return { status: 'ok', code: outcome.code, window }
+  return { status: 'ok', code: outcome.code, window, minted: outcome.minted }
 }
 
 /**
@@ -145,7 +287,8 @@ async function mint(
   client: VersionsClient,
   talk: TalkDoc,
   conferenceId: string,
-  speakerId: string,
+  actor: FeedbackCodeActor,
+  batch: MintBatch | undefined,
 ): Promise<{ code: string | null; minted: boolean } | null> {
   let current = talk
   for (let attempt = 0; ; attempt++) {
@@ -159,9 +302,11 @@ async function mint(
       )
     }
     if (locked.length > 0) return { code: null, minted: false }
-    const code = createShortCodeMinter(
-      await conferenceFeedbackCodes(conferenceId),
-    )()
+    const code = createShortCodeMinter([
+      ...(await conferenceFeedbackCodes(conferenceId)),
+      ...(batch?.codes ?? []),
+    ])()
+    batch?.codes.add(code)
     const tx = client
       .transaction()
       .patch(current._id, (p) =>
@@ -179,7 +324,10 @@ async function mint(
       if (!isRetryable(error) || attempt >= MAX_RETRIES) throw error
     }
     const reread = await client.getDocument<TalkDoc>(current._id)
-    if (!mayHoldCode(reread, conferenceId, speakerId)) return null
+    if (!mayHoldCode(reread, conferenceId, actor)) return null
+    if ('organizer' in actor && !(await hasLiveSpeaker(client, reread))) {
+      return null
+    }
     const won = normalizeShortCode(reread.feedbackCode)
     if (won) return { code: won, minted: false }
     current = reread

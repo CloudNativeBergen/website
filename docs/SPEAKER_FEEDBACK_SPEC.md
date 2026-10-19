@@ -217,6 +217,21 @@ Decided on [#1418](https://github.com/CloudNativeBergen/website/issues/1418).
   an edition that ended before launch"
   ([#1421](https://github.com/CloudNativeBergen/website/issues/1421)) without
   refusing a code during the last hours of a window that is still open.
+- **Minted by an organizer** ([#1459](https://github.com/CloudNativeBergen/website/issues/1459)):
+  so every room has a code to print whether or not its speakers opened their
+  page. **Mint Feedback Code** on the talk's admin page
+  (`sessionFeedback.mintCode`), and **Mint Feedback Codes** on
+  `/admin/proposals` for every confirmed talk without one
+  (`sessionFeedback.mintAll`, after a count from `sessionFeedback.mintPreview`).
+  Both are `adminProcedure`s on the speaker's minting path with the same rules,
+  minus the speaker check and plus one: the talk must still have a speaker who
+  exists and is not erased, so an organizer never brings back a code erasure
+  unset (§12.3, the rule §10.4 states for rotation). Neither changes an
+  existing code; that is rotation. The bulk mint runs talk by talk with one
+  batch: each draw also avoids the codes the batch already minted (GROQ may lag
+  them), the index tag is expired once at the end, and a talk whose write
+  fails is reported while the rest go on. Viewing the admin page never mints:
+  it reads through `sessionFeedback.adminCode`.
 - **URL:** `<conferenceBaseUrl(talk.conference)>/f/<code>`
   (`src/lib/conference/baseUrl.ts`). The proposal projection adds the
   conference's `domains` for this.
@@ -656,7 +671,8 @@ will reach a dead page. Existing responses are kept." Rotation mints a new code
 Rotation is **refused, and not offered**, when the talk has no `feedbackCode`
 (never minted, folded, or its only speaker erased) or when §5 would refuse to
 mint one (its window has closed). _Refinement (spec):_ otherwise an organizer
-could restart collection on a talk erasure or the fold had closed.
+could restart collection on a talk erasure or the fold had closed. An organizer's
+mint (§5) refuses the erased case the same way.
 
 ## 11. Notifications
 

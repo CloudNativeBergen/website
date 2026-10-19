@@ -9,6 +9,8 @@ import { ProposalPreview } from './ProposalPreview'
 import { ProposalManagementModal } from '@/components/admin/ProposalManagementModal'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { ModalShell } from '@/components/ModalShell'
+import { MintFeedbackCodesDialog } from '@/components/feedback'
+import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
 
 interface ProposalsPageClientProps {
   proposals: ProposalExisting[]
@@ -32,6 +34,7 @@ export function ProposalsPageClient({
 
   // Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isMintOpen, setIsMintOpen] = useState(false)
 
   // Handlers
   const handleCreateProposal = () => {
@@ -58,6 +61,9 @@ export function ProposalsPageClient({
             currentUserId={currentUserId}
             allowedFormats={conference.formats}
             onCreateProposal={handleCreateProposal}
+            onMintFeedbackCodes={
+              ATTENDEE_PAGE_LIVE ? () => setIsMintOpen(true) : undefined
+            }
             conference={conference}
           />
         </div>
@@ -91,6 +97,11 @@ export function ProposalsPageClient({
           )}
         </ModalShell>
       )}
+
+      <MintFeedbackCodesDialog
+        isOpen={isMintOpen}
+        onClose={() => setIsMintOpen(false)}
+      />
 
       {/* Create Modal */}
       <ProposalManagementModal

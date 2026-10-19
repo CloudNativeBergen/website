@@ -80,3 +80,78 @@ export async function conferenceFeedbackCodes(
   if (!Array.isArray(codes)) return []
   return codes.filter((c): c is string => typeof c === 'string')
 }
+
+export interface ConfirmedTalk {
+  _id: string
+  title: string | null
+  feedbackCode: string | null
+  /** A speaker of the talk exists and is not erased. */
+  hasLiveSpeaker: boolean
+}
+
+/**
+ * The conference's published, confirmed talks, for minting every code at
+ * once (#1459). GROQ may lag a write by about a second; each talk is read
+ * again by id before anything is written to it.
+ */
+export async function getConfirmedTalks(
+  conferenceId: string,
+): Promise<ConfirmedTalk[]> {
+  const talks = await scopedFetch<ConfirmedTalk[]>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "talk" && ${PUBLISHED_ONLY} && status == "confirmed"] | order(title asc){
+      _id, title, feedbackCode,
+      // count() of a missing array is null: coalesce, so the flag is a boolean.
+      "hasLiveSpeaker": coalesce(count(speakers[defined(@->_id) && !defined(@->erasedAt)]), 0) > 0
+    }`,
+    {},
+    { cache: 'no-store' },
+  )
+  return talks ?? []
+}
+
+/**
+ * Every slot on the conference's published, official schedule days, by
+ * talk: {@link getFeedbackSlots} for all talks in one read, for the bulk
+ * mint's count (#1459).
+ */
+export async function getConferenceFeedbackSlots(
+  conferenceId: string,
+): Promise<Map<string, FeedbackSlot[]>> {
+  const days = await scopedFetch<
+    | {
+        date: string | null
+        // A track with no talks yields a null entry.
+        slots:
+          | ((Omit<FeedbackSlot, 'date'> & { talkId: string | null }) | null)[]
+          | null
+      }[]
+    | null
+  >(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "schedule" && ${PUBLISHED_ONLY} && ${OFFICIAL_SCHEDULE_FILTER}]{
+      date,
+      "slots": tracks[].talks[defined(talk._ref)]{
+        "talkId": talk._ref, startTime, endTime
+      }
+    }`,
+    {},
+    { cache: 'no-store' },
+  )
+  const byTalk = new Map<string, FeedbackSlot[]>()
+  for (const day of days ?? []) {
+    for (const s of day.slots ?? []) {
+      if (!s?.talkId) continue
+      const slots = byTalk.get(s.talkId) ?? []
+      slots.push({
+        date: day.date,
+        startTime: s.startTime ?? null,
+        endTime: s.endTime ?? null,
+      })
+      byTalk.set(s.talkId, slots)
+    }
+  }
+  return byTalk
+}

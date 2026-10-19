@@ -16,6 +16,8 @@ import {
 } from '@/components/admin'
 import { BackLink } from '@/components/BackButton'
 import { ProposalMessagesRedirect } from '@/components/messaging'
+import { AdminFeedbackCodePanel } from '@/components/feedback'
+import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
 import { getAuthSession } from '@/lib/auth'
 import { getProposalVideoUrl } from '@/lib/proposal/video'
 
@@ -148,6 +150,12 @@ export default async function ProposalDetailPage({
               status={proposal.status}
               conferenceEndDate={conference.endDate}
             />
+            {ATTENDEE_PAGE_LIVE && proposal.status === 'confirmed' && (
+              <AdminFeedbackCodePanel
+                talkId={proposal._id}
+                title={proposal.title}
+              />
+            )}
             <AudienceFeedbackPanel
               proposalId={proposal._id}
               currentFeedback={proposal.audienceFeedback}
