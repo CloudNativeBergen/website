@@ -621,6 +621,7 @@ describe('sessionFeedbackRouter surface', () => {
       }
     )._def
     expect(Object.keys(procedures).sort()).toEqual([
+      'adminCode',
       'ensureCode',
       'mintAll',
       'mintCode',
@@ -833,5 +834,46 @@ describe('mintAll — every confirmed talk without a code', () => {
     expect(h.docReads).toEqual([])
     expect(h.attempts).toBe(0)
     expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+  })
+})
+
+describe('adminCode — what the talk page shows, never a write', () => {
+  it('offers a mint for a talk with no code, and writes nothing', async () => {
+    const out = await organizer().adminCode({ talkId: 'talk-1' })
+    expect(out).toMatchObject({ code: null, url: null, mayMint: true })
+    expect(out.window.state).toBe('before')
+    expect(h.attempts).toBe(0)
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+  })
+
+  it('returns the talk’s code and URL once it has one', async () => {
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'talk-1' ? { ...d, feedbackCode: 'k7m2qx' } : d,
+    )
+    expect(await organizer().adminCode({ talkId: 'talk-1' })).toMatchObject({
+      code: 'k7m2qx',
+      url: 'https://2026.example.no/f/k7m2qx',
+      mayMint: false,
+    })
+  })
+
+  it('offers no mint once the window has closed', async () => {
+    vi.setSystemTime(new Date('2026-06-11T08:40:00Z'))
+    const out = await organizer().adminCode({ talkId: 'talk-1' })
+    expect(out).toMatchObject({ code: null, mayMint: false })
+  })
+
+  it('answers another conference’s talk like a missing one', async () => {
+    for (const talkId of ['talk-foreign', 'talk-missing', 'talk-accepted'])
+      await expect(organizer().adminCode({ talkId })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      })
+  })
+
+  it('refuses a speaker who is not an organizer, before any read', async () => {
+    await expect(
+      caller('sp-ada').adminCode({ talkId: 'talk-1' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.docReads).toEqual([])
   })
 })

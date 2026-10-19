@@ -113,6 +113,76 @@ function isRetryable(error: unknown): boolean {
   return message.includes('revision')
 }
 
+/**
+ * The talk as the code's rules see it: refused (`null`) unless it is a
+ * confirmed talk of this conference the actor may hold, with its window and
+ * any code it already has.
+ */
+async function readTalkForCode(
+  client: VersionsClient,
+  talkId: string,
+  actor: FeedbackCodeActor,
+  conference: { _id: string; endDate?: string | null },
+  now: Date,
+): Promise<{
+  talk: TalkDoc
+  window: FeedbackWindow
+  existing: string | null
+} | null> {
+  if (!isPublishedId(talkId)) return null
+  const talk = await client.getDocument<TalkDoc>(talkId)
+  // The doc endpoint answers a comma list of ids with the first match, so
+  // the document read must BE the id asked for. The router's id check stops
+  // such ids first; this keeps the module safe on its own.
+  if (talk?._id !== talkId || !mayHoldCode(talk, conference._id, actor)) {
+    return null
+  }
+  const window = feedbackWindow({
+    slots: await getFeedbackSlots(conference._id, talk._id),
+    conferenceEndDate: conference.endDate,
+    now,
+  })
+  return { talk, window, existing: normalizeShortCode(talk.feedbackCode) }
+}
+
+/**
+ * The organizer's view of a talk's code (#1459), without minting one:
+ * `mayMint` says §5 would mint it now. A version waiting in a scheduled
+ * release still refuses the mint itself.
+ */
+export async function readFeedbackCode({
+  talkId,
+  conference,
+  now,
+}: {
+  talkId: string
+  conference: { _id: string; endDate?: string | null }
+  now: Date
+}): Promise<
+  | { status: 'refused' }
+  | {
+      status: 'ok'
+      code: string | null
+      window: FeedbackWindow
+      mayMint: boolean
+    }
+> {
+  const read = await readTalkForCode(
+    versionsClient(),
+    talkId,
+    { organizer: true },
+    conference,
+    now,
+  )
+  if (!read) return { status: 'refused' }
+  return {
+    status: 'ok',
+    code: read.existing,
+    window: read.window,
+    mayMint: !read.existing && mayMint(read.window),
+  }
+}
+
 export async function ensureFeedbackCode({
   talkId,
   actor,
@@ -126,22 +196,10 @@ export async function ensureFeedbackCode({
   now: Date
   batch?: MintBatch
 }): Promise<EnsureFeedbackCodeResult> {
-  if (!isPublishedId(talkId)) return { status: 'refused' }
   const client = versionsClient()
-  const talk = await client.getDocument<TalkDoc>(talkId)
-  // The doc endpoint answers a comma list of ids with the first match, so
-  // the document read must BE the id asked for. The router's id check stops
-  // such ids first; this keeps the module safe on its own.
-  if (talk?._id !== talkId || !mayHoldCode(talk, conference._id, actor)) {
-    return { status: 'refused' }
-  }
-
-  const window = feedbackWindow({
-    slots: await getFeedbackSlots(conference._id, talk._id),
-    conferenceEndDate: conference.endDate,
-    now,
-  })
-  const existing = normalizeShortCode(talk.feedbackCode)
+  const read = await readTalkForCode(client, talkId, actor, conference, now)
+  if (!read) return { status: 'refused' }
+  const { talk, window, existing } = read
   if (existing) return { status: 'ok', code: existing, window, minted: false }
   if (!mayMint(window))
     return { status: 'ok', code: null, window, minted: false }

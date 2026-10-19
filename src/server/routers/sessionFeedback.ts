@@ -7,6 +7,7 @@ import {
   countTalksWithoutCode,
   ensureFeedbackCode,
   mintConferenceFeedbackCodes,
+  readFeedbackCode,
 } from '@/lib/feedback/server'
 
 /**
@@ -79,6 +80,27 @@ export const sessionFeedbackRouter = router({
       window: result.window,
     }
   }),
+  /**
+   * A talk's code as the admin talk page shows it (#1459). Never mints:
+   * `mayMint` offers the Mint button. NOT_FOUND as {@link mintCode}.
+   */
+  adminCode: adminProcedure.input(talkInput).query(async ({ input }) => {
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) throw notFound()
+    const result = await readFeedbackCode({
+      talkId: input.talkId,
+      conference,
+      now: new Date(),
+    })
+    if (result.status === 'refused') throw notFound()
+    return {
+      code: result.code,
+      url: result.code ? feedbackCodeUrl(conference, result.code) : null,
+      window: result.window,
+      mayMint: result.mayMint,
+    }
+  }),
+
   /** How many confirmed talks the bulk mint would give a code (#1459). */
   mintPreview: adminProcedure.query(async () => {
     const { conference } = await getConferenceForCurrentDomain()

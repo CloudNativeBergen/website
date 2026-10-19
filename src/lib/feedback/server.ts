@@ -1,6 +1,7 @@
 export {
   ensureFeedbackCode,
   type EnsureFeedbackCodeResult,
+  readFeedbackCode,
   type FeedbackCodeActor,
 } from './code'
 export { expireFeedbackCodeIndex } from './cache'
