@@ -351,6 +351,55 @@ export const ResultsArriveOnTheClock: Story = {
   },
 }
 
+let closingHits = { n: 0 }
+
+/**
+ * The window closes 3 s after the page loads, with the results tab open:
+ * polling stops, and the results are fetched once more so the final counts
+ * show, not the last ones polled.
+ */
+export const ResultsFinalFetchAtClose: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post(ENDPOINT, () => {
+          const closes = Date.now() + 3000
+          return HttpResponse.json({
+            result: {
+              data: {
+                ...BEFORE,
+                window: {
+                  state: 'open',
+                  opensAt: new Date(closes - 25 * 3_600_000).toISOString(),
+                  lastSlotEnd: new Date(closes - 24 * 3_600_000).toISOString(),
+                  closesAt: new Date(closes).toISOString(),
+                  feedbackVisible: true,
+                },
+              },
+            },
+          })
+        }),
+        http.get(RESULTS, () => {
+          closingHits.n++
+          return HttpResponse.json({ result: { data: results(LIVE_WINDOW) } })
+        }),
+      ],
+    },
+  },
+  beforeEach: () => {
+    closingHits = { n: 0 }
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(await canvas.findByText('Live')).toBeVisible()
+    expect(closingHits.n).toBe(1)
+    await waitFor(() => expect(canvas.queryByText('Live')).toBeNull(), {
+      timeout: 10000,
+    })
+    await waitFor(() => expect(closingHits.n).toBe(2))
+  },
+}
+
 const resultsFailedHits = { n: 0 }
 
 /** The results fail to load: the tab says so and can be retried. */

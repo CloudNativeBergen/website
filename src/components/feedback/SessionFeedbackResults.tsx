@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import type { FeedbackWindow } from '@/lib/feedback'
 import { api } from '@/lib/trpc/client'
 import { useIdlePolling } from '@/hooks/useIdlePolling'
@@ -44,6 +45,14 @@ export function SessionFeedbackResults({
       { talkId },
       { enabled: visible, refetchInterval },
     )
+
+  // The window closed with the page open (or the laptop asleep): polling
+  // has stopped, so fetch once more for the final counts.
+  const wasLive = useRef(live)
+  useEffect(() => {
+    if (wasLive.current && !live && visible) void refetch()
+    wasLive.current = live
+  }, [live, visible, refetch])
 
   if (!visible) return <Waiting window={window} />
   if (data && !data.visible) return <Waiting window={data.window} />
