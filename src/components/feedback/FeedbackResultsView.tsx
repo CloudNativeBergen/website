@@ -58,19 +58,7 @@ export function FeedbackResultsView({
           {plural(totals.total, 'response', 'responses')} &middot;{' '}
           {plural(comments.length, 'comment', 'comments')}
         </p>
-        <div className="flex items-center gap-3">
-          {hasCards && totals.total > 0 && (
-            <button
-              type="button"
-              aria-pressed={breakdown}
-              onClick={() => setBreakdown((b) => !b)}
-              className="rounded-md px-2 py-1 text-sm font-medium text-brand-cloud-blue hover:bg-brand-cloud-blue/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-pressed:bg-brand-cloud-blue/10 dark:text-blue-400 dark:hover:bg-blue-900/30 dark:aria-pressed:bg-blue-900/30"
-            >
-              Scanned vs cards
-            </button>
-          )}
-          {live && <LiveBadge />}
-        </div>
+        {live && <LiveBadge />}
       </div>
 
       {totals.total === 0 ? (
@@ -102,13 +90,15 @@ export function FeedbackResultsView({
             {ANSWERS.map(({ colour, label, Icon }) => (
               <div
                 key={colour}
-                className={`rounded-lg p-3 ${TONE[colour].tile} ${TONE[colour].text}`}
+                // The number first on screen, so a label that wraps at
+                // phone width never pushes one tile's number below another's.
+                className={`flex flex-col gap-1 rounded-lg p-3 ${TONE[colour].tile} ${TONE[colour].text}`}
               >
-                <dt className="flex items-center gap-1.5 text-xs font-medium sm:text-sm">
+                <dt className="order-2 flex items-center gap-1.5 text-xs font-medium sm:text-sm">
                   <Icon className="size-4 shrink-0" aria-hidden="true" />
                   {label}
                 </dt>
-                <dd className="mt-1 flex items-baseline gap-1.5">
+                <dd className="order-1 flex items-baseline gap-1.5">
                   <span className="text-2xl font-bold tabular-nums">
                     {totals.combined[colour]}
                   </span>
@@ -118,7 +108,7 @@ export function FeedbackResultsView({
                   </span>
                 </dd>
                 {breakdown && (
-                  <dd className="mt-1 text-xs tabular-nums">
+                  <dd className="order-3 text-xs tabular-nums">
                     {totals.scanned[colour]} scanned &middot;{' '}
                     {totals.cards[colour]} cards
                   </dd>
@@ -126,6 +116,16 @@ export function FeedbackResultsView({
               </div>
             ))}
           </dl>
+          {hasCards && (
+            <button
+              type="button"
+              aria-pressed={breakdown}
+              onClick={() => setBreakdown((b) => !b)}
+              className="-mx-2 rounded-md px-2 py-1 text-sm font-medium text-brand-cloud-blue hover:bg-brand-cloud-blue/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-pressed:bg-brand-cloud-blue/10 dark:text-blue-400 dark:hover:bg-blue-900/30 dark:aria-pressed:bg-blue-900/30"
+            >
+              Scanned vs cards
+            </button>
+          )}
         </>
       )}
 

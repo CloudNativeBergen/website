@@ -229,11 +229,18 @@ export const ResultsAfterSession: Story = {
     // Combined counts: 31 scanned + 12 cards.
     expect(canvas.getByText('43')).toBeVisible()
     expect(canvas.queryByText('Live')).toBeNull()
+  },
+}
+
+/** Scanned vs cards, then the code one tab away, its QR kept. */
+export const ResultsBreakdownAndCode: Story = {
+  parameters: ResultsAfterSession.parameters,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Scanned vs cards' }),
+      await canvas.findByRole('button', { name: 'Scanned vs cards' }),
     )
     expect(canvas.getByText('31 scanned · 12 cards')).toBeVisible()
-    // The code is one tab away, its QR kept.
     await userEvent.click(canvas.getByRole('tab', { name: 'Feedback Code' }))
     expect(
       await canvas.findByRole('img', { name: /QR code for/ }),

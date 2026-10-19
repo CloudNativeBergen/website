@@ -9,7 +9,7 @@ import { SessionFeedbackResults } from './SessionFeedbackResults'
 import { useWindowOnTheClock } from './useWindowOnTheClock'
 
 const TAB_BASE =
-  '-mb-px inline-flex items-center gap-1.5 border-b-2 px-1 pb-2 text-sm font-medium'
+  '-mb-px inline-flex items-center gap-1.5 border-b-2 px-1 pb-2 text-sm font-medium whitespace-nowrap'
 const SELECTED =
   'border-brand-cloud-blue text-brand-cloud-blue dark:border-blue-400 dark:text-blue-400'
 // Literal class names: Tailwind only generates what it can read here.
@@ -73,13 +73,17 @@ export function SessionFeedbackSection({
           selectedIndex={chosenTab ?? (data.window.feedbackVisible ? 0 : 1)}
           onChange={setChosenTab}
         >
-          <TabList className="mb-5 flex gap-6 border-b border-gray-200 dark:border-gray-700">
+          <TabList className="mb-5 flex gap-4 border-b border-gray-200 sm:gap-6 dark:border-gray-700">
             <Tab className={TAB}>
-              <ChartBarIcon className="size-4" aria-hidden="true" />
+              {/* Icons from `sm` up: at 320 px both names fit only without them. */}
+              <ChartBarIcon
+                className="size-4 max-sm:hidden"
+                aria-hidden="true"
+              />
               Session Feedback
             </Tab>
             <Tab className={TAB}>
-              <QrCodeIcon className="size-4" aria-hidden="true" />
+              <QrCodeIcon className="size-4 max-sm:hidden" aria-hidden="true" />
               Feedback Code
             </Tab>
           </TabList>
