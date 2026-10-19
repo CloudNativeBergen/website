@@ -695,10 +695,56 @@ export const ChangeAnswerWhileTyping: Story = {
     await expect(document.activeElement).toBe(box)
     await expect(shown).not.toContain('Showing your saved comment.')
     // The heading did not take focus, so the status line said the new
-    // answer, once (a keystroke then cleared it).
+    // answer, once, and the keystrokes after it did not clear it.
     await expect(
       shown.filter((t) => t === 'You answered Not for me.'),
     ).toHaveLength(1)
+    await expect(formStatus(canvasElement)).toHaveTextContent(
+      'You answered Not for me.',
+    )
+  },
+}
+
+/**
+ * ADVERSARIAL ROUND 6: Enter on a colour, then Tab to Keep my answer while
+ * the change is in flight. Keep unmounts with the grid, so focus has not
+ * moved on to anything that stays: the heading takes it, and the status line
+ * stays quiet.
+ */
+export const ChangeAnswerTabToKeep: Story = {
+  args: {
+    page: answeredPage,
+    submit: fn<SubmitAnswer>(
+      (colour) =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                state: 'answered',
+                colour,
+                comment: answeredPage.comment,
+                talk,
+              }),
+            300,
+          ),
+        ),
+    ),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
+    canvas.getByRole('button', { name: 'Not for me' }).focus()
+    await userEvent.keyboard('{Enter}')
+    await userEvent.tab()
+    await expect(document.activeElement).toBe(
+      canvas.getByRole('button', { name: 'Keep my answer' }),
+    )
+    const thanks = canvas.getByRole('heading', { level: 2, name: 'Thanks!' })
+    await waitFor(() =>
+      expect(thanks).toHaveAccessibleDescription('You answered Not for me.'),
+    )
+    await waitFor(() => expect(document.activeElement).toBe(thanks))
+    await expect(args.submit).toHaveBeenCalledTimes(1)
     await expect(formStatus(canvasElement)).toHaveTextContent('')
   },
 }

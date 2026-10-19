@@ -81,7 +81,12 @@ export function AnsweredState({
   const [tapped, setTapped] = useState<FeedbackColour | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [commentStatus, setCommentStatus] = useState<StatusLine | null>(null)
+  // `answer`: the line says the new answer (focus moved on during a colour
+  // change). A keystroke keeps that part, so it is still there to be read;
+  // the next action clears it.
+  const [commentStatus, setCommentStatus] = useState<
+    (StatusLine & { answer?: string }) | null
+  >(null)
   const [changeStatus, setChangeStatus] = useState<StatusLine | null>(null)
   const [deleteStatus, setDeleteStatus] = useState<StatusLine | null>(null)
   const { pending, run } = useOneAtATime()
@@ -90,6 +95,8 @@ export function AnsweredState({
   const commentId = useId()
   const counterId = useId()
   const grid = useRef<HTMLDivElement>(null)
+  // The grid and Keep my answer: everything that unmounts when it closes.
+  const changingBlock = useRef<HTMLDivElement>(null)
   const changeButton = useRef<HTMLButtonElement>(null)
   const wasChanging = useRef(false)
   const changeStatusLine = useRef<HTMLParagraphElement>(null)
@@ -144,23 +151,25 @@ export function AnsweredState({
     }
     onOutcome(next)
     if (next.state === 'answered') {
-      // Focus still on the tapped button, anywhere in the grid (both about
-      // to unmount) or on nothing: it has not moved on since the tap.
+      // Focus still on the tapped button, anywhere in the grid or on Keep my
+      // answer (all about to unmount) or on nothing: it has not moved on.
       const now = document.activeElement
       headingTakesFocus.current =
         !now ||
         now === document.body ||
         now === focusAtTap.current ||
-        !!grid.current?.contains(now)
+        !!changingBlock.current?.contains(now)
       afterClose.current = 'heading'
       setChanging(false)
       const lines: string[] = []
       // Focus moved on (into the box, say): the heading that names the new
       // answer is not read out, so the status line says it, once.
-      if (!headingTakesFocus.current) {
-        const label = ANSWERS.find((a) => a.colour === next.colour)?.label
-        if (label) lines.push(`You answered ${label}.`)
-      }
+      const label = ANSWERS.find((a) => a.colour === next.colour)?.label
+      const answer =
+        !headingTakesFocus.current && label
+          ? `You answered ${label}.`
+          : undefined
+      if (answer) lines.push(answer)
       // A comment this tab did not know of has filled the untouched box: the
       // box as it is NOW (typed in during the wait, it stays as typed), and
       // `undefined` (unread) keeps the comment this tab has.
@@ -169,7 +178,7 @@ export function AnsweredState({
         lines.push('Showing your saved comment.')
       }
       if (lines.length) {
-        setCommentStatus({ kind: 'neutral', text: lines.join(' ') })
+        setCommentStatus({ kind: 'neutral', text: lines.join(' '), answer })
       }
     }
   }
@@ -225,6 +234,7 @@ export function AnsweredState({
   const erase = async () => {
     // Cleared BEFORE the wait, so a second failure is announced again.
     setDeleteStatus(null)
+    setCommentStatus(null)
     setDeleting(true)
     await eraseAnswer({
       run,
@@ -270,7 +280,7 @@ export function AnsweredState({
       </div>
 
       {changing ? (
-        <div className="mt-6">
+        <div ref={changingBlock} className="mt-6">
           <p id={pickId} className="text-center text-sm font-medium">
             Pick a new answer
           </p>
@@ -329,7 +339,14 @@ export function AnsweredState({
           value={draft}
           onChange={(event) => {
             setEdit(event.target.value)
-            setCommentStatus(null)
+            // Typing makes any other line stale; the new answer stays.
+            setCommentStatus((line) =>
+              line?.answer
+                ? line.text === line.answer
+                  ? line
+                  : { kind: 'neutral', text: line.answer, answer: line.answer }
+                : null,
+            )
           }}
           aria-describedby={counterId}
           className={`mt-2 block w-full rounded-lg ${CONTROL_BORDER} bg-white px-3 py-2 text-base text-gray-900 shadow-xs focus:border-gray-900 focus:outline-2 focus:outline-offset-0 focus:outline-gray-900 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-white dark:focus:outline-white`}
