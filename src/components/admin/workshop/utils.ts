@@ -61,8 +61,9 @@ export function getCapacityColorClass(percentage: number): string {
 export interface WorkshopScheduleDay<T> {
   date: string
   tracks: string[]
-  /** Rows by start time; each row holds one cell per track, in `tracks` order. */
-  slots: { startTime: string; endTime?: string; cells: (T | undefined)[] }[]
+  /** Rows by start time; each row holds one cell per track, in `tracks` order; a cell
+   * holds every workshop booked there, so a double booking shows. */
+  slots: { startTime: string; endTime?: string; cells: T[][] }[]
 }
 
 /**
@@ -97,11 +98,15 @@ export function groupWorkshopsBySchedule<T extends ProposalWithWorkshopData>(
         const inSlot = list.filter(
           (w) => w.scheduleInfo!.timeSlot!.startTime === startTime,
         )
+        // A row shows one end time only when its workshops agree on it.
+        const ends = new Set(
+          inSlot.map((w) => w.scheduleInfo!.timeSlot!.endTime),
+        )
         return {
           startTime,
-          endTime: inSlot[0]?.scheduleInfo!.timeSlot!.endTime,
+          endTime: ends.size === 1 ? [...ends][0] : undefined,
           cells: tracks.map((t) =>
-            inSlot.find((w) => w.scheduleInfo!.trackTitle === t),
+            inSlot.filter((w) => w.scheduleInfo!.trackTitle === t),
           ),
         }
       })

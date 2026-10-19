@@ -57,9 +57,16 @@ export function WorkshopScheduleGrid({
                     </div>
                   )}
                 </div>,
-                ...slot.cells.map((workshop, i) =>
-                  workshop ? (
-                    <div key={workshop._id}>{renderCard(workshop)}</div>
+                ...slot.cells.map((cell, i) =>
+                  cell.length > 0 ? (
+                    <div
+                      key={`${slot.startTime}-${day.tracks[i]}`}
+                      className="space-y-4"
+                    >
+                      {cell.map((workshop) => (
+                        <div key={workshop._id}>{renderCard(workshop)}</div>
+                      ))}
+                    </div>
                   ) : (
                     <div
                       key={`${slot.startTime}-${day.tracks[i]}`}
