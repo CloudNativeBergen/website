@@ -109,3 +109,45 @@ export async function getConfirmedTalks(
   )
   return talks ?? []
 }
+
+/**
+ * Every slot on the conference's published, official schedule days, by
+ * talk: {@link getFeedbackSlots} for all talks in one read, for the bulk
+ * mint's count (#1459).
+ */
+export async function getConferenceFeedbackSlots(
+  conferenceId: string,
+): Promise<Map<string, FeedbackSlot[]>> {
+  const days = await scopedFetch<
+    | {
+        date: string | null
+        slots: (Omit<FeedbackSlot, 'date'> & { talkId: string | null })[] | null
+      }[]
+    | null
+  >(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "schedule" && ${PUBLISHED_ONLY} && ${OFFICIAL_SCHEDULE_FILTER}]{
+      date,
+      "slots": tracks[].talks[defined(talk._ref)]{
+        "talkId": talk._ref, startTime, endTime
+      }
+    }`,
+    {},
+    { cache: 'no-store' },
+  )
+  const byTalk = new Map<string, FeedbackSlot[]>()
+  for (const day of days ?? []) {
+    for (const s of day.slots ?? []) {
+      if (!s.talkId) continue
+      const slots = byTalk.get(s.talkId) ?? []
+      slots.push({
+        date: day.date,
+        startTime: s.startTime ?? null,
+        endTime: s.endTime ?? null,
+      })
+      byTalk.set(s.talkId, slots)
+    }
+  }
+  return byTalk
+}

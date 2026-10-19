@@ -83,19 +83,22 @@ export function SessionFeedbackSection({
 
 function FeedbackCodeSkeleton() {
   const bar = 'animate-pulse rounded bg-gray-100 dark:bg-gray-700'
-  // The panel's shape, so the form below does not jump when the code arrives.
+  // The panel's shape, laid out by the same container width, so the form
+  // below does not jump when the code arrives.
   return (
-    <div
-      role="status"
-      className="flex flex-col gap-5 sm:flex-row sm:items-center"
-    >
-      <span className="sr-only">Loading your Feedback Code</span>
-      <div className={`size-44 shrink-0 rounded-md ${bar}`} />
-      <div className="w-full max-w-xl space-y-3">
-        <div className={`h-5 w-3/4 ${bar}`} />
-        <div className={`h-10 w-full ${bar}`} />
-        <div className={`h-5 w-2/3 ${bar}`} />
-        <div className={`h-8 w-28 ${bar}`} />
+    <div className="@container">
+      <div
+        role="status"
+        className="flex flex-col gap-5 @md:flex-row @md:items-center"
+      >
+        <span className="sr-only">Loading your Feedback Code</span>
+        <div className={`size-44 shrink-0 rounded-md ${bar}`} />
+        <div className="w-full max-w-xl space-y-3">
+          <div className={`h-5 w-3/4 ${bar}`} />
+          <div className={`h-10 w-full ${bar}`} />
+          <div className={`h-5 w-2/3 ${bar}`} />
+          <div className={`h-8 w-28 ${bar}`} />
+        </div>
       </div>
     </div>
   )

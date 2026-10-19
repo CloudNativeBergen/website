@@ -24,6 +24,29 @@ const PRIMARY =
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`
 
+function previewText({
+  confirmed,
+  withoutCode,
+  mintable,
+}: {
+  confirmed: number
+  withoutCode: number
+  mintable: number
+}): string {
+  const talks = plural(confirmed, 'confirmed talk', 'confirmed talks')
+  if (withoutCode === 0) return `All ${talks} have a Feedback Code.`
+  const missing = `${withoutCode} of ${talks} ${withoutCode === 1 ? 'has' : 'have'} no Feedback Code yet.`
+  if (mintable === 0)
+    return `${missing} None can get one now: the feedback window has closed or no speaker is left.`
+  const some =
+    mintable === withoutCode
+      ? withoutCode === 1
+        ? 'Mint it'
+        : 'Mint one for each'
+      : `${mintable} can still get one; mint ${mintable === 1 ? 'it' : 'them'}`
+  return `${missing} ${some}, so every room’s sheet can be printed. Talks with a code keep it.`
+}
+
 function TalkList({
   heading,
   talks,
@@ -129,11 +152,7 @@ export function MintFeedbackCodesDialog({
             <TalkList heading="Failed" talks={report.failed} />
           </>
         ) : preview.data ? (
-          <p className="text-center">
-            {preview.data.withoutCode === 0
-              ? 'Every confirmed talk with a speaker already has a Feedback Code.'
-              : `${preview.data.withoutCode} of ${plural(preview.data.confirmed, 'confirmed talk', 'confirmed talks')} have no Feedback Code yet. Each one whose feedback window is still open gets a code, so every room’s sheet can be printed. Talks with a code keep it.`}
-          </p>
+          <p className="text-center">{previewText(preview.data)}</p>
         ) : preview.error ? (
           <p
             role="alert"
@@ -184,16 +203,18 @@ export function MintFeedbackCodesDialog({
               disabled={mintAll.isPending}
               className={SECONDARY}
             >
-              {preview.data?.withoutCode === 0 ? 'Close' : 'Cancel'}
+              {preview.data?.mintable === 0 ? 'Close' : 'Cancel'}
             </button>
-            {preview.data && preview.data.withoutCode > 0 && (
+            {preview.data && preview.data.mintable > 0 && (
               <button
                 type="button"
                 onClick={() => mintAll.mutate()}
                 disabled={mintAll.isPending}
                 className={PRIMARY}
               >
-                {mintAll.isPending ? 'Minting…' : 'Mint codes'}
+                {mintAll.isPending
+                  ? 'Minting…'
+                  : `Mint ${plural(preview.data.mintable, 'code', 'codes')}`}
               </button>
             )}
           </>

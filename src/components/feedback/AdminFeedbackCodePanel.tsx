@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { QrCodeIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
@@ -20,6 +21,8 @@ export function AdminFeedbackCodePanel({
   title: string
 }) {
   const utils = api.useUtils()
+  // The Mint button goes once the code is minted: focus moves to the heading.
+  const heading = useRef<HTMLHeadingElement>(null)
   const code = api.sessionFeedback.adminCode.useQuery(
     { talkId },
     { retry: false },
@@ -27,13 +30,23 @@ export function AdminFeedbackCodePanel({
   const mint = api.sessionFeedback.mintCode.useMutation({
     // No code back: the window closed meanwhile, or a release locks the
     // talk. Read again; a still-open window then means the release.
-    onSuccess: (minted) =>
-      minted.code
-        ? utils.sessionFeedback.adminCode.setData(
-            { talkId },
-            { ...minted, mayMint: false },
-          )
-        : utils.sessionFeedback.adminCode.invalidate({ talkId }),
+    onSuccess: (minted) => {
+      void utils.sessionFeedback.mintPreview.invalidate()
+      if (!minted.code) {
+        void utils.sessionFeedback.adminCode.invalidate({ talkId })
+        return
+      }
+      utils.sessionFeedback.adminCode.setData(
+        { talkId },
+        { ...minted, mayMint: false },
+      )
+      heading.current?.focus()
+    },
+    // No longer a talk that may hold a code: read again, and the panel goes.
+    onError: (error) => {
+      if (error.data?.code === 'NOT_FOUND')
+        void utils.sessionFeedback.adminCode.invalidate({ talkId })
+    },
   })
 
   // An organizer may leave the page up through the session's start.
@@ -48,10 +61,17 @@ export function AdminFeedbackCodePanel({
       aria-label="Feedback Code"
       className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
     >
-      <h3 className="mb-3 flex items-center text-lg font-semibold text-gray-900 dark:text-white">
+      <h3
+        ref={heading}
+        tabIndex={-1}
+        className="mb-3 flex items-center text-lg font-semibold text-gray-900 focus:outline-none dark:text-white"
+      >
         <QrCodeIcon className="mr-2 size-5" aria-hidden="true" />
         Feedback Code
       </h3>
+      <p className="sr-only" aria-live="polite">
+        {mint.data?.code ? 'Feedback Code minted.' : ''}
+      </p>
       {code.data?.code && code.data.url && shownWindow ? (
         <FeedbackCodePanel
           url={code.data.url}

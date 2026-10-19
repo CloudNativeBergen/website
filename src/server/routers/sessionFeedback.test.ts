@@ -834,6 +834,7 @@ describe('mintAll — every confirmed talk without a code', () => {
     expect(await organizer().mintPreview()).toEqual({
       confirmed: 4,
       withoutCode: 0,
+      mintable: 0,
     })
   })
 
@@ -870,7 +871,22 @@ describe('mintAll — every confirmed talk without a code', () => {
     expect(await organizer().mintPreview()).toEqual({
       confirmed: 4,
       withoutCode: 3,
+      mintable: 3,
     })
+  })
+
+  it('does not count a talk whose window has closed as mintable', async () => {
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'day-talk-2-2026-06-10' ? schedule('talk-2', '2026-05-01') : d,
+    )
+    expect(await organizer().mintPreview()).toEqual({
+      confirmed: 4,
+      withoutCode: 3,
+      mintable: 2,
+    })
+    // Once the conference is over, no talk can get one.
+    vi.setSystemTime(new Date('2026-06-12T00:00:00Z'))
+    expect(await organizer().mintPreview()).toMatchObject({ mintable: 0 })
   })
 
   it.each([
@@ -958,7 +974,8 @@ describe('organizers never restart feedback for an erased speaker', () => {
   it('reports the erased speaker’s talk as skipped, and leaves it out of the count', async () => {
     expect(await organizer().mintPreview()).toEqual({
       confirmed: 5,
-      withoutCode: 3,
+      withoutCode: 5,
+      mintable: 3,
     })
     const out = await organizer().mintAll()
     expect(doc('talk-erased')?.feedbackCode).toBeUndefined()

@@ -7,8 +7,9 @@
 import 'server-only'
 import { normalizeShortCode } from '@/lib/marketing/short-code'
 import { expireFeedbackCodeIndex } from './cache'
-import { ensureFeedbackCode, type MintBatch } from './code'
-import { getConfirmedTalks } from './sanity'
+import { ensureFeedbackCode, mayMint, type MintBatch } from './code'
+import { getConferenceFeedbackSlots, getConfirmedTalks } from './sanity'
+import { feedbackWindow } from './window'
 
 interface TalkRef {
   talkId: string
@@ -38,15 +39,36 @@ const hasCode = (talk: { feedbackCode: string | null }) =>
   normalizeShortCode(talk.feedbackCode) !== null
 
 /**
- * How many confirmed talks have no code yet and a speaker left, for the
- * confirmation. An upper bound: a talk whose window has closed is only
- * found out when minting it.
+ * For the confirmation: how many confirmed talks have no code, and how many
+ * of those can get one now (a speaker left, the window not closed). A
+ * version waiting in a scheduled release is only found out when minting.
  */
-export async function countTalksWithoutCode(conferenceId: string) {
-  const talks = await getConfirmedTalks(conferenceId)
+export async function countTalksWithoutCode({
+  conference,
+  now,
+}: {
+  conference: { _id: string; endDate?: string | null }
+  now: Date
+}) {
+  const [talks, slots] = await Promise.all([
+    getConfirmedTalks(conference._id),
+    getConferenceFeedbackSlots(conference._id),
+  ])
+  const withoutCode = talks.filter((t) => !hasCode(t))
   return {
     confirmed: talks.length,
-    withoutCode: talks.filter((t) => t.hasLiveSpeaker && !hasCode(t)).length,
+    withoutCode: withoutCode.length,
+    mintable: withoutCode.filter(
+      (t) =>
+        t.hasLiveSpeaker &&
+        mayMint(
+          feedbackWindow({
+            slots: slots.get(t._id) ?? [],
+            conferenceEndDate: conference.endDate,
+            now,
+          }),
+        ),
+    ).length,
   }
 }
 

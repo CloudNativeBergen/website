@@ -108,7 +108,7 @@ function mayHoldCode(
  * slot, once its conference is over (for an unscheduled talk
  * `feedbackVisible` is exactly "the conference is over").
  */
-const mayMint = (window: FeedbackWindow) =>
+export const mayMint = (window: FeedbackWindow) =>
   window.state !== 'closed' &&
   !(window.state === 'unscheduled' && window.feedbackVisible)
 

@@ -71,6 +71,9 @@ export const MintsACode: Story = {
     ).toBeVisible()
     expect(canvas.getByText(/send the link to the speaker/)).toBeInTheDocument()
     expect(canvas.getByText(/Opens when the session starts/)).toBeVisible()
+    // The button is gone: focus is on the heading, and the change is said.
+    expect(canvas.getByRole('heading', { name: 'Feedback Code' })).toHaveFocus()
+    expect(canvas.getByText('Feedback Code minted.')).toBeInTheDocument()
   },
 }
 
@@ -276,5 +279,38 @@ export const ClosesWhileShown: Story = {
       timeout: 10000,
     })
     expect(canvas.queryByRole('button')).toBeNull()
+  },
+}
+
+/**
+ * The talk stopped qualifying between load and Mint (unconfirmed, or its last
+ * speaker erased): the mint is refused, and the panel reads again and goes.
+ */
+let refusedReads = 0
+export const MintRefused: Story = {
+  beforeEach: () => {
+    refusedReads = 0
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(READ, () =>
+          refusedReads++ === 0 ? trpc(noCode) : failWith('NOT_FOUND', 404),
+        ),
+        http.post(MINT, () => failWith('NOT_FOUND', 404)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Mint Feedback Code' }),
+    )
+    await waitFor(() => expect(refusedReads).toBe(2))
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole('region', { name: 'Feedback Code' }),
+      ).toBeNull(),
+    )
   },
 }

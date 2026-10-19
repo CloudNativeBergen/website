@@ -62,7 +62,9 @@ const meta = {
     },
     msw: {
       handlers: [
-        http.get(PREVIEW, () => trpc({ confirmed: 43, withoutCode: 41 })),
+        http.get(PREVIEW, () =>
+          trpc({ confirmed: 43, withoutCode: 41, mintable: 41 }),
+        ),
         http.post(MINT_ALL, () => trpc(report)),
       ],
     },
@@ -88,7 +90,9 @@ export const Confirm: Story = {
       ).toBeVisible(),
     )
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Mint codes' })).toBeVisible(),
+      expect(
+        screen.getByRole('button', { name: 'Mint 41 codes' }),
+      ).toBeVisible(),
     )
   },
 }
@@ -99,7 +103,7 @@ export const ConfirmDark: Story = { ...Confirm, globals: { theme: 'dark' } }
 export const Report: Story = {
   play: async () => {
     await userEvent.click(
-      await screen.findByRole('button', { name: 'Mint codes' }),
+      await screen.findByRole('button', { name: 'Mint 41 codes' }),
     )
     await waitFor(() =>
       expect(
@@ -146,16 +150,16 @@ export const EveryTalkHasACode: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get(PREVIEW, () => trpc({ confirmed: 43, withoutCode: 0 })),
+        http.get(PREVIEW, () =>
+          trpc({ confirmed: 43, withoutCode: 0, mintable: 0 }),
+        ),
       ],
     },
   },
   play: async () => {
     await waitFor(() =>
       expect(
-        screen.getByText(
-          'Every confirmed talk with a speaker already has a Feedback Code.',
-        ),
+        screen.getByText('All 43 confirmed talks have a Feedback Code.'),
       ).toBeVisible(),
     )
     expect(screen.queryByRole('button', { name: /^Mint/ })).toBeNull()
@@ -167,7 +171,9 @@ export const Minting: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get(PREVIEW, () => trpc({ confirmed: 43, withoutCode: 41 })),
+        http.get(PREVIEW, () =>
+          trpc({ confirmed: 43, withoutCode: 41, mintable: 41 }),
+        ),
         http.post(MINT_ALL, async () => {
           await delay('infinite')
           return trpc(report)
@@ -177,7 +183,7 @@ export const Minting: Story = {
   },
   play: async ({ args }) => {
     await userEvent.click(
-      await screen.findByRole('button', { name: 'Mint codes' }),
+      await screen.findByRole('button', { name: 'Mint 41 codes' }),
     )
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Minting…' })).toBeDisabled(),
@@ -192,7 +198,9 @@ export const ReportNotReached: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get(PREVIEW, () => trpc({ confirmed: 43, withoutCode: 41 })),
+        http.get(PREVIEW, () =>
+          trpc({ confirmed: 43, withoutCode: 41, mintable: 41 }),
+        ),
         http.post(MINT_ALL, () =>
           trpc({
             ...report,
@@ -207,12 +215,36 @@ export const ReportNotReached: Story = {
   },
   play: async () => {
     await userEvent.click(
-      await screen.findByRole('button', { name: 'Mint codes' }),
+      await screen.findByRole('button', { name: 'Mint 41 codes' }),
     )
     await waitFor(() =>
       expect(
         screen.getByRole('button', { name: 'Mint the rest' }),
       ).toBeVisible(),
     )
+  },
+}
+
+/** After the conference: talks without a code, and none can get one. */
+export const NoneMintable: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(PREVIEW, () =>
+          trpc({ confirmed: 43, withoutCode: 1, mintable: 0 }),
+        ),
+      ],
+    },
+  },
+  play: async () => {
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          '1 of 43 confirmed talks has no Feedback Code yet. None can get one now: the feedback window has closed or no speaker is left.',
+        ),
+      ).toBeVisible(),
+    )
+    expect(screen.queryByRole('button', { name: /^Mint/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Close' })).toBeVisible()
   },
 }

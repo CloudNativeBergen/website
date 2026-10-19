@@ -102,7 +102,7 @@ export const sessionFeedbackRouter = router({
   mintPreview: adminProcedure.query(async () => {
     const { conference } = await getConferenceForCurrentDomain()
     if (!conference?._id) throw notFound()
-    return countTalksWithoutCode(conference._id)
+    return countTalksWithoutCode({ conference, now: new Date() })
   }),
 
   /**
