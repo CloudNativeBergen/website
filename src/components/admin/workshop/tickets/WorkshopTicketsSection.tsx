@@ -172,7 +172,8 @@ export function WorkshopTicketsSection({
   // is offered. Said as a fact, not as an error: the read worked.
   if (list.types.length === 0) {
     return (
-      <WorkshopTicketsFrame>
+      // Open: the sentence below is all the card has to say.
+      <WorkshopTicketsFrame open>
         <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
           {providerLabel} lists no ticket types for this event, so there is
           nothing to set here.
