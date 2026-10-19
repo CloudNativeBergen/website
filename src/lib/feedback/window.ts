@@ -60,8 +60,7 @@ export function feedbackWindow({
   now: Date
 }): FeedbackWindow {
   const t = now.getTime()
-  const overAt = conferenceOverAt(conferenceEndDate)
-  const conferenceOver = overAt !== null && t >= overAt
+  const conferenceOver = isConferenceOverAt(conferenceEndDate, now)
 
   let opens = Infinity
   let lastEnd = -Infinity
@@ -119,3 +118,21 @@ export function feedbackVisibleAt(
     (!!window.lastSlotEnd && now.getTime() >= Date.parse(window.lastSlotEnd))
   )
 }
+
+/** "The conference is over" at `now`, as {@link feedbackWindow} judges it. */
+export function isConferenceOverAt(
+  endDate: string | null | undefined,
+  now: Date,
+): boolean {
+  const overAt = conferenceOverAt(endDate)
+  return overAt !== null && now.getTime() >= overAt
+}
+
+/**
+ * §5: no code once the talk's window has closed, or, for a talk with no
+ * slot, once its conference is over (for an unscheduled talk
+ * `feedbackVisible` is exactly "the conference is over").
+ */
+export const mayMint = (window: FeedbackWindow) =>
+  window.state !== 'closed' &&
+  !(window.state === 'unscheduled' && window.feedbackVisible)

@@ -21,7 +21,9 @@ import {
   getFeedbackSlots,
   versionsClient,
 } from './sanity'
-import { feedbackWindow, type FeedbackWindow } from './window'
+import { feedbackWindow, mayMint, type FeedbackWindow } from './window'
+
+export { mayMint }
 
 interface TalkDoc {
   _id: string
@@ -127,15 +129,6 @@ function mayHoldCode(
       (talk.speakers ?? []).some((s) => s._ref === actor.speakerId))
   )
 }
-
-/**
- * §5: no code once the talk's window has closed, or, for a talk with no
- * slot, once its conference is over (for an unscheduled talk
- * `feedbackVisible` is exactly "the conference is over").
- */
-export const mayMint = (window: FeedbackWindow) =>
-  window.state !== 'closed' &&
-  !(window.state === 'unscheduled' && window.feedbackVisible)
 
 /**
  * A write that lost to a concurrent edit and should re-read and try again: a

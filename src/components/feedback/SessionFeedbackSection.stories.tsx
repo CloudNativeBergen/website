@@ -428,6 +428,45 @@ export const ResultsOnlyDark: Story = {
   globals: { theme: 'dark' },
 }
 
+export const ResultsOnlyPhone: Story = {
+  ...ResultsOnly,
+  parameters: {
+    ...ResultsOnly.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+
+const lockedHits = { n: 0 }
+const lockedResultsHits = { n: 0 }
+
+/**
+ * No code while §5 would still mint one (a version of the talk waits in a
+ * locked release): nothing renders, and no results are asked for.
+ */
+export const NoCodeYet: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post(ENDPOINT, () => {
+          lockedHits.n++
+          return HttpResponse.json({
+            result: { data: { code: null, url: null, window: BEFORE.window } },
+          })
+        }),
+        resultsAnswer(results(LIVE_WINDOW), lockedResultsHits),
+      ],
+    },
+  },
+  beforeEach: () => {
+    lockedHits.n = 0
+    lockedResultsHits.n = 0
+  },
+  play: async ({ canvasElement }) => {
+    await expectNothingRendered(canvasElement, lockedHits)
+    expect(lockedResultsHits.n).toBe(0)
+  },
+}
+
 let opensWhileShownRequests = 0
 
 /**

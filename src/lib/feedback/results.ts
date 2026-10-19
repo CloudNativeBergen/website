@@ -12,12 +12,7 @@ import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { isFeedbackColour, type FeedbackColour } from './colour'
 import { getFeedbackSlots, PUBLISHED_ONLY } from './sanity'
-import {
-  feedbackTotals,
-  type ColourCounts,
-  type FeedbackTotals,
-  type StoredCounts,
-} from './totals'
+import { talkTotals, type FeedbackTotals, type TalkCounts } from './totals'
 import { feedbackWindow, type FeedbackWindow } from './window'
 
 /** A comment as the talk's speakers see it: never whether it was flagged. */
@@ -25,7 +20,7 @@ export interface SpeakerComment {
   id: string
   colour: FeedbackColour
   comment: string
-  submittedAt: string
+  submittedAt: string | null
 }
 
 export type SpeakerResults =
@@ -39,21 +34,6 @@ export type SpeakerResults =
       /** Visible comments, oldest first. */
       comments: SpeakerComment[]
     }
-
-/** The talk's stored counts: Card Counts and the fold (§4.2). */
-export interface TalkCounts {
-  audienceFeedback?: StoredCounts | null
-  feedbackFolded?: StoredCounts | null
-}
-
-/** Live responses per colour, from `{colour}` rows. */
-export function countColours(
-  rows: readonly { colour?: unknown }[],
-): ColourCounts {
-  const counts: ColourCounts = { green: 0, yellow: 0, red: 0 }
-  for (const row of rows) if (isFeedbackColour(row.colour)) counts[row.colour]++
-  return counts
-}
 
 interface ResponseRow {
   _id: string
@@ -111,18 +91,14 @@ export async function readSpeakerResults({
       id: r._id,
       colour: r.colour,
       comment: r.comment,
-      submittedAt: typeof r.submittedAt === 'string' ? r.submittedAt : '',
+      submittedAt: typeof r.submittedAt === 'string' ? r.submittedAt : null,
     })
   }
   return {
     status: 'ok',
     visible: true,
     window,
-    totals: feedbackTotals({
-      live: countColours(responses),
-      folded: talk.feedbackFolded,
-      cards: talk.audienceFeedback,
-    }),
+    totals: talkTotals(talk, responses),
     comments,
   }
 }

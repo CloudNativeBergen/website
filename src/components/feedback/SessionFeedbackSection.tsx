@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
 import { ChartBarIcon, QrCodeIcon } from '@heroicons/react/24/outline'
+import { mayMint, SESSION_FEEDBACK_ANCHOR } from '@/lib/feedback'
 import { api } from '@/lib/trpc/client'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
 import { SessionFeedbackResults } from './SessionFeedbackResults'
@@ -14,9 +15,6 @@ const SELECTED =
   'border-brand-cloud-blue text-brand-cloud-blue dark:border-blue-400 dark:text-blue-400'
 // Literal class names: Tailwind only generates what it can read here.
 const TAB = `${TAB_BASE} border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-800 focus:outline-none data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-brand-cloud-blue data-selected:border-brand-cloud-blue data-selected:text-brand-cloud-blue dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-200 dark:data-selected:border-blue-400 dark:data-selected:text-blue-400`
-
-/** The section's anchor, which the dashboard chip links to (§9.4). */
-export const SESSION_FEEDBACK_ANCHOR = 'session-feedback'
 
 /**
  * The speaker's Session Feedback section (speaker feedback spec §9.1), shown
@@ -56,14 +54,19 @@ export function SessionFeedbackSection({
 
   if (error?.data?.code === 'NOT_FOUND') return null
 
-  // A talk with no code: the results only, under a plain heading (§9.5).
-  if (data && shownWindow && (!data.code || !data.url))
+  if (data && shownWindow && (!data.code || !data.url)) {
+    // No code while §5 would still give one: a version of the talk waits in
+    // a locked release. Nothing to show yet, as before the code exists.
+    if (mayMint(data.window)) return null
+    // No code ever (its window closed before it had one, like every talk of
+    // an edition that ended before launch): the results only (§9.5).
     return (
       <SectionShell>
         <SectionHeading />
         <SessionFeedbackResults talkId={talkId} window={shownWindow} />
       </SectionShell>
     )
+  }
 
   if (data?.code && data.url && shownWindow)
     return (

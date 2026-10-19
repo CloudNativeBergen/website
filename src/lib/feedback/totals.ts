@@ -8,7 +8,11 @@
  *
  * Hidden comments still count: hiding removes text, not a colour (§10.3).
  */
-import { FEEDBACK_COLOURS, type FeedbackColour } from './colour'
+import {
+  FEEDBACK_COLOURS,
+  isFeedbackColour,
+  type FeedbackColour,
+} from './colour'
 
 export type ColourCounts = Record<FeedbackColour, number>
 
@@ -74,3 +78,29 @@ export function feedbackTotals({
       total === 0 ? null : Math.round((combined.green / total) * 100),
   }
 }
+
+/** Live responses per colour, from `{colour}` rows. */
+export function countColours(
+  rows: readonly { colour?: unknown }[],
+): ColourCounts {
+  const counts: ColourCounts = { green: 0, yellow: 0, red: 0 }
+  for (const row of rows) if (isFeedbackColour(row.colour)) counts[row.colour]++
+  return counts
+}
+
+/** A talk's stored counts: Card Counts and the fold (§4.2). */
+export interface TalkCounts {
+  audienceFeedback?: StoredCounts | null
+  feedbackFolded?: StoredCounts | null
+}
+
+/** {@link feedbackTotals} of one talk and its live response rows. */
+export const talkTotals = (
+  talk: TalkCounts,
+  rows: readonly { colour?: unknown }[],
+): FeedbackTotals =>
+  feedbackTotals({
+    live: countColours(rows),
+    folded: talk.feedbackFolded,
+    cards: talk.audienceFeedback,
+  })

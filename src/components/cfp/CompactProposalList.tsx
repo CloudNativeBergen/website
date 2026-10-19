@@ -34,7 +34,8 @@ import { useState } from 'react'
 import { Action } from '@/lib/proposal/types'
 import { CheckIcon } from '@heroicons/react/20/solid'
 import { useNotification } from '@/components/admin/NotificationProvider'
-import type { FeedbackChip, FeedbackChips } from '@/lib/feedback/chips'
+import { SESSION_FEEDBACK_ANCHOR } from '@/lib/feedback'
+import type { FeedbackChip, FeedbackChips } from '@/lib/feedback/server'
 
 type BadgeColor =
   'gray' | 'red' | 'yellow' | 'green' | 'blue' | 'purple' | 'orange'
@@ -61,24 +62,49 @@ interface CompactProposalListProps {
 const CHIP =
   'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium'
 
-/** The chip's look and words (§9.4). */
-function feedbackChipContent(chip: FeedbackChip) {
-  return chip.kind === 'code'
-    ? {
-        className:
-          'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
-        Icon: QrCodeIcon,
-        text: 'Feedback Code',
-        srSuffix: '',
-      }
-    : {
-        className:
-          'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-        Icon: FaceSmileIcon,
-        text: `${chip.lovedItPercent}% loved it · ${chip.total}`,
-        // The bare total needs its noun for a screen reader.
-        srSuffix: chip.total === 1 ? ' response' : ' responses',
-      }
+/** The Session Feedback chip (§9.4), a link to the section when it opens here. */
+function FeedbackChipBadge({
+  chip,
+  href,
+}: {
+  chip: FeedbackChip
+  href?: string
+}) {
+  const { className, Icon, text, srSuffix } =
+    chip.kind === 'code'
+      ? {
+          className:
+            'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
+          Icon: QrCodeIcon,
+          text: 'Feedback Code',
+          srSuffix: '',
+        }
+      : {
+          className:
+            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+          Icon: FaceSmileIcon,
+          text: `${chip.lovedItPercent}% loved it · ${chip.total}`,
+          // The bare total needs its noun for a screen reader.
+          srSuffix: chip.total === 1 ? ' response' : ' responses',
+        }
+  const content = (
+    <>
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {text}
+      {srSuffix && <span className="sr-only">{srSuffix}</span>}
+    </>
+  )
+  return href ? (
+    <Link
+      href={href}
+      className={`${CHIP} ${className} hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue`}
+      title="Open Session Feedback"
+    >
+      {content}
+    </Link>
+  ) : (
+    <span className={`${CHIP} ${className}`}>{content}</span>
+  )
 }
 
 function getProposalStatusConfig(
@@ -245,31 +271,16 @@ export function CompactProposalList({
                     </span>
                   </span>
                 )}
-                {feedbackChip &&
-                  (() => {
-                    const { className, Icon, text, srSuffix } =
-                      feedbackChipContent(feedbackChip)
-                    const content = (
-                      <>
-                        <Icon className="h-3 w-3" aria-hidden="true" />
-                        {text}
-                        {srSuffix && (
-                          <span className="sr-only">{srSuffix}</span>
-                        )}
-                      </>
-                    )
-                    return feedbackLinked ? (
-                      <Link
-                        href={`/cfp/proposal/${proposal._id}${queryString}#session-feedback`}
-                        className={`${CHIP} ${className} hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue`}
-                        title="Open Session Feedback"
-                      >
-                        {content}
-                      </Link>
-                    ) : (
-                      <span className={`${CHIP} ${className}`}>{content}</span>
-                    )
-                  })()}
+                {feedbackChip && (
+                  <FeedbackChipBadge
+                    chip={feedbackChip}
+                    href={
+                      feedbackLinked
+                        ? `/cfp/proposal/${proposal._id}${queryString}#${SESSION_FEEDBACK_ANCHOR}`
+                        : undefined
+                    }
+                  />
+                )}
                 {hasProposalVideo(proposal) && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-400"

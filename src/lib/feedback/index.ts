@@ -2,6 +2,7 @@ export {
   feedbackVisibleAt,
   feedbackWindow,
   feedbackWindowStateAt,
+  mayMint,
   type FeedbackSlot,
   type FeedbackWindow,
   type FeedbackWindowState,
@@ -15,6 +16,7 @@ export {
 export {
   ATTENDEE_PAGE_LIVE,
   DEVICE_COOKIE_DAYS,
+  SESSION_FEEDBACK_ANCHOR,
   feedbackCodeUrl,
   isFeedbackPath,
   dropFeedbackVitals,

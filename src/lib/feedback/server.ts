@@ -24,6 +24,11 @@ export {
 } from './page'
 export { submitFeedback } from './submit'
 export {
+  getSpeakerFeedbackChips,
+  type FeedbackChip,
+  type FeedbackChips,
+} from './chips'
+export {
   readSpeakerResults,
   type SpeakerComment,
   type SpeakerResults,

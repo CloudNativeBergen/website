@@ -25,6 +25,9 @@ export const ATTENDEE_PAGE_LIVE: boolean = true
  */
 export const DEVICE_COOKIE_DAYS = 30
 
+/** The speaker's Session Feedback section on `/cfp/proposal/<id>` (§9.4). */
+export const SESSION_FEEDBACK_ANCHOR = 'session-feedback'
+
 // Case-insensitive: codes are, so an attendee typing `/F/K7M2QX` must be
 // kept out of analytics on the not-found page it lands on.
 const FEEDBACK_PATH = /^\/f(\/|$)/i

@@ -13,9 +13,9 @@ const MAX_TIMER_MS = 24 * 60 * 60 * 1000
 /**
  * The window moved on by the clock. A speaker may leave the page up to show
  * the QR, so "Opens…" becomes "Open until…" and then "Closed" at the
- * window's own instants, and their feedback shows once the last slot ends, derived here, never refetched: a refetch would
- * blank the QR on the lectern while it loads, and show an error if it
- * failed. Re-derived once as soon as the answer arrives too, since a boundary
+ * window's own instants, and their feedback becomes visible when the last
+ * slot ends. All derived here, never refetched: a refetch would blank the QR
+ * on the lectern while it loads, and show an error if it failed. Re-derived once as soon as the answer arrives too, since a boundary
  * may have passed while the request was in flight.
  */
 export function useWindowOnTheClock(

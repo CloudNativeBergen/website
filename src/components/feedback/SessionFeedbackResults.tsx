@@ -7,7 +7,7 @@ import { formatSessionInstant } from '@/lib/time'
 import { FeedbackResultsView } from './FeedbackResultsView'
 
 /** How often the results refresh while the window is open (§9.3). */
-export const RESULTS_POLL_MS = 30_000
+const RESULTS_POLL_MS = 30_000
 
 /** Before feedback is visible (§9.3), worded from the window. */
 function waitingText(window: FeedbackWindow) {

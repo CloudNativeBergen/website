@@ -112,13 +112,30 @@ describe('getSpeakerFeedbackChips (§9.4)', () => {
     expect(h.queries.some((q) => q.includes('"feedbackResponse"'))).toBe(false)
   })
 
-  it('shows no chip for a visible talk with nothing to show', async () => {
+  it('keeps "Feedback Code" while answers can still arrive and none have', async () => {
     h.dataset = h.dataset.map((d) =>
       d._id === 'talk-early'
         ? { ...d, audienceFeedback: undefined, feedbackFolded: undefined }
         : d,
     )
-    expect(await chips()).toEqual({ 'talk-late': { kind: 'code' } })
+    // talk-early ended at 07:40Z; its window is open until tomorrow.
+    expect(await chips()).toEqual({
+      'talk-early': { kind: 'code' },
+      'talk-late': { kind: 'code' },
+    })
+  })
+
+  it('shows no chip once the window has closed with nothing to show', async () => {
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'talk-early'
+        ? { ...d, audienceFeedback: undefined, feedbackFolded: undefined }
+        : d,
+    )
+    // 2026-06-11 12:00Z: talk-early closed at 07:40Z, talk-late (no
+    // answers either) is open until 13:40Z.
+    expect(await chips(new Date('2026-06-11T12:00:00Z'))).toEqual({
+      'talk-late': { kind: 'code' },
+    })
   })
 
   it('leaves out talks that are not the speaker’s confirmed, published talks of this conference', async () => {
