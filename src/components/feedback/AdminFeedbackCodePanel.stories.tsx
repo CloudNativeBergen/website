@@ -315,9 +315,10 @@ export const MintRefused: Story = {
     await userEvent.click(
       await canvas.findByRole('button', { name: 'Mint Feedback Code' }),
     )
-    expect(
-      await canvas.findByText(/can no longer get a Feedback Code/),
-    ).toBeVisible()
+    const reason = await canvas.findByText(/can no longer get a Feedback Code/)
+    expect(reason).toBeVisible()
+    // Focus is on the heading: the reason itself is announced.
+    expect(reason).toHaveAttribute('aria-live', 'polite')
     expect(canvas.queryByRole('button')).toBeNull()
     expect(canvas.queryByRole('alert')).toBeNull()
     expect(canvas.getByRole('heading', { name: 'Feedback Code' })).toHaveFocus()

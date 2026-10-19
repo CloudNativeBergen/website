@@ -82,7 +82,11 @@ export function AdminFeedbackCodePanel({
         />
       ) : code.data ? (
         <div className="space-y-3">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          {/* Live: a refused mint replaces the button with its reason here. */}
+          <p
+            aria-live="polite"
+            className="text-sm text-gray-600 dark:text-gray-400"
+          >
             {refused
               ? 'This talk can no longer get a Feedback Code: it is not confirmed, or no speaker is left.'
               : !mayMint
@@ -102,7 +106,7 @@ export function AdminFeedbackCodePanel({
               {mint.isPending ? 'Minting…' : 'Mint Feedback Code'}
             </button>
           )}
-          {mint.error && !refused && (
+          {mint.error && mayMint && (
             <p role="alert" className="text-sm text-red-700 dark:text-red-400">
               The code could not be minted. Try again.
             </p>
