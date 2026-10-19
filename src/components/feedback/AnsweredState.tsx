@@ -99,20 +99,16 @@ export function AnsweredState({
   // What had focus when a colour was tapped: after the change, the heading
   // takes focus only if focus has not moved on since (into the box, say).
   const focusAtTap = useRef<Element | null>(null)
+  // Decided when the change resolves: whether the heading takes focus. When
+  // it does not, the status line says the new answer instead.
+  const headingTakesFocus = useRef(true)
 
   useEffect(() => {
     if (changing) {
       grid.current?.querySelector('button')?.focus()
     } else if (wasChanging.current) {
       if (afterClose.current === 'change') changeButton.current?.focus()
-      else {
-        // The tapped button is gone, so focus that stayed on it is on the
-        // body now.
-        const now = document.activeElement
-        if (!now || now === document.body || now === focusAtTap.current) {
-          heading.current?.focus()
-        }
-      }
+      else if (headingTakesFocus.current) heading.current?.focus()
     }
     wasChanging.current = changing
   }, [changing, heading])
@@ -148,17 +144,32 @@ export function AnsweredState({
     }
     onOutcome(next)
     if (next.state === 'answered') {
+      // Focus still on the tapped button, anywhere in the grid (both about
+      // to unmount) or on nothing: it has not moved on since the tap.
+      const now = document.activeElement
+      headingTakesFocus.current =
+        !now ||
+        now === document.body ||
+        now === focusAtTap.current ||
+        !!grid.current?.contains(now)
       afterClose.current = 'heading'
       setChanging(false)
+      const lines: string[] = []
+      // Focus moved on (into the box, say): the heading that names the new
+      // answer is not read out, so the status line says it, once.
+      if (!headingTakesFocus.current) {
+        const label = ANSWERS.find((a) => a.colour === next.colour)?.label
+        if (label) lines.push(`You answered ${label}.`)
+      }
       // A comment this tab did not know of has filled the untouched box: the
       // box as it is NOW (typed in during the wait, it stays as typed), and
       // `undefined` (unread) keeps the comment this tab has.
       const shown = next.comment === undefined ? stored : (next.comment ?? '')
       if (editNow.current === null && shown !== stored) {
-        setCommentStatus({
-          kind: 'neutral',
-          text: 'Showing your saved comment.',
-        })
+        lines.push('Showing your saved comment.')
+      }
+      if (lines.length) {
+        setCommentStatus({ kind: 'neutral', text: lines.join(' ') })
       }
     }
   }
@@ -202,12 +213,11 @@ export function AnsweredState({
           ? 'Comment removed.'
           : ''
       setCommentStatus(text ? { kind: 'ok', text } : null)
-      // Sent: the box follows the stored comment again, unless it was typed
-      // in meanwhile; that newer text stays, unsent. When the only change
-      // the server made was a trim, the box keeps the text as typed:
-      // swapping the trimmed text in would move the caret.
-      const trimmedOnly = sent !== sent.trim() && next.comment === sent.trim()
-      if (editNow.current === sent && !trimmedOnly) setEdit(null)
+      // Sent: the box follows the stored comment again (trimmed, as stored),
+      // unless it was typed in meanwhile; that newer text stays, unsent. An
+      // edit kept after its own send would stop the box following a comment
+      // another tab stores, and Update would overwrite it unseen.
+      if (editNow.current === sent) setEdit(null)
     }
     onOutcome(next)
   }

@@ -295,6 +295,8 @@ export const ChangeAnswer: Story = {
     // The grid is gone again; the heading, naming the new answer, has focus.
     await expect(canvas.queryByRole('button', { name: 'Loved it' })).toBeNull()
     await waitFor(() => expect(document.activeElement).toBe(thanks))
+    // The focused heading names the answer: the status line stays quiet.
+    await expect(formStatus(canvasElement)).toHaveTextContent('')
     await expect(box).toHaveValue('draft, not sent')
     await expect(
       canvas.getByRole('button', { name: 'Update comment' }),
@@ -692,6 +694,11 @@ export const ChangeAnswerWhileTyping: Story = {
     await expect(box).toHaveValue(typed)
     await expect(document.activeElement).toBe(box)
     await expect(shown).not.toContain('Showing your saved comment.')
+    // The heading did not take focus, so the status line said the new
+    // answer, once (a keystroke then cleared it).
+    await expect(
+      shown.filter((t) => t === 'You answered Not for me.'),
+    ).toHaveLength(1)
     await expect(formStatus(canvasElement)).toHaveTextContent('')
   },
 }
@@ -730,8 +737,8 @@ export const ChangeAnswerCommentUnread: Story = {
 }
 
 /**
- * Sent with spaces around it: the server stores it trimmed, and the box keeps
- * the text as typed rather than swapping the trimmed text in under the caret.
+ * Sent with spaces around it: the server stores it trimmed, and the box shows
+ * the comment as stored, so it keeps following the stored comment.
  */
 export const SendCommentTrimmed: Story = {
   args: {
@@ -747,7 +754,46 @@ export const SendCommentTrimmed: Story = {
       expect(formStatus(canvasElement)).toHaveTextContent('Comment sent.'),
     )
     await expect(args.submit).toHaveBeenCalledWith('green', '  hi  ')
-    await expect(box).toHaveValue('  hi  ')
+    await expect(box).toHaveValue('hi')
+    await expect(
+      canvas.getByRole('button', { name: 'Update comment' }),
+    ).toBeInTheDocument()
+  },
+}
+
+/**
+ * ADVERSARIAL ROUND 5: a send the server only trimmed ("Great talk " from
+ * predictive text), then another tab stores its own comment, then this tab
+ * changes colour. The box follows the stored comment and says so, so Update
+ * cannot overwrite the other tab's words unseen.
+ */
+export const ChangeAnswerAfterTrimmedSend: Story = {
+  args: {
+    page: { ...answeredPage, comment: null },
+    submit: fn<SubmitAnswer>(async (colour, sent) => ({
+      state: 'answered',
+      colour,
+      // A send is stored trimmed; by the colour change, the other tab's
+      // comment is the stored one.
+      comment: sent === undefined ? 'Other tab words' : sent.trim() || null,
+      talk,
+    })),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const box = canvas.getByLabelText('Comment for the speaker (optional)')
+    await userEvent.type(box, 'Great talk ')
+    await userEvent.click(canvas.getByRole('button', { name: 'Send comment' }))
+    await waitFor(() =>
+      expect(formStatus(canvasElement)).toHaveTextContent('Comment sent.'),
+    )
+    await expect(args.submit).toHaveBeenCalledWith('green', 'Great talk ')
+    await userEvent.click(canvas.getByRole('button', { name: 'Change answer' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Not for me' }))
+    await waitFor(() => expect(box).toHaveValue('Other tab words'))
+    await expect(formStatus(canvasElement)).toHaveTextContent(
+      'Showing your saved comment.',
+    )
   },
 }
 
