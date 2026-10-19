@@ -73,11 +73,18 @@ vi.mock('@/lib/sanity/client', async () => {
       throw Object.assign(new Error('503 releases unavailable'), {
         statusCode: 503,
       })
-    if (query.includes('releases::all()'))
+    if (query.includes('releases::all()')) {
+      // MEASURED on production (2026-10-19, no releases):
+      // `releases::all(){ _id, state }` answers null, while
+      // `releases::all()[]{ _id, state }` answers []. Modelled, so a query
+      // that only works once a release exists fails here as it does there.
+      if (h.releases.length === 0 && !query.includes('releases::all()[]'))
+        return null
       return h.releases.map((r) => ({
         _id: `_.releases.${r.name}`,
         state: r.state,
       }))
+    }
     const value = await evaluate(parse(query), {
       dataset: h.groqSnapshot ?? h.dataset,
       params,

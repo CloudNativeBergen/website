@@ -421,7 +421,9 @@ async function readTalkVersions(
       raw,
     ),
     client
-      .fetch<unknown>('releases::all(){ _id, state }', {}, raw)
+      // `[]` projects each release: without it Sanity answers null when
+      // the dataset has no releases (measured), which read as a failed list.
+      .fetch<unknown>('releases::all()[]{ _id, state }', {}, raw)
       .catch(() => null),
   ])
   const releasesListed = Array.isArray(releases)
