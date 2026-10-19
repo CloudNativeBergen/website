@@ -24,17 +24,24 @@ import { useFeedbackQrPng } from './useFeedbackQrPng'
 const BUTTON =
   'inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:aria-disabled:hover:bg-gray-800'
 
+/** Who the panel speaks to: the talk's speaker, or an organizer (#1459). */
+type Audience = 'speaker' | 'organizer'
+
 /** The code's state line (speaker feedback spec §9.2). */
-function codeState(window: FeedbackWindow): { text: string; live: boolean } {
+function codeState(
+  window: FeedbackWindow,
+  audience: Audience,
+): { text: string; live: boolean } {
+  const session = audience === 'speaker' ? 'your session' : 'the session'
   switch (window.state) {
     case 'unscheduled':
       // Once the conference is over an unscheduled session can't open any more.
       return window.feedbackVisible
         ? { text: 'Closed', live: false }
-        : { text: 'Opens once your session is scheduled', live: false }
+        : { text: `Opens once ${session} is scheduled`, live: false }
     case 'before':
       return {
-        text: `Opens when your session starts (${formatRegistrationInstant(window.opensAt ?? '')})`,
+        text: `Opens when ${session} starts (${formatRegistrationInstant(window.opensAt ?? '')})`,
         live: false,
       }
     case 'open':
@@ -242,35 +249,43 @@ function CodeActions({ url, title }: { url: string; title: string }) {
 /**
  * The Feedback Code tab (speaker feedback spec §9.2): the QR code for the
  * attendee URL, its state, the downloads, Print sheet, Present and Copy link.
+ * Side by side only where its own width allows, so it also fits the admin
+ * talk page's sidebar.
  */
 export function FeedbackCodePanel({
   url,
   title,
   window,
+  audience = 'speaker',
 }: {
   url: string
   /** The talk's title, for the print sheet and the file names. */
   title: string
   window: FeedbackWindow
+  audience?: Audience
 }) {
-  const state = codeState(window)
+  const state = codeState(window, audience)
   return (
-    <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-      <QrCode url={url} />
-      <div className="min-w-0 space-y-3">
-        <p className="flex items-start gap-2 text-sm font-medium text-gray-900 dark:text-white">
-          <span
-            aria-hidden="true"
-            className={`mt-1.5 size-2 shrink-0 rounded-full ${state.live ? 'animate-pulse bg-green-500' : 'bg-gray-400'}`}
-          />
-          {state.text}
-        </p>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Put this on your last slide or print the sheet for the room. Attendees
-          scan it and answer in one tap; it&apos;s anonymous.
-        </p>
-        <DisplayUrl url={url} />
-        <CodeActions url={url} title={title} />
+    <div className="@container">
+      <div className="flex flex-col gap-5 @md:flex-row @md:items-center">
+        <QrCode url={url} />
+        <div className="min-w-0 space-y-3">
+          <p className="flex items-start gap-2 text-sm font-medium text-gray-900 dark:text-white">
+            <span
+              aria-hidden="true"
+              className={`mt-1.5 size-2 shrink-0 rounded-full ${state.live ? 'animate-pulse bg-green-500' : 'bg-gray-400'}`}
+            />
+            {state.text}
+          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {audience === 'speaker'
+              ? 'Put this on your last slide or print the sheet for the room.'
+              : 'Print the sheet for the room, or send the link to the speaker.'}{' '}
+            Attendees scan it and answer in one tap; it&apos;s anonymous.
+          </p>
+          <DisplayUrl url={url} />
+          <CodeActions url={url} title={title} />
+        </div>
       </div>
     </div>
   )
