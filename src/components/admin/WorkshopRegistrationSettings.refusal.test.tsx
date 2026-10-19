@@ -166,7 +166,7 @@ describe('a save refused about a time the form does not show', () => {
     }
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Edit Workshop Registration' }),
+      screen.getByRole('button', { name: 'Edit workshop registration' }),
     )
     expect(field(/Sponsor Early Access Opens/).value).toBe('')
     // No refusal yet: nothing describes the fields but the sponsor field's help.
@@ -259,7 +259,7 @@ describe('a save refused about a time the form does not show', () => {
       workshopRegistrationEnd: '2026-07-02T08:00:00.000Z',
     }
     fireEvent.click(
-      screen.getByRole('button', { name: 'Edit Workshop Registration' }),
+      screen.getByRole('button', { name: 'Edit workshop registration' }),
     )
     fireEvent.change(field(/Registration Closes/), {
       target: { value: '2026-07-02T10:00' },
@@ -270,7 +270,7 @@ describe('a save refused about a time the form does not show', () => {
     expect(h.saves).toEqual([{ endDate: '2026-07-02T08:00:00.000Z' }])
     expect(h.refreshes).toBe(1)
     // An accepted save still says so in a toast, as it did before.
-    expect(screen.getAllByText('Workshop Registration saved.')).toHaveLength(1)
+    expect(screen.getAllByText('Workshop registration saved.')).toHaveLength(1)
   })
 })
 
@@ -305,7 +305,7 @@ describe('a save that changes nothing, over a card that is out of date', () => {
     expect(row('Registration Opens')).toBe('20. oktober 2026 kl. 09:00')
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Edit Workshop Registration' }),
+      screen.getByRole('button', { name: 'Edit workshop registration' }),
     )
     // Retyped as it stands: 20 October is what the form believes is stored.
     fireEvent.change(field(/Registration Opens/), {
@@ -357,7 +357,7 @@ describe('closing the form while a save is pending', () => {
     )
     h.stored = { ...TIMES }
     fireEvent.click(
-      screen.getByRole('button', { name: 'Edit Workshop Registration' }),
+      screen.getByRole('button', { name: 'Edit workshop registration' }),
     )
     await waitFor(() => expect(formIs()).toBe('open'))
     fireEvent.change(field(/Registration Closes/), {
@@ -419,7 +419,7 @@ describe('closing the form while a save is pending', () => {
     answer()
     await waitFor(() => expect(formIs()).toBe('gone'))
     expect(h.saves).toEqual([{ endDate: '2026-07-02T08:00:00.000Z' }])
-    expect(screen.getAllByText('Workshop Registration saved.')).toHaveLength(1)
+    expect(screen.getAllByText('Workshop registration saved.')).toHaveLength(1)
   })
 
   it('can be closed again once the refusal has arrived', async () => {

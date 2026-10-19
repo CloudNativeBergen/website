@@ -456,25 +456,25 @@ function WorkshopsClientPageFor({
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Workshop Management"
-        description="Manage workshop signups and capacity"
+        title="Workshop management"
+        description="Sign-ups, seats, ticket access and sponsor early access"
         icon={<AcademicCapIcon className="h-6 w-6" />}
         stats={
           statsData
             ? [
                 {
                   value: statsData.data.totals.totalWorkshops,
-                  label: 'Total Workshops',
+                  label: 'Total workshops',
                   color: 'blue' as const,
                 },
                 {
                   value: statsData.data.totals.uniqueParticipants,
-                  label: 'Unique Participants',
+                  label: 'Unique participants',
                   color: 'purple' as const,
                 },
                 {
                   value: statsData.data.totals.totalSignups,
-                  label: 'Total Signups',
+                  label: 'Total sign-ups',
                   color: 'slate' as const,
                 },
                 {

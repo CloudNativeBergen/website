@@ -181,7 +181,7 @@ export const Editing: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.click(
       within(canvasElement).getByRole('button', {
-        name: 'Edit Workshop Registration',
+        name: 'Edit workshop registration',
       }),
     )
     // The dialog is portalled out of the canvas.
@@ -271,7 +271,7 @@ export const RefusedSave: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.click(
       within(canvasElement).getByRole('button', {
-        name: 'Edit Workshop Registration',
+        name: 'Edit workshop registration',
       }),
     )
     const dialog = await within(document.body).findByRole('dialog')
