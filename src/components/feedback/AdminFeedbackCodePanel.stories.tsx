@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { delay, http, HttpResponse } from 'msw'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { AdminFeedbackCodePanel } from './AdminFeedbackCodePanel'
 
 const READ = '/api/trpc/sessionFeedback.adminCode'
@@ -152,15 +152,29 @@ export const MintFailed: Story = {
 }
 
 /** Not a confirmed talk of this conference: the panel is not there at all. */
+const notFoundHits = { n: 0 }
 export const NotFound: Story = {
+  beforeEach: () => {
+    notFoundHits.n = 0
+  },
   parameters: {
-    msw: { handlers: [http.get(READ, () => failWith('NOT_FOUND', 404))] },
+    msw: {
+      handlers: [
+        http.get(READ, () => {
+          notFoundHits.n++
+          return failWith('NOT_FOUND', 404)
+        }),
+      ],
+    },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(
-      canvas.findByRole('region', { name: 'Feedback Code' }),
-    ).rejects.toThrow()
+    await waitFor(() => expect(notFoundHits.n).toBe(1))
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole('region', { name: 'Feedback Code' }),
+      ).toBeNull(),
+    )
   },
 }
 

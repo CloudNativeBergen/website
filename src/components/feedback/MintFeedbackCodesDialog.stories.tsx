@@ -82,10 +82,16 @@ type Story = StoryObj<typeof meta>
 
 export const Confirm: Story = {
   play: async () => {
-    expect(
-      await screen.findByText(/41 of 43 confirmed talks have no Feedback Code/),
-    ).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Mint 41 codes' })).toBeVisible()
+    await waitFor(() =>
+      expect(
+        screen.getByText(/41 of 43 confirmed talks have no Feedback Code/),
+      ).toBeVisible(),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Mint 41 codes' }),
+      ).toBeVisible(),
+    )
   },
 }
 
@@ -97,19 +103,27 @@ export const Report: Story = {
     await userEvent.click(
       await screen.findByRole('button', { name: 'Mint 41 codes' }),
     )
-    expect(
-      await screen.findByRole('heading', { name: 'Feedback Codes minted' }),
-    ).toBeVisible()
-    expect(
-      screen.getByText('Minted 39 codes. 2 talks already had one.'),
-    ).toBeVisible()
-    expect(screen.getByText(/Waits in a scheduled release/)).toBeVisible()
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Feedback Codes minted' }),
+      ).toBeVisible(),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByText('Minted 39 codes. 2 talks already had one.'),
+      ).toBeVisible(),
+    )
+    await waitFor(() =>
+      expect(screen.getByText(/Waits in a scheduled release/)).toBeVisible(),
+    )
     expect(
       screen.getByRole('link', { name: 'Kubernetes: the hard parts' }),
     ).toHaveAttribute('href', '/admin/proposals/talk-c')
-    expect(
-      screen.getByRole('button', { name: 'Try the failed again' }),
-    ).toBeVisible()
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Try the failed again' }),
+      ).toBeVisible(),
+    )
   },
 }
 
@@ -139,11 +153,13 @@ export const EveryTalkHasACode: Story = {
     },
   },
   play: async () => {
-    expect(
-      await screen.findByText(
-        'All 43 confirmed talks already have a Feedback Code.',
-      ),
-    ).toBeVisible()
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'All 43 confirmed talks already have a Feedback Code.',
+        ),
+      ).toBeVisible(),
+    )
     expect(screen.queryByRole('button', { name: /^Mint/ })).toBeNull()
   },
 }
