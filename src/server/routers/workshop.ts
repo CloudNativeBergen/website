@@ -235,7 +235,7 @@ function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
  * page. It runs BEFORE any signup read or write, so a refused caller learns
  * nothing about what exists.
  */
-async function requireWorkshopAttendee(ctx: Context) {
+async function requireWorkshopAttendee(ctx: Context, signUp = false) {
   const actor = requireWorkshopUser(ctx)
 
   const { conference, error } = await getConferenceForCurrentDomain({})
@@ -257,9 +257,11 @@ async function requireWorkshopAttendee(ctx: Context) {
 
   const access = await decideWorkshopPortalAccess({ conference, user: actor })
   if (!access.allowed) {
-    console.warn(
-      `[workshop] signup refused: ${access.denial} conference=${conference._id}`,
-    )
+    // Logged for a sign-up attempt only, not for every attendee call.
+    if (signUp)
+      console.warn(
+        `[workshop] signup refused: ${access.denial} conference=${conference._id}`,
+      )
     throw new TRPCError({ code: 'FORBIDDEN', message: access.reason })
   }
 
@@ -639,7 +641,7 @@ export const workshopRouter = router({
         // from the sealed session cookie (authoritative); the client no longer
         // sends — and cannot spoof — any identity.
         const { actor, conference, eligibleTickets } =
-          await requireWorkshopAttendee(ctx)
+          await requireWorkshopAttendee(ctx, true)
         const userWorkOSId = actor.id
         const userEmail = actor.email
         const userName = workshopUserName(actor)
