@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { delay, http, HttpResponse } from 'msw'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
+import { feedbackTotals } from '@/lib/feedback/totals'
 import { SessionFeedbackSection } from './SessionFeedbackSection'
 
 const ENDPOINT = '/api/trpc/sessionFeedback.ensureCode'
+const RESULTS = '/api/trpc/sessionFeedback.results'
 
 const answer = (data: unknown) =>
   http.post(ENDPOINT, () => HttpResponse.json({ result: { data } }))
@@ -67,7 +69,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Full-width section at the top of `/cfp/proposal/[id]` for a confirmed talk. Calls `sessionFeedback.ensureCode` on mount, which mints the Feedback Code on first view. Renders nothing when the server refuses the talk or will not mint a code. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'Full-width section at the top of `/cfp/proposal/[id]` for a confirmed talk (speaker feedback spec §9). Calls `sessionFeedback.ensureCode` on mount, which mints the Feedback Code on first view. Two tabs, **Session Feedback** (from `sessionFeedback.results`, refreshed every 30 s while the window is open) and **Feedback Code**; it opens on the code until feedback is visible, then on the results. A talk with no code shows the results only; a refused talk renders nothing. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
     msw: { handlers: [answer(BEFORE)] },
@@ -127,7 +129,7 @@ export const LoadFailed: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await canvas.findByText('Your Feedback Code could not be loaded.')
+    await canvas.findByText('Your Session Feedback could not be loaded.')
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }))
     await waitFor(() => expect(loadFailedHits.n).toBe(2))
   },
@@ -150,32 +152,273 @@ export const Refused: Story = {
     expectNothingRendered(canvasElement, refusedHits),
 }
 
-const noCodeHits = { n: 0 }
+/** The story clock starts 2026-10-17T12:00Z; this session ran two days before. */
+const CLOSED_WINDOW = {
+  state: 'closed',
+  opensAt: '2026-10-15T08:00:00.000Z',
+  lastSlotEnd: '2026-10-15T08:40:00.000Z',
+  closesAt: '2026-10-16T08:40:00.000Z',
+  feedbackVisible: true,
+}
+/** This session ended at 10:40Z today; answers can still arrive. */
+const LIVE_WINDOW = {
+  state: 'open',
+  opensAt: '2026-10-17T10:00:00.000Z',
+  lastSlotEnd: '2026-10-17T10:40:00.000Z',
+  closesAt: '2026-10-18T10:40:00.000Z',
+  feedbackVisible: true,
+}
 
-/** A talk whose window closed before it ever had a code: nothing renders. */
-export const NoCode: Story = {
+const COMMENTS = [
+  {
+    id: 'feedbackResponse-1',
+    colour: 'green',
+    comment: 'The live demo of the scheduler was the best part of the day.',
+    submittedAt: '2026-10-15T08:41:00.000Z',
+  },
+  {
+    id: 'feedbackResponse-2',
+    colour: 'yellow',
+    comment: 'Good content, but the slides were hard to read from the back.',
+    submittedAt: '2026-10-15T08:44:00.000Z',
+  },
+  {
+    id: 'feedbackResponse-3',
+    colour: 'red',
+    comment: 'Too fast for me.',
+    submittedAt: '2026-10-15T08:52:00.000Z',
+  },
+]
+
+const results = (window: unknown, fields: Record<string, unknown> = {}) => ({
+  visible: true,
+  window,
+  totals: feedbackTotals({
+    live: { green: 31, yellow: 9, red: 3 },
+    cards: { greenCount: 12, yellowCount: 2, redCount: 0 },
+  }),
+  comments: COMMENTS,
+  ...fields,
+})
+
+const resultsAnswer = (data: unknown, hits?: { n: number }) =>
+  http.get(RESULTS, () => {
+    if (hits) hits.n++
+    return HttpResponse.json({ result: { data } })
+  })
+
+/** After the session: the section opens on the results. */
+export const ResultsAfterSession: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        answer({ ...BEFORE, window: CLOSED_WINDOW }),
+        resultsAnswer(results(CLOSED_WINDOW)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      await canvas.findByRole('tab', {
+        name: 'Session Feedback',
+        selected: true,
+      }),
+    ).toBeVisible()
+    expect(await canvas.findByText('57 responses · 3 comments')).toBeVisible()
+    // Combined counts: 31 scanned + 12 cards.
+    expect(canvas.getByText('43')).toBeVisible()
+    expect(canvas.queryByText('Live')).toBeNull()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Scanned vs cards' }),
+    )
+    expect(canvas.getByText('31 scanned · 12 cards')).toBeVisible()
+    // The code is one tab away, its QR kept.
+    await userEvent.click(canvas.getByRole('tab', { name: 'Feedback Code' }))
+    expect(
+      await canvas.findByRole('img', { name: /QR code for/ }),
+    ).toBeVisible()
+  },
+}
+
+export const ResultsAfterSessionDark: Story = {
+  ...ResultsAfterSession,
+  globals: { theme: 'dark' },
+}
+
+export const ResultsAfterSessionPhone: Story = {
+  ...ResultsAfterSession,
+  parameters: {
+    ...ResultsAfterSession.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+
+export const ResultsAfterSessionPhoneDark: Story = {
+  ...ResultsAfterSessionPhone,
+  globals: { theme: 'dark' },
+}
+
+/** The window is still open: a Live badge. */
+export const ResultsLive: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        answer({ ...BEFORE, window: LIVE_WINDOW }),
+        resultsAnswer(results(LIVE_WINDOW)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(await canvas.findByText('Live')).toBeVisible()
+  },
+}
+
+/** Before the session, the results tab says when feedback appears. */
+export const ResultsBeforeSession: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      await canvas.findByRole('tab', { name: 'Feedback Code', selected: true }),
+    ).toBeVisible()
+    await userEvent.click(canvas.getByRole('tab', { name: 'Session Feedback' }))
+    expect(
+      canvas.getByText(
+        'Your feedback appears here when your session ends (Thursday 29 October at 09:40).',
+      ),
+    ).toBeVisible()
+  },
+}
+
+let flipHits = { n: 0 }
+
+/**
+ * The last slot ends 3 s after the code loads, while the speaker is on the
+ * Feedback Code tab, maybe showing the QR: the tab stays put, and the
+ * results load once the speaker opens their tab.
+ */
+export const ResultsArriveOnTheClock: Story = {
   parameters: {
     msw: {
       handlers: [
         http.post(ENDPOINT, () => {
-          noCodeHits.n++
+          const end = Date.now() + 3000
           return HttpResponse.json({
             result: {
               data: {
-                code: null,
-                url: null,
-                window: { ...BEFORE.window, state: 'closed' },
+                ...BEFORE,
+                window: {
+                  state: 'open',
+                  opensAt: new Date(end - 40 * 60_000).toISOString(),
+                  lastSlotEnd: new Date(end).toISOString(),
+                  closesAt: new Date(end + 24 * 3_600_000).toISOString(),
+                  feedbackVisible: false,
+                },
               },
             },
           })
+        }),
+        http.get(RESULTS, () => {
+          flipHits.n++
+          return HttpResponse.json({ result: { data: results(LIVE_WINDOW) } })
         }),
       ],
     },
   },
   beforeEach: () => {
-    noCodeHits.n = 0
+    flipHits = { n: 0 }
   },
-  play: ({ canvasElement }) => expectNothingRendered(canvasElement, noCodeHits),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const codeTab = await canvas.findByRole('tab', {
+      name: 'Feedback Code',
+      selected: true,
+    })
+    await canvas.findByRole('img', { name: /QR code for/ })
+    // After the slot's end the results load, but the tab does not move.
+    await waitFor(() => expect(flipHits.n).toBe(1), { timeout: 10000 })
+    expect(codeTab).toHaveAttribute('aria-selected', 'true')
+    await userEvent.click(canvas.getByRole('tab', { name: 'Session Feedback' }))
+    expect(await canvas.findByText('57 responses · 3 comments')).toBeVisible()
+  },
+}
+
+const resultsFailedHits = { n: 0 }
+
+/** The results fail to load: the tab says so and can be retried. */
+export const ResultsLoadFailed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        answer({ ...BEFORE, window: CLOSED_WINDOW }),
+        http.get(RESULTS, () => {
+          resultsFailedHits.n++
+          return HttpResponse.json(
+            {
+              error: {
+                message: 'x',
+                code: -32603,
+                data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+              },
+            },
+            { status: 500 },
+          )
+        }),
+      ],
+    },
+  },
+  beforeEach: () => {
+    resultsFailedHits.n = 0
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText(
+      'Your Session Feedback could not be loaded.',
+      {},
+      {
+        timeout: 10000,
+      },
+    )
+    const before = resultsFailedHits.n
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(resultsFailedHits.n).toBeGreaterThan(before))
+  },
+}
+
+/**
+ * A talk the server gives no code because its window closed before it ever
+ * had one, like every talk of an edition that ended before launch (§9.5):
+ * the results only, no code tab.
+ */
+export const ResultsOnly: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        answer({ code: null, url: null, window: CLOSED_WINDOW }),
+        resultsAnswer(
+          results(CLOSED_WINDOW, {
+            totals: feedbackTotals({
+              live: { green: 0, yellow: 0, red: 0 },
+              cards: { greenCount: 42, yellowCount: 15, redCount: 3 },
+            }),
+            comments: [],
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(await canvas.findByText('60 responses · 0 comments')).toBeVisible()
+    expect(canvas.queryByRole('tab')).toBeNull()
+    expect(canvas.getByText('No comments yet.')).toBeVisible()
+  },
+}
+
+export const ResultsOnlyDark: Story = {
+  ...ResultsOnly,
+  globals: { theme: 'dark' },
 }
 
 let opensWhileShownRequests = 0

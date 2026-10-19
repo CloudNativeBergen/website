@@ -15,7 +15,6 @@ import { ProposalForm } from '@/components/cfp/ProposalForm'
 import { CoSpeakerManager } from '@/components/cfp/CoSpeakerManager'
 import { ProposalGuidanceSidebar } from '@/components/cfp/ProposalGuidanceSidebar'
 import { PostConferenceVideoPanel } from '@/components/cfp/PostConferenceVideoPanel'
-import { PostConferenceAudienceFeedbackPanel } from '@/components/cfp/PostConferenceAudienceFeedbackPanel'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
 import { SessionFeedbackSection } from '@/components/feedback'
 import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
@@ -249,13 +248,10 @@ export default async function ProposalViewPage({
                   proposalId={proposal._id}
                   initialAttachments={proposal.attachments || []}
                 />
+                {/* Card Counts moved into the Session Feedback section
+                    (speaker feedback spec §9.5). */}
                 {isConferenceOver(conference) && (
-                  <>
-                    <PostConferenceVideoPanel proposal={proposal} />
-                    <PostConferenceAudienceFeedbackPanel
-                      audienceFeedback={proposal.audienceFeedback}
-                    />
-                  </>
+                  <PostConferenceVideoPanel proposal={proposal} />
                 )}
               </>
             )}

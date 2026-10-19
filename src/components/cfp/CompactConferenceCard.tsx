@@ -72,8 +72,9 @@ export function CompactConferenceCard({
             <CompactProposalList
               proposals={proposals}
               canEdit={data.canEditProposals}
-              conferenceHasEnded={data.isOver}
               unreadByProposalId={unreadByProposalId}
+              feedbackChips={data.feedbackChips}
+              feedbackLinked={data.isCurrentConference}
             />
           )}
 

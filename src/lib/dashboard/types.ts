@@ -4,6 +4,7 @@ import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import type { WorkshopStats } from '@/components/cfp/WorkshopStatistics'
 import type { TravelSupportWithExpenses } from '@/lib/travel-support/types'
 import type { BadgeRecord } from '@/lib/badge/types'
+import type { FeedbackChips } from '@/lib/feedback/chips'
 import type { WidgetMetadata } from './widget-metadata'
 import type { ConferencePhase } from '@/lib/conference/phase'
 import { z } from 'zod'
@@ -29,6 +30,10 @@ export interface ConferenceWithSpeakerData {
   badges: BadgeRecord[]
   isOver: boolean
   canEditProposals: boolean
+  /** Session Feedback chip per confirmed talk (speaker feedback spec §9.4). */
+  feedbackChips?: FeedbackChips
+  /** The edition served on this host, where a chip's section can open. */
+  isCurrentConference?: boolean
 }
 
 export interface GridPosition {
