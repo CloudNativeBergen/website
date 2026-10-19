@@ -136,6 +136,10 @@ export const EarlyAccessOpenPhone: Story = {
   parameters: { viewport: { defaultViewport: 'phone' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    // Collapsed by default: open it to measure the rows.
+    await userEvent.click(
+      canvas.getByRole('button', { name: /^Workshop registration/ }),
+    )
     let wrapped = 0
 
     for (const name of [
@@ -181,7 +185,7 @@ export const Editing: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.click(
       within(canvasElement).getByRole('button', {
-        name: 'Edit Workshop Registration',
+        name: 'Edit workshop registration',
       }),
     )
     // The dialog is portalled out of the canvas.
@@ -271,7 +275,7 @@ export const RefusedSave: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.click(
       within(canvasElement).getByRole('button', {
-        name: 'Edit Workshop Registration',
+        name: 'Edit workshop registration',
       }),
     )
     const dialog = await within(document.body).findByRole('dialog')

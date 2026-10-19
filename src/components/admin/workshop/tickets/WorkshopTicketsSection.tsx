@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -12,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import {
+  ChevronDownIcon,
   ExclamationTriangleIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
@@ -38,17 +40,35 @@ const HEADING_ID = 'workshop-tickets-heading'
  */
 function WorkshopTicketsFrame({
   badge,
+  open: initiallyOpen = false,
   children,
 }: {
   badge?: ReactNode
+  /**
+   * Starts open: something here needs the organizer. Read once, on mount: a
+   * save that settles the last decision must not shut the card mid-work, and
+   * a refresh must not reopen one the organizer closed.
+   */
+  open?: boolean
   children: ReactNode
 }) {
+  const [open, setOpen] = useState(initiallyOpen)
+  const contentId = useId()
+  // A link to the card (from the ticket-types page) opens it. After mount:
+  // the server render has no address hash.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.location.hash === `#${WORKSHOP_TICKETS_ANCHOR}`) setOpen(true)
+  }, [])
   return (
     <section
       id={WORKSHOP_TICKETS_ANCHOR}
       aria-labelledby={HEADING_ID}
       className="scroll-mt-24 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
     >
+      {/* Collapsed by default: rarely changed once set. A button inside the
+          heading, not <summary>, which would hide the heading from
+          screen-reader heading navigation. */}
       <div className="flex flex-wrap items-center gap-2">
         <TicketIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
         <h3
@@ -56,17 +76,31 @@ function WorkshopTicketsFrame({
           // Focusable from code only: focus lands here when the control that
           // held it leaves the page (a removed entry).
           tabIndex={-1}
-          className="text-lg font-medium text-gray-900 outline-none dark:text-white"
+          className="flex-1 text-lg font-medium text-gray-900 outline-none dark:text-white"
         >
-          Workshop tickets
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={contentId}
+            onClick={() => setOpen((o) => !o)}
+            className="flex w-full items-center gap-2 text-left"
+          >
+            Workshop tickets
+            {badge}
+            <ChevronDownIcon
+              aria-hidden
+              className={`ml-auto size-5 shrink-0 text-gray-400 transition-transform dark:text-gray-500 ${open ? 'rotate-180' : ''}`}
+            />
+          </button>
         </h3>
-        {badge}
       </div>
-      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        Holders of a ticket type that grants workshop access can sign up for
-        workshops.
-      </p>
-      {children}
+      <div id={contentId} className={open ? undefined : 'hidden'}>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Holders of a ticket type that grants workshop access can sign up for
+          workshops.
+        </p>
+        {children}
+      </div>
     </section>
   )
 }
@@ -138,7 +172,7 @@ export function WorkshopTicketsSection({
 }: WorkshopTicketsSectionProps) {
   if (!list) {
     return (
-      <WorkshopTicketsFrame>
+      <WorkshopTicketsFrame key="error" open>
         <div
           role="alert"
           className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900"
@@ -164,7 +198,8 @@ export function WorkshopTicketsSection({
   // is offered. Said as a fact, not as an error: the read worked.
   if (list.types.length === 0) {
     return (
-      <WorkshopTicketsFrame>
+      // Open: the sentence below is all the card has to say.
+      <WorkshopTicketsFrame key="empty" open>
         <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
           {providerLabel} lists no ticket types for this event, so there is
           nothing to set here.
@@ -177,17 +212,23 @@ export function WorkshopTicketsSection({
     .filter((type) => type.access === 'unclassified')
     .map((type) => type.typeName)
 
+  const needsDecision =
+    notSet.length > 0 ||
+    list.orphaned.length > 0 ||
+    list.orphanedEarlyAccess.length > 0
+
   return (
     <WorkshopTicketsFrame
+      // A key per branch: a switch starts the card over, with its own open.
+      key="list"
+      open={needsDecision || !list.configured}
       badge={
         !list.configured && (
           <StatusBadge label="Not configured" color="yellow" />
         )
       }
     >
-      {(notSet.length > 0 ||
-        list.orphaned.length > 0 ||
-        list.orphanedEarlyAccess.length > 0) && (
+      {needsDecision && (
         // A labelled region, NOT a live one: it holds buttons and questions,
         // and a live region would be read out again whole on every change.
         <section

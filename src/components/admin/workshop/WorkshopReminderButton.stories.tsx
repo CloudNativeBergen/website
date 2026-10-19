@@ -276,13 +276,13 @@ export const InHeaderMobile: Story = {
   render: (args) => (
     <div className="p-4">
       <AdminPageHeader
-        title="Workshop Management"
-        description="Manage workshop signups and capacity"
+        title="Workshop management"
+        description="Sign-ups, seats, ticket access and sponsor early access"
         icon={<AcademicCapIcon className="h-6 w-6" />}
         stats={[
-          { value: 6, label: 'Total Workshops', color: 'blue' },
-          { value: 112, label: 'Unique Participants', color: 'purple' },
-          { value: 180, label: 'Total Signups', color: 'slate' },
+          { value: 6, label: 'Total workshops', color: 'blue' },
+          { value: 112, label: 'Unique participants', color: 'purple' },
+          { value: 180, label: 'Total sign-ups', color: 'slate' },
         ]}
       >
         <div className="mt-4 flex justify-end">

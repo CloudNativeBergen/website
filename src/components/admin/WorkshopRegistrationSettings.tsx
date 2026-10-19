@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CalendarIcon,
+  ChevronDownIcon,
   PencilSquareIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
@@ -54,6 +55,8 @@ export function WorkshopRegistrationSettings({
   const toLocalInput = (value?: string) => instantToOsloLocalInput(value)
 
   const [isOpen, setIsOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const contentId = useId()
   const [error, setError] = useState<string | null>(null)
   // A REFUSAL IS BROUGHT INTO VIEW when it arrives: on a short screen it sits
   // above the Save button that was just tapped. Counted, not keyed on the
@@ -108,7 +111,7 @@ export function WorkshopRegistrationSettings({
         showNotification({
           type: 'success',
           title: 'Settings updated',
-          message: 'Workshop Registration saved.',
+          message: 'Workshop registration saved.',
         })
         router.refresh()
       },
@@ -244,70 +247,84 @@ export function WorkshopRegistrationSettings({
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center">
-          <CalendarIcon className="mr-2 h-5 w-5 text-gray-400 dark:text-gray-500" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            Workshop Registration
-          </h3>
-        </div>
+      <div className="flex items-center gap-2">
+        <CalendarIcon className="h-5 w-5 shrink-0 text-gray-400 dark:text-gray-500" />
+        {/* Collapsed by default. A button inside the heading, not <summary>,
+            which would hide the heading from heading navigation. */}
+        <h3 className="flex-1 text-lg font-medium text-gray-900 dark:text-white">
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-controls={contentId}
+            onClick={() => setExpanded((e) => !e)}
+            className="flex w-full items-center gap-2 text-left"
+          >
+            Workshop registration
+            <ChevronDownIcon
+              aria-hidden
+              className={`ml-auto size-5 shrink-0 text-gray-400 transition-transform dark:text-gray-500 ${expanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+        </h3>
         <button
           type="button"
           onClick={openModal}
-          aria-label="Edit Workshop Registration"
+          aria-label="Edit workshop registration"
           className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-400 dark:hover:bg-gray-800"
         >
           <PencilSquareIcon className="h-5 w-5" />
         </button>
       </div>
 
-      <div className="space-y-3">
-        <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Sponsor Early Access Opens
-          </span>
-          <span className="text-right text-sm text-gray-900 dark:text-white">
-            {formatDateTime(workshopRegistrationSponsorStart)}
-          </span>
-        </div>
+      <div id={contentId} className={expanded ? 'mt-4' : 'hidden'}>
+        <div className="space-y-3">
+          <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Sponsor Early Access Opens
+            </span>
+            <span className="text-right text-sm text-gray-900 dark:text-white">
+              {formatDateTime(workshopRegistrationSponsorStart)}
+            </span>
+          </div>
 
-        <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Registration Opens
-          </span>
-          <span className="text-right text-sm text-gray-900 dark:text-white">
-            {formatDateTime(workshopRegistrationStart)}
-          </span>
-        </div>
+          <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Registration Opens
+            </span>
+            <span className="text-right text-sm text-gray-900 dark:text-white">
+              {formatDateTime(workshopRegistrationStart)}
+            </span>
+          </div>
 
-        <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Registration Closes
-          </span>
-          <span className="text-right text-sm text-gray-900 dark:text-white">
-            {formatDateTime(workshopRegistrationEnd)}
-          </span>
-        </div>
+          <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Registration Closes
+            </span>
+            <span className="text-right text-sm text-gray-900 dark:text-white">
+              {formatDateTime(workshopRegistrationEnd)}
+            </span>
+          </div>
 
-        <div className="flex items-center justify-between py-2">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Status
-          </span>
-          <StatusBadge label={status.label} color={status.color} />
-        </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Status
+            </span>
+            <StatusBadge label={status.label} color={status.color} />
+          </div>
 
-        {status.note ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {status.note}
-          </p>
-        ) : null}
+          {status.note ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {status.note}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <ModalShell
         isOpen={isOpen}
         onClose={closeModal}
         size="lg"
-        title="Edit Workshop Registration"
+        title="Edit workshop registration"
         subtitle="When workshop sign-ups open and close"
         icon={<PencilSquareIcon className="h-5 w-5" />}
       >

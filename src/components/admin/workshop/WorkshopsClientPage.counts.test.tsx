@@ -696,7 +696,7 @@ describe('the ticket holders (#1333)', () => {
       await within(region).findByText(/^Unavailable:/)
       expect(region.textContent).not.toMatch(/\d/)
       // The sign-up totals from the summary are on the page all the same.
-      expect(await screen.findByText('Total Signups')).toBeInTheDocument()
+      expect(await screen.findByText('Total sign-ups')).toBeInTheDocument()
     },
   )
 })

@@ -204,7 +204,7 @@ describe('the sponsor start time on the card', () => {
 describe('saving the registration times', () => {
   const edit = () =>
     fireEvent.click(
-      screen.getByRole('button', { name: 'Edit Workshop Registration' }),
+      screen.getByRole('button', { name: 'Edit workshop registration' }),
     )
   const field = (name: RegExp) =>
     screen.getByLabelText(name) as HTMLInputElement

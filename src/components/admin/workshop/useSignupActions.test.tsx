@@ -264,10 +264,8 @@ describe('"Move to Confirmed"', () => {
   it('confirms that one sign-up, with the email, and says so', async () => {
     const { onSettled } = press('confirm')
 
-    await vi.waitFor(() => expect(alert).toHaveBeenCalledTimes(1))
-    expect(alert).toHaveBeenCalledWith(
-      '✅ Ada Lovelace confirmed! Confirmation email sent.',
-    )
+    await screen.findByText('Ada Lovelace confirmed')
+    expect(screen.getByText('Confirmation email sent.')).toBeInTheDocument()
     expect(posted).toEqual([
       {
         procedure: 'workshop.admin.batchConfirmSignups',
@@ -283,10 +281,12 @@ describe('"Move to Confirmed"', () => {
     ])
     press('confirm')
 
-    await vi.waitFor(() => expect(alert).toHaveBeenCalledTimes(1))
-    expect(alert).toHaveBeenCalledWith(
-      '✅ Ada Lovelace confirmed beyond capacity (31 of 30 seats). Confirmation email sent.',
-    )
+    await screen.findByText('Ada Lovelace confirmed')
+    expect(
+      screen.getByText(
+        'Confirmed beyond capacity (31 of 30 seats). Confirmation email sent.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('does not say "confirmed" when the server could not confirm', async () => {
@@ -294,7 +294,7 @@ describe('"Move to Confirmed"', () => {
     const { onSettled } = press('confirm')
 
     await screen.findByText('Could not confirm')
-    expect(alert).not.toHaveBeenCalled()
+    expect(screen.queryByText('Ada Lovelace confirmed')).not.toBeInTheDocument()
     expect(onSettled).toHaveBeenCalledTimes(1)
   })
 
@@ -338,10 +338,12 @@ describe('"Move to Confirmed" into a full workshop (#1358)', () => {
     ])
     fireEvent.click(screen.getByRole('button', { name: 'beyond capacity' }))
 
-    await vi.waitFor(() => expect(alert).toHaveBeenCalledTimes(1))
-    expect(alert).toHaveBeenCalledWith(
-      '✅ Ada Lovelace confirmed beyond capacity (31 of 30 seats). Confirmation email sent.',
-    )
+    await screen.findByText('Ada Lovelace confirmed')
+    expect(
+      screen.getByText(
+        'Confirmed beyond capacity (31 of 30 seats). Confirmation email sent.',
+      ),
+    ).toBeInTheDocument()
     expect(posted[1]).toEqual({
       procedure: 'workshop.admin.batchConfirmSignups',
       input: {
