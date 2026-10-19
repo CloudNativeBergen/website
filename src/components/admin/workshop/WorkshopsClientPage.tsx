@@ -16,6 +16,7 @@ import {
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
 import { WorkshopEarlyAccessBulkButton } from './WorkshopEarlyAccessBulkButton'
+import { WorkshopScheduleGrid } from './WorkshopScheduleGrid'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import {
   WorkshopReminderButton,
@@ -523,16 +524,17 @@ function WorkshopsClientPageFor({
 
       <WorkshopEarlyAccessBulkButton />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        {initialWorkshops.length === 0 ? (
-          <EmptyState
-            icon={AcademicCapIcon}
-            title="No workshops found"
-            description="No workshops have been created for this conference yet."
-            className="col-span-full rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
-          />
-        ) : (
-          initialWorkshops.map((workshop) => {
+      {initialWorkshops.length === 0 ? (
+        <EmptyState
+          icon={AcademicCapIcon}
+          title="No workshops found"
+          description="No workshops have been created for this conference yet."
+          className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+        />
+      ) : (
+        <WorkshopScheduleGrid
+          workshops={initialWorkshops}
+          renderCard={(workshop) => {
             const workshopSignups = signupsByWorkshop.get(workshop._id) || []
             // The summary is read again after every action; the server render
             // (`workshop`) never is. Once the summary is in, its numbers are
@@ -599,9 +601,9 @@ function WorkshopsClientPageFor({
                 }
               />
             )
-          })
-        )}
-      </div>
+          }}
+        />
+      )}
 
       <EarlySignupsList
         signups={

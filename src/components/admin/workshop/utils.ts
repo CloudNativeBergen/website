@@ -57,3 +57,61 @@ export function getCapacityColorClass(percentage: number): string {
 
   return `bg-${color}-500`
 }
+
+export interface WorkshopScheduleDay<T> {
+  date: string
+  tracks: string[]
+  /** Rows by start time; each row holds one cell per track, in `tracks` order; a cell
+   * holds every workshop booked there, so a double booking shows. */
+  slots: { startTime: string; endTime?: string; cells: T[][] }[]
+}
+
+/**
+ * Lays workshops out like the program grid: one column per track (room), one
+ * row per start time, per day. Workshops without a date, track or start time
+ * are returned in `unscheduled` so they never drop off the admin page.
+ */
+export function groupWorkshopsBySchedule<T extends ProposalWithWorkshopData>(
+  workshops: T[],
+): { days: WorkshopScheduleDay<T>[]; unscheduled: T[] } {
+  const unscheduled: T[] = []
+  const byDay = new Map<string, T[]>()
+  for (const w of workshops) {
+    const s = w.scheduleInfo
+    if (!s?.date || !s.trackTitle || !s.timeSlot?.startTime) {
+      unscheduled.push(w)
+      continue
+    }
+    byDay.set(s.date, [...(byDay.get(s.date) ?? []), w])
+  }
+
+  const days = [...byDay.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, list]) => {
+      const tracks = [
+        ...new Set(list.map((w) => w.scheduleInfo!.trackTitle!)),
+      ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      const times = [
+        ...new Set(list.map((w) => w.scheduleInfo!.timeSlot!.startTime)),
+      ].sort()
+      const slots = times.map((startTime) => {
+        const inSlot = list.filter(
+          (w) => w.scheduleInfo!.timeSlot!.startTime === startTime,
+        )
+        // A row shows one end time only when its workshops agree on it.
+        const ends = new Set(
+          inSlot.map((w) => w.scheduleInfo!.timeSlot!.endTime),
+        )
+        return {
+          startTime,
+          endTime: ends.size === 1 ? [...ends][0] : undefined,
+          cells: tracks.map((t) =>
+            inSlot.filter((w) => w.scheduleInfo!.trackTitle === t),
+          ),
+        }
+      })
+      return { date, tracks, slots }
+    })
+
+  return { days, unscheduled }
+}
