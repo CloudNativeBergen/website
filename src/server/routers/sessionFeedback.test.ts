@@ -402,7 +402,7 @@ describe('ensureCode — the talk id is an id, nothing else', () => {
       expect(
         await ensureFeedbackCode({
           talkId,
-          speakerId: 'sp-ada',
+          actor: { speakerId: 'sp-ada' },
           conference,
           now: new Date(),
         }),
@@ -621,5 +621,90 @@ describe('sessionFeedbackRouter surface', () => {
       }
     )._def
     expect(Object.keys(procedures).sort()).toEqual(['ensureCode'])
+  })
+})
+
+/** An organizer of org-A (the request's org) who speaks at no talk. */
+function organizer(orgIds: string[] = ['org-A']) {
+  const speaker = { _id: 'sp-org', name: 'Org', organizerOrgIds: orgIds }
+  const user = { email: 'o@example.com', name: 'Org', picture: '' }
+  return t.createCallerFactory(sessionFeedbackRouter)({
+    req: { headers: new Headers(), url: 'http://localhost:3000' },
+    session: { expires: '2099-01-01T00:00:00Z', user, speaker },
+    speaker,
+    user,
+    workosUser: null,
+    ipAddress: '127.0.0.1',
+  } as unknown as Context)
+}
+
+describe('mintCode — an organizer mints one talk’s code', () => {
+  it('mints a code on a talk the organizer does not speak at', async () => {
+    const out = await organizer().mintCode({ talkId: 'talk-other-speakers' })
+    expect(out.code).toMatch(CODE)
+    expect(out.url).toBe(`https://2026.example.no/f/${out.code}`)
+    expect(doc('talk-other-speakers')?.feedbackCode).toBe(out.code)
+    expect(revalidateTag).toHaveBeenCalledWith(feedbackCodeIndexTag('conf-A'), {
+      expire: 0,
+    })
+  })
+})
+
+describe('mintCode — refusals, before any read', () => {
+  it('refuses a speaker of the talk who is not an organizer', async () => {
+    await expect(
+      caller('sp-ada').mintCode({ talkId: 'talk-1' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.docReads).toEqual([])
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+  })
+
+  it('refuses an organizer of another organization', async () => {
+    await expect(
+      organizer(['org-B']).mintCode({ talkId: 'talk-1' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.docReads).toEqual([])
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+  })
+})
+
+describe('mintCode — the same rules as the speaker’s mint', () => {
+  it.each([
+    ['another conference’s talk', 'talk-foreign'],
+    ['an accepted talk', 'talk-accepted'],
+    ['a withdrawn talk', 'talk-withdrawn'],
+    ['a missing talk', 'talk-missing'],
+  ])('refuses %s with NOT_FOUND and writes nothing', async (_, talkId) => {
+    await expect(organizer().mintCode({ talkId })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+    expect(h.attempts).toBe(0)
+    expect(doc(talkId)?.feedbackCode).toBeUndefined()
+  })
+
+  it('keeps a code the talk already has', async () => {
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'talk-1' ? { ...d, feedbackCode: 'k7m2qx' } : d,
+    )
+    const out = await organizer().mintCode({ talkId: 'talk-1' })
+    expect(out.code).toBe('k7m2qx')
+    expect(doc('talk-1')?.feedbackCode).toBe('k7m2qx')
+    expect(h.attempts).toBe(0)
+  })
+
+  it('mints nothing once the talk’s window has closed', async () => {
+    vi.setSystemTime(new Date('2026-06-11T08:40:00Z'))
+    const out = await organizer().mintCode({ talkId: 'talk-1' })
+    expect(out).toMatchObject({ code: null, url: null })
+    expect(out.window.state).toBe('closed')
+    expect(h.attempts).toBe(0)
+  })
+
+  it('mints nothing while a version waits in a scheduled release', async () => {
+    h.dataset.push(talk('versions.r1.talk-1'))
+    h.releases = [{ name: 'r1', state: 'scheduled' }]
+    const out = await organizer().mintCode({ talkId: 'talk-1' })
+    expect(out.code).toBeNull()
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
   })
 })

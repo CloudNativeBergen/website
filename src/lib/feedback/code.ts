@@ -50,19 +50,27 @@ const isPublishedId = (id: string) =>
   !id.startsWith('drafts.') && !id.startsWith('versions.')
 
 /**
+ * Who asks for the code: one of the talk's speakers, or an organizer of the
+ * conference serving the request, whom the caller has already checked.
+ */
+export type FeedbackCodeActor = { speakerId: string } | { organizer: true }
+
+/**
  * The talk is a confirmed talk of the conference serving the request, and
- * the caller is one of its speakers. Checked on the PUBLISHED document only.
+ * the actor may hold its code: an organizer, or one of its speakers. Checked
+ * on the PUBLISHED document only.
  */
 function mayHoldCode(
   talk: TalkDoc | null | undefined,
   conferenceId: string,
-  speakerId: string,
+  actor: FeedbackCodeActor,
 ): talk is TalkDoc {
   return (
     talk?._type === 'talk' &&
     talk.status === 'confirmed' &&
     talk.conference?._ref === conferenceId &&
-    (talk.speakers ?? []).some((s) => s._ref === speakerId)
+    ('organizer' in actor ||
+      (talk.speakers ?? []).some((s) => s._ref === actor.speakerId))
   )
 }
 
@@ -90,12 +98,12 @@ function isRetryable(error: unknown): boolean {
 
 export async function ensureFeedbackCode({
   talkId,
-  speakerId,
+  actor,
   conference,
   now,
 }: {
   talkId: string
-  speakerId: string
+  actor: FeedbackCodeActor
   conference: { _id: string; endDate?: string | null }
   now: Date
 }): Promise<EnsureFeedbackCodeResult> {
@@ -105,7 +113,7 @@ export async function ensureFeedbackCode({
   // The doc endpoint answers a comma list of ids with the first match, so
   // the document read must BE the id asked for. The router's id check stops
   // such ids first; this keeps the module safe on its own.
-  if (talk?._id !== talkId || !mayHoldCode(talk, conference._id, speakerId)) {
+  if (talk?._id !== talkId || !mayHoldCode(talk, conference._id, actor)) {
     return { status: 'refused' }
   }
 
@@ -118,7 +126,7 @@ export async function ensureFeedbackCode({
   if (existing) return { status: 'ok', code: existing, window }
   if (!mayMint(window)) return { status: 'ok', code: null, window }
 
-  const outcome = await mint(client, talk, conference._id, speakerId)
+  const outcome = await mint(client, talk, conference._id, actor)
   if (!outcome) return { status: 'refused' }
   if (outcome.code === null) return { status: 'ok', code: null, window }
   if (outcome.minted) {
@@ -145,7 +153,7 @@ async function mint(
   client: VersionsClient,
   talk: TalkDoc,
   conferenceId: string,
-  speakerId: string,
+  actor: FeedbackCodeActor,
 ): Promise<{ code: string | null; minted: boolean } | null> {
   let current = talk
   for (let attempt = 0; ; attempt++) {
@@ -179,7 +187,7 @@ async function mint(
       if (!isRetryable(error) || attempt >= MAX_RETRIES) throw error
     }
     const reread = await client.getDocument<TalkDoc>(current._id)
-    if (!mayHoldCode(reread, conferenceId, speakerId)) return null
+    if (!mayHoldCode(reread, conferenceId, actor)) return null
     const won = normalizeShortCode(reread.feedbackCode)
     if (won) return { code: won, minted: false }
     current = reread

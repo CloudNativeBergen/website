@@ -1,4 +1,8 @@
-export { ensureFeedbackCode, type EnsureFeedbackCodeResult } from './code'
+export {
+  ensureFeedbackCode,
+  type EnsureFeedbackCodeResult,
+  type FeedbackCodeActor,
+} from './code'
 export { expireFeedbackCodeIndex } from './cache'
 export { conferenceFeedbackCodes, getFeedbackSlots } from './sanity'
 export {

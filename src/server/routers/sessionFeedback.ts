@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { protectedProcedure, router } from '@/server/trpc'
+import { adminProcedure, protectedProcedure, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { feedbackCodeUrl } from '@/lib/feedback'
 import { ensureFeedbackCode } from '@/lib/feedback/server'
@@ -13,9 +13,15 @@ import { ensureFeedbackCode } from '@/lib/feedback/server'
  */
 const TALK_ID = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/
 
+const talkInput = z.object({ talkId: z.string().max(200).regex(TALK_ID) })
+
+const notFound = () =>
+  new TRPCError({ code: 'NOT_FOUND', message: 'Talk not found' })
+
 /**
- * Session Feedback for speakers (speaker feedback spec §5, §9). The conference
- * is always the one serving the request, never an input.
+ * Session Feedback for speakers (speaker feedback spec §5, §9) and the
+ * organizers' minting (#1459). The conference is always the one serving the
+ * request, never an input.
  */
 export const sessionFeedbackRouter = router({
   /**
@@ -25,10 +31,8 @@ export const sessionFeedbackRouter = router({
    * talk all get the same NOT_FOUND, so the answer reveals nothing (§9.1).
    */
   ensureCode: protectedProcedure
-    .input(z.object({ talkId: z.string().max(200).regex(TALK_ID) }))
+    .input(talkInput)
     .mutation(async ({ ctx, input }) => {
-      const notFound = () =>
-        new TRPCError({ code: 'NOT_FOUND', message: 'Talk not found' })
       // An organizer impersonating a speaker (development only) must not
       // write a code as them; other writes refuse the same way.
       if (ctx.session?.isImpersonating) throw notFound()
@@ -38,7 +42,7 @@ export const sessionFeedbackRouter = router({
       if (!conference?._id) throw notFound()
       const result = await ensureFeedbackCode({
         talkId: input.talkId,
-        speakerId: ctx.speaker._id,
+        actor: { speakerId: ctx.speaker._id },
         conference,
         now: new Date(),
       })
@@ -49,4 +53,26 @@ export const sessionFeedbackRouter = router({
         window: result.window,
       }
     }),
+  /**
+   * An organizer mints a talk's code (#1459), with the same rules as the
+   * speaker's first view (§5) but no speaker check. A talk with a code keeps
+   * it; changing one is rotation (§10.4). Another conference's talk gets the
+   * same NOT_FOUND as a missing one.
+   */
+  mintCode: adminProcedure.input(talkInput).mutation(async ({ input }) => {
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) throw notFound()
+    const result = await ensureFeedbackCode({
+      talkId: input.talkId,
+      actor: { organizer: true },
+      conference,
+      now: new Date(),
+    })
+    if (result.status === 'refused') throw notFound()
+    return {
+      code: result.code,
+      url: result.code ? feedbackCodeUrl(conference, result.code) : null,
+      window: result.window,
+    }
+  }),
 })
