@@ -209,3 +209,39 @@ export const HasCodeMobile: Story = {
     await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth)
   },
 }
+
+/**
+ * Left up through the session's start: the state moves on by the clock,
+ * without asking the server again. The session opens 5 s after the answer.
+ */
+let opensWhileShownReads = 0
+export const OpensWhileShown: Story = {
+  beforeEach: () => {
+    opensWhileShownReads = 0
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(READ, () => {
+          opensWhileShownReads++
+          const opensAt = Date.now() + 5000
+          return trpc({
+            ...withCode,
+            window: {
+              ...before,
+              opensAt: new Date(opensAt).toISOString(),
+              lastSlotEnd: new Date(opensAt + 40 * 60_000).toISOString(),
+              closesAt: new Date(opensAt + 25 * 3_600_000).toISOString(),
+            },
+          })
+        }),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText(/Opens when the session starts/)
+    await waitFor(() => canvas.getByText(/Open until/), { timeout: 10000 })
+    expect(opensWhileShownReads).toBe(1)
+  },
+}

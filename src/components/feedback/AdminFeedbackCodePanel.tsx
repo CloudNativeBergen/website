@@ -3,6 +3,7 @@
 import { QrCodeIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
+import { useWindowOnTheClock } from './useWindowOnTheClock'
 
 /**
  * A talk's Feedback Code on its admin page (#1459). Viewing never mints: an
@@ -35,6 +36,9 @@ export function AdminFeedbackCodePanel({
         : utils.sessionFeedback.adminCode.invalidate({ talkId }),
   })
 
+  // An organizer may leave the page up through the session's start.
+  const shownWindow = useWindowOnTheClock(code.data?.window)
+
   if (code.error?.data?.code === 'NOT_FOUND') return null
 
   return (
@@ -46,11 +50,11 @@ export function AdminFeedbackCodePanel({
         <QrCodeIcon className="mr-2 size-5" aria-hidden="true" />
         Feedback Code
       </h3>
-      {code.data?.code && code.data.url ? (
+      {code.data?.code && code.data.url && shownWindow ? (
         <FeedbackCodePanel
           url={code.data.url}
           title={title}
-          window={code.data.window}
+          window={shownWindow}
           audience="organizer"
         />
       ) : code.data ? (
