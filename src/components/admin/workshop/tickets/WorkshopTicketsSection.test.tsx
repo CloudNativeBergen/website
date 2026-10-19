@@ -409,6 +409,23 @@ describe('a configured list', () => {
     expect(toggle()).toHaveAttribute('aria-expanded', 'false')
   })
 
+  it('shows a load failure even after the organizer closed the card', () => {
+    // Opens on a decision to make; the organizer closes it.
+    const { rerender } = section(
+      ['Two-day pass', 'Day pass'],
+      roles.slice(0, 1),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Workshop tickets/ }))
+    expect(
+      screen.getByRole('button', { name: /^Workshop tickets/ }),
+    ).toHaveAttribute('aria-expanded', 'false')
+    rerender(<WorkshopTicketsSection list={null} providerLabel="Checkin.no" />)
+    expect(
+      screen.getByRole('button', { name: /^Workshop tickets/ }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('alert').closest('.hidden')).toBeNull()
+  })
+
   it('saves an answer straight away while another type still grants', () => {
     section(types, roles)
 

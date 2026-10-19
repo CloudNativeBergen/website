@@ -172,7 +172,7 @@ export function WorkshopTicketsSection({
 }: WorkshopTicketsSectionProps) {
   if (!list) {
     return (
-      <WorkshopTicketsFrame open>
+      <WorkshopTicketsFrame key="error" open>
         <div
           role="alert"
           className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900"
@@ -199,7 +199,7 @@ export function WorkshopTicketsSection({
   if (list.types.length === 0) {
     return (
       // Open: the sentence below is all the card has to say.
-      <WorkshopTicketsFrame open>
+      <WorkshopTicketsFrame key="empty" open>
         <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
           {providerLabel} lists no ticket types for this event, so there is
           nothing to set here.
@@ -219,6 +219,8 @@ export function WorkshopTicketsSection({
 
   return (
     <WorkshopTicketsFrame
+      // A key per branch: a switch starts the card over, with its own open.
+      key="list"
       open={needsDecision || !list.configured}
       badge={
         !list.configured && (
