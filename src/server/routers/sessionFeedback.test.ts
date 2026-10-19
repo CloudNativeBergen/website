@@ -807,6 +807,36 @@ describe('mintAll — every confirmed talk without a code', () => {
     expect(out.minted.map((m) => m.code)).not.toContain('aaaaaa')
   })
 
+  it('never repeats a code held by a talk late in the queue that GROQ does not show', async () => {
+    // Sixty more talks put talk-zz behind the first workers' draws, and in
+    // the second chunk of the by-id read.
+    h.dataset.push(
+      ...Array.from({ length: 60 }, (_, i) =>
+        talk(`talk-a${String(i).padStart(2, '0')}`),
+      ),
+      talk('talk-zz'),
+    )
+    h.groqSnapshot = structuredClone(h.dataset)
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'talk-zz' ? { ...d, feedbackCode: 'aaaaaa' } : d,
+    )
+    let calls = 0
+    const random = vi
+      .spyOn(globalThis.crypto, 'getRandomValues')
+      .mockImplementation(<T extends ArrayBufferView | null>(array: T): T => {
+        const letter = Math.floor(calls++ / 6)
+        ;(array as unknown as Uint32Array)[0] = Math.ceil(
+          (letter * 2 ** 32) / 31,
+        )
+        return array
+      })
+    const out = await organizer().mintAll()
+    random.mockRestore()
+    expect(doc('talk-zz')?.feedbackCode).toBe('aaaaaa')
+    expect(out.minted.length).toBeGreaterThan(0)
+    expect(out.minted.map((m) => m.code)).not.toContain('aaaaaa')
+  })
+
   it('reports a talk whose write fails and still mints the rest', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     // The first talk's transaction fails, as a Sanity outage would.
@@ -857,6 +887,13 @@ describe('mintAll — every confirmed talk without a code', () => {
     )
     h.dataset.push(talk('versions.r1.talk-1'))
     h.releases = [{ name: 'r1', state: 'scheduled' }]
+    // The count does not look at releases: the locked talk-1 is counted as
+    // mintable, and only the mint finds it waits.
+    expect(await organizer().mintPreview()).toEqual({
+      confirmed: 4,
+      withoutCode: 3,
+      mintable: 2,
+    })
     const out = await organizer().mintAll()
     expect(out.skipped).toEqual([
       { talkId: 'talk-1', title: 'talk-1', reason: 'release' },

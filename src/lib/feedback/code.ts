@@ -70,6 +70,31 @@ export interface MintBatch {
   codes: Set<string>
 }
 
+/** Ids per doc-endpoint read: the ids travel in the URL. */
+const HELD_CODES_CHUNK = 50
+
+/**
+ * Reserve in the batch every code the talks hold now, read by id. GROQ may
+ * not show a code minted a moment ago, and a talk late in the queue would
+ * otherwise reserve its code only when its own turn comes, after other
+ * talks have drawn.
+ */
+export async function reserveHeldCodes(
+  talkIds: string[],
+  batch: MintBatch,
+): Promise<void> {
+  const client = versionsClient()
+  for (let i = 0; i < talkIds.length; i += HELD_CODES_CHUNK) {
+    const talks = await client.getDocuments<TalkDoc>(
+      talkIds.slice(i, i + HELD_CODES_CHUNK),
+    )
+    for (const talk of talks) {
+      const code = normalizeShortCode(talk?.feedbackCode)
+      if (code) batch.codes.add(code)
+    }
+  }
+}
+
 /** How often a write that lost a revision guard re-reads and tries again. */
 const MAX_RETRIES = 3
 /** How often the post-commit sweep may re-patch a stale version. */

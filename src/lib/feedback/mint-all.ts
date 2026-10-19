@@ -7,7 +7,12 @@
 import 'server-only'
 import { normalizeShortCode } from '@/lib/marketing/short-code'
 import { expireFeedbackCodeIndex } from './cache'
-import { ensureFeedbackCode, mayMint, type MintBatch } from './code'
+import {
+  ensureFeedbackCode,
+  mayMint,
+  reserveHeldCodes,
+  type MintBatch,
+} from './code'
 import { getConferenceFeedbackSlots, getConfirmedTalks } from './sanity'
 import { feedbackWindow } from './window'
 
@@ -104,6 +109,10 @@ export async function mintConferenceFeedbackCodes({
   const batch: MintBatch = { codes: new Set() }
   const startedAt = Date.now()
   const queue = await getConfirmedTalks(conference._id)
+  await reserveHeldCodes(
+    queue.map((t) => t._id),
+    batch,
+  )
 
   const mintOne = async (talk: (typeof queue)[number]) => {
     const ref = { talkId: talk._id, title: talk.title ?? 'Untitled talk' }
