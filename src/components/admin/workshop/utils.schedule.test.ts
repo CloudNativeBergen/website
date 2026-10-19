@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { groupWorkshopsBySchedule } from './utils'
 
-const w = (_id: string, trackTitle?: string, startTime?: string) =>
+// The shape `getWorkshops({ includeScheduleInfo: true })` returns: the
+// schedule track arrives as `room`, with top-level date and times.
+const w = (_id: string, room?: string, startTime?: string) =>
   ({
     _id,
-    scheduleInfo: trackTitle
-      ? { date: '2026-10-27', trackTitle, timeSlot: { startTime, endTime: '' } }
-      : undefined,
+    ...(room && { date: '2026-10-27', room, startTime, endTime: '11:00' }),
   }) as unknown as ProposalWithWorkshopData
 
 describe('groupWorkshopsBySchedule', () => {
