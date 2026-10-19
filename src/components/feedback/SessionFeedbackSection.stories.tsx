@@ -480,6 +480,70 @@ export const ResultsMovedLater: Story = {
   },
 }
 
+let waitingFailHits = { n: 0 }
+
+/**
+ * The last answer said "not visible yet" (the session moved to end 2 s from
+ * now). At that end the tab asks again, and the request fails: the waiting
+ * line stays, with a way to try again, not a silent wait.
+ */
+export const ResultsRefreshFailedWhileWaiting: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        answer({ ...BEFORE, window: CLOSED_WINDOW }),
+        http.get(RESULTS, () => {
+          waitingFailHits.n++
+          if (waitingFailHits.n === 1) {
+            const end = Date.now() + 2000
+            return HttpResponse.json({
+              result: {
+                data: {
+                  visible: false,
+                  window: {
+                    state: 'open',
+                    opensAt: new Date(end - 40 * 60_000).toISOString(),
+                    lastSlotEnd: new Date(end).toISOString(),
+                    closesAt: new Date(end + 24 * 3_600_000).toISOString(),
+                    feedbackVisible: false,
+                  },
+                },
+              },
+            })
+          }
+          return HttpResponse.json(
+            {
+              error: {
+                message: 'x',
+                code: -32603,
+                data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+              },
+            },
+            { status: 500 },
+          )
+        }),
+      ],
+    },
+  },
+  beforeEach: () => {
+    waitingFailHits = { n: 0 }
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      await canvas.findByText(
+        /Your feedback appears here when your session ends/,
+      ),
+    ).toBeVisible()
+    expect(
+      await canvas.findByText('Could not refresh.', {}, { timeout: 10000 }),
+    ).toBeVisible()
+    const before = waitingFailHits.n
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(waitingFailHits.n).toBeGreaterThan(before))
+  },
+}
+
 let refreshFailHits = { n: 0 }
 
 /**

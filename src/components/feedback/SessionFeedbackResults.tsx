@@ -88,26 +88,39 @@ export function SessionFeedbackResults({
     else if (!was.visible && visible) void refetch({ cancelRefetch: false })
   }, [live, visible, refetch])
 
-  if (!visible) return <Waiting window={window} />
-  if (data && !data.visible) return <Waiting window={data.window} />
+  // A failed refresh keeps what was loaded, and says so, with a retry:
+  // nothing else may ask again (a waiting window does not poll).
+  const refreshFailed = (text: string) =>
+    error && (
+      <div className="flex flex-wrap items-center gap-3">
+        <p role="status" className="text-sm text-red-700 dark:text-red-400">
+          {text}
+        </p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          aria-disabled={isFetching}
+          className={RETRY_BUTTON}
+        >
+          Try again
+        </button>
+      </div>
+    )
+
+  // Not visible yet, by the clock or by the server's last answer: one
+  // shape for both, so the line is not replaced when the window moves.
+  if (!visible || (data && !data.visible))
+    return (
+      <div className="space-y-4">
+        {refreshFailed('Could not refresh.')}
+        <Waiting window={!visible || !data ? window : data.window} />
+      </div>
+    )
   if (data)
     return (
       <div className="space-y-4">
-        {error && (
-          // A failed refresh keeps what was loaded, and says so.
-          <div className="flex flex-wrap items-center gap-3">
-            <p role="status" className="text-sm text-red-700 dark:text-red-400">
-              Could not refresh. Showing the results loaded earlier.
-            </p>
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              aria-disabled={isFetching}
-              className={RETRY_BUTTON}
-            >
-              Try again
-            </button>
-          </div>
+        {refreshFailed(
+          'Could not refresh. Showing the results loaded earlier.',
         )}
         <FeedbackResultsView
           totals={data.totals}
