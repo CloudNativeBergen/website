@@ -645,6 +645,7 @@ describe('sessionFeedbackRouter surface', () => {
       'mintAll',
       'mintCode',
       'mintPreview',
+      'results',
     ])
   })
 })
