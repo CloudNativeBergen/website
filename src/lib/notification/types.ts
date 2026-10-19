@@ -53,6 +53,11 @@ export type NotificationType =
   // `/admin/workshops`. Bell only: no web push. Rendered generically by the
   // hub.
   | 'workshop_ticket_type_not_set'
+  // A workshop is 80% full, or its waitlist started. Emitted once per
+  // workshop per threshold by the `workshop.capacity.threshold` bus handler to
+  // the conference's organizers; links to `/admin/workshops`. Bell only.
+  // Rendered generically by the hub.
+  | 'workshop_capacity'
   | 'system'
 
 /**

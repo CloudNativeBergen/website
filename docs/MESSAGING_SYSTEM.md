@@ -139,6 +139,16 @@ deterministic-id technique:
   document to the surviving account (`DETERMINISTIC_ID_PREFIXES` in
   `src/lib/speaker/merge.ts`); a survivor whose id is too long for a notice of
   their own gets none, and the merged account's is dropped.
+- **`workshop_capacity`** — tells a conference's organizers that a workshop
+  is 80% full (confirmed seats against capacity) or that its waitlist has
+  started, with the seat counts, linking to `/admin/workshops`. Raised by
+  `reportCapacityThresholds` (`src/lib/workshop/capacity-notice.ts`) after a
+  seats write in `src/lib/workshop/seats.ts` commits and crosses a threshold,
+  and written by the `workshop.capacity.threshold` bus handler. Once-only like
+  the not-set notice: one document per `(conference, workshop, threshold,
+organizer)` under `notification.workshop-capacity.<hash>.<organizerId>`, so
+  a workshop that drops below and crosses again notifies no one twice. Bell
+  only; the workshop's title and counts, no attendee data.
 
 ### Deterministic-id schemes
 
