@@ -92,14 +92,14 @@ export function FeedbackResultsView({
                 key={colour}
                 // The number first on screen, so a label that wraps at
                 // phone width never pushes one tile's number below another's.
-                className={`flex flex-col gap-1 rounded-lg p-3 ${TONE[colour].tile} ${TONE[colour].text}`}
+                className={`flex flex-col gap-1 rounded-lg p-2 sm:p-3 ${TONE[colour].tile} ${TONE[colour].text}`}
               >
                 <dt className="order-2 flex items-center gap-1.5 text-xs font-medium sm:text-sm">
                   <Icon className="size-4 shrink-0" aria-hidden="true" />
                   {label}
                 </dt>
-                <dd className="order-1 flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold tabular-nums">
+                <dd className="order-1 flex flex-wrap items-baseline gap-x-1.5">
+                  <span className="text-xl font-bold tabular-nums sm:text-2xl">
                     {totals.combined[colour]}
                   </span>
                   <span className="text-xs tabular-nums">

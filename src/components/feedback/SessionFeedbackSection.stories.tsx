@@ -432,6 +432,10 @@ export const ResultsFollowMovedSession: Story = {
     expect(await canvas.findByText('Live')).toBeVisible()
     await new Promise((resolve) => setTimeout(resolve, 4000))
     expect(canvas.getByText('Live')).toBeVisible()
+    // The code tab shows the same, moved window: still open.
+    await userEvent.click(canvas.getByRole('tab', { name: 'Feedback Code' }))
+    expect(await canvas.findByText(/Open until/)).toBeVisible()
+    expect(canvas.queryByText('Closed')).toBeNull()
   },
 }
 

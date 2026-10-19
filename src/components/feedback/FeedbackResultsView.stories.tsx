@@ -94,3 +94,29 @@ export const ScannedOnly: Story = {
     expect(canvas.getByText('100%')).toBeVisible()
   },
 }
+
+/**
+ * A keynote's three-digit counts at the narrowest phone: each tile's count
+ * and share wrap inside the tile instead of running into the next one.
+ */
+export const LargeNumbersPhone: Story = {
+  args: {
+    totals: feedbackTotals({
+      live: { green: 128, yellow: 34, red: 9 },
+      cards: { greenCount: 40, yellowCount: 6, redCount: 1 },
+    }),
+  },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    const tiles = Array.from(canvasElement.querySelectorAll('dl > div'))
+    expect(tiles).toHaveLength(3)
+    for (const tile of tiles) {
+      const box = tile.getBoundingClientRect()
+      for (const child of Array.from(tile.querySelectorAll('span'))) {
+        expect(child.getBoundingClientRect().right).toBeLessThanOrEqual(
+          box.right + 0.5,
+        )
+      }
+    }
+  },
+}

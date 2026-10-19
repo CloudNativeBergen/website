@@ -1,12 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { FeedbackWindow } from '@/lib/feedback'
 import { api } from '@/lib/trpc/client'
 import { useIdlePolling } from '@/hooks/useIdlePolling'
 import { formatSessionInstant } from '@/lib/time'
 import { FeedbackResultsView } from './FeedbackResultsView'
-import { useWindowOnTheClock } from './useWindowOnTheClock'
 
 /** How often the results refresh while the window is open (§9.3). */
 const RESULTS_POLL_MS = 30_000
@@ -28,56 +27,60 @@ const RETRY_BUTTON =
  * is idle or the browser tab is in the background (`useIdlePolling`). The
  * server decides visibility again and filters hidden comments.
  *
- * Once the server has answered, its window (on the clock) runs the
- * lifecycle, not the one the section loaded with: a session moved while the
- * page is open keeps polling until its new closing time.
+ * Once the server has answered, its window runs the lifecycle (the section
+ * shows it on the clock): a session moved while the page is open keeps
+ * polling until its new closing time.
  */
 export function SessionFeedbackResults({
   talkId,
-  window: loadedWindow,
+  window,
   active,
+  onWindow,
 }: {
   talkId: string
-  /** The window the section loaded with, on the clock. */
+  /**
+   * The window on the clock: the server's latest from these results once
+   * there is one (reported through `onWindow`), else the section's.
+   */
   window: FeedbackWindow
   /** The results tab is the one shown. */
   active: boolean
+  onWindow: (window: FeedbackWindow) => void
 }) {
-  // The server's latest window, once it has answered: it runs the lifecycle.
-  const [serverWindow, setServerWindow] = useState<FeedbackWindow>()
-  const current = useWindowOnTheClock(serverWindow) ?? loadedWindow
-  const visible = current.feedbackVisible
-  const live = current.state === 'open'
+  const visible = window.feedbackVisible
+  const live = window.state === 'open'
 
   const refetchInterval = useIdlePolling({
     intervalMs: RESULTS_POLL_MS,
     enabled: active && visible && live,
-    onResume: () => void refetch(),
+    // Back from idle, or to this tab: refresh only what has gone stale.
+    onResume: () => {
+      if (isStale) void refetch({ cancelRefetch: false })
+    },
   })
-  // Asked for once the loaded window turns visible; after that the server's
-  // answer decides what shows.
-  const { data, error, refetch, isFetching } =
+  const { data, error, refetch, isFetching, isStale } =
     api.sessionFeedback.results.useQuery(
       { talkId },
-      { enabled: loadedWindow.feedbackVisible, refetchInterval },
+      { enabled: visible, refetchInterval },
     )
   useEffect(() => {
-    if (data) setServerWindow(data.window)
-  }, [data])
+    if (data) onWindow(data.window)
+  }, [data, onWindow])
 
   // Polling stops when the window closes (or never ran while the session
   // was moved later), so fetch once on each change that matters: the final
-  // counts at close, the first results once visible.
+  // counts at close, the first results once visible. `cancelRefetch: false`
+  // joins a fetch already running instead of sending a second one.
   const previous = useRef({ live, visible })
   useEffect(() => {
     const was = previous.current
     previous.current = { live, visible }
-    if (!loadedWindow.feedbackVisible) return
-    if ((was.live && !live) || (!was.visible && visible)) void refetch()
-  }, [live, visible, loadedWindow.feedbackVisible, refetch])
+    if ((was.live && !live && visible) || (!was.visible && visible))
+      void refetch({ cancelRefetch: false })
+  }, [live, visible, refetch])
 
-  if (!loadedWindow.feedbackVisible) return <Waiting window={loadedWindow} />
-  if (data && !data.visible) return <Waiting window={current} />
+  if (!visible) return <Waiting window={window} />
+  if (data && !data.visible) return <Waiting window={data.window} />
   if (data)
     return (
       <div className="space-y-4">

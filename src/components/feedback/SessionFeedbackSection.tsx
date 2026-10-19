@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
 import { ChartBarIcon, QrCodeIcon } from '@heroicons/react/24/outline'
-import { mayMint, SESSION_FEEDBACK_ANCHOR } from '@/lib/feedback'
+import {
+  mayMint,
+  SESSION_FEEDBACK_ANCHOR,
+  type FeedbackWindow,
+} from '@/lib/feedback'
 import { api } from '@/lib/trpc/client'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
 import { SessionFeedbackResults } from './SessionFeedbackResults'
@@ -52,7 +56,11 @@ export function SessionFeedbackSection({
     mutate({ talkId })
   }, [mutate, talkId])
 
-  const shownWindow = useWindowOnTheClock(data?.window)
+  // The latest window the server sent with the results, once there is one:
+  // a session moved while the page is open shows the same window in both
+  // tabs, and runs the results' lifecycle.
+  const [resultsWindow, setResultsWindow] = useState<FeedbackWindow>()
+  const shownWindow = useWindowOnTheClock(resultsWindow ?? data?.window)
   // Chosen by the speaker; until then the tab the answer opened on.
   const [chosenTab, setChosenTab] = useState<number | null>(null)
 
@@ -67,7 +75,12 @@ export function SessionFeedbackSection({
     return (
       <SectionShell>
         <SectionHeading />
-        <SessionFeedbackResults talkId={talkId} window={shownWindow} active />
+        <SessionFeedbackResults
+          talkId={talkId}
+          window={shownWindow}
+          active
+          onWindow={setResultsWindow}
+        />
       </SectionShell>
     )
   }
@@ -101,6 +114,7 @@ export function SessionFeedbackSection({
                 talkId={talkId}
                 window={shownWindow}
                 active={selectedTab === RESULTS_TAB}
+                onWindow={setResultsWindow}
               />
             </TabPanel>
             <TabPanel unmount={false}>
