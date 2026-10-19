@@ -439,6 +439,47 @@ export const ResultsFollowMovedSession: Story = {
   },
 }
 
+let movedLaterHits = { n: 0 }
+
+/**
+ * The section loaded after the session, but the session has since been
+ * moved later: the results answer `visible: false` with the new window.
+ * Both tabs follow it: the results wait for the new end, the code tab says
+ * when it opens, and nothing is asked again before then.
+ */
+export const ResultsMovedLater: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        answer({ ...BEFORE, window: CLOSED_WINDOW }),
+        http.get(RESULTS, () => {
+          movedLaterHits.n++
+          return HttpResponse.json({
+            result: { data: { visible: false, window: BEFORE.window } },
+          })
+        }),
+      ],
+    },
+  },
+  beforeEach: () => {
+    movedLaterHits = { n: 0 }
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      await canvas.findByText(
+        'Your feedback appears here when your session ends (Thursday 29 October at 09:40).',
+      ),
+    ).toBeVisible()
+    await userEvent.click(canvas.getByRole('tab', { name: 'Feedback Code' }))
+    expect(
+      await canvas.findByText(/Opens when your session starts/),
+    ).toBeVisible()
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    expect(movedLaterHits.n).toBe(1)
+  },
+}
+
 let refreshFailHits = { n: 0 }
 
 /**

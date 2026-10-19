@@ -58,25 +58,34 @@ export function SessionFeedbackResults({
       if (isStale) void refetch({ cancelRefetch: false })
     },
   })
-  const { data, error, refetch, isFetching, isStale } =
+  const { data, dataUpdatedAt, error, refetch, isFetching, isStale } =
     api.sessionFeedback.results.useQuery(
       { talkId },
-      { enabled: visible, refetchInterval },
+      // An answer cached before this mount may predate the window the
+      // section just loaded: always ask again on mount.
+      { enabled: visible, refetchInterval, refetchOnMount: 'always' },
     )
+  // Only an answer fetched since this mount may replace the section's
+  // window; an older cached one would bring back a superseded window.
+  const mountedAt = useRef(Infinity)
   useEffect(() => {
-    if (data) onWindow(data.window)
-  }, [data, onWindow])
+    mountedAt.current = Date.now()
+  }, [])
+  useEffect(() => {
+    if (data && dataUpdatedAt >= mountedAt.current) onWindow(data.window)
+  }, [data, dataUpdatedAt, onWindow])
 
   // Polling stops when the window closes (or never ran while the session
-  // was moved later), so fetch once on each change that matters: the final
-  // counts at close, the first results once visible. `cancelRefetch: false`
-  // joins a fetch already running instead of sending a second one.
+  // was moved later), so fetch once on each change that matters. At close,
+  // a fresh request: a poll still in flight was sent before the deadline
+  // and may miss its last answers. Once visible, `cancelRefetch: false`
+  // joins the fetch that enabling the query already started.
   const previous = useRef({ live, visible })
   useEffect(() => {
     const was = previous.current
     previous.current = { live, visible }
-    if ((was.live && !live && visible) || (!was.visible && visible))
-      void refetch({ cancelRefetch: false })
+    if (was.live && !live && visible) void refetch()
+    else if (!was.visible && visible) void refetch({ cancelRefetch: false })
   }, [live, visible, refetch])
 
   if (!visible) return <Waiting window={window} />
