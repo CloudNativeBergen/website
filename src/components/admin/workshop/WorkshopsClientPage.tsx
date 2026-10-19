@@ -295,7 +295,11 @@ function WorkshopsClientPageFor({
       readSignupsAgain()
 
       if (result.promotedCount && result.promotedCount > 0) {
-        alert(`✅ ${result.message}`)
+        showNotification({
+          type: 'success',
+          title: 'Capacity changed',
+          message: result.message,
+        })
       }
 
       setEditCapacityModal({
