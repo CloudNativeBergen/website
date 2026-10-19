@@ -1,5 +1,6 @@
 import { defineField, defineType } from 'sanity'
 import { FEEDBACK_COLOURS, FEEDBACK_COLOUR_LABELS } from '@/lib/feedback/colour'
+import { MAX_COMMENT_LENGTH } from '@/lib/feedback/comment'
 
 /**
  * A Feedback Response (speaker feedback spec §4.1): one anonymous attendee's
@@ -47,7 +48,7 @@ export default defineType({
       name: 'comment',
       title: 'Comment',
       type: 'text',
-      validation: (Rule) => Rule.max(1000),
+      validation: (Rule) => Rule.max(MAX_COMMENT_LENGTH),
     }),
     defineField({
       name: 'submittedAt',

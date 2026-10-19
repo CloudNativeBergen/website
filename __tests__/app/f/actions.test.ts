@@ -22,6 +22,7 @@ import {
 const h = vi.hoisted(() => ({
   store: null as null | VersionedSanityStore,
   resolution: {} as Record<string, unknown>,
+  updateTag: vi.fn(),
 }))
 
 vi.mock('@/lib/sanity/client', async () => {
@@ -31,12 +32,17 @@ vi.mock('@/lib/sanity/client', async () => {
   return h.store.clients
 })
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
-vi.mock('next/cache', () => ({ cacheLife: () => {}, cacheTag: () => {} }))
+vi.mock('next/cache', () => ({
+  cacheLife: () => {},
+  cacheTag: () => {},
+  updateTag: h.updateTag,
+}))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: async () => h.resolution,
 }))
 
 import { submitFeedbackAnswer } from '@/app/(public)/f/[code]/actions'
+import { feedbackResponseTag } from '@/lib/cache/tags'
 
 const store = () => h.store!
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
@@ -107,6 +113,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(DURING)
   h.resolution = { conference: CONF, status: 'resolved' }
+  h.updateTag.mockReset()
   store().reset([
     talk('talk-open', 'conf-A', 'k7m2qx'),
     talk('talk-later', 'conf-A', 'abc234'),
@@ -131,6 +138,7 @@ describe('the first tap', () => {
     expect(await submitFeedbackAnswer('k7m2qx', 'green')).toEqual({
       state: 'answered',
       colour: 'green',
+      comment: null,
       // The talk is public, so the thank-you keeps its heading.
       talk: { title: 'Title of talk-open', speakers: [] },
     })
@@ -285,11 +293,177 @@ describe('a second tap from the same phone', () => {
   })
 })
 
+describe('the comment (F2)', () => {
+  it('is stored trimmed with the colour, and comes back in the Answered state', async () => {
+    expect(
+      await submitFeedbackAnswer('k7m2qx', 'green', '  Great demo!\n'),
+    ).toEqual({
+      state: 'answered',
+      colour: 'green',
+      comment: 'Great demo!',
+      talk: { title: 'Title of talk-open', speakers: [] },
+    })
+    expect(responses()[0]).toMatchObject({
+      colour: 'green',
+      comment: 'Great demo!',
+    })
+  })
+
+  it('is unset, not stored empty, when sent blank', async () => {
+    await submitFeedbackAnswer('k7m2qx', 'green', 'First thoughts')
+    request(deviceCookieFromResponse())
+    expect(
+      await submitFeedbackAnswer('k7m2qx', 'green', '  \n '),
+    ).toMatchObject({ state: 'answered', comment: null })
+    expect(responses()).toHaveLength(1)
+    expect(responses()[0]).not.toHaveProperty('comment')
+  })
+
+  it('is untouched by a tap that sends none (a bare colour change)', async () => {
+    expect(await submitFeedbackAnswer('k7m2qx', 'red')).toMatchObject({
+      state: 'answered',
+      comment: null,
+    })
+    expect(responses()[0]).not.toHaveProperty('comment')
+
+    request(deviceCookieFromResponse())
+    await submitFeedbackAnswer('k7m2qx', 'green', 'Keep me')
+    request(deviceCookieFromResponse())
+    expect(await submitFeedbackAnswer('k7m2qx', 'yellow')).toMatchObject({
+      state: 'answered',
+      colour: 'yellow',
+      comment: 'Keep me',
+    })
+    expect(responses()[0]).toMatchObject({
+      colour: 'yellow',
+      comment: 'Keep me',
+    })
+  })
+
+  it('survives a stale tab’s colour change, which is told the comment that is stored', async () => {
+    // Tab A and tab B hold the same cookie; B still shows "no comment".
+    await submitFeedbackAnswer('k7m2qx', 'green')
+    const cookie = deviceCookieFromResponse()
+    request(cookie)
+    await submitFeedbackAnswer('k7m2qx', 'green', 'Great demo') // tab A
+    request(cookie)
+    const stale = await submitFeedbackAnswer('k7m2qx', 'red') // tab B
+    expect(stale).toEqual({
+      state: 'answered',
+      colour: 'red',
+      comment: 'Great demo',
+      talk: { title: 'Title of talk-open', speakers: [] },
+    })
+    expect(responses()).toHaveLength(1)
+    expect(responses()[0]).toMatchObject({
+      colour: 'red',
+      comment: 'Great demo',
+    })
+  })
+
+  it('is unset by an explicitly emptied box, sent as an empty string', async () => {
+    await submitFeedbackAnswer('k7m2qx', 'green', 'Great demo')
+    request(deviceCookieFromResponse())
+    expect(await submitFeedbackAnswer('k7m2qx', 'green', '')).toMatchObject({
+      comment: null,
+    })
+    expect(responses()[0]).not.toHaveProperty('comment')
+  })
+
+  it('takes 1,000 characters after trimming, and refuses 1,001 before any write', async () => {
+    const ok = `${'x'.repeat(1000)}  `
+    expect(await submitFeedbackAnswer('k7m2qx', 'green', ok)).toMatchObject({
+      state: 'answered',
+      comment: 'x'.repeat(1000),
+    })
+    request(deviceCookieFromResponse())
+    const before = store().commits.length
+    expect(
+      await submitFeedbackAnswer('k7m2qx', 'green', 'y'.repeat(1001)),
+    ).toMatchObject({ state: 'open' })
+    expect(store().commits).toHaveLength(before)
+    expect(responses()[0].comment).toBe('x'.repeat(1000))
+  })
+
+  it('refuses anything but a string, before any write', async () => {
+    for (const comment of [null, 42, ['hi'], { text: 'hi' }]) {
+      expect(
+        await submitFeedbackAnswer(
+          'k7m2qx',
+          'green',
+          comment as unknown as string,
+        ),
+      ).toMatchObject({ state: 'open' })
+    }
+    expect(store().commits).toHaveLength(0)
+    expect(writtenCookies()).toEqual([])
+  })
+
+  it('never clears what organizers and speakers set when the comment is reworded', async () => {
+    await submitFeedbackAnswer('k7m2qx', 'green', 'rude')
+    const [first] = responses()
+    store().put({ ...first, hiddenAt: '2026-10-26T09:35:00.000Z' })
+
+    request(deviceCookieFromResponse())
+    await submitFeedbackAnswer('k7m2qx', 'green', 'ruder')
+    expect(responses()[0]).toMatchObject({
+      comment: 'ruder',
+      hiddenAt: '2026-10-26T09:35:00.000Z',
+    })
+  })
+
+  it('is read back by id when the commit answers with no documents', async () => {
+    await submitFeedbackAnswer('k7m2qx', 'green', 'Stays put')
+    request(deviceCookieFromResponse())
+    store().withholdReturnedDocuments()
+    const [{ _id }] = responses()
+    // A colour-only tap: nothing sent says what the comment is.
+    expect(await submitFeedbackAnswer('k7m2qx', 'red')).toMatchObject({
+      colour: 'red',
+      comment: 'Stays put',
+    })
+    expect(store().docReads).toEqual(['talk-open', 'talk-open', _id])
+  })
+
+  it('is unknown, not "none", when the read-back fails after a colour-only tap', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await submitFeedbackAnswer('k7m2qx', 'green', 'Stays put')
+    request(deviceCookieFromResponse())
+    store().withholdReturnedDocuments()
+    const original = store().clients.clientWrite as {
+      getDocument: (id: string) => Promise<unknown>
+    }
+    const real = original.getDocument
+    vi.spyOn(original, 'getDocument').mockImplementation((id: string) =>
+      id.startsWith('feedbackResponse-')
+        ? Promise.reject(new Error('503: read refused'))
+        : real(id),
+    )
+    const outcome = await submitFeedbackAnswer('k7m2qx', 'red')
+    expect(outcome).toMatchObject({ state: 'answered', colour: 'red' })
+    expect((outcome as { comment?: unknown }).comment).toBeUndefined()
+    // What was sent is still authoritative when something WAS sent.
+    request(deviceCookieFromResponse())
+    expect(
+      await submitFeedbackAnswer('k7m2qx', 'red', 'New text'),
+    ).toMatchObject({ comment: 'New text' })
+    expect(responses()[0]).toMatchObject({ comment: 'New text' })
+  })
+
+  it('expires the response’s own cache tag after the write, so a reload shows the new answer', async () => {
+    await submitFeedbackAnswer('k7m2qx', 'green', 'hi')
+    const [{ _id }] = responses()
+    expect(h.updateTag).toHaveBeenCalledTimes(1)
+    expect(h.updateTag).toHaveBeenCalledWith(feedbackResponseTag(_id))
+  })
+})
+
 describe('refusals, before any write or talk read', () => {
   const nothingHappened = () => {
     expect(store().commits).toHaveLength(0)
     expect(store().docReads).toEqual([])
     expect(writtenCookies()).toEqual([])
+    expect(h.updateTag).not.toHaveBeenCalled()
   }
 
   it('treats another tenant’s code exactly like one that does not exist', async () => {

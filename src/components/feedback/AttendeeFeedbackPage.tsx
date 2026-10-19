@@ -1,80 +1,68 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  ArrowPathIcon,
   ClockIcon,
   ExclamationTriangleIcon,
-  FaceFrownIcon,
-  FaceSmileIcon,
   LockClosedIcon,
-  MinusCircleIcon,
   QuestionMarkCircleIcon,
 } from '@heroicons/react/24/outline'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
-import {
-  FEEDBACK_COLOUR_LABELS,
-  type FeedbackColour,
-} from '@/lib/feedback/colour'
-import type { PublicFeedbackTalk, SubmitOutcome } from '@/lib/feedback/server'
+import type { FeedbackColour } from '@/lib/feedback/colour'
+import type {
+  AttendeeFeedbackState,
+  PublicFeedbackTalk,
+} from '@/lib/feedback/server'
 import { formatSessionInstant } from '@/lib/time'
+import { AnsweredState } from './AnsweredState'
+import { DeleteAnswerButton } from './DeleteAnswerButton'
+import {
+  AnswerButtons,
+  Failed,
+  HEADING_FOCUS,
+  Status,
+  useFocusOnMount,
+  type DeleteAnswer,
+  type DeleteNotice,
+  type SubmitAnswer,
+} from './answers'
+import { useOneAtATime } from './useOneAtATime'
 
-/**
- * The page the attendee sees: a state of the code, `unavailable` when it
- * could not be read, or `answered` after a tap.
- */
-export type AttendeeFeedbackState = SubmitOutcome
-
-/** Submit (speaker feedback spec §7.4), bound to the page's code. */
-export type SubmitAnswer = (colour: FeedbackColour) => Promise<SubmitOutcome>
-
-const ANSWERS = [
-  {
-    colour: 'green',
-    label: FEEDBACK_COLOUR_LABELS.green,
-    Icon: FaceSmileIcon,
-    className: 'bg-green-700 text-white',
-    iconClassName: 'text-green-600 dark:text-green-500',
-  },
-  {
-    colour: 'yellow',
-    label: FEEDBACK_COLOUR_LABELS.yellow,
-    Icon: MinusCircleIcon,
-    className: 'bg-yellow-400 text-yellow-950',
-    iconClassName: 'text-yellow-500 dark:text-yellow-400',
-  },
-  {
-    colour: 'red',
-    label: FEEDBACK_COLOUR_LABELS.red,
-    Icon: FaceFrownIcon,
-    className: 'bg-red-600 text-white',
-    iconClassName: 'text-red-600 dark:text-red-500',
-  },
-] as const
+export type { AttendeeFeedbackState }
+export type { DeleteAnswer, SubmitAnswer } from './answers'
 
 /**
  * The attendee page, `/f/<code>` (speaker feedback spec §7.1, §7.2): the
  * conference logo and one state, nothing else. The talk's title and speakers
  * arrive only for a public talk; the resolver never hands them over otherwise.
  *
- * A tap calls `submit`, and the page shows what it answers: a thank-you, or
- * the state the code is in now (closed since the page loaded, say). A failed
- * save keeps the buttons, with a line saying the answer couldn't be confirmed.
+ * A tap calls `submit`, and the page shows what it answers: the Answered
+ * state, or the state the code is in now (closed since the page loaded, say).
+ * A failed save keeps the buttons, with a line saying the answer couldn't be
+ * confirmed. From Answered the attendee changes the colour, sends a comment,
+ * or deletes the answer; Delete is also on Closed and Not yet open while the
+ * cookie lists the talk.
  */
 export function AttendeeFeedbackPage({
   logo,
   page: initial,
   submit,
+  remove,
 }: {
   logo: ConferenceLogoData | null
   page: AttendeeFeedbackState
   submit: SubmitAnswer
+  remove: DeleteAnswer
 }) {
   const [page, setPage] = useState(initial)
-  // Whatever a tap leads to takes focus, so a screen reader announces it: the
-  // tapped button is gone from the page.
+  // Whatever an action leads to takes focus, so a screen reader announces
+  // it: the tapped button is gone from the page.
   const [afterTap, setAfterTap] = useState(false)
+  const [notice, setNotice] = useState<DeleteNotice | null>(null)
+  // Counts delete outcomes: a Notice that stays mounted across one (Closed
+  // before and after) takes focus on each.
+  const [deletes, setDeletes] = useState(0)
   return (
     <div
       data-shell-fit="viewport"
@@ -92,13 +80,39 @@ export function AttendeeFeedbackPage({
         </header>
       )}
       <main className="mx-auto max-w-md px-4 pt-10 pb-12">
+        {/* Always in the DOM, so the text set after a delete is announced;
+            neutral on a refusal, whatever its reason (§7.4). */}
+        <Status
+          status={notice ? { kind: 'neutral', text: NOTICES[notice] } : null}
+          className={
+            notice
+              ? 'mb-6 rounded-lg bg-gray-100 px-4 py-3 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
+              : 'sr-only'
+          }
+        />
         <PageState
           page={page}
           submit={submit}
+          remove={remove}
           announce={afterTap}
-          onAnswer={(next) => {
-            setPage(next)
+          deletes={deletes}
+          onOutcome={(next, afterDelete) => {
+            setPage((previous) =>
+              // A comment the server could not read back after a
+              // colour-only tap is UNKNOWN: keep what this page last knew.
+              next.state === 'answered' && next.comment === undefined
+                ? {
+                    ...next,
+                    comment:
+                      previous.state === 'answered'
+                        ? (previous.comment ?? null)
+                        : null,
+                  }
+                : next,
+            )
             setAfterTap(true)
+            setNotice(afterDelete ?? null)
+            if (afterDelete) setDeletes((n) => n + 1)
           }}
         />
       </main>
@@ -106,16 +120,25 @@ export function AttendeeFeedbackPage({
   )
 }
 
+const NOTICES: Record<DeleteNotice, string> = {
+  deleted: 'Your answer has been deleted.',
+  'nothing-to-delete': 'There was no answer from this browser to delete.',
+}
+
 function PageState({
   page,
   submit,
+  remove,
   announce,
-  onAnswer,
+  deletes,
+  onOutcome,
 }: {
   page: AttendeeFeedbackState
   submit: SubmitAnswer
+  remove: DeleteAnswer
   announce: boolean
-  onAnswer: (next: AttendeeFeedbackState) => void
+  deletes: number
+  onOutcome: (next: AttendeeFeedbackState, afterDelete?: DeleteNotice) => void
 }) {
   // The talk's title is the page's h1 when it is shown; the state's own
   // heading is the h1 otherwise.
@@ -128,26 +151,33 @@ function PageState({
           <AnswerForm
             level={level}
             closesAt={page.closesAt}
+            announce={announce}
             submit={submit}
-            onAnswer={onAnswer}
+            onAnswer={onOutcome}
           />
         </>
       )
-    case 'answered': {
-      const answer = ANSWERS.find((a) => a.colour === page.colour)
+    case 'answered':
       return (
         <>
           <TalkHeading talk={page.talk} />
-          <Thanks level={level} answer={answer} announce={announce} />
+          <AnsweredState
+            level={level}
+            page={page}
+            announce={announce}
+            submit={submit}
+            remove={remove}
+            onOutcome={onOutcome}
+          />
         </>
       )
-    }
     case 'not-yet-open':
       return (
         <>
           <TalkHeading talk={page.talk} />
           <Notice
             announce={announce}
+            refocus={deletes}
             level={level}
             Icon={ClockIcon}
             title="Feedback opens when the session starts"
@@ -156,6 +186,9 @@ function PageState({
               ? `It opens on ${formatSessionInstant(page.opensAt)}. Scan the code again then.`
               : 'Scan the code again during the session.'}
           </Notice>
+          {page.canDelete && (
+            <DeleteAnswerButton remove={remove} onDelete={onOutcome} />
+          )}
         </>
       )
     case 'closed':
@@ -164,12 +197,16 @@ function PageState({
           <TalkHeading talk={page.talk} />
           <Notice
             announce={announce}
+            refocus={deletes}
             level={level}
             Icon={LockClosedIcon}
             title="Feedback for this session has closed"
           >
             Thank you for coming. Feedback closes 24 hours after a session ends.
           </Notice>
+          {page.canDelete && (
+            <DeleteAnswerButton remove={remove} onDelete={onOutcome} />
+          )}
         </>
       )
     case 'unknown':
@@ -201,37 +238,27 @@ function PageState({
 function AnswerForm({
   level: Question,
   closesAt,
+  announce,
   submit,
   onAnswer,
 }: {
   level: 'h1' | 'h2'
   closesAt: string | null
+  /** Take focus on mount: the form replaced the Answered state after a delete. */
+  announce: boolean
   submit: SubmitAnswer
-  onAnswer: (next: SubmitOutcome) => void
+  onAnswer: (next: AttendeeFeedbackState) => void
 }) {
   const [tapped, setTapped] = useState<FeedbackColour | null>(null)
   const [failed, setFailed] = useState(false)
-  // Plain state, not `useTransition`: with it, `isPending` never cleared
-  // after a failed save in the dark story (cause not pinned down), leaving
-  // every button disabled. Nothing else can hold this flag.
-  const [pending, setPending] = useState(false)
-  // One tap at a time, checked synchronously so a double tap can't send two.
-  const busy = useRef(false)
+  const { pending, run } = useOneAtATime()
+  const question = useFocusOnMount(announce)
 
   const answer = async (colour: FeedbackColour) => {
-    if (busy.current) return
-    busy.current = true
     setTapped(colour)
     setFailed(false)
-    setPending(true)
-    let next: SubmitOutcome
-    try {
-      next = await submit(colour)
-    } catch {
-      next = { state: 'unavailable' }
-    }
-    busy.current = false
-    setPending(false)
+    const next = await run(() => submit(colour), { state: 'unavailable' })
+    if (!next) return
     // Not confirmed: keep the buttons. Tapping again is safe, as a retry under
     // the same cookie lands on the same response.
     if (next.state === 'unavailable') setFailed(true)
@@ -240,40 +267,16 @@ function AnswerForm({
 
   return (
     <>
-      <Question className="text-xl font-semibold">
+      <Question
+        ref={question}
+        tabIndex={announce ? -1 : undefined}
+        className={`text-xl font-semibold ${HEADING_FOCUS}`}
+      >
         How was this session?
       </Question>
-      <div className="mt-5 flex flex-col gap-3" aria-busy={pending}>
-        {ANSWERS.map(({ colour, label, Icon, className }) => {
-          const saving = pending && tapped === colour
-          const ShownIcon = saving ? ArrowPathIcon : Icon
-          return (
-            <button
-              key={colour}
-              type="button"
-              // `aria-disabled`, not `disabled`: a disabled button drops focus to
-              // the body, and after a failed save a keyboard or screen reader
-              // user must still be on the answer they tapped.
-              aria-disabled={pending}
-              onClick={() => answer(colour)}
-              className={`flex min-h-20 w-full items-center gap-4 rounded-xl px-6 text-xl font-bold shadow-xs transition-opacity focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-gray-900 aria-disabled:cursor-wait dark:focus-visible:outline-white ${pending && !saving ? 'opacity-50' : ''} ${className}`}
-            >
-              <ShownIcon
-                className={`size-9 shrink-0 ${saving ? 'animate-spin motion-reduce:animate-none' : ''}`}
-                aria-hidden="true"
-              />
-              {label}
-            </button>
-          )
-        })}
-      </div>
+      <AnswerButtons pending={pending} tapped={tapped} onTap={answer} />
       {failed && (
-        <p
-          role="alert"
-          className="mt-4 text-center text-sm font-medium text-red-700 dark:text-red-400"
-        >
-          We couldn&apos;t confirm your answer. Please try again.
-        </p>
+        <Failed>We couldn&apos;t confirm your answer. Please try again.</Failed>
       )}
       <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
         Anonymous. You can change your answer until{' '}
@@ -284,51 +287,6 @@ function AnswerForm({
           : '24 hours after the session ends.'}
       </p>
     </>
-  )
-}
-
-/**
- * The plain thank-you after a tap (F1c). The answer's own icon and words say
- * what was recorded; focus moves to the heading so a screen reader announces
- * it. Changing the answer is a new scan and tap until F2 adds the Answered
- * state.
- */
-function Thanks({
-  level: Heading,
-  answer,
-  announce,
-}: {
-  level: 'h1' | 'h2'
-  answer: (typeof ANSWERS)[number] | undefined
-  /** Take focus on mount: the thank-you replaced the buttons after a tap. */
-  announce: boolean
-}) {
-  const heading = useFocusOnMount(announce)
-  const Icon = answer?.Icon ?? FaceSmileIcon
-  return (
-    <div className="flex flex-col items-center text-center">
-      <Icon
-        className={`size-12 ${answer?.iconClassName ?? ''}`}
-        aria-hidden="true"
-      />
-      <Heading
-        ref={heading}
-        tabIndex={announce ? -1 : undefined}
-        className="mt-4 text-lg font-semibold text-balance focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
-      >
-        Thanks!
-      </Heading>
-      <p className="mt-2 text-gray-600 dark:text-gray-400">
-        You answered{' '}
-        <strong className="text-gray-900 dark:text-white">
-          {answer?.label}
-        </strong>
-        .
-      </p>
-      <p className="mt-8 text-sm text-gray-600 dark:text-gray-400">
-        Changed your mind? Scan the code again and tap another answer.
-      </p>
-    </div>
   )
 }
 
@@ -353,6 +311,7 @@ function Notice({
   Icon,
   title,
   announce = false,
+  refocus = 0,
   children,
 }: {
   level: 'h1' | 'h2'
@@ -360,29 +319,27 @@ function Notice({
   title: string
   /** Take focus on mount: this notice replaced the buttons after a tap. */
   announce?: boolean
+  /** Take focus again each time this changes: a delete under this notice. */
+  refocus?: number
   children: React.ReactNode
 }) {
   const heading = useFocusOnMount(announce)
+  useEffect(() => {
+    // Delete my answer unmounted under a notice that stays: focus would
+    // otherwise drop to the body.
+    if (refocus > 0) heading.current?.focus()
+  }, [refocus, heading])
   return (
     <div className="flex flex-col items-center text-center">
       <Icon className="size-12 text-gray-400" aria-hidden="true" />
       <Heading
         ref={heading}
         tabIndex={announce ? -1 : undefined}
-        className="mt-4 text-lg font-semibold text-balance focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
+        className={`mt-4 text-lg font-semibold text-balance ${HEADING_FOCUS}`}
       >
         {title}
       </Heading>
       <p className="mt-2 text-gray-600 dark:text-gray-400">{children}</p>
     </div>
   )
-}
-
-/** A ref that focuses its element once, on mount, when `enabled`. */
-function useFocusOnMount(enabled: boolean) {
-  const ref = useRef<HTMLHeadingElement>(null)
-  useEffect(() => {
-    if (enabled) ref.current?.focus()
-  }, [enabled])
-  return ref
 }

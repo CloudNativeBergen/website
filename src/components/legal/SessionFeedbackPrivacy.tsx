@@ -4,8 +4,9 @@ import { DEVICE_COOKIE_DAYS } from '@/lib/feedback'
 /**
  * Session Feedback on /privacy (speaker feedback spec §8): what the QR code on
  * a session collects, for EVERY tenant, since any conference can print one.
- * "Your rights" (deleting your own answer) is added with Delete my answer
- * (F2). The cookie's lifetime comes from `src/lib/feedback/device.ts`.
+ * "Your rights" names Delete my answer (F2) with its two exceptions and, past
+ * them, the organizers (R1: never "can't be linked to you" while the cookie
+ * lives). The cookie's lifetime comes from `src/lib/feedback/device.ts`.
  */
 export function SessionFeedbackPrivacy() {
   return (
@@ -26,8 +27,8 @@ export function SessionFeedbackPrivacy() {
         <li>
           <strong>Cookie:</strong> a strictly necessary cookie, used only on the
           feedback pages and kept for {DEVICE_COOKIE_DAYS} days after your last
-          answer, so you can change your own answer and so answers aren&apos;t
-          counted twice. No consent prompt.
+          answer, so you can change or delete your own answer and so answers
+          aren&apos;t counted twice. No consent prompt.
         </li>
         <li>
           <strong>Who sees it:</strong> the session&apos;s speakers see the
@@ -42,6 +43,14 @@ export function SessionFeedbackPrivacy() {
           <strong>Retention:</strong> 24 months after the conference ends; then
           comments and individual answers are deleted and only per-session
           totals remain.
+        </li>
+        <li>
+          <strong>Your rights:</strong> you can delete your answer yourself from
+          the same browser, through the session&apos;s QR link, for{' '}
+          {DEVICE_COOKIE_DAYS} days after your last answer, unless the
+          organizers have replaced that code or the session was withdrawn. After
+          that we can&apos;t tell which answer is yours; contact the organizers
+          quoting the comment and they will remove it.
         </li>
         <li>
           <strong>Processors:</strong> Sanity (storage) and Resend (summary
@@ -60,9 +69,9 @@ export function SessionFeedbackCookieNote() {
       QR code, this site sets one strictly necessary cookie, sent only to the
       feedback pages. It holds a random identifier for your browser and which
       sessions you have answered (as unreadable codes, not their names), and the
-      time of your last answer; nothing about you. It is how you can change your
-      own answer, and it expires {DEVICE_COOKIE_DAYS} days after your last
-      answer. Clearing this site&apos;s cookies removes it.
+      time of your last answer; nothing about you. It is how you can change or
+      delete your own answer, and it expires {DEVICE_COOKIE_DAYS} days after
+      your last answer. Clearing this site&apos;s cookies removes it.
     </p>
   )
 }

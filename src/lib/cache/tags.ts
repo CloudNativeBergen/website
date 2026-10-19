@@ -37,6 +37,11 @@
  *   speaker erasure's printed tags send the operator to). Rotation (F6) and
  *   the fold (F9) add theirs. Not `conferenceTag`, which would flush the whole
  *   site on every mint.
+ * - `feedbackResponseTag(responseId)` — the per-RESPONSE tag on a device's own
+ *   Feedback Response as the attendee page reads it (speaker feedback spec
+ *   §7.4). Submit and Delete my answer expire it with `updateTag` (Server
+ *   Actions); Remove (F5) with `revalidateTag(tag, { expire: 0 })`, since it
+ *   runs where `updateTag` throws.
  * - `organizationTag(orgId)` — the per-ORGANIZATION-document tag, for cached
  *   reads keyed on the tenant itself rather than one of its conference
  *   editions (plan/entitlement resolution). Mutations that edit an
@@ -89,4 +94,13 @@ export function earlyAccessLinksTag(conferenceId: string): string {
  */
 export function feedbackCodeIndexTag(conferenceId: string): string {
   return `sanity:feedback-code-index-${conferenceId}`
+}
+
+/**
+ * One device's own Feedback Response, as `/f/<code>` reads it for the
+ * Answered state (speaker feedback spec §7.4). Expire it on every write to
+ * the response: the page shows the answer it was told.
+ */
+export function feedbackResponseTag(responseId: string): string {
+  return `sanity:feedback-response-${responseId}`
 }

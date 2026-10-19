@@ -45,6 +45,8 @@ export function deviceCookie() {
 
 export interface Device {
   token: string
+  /** The signed time of the last answer, in seconds since the epoch. */
+  at: number
   /** Truncated HMACs of the answered talks' ids, most recent first. */
   answered: string[]
 }
@@ -121,7 +123,17 @@ export function readDeviceCookie(
     return null
   }
   if (now.getTime() / 1000 - at > DEVICE_COOKIE_MAX_AGE) return null
-  return { token: t, answered: l }
+  return { token: t, at, answered: l }
+}
+
+function signed(device: Device): string {
+  const data = JSON.stringify({
+    t: device.token,
+    at: device.at,
+    l: device.answered,
+  })
+  const signature = hmac(COOKIE_LABEL, data).toString('base64url')
+  return `${Buffer.from(data).toString('base64url')}.${signature}`
 }
 
 /**
@@ -133,23 +145,50 @@ export function recordAnswer(
   device: Device | null,
   talkId: string,
   now: Date,
-): { device: Device; value: string } {
+): { device: Device; cookie: DeviceCookie } {
   const entry = talkEntry(talkId)
   const next: Device = {
     token: device?.token ?? crypto.randomBytes(16).toString('base64url'),
+    at: Math.floor(now.getTime() / 1000),
     answered: [
       entry,
       ...(device?.answered ?? []).filter((e) => e !== entry),
     ].slice(0, MAX_ANSWERED_TALKS),
   }
-  const data = JSON.stringify({
-    t: next.token,
-    at: Math.floor(now.getTime() / 1000),
-    l: next.answered,
-  })
-  const signature = hmac(COOKIE_LABEL, data).toString('base64url')
   return {
     device: next,
-    value: `${Buffer.from(data).toString('base64url')}.${signature}`,
+    cookie: { value: signed(next), maxAge: DEVICE_COOKIE_MAX_AGE },
+  }
+}
+
+/** The cookie to set: its value and how long the browser should keep it. */
+export interface DeviceCookie {
+  value: string
+  /** Seconds; `0` means the cookie is to be deleted. */
+  maxAge: number
+}
+
+/**
+ * The cookie after this device deletes its answer about `talkId` (§7.4): the
+ * same token, the talk gone from the list, and the signed time kept, so the
+ * 30 days still run from the last ANSWER (§8), not from a deletion. The
+ * browser is told only the time LEFT of those 30 days, so it does not keep
+ * a cookie the server would already treat as absent.
+ */
+export function forgetAnswer(
+  device: Device,
+  talkId: string,
+  now: Date,
+): { device: Device; cookie: DeviceCookie } {
+  const entry = talkEntry(talkId)
+  const next: Device = {
+    ...device,
+    answered: device.answered.filter((e) => e !== entry),
+  }
+  const left =
+    device.at + DEVICE_COOKIE_MAX_AGE - Math.floor(now.getTime() / 1000)
+  return {
+    device: next,
+    cookie: { value: signed(next), maxAge: Math.max(0, left) },
   }
 }
