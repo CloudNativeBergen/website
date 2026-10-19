@@ -68,10 +68,12 @@ export function SessionFeedbackSection({
 
   if (data && shownWindow && (!data.code || !data.url)) {
     // No code while §5 would still give one: a version of the talk waits in
-    // a locked release. Nothing to show yet, as before the code exists.
-    if (mayMint(shownWindow)) return null
-    // No code ever (its window closed before it had one, like every talk of
-    // an edition that ended before launch): the results only (§9.5).
+    // a locked release. Nothing to show until the results are visible, which
+    // need no code.
+    if (mayMint(shownWindow) && !shownWindow.feedbackVisible) return null
+    // No code, and the results are visible (its window closed before it had
+    // one, like every talk of an edition that ended before launch, or a
+    // locked release after the session): the results only (§9.5).
     return (
       <SectionShell>
         <SectionHeading />

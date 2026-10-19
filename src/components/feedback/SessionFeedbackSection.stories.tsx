@@ -439,6 +439,26 @@ export const ResultsFollowMovedSession: Story = {
   },
 }
 
+/**
+ * No code (a locked release) after the session ended, with the window still
+ * open: the results show, results-only, since they need no code.
+ */
+export const NoCodeYetResultsVisible: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        answer({ code: null, url: null, window: LIVE_WINDOW }),
+        resultsAnswer(results(LIVE_WINDOW)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(await canvas.findByText('57 responses · 3 comments')).toBeVisible()
+    expect(canvas.queryByRole('tab')).toBeNull()
+  },
+}
+
 let movedLaterHits = { n: 0 }
 
 /**
