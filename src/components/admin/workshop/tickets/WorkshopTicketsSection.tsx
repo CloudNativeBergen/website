@@ -39,9 +39,12 @@ const HEADING_ID = 'workshop-tickets-heading'
  */
 function WorkshopTicketsFrame({
   badge,
+  open = false,
   children,
 }: {
   badge?: ReactNode
+  /** Starts open: something here needs the organizer. */
+  open?: boolean
   children: ReactNode
 }) {
   return (
@@ -51,7 +54,7 @@ function WorkshopTicketsFrame({
       className="scroll-mt-24 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
     >
       {/* Collapsed by default: rarely changed once set. */}
-      <details className="group">
+      <details className="group" open={open}>
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 [&::-webkit-details-marker]:hidden">
           <TicketIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
           <h3
@@ -143,7 +146,7 @@ export function WorkshopTicketsSection({
 }: WorkshopTicketsSectionProps) {
   if (!list) {
     return (
-      <WorkshopTicketsFrame>
+      <WorkshopTicketsFrame open>
         <div
           role="alert"
           className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900"
@@ -182,17 +185,21 @@ export function WorkshopTicketsSection({
     .filter((type) => type.access === 'unclassified')
     .map((type) => type.typeName)
 
+  const needsDecision =
+    notSet.length > 0 ||
+    list.orphaned.length > 0 ||
+    list.orphanedEarlyAccess.length > 0
+
   return (
     <WorkshopTicketsFrame
+      open={needsDecision || !list.configured}
       badge={
         !list.configured && (
           <StatusBadge label="Not configured" color="yellow" />
         )
       }
     >
-      {(notSet.length > 0 ||
-        list.orphaned.length > 0 ||
-        list.orphanedEarlyAccess.length > 0) && (
+      {needsDecision && (
         // A labelled region, NOT a live one: it holds buttons and questions,
         // and a live region would be read out again whole on every change.
         <section
