@@ -102,7 +102,8 @@ export async function getConfirmedTalks(
     { conferenceId },
     `*[_type == "talk" && ${PUBLISHED_ONLY} && status == "confirmed"] | order(title asc){
       _id, title, feedbackCode,
-      "hasLiveSpeaker": count(speakers[defined(@->_id) && !defined(@->erasedAt)]) > 0
+      // count() of a missing array is null: coalesce, so the flag is a boolean.
+      "hasLiveSpeaker": coalesce(count(speakers[defined(@->_id) && !defined(@->erasedAt)]), 0) > 0
     }`,
     {},
     { cache: 'no-store' },
