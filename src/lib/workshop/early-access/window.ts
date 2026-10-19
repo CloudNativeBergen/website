@@ -17,15 +17,11 @@ import {
  *
  * `access` is what `lookUp` found, or `null`: without it, `registration` is
  * what everyone gets.
- *
- * A caller turned away (not open yet, or closed) leaves one log line with
- * `seen`: what the caller brought, never who they are.
  */
 export async function registrationWindowFor<Access>(
   times: WorkshopRegistrationTimes,
   now: Date,
   lookUp: () => Promise<Access | null>,
-  seen: { conferenceId: string; cookie: boolean; ticketType: boolean },
 ): Promise<{
   registration: WorkshopRegistrationWindow
   access: Access | null
@@ -36,13 +32,10 @@ export async function registrationWindowFor<Access>(
   })
   const canMatter = withAccess.status !== 'closed' && withAccess.early
   const access = canMatter ? await lookUp() : null
-  const registration = access
-    ? withAccess
-    : workshopRegistrationWindow(times, { now, earlyAccess: false })
-  if (registration.status !== 'open') {
-    console.warn(
-      `[workshop] signup refused: ${registration.status} conference=${seen.conferenceId} early-window=${withAccess.status !== 'closed' && withAccess.early} early-access-cookie=${seen.cookie} early-access-ticket-type=${seen.ticketType} early-access=${access !== null}`,
-    )
+  return {
+    registration: access
+      ? withAccess
+      : workshopRegistrationWindow(times, { now, earlyAccess: false }),
+    access,
   }
-  return { registration, access }
 }

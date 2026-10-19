@@ -146,8 +146,11 @@ const seatsBusy = (): never => {
  */
 const signUpRefused = (
   refused: Extract<SignUpOutcome, { refused: string }>['refused'],
-  { own }: { own: boolean },
+  { own, conferenceId }: { own: boolean; conferenceId: string },
 ): never => {
+  console.warn(
+    `[workshop] signup refused: ${refused} conference=${conferenceId} own=${own}`,
+  )
   switch (refused) {
     // Not of this conference, or not listed (#1301): as the router's own
     // check answers.
@@ -254,6 +257,9 @@ async function requireWorkshopAttendee(ctx: Context) {
 
   const access = await decideWorkshopPortalAccess({ conference, user: actor })
   if (!access.allowed) {
+    console.warn(
+      `[workshop] signup refused: ${access.denial} conference=${conference._id}`,
+    )
     throw new TRPCError({ code: 'FORBIDDEN', message: access.reason })
   }
 
@@ -659,47 +665,41 @@ export const workshopRouter = router({
         const { registration, access } = await registrationWindowFor<{
           sponsor?: { _id: string }
           ticketType?: string
-        }>(
-          conference,
-          new Date(),
-          async () => {
-            const byType = ticketType ? { ticketType } : null
-            if (!token) return byType
-            let found: Awaited<ReturnType<typeof findEarlyAccessSponsor>>
-            try {
-              found = await findEarlyAccessSponsor(conference._id, token)
-            } catch (error) {
-              console.error('[workshop] early-access lookup failed', error)
-              if (byType) return byType
-              // NEVER ADMITS, and never names the official opening to a
-              // person whose early access was simply not checked.
-              throw new TRPCError({
-                code: 'SERVICE_UNAVAILABLE',
-                message:
-                  'We could not check your early access right now. Please try again in a moment.',
-              })
-            }
-            // The link is not live. If the portal page's cached links still
-            // say it is, the page is showing this person an early access
-            // they do not have: make its next view read them again.
-            if (!found) {
-              await expireEarlyAccessLinksIfTheyDisagree(
-                conference._id,
-                token,
-                {
-                  live: false,
-                },
-              )
-              return byType
-            }
-            return { sponsor: found, ...byType }
-          },
-          {
-            conferenceId: conference._id,
-            cookie: token !== undefined,
-            ticketType: ticketType !== null,
-          },
-        )
+        }>(conference, new Date(), async () => {
+          const byType = ticketType ? { ticketType } : null
+          if (!token) return byType
+          let found: Awaited<ReturnType<typeof findEarlyAccessSponsor>>
+          try {
+            found = await findEarlyAccessSponsor(conference._id, token)
+          } catch (error) {
+            console.error('[workshop] early-access lookup failed', error)
+            if (byType) return byType
+            // NEVER ADMITS, and never names the official opening to a
+            // person whose early access was simply not checked.
+            throw new TRPCError({
+              code: 'SERVICE_UNAVAILABLE',
+              message:
+                'We could not check your early access right now. Please try again in a moment.',
+            })
+          }
+          // The link is not live. If the portal page's cached links still
+          // say it is, the page is showing this person an early access
+          // they do not have: make its next view read them again.
+          if (!found) {
+            await expireEarlyAccessLinksIfTheyDisagree(conference._id, token, {
+              live: false,
+            })
+            return byType
+          }
+          return { sponsor: found, ...byType }
+        })
+        if (registration.status !== 'open') {
+          // One line per refused attempt, never the person (2026-10-19:
+          // sponsors were told "opens tomorrow" and the logs said nothing).
+          console.warn(
+            `[workshop] signup refused: ${registration.status} conference=${conference._id} early-access-cookie=${token !== undefined} early-access-ticket-type=${ticketType !== null} early-access=${access !== null}`,
+          )
+        }
         if (registration.status === 'not-open-yet') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
@@ -750,7 +750,10 @@ export const workshopRouter = router({
           { whenFull: 'waitlist' },
         )
         if ('refused' in outcome) {
-          return signUpRefused(outcome.refused, { own: true })
+          return signUpRefused(outcome.refused, {
+            own: true,
+            conferenceId: conference._id,
+          })
         }
         const { signup } = outcome
         const isWaitlist = signup.status === WorkshopSignupStatus.WAITLIST
@@ -1512,7 +1515,7 @@ export const workshopRouter = router({
             { whenFull: 'refuse' },
           )
           if ('refused' in outcome) {
-            return signUpRefused(outcome.refused, { own: false })
+            return signUpRefused(outcome.refused, { own: false, conferenceId })
           }
           const { signup } = outcome
 
