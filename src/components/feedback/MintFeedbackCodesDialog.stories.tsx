@@ -119,7 +119,7 @@ export const Report: Story = {
     ).toHaveAttribute('href', '/admin/proposals/talk-c')
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Try the failed again' }),
+        screen.getByRole('button', { name: 'Mint the rest' }),
       ).toBeVisible(),
     )
   },
@@ -184,5 +184,35 @@ export const Minting: Story = {
     )
     await userEvent.keyboard('{Escape}')
     expect(args.onClose).not.toHaveBeenCalled()
+  },
+}
+
+/** Only talks the run did not reach in time: it still offers the rest. */
+export const ReportNotReached: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(PREVIEW, () => trpc({ confirmed: 43, withoutCode: 41 })),
+        http.post(MINT_ALL, () =>
+          trpc({
+            ...report,
+            skipped: [
+              { talkId: 'talk-d', title: 'Talk d', reason: 'notReached' },
+            ],
+            failed: [],
+          }),
+        ),
+      ],
+    },
+  },
+  play: async () => {
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Mint codes' }),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Mint the rest' }),
+      ).toBeVisible(),
+    )
   },
 }

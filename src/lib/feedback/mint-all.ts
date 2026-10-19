@@ -129,7 +129,12 @@ export async function mintConferenceFeedbackCodes({
       }
     }),
   )
-  if (report.minted.length > 0) expireFeedbackCodeIndex(conference._id)
+  // Once per run, whenever a code exists: a run cut off by the route's limit
+  // after committing never got here, and the next run finds its codes as
+  // already held.
+  if (report.minted.length > 0 || report.alreadyHad > 0) {
+    expireFeedbackCodeIndex(conference._id)
+  }
   const byTitle = (a: TalkRef, b: TalkRef) =>
     a.title.localeCompare(b.title) || a.talkId.localeCompare(b.talkId)
   report.minted.sort(byTitle)

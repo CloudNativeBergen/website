@@ -164,14 +164,15 @@ export function MintFeedbackCodesDialog({
             <button type="button" onClick={close} className={SECONDARY}>
               Close
             </button>
-            {report.failed.length > 0 && (
+            {(report.failed.length > 0 ||
+              report.skipped.some((t) => t.reason === 'notReached')) && (
               <button
                 type="button"
                 onClick={() => mintAll.mutate()}
                 disabled={mintAll.isPending}
                 className={PRIMARY}
               >
-                {mintAll.isPending ? 'Minting…' : 'Try the failed again'}
+                {mintAll.isPending ? 'Minting…' : 'Mint the rest'}
               </button>
             )}
           </>

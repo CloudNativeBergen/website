@@ -837,7 +837,7 @@ describe('mintAll — every confirmed talk without a code', () => {
     })
   })
 
-  it('mints nothing the second time', async () => {
+  it('mints nothing the second time, and expires the index once', async () => {
     await organizer().mintAll()
     const commits = h.commits
     vi.mocked(revalidateTag).mockClear()
@@ -845,7 +845,8 @@ describe('mintAll — every confirmed talk without a code', () => {
     expect(again.minted).toEqual([])
     expect(again.alreadyHad).toBe(4)
     expect(h.commits).toBe(commits)
-    expect(revalidateTag).not.toHaveBeenCalled()
+    // A run cut off before its own expiry is recovered by the next run.
+    expect(revalidateTag).toHaveBeenCalledTimes(1)
   })
 
   it('skips a talk whose window closed and one waiting on a scheduled release', async () => {
@@ -1039,5 +1040,15 @@ describe('mintAll — within the function’s time limit', () => {
     expect(again.minted.map((m) => m.talkId).sort()).toEqual(
       notReached.map((t) => t.talkId).sort(),
     )
+  })
+})
+
+describe('mintAll — nothing to mint, nothing to expire', () => {
+  it('leaves the index alone when no talk has a code', async () => {
+    vi.setSystemTime(new Date('2026-06-12T00:00:00Z'))
+    const out = await organizer().mintAll()
+    expect(out.minted).toEqual([])
+    expect(out.alreadyHad).toBe(0)
+    expect(revalidateTag).not.toHaveBeenCalled()
   })
 })
