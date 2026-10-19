@@ -245,3 +245,36 @@ export const OpensWhileShown: Story = {
     expect(opensWhileShownReads).toBe(1)
   },
 }
+
+/** No code, and the window closes while the page is up: the offer goes. */
+export const ClosesWhileShown: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(READ, () => {
+          const closesAt = Date.now() + 4000
+          return trpc({
+            ...noCode,
+            window: {
+              state: 'open',
+              opensAt: new Date(closesAt - 25 * 3_600_000).toISOString(),
+              lastSlotEnd: new Date(closesAt - 24 * 3_600_000).toISOString(),
+              closesAt: new Date(closesAt).toISOString(),
+              feedbackVisible: true,
+            },
+          })
+        }),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      await canvas.findByRole('button', { name: 'Mint Feedback Code' }),
+    ).toBeVisible()
+    await waitFor(() => canvas.getByText(/the feedback window has closed/), {
+      timeout: 10000,
+    })
+    expect(canvas.queryByRole('button')).toBeNull()
+  },
+}

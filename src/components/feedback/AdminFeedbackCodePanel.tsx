@@ -38,6 +38,8 @@ export function AdminFeedbackCodePanel({
 
   // An organizer may leave the page up through the session's start.
   const shownWindow = useWindowOnTheClock(code.data?.window)
+  // The window may close while the page is up; the offer closes with it.
+  const mayMint = !!code.data?.mayMint && shownWindow?.state !== 'closed'
 
   if (code.error?.data?.code === 'NOT_FOUND') return null
 
@@ -60,13 +62,13 @@ export function AdminFeedbackCodePanel({
       ) : code.data ? (
         <div className="space-y-3">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {!code.data.mayMint
+            {!mayMint
               ? 'No Feedback Code: the feedback window has closed.'
               : mint.data && !mint.data.code
                 ? 'No code yet: a version of this talk waits in a scheduled release. Mint again once it is published.'
                 : 'No Feedback Code yet. The speakers get one when they open their talk; mint it now to print the sheet for the room.'}
           </p>
-          {code.data.mayMint && (
+          {mayMint && (
             <button
               type="button"
               onClick={() => mint.mutate({ talkId })}
