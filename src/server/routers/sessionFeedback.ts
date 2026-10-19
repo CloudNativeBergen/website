@@ -3,7 +3,11 @@ import { z } from 'zod'
 import { adminProcedure, protectedProcedure, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { feedbackCodeUrl } from '@/lib/feedback'
-import { ensureFeedbackCode } from '@/lib/feedback/server'
+import {
+  countTalksWithoutCode,
+  ensureFeedbackCode,
+  mintConferenceFeedbackCodes,
+} from '@/lib/feedback/server'
 
 /**
  * A published Sanity document id and nothing else. The doc endpoint puts the
@@ -74,5 +78,21 @@ export const sessionFeedbackRouter = router({
       url: result.code ? feedbackCodeUrl(conference, result.code) : null,
       window: result.window,
     }
+  }),
+  /** How many confirmed talks the bulk mint would give a code (#1459). */
+  mintPreview: adminProcedure.query(async () => {
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) throw notFound()
+    return countTalksWithoutCode(conference._id)
+  }),
+
+  /**
+   * Mint a code for every confirmed talk of the conference that has none
+   * (#1459). One talk failing does not stop the rest; the report names it.
+   */
+  mintAll: adminProcedure.mutation(async () => {
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) throw notFound()
+    return mintConferenceFeedbackCodes({ conference, now: new Date() })
   }),
 })

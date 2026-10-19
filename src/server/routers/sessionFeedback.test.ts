@@ -620,7 +620,12 @@ describe('sessionFeedbackRouter surface', () => {
         _def: { procedures: Record<string, unknown> }
       }
     )._def
-    expect(Object.keys(procedures).sort()).toEqual(['ensureCode'])
+    expect(Object.keys(procedures).sort()).toEqual([
+      'ensureCode',
+      'mintAll',
+      'mintCode',
+      'mintPreview',
+    ])
   })
 })
 
@@ -705,6 +710,128 @@ describe('mintCode — the same rules as the speaker’s mint', () => {
     h.releases = [{ name: 'r1', state: 'scheduled' }]
     const out = await organizer().mintCode({ talkId: 'talk-1' })
     expect(out.code).toBeNull()
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+  })
+})
+
+describe('mintAll — every confirmed talk without a code', () => {
+  beforeEach(() => {
+    h.dataset.push(
+      talk('talk-2'),
+      schedule('talk-2'),
+      talk('talk-3', { feedbackCode: 'k7m2qx' }),
+      talk('drafts.talk-4'),
+    )
+  })
+
+  it('mints a unique code for each, expires the index once, and reports each talk', async () => {
+    const out = await organizer().mintAll()
+    const codes = ['talk-1', 'talk-2', 'talk-other-speakers'].map(
+      (id) => doc(id)?.feedbackCode,
+    )
+    for (const c of codes) expect(c).toMatch(CODE)
+    expect(new Set([...codes, 'k7m2qx']).size).toBe(4)
+    expect(out.minted.map((m) => m.talkId).sort()).toEqual([
+      'talk-1',
+      'talk-2',
+      'talk-other-speakers',
+    ])
+    expect(out.alreadyHad).toBe(1)
+    expect(out.skipped).toEqual([])
+    expect(out.failed).toEqual([])
+    // Not the foreign, unconfirmed or draft-only talks.
+    for (const id of ['talk-foreign', 'talk-accepted', 'drafts.talk-4'])
+      expect(doc(id)?.feedbackCode).toBeUndefined()
+    expect(doc('talk-3')?.feedbackCode).toBe('k7m2qx')
+    expect(revalidateTag).toHaveBeenCalledTimes(1)
+    expect(revalidateTag).toHaveBeenCalledWith(feedbackCodeIndexTag('conf-A'), {
+      expire: 0,
+    })
+  })
+
+  it('never repeats a code it minted, though GROQ lags the batch’s writes', async () => {
+    // GROQ sees none of the batch's codes, and the random source draws every
+    // code twice in a row: only the batch's own memory keeps them apart.
+    h.groqSnapshot = structuredClone(h.dataset)
+    let calls = 0
+    const random = vi
+      .spyOn(globalThis.crypto, 'getRandomValues')
+      .mockImplementation(<T extends ArrayBufferView | null>(array: T): T => {
+        const letter = Math.floor(Math.floor(calls++ / 6) / 2)
+        ;(array as unknown as Uint32Array)[0] = Math.ceil(
+          (letter * 2 ** 32) / 31,
+        )
+        return array
+      })
+    const out = await organizer().mintAll()
+    random.mockRestore()
+    const codes = out.minted.map((m) => m.code)
+    expect(codes).toEqual(['aaaaaa', 'bbbbbb', 'cccccc'])
+    expect(out.minted.map((m) => doc(m.talkId)?.feedbackCode)).toEqual(codes)
+  })
+
+  it('reports a talk whose write fails and still mints the rest', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // The first talk's transaction fails, as a Sanity outage would.
+    h.beforeCommit.push(() => {
+      throw Object.assign(new Error('boom'), { statusCode: 500 })
+    })
+    const out = await organizer().mintAll()
+    error.mockRestore()
+    expect(out.failed).toEqual([{ talkId: 'talk-1', title: 'talk-1' }])
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+    expect(out.minted.map((m) => m.talkId)).toEqual([
+      'talk-2',
+      'talk-other-speakers',
+    ])
+    expect(doc('talk-2')?.feedbackCode).toMatch(CODE)
+  })
+
+  it('mints nothing the second time', async () => {
+    await organizer().mintAll()
+    const commits = h.commits
+    vi.mocked(revalidateTag).mockClear()
+    const again = await organizer().mintAll()
+    expect(again.minted).toEqual([])
+    expect(again.alreadyHad).toBe(4)
+    expect(h.commits).toBe(commits)
+    expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('skips a talk whose window closed and one waiting on a scheduled release', async () => {
+    // talk-2's slot ended; talk-1 holds a version in a scheduled release.
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'day-talk-2-2026-06-10' ? schedule('talk-2', '2026-05-01') : d,
+    )
+    h.dataset.push(talk('versions.r1.talk-1'))
+    h.releases = [{ name: 'r1', state: 'scheduled' }]
+    const out = await organizer().mintAll()
+    expect(out.skipped).toEqual([
+      { talkId: 'talk-1', title: 'talk-1', reason: 'release' },
+      { talkId: 'talk-2', title: 'talk-2', reason: 'closed' },
+    ])
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+    expect(doc('talk-2')?.feedbackCode).toBeUndefined()
+    expect(out.minted.map((m) => m.talkId)).toEqual(['talk-other-speakers'])
+  })
+
+  it('counts the confirmed talks without a code for the confirmation', async () => {
+    expect(await organizer().mintPreview()).toEqual({
+      confirmed: 4,
+      withoutCode: 3,
+    })
+  })
+
+  it.each([
+    ['a speaker who is not an organizer', () => caller('sp-ada')],
+    ['an organizer of another organization', () => organizer(['org-B'])],
+  ])('refuses %s, before any read', async (_, who) => {
+    await expect(who().mintAll()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    await expect(who().mintPreview()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(h.docReads).toEqual([])
+    expect(h.attempts).toBe(0)
     expect(doc('talk-1')?.feedbackCode).toBeUndefined()
   })
 })

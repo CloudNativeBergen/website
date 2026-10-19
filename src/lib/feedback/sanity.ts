@@ -80,3 +80,29 @@ export async function conferenceFeedbackCodes(
   if (!Array.isArray(codes)) return []
   return codes.filter((c): c is string => typeof c === 'string')
 }
+
+export interface ConfirmedTalk {
+  _id: string
+  title: string | null
+  feedbackCode: string | null
+}
+
+/**
+ * The conference's published, confirmed talks, for minting every code at
+ * once (#1459). GROQ may lag a write by about a second; each talk is read
+ * again by id before anything is written to it.
+ */
+export async function getConfirmedTalks(
+  conferenceId: string,
+): Promise<ConfirmedTalk[]> {
+  const talks = await scopedFetch<ConfirmedTalk[]>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "talk" && ${PUBLISHED_ONLY} && status == "confirmed"] | order(title asc){
+      _id, title, feedbackCode
+    }`,
+    {},
+    { cache: 'no-store' },
+  )
+  return talks ?? []
+}

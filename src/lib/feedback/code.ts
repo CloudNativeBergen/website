@@ -38,8 +38,25 @@ type VersionsClient = ReturnType<typeof versionsClient>
 export type EnsureFeedbackCodeResult =
   /** Missing, foreign, not the caller's, or not confirmed: one answer for all. */
   | { status: 'refused' }
-  /** `code` is null when none exists and §5 refuses to mint one. */
-  | { status: 'ok'; code: string | null; window: FeedbackWindow }
+  /**
+   * `code` is null when none exists and §5 refuses to mint one. `minted`
+   * says this call wrote it.
+   */
+  | {
+      status: 'ok'
+      code: string | null
+      window: FeedbackWindow
+      minted: boolean
+    }
+
+/**
+ * Several mints in one request (#1459). Each draw also avoids the codes the
+ * batch already minted, which a GROQ read lagging those writes would miss,
+ * and the code index is left for the caller to expire once at the end.
+ */
+export interface MintBatch {
+  codes: Set<string>
+}
 
 /** How often a write that lost a revision guard re-reads and tries again. */
 const MAX_RETRIES = 3
@@ -101,11 +118,13 @@ export async function ensureFeedbackCode({
   actor,
   conference,
   now,
+  batch,
 }: {
   talkId: string
   actor: FeedbackCodeActor
   conference: { _id: string; endDate?: string | null }
   now: Date
+  batch?: MintBatch
 }): Promise<EnsureFeedbackCodeResult> {
   if (!isPublishedId(talkId)) return { status: 'refused' }
   const client = versionsClient()
@@ -123,17 +142,20 @@ export async function ensureFeedbackCode({
     now,
   })
   const existing = normalizeShortCode(talk.feedbackCode)
-  if (existing) return { status: 'ok', code: existing, window }
-  if (!mayMint(window)) return { status: 'ok', code: null, window }
+  if (existing) return { status: 'ok', code: existing, window, minted: false }
+  if (!mayMint(window))
+    return { status: 'ok', code: null, window, minted: false }
 
-  const outcome = await mint(client, talk, conference._id, actor)
+  const outcome = await mint(client, talk, conference._id, actor, batch)
   if (!outcome) return { status: 'refused' }
-  if (outcome.code === null) return { status: 'ok', code: null, window }
+  if (outcome.code === null)
+    return { status: 'ok', code: null, window, minted: false }
   if (outcome.minted) {
     await sweepTalkVersions(client, talk._id)
-    expireFeedbackCodeIndex(conference._id)
+    if (batch) batch.codes.add(outcome.code)
+    else expireFeedbackCodeIndex(conference._id)
   }
-  return { status: 'ok', code: outcome.code, window }
+  return { status: 'ok', code: outcome.code, window, minted: outcome.minted }
 }
 
 /**
@@ -154,6 +176,7 @@ async function mint(
   talk: TalkDoc,
   conferenceId: string,
   actor: FeedbackCodeActor,
+  batch: MintBatch | undefined,
 ): Promise<{ code: string | null; minted: boolean } | null> {
   let current = talk
   for (let attempt = 0; ; attempt++) {
@@ -167,9 +190,10 @@ async function mint(
       )
     }
     if (locked.length > 0) return { code: null, minted: false }
-    const code = createShortCodeMinter(
-      await conferenceFeedbackCodes(conferenceId),
-    )()
+    const code = createShortCodeMinter([
+      ...(await conferenceFeedbackCodes(conferenceId)),
+      ...(batch?.codes ?? []),
+    ])()
     const tx = client
       .transaction()
       .patch(current._id, (p) =>
