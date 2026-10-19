@@ -17,11 +17,12 @@
  *   `workshopPortalUrl` has no link: the email exists to send people there.
  * - NOT AFTER REGISTRATION HAS CLOSED: the email would only say so. Checked
  *   before the link, so a closed conference is never told to fix its host.
- * - AT MOST ONCE AN HOUR PER CONFERENCE, best effort per instance (the
- *   announcement rail's pattern): a misfire guard against a double click, not
- *   a security control. The hour is reserved before the first ticket read, so
- *   two concurrent presses send once; a refusal, nobody to send to, or a send
- *   confirmed to have reached nobody spends no quota.
+ * - AT MOST ONCE AN HOUR PER CONFERENCE, across instances: the hour is
+ *   reserved on the conference (`workshopReminderReservedAt`) with a
+ *   revision-conditioned patch before the first ticket read, so two
+ *   concurrent presses send once. A misfire guard against a double click, not
+ *   a security control. A refusal, nobody to send to, or a send confirmed to
+ *   have reached nobody releases the hour.
  * - THE LAST SEND IS STORED on the conference (`workshopReminderLastSentAt`,
  *   `workshopReminderLastSentCount`) after a send that reached at least one
  *   person, for the dialog to show. Written after the send and never retried:
@@ -42,7 +43,8 @@ import {
   retryWithBackoff,
 } from '@/lib/email/config'
 import { renderWorkshopReminder } from '@/lib/email/workshop'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import { groq } from 'next-sanity'
 import { readTicketHolders } from './holders'
 import { workshopRegistrationWindow } from './registration-window'
 import { workshopPortalUrl } from './sign-in'
@@ -77,11 +79,56 @@ export type ReminderOutcome =
   | { kind: 'ticketing-unavailable' }
   | { kind: 'rate-limited'; retryAfterMs: number }
 
-/** conference id → when the hour it holds was reserved (the rate limit). */
-const reservedAt = new Map<string, number>()
+// groq-global-scoped: $id is the conference the caller already resolved
+const RESERVATION = groq`*[_type == "conference" && _id == $id][0]{ _rev, workshopReminderReservedAt }`
+/** Bounded compare-and-swap rounds; a lost round re-reads the winner's write. */
+const RESERVE_ATTEMPTS = 3
 
-export function __resetReminderRateLimit(): void {
-  reservedAt.clear()
+async function readReservation(id: string) {
+  return clientReadUncached.fetch<{
+    _rev: string
+    workshopReminderReservedAt?: string
+  } | null>(RESERVATION, { id }, { cache: 'no-store' })
+}
+
+/**
+ * Reserve the hour on the conference: null when reserved, otherwise how long
+ * until it may be. A read failure or lost contention refuses (the safe way).
+ */
+async function reserveHour(id: string, now: number): Promise<number | null> {
+  for (let attempt = 0; attempt < RESERVE_ATTEMPTS; attempt++) {
+    const doc = await readReservation(id)
+    if (!doc) throw new Error(`Conference ${id} not found`)
+    const previous = Date.parse(doc.workshopReminderReservedAt ?? '')
+    if (!Number.isNaN(previous) && now - previous < REMINDER_WINDOW_MS)
+      return previous + REMINDER_WINDOW_MS - now
+    try {
+      await clientWrite
+        .patch(id)
+        .ifRevisionId(doc._rev)
+        .set({ workshopReminderReservedAt: new Date(now).toISOString() })
+        .commit({ visibility: 'sync' })
+      return null
+    } catch (error) {
+      if (attempt === RESERVE_ATTEMPTS - 1) throw error
+    }
+  }
+  return null // unreachable: the last attempt returns or throws
+}
+
+/** Give the hour back, if it is still ours. Best effort: logged on failure. */
+async function releaseHour(id: string, now: number): Promise<void> {
+  try {
+    const doc = await readReservation(id)
+    if (doc?.workshopReminderReservedAt !== new Date(now).toISOString()) return
+    await clientWrite
+      .patch(id)
+      .ifRevisionId(doc._rev)
+      .unset(['workshopReminderReservedAt'])
+      .commit({ visibility: 'sync' })
+  } catch (error) {
+    console.error('Workshop reminder: the hour was not released:', error)
+  }
 }
 
 /**
@@ -122,22 +169,19 @@ export async function sendWorkshopReminder(
   if (portal.blocker) return { kind: portal.blocker }
   const { portalUrl } = portal
 
-  const previous = reservedAt.get(conference._id)
-  if (previous !== undefined && now - previous < REMINDER_WINDOW_MS) {
-    return {
-      kind: 'rate-limited',
-      retryAfterMs: previous + REMINDER_WINDOW_MS - now,
-    }
+  // Reserve the hour before anything is read or sent; released below when
+  // nothing went out.
+  let retryAfterMs: number | null
+  try {
+    retryAfterMs = await reserveHour(conference._id, now)
+  } catch (error) {
+    // Sanity unreachable or contended: refuse rather than risk a double send.
+    console.error('Workshop reminder: the hour could not be reserved:', error)
+    return { kind: 'rate-limited', retryAfterMs: 60_000 }
   }
+  if (retryAfterMs !== null) return { kind: 'rate-limited', retryAfterMs }
 
-  // Reserve the hour NOW, before the next await, so a concurrent press sees
-  // it; released if the holders cannot be read.
-  reservedAt.set(conference._id, now)
-
-  const release = () => {
-    if (reservedAt.get(conference._id) === now)
-      reservedAt.delete(conference._id)
-  }
+  const release = () => releaseHour(conference._id, now)
 
   // The sender before the ticket read: a press that cannot send reads nothing.
   let client: Awaited<ReturnType<typeof resolveEmailSender>>['client']
@@ -145,7 +189,7 @@ export async function sendWorkshopReminder(
     ;({ client } = await resolveEmailSender(conference.organization?._ref))
   } catch (error) {
     console.error('Workshop reminder: no email sender:', error)
-    release()
+    await release()
     return { kind: 'email-unavailable' }
   }
 
@@ -161,13 +205,13 @@ export async function sendWorkshopReminder(
     join = null
   }
   if (!join) {
-    release()
+    await release()
     return { kind: 'ticketing-unavailable' }
   }
 
   const recipients = join.notSignedUp
   if (recipients.length === 0) {
-    release()
+    await release()
     return { kind: 'sent', sent: 0, failed: 0, unconfirmed: 0 }
   }
 
@@ -239,7 +283,7 @@ export async function sendWorkshopReminder(
   // Confirmed to have reached nobody: the organizer may try again without
   // waiting the hour. Anything unconfirmed keeps the hour, so a second press
   // cannot double-send what may have gone.
-  if (sent === 0 && unconfirmed === 0) release()
+  if (sent === 0 && unconfirmed === 0) await release()
   if (sent > 0) await storeLastReminder(conference._id, now, sent)
   return { kind: 'sent', sent, failed, unconfirmed }
 }
