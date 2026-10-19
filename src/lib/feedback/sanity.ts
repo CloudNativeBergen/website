@@ -85,13 +85,14 @@ export interface ConfirmedTalk {
   _id: string
   title: string | null
   feedbackCode: string | null
+  /** A speaker of the talk exists and is not erased. */
+  hasLiveSpeaker: boolean
 }
 
 /**
- * The conference's published, confirmed talks with a speaker left who is not
- * erased, for minting every code at once (#1459). GROQ may lag a write by
- * about a second; each talk is read again by id before anything is written
- * to it.
+ * The conference's published, confirmed talks, for minting every code at
+ * once (#1459). GROQ may lag a write by about a second; each talk is read
+ * again by id before anything is written to it.
  */
 export async function getConfirmedTalks(
   conferenceId: string,
@@ -99,10 +100,9 @@ export async function getConfirmedTalks(
   const talks = await scopedFetch<ConfirmedTalk[]>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "talk" && ${PUBLISHED_ONLY} && status == "confirmed"
-      && count(speakers[defined(@->_id) && !defined(@->erasedAt)]) > 0
-    ] | order(title asc){
-      _id, title, feedbackCode
+    `*[_type == "talk" && ${PUBLISHED_ONLY} && status == "confirmed"] | order(title asc){
+      _id, title, feedbackCode,
+      "hasLiveSpeaker": count(speakers[defined(@->_id) && !defined(@->erasedAt)]) > 0
     }`,
     {},
     { cache: 'no-store' },

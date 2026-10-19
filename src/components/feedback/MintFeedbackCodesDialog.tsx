@@ -5,19 +5,20 @@ import { DialogTitle } from '@headlessui/react'
 import { QrCodeIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { api } from '@/lib/trpc/client'
-import type { MintAllReport } from '@/lib/feedback/mint-all'
+import type { MintAllReport } from '@/lib/feedback/server'
 
 const SKIP_REASON: Record<MintAllReport['skipped'][number]['reason'], string> =
   {
     closed: 'Feedback window has closed',
     release: 'Waits in a scheduled release',
-    changed: 'No longer a confirmed talk',
+    noSpeaker: 'No speaker left',
+    changed: 'No longer confirmed, or no speaker left',
   }
 
 const SECONDARY =
   'font-space-grotesk w-full justify-center rounded-xl border border-brand-frosted-steel px-4 py-3 text-sm font-semibold text-brand-slate-gray hover:bg-brand-sky-mist disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800'
 const PRIMARY =
-  'font-space-grotesk inline-flex w-full items-center justify-center rounded-xl bg-brand-cloud-blue px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto dark:bg-indigo-600 dark:hover:bg-indigo-500'
+  'font-space-grotesk inline-flex w-full items-center justify-center rounded-xl bg-brand-cloud-blue px-4 py-3 text-sm font-semibold text-white shadow-xs hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto dark:bg-indigo-600 dark:hover:bg-indigo-500'
 
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`
@@ -129,8 +130,8 @@ export function MintFeedbackCodesDialog({
         ) : preview.data ? (
           <p className="text-center">
             {preview.data.withoutCode === 0
-              ? `All ${plural(preview.data.confirmed, 'confirmed talk', 'confirmed talks')} already have a Feedback Code.`
-              : `${preview.data.withoutCode} of ${plural(preview.data.confirmed, 'confirmed talk', 'confirmed talks')} have no Feedback Code yet. Mint one for each, so every room’s sheet can be printed. Talks with a code keep it.`}
+              ? 'Every confirmed talk with a speaker already has a Feedback Code.'
+              : `${preview.data.withoutCode} of ${plural(preview.data.confirmed, 'confirmed talk', 'confirmed talks')} have no Feedback Code yet. Each one whose feedback window is still open gets a code, so every room’s sheet can be printed. Talks with a code keep it.`}
           </p>
         ) : preview.error ? (
           <p
@@ -190,9 +191,7 @@ export function MintFeedbackCodesDialog({
                 disabled={mintAll.isPending}
                 className={PRIMARY}
               >
-                {mintAll.isPending
-                  ? 'Minting…'
-                  : `Mint ${plural(preview.data.withoutCode, 'code', 'codes')}`}
+                {mintAll.isPending ? 'Minting…' : 'Mint codes'}
               </button>
             )}
           </>

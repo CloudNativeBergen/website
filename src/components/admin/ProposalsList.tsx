@@ -104,7 +104,7 @@ export function ProposalsList({
                 {
                   label: 'Mint Feedback Codes',
                   onClick: onMintFeedbackCodes,
-                  icon: <QrCodeIcon className="h-4 w-4" />,
+                  icon: <QrCodeIcon className="size-4" />,
                   variant: 'secondary',
                   hidden: !onMintFeedbackCodes,
                 },

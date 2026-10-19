@@ -2,7 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { adminProcedure, protectedProcedure, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { feedbackCodeUrl } from '@/lib/feedback'
+import { feedbackCodeUrl, type FeedbackWindow } from '@/lib/feedback'
 import {
   countTalksWithoutCode,
   ensureFeedbackCode,
@@ -22,6 +22,16 @@ const talkInput = z.object({ talkId: z.string().max(200).regex(TALK_ID) })
 
 const notFound = () =>
   new TRPCError({ code: 'NOT_FOUND', message: 'Talk not found' })
+
+/** A talk's code as every procedure here answers it, URL on its domain. */
+const toCodeResponse = (
+  conference: Parameters<typeof feedbackCodeUrl>[0],
+  result: { code: string | null; window: FeedbackWindow },
+) => ({
+  code: result.code,
+  url: result.code ? feedbackCodeUrl(conference, result.code) : null,
+  window: result.window,
+})
 
 /**
  * Session Feedback for speakers (speaker feedback spec §5, §9) and the
@@ -52,11 +62,7 @@ export const sessionFeedbackRouter = router({
         now: new Date(),
       })
       if (result.status === 'refused') throw notFound()
-      return {
-        code: result.code,
-        url: result.code ? feedbackCodeUrl(conference, result.code) : null,
-        window: result.window,
-      }
+      return toCodeResponse(conference, result)
     }),
   /**
    * An organizer mints a talk's code (#1459), with the same rules as the
@@ -74,11 +80,7 @@ export const sessionFeedbackRouter = router({
       now: new Date(),
     })
     if (result.status === 'refused') throw notFound()
-    return {
-      code: result.code,
-      url: result.code ? feedbackCodeUrl(conference, result.code) : null,
-      window: result.window,
-    }
+    return toCodeResponse(conference, result)
   }),
   /**
    * A talk's code as the admin talk page shows it (#1459). Never mints:
@@ -93,12 +95,7 @@ export const sessionFeedbackRouter = router({
       now: new Date(),
     })
     if (result.status === 'refused') throw notFound()
-    return {
-      code: result.code,
-      url: result.code ? feedbackCodeUrl(conference, result.code) : null,
-      window: result.window,
-      mayMint: result.mayMint,
-    }
+    return { ...toCodeResponse(conference, result), mayMint: result.mayMint }
   }),
 
   /** How many confirmed talks the bulk mint would give a code (#1459). */

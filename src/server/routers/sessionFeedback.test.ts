@@ -796,6 +796,19 @@ describe('mintAll — every confirmed talk without a code', () => {
     expect(doc('talk-2')?.feedbackCode).toMatch(CODE)
   })
 
+  it('mints a code for a talk whose stored value is not a code', async () => {
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'talk-3' ? { ...d, feedbackCode: 'not a code!' } : d,
+    )
+    const out = await organizer().mintAll()
+    expect(out.minted.map((m) => m.talkId)).toContain('talk-3')
+    expect(doc('talk-3')?.feedbackCode).toMatch(CODE)
+    expect(await organizer().mintPreview()).toEqual({
+      confirmed: 4,
+      withoutCode: 0,
+    })
+  })
+
   it('mints nothing the second time', async () => {
     await organizer().mintAll()
     const commits = h.commits
@@ -913,16 +926,25 @@ describe('organizers never restart feedback for an erased speaker', () => {
     expect(out.code).toMatch(CODE)
   })
 
-  it('leaves the erased speaker’s talk out of the bulk mint and its count', async () => {
+  it('reports the erased speaker’s talk as skipped, and leaves it out of the count', async () => {
+    expect(await organizer().mintPreview()).toEqual({
+      confirmed: 5,
+      withoutCode: 3,
+    })
     const out = await organizer().mintAll()
     expect(doc('talk-erased')?.feedbackCode).toBeUndefined()
     expect(doc('talk-speaker-deleted')?.feedbackCode).toBeUndefined()
     expect(doc('talk-co-spoken')?.feedbackCode).toMatch(CODE)
-    expect(out.skipped).toEqual([])
-    expect(await organizer().mintPreview()).toEqual({
-      confirmed: 3,
-      withoutCode: 0,
-    })
+    expect(out.skipped).toEqual([
+      { talkId: 'talk-erased', title: 'talk-erased', reason: 'noSpeaker' },
+      {
+        talkId: 'talk-speaker-deleted',
+        title: 'talk-speaker-deleted',
+        reason: 'noSpeaker',
+      },
+    ])
+    // The speaker's documents are read by id too, before any write.
+    expect(h.attempts).toBe(3)
   })
 
   it('refuses an erased speaker’s talk even when GROQ still lists it', async () => {

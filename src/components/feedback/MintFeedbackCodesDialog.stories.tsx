@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { delay, http, HttpResponse } from 'msw'
 import { expect, fn, screen, userEvent, waitFor } from 'storybook/test'
-import type { MintAllReport } from '@/lib/feedback/mint-all'
+import type { MintAllReport } from '@/lib/feedback/server'
 import { MintFeedbackCodesDialog } from './MintFeedbackCodesDialog'
 
 const PREVIEW = '/api/trpc/sessionFeedback.mintPreview'
@@ -88,9 +88,7 @@ export const Confirm: Story = {
       ).toBeVisible(),
     )
     await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: 'Mint 41 codes' }),
-      ).toBeVisible(),
+      expect(screen.getByRole('button', { name: 'Mint codes' })).toBeVisible(),
     )
   },
 }
@@ -101,7 +99,7 @@ export const ConfirmDark: Story = { ...Confirm, globals: { theme: 'dark' } }
 export const Report: Story = {
   play: async () => {
     await userEvent.click(
-      await screen.findByRole('button', { name: 'Mint 41 codes' }),
+      await screen.findByRole('button', { name: 'Mint codes' }),
     )
     await waitFor(() =>
       expect(
@@ -156,7 +154,7 @@ export const EveryTalkHasACode: Story = {
     await waitFor(() =>
       expect(
         screen.getByText(
-          'All 43 confirmed talks already have a Feedback Code.',
+          'Every confirmed talk with a speaker already has a Feedback Code.',
         ),
       ).toBeVisible(),
     )
@@ -179,7 +177,7 @@ export const Minting: Story = {
   },
   play: async ({ args }) => {
     await userEvent.click(
-      await screen.findByRole('button', { name: 'Mint 41 codes' }),
+      await screen.findByRole('button', { name: 'Mint codes' }),
     )
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Minting…' })).toBeDisabled(),

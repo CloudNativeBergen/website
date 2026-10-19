@@ -3,6 +3,7 @@ export {
   type EnsureFeedbackCodeResult,
   readFeedbackCode,
   type FeedbackCodeActor,
+  type ReadFeedbackCodeResult,
 } from './code'
 export { expireFeedbackCodeIndex } from './cache'
 export { conferenceFeedbackCodes, getFeedbackSlots } from './sanity'

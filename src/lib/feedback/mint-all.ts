@@ -5,6 +5,7 @@
  * repeats within it, and the code index is expired once at the end.
  */
 import 'server-only'
+import { normalizeShortCode } from '@/lib/marketing/short-code'
 import { expireFeedbackCodeIndex } from './cache'
 import { ensureFeedbackCode, type MintBatch } from './code'
 import { getConfirmedTalks } from './sanity'
@@ -20,20 +21,31 @@ export interface MintAllReport {
   alreadyHad: number
   /**
    * `closed`: the window closed, or the conference ended for an unscheduled
-   * talk. `release`: a version waits in a scheduled release. `changed`: no
-   * longer a confirmed talk of this conference when read again.
+   * talk. `release`: a version waits in a scheduled release. `noSpeaker`:
+   * every speaker is erased or gone, and erasure's unset code stays unset
+   * (spec §12.3). `changed`: refused when read again by id, after GROQ
+   * listed it (no longer confirmed, or its last speaker just erased).
    */
-  skipped: (TalkRef & { reason: 'closed' | 'release' | 'changed' })[]
+  skipped: (TalkRef & {
+    reason: 'closed' | 'release' | 'noSpeaker' | 'changed'
+  })[]
   /** The write threw; the rest of the batch still ran. */
   failed: TalkRef[]
 }
 
-/** How many confirmed talks have no code yet, for the confirmation. */
+const hasCode = (talk: { feedbackCode: string | null }) =>
+  normalizeShortCode(talk.feedbackCode) !== null
+
+/**
+ * How many confirmed talks have no code yet and a speaker left, for the
+ * confirmation. An upper bound: a talk whose window has closed is only
+ * found out when minting it.
+ */
 export async function countTalksWithoutCode(conferenceId: string) {
   const talks = await getConfirmedTalks(conferenceId)
   return {
     confirmed: talks.length,
-    withoutCode: talks.filter((t) => !t.feedbackCode).length,
+    withoutCode: talks.filter((t) => t.hasLiveSpeaker && !hasCode(t)).length,
   }
 }
 
@@ -53,8 +65,12 @@ export async function mintConferenceFeedbackCodes({
   const batch: MintBatch = { codes: new Set() }
   for (const talk of await getConfirmedTalks(conference._id)) {
     const ref = { talkId: talk._id, title: talk.title ?? 'Untitled talk' }
-    if (talk.feedbackCode) {
+    if (hasCode(talk)) {
       report.alreadyHad++
+      continue
+    }
+    if (!talk.hasLiveSpeaker) {
+      report.skipped.push({ ...ref, reason: 'noSpeaker' })
       continue
     }
     try {

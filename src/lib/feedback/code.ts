@@ -49,6 +49,17 @@ export type EnsureFeedbackCodeResult =
       minted: boolean
     }
 
+/** {@link readFeedbackCode}: refused as {@link EnsureFeedbackCodeResult}. */
+export type ReadFeedbackCodeResult =
+  | { status: 'refused' }
+  | {
+      status: 'ok'
+      code: string | null
+      window: FeedbackWindow
+      /** §5 would mint a code now. */
+      mayMint: boolean
+    }
+
 /**
  * Several mints in one request (#1459). Each draw also avoids the codes the
  * batch already minted, which a GROQ read lagging those writes would miss,
@@ -119,7 +130,7 @@ function isRetryable(error: unknown): boolean {
  * organizer must not bring it back (§10.4's rule for rotation); a speaker's
  * own mint needs no check, since an erased speaker cannot sign in.
  */
-async function hasSpeakerLeft(
+async function hasLiveSpeaker(
   client: VersionsClient,
   talk: TalkDoc,
 ): Promise<boolean> {
@@ -155,7 +166,7 @@ async function readTalkForCode(
   if (talk?._id !== talkId || !mayHoldCode(talk, conference._id, actor)) {
     return null
   }
-  if ('organizer' in actor && !(await hasSpeakerLeft(client, talk))) {
+  if ('organizer' in actor && !(await hasLiveSpeaker(client, talk))) {
     return null
   }
   const window = feedbackWindow({
@@ -179,15 +190,7 @@ export async function readFeedbackCode({
   talkId: string
   conference: { _id: string; endDate?: string | null }
   now: Date
-}): Promise<
-  | { status: 'refused' }
-  | {
-      status: 'ok'
-      code: string | null
-      window: FeedbackWindow
-      mayMint: boolean
-    }
-> {
+}): Promise<ReadFeedbackCodeResult> {
   const read = await readTalkForCode(
     versionsClient(),
     talkId,
