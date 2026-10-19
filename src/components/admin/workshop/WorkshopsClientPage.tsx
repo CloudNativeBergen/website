@@ -510,24 +510,6 @@ function WorkshopsClientPageFor({
         {ticketsSection}
       </TicketHolderContext.Provider>
 
-      <TicketHolderPanel
-        view={holderView}
-        onRetry={() => void ticketHolders.refetch()}
-        onMoveToWaitlist={signupActions.moveToWaitlist}
-        onDeleteSignup={signupActions.remove}
-        isMoving={signupActions.isMoving}
-        isDeleting={signupActions.isDeleting}
-        isRefreshing={ticketHolders.isFetching}
-      />
-
-      <WorkshopRegistrationSettings
-        workshopRegistrationSponsorStart={workshopRegistrationSponsorStart}
-        workshopRegistrationStart={workshopRegistrationStart}
-        workshopRegistrationEnd={workshopRegistrationEnd}
-      />
-
-      <WorkshopEarlyAccessBulkButton />
-
       {initialWorkshops.length === 0 ? (
         <EmptyState
           icon={AcademicCapIcon}
@@ -608,6 +590,24 @@ function WorkshopsClientPageFor({
           }}
         />
       )}
+
+      <TicketHolderPanel
+        view={holderView}
+        onRetry={() => void ticketHolders.refetch()}
+        onMoveToWaitlist={signupActions.moveToWaitlist}
+        onDeleteSignup={signupActions.remove}
+        isMoving={signupActions.isMoving}
+        isDeleting={signupActions.isDeleting}
+        isRefreshing={ticketHolders.isFetching}
+      />
+
+      <WorkshopRegistrationSettings
+        workshopRegistrationSponsorStart={workshopRegistrationSponsorStart}
+        workshopRegistrationStart={workshopRegistrationStart}
+        workshopRegistrationEnd={workshopRegistrationEnd}
+      />
+
+      <WorkshopEarlyAccessBulkButton />
 
       <EarlySignupsList
         signups={

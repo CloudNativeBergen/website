@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CalendarIcon,
+  ChevronDownIcon,
   PencilSquareIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
@@ -244,64 +245,67 @@ export function WorkshopRegistrationSettings({
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center">
-          <CalendarIcon className="mr-2 h-5 w-5 text-gray-400 dark:text-gray-500" />
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+          <CalendarIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
             Workshop registration
           </h3>
-        </div>
-        <button
-          type="button"
-          onClick={openModal}
-          aria-label="Edit workshop registration"
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-400 dark:hover:bg-gray-800"
-        >
-          <PencilSquareIcon className="h-5 w-5" />
-        </button>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Sponsor Early Access Opens
-          </span>
-          <span className="text-right text-sm text-gray-900 dark:text-white">
-            {formatDateTime(workshopRegistrationSponsorStart)}
-          </span>
+          <ChevronDownIcon className="ml-auto size-5 shrink-0 text-gray-400 transition-transform group-open:rotate-180 dark:text-gray-500" />
+        </summary>
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={openModal}
+            aria-label="Edit workshop registration"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-400 dark:hover:bg-gray-800"
+          >
+            <PencilSquareIcon className="h-5 w-5" />
+          </button>
         </div>
 
-        <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Registration Opens
-          </span>
-          <span className="text-right text-sm text-gray-900 dark:text-white">
-            {formatDateTime(workshopRegistrationStart)}
-          </span>
-        </div>
+        <div className="space-y-3">
+          <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Sponsor Early Access Opens
+            </span>
+            <span className="text-right text-sm text-gray-900 dark:text-white">
+              {formatDateTime(workshopRegistrationSponsorStart)}
+            </span>
+          </div>
 
-        <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Registration Closes
-          </span>
-          <span className="text-right text-sm text-gray-900 dark:text-white">
-            {formatDateTime(workshopRegistrationEnd)}
-          </span>
-        </div>
+          <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Registration Opens
+            </span>
+            <span className="text-right text-sm text-gray-900 dark:text-white">
+              {formatDateTime(workshopRegistrationStart)}
+            </span>
+          </div>
 
-        <div className="flex items-center justify-between py-2">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Status
-          </span>
-          <StatusBadge label={status.label} color={status.color} />
-        </div>
+          <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Registration Closes
+            </span>
+            <span className="text-right text-sm text-gray-900 dark:text-white">
+              {formatDateTime(workshopRegistrationEnd)}
+            </span>
+          </div>
 
-        {status.note ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {status.note}
-          </p>
-        ) : null}
-      </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Status
+            </span>
+            <StatusBadge label={status.label} color={status.color} />
+          </div>
+
+          {status.note ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {status.note}
+            </p>
+          ) : null}
+        </div>
+      </details>
 
       <ModalShell
         isOpen={isOpen}
