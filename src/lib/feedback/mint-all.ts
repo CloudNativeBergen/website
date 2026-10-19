@@ -86,12 +86,14 @@ const CONCURRENCY = 4
  */
 const BUDGET_MS = 30_000
 
+/**
+ * Each talk is judged at the moment it is started, not when the run began:
+ * a window may close while the run goes on.
+ */
 export async function mintConferenceFeedbackCodes({
   conference,
-  now,
 }: {
   conference: { _id: string; endDate?: string | null }
-  now: Date
 }): Promise<MintAllReport> {
   const report: MintAllReport = {
     minted: [],
@@ -122,7 +124,7 @@ export async function mintConferenceFeedbackCodes({
         talkId: talk._id,
         actor: { organizer: true },
         conference,
-        now,
+        now: new Date(),
         batch,
       })
       if (result.status === 'refused') {

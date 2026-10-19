@@ -1069,3 +1069,21 @@ describe('mintAll — nothing to mint, nothing to expire', () => {
     expect(revalidateTag).not.toHaveBeenCalled()
   })
 })
+
+describe('mintAll — each talk judged when it starts', () => {
+  it('mints nothing for a talk whose window closed while the run was going', async () => {
+    const late = Array.from({ length: 8 }, (_, i) => `talk-late${i}`)
+    h.dataset.push(...late.flatMap((id) => [talk(id), schedule(id)]))
+    // Ten seconds before the windows close (2026-06-11 08:40Z); the first
+    // commit lands after they have.
+    vi.setSystemTime(new Date('2026-06-11T08:39:50Z'))
+    h.beforeCommit.push(() =>
+      // 15 s on: past the windows, within the run's 30 s start budget.
+      vi.setSystemTime(new Date('2026-06-11T08:40:05Z')),
+    )
+    const out = await organizer().mintAll()
+    const closed = out.skipped.filter((t) => t.reason === 'closed')
+    expect(closed.length).toBeGreaterThan(0)
+    for (const t of closed) expect(doc(t.talkId)?.feedbackCode).toBeUndefined()
+  })
+})

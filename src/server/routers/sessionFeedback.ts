@@ -112,6 +112,6 @@ export const sessionFeedbackRouter = router({
   mintAll: adminProcedure.mutation(async () => {
     const { conference } = await getConferenceForCurrentDomain()
     if (!conference?._id) throw notFound()
-    return mintConferenceFeedbackCodes({ conference, now: new Date() })
+    return mintConferenceFeedbackCodes({ conference })
   }),
 })

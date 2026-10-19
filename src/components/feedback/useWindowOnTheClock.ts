@@ -17,9 +17,13 @@ const MAX_TIMER_MS = 24 * 60 * 60 * 1000
 export function useWindowOnTheClock(
   computed: FeedbackWindow | undefined,
 ): FeedbackWindow | undefined {
-  const [now, setNow] = useState<number | null>(null)
   const opensAt = computed?.opensAt
   const closesAt = computed?.closesAt
+  // A sample belongs to the window it was taken for: a moved session's
+  // window is first shown as the server computed it, then sampled afresh.
+  const key = `${opensAt}|${closesAt}`
+  const [sample, setSample] = useState<{ key: string; at: number } | null>(null)
+  const now = sample?.key === key ? sample.at : null
   useEffect(() => {
     if (!opensAt || !closesAt) return
     const current = Date.now()
@@ -30,17 +34,18 @@ export function useWindowOnTheClock(
       now === null ? 0 : next === undefined ? null : next - current + 50
     if (wait === null) return
     const timer = setTimeout(
-      () => setNow(Date.now()),
+      () => setSample({ key, at: Date.now() }),
       Math.min(wait, MAX_TIMER_MS),
     )
     return () => clearTimeout(timer)
-  }, [opensAt, closesAt, now])
+  }, [opensAt, closesAt, key, now])
   // Timers do not run while a laptop sleeps, so a page left up through the
   // session start would keep its old state: re-read the clock on return.
   useEffect(() => {
     if (!opensAt || !closesAt) return
     const tick = () => {
-      if (document.visibilityState === 'visible') setNow(Date.now())
+      if (document.visibilityState === 'visible')
+        setSample({ key, at: Date.now() })
     }
     document.addEventListener('visibilitychange', tick)
     window.addEventListener('focus', tick)
@@ -48,7 +53,7 @@ export function useWindowOnTheClock(
       document.removeEventListener('visibilitychange', tick)
       window.removeEventListener('focus', tick)
     }
-  }, [opensAt, closesAt])
+  }, [opensAt, closesAt, key])
   if (!computed || now === null) return computed
   return { ...computed, state: feedbackWindowStateAt(computed, new Date(now)) }
 }
