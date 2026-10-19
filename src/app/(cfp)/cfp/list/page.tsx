@@ -10,6 +10,9 @@ import { clientReadCached } from '@/lib/sanity/client'
 import { resolveSnapshotField } from '@/lib/speaker/utils'
 import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
+import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
+import { getSpeakerFeedbackChips } from '@/lib/feedback/server'
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { CompactConferenceCard } from '@/components/cfp/CompactConferenceCard'
 import { SpeakerShareSidebar } from '@/components/cfp/SpeakerShareSidebar'
@@ -179,9 +182,35 @@ export default async function SpeakerDashboard() {
       const isOver = isConferenceOver(conference)
       const canEditProposals = !isOver
 
+      // Session Feedback chips (speaker feedback spec §9.4), read only for an
+      // edition where the speaker has a confirmed talk. A failed read hides
+      // the chips, never the dashboard.
+      const feedbackChips =
+        ATTENDEE_PAGE_LIVE &&
+        (proposals ?? []).some((p) => p.status === 'confirmed')
+          ? await getSpeakerFeedbackChips({
+              conference,
+              speakerId,
+              now: new Date(),
+            }).catch((error) => {
+              console.error(
+                `Could not read Session Feedback chips for ${conference._id}`,
+                error,
+              )
+              return {}
+            })
+          : {}
+
       return {
         conference,
         proposals: proposals || [],
+        feedbackChips,
+        // The section a chip links to opens only on the talk's own host (spec
+        // §5): this host for this edition, the edition's own domain otherwise.
+        feedbackLinkOrigin:
+          conference._id === currentConference?._id
+            ? ''
+            : findOutboundOrigin(conference),
         galleryImages,
         workshopStats,
         travelSupport,

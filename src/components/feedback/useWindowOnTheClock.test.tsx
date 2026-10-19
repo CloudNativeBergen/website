@@ -36,6 +36,44 @@ describe('useWindowOnTheClock', () => {
     expect(result.current?.state).toBe('open')
   })
 
+  it('turns feedback visible at the last slot’s end, on the clock', () => {
+    const w = {
+      ...windowFrom('2026-10-26T07:50:00Z', 'open'),
+      feedbackVisible: false,
+    }
+    const { result } = renderHook(() => useWindowOnTheClock(w))
+    act(() => vi.advanceTimersByTime(0))
+    expect(result.current).toMatchObject({
+      state: 'open',
+      feedbackVisible: false,
+    })
+    // The slot ends at 08:30.
+    act(() => vi.advanceTimersByTime(30 * 60_000 + 100))
+    expect(result.current).toMatchObject({
+      state: 'open',
+      feedbackVisible: true,
+    })
+  })
+
+  it('turns an unscheduled talk’s feedback visible when the conference is over', () => {
+    const w: FeedbackWindow = {
+      state: 'unscheduled',
+      feedbackVisible: false,
+      conferenceOverAt: '2026-10-26T08:30:00.000Z',
+    }
+    const { result } = renderHook(() => useWindowOnTheClock(w))
+    act(() => vi.advanceTimersByTime(0))
+    expect(result.current).toMatchObject({
+      state: 'unscheduled',
+      feedbackVisible: false,
+    })
+    act(() => vi.advanceTimersByTime(30 * 60_000 + 100))
+    expect(result.current).toMatchObject({
+      state: 'unscheduled',
+      feedbackVisible: true,
+    })
+  })
+
   it('never judges a moved window by the clock sampled for the old one', () => {
     const { result, rerender } = renderHook(({ w }) => useWindowOnTheClock(w), {
       initialProps: { w: windowFrom('2026-10-26T10:00:00Z', 'before') },

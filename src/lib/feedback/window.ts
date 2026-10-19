@@ -29,6 +29,12 @@ export interface FeedbackWindow {
   lastSlotEnd?: string
   /** Speakers see their feedback once the last slot ended or the conference is over. */
   feedbackVisible: boolean
+  /**
+   * When the conference will be over, for a window whose feedback is not
+   * visible yet and would not be by its last slot's end (no slot, or a slot
+   * dated after the conference), so a page left open turns visible on time.
+   */
+  conferenceOverAt?: string
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -60,32 +66,47 @@ export function feedbackWindow({
   now: Date
 }): FeedbackWindow {
   const t = now.getTime()
-  const overAt = conferenceOverAt(conferenceEndDate)
-  const conferenceOver = overAt !== null && t >= overAt
+  const conferenceOver = isConferenceOverAt(conferenceEndDate, now)
 
   let opens = Infinity
   let lastEnd = -Infinity
   for (const s of slots) {
     const start = slotInstant(s.date, s.startTime)
     const end = slotInstant(s.date, s.endTime)
-    if (start === null || end === null) continue
+    // A slot that does not end after it starts (Studio checks only the
+    // HH:mm shape) would show feedback before the session is over.
+    if (start === null || end === null || end <= start) continue
     opens = Math.min(opens, start)
     lastEnd = Math.max(lastEnd, end)
   }
 
   if (opens === Infinity) {
-    return { state: 'unscheduled', feedbackVisible: conferenceOver }
+    const overAt = conferenceOverAt(conferenceEndDate)
+    return conferenceOver || overAt === null
+      ? { state: 'unscheduled', feedbackVisible: conferenceOver }
+      : {
+          state: 'unscheduled',
+          feedbackVisible: false,
+          conferenceOverAt: new Date(overAt).toISOString(),
+        }
   }
 
   const closes = lastEnd + DAY_MS
   const state: FeedbackWindowState =
     t < opens ? 'before' : t < closes ? 'open' : 'closed'
+  const feedbackVisible = t >= lastEnd || conferenceOver
+  // A slot dated after the conference's last day (a data error): feedback
+  // turns visible when the conference is over, before that slot ends.
+  const overAt = conferenceOverAt(conferenceEndDate)
   return {
     state,
     opensAt: new Date(opens).toISOString(),
     closesAt: new Date(closes).toISOString(),
     lastSlotEnd: new Date(lastEnd).toISOString(),
-    feedbackVisible: t >= lastEnd || conferenceOver,
+    feedbackVisible,
+    ...(!feedbackVisible &&
+      overAt !== null &&
+      overAt < lastEnd && { conferenceOverAt: new Date(overAt).toISOString() }),
   }
 }
 
@@ -104,3 +125,42 @@ export function feedbackWindowStateAt(
   if (t < Date.parse(window.opensAt)) return 'before'
   return t < Date.parse(window.closesAt) ? 'open' : 'closed'
 }
+
+/**
+ * Whether speakers see their feedback at `now` (§6), from a window computed
+ * earlier: once its last slot has ended, once the conference is over for a
+ * talk with no slot, or when the server already said so.
+ */
+export function feedbackVisibleAt(
+  window: Pick<
+    FeedbackWindow,
+    'feedbackVisible' | 'lastSlotEnd' | 'conferenceOverAt'
+  >,
+  now: Date,
+): boolean {
+  const reached = (instant: string | undefined) =>
+    !!instant && now.getTime() >= Date.parse(instant)
+  return (
+    window.feedbackVisible ||
+    reached(window.lastSlotEnd) ||
+    reached(window.conferenceOverAt)
+  )
+}
+
+/** "The conference is over" at `now`, as {@link feedbackWindow} judges it. */
+export function isConferenceOverAt(
+  endDate: string | null | undefined,
+  now: Date,
+): boolean {
+  const overAt = conferenceOverAt(endDate)
+  return overAt !== null && now.getTime() >= overAt
+}
+
+/**
+ * §5: no code once the talk's window has closed, or, for a talk with no
+ * slot, once its conference is over (for an unscheduled talk
+ * `feedbackVisible` is exactly "the conference is over").
+ */
+export const mayMint = (window: FeedbackWindow) =>
+  window.state !== 'closed' &&
+  !(window.state === 'unscheduled' && window.feedbackVisible)

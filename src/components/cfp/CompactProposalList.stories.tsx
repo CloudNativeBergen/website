@@ -442,16 +442,91 @@ export const ConferenceEnded: Story = {
       ),
     ],
     canEdit: false,
-    conferenceHasEnded: true,
+    // Card Counts only (an edition before Feedback Codes): 42 of 60 green.
+    feedbackChips: {
+      'talk-1': { kind: 'results', lovedItPercent: 70, total: 60 },
+    },
+    // An earlier edition: its section opens on its own host.
+    feedbackLinkOrigin: 'https://2025.cloudnativedays.no',
   },
   parameters: {
     docs: {
       description: {
         story:
-          'After conference ends: shows audience feedback count and warning for missing slides.',
+          'After conference ends: shows the Session Feedback chip ("<n>% loved it · <total>", speaker feedback spec §9.4) and the warning for missing slides. An earlier edition’s chip links to its own host, the only one where its section opens (§5).',
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByRole('link', { name: /70% loved it · 60 responses/ }),
+    ).toHaveAttribute(
+      'href',
+      'https://2025.cloudnativedays.no/cfp/proposal/talk-1#session-feedback',
+    )
+  },
+}
+
+const feedbackProposals = [
+  createMockProposal(
+    'talk-1',
+    'Kubernetes: the hard parts',
+    Status.confirmed,
+    Format.presentation_45,
+  ),
+  createMockProposal(
+    'talk-2',
+    'Platform engineering in ten minutes',
+    Status.confirmed,
+    Format.lightning_10,
+  ),
+  createMockProposal(
+    'talk-3',
+    'A talk still under review',
+    Status.submitted,
+    Format.presentation_25,
+  ),
+]
+
+/**
+ * The Session Feedback chips on this host's edition (speaker feedback spec
+ * §9.4): "Feedback Code" until feedback is visible, then the loved-it share
+ * and total. Both link to the talk's Session Feedback section.
+ */
+export const SessionFeedbackChips: Story = {
+  args: {
+    proposals: feedbackProposals,
+    canEdit: true,
+    feedbackLinkOrigin: '',
+    feedbackChips: {
+      'talk-1': { kind: 'results', lovedItPercent: 82, total: 57 },
+      'talk-2': { kind: 'code' },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByRole('link', { name: /82% loved it · 57 responses/ }),
+    ).toHaveAttribute('href', '/cfp/proposal/talk-1#session-feedback')
+    expect(canvas.getByRole('link', { name: 'Feedback Code' })).toHaveAttribute(
+      'href',
+      '/cfp/proposal/talk-2#session-feedback',
+    )
+    // A talk with no chip shows none.
+    expect(canvas.getAllByText(/Feedback Code|loved it/)).toHaveLength(2)
+  },
+}
+
+export const SessionFeedbackChipsDark: Story = {
+  ...SessionFeedbackChips,
+  globals: { theme: 'dark' },
+}
+
+/** Phone width: the chips wrap under the title. */
+export const SessionFeedbackChipsPhone: Story = {
+  ...SessionFeedbackChips,
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
 }
 
 export const MultiSpeaker: Story = {

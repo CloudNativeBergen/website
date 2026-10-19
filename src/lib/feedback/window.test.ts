@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { feedbackWindow, feedbackWindowStateAt } from './window'
+import {
+  feedbackVisibleAt,
+  feedbackWindow,
+  feedbackWindowStateAt,
+} from './window'
 
 // Expected instants are worked out by hand from Oslo wall-clock times:
 // CEST (summer) is UTC+2, CET (winter) is UTC+1.
@@ -19,7 +23,12 @@ describe('feedbackWindow', () => {
         conferenceEndDate: '2026-10-29',
         now: at('2026-10-17T12:00:00Z'),
       }),
-    ).toEqual({ state: 'unscheduled', feedbackVisible: false })
+    ).toEqual({
+      state: 'unscheduled',
+      feedbackVisible: false,
+      // When it will be visible: the conference is over (UTC midnight).
+      conferenceOverAt: '2026-10-30T00:00:00.000Z',
+    })
   })
 
   it('runs from the slot start to 24 hours after its end', () => {
@@ -173,11 +182,19 @@ describe('feedbackWindow', () => {
         slots: [
           slot('2026-06-10', '', '10:40'),
           { date: '2026-06-10', startTime: '10:00', endTime: null },
+          // Ends before it starts (Studio checks only the HH:mm shape): it
+          // would make feedback visible before the session is over.
+          slot('2026-06-10', '13:00', '01:40'),
+          slot('2026-06-10', '13:00', '13:00'),
         ],
         conferenceEndDate: '2026-06-11',
         now: at('2026-06-10T09:00:00Z'),
       }),
-    ).toEqual({ state: 'unscheduled', feedbackVisible: false })
+    ).toEqual({
+      state: 'unscheduled',
+      feedbackVisible: false,
+      conferenceOverAt: '2026-06-12T00:00:00.000Z',
+    })
   })
 
   it('never treats a missing conference end date as over', () => {
@@ -188,6 +205,39 @@ describe('feedbackWindow', () => {
         now: at('2030-01-01T00:00:00Z'),
       }).feedbackVisible,
     ).toBe(false)
+  })
+})
+
+describe('feedbackVisibleAt — whether a shown window shows feedback later', () => {
+  it('turns visible at the last slot’s end', () => {
+    const shown = feedbackWindow({
+      slots: [slot('2026-06-10', '10:00', '10:40')],
+      conferenceEndDate: '2026-06-11',
+      now: at('2026-06-01T00:00:00Z'),
+    })
+    expect(feedbackVisibleAt(shown, at('2026-06-10T08:39:59Z'))).toBe(false)
+    expect(feedbackVisibleAt(shown, at('2026-06-10T08:40:00Z'))).toBe(true)
+  })
+
+  it('turns visible when the conference is over, before a slot dated after it', () => {
+    // A slot dated after the conference's last day (a data error).
+    const shown = feedbackWindow({
+      slots: [slot('2026-06-20', '10:00', '11:00')],
+      conferenceEndDate: '2026-06-11',
+      now: at('2026-06-01T00:00:00Z'),
+    })
+    expect(feedbackVisibleAt(shown, at('2026-06-11T23:59:59Z'))).toBe(false)
+    expect(feedbackVisibleAt(shown, at('2026-06-12T00:00:00Z'))).toBe(true)
+  })
+
+  it('turns an unscheduled talk visible once the conference is over', () => {
+    const shown = feedbackWindow({
+      slots: [],
+      conferenceEndDate: '2026-06-11',
+      now: at('2026-06-01T00:00:00Z'),
+    })
+    expect(feedbackVisibleAt(shown, at('2026-06-11T23:59:59Z'))).toBe(false)
+    expect(feedbackVisibleAt(shown, at('2026-06-12T00:00:00Z'))).toBe(true)
   })
 })
 

@@ -32,8 +32,8 @@ export function SessionFeedbackPrivacy() {
         </li>
         <li>
           <strong>Who sees it:</strong> the session&apos;s speakers see the
-          totals and the comments; organizers see everything and can hide or
-          remove comments.
+          totals and the comments, each with the time it was given, to the
+          minute; organizers see everything and can hide or remove comments.
         </li>
         <li>
           <strong>Purpose and legal basis:</strong> helping speakers and

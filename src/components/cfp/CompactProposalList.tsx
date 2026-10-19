@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import {
   PencilIcon,
-  ChatBubbleBottomCenterTextIcon,
+  FaceSmileIcon,
+  QrCodeIcon,
   ChatBubbleLeftRightIcon,
   VideoCameraIcon,
   ExclamationTriangleIcon,
@@ -33,6 +34,8 @@ import { useState } from 'react'
 import { Action } from '@/lib/proposal/types'
 import { CheckIcon } from '@heroicons/react/20/solid'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { SESSION_FEEDBACK_ANCHOR } from '@/lib/feedback'
+import type { FeedbackChip, FeedbackChips } from '@/lib/feedback/server'
 
 type BadgeColor =
   'gray' | 'red' | 'yellow' | 'green' | 'blue' | 'purple' | 'orange'
@@ -40,7 +43,6 @@ type BadgeColor =
 interface CompactProposalListProps {
   proposals: ProposalExisting[]
   canEdit: boolean
-  conferenceHasEnded?: boolean
   /**
    * Unread message count per proposal id (V2b). A row with a positive count
    * shows an unread-messages badge. Presentational — the parent
@@ -48,6 +50,65 @@ interface CompactProposalListProps {
    * and passes the map down, so this component stays testable without tRPC.
    */
   unreadByProposalId?: Record<string, number>
+  /**
+   * Session Feedback chip per confirmed talk (speaker feedback spec §9.4),
+   * computed on the server. A talk without one shows none.
+   */
+  feedbackChips?: FeedbackChips
+  /**
+   * Where a chip's Session Feedback section opens (§5: only on the talk's
+   * own host): `''` for this host, an origin for an earlier edition's host,
+   * absent for no link.
+   */
+  feedbackLinkOrigin?: string | null
+}
+
+const CHIP =
+  'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium'
+
+/** The Session Feedback chip (§9.4), a link to the section when it opens here. */
+function FeedbackChipBadge({
+  chip,
+  href,
+}: {
+  chip: FeedbackChip
+  href?: string
+}) {
+  const { className, Icon, text, srSuffix } =
+    chip.kind === 'code'
+      ? {
+          className:
+            'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
+          Icon: QrCodeIcon,
+          text: 'Feedback Code',
+          srSuffix: '',
+        }
+      : {
+          className:
+            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+          Icon: FaceSmileIcon,
+          text: `${chip.lovedItPercent}% loved it · ${chip.total}`,
+          // The bare total needs its noun for a screen reader.
+          srSuffix: chip.total === 1 ? ' response' : ' responses',
+        }
+  const content = (
+    <>
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {text}
+      {srSuffix && <span className="sr-only">{srSuffix}</span>}
+    </>
+  )
+  return href ? (
+    <Link
+      href={href}
+      className={`${CHIP} ${className} hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue`}
+      title="Open Session Feedback"
+    >
+      {content}
+    </Link>
+  ) : (
+    <span className={`${CHIP} ${className}`}>{content}</span>
+  )
 }
 
 function getProposalStatusConfig(
@@ -87,8 +148,9 @@ function getProposalStatusConfig(
 export function CompactProposalList({
   proposals,
   canEdit,
-  conferenceHasEnded = false,
   unreadByProposalId,
+  feedbackChips,
+  feedbackLinkOrigin,
 }: CompactProposalListProps) {
   const queryString = useImpersonateQueryString()
   const router = useRouter()
@@ -123,17 +185,7 @@ export function CompactProposalList({
         {sortedProposals.map((proposal) => {
           const formatInfo = formatConfig[proposal.format]
           const FormatIcon = formatInfo?.icon
-          const audienceFeedback = proposal.audienceFeedback
-          const totalFeedback = audienceFeedback
-            ? audienceFeedback.greenCount +
-              audienceFeedback.yellowCount +
-              audienceFeedback.redCount
-            : 0
-          const showFeedback =
-            conferenceHasEnded &&
-            (proposal.status === 'confirmed' ||
-              proposal.status === 'accepted') &&
-            totalFeedback > 0
+          const feedbackChip = feedbackChips?.[proposal._id]
 
           const isApproved =
             proposal.status === 'confirmed' || proposal.status === 'accepted'
@@ -223,14 +275,17 @@ export function CompactProposalList({
                     </span>
                   </span>
                 )}
-                {showFeedback && (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                    title="Audience feedback available"
-                  >
-                    <ChatBubbleBottomCenterTextIcon className="h-3 w-3" />
-                    {totalFeedback}
-                  </span>
+                {feedbackChip && (
+                  <FeedbackChipBadge
+                    chip={feedbackChip}
+                    href={
+                      feedbackLinkOrigin == null
+                        ? undefined
+                        : feedbackLinkOrigin
+                          ? `${feedbackLinkOrigin}/cfp/proposal/${proposal._id}#${SESSION_FEEDBACK_ANCHOR}`
+                          : `/cfp/proposal/${proposal._id}${queryString}#${SESSION_FEEDBACK_ANCHOR}`
+                    }
+                  />
                 )}
                 {hasProposalVideo(proposal) && (
                   <span

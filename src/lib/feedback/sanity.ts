@@ -7,7 +7,11 @@
  * unpublished schedule would open a Feedback Window.
  */
 import 'server-only'
-import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import {
+  clientReadCached,
+  clientReadUncached,
+  clientWrite,
+} from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { OFFICIAL_SCHEDULE_FILTER } from '@/lib/speaker/sanity'
 import type { FeedbackSlot } from './window'
@@ -114,10 +118,12 @@ export async function getConfirmedTalks(
 /**
  * Every slot on the conference's published, official schedule days, by
  * talk: {@link getFeedbackSlots} for all talks in one read, for the bulk
- * mint's count (#1459).
+ * mint's count (#1459) and the dashboard chips, which pass the CDN client.
  */
 export async function getConferenceFeedbackSlots(
   conferenceId: string,
+  client:
+    typeof clientReadUncached | typeof clientReadCached = clientReadUncached,
 ): Promise<Map<string, FeedbackSlot[]>> {
   const days = await scopedFetch<
     | {
@@ -129,7 +135,7 @@ export async function getConferenceFeedbackSlots(
       }[]
     | null
   >(
-    clientReadUncached,
+    client,
     { conferenceId },
     `*[_type == "schedule" && ${PUBLISHED_ONLY} && ${OFFICIAL_SCHEDULE_FILTER}]{
       date,
@@ -138,7 +144,7 @@ export async function getConferenceFeedbackSlots(
       }
     }`,
     {},
-    { cache: 'no-store' },
+    client === clientReadUncached ? { cache: 'no-store' } : {},
   )
   const byTalk = new Map<string, FeedbackSlot[]>()
   for (const day of days ?? []) {
