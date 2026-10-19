@@ -784,6 +784,29 @@ describe('mintAll — every confirmed talk without a code', () => {
     expect(out.minted.map((m) => doc(m.talkId)?.feedbackCode)).toEqual(codes)
   })
 
+  it('never repeats a code a talk already held but GROQ did not show', async () => {
+    // talk-1 got 'aaaaaa' from its speaker a moment ago: the doc endpoint
+    // has it, GROQ does not yet, and the random source draws it next.
+    h.groqSnapshot = structuredClone(h.dataset)
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'talk-1' ? { ...d, feedbackCode: 'aaaaaa' } : d,
+    )
+    let calls = 0
+    const random = vi
+      .spyOn(globalThis.crypto, 'getRandomValues')
+      .mockImplementation(<T extends ArrayBufferView | null>(array: T): T => {
+        const letter = Math.floor(calls++ / 6)
+        ;(array as unknown as Uint32Array)[0] = Math.ceil(
+          (letter * 2 ** 32) / 31,
+        )
+        return array
+      })
+    const out = await organizer().mintAll()
+    random.mockRestore()
+    expect(doc('talk-1')?.feedbackCode).toBe('aaaaaa')
+    expect(out.minted.map((m) => m.code)).not.toContain('aaaaaa')
+  })
+
   it('reports a talk whose write fails and still mints the rest', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     // The first talk's transaction fails, as a Sanity outage would.

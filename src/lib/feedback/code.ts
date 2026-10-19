@@ -225,7 +225,11 @@ export async function ensureFeedbackCode({
   const read = await readTalkForCode(client, talkId, actor, conference, now)
   if (!read) return { status: 'refused' }
   const { talk, window, existing } = read
-  if (existing) return { status: 'ok', code: existing, window, minted: false }
+  if (existing) {
+    // GROQ may not show it yet: the batch's later draws must avoid it too.
+    batch?.codes.add(existing)
+    return { status: 'ok', code: existing, window, minted: false }
+  }
   if (!mayMint(window))
     return { status: 'ok', code: null, window, minted: false }
 

@@ -59,8 +59,10 @@ const CONCURRENCY = 4
 /**
  * No talk is started after this, so the run reports before the route's limit.
  * A talk not reached is left for the next run, which mints nothing twice.
+ * Bounds starts only: a talk already started runs on, retries and sweep
+ * included, so this leaves the slowest such talk 30 s.
  */
-const BUDGET_MS = 40_000
+const BUDGET_MS = 30_000
 
 export async function mintConferenceFeedbackCodes({
   conference,
