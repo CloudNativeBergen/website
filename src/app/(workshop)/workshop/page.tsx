@@ -168,22 +168,22 @@ export default async function WorkshopPage({
   // the official opening. Through the ONE cached read of the conference's
   // links, never a live read: it decides what is shown, and the sign-up
   // checks the link live. A cookie whose link is no longer live is no cookie.
+  // A LIVE LINK names its sponsor, as `workshop.signup` records it; the
+  // ticket type (from the tickets the decision above already read) is the
+  // fallback when there is no live link.
+  const ticketType = earlyAccessTicketTypeOf(
+    access.allowed ? access.eligibleTickets : [],
+    conference.workshopEarlyAccessTicketTypes,
+  )
+  const token = earlyAccessTokenOf(await cookies())
   const { registration, access: earlyAccess } = await registrationWindowFor(
     conference,
     new Date(),
     async () => {
-      // A LIVE LINK names its sponsor, as `workshop.signup` records it; the
-      // ticket type (from the tickets the decision above already read) is
-      // the fallback when there is no live link.
-      const ticketType = earlyAccessTicketTypeOf(
-        access.allowed ? access.eligibleTickets : [],
-        conference.workshopEarlyAccessTicketTypes,
-      )
       // The banner reads "early access through …".
       const byType = ticketType
         ? { sponsorName: `your “${ticketType}” ticket` }
         : null
-      const token = earlyAccessTokenOf(await cookies())
       if (!token) return byType
       try {
         return (await resolveEarlyAccess(conference._id, token)) ?? byType
@@ -197,6 +197,11 @@ export default async function WorkshopPage({
         console.error('[workshop] early-access links could not be read', error)
         return byType
       }
+    },
+    {
+      conferenceId: conference._id,
+      cookie: token !== undefined,
+      ticketType: ticketType !== null,
     },
   )
 

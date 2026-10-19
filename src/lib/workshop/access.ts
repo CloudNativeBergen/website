@@ -45,7 +45,20 @@ export type WorkshopPortalAccess =
       tickets: TicketCandidate[]
     }
 
-export async function decideWorkshopPortalAccess(params: {
+export async function decideWorkshopPortalAccess(
+  params: Parameters<typeof decide>[0],
+): Promise<WorkshopPortalAccess> {
+  const access = await decide(params)
+  // One line per refusal, the reason only: never the person.
+  if (!access.allowed) {
+    console.warn(
+      `[workshop] signup refused: ${access.denial} conference=${params.conference._id}`,
+    )
+  }
+  return access
+}
+
+async function decide(params: {
   conference: ConferenceTenant &
     ConferenceTicketingBinding & {
       _id?: string

@@ -651,42 +651,55 @@ export const workshopRouter = router({
         // type keeps the sponsor attribution: both are recorded. When the
         // type admits, a failed lookup or a dead link does not refuse: the
         // sign-up goes ahead with only the type.
+        const ticketType = earlyAccessTicketTypeOf(
+          eligibleTickets,
+          conference.workshopEarlyAccessTicketTypes,
+        )
+        const token = earlyAccessTokenOf(ctx.req.cookies)
         const { registration, access } = await registrationWindowFor<{
           sponsor?: { _id: string }
           ticketType?: string
-        }>(conference, new Date(), async () => {
-          const ticketType = earlyAccessTicketTypeOf(
-            eligibleTickets,
-            conference.workshopEarlyAccessTicketTypes,
-          )
-          const byType = ticketType ? { ticketType } : null
-          const token = earlyAccessTokenOf(ctx.req.cookies)
-          if (!token) return byType
-          let found: Awaited<ReturnType<typeof findEarlyAccessSponsor>>
-          try {
-            found = await findEarlyAccessSponsor(conference._id, token)
-          } catch (error) {
-            console.error('[workshop] early-access lookup failed', error)
-            if (byType) return byType
-            // NEVER ADMITS, and never names the official opening to a
-            // person whose early access was simply not checked.
-            throw new TRPCError({
-              code: 'SERVICE_UNAVAILABLE',
-              message:
-                'We could not check your early access right now. Please try again in a moment.',
-            })
-          }
-          // The link is not live. If the portal page's cached links still
-          // say it is, the page is showing this person an early access
-          // they do not have: make its next view read them again.
-          if (!found) {
-            await expireEarlyAccessLinksIfTheyDisagree(conference._id, token, {
-              live: false,
-            })
-            return byType
-          }
-          return { sponsor: found, ...byType }
-        })
+        }>(
+          conference,
+          new Date(),
+          async () => {
+            const byType = ticketType ? { ticketType } : null
+            if (!token) return byType
+            let found: Awaited<ReturnType<typeof findEarlyAccessSponsor>>
+            try {
+              found = await findEarlyAccessSponsor(conference._id, token)
+            } catch (error) {
+              console.error('[workshop] early-access lookup failed', error)
+              if (byType) return byType
+              // NEVER ADMITS, and never names the official opening to a
+              // person whose early access was simply not checked.
+              throw new TRPCError({
+                code: 'SERVICE_UNAVAILABLE',
+                message:
+                  'We could not check your early access right now. Please try again in a moment.',
+              })
+            }
+            // The link is not live. If the portal page's cached links still
+            // say it is, the page is showing this person an early access
+            // they do not have: make its next view read them again.
+            if (!found) {
+              await expireEarlyAccessLinksIfTheyDisagree(
+                conference._id,
+                token,
+                {
+                  live: false,
+                },
+              )
+              return byType
+            }
+            return { sponsor: found, ...byType }
+          },
+          {
+            conferenceId: conference._id,
+            cookie: token !== undefined,
+            ticketType: ticketType !== null,
+          },
+        )
         if (registration.status === 'not-open-yet') {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
