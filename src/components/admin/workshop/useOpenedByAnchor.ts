@@ -6,11 +6,13 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 const shownKey = (anchor: string) => `anchorShown:${anchor}`
 
 /**
- * The marks kept by the Navigation API's entry key, where the browser has it.
- * Next drops the page's own keys from `history.state` on `router.refresh()`
- * (every save on this page refreshes), and the entry key survives that.
+ * The marks kept by the Navigation API's entry key, where the browser has it,
+ * in session storage. Next drops the page's own keys from `history.state` on
+ * `router.refresh()` (every save on this page refreshes); the entry key
+ * survives that, and with session storage a reload too.
  */
-const shownEntries = new Set<string>()
+const storedKey = (entry: string, anchor: string) =>
+  `anchorShown:${entry}:${anchor}`
 const entryKey = () =>
   (
     window as unknown as {
@@ -20,7 +22,11 @@ const entryKey = () =>
 
 function shownInThisEntry(anchor: string) {
   const key = entryKey()
-  if (key && shownEntries.has(`${key}:${anchor}`)) return true
+  try {
+    if (key && sessionStorage.getItem(storedKey(key, anchor))) return true
+  } catch {
+    // Storage blocked: the mark in the entry's state is all there is.
+  }
   const state: unknown = window.history.state
   return (
     !!state &&
@@ -31,7 +37,11 @@ function shownInThisEntry(anchor: string) {
 
 function markShownInThisEntry(anchor: string) {
   const key = entryKey()
-  if (key) shownEntries.add(`${key}:${anchor}`)
+  try {
+    if (key) sessionStorage.setItem(storedKey(key, anchor), '1')
+  } catch {
+    // Storage blocked: the mark in the entry's state is all there is.
+  }
   const state: unknown = window.history.state
   // Next's own keys in the entry are kept, so it passes this through.
   window.history.replaceState(

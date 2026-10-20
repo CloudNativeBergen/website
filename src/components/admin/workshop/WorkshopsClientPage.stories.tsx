@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { expect, within } from 'storybook/test'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
+import { mockDateBeforeEach } from '@/lib/storybook/mockDate'
 import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { WorkshopTicketsSection } from './tickets/WorkshopTicketsSection'
@@ -135,6 +136,8 @@ const undecided = buildWorkshopTicketList(
 const meta = {
   title: 'Systems/Workshops/Admin/WorkshopsPage',
   component: WorkshopsClientPage,
+  // Inside the registration window below: the card's badge reads the clock.
+  beforeEach: mockDateBeforeEach(new Date('2026-09-25T12:00:00Z')),
   parameters: {
     layout: 'fullscreen',
     msw: { handlers: handlers(0) },

@@ -496,7 +496,7 @@ describe('a configured list', () => {
   // A save refreshes the page, and Next writes the entry's state anew without
   // the page's own keys. Shown again later (Back to a kept page), the card is
   // not brought into view a second time; a NEW entry for the same address is.
-  it('is brought into view once per entry, also after a refresh wiped the entry’s state', () => {
+  it('is brought into view once per entry, also after a refresh or reload wiped the entry’s state', () => {
     const scrolled = vi.fn()
     const original = Element.prototype.scrollIntoView
     Element.prototype.scrollIntoView = scrolled
@@ -505,6 +505,7 @@ describe('a configured list', () => {
     onTestFinished(() => {
       Element.prototype.scrollIntoView = original
       vi.unstubAllGlobals()
+      sessionStorage.clear()
       window.history.replaceState(null, '', window.location.pathname)
     })
     window.history.replaceState(null, '', '#workshop-tickets')
@@ -518,7 +519,8 @@ describe('a configured list', () => {
 
     const first = render(card())
     first.unmount()
-    // What `router.refresh()` writes: Next's keys only.
+    // What `router.refresh()` writes: Next's keys only. Nothing is kept in
+    // memory either, so this is a reload of the entry as well.
     window.history.replaceState({ __NA: true }, '')
     render(card()).unmount()
     expect(scrolled).toHaveBeenCalledTimes(1)
