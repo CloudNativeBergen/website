@@ -61,7 +61,7 @@ describe('/api/cron/feedback-summary', () => {
     expect(deliver).not.toHaveBeenCalled()
   })
 
-  it('sends the due summaries with a deadline a minute inside the time budget, and reports the counts', async () => {
+  it('sends the due summaries with a deadline just inside the time budget, and reports the counts', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-06-12T08:00:00.000Z'))
     try {
@@ -69,7 +69,7 @@ describe('/api/cron/feedback-summary', () => {
       expect(res.status).toBe(200)
       expect(deliver).toHaveBeenCalledWith({
         now: new Date('2026-06-12T08:00:00.000Z'),
-        deadline: new Date('2026-06-12T08:04:00.000Z'),
+        deadline: new Date('2026-06-12T08:04:50.000Z'),
       })
       expect(maxDuration).toBe(300)
       await expect(res.json()).resolves.toEqual({ success: true, ...REPORT })

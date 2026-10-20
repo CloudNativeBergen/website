@@ -273,7 +273,8 @@ beforeEach(() => {
   // One sender per organization, as the tenant's own Resend account is.
   h.resolveSender.mockImplementation(
     async (conference: { organization?: { _ref?: string } }) => ({
-      key: `sender-${conference.organization?._ref}`,
+      // As the real key: the account and the From, which names an address.
+      key: `sender-${conference.organization?._ref}|Org <cfp@org.example.com>`,
     }),
   )
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -805,16 +806,23 @@ describe('deliverFeedbackSummaries: a claim whose reply is lost', () => {
     expect(report).toMatchObject({ claimed: 1, failed: 0 })
   })
 
-  it('knows its own claim by the time it wrote, when a later edit changed the revision', async () => {
-    store().afterNextCommit(() => {
-      store().put({ ...store().doc('talk-1')!, _rev: 'rev-later-edit' })
+  it('does not take another run’s claim, written at the same moment, for its own', async () => {
+    // Another run started in the same millisecond claims talk-1 first; this
+    // run's commit then fails without landing.
+    store().beforeNextCommit(() => {
+      store().put({
+        ...store().doc('talk-1')!,
+        feedbackSummarySentAt: NOW.toISOString(),
+        _rev: 'rev-other-run',
+      })
       throw Object.assign(new Error('502 Bad Gateway'), { statusCode: 502 })
     })
 
     const report = await deliverFeedbackSummaries({ now: NOW })
 
-    expect(emailsTo()).toHaveLength(2)
-    expect(report).toMatchObject({ claimed: 1, failed: 0 })
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(notifications()).toEqual([])
+    expect(report).toMatchObject({ claimed: 0, failed: 1 })
   })
 
   it('leaves the talk unclaimed when the failed commit did not land', async () => {
@@ -843,6 +851,13 @@ describe('deliverFeedbackSummaries: a claim whose reply is lost', () => {
     ])
   })
 })
+
+const bothSpeakers = {
+  speakers: [
+    { _type: 'reference', _ref: 'sp-1', _key: 'k1' },
+    { _type: 'reference', _ref: 'sp-2', _key: 'k2' },
+  ],
+}
 
 describe('deliverFeedbackSummaries: a sender that cannot send', () => {
   /** Two more due talks of conf-A (same sender), one of conf-B (another). */
@@ -892,7 +907,11 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
     expect(report).toMatchObject({ claimed: 2, senderDown: 2 })
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('stops sending through'),
-      expect.objectContaining({ sender: 'sender-org-A' }),
+      { orgId: 'org-A', conferenceId: 'conf-A', talkId: expect.any(String) },
+    )
+    // The sender's From address is not logged.
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
+      'cfp@org.example.com',
     )
 
     // The next run, with the sender working again, sends the two it left.
@@ -901,6 +920,50 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
     await deliverFeedbackSummaries({ now: LATER })
     expect(['talk-1', 'talk-2', 'talk-3'].every((id) => sentAt(id))).toBe(true)
     expect(h.sendEmail).toHaveBeenCalled()
+  })
+
+  it('stops on a dead sender even when a co-speaker’s address was refused too', async () => {
+    // Every conf-A talk: sp-1's address is refused, sp-2's email fails for
+    // the sender's reason. No email of the talk went out.
+    seed([
+      ...moreDue().filter((d) => d._id !== 'talk-2' && d._id !== 'talk-3'),
+      talk('talk-2', 'conf-A', bothSpeakers),
+      talk('talk-3', 'conf-A', bothSpeakers),
+    ])
+    h.sendEmail.mockImplementation(async ({ to }: { to: string }) => {
+      if (to === 'sp-1@example.com') throw refusal('validation_error', 422)
+      if (to === 'sp-2@example.com') throw refusal('invalid_api_key', 401)
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(report).toMatchObject({ claimed: 2, senderDown: 2 })
+  })
+
+  it('counts an email whose outcome Resend still has in progress as unknown: not sent, not failed, no breaker', async () => {
+    seed([
+      ...moreDue().filter((d) => d._id !== 'talk-2' && d._id !== 'talk-3'),
+      talk('talk-2', 'conf-A', bothSpeakers),
+      talk('talk-3', 'conf-A', bothSpeakers),
+    ])
+    h.sendEmail.mockRejectedValue(
+      refusal('concurrent_idempotent_requests', 409),
+    )
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(report).toMatchObject({
+      claimed: 4,
+      senderDown: 0,
+      emailed: 0,
+      emailFailed: 0,
+      emailUnknown: 7,
+    })
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('outcome unknown'),
+      expect.objectContaining({ talkId: 'talk-1', speakerId: 'sp-1' }),
+      expect.any(Error),
+    )
   })
 
   it('keeps going when the only failures are bad addresses', async () => {
@@ -938,5 +1001,44 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
     const report = await deliverFeedbackSummaries({ now: NOW })
 
     expect(report).toMatchObject({ claimed: 4, senderDown: 0 })
+  })
+})
+
+describe('deliverFeedbackSummaries: the run’s time', () => {
+  it('does not claim a talk whose emails could not all be sent before the deadline', async () => {
+    // talk-1 has three speakers: three emails' worst case does not fit.
+    const report = await deliverFeedbackSummaries({
+      now: NOW,
+      deadline: new Date(Date.now() + 60_000),
+    })
+
+    expect(sentAt('talk-1')).toBeUndefined()
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(report).toMatchObject({ claimed: 0, notReached: 1 })
+  })
+
+  it('claims a talk whose emails fit', async () => {
+    const report = await deliverFeedbackSummaries({
+      now: NOW,
+      deadline: new Date(Date.now() + 10 * 60_000),
+    })
+
+    expect(sentAt('talk-1')).toBe(NOW.toISOString())
+    expect(report).toMatchObject({ claimed: 1, notReached: 0 })
+  })
+})
+
+describe('deliverFeedbackSummaries: a title with nothing visible', () => {
+  it('names the session generically', async () => {
+    store().put({
+      ...store().doc('talk-1')!,
+      title: '\u200D\u00AD\u2060',
+    })
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(
+      store().doc('notification.feedback-summary.talk-1.sp-1')?.title,
+    ).toBe('Your Session Feedback for “your session”')
   })
 })

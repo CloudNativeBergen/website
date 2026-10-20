@@ -22,6 +22,8 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
 import { EMAIL_CONFIG, delay } from '@/lib/email/config'
 import {
+  FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS,
+  isOutcomeUnknown,
   isRecipientRefusal,
   resolveFeedbackSummarySender,
   sendFeedbackSummaryEmail,
@@ -89,6 +91,11 @@ export interface SummaryReport {
   claimed: number
   emailed: number
   emailFailed: number
+  /**
+   * Emails whose outcome is unknown: Resend was still processing an earlier
+   * attempt under the same key when the retries ran out (likely sent).
+   */
+  emailUnknown: number
   /** Not claimed: changed since the selection, claimed by another run, or a version locked in a release. */
   skipped: number
   /** A read or the claim threw; not claimed, so the next run tries again. */
@@ -199,6 +206,7 @@ export async function deliverFeedbackSummaries({
     claimed: 0,
     emailed: 0,
     emailFailed: 0,
+    emailUnknown: 0,
     skipped: 0,
     failed: 0,
     notReached: 0,
@@ -233,23 +241,35 @@ export async function deliverFeedbackSummaries({
         report.senderDown++
         continue
       }
-      const outcome = await deliverOne(client, item, now, pacing, sender)
+      const outcome = await deliverOne(client, item, {
+        now,
+        deadline,
+        pacing,
+        sender,
+      })
       if (outcome === 'skipped') {
         report.skipped++
+        continue
+      }
+      if (outcome === 'notReached') {
+        report.notReached++
         continue
       }
       report.claimed++
       report.emailed += outcome.emailed
       report.emailFailed += outcome.emailFailed
-      if (
-        outcome.emailed === 0 &&
-        outcome.emailFailed > 0 &&
-        outcome.senderFailed === outcome.emailFailed
-      ) {
+      report.emailUnknown += outcome.emailUnknown
+      // No email of the talk went out, and at least one failed for the
+      // sender's reason (a refused co-speaker address does not hide that).
+      if (outcome.emailed === 0 && outcome.senderFailed > 0) {
         down.add(sender.key)
         console.error(
           '[feedback] summary run stops sending through a sender that failed every email of a talk; its other talks stay unclaimed until the next run',
-          { sender: sender.key, talkId: item.talkId },
+          {
+            orgId: item.conference.organization?._ref ?? null,
+            conferenceId: item.conferenceId,
+            talkId: item.talkId,
+          },
         )
       }
     } catch (error) {
@@ -273,16 +293,26 @@ async function deliverOne(
   }: DueSummary & {
     conference: SummaryConference
   },
-  now: Date,
-  pacing: { sends: number },
-  sender: FeedbackSummarySender,
+  {
+    now,
+    deadline,
+    pacing,
+    sender,
+  }: {
+    now: Date
+    deadline: Date | undefined
+    pacing: { sends: number }
+    sender: FeedbackSummarySender
+  },
 ): Promise<
   | 'skipped'
+  | 'notReached'
   | {
       emailed: number
       emailFailed: number
       /** Of the failed, those Resend did not refuse for the address. */
       senderFailed: number
+      emailUnknown: number
     }
 > {
   // Read, then claim THAT revision of the talk: what is sent (its speakers,
@@ -292,6 +322,11 @@ async function deliverOne(
   for (let attempt = 0; ; attempt++) {
     prepared = await prepare(client, talkId, conference, now)
     if (!prepared) return 'skipped'
+    // Right before the claim: once claimed, a run killed before the sends
+    // loses them for good. Unclaimed, the talk waits for the next run.
+    if (deadline && !fitsBefore(deadline, prepared.speakerIds.length)) {
+      return 'notReached'
+    }
     const outcome = await claim(client, prepared.talk, conferenceId, now)
     if (outcome === 'claimed') break
     if (outcome === 'refused') return 'skipped'
@@ -316,7 +351,7 @@ async function deliverOne(
       { talkId, conferenceId },
       error,
     )
-    return { emailed: 0, emailFailed: 0, senderFailed: 0 }
+    return { emailed: 0, emailFailed: 0, senderFailed: 0, emailUnknown: 0 }
   }
 
   // One line, no invisible or bidi characters, quotes that cannot close ours.
@@ -338,6 +373,7 @@ async function deliverOne(
   let emailed = 0
   let emailFailed = 0
   let senderFailed = 0
+  let emailUnknown = 0
   const resultsUrl = `${conferenceBaseUrl(conference)}${path}`
   for (const speaker of speakers) {
     if (!speaker.email) continue
@@ -359,6 +395,17 @@ async function deliverOne(
       })
       emailed++
     } catch (error) {
+      if (isOutcomeUnknown(error)) {
+        // An earlier attempt is still in progress at Resend under this key:
+        // likely sent. Neither a failure nor the sender's fault.
+        emailUnknown++
+        console.error(
+          '[feedback] summary email outcome unknown (Resend still processing it; likely sent)',
+          { talkId, speakerId: speaker._id },
+          error,
+        )
+        continue
+      }
       emailFailed++
       if (!isRecipientRefusal(error)) senderFailed++
       console.error(
@@ -368,7 +415,20 @@ async function deliverOne(
       )
     }
   }
-  return { emailed, emailFailed, senderFailed }
+  return { emailed, emailFailed, senderFailed, emailUnknown }
+}
+
+/**
+ * Beyond the emails: the speaker read after the claim (bounded at
+ * {@link SPEAKER_READ_TIMEOUT_MS}), the sweep and the bell, with room.
+ */
+const CLAIM_OVERHEAD_MS = 20_000
+
+/** A talk's every email, at its worst, ends before `deadline`. */
+function fitsBefore(deadline: Date, speakers: number): boolean {
+  const worst =
+    CLAIM_OVERHEAD_MS + speakers * FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS
+  return deadline.getTime() - Date.now() >= worst
 }
 
 interface Prepared {
@@ -507,7 +567,7 @@ async function claim(
     // socket, a 502 after the write): `@sanity/client` never retries a
     // mutation. Treated as unclaimed, the talk would be marked sent and
     // never told; so read it back.
-    if (await claimLanded(client, talk._id, transactionId, sentAt)) {
+    if (await claimLanded(client, talk._id, transactionId)) {
       console.error(
         `[feedback] the claim of ${talk._id} landed although its reply failed; sending`,
         error,
@@ -519,21 +579,20 @@ async function claim(
 }
 
 /**
- * The talk carries this claim: our transaction id as its revision, or, when
- * a later write has replaced that, our `feedbackSummarySentAt`. False when
- * it cannot be read: then nothing is sent and the error is reported.
+ * The talk carries this claim: our transaction id is its revision (Sanity
+ * sets `_rev` to the id of the transaction that last wrote the document).
+ * Not the stored time: another run started in the same millisecond writes
+ * the same one. False when a later write has moved the revision on, or the
+ * talk cannot be read: then nothing is sent and the error is reported.
  */
 async function claimLanded(
   client: VersionsClient,
   talkId: string,
   transactionId: string,
-  sentAt: string,
 ): Promise<boolean> {
   try {
     const talk = await client.getDocument<SummaryTalk>(talkId)
-    return (
-      talk?._rev === transactionId || talk?.feedbackSummarySentAt === sentAt
-    )
+    return talk?._rev === transactionId
   } catch {
     return false
   }

@@ -17,12 +17,14 @@ import { deliverFeedbackSummaries } from '@/lib/feedback/server'
 
 /**
  * Resend allows about two requests a second, so 300 s is room for a few
- * hundred emails. No talk is started in the last minute: a talk not started
- * stays unclaimed and goes out on the next run, while one cut off after its
- * claim would lose the emails it had not sent yet.
+ * hundred emails. The deadline is the end of the budget, less room to answer:
+ * the run itself checks, right before each claim, that the talk's emails fit
+ * before it at their worst, since a talk cut off after its claim would lose
+ * the emails it had not sent yet. A talk that does not fit stays unclaimed
+ * and goes out on the next run.
  */
 export const maxDuration = 300
-const RESERVE_MS = 60_000
+const RESERVE_MS = 10_000
 
 export async function GET(request: NextRequest) {
   noStore()
