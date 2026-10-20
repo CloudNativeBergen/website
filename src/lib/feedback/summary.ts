@@ -379,7 +379,7 @@ async function deliverOne(
   // missed summary is better than mail to someone who asked to be erased.
   let speakers: SpeakerDoc[]
   try {
-    speakers = await liveSpeakers(client, speakerIds)
+    speakers = await speakersAfterClaim(client, talkId, speakerIds)
   } catch (error) {
     console.error(
       '[feedback] summary not sent: its speakers could not be read after the claim',
@@ -479,7 +479,7 @@ async function deliverOne(
 
 /** How long the run waits for the bell write before going on. */
 const BELL_TIMEOUT_MS = 10_000
-/** Each speaker read through the doc endpoint. */
+/** The speaker reads of one step through the doc endpoint, all of them. */
 const SPEAKER_READ_TIMEOUT_MS = 10_000
 /** How long the run waits for the version sweep before sending anyway. */
 const SWEEP_TIMEOUT_MS = 10_000
@@ -511,8 +511,8 @@ function bounded(
  * claim's version reads (two rounds), its commit and up to two read-backs
  * of a failed one ({@link CLAIM_REQUEST_TIMEOUT_MS} each, with
  * {@link CLAIM_LANDING_GRACE_MS} between them), the sweep
- * ({@link SWEEP_TIMEOUT_MS}) and the speaker read
- * ({@link SPEAKER_READ_TIMEOUT_MS}), and a margin. The bell runs alongside
+ * ({@link SWEEP_TIMEOUT_MS}) and the speaker reads
+ * ({@link SPEAKER_READ_TIMEOUT_MS} for all of them), and a margin. The bell runs alongside
  * the emails, so it takes none of this.
  */
 const CLAIM_OVERHEAD_MS =
@@ -544,20 +544,58 @@ interface Prepared {
   recipients: number
 }
 
+/** The talk's speaker ids, each once. */
+const speakerRefs = (talk: TalkDoc): string[] => [
+  ...new Set(
+    (talk.speakers ?? [])
+      .map((s) => s._ref)
+      .filter((id): id is string => typeof id === 'string'),
+  ),
+]
+
+/** Each id's speaker as the doc endpoint has it now: `null` when it is gone. */
+async function readSpeakers(
+  client: VersionsClient,
+  ids: string[],
+  signal: AbortSignal,
+): Promise<(SpeakerDoc | null)[]> {
+  if (ids.length === 0) return []
+  return client.getDocuments<SpeakerDoc>(ids, { signal })
+}
+
+const live = (found: (SpeakerDoc | null)[]): SpeakerDoc[] =>
+  found.filter(
+    (s): s is SpeakerDoc => !!s && s._type === 'speaker' && !s.erasedAt,
+  )
+
 /** The speakers who exist and are not erased, as the doc endpoint has them now. */
 async function liveSpeakers(
   client: VersionsClient,
   ids: string[],
 ): Promise<SpeakerDoc[]> {
-  if (ids.length === 0) return []
   // Bounded: a hung read must not hold the run past its time budget.
-  const found: (SpeakerDoc | null)[] = await client.getDocuments<SpeakerDoc>(
-    ids,
-    { signal: AbortSignal.timeout(SPEAKER_READ_TIMEOUT_MS) },
-  )
-  return found.filter(
-    (s): s is SpeakerDoc => !!s && s._type === 'speaker' && !s.erasedAt,
-  )
+  const signal = AbortSignal.timeout(SPEAKER_READ_TIMEOUT_MS)
+  return live(await readSpeakers(client, ids, signal))
+}
+
+/**
+ * The claimed talk's speakers, read after the claim. A speaker merged into
+ * another since (`mergeSpeakers` repoints the talk to the one kept and
+ * deletes the duplicate, in one transaction) is gone by then: the talk is
+ * read again, for the speakers it names now. All of it within one
+ * {@link SPEAKER_READ_TIMEOUT_MS}.
+ */
+async function speakersAfterClaim(
+  client: VersionsClient,
+  talkId: string,
+  claimedIds: string[],
+): Promise<SpeakerDoc[]> {
+  const signal = AbortSignal.timeout(SPEAKER_READ_TIMEOUT_MS)
+  const found = await readSpeakers(client, claimedIds, signal)
+  if (found.every((s) => s !== null)) return live(found)
+  const talk = await client.getDocument<SummaryTalk>(talkId, { signal })
+  if (!talk) return live(found)
+  return live(await readSpeakers(client, speakerRefs(talk), signal))
 }
 
 /**
@@ -589,13 +627,7 @@ async function prepare(
   // Every answer removed since the selection: nothing to tell.
   if (rows.length === 0) return null
 
-  const speakerIds = [
-    ...new Set(
-      (talk.speakers ?? [])
-        .map((s) => s._ref)
-        .filter((id): id is string => typeof id === 'string'),
-    ),
-  ]
+  const speakerIds = speakerRefs(talk)
   // The window again, from this talk's own slots as they are now: the
   // schedule is another document, so the claim's guard cannot see a move.
   const window = feedbackWindow({

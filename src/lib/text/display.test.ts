@@ -8,6 +8,14 @@ describe('displayName', () => {
     )
   })
 
+  it('drops the bidi marks too, which reorder text as an override does', () => {
+    // RLM, LRM, ALM; and a word joiner and an invisible separator.
+    expect(displayName('Talk\u200F\u200E\u061C title\u2060\u2063 here')).toBe(
+      'Talk title here',
+    )
+    expect(displayName('\u200F\u061C')).toBe('')
+  })
+
   it('keeps a joined emoji, a zero-width non-joiner and a soft hyphen', () => {
     const developer = '\u{1F9D1}\u{1F3FD}‍\u{1F4BB}'
     expect(displayName(`Live coding ${developer}`)).toBe(

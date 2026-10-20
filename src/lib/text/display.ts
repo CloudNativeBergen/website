@@ -9,12 +9,13 @@
  * Shown as it arrives, a `”` in it would close the title's quote and let the
  * rest read as this system's own words, and a bidi override, a NUL or a line
  * break would be stored into a bell notification or an email subject. So
- * control characters and line breaks become spaces; the bidi embedding,
- * override and isolate controls, the zero-width space and the BOM are
- * dropped; whitespace is collapsed; and a curly double quote inside the text
- * becomes a single one. Other format characters stay: the zero-width joiner
- * builds emoji like 🧑🏽‍💻, the non-joiner shapes Persian and Indic text, and
- * the soft hyphen is a line-break hint.
+ * control characters and line breaks become spaces; every format character
+ * (the bidi marks, embeddings, overrides and isolates, the zero-width space,
+ * the BOM) is dropped; whitespace is collapsed; and a curly double quote
+ * inside the text becomes a single one. Three format characters stay: the
+ * zero-width joiner builds emoji like 🧑🏽‍💻, the non-joiner shapes Persian
+ * and Indic text, and the soft hyphen is a line-break hint. None of them
+ * reorders text.
  *
  * Empty when no visible character remains (a name of only joiners, soft
  * hyphens or fillers), so the caller's fallback shows instead of `“”`.
@@ -24,7 +25,7 @@
 export function displayName(text: string): string {
   const shown = text
     .replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ')
-    .replace(/[\u202A-\u202E\u2066-\u2069\u200B\uFEFF]/gu, '')
+    .replace(/(?![\u200C\u200D\u00AD])\p{Cf}/gu, '')
     .replace(/“/g, '‘')
     .replace(/”/g, '’')
     .replace(/\s+/g, ' ')

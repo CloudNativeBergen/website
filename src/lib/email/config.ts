@@ -96,11 +96,10 @@ export async function resolveEmailSender(
 ): Promise<EmailSender> {
   const creds = await resolveTenantSecrets(orgId, 'email')
   if (creds?.apiKey) {
-    return {
-      client: getResendClient(creds, { orgId }),
-      from: creds.fallbackFrom,
-      platform: false,
-    }
+    const client = getResendClient(creds, { orgId })
+    // A tenant secret holding the env key (the platform org's own) is still
+    // the shared platform client: `getResendClient` hands out that instance.
+    return { client, from: creds.fallbackFrom, platform: client === resend }
   }
   return { client: resend, platform: true }
 }
