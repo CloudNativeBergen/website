@@ -501,6 +501,31 @@ describe('refusals, before any write or talk read', () => {
     nothingHappened()
   })
 
+  it('records answers outside the window under `next dev` with FEEDBACK_DEV_OPEN_WINDOW=1', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('FEEDBACK_DEV_OPEN_WINDOW', '1')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      // Before its session, and after its window closed.
+      expect(await submitFeedbackAnswer('abc234', 'green')).toMatchObject({
+        state: 'answered',
+        colour: 'green',
+      })
+      expect(await submitFeedbackAnswer('def567', 'red')).toMatchObject({
+        state: 'answered',
+        colour: 'red',
+      })
+      expect(
+        responses()
+          .map((r) => (r.talk as { _ref: string })._ref)
+          .sort(),
+      ).toEqual(['talk-done', 'talk-later'])
+    } finally {
+      vi.unstubAllEnvs()
+      vi.mocked(console.warn).mockRestore()
+    }
+  })
+
   it('refuses anything but exactly one colour', async () => {
     for (const colour of ['blue', '', ['green'], { colour: 'green' }, null]) {
       expect(
