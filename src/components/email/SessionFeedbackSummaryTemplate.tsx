@@ -57,7 +57,8 @@ export function SessionFeedbackSummaryTemplate({
     <BaseEmailTemplate
       title="Your Session Feedback is in"
       titleTone="brand"
-      speakerName={speakerName}
+      // The base template refuses an empty name; a speaker may have none.
+      speakerName={speakerName.trim() || 'speaker'}
       eventName={eventName}
       eventLocation={eventLocation}
       eventDate={eventDate}

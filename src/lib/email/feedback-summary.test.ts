@@ -159,6 +159,11 @@ describe('sendFeedbackSummaryEmail', () => {
     expect(h.send).toHaveBeenCalledTimes(1)
   })
 
+  it('greets a speaker with no name neutrally instead of failing to render', async () => {
+    await sendFeedbackSummaryEmail({ ...request(), speakerName: '  ' })
+    expect(sent().html).toMatch(/Dear (<!-- -->)?speaker(<!-- -->)?,/)
+  })
+
   it('throws when Resend refuses it, so the caller logs it', async () => {
     h.send.mockResolvedValue({
       data: null,
