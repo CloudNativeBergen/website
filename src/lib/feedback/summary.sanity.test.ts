@@ -36,6 +36,8 @@ const h = vi.hoisted(() => ({
   speakerReadOptions: [] as unknown[],
   /** The options of every doc-endpoint read of `talk-1`. */
   talkReadOptions: [] as unknown[],
+  /** Doc-endpoint reads of these ids reject: a 5xx for one tenant. */
+  failDocReadsOf: [] as string[],
   /** Runs before each doc-endpoint read of speakers: a write landing then. */
   beforeSpeakerRead: null as null | ((ids: string[]) => void),
   sendEmail: vi.fn(),
@@ -73,6 +75,7 @@ vi.mock('@/lib/sanity/client', async () => {
     },
     getDocument: async (id: string, options?: unknown) => {
       if (id === 'talk-1') h.talkReadOptions.push(options)
+      if (h.failDocReadsOf.includes(id)) throw new Error('503 (test)')
       return (w.getDocument as (id: string) => Promise<unknown>)(id)
     },
     getDocuments: async (ids: string[], options?: unknown) => {
@@ -311,6 +314,7 @@ beforeEach(() => {
   h.speakerReadOptions = []
   h.talkReadOptions = []
   h.beforeSpeakerRead = null
+  h.failDocReadsOf = []
   h.sendEmail.mockReset()
   h.sendEmail.mockResolvedValue(undefined)
   h.delay.mockClear()
@@ -922,6 +926,49 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
 
     expect(sentAt('talk-1')).toBeUndefined()
     expect(h.sendEmail).not.toHaveBeenCalled()
+  })
+
+  describe('a conference whose selection reads fail', () => {
+    /** conf-B's unscheduled talk, due since its conference is over. */
+    const otherTenant = () => {
+      store().put(
+        talk('talk-b', 'conf-B', { speakers: [{ ...ref('sp-b'), _key: 'k' }] }),
+      )
+      store().put(response('talk-b', 'conf-B', 'green'))
+    }
+
+    it('holds back only its own talks when the conference cannot be read', async () => {
+      otherTenant()
+      h.failDocReadsOf = ['conf-A']
+
+      const report = await deliverFeedbackSummaries({ now: NOW })
+
+      expect(sentAt('talk-1')).toBeUndefined()
+      expect(sentAt('talk-b')).toBe(NOW.toISOString())
+      expect(emailsTo()).toEqual(['sp-b@example.com'])
+      // talk-1 and talk-open, both of conf-A, not tried this run.
+      expect(report).toMatchObject({ claimed: 1, failed: 2 })
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('skipped a conference whose reads failed'),
+        { conferenceId: 'conf-A', talks: 2 },
+        expect.any(Error),
+      )
+    })
+
+    it('holds back only its own talks when its schedule cannot be read', async () => {
+      otherTenant()
+      store().failReadsThat(
+        (r) =>
+          r.query.includes('_type == "schedule"') &&
+          r.params.conferenceId === 'conf-A',
+      )
+
+      const report = await deliverFeedbackSummaries({ now: NOW })
+
+      expect(sentAt('talk-1')).toBeUndefined()
+      expect(sentAt('talk-b')).toBe(NOW.toISOString())
+      expect(report).toMatchObject({ claimed: 1, failed: 2 })
+    })
   })
 
   it('a failed run for one talk does not stop the next', async () => {

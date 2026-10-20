@@ -100,7 +100,10 @@ export interface SummaryReport {
   emailUnknown: number
   /** Not claimed: changed since the selection, claimed by another run, or a version locked in a release. */
   skipped: number
-  /** A read or the claim threw; not claimed, so the next run tries again. */
+  /**
+   * A read or the claim threw, for the talk or for its conference's
+   * selection; not claimed, so the next run tries again.
+   */
   failed: number
   /** Not started before the deadline; the next run picks them up. */
   notReached: number
@@ -134,6 +137,8 @@ export async function findDueFeedbackSummaries(
 async function selectDue(now: Date): Promise<{
   candidates: number
   due: (DueSummary & { conference: SummaryConference })[]
+  /** Candidates of a conference whose reads failed: not tried this run. */
+  unread: number
 }> {
   const rows =
     (await clientReadUncached.fetch<
@@ -149,12 +154,36 @@ async function selectDue(now: Date): Promise<{
 
   const client = versionsClient()
   const due: (DueSummary & { conference: SummaryConference })[] = []
+  let unread = 0
   for (const [conferenceId, talkIds] of byConference) {
-    const conference = await client.getDocument<
-      SummaryConference & { _type?: string }
-    >(conferenceId)
-    if (conference?._type !== 'conference') continue
-    const slots = await getConferenceFeedbackSlots(conferenceId)
+    // One conference's failed read holds back only its own talks: nothing
+    // of them is claimed, so the next run selects them again.
+    let read: {
+      conference: SummaryConference
+      slots: Awaited<ReturnType<typeof getConferenceFeedbackSlots>>
+    } | null
+    try {
+      const conference = await client.getDocument<
+        SummaryConference & { _type?: string }
+      >(conferenceId)
+      read =
+        conference?._type === 'conference'
+          ? {
+              conference,
+              slots: await getConferenceFeedbackSlots(conferenceId),
+            }
+          : null
+    } catch (error) {
+      console.error(
+        '[feedback] summary selection skipped a conference whose reads failed; its talks wait for the next run',
+        { conferenceId, talks: talkIds.length },
+        error,
+      )
+      unread += talkIds.length
+      continue
+    }
+    if (!read) continue
+    const { conference, slots } = read
     for (const talkId of talkIds) {
       const window = feedbackWindow({
         slots: slots.get(talkId) ?? [],
@@ -164,7 +193,7 @@ async function selectDue(now: Date): Promise<{
       if (answersClosed(window)) due.push({ talkId, conferenceId, conference })
     }
   }
-  return { candidates: rows.length, due }
+  return { candidates: rows.length, due, unread }
 }
 
 interface SpeakerDoc {
@@ -202,7 +231,7 @@ export async function deliverFeedbackSummaries({
   now: Date
   deadline?: Date
 }): Promise<SummaryReport> {
-  const { candidates, due } = await selectDue(now)
+  const { candidates, due, unread } = await selectDue(now)
   const report: SummaryReport = {
     candidates,
     due: due.length,
@@ -211,7 +240,7 @@ export async function deliverFeedbackSummaries({
     emailFailed: 0,
     emailUnknown: 0,
     skipped: 0,
-    failed: 0,
+    failed: unread,
     notReached: 0,
     senderDown: 0,
   }
