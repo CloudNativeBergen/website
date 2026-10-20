@@ -1070,6 +1070,25 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
       store().put(response('talk-b', 'conf-B', 'green'))
     }
 
+    it('delivers a conference’s talks before it reads the next conference', async () => {
+      otherTenant()
+      const conferencesReadBy: string[][] = []
+      h.sendEmail.mockImplementation(async () => {
+        conferencesReadBy.push([
+          ...new Set(
+            store().docReads.filter((id) => id === 'conf-A' || id === 'conf-B'),
+          ),
+        ])
+      })
+
+      await deliverFeedbackSummaries({ now: NOW })
+
+      // By the first email only its own conference has been read: a slow
+      // conference later in the run cannot hold it up.
+      expect(conferencesReadBy[0]).toHaveLength(1)
+      expect(conferencesReadBy.at(-1)).toHaveLength(2)
+    })
+
     it('holds back only its own talks when the conference cannot be read', async () => {
       otherTenant()
       h.failDocReadsOf = ['conf-A']

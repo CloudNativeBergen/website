@@ -131,23 +131,25 @@ export const DUE_TALKS = `*[_type == "talk" && !(_id in path("drafts.**")) && !(
 export async function findDueFeedbackSummaries(
   now: Date,
 ): Promise<DueSummary[]> {
-  return (await selectDue(now)).due.map(({ talkId, conferenceId }) => ({
-    talkId,
-    conferenceId,
-  }))
+  const cap = readCapUntil(undefined)
+  const client = versionsClient()
+  const due: DueSummary[] = []
+  for (const [conferenceId, talkIds] of (await selectCandidates(cap))
+    .byConference) {
+    const selected = await selectConference(client, conferenceId, talkIds, {
+      now,
+      deadline: undefined,
+      cap,
+    })
+    for (const { talkId } of selected.due) due.push({ talkId, conferenceId })
+  }
+  return due
 }
 
-async function selectDue(
-  now: Date,
-  deadline?: Date,
-  cap: ReadCap = readCapUntil(deadline),
-): Promise<{
+/** The candidates, by conference: the run's one cross-tenant read. */
+async function selectCandidates(cap: ReadCap): Promise<{
   candidates: number
-  due: (DueSummary & { conference: SummaryConference })[]
-  /** Candidates of a conference whose reads failed: not tried this run. */
-  unread: number
-  /** Candidates of a conference not read before the deadline. */
-  late: number
+  byConference: Map<string, string[]>
 }> {
   const rows =
     (await clientReadUncached.fetch<
@@ -164,60 +166,78 @@ async function selectDue(
     ids.push(row._id)
     byConference.set(row.conferenceId, ids)
   }
+  return { candidates: rows.length, byConference }
+}
 
-  const client = versionsClient()
-  const due: (DueSummary & { conference: SummaryConference })[] = []
-  let unread = 0
-  let late = 0
-  for (const [conferenceId, talkIds] of byConference) {
-    if (deadline && Date.now() >= deadline.getTime()) {
-      late += talkIds.length
-      continue
-    }
-    // One conference's failed or hung read holds back only its own talks:
-    // nothing of them is claimed, so the next run selects them again.
-    let read: {
-      conference: SummaryConference
-      slots: Awaited<ReturnType<typeof getConferenceFeedbackSlots>>
-    } | null
-    try {
-      const conference = await client.getDocument<
-        SummaryConference & { _type?: string }
-      >(conferenceId, { signal: cap() })
-      read =
-        conference?._type === 'conference'
-          ? {
-              conference,
-              slots: await getConferenceFeedbackSlots(
-                conferenceId,
-                clientReadUncached,
-                { signal: cap() },
-              ),
-            }
-          : null
-    } catch (error) {
-      console.error(
-        '[feedback] summary selection skipped a conference whose reads failed; its talks wait for the next run',
-        { conferenceId, talks: talkIds.length },
-        error,
-      )
-      // Cut off by the run's deadline: not reached, rather than failed.
-      if (deadline && Date.now() >= deadline.getTime()) late += talkIds.length
-      else unread += talkIds.length
-      continue
-    }
-    if (!read) continue
-    const { conference, slots } = read
-    for (const talkId of talkIds) {
-      const window = feedbackWindow({
-        slots: slots.get(talkId) ?? [],
-        conferenceEndDate: conference.endDate,
-        now,
-      })
-      if (answersClosed(window)) due.push({ talkId, conferenceId, conference })
-    }
+/**
+ * One conference's due talks, read when the run reaches it: its talks are
+ * delivered before the next conference is read, so slow conferences cost
+ * the run their own time, never every tenant's delivery.
+ */
+async function selectConference(
+  client: VersionsClient,
+  conferenceId: string,
+  talkIds: string[],
+  {
+    now,
+    deadline,
+    cap,
+  }: { now: Date; deadline: Date | undefined; cap: ReadCap },
+): Promise<{
+  due: (DueSummary & { conference: SummaryConference })[]
+  /** Candidates of the conference, its reads failed: not tried this run. */
+  unread: number
+  /** Candidates of the conference, not read before the deadline. */
+  late: number
+}> {
+  const none = { due: [], unread: 0, late: 0 }
+  if (deadline && Date.now() >= deadline.getTime()) {
+    return { ...none, late: talkIds.length }
   }
-  return { candidates: rows.length, due, unread, late }
+  // One conference's failed or hung read holds back only its own talks:
+  // nothing of them is claimed, so the next run selects them again.
+  let read: {
+    conference: SummaryConference
+    slots: Awaited<ReturnType<typeof getConferenceFeedbackSlots>>
+  } | null
+  try {
+    const conference = await client.getDocument<
+      SummaryConference & { _type?: string }
+    >(conferenceId, { signal: cap() })
+    read =
+      conference?._type === 'conference'
+        ? {
+            conference,
+            slots: await getConferenceFeedbackSlots(
+              conferenceId,
+              clientReadUncached,
+              { signal: cap() },
+            ),
+          }
+        : null
+  } catch (error) {
+    console.error(
+      '[feedback] summary selection skipped a conference whose reads failed; its talks wait for the next run',
+      { conferenceId, talks: talkIds.length },
+      error,
+    )
+    // Cut off by the run's deadline: not reached, rather than failed.
+    return deadline && Date.now() >= deadline.getTime()
+      ? { ...none, late: talkIds.length }
+      : { ...none, unread: talkIds.length }
+  }
+  if (!read) return none
+  const { conference, slots } = read
+  const due: (DueSummary & { conference: SummaryConference })[] = []
+  for (const talkId of talkIds) {
+    const window = feedbackWindow({
+      slots: slots.get(talkId) ?? [],
+      conferenceEndDate: conference.endDate,
+      now,
+    })
+    if (answersClosed(window)) due.push({ talkId, conferenceId, conference })
+  }
+  return { due, unread: 0, late: 0 }
 }
 
 /** The run's one cross-tenant read of the candidates. */
@@ -279,17 +299,17 @@ export async function deliverFeedbackSummaries({
   deadline?: Date
 }): Promise<SummaryReport> {
   const cap = readCapUntil(deadline)
-  const { candidates, due, unread, late } = await selectDue(now, deadline, cap)
+  const { candidates, byConference } = await selectCandidates(cap)
   const report: SummaryReport = {
     candidates,
-    due: due.length,
+    due: 0,
     claimed: 0,
     emailed: 0,
     emailFailed: 0,
     emailUnknown: 0,
     skipped: 0,
-    failed: unread,
-    notReached: late,
+    failed: 0,
+    notReached: 0,
     senderDown: 0,
   }
   const client = versionsClient()
@@ -329,68 +349,79 @@ export async function deliverFeedbackSummaries({
   // From on it; a From failure (an unverified domain) stops only that pair.
   const downAccounts = new Set<string>()
   const downSenders = new Set<string>()
-  for (const item of due) {
-    // Past the deadline nothing more is read: a backlog must not run the
-    // function past its budget and lose this report.
-    if (deadline && Date.now() >= deadline.getTime()) {
-      report.notReached++
-      continue
-    }
-    try {
-      const outcome = await deliverOne(client, claimClient, item, {
-        now,
-        deadline,
-        pacing,
-        senderFor,
-        isDown: (sender) =>
-          downAccounts.has(sender.account) || downSenders.has(sender.key),
-        cap,
-      })
-      if (outcome === 'senderDown') {
-        report.senderDown++
-        continue
-      }
-      if (outcome === 'skipped') {
-        report.skipped++
-        continue
-      }
-      if (outcome === 'notReached') {
+  for (const [conferenceId, talkIds] of byConference) {
+    const selected = await selectConference(client, conferenceId, talkIds, {
+      now,
+      deadline,
+      cap,
+    })
+    report.due += selected.due.length
+    report.failed += selected.unread
+    report.notReached += selected.late
+    for (const item of selected.due) {
+      // Past the deadline nothing more is read: a backlog must not run the
+      // function past its budget and lose this report.
+      if (deadline && Date.now() >= deadline.getTime()) {
         report.notReached++
         continue
       }
-      const { sender } = outcome
-      report.claimed++
-      report.emailed += outcome.emailed
-      report.emailFailed += outcome.emailFailed
-      report.emailUnknown += outcome.emailUnknown
-      // No email of the talk went out, and at least one failed for the
-      // sender's reason (a refused co-speaker address does not hide that) or
-      // was left in progress at Resend (a stalled Resend). The cost is a
-      // day's delay for the sender's other talks, not their loss.
-      const accountDown = outcome.accountFailed > 0 || outcome.emailUnknown > 0
-      if (outcome.emailed === 0 && (accountDown || outcome.fromFailed > 0)) {
-        if (accountDown) downAccounts.add(sender.account)
-        else downSenders.add(sender.key)
+      try {
+        const outcome = await deliverOne(client, claimClient, item, {
+          now,
+          deadline,
+          pacing,
+          senderFor,
+          isDown: (sender) =>
+            downAccounts.has(sender.account) || downSenders.has(sender.key),
+          cap,
+        })
+        if (outcome === 'senderDown') {
+          report.senderDown++
+          continue
+        }
+        if (outcome === 'skipped') {
+          report.skipped++
+          continue
+        }
+        if (outcome === 'notReached') {
+          report.notReached++
+          continue
+        }
+        const { sender } = outcome
+        report.claimed++
+        report.emailed += outcome.emailed
+        report.emailFailed += outcome.emailFailed
+        report.emailUnknown += outcome.emailUnknown
+        // No email of the talk went out, and at least one failed for the
+        // sender's reason (a refused co-speaker address does not hide that) or
+        // was left in progress at Resend (a stalled Resend). The cost is a
+        // day's delay for the sender's other talks, not their loss.
+        const accountDown =
+          outcome.accountFailed > 0 || outcome.emailUnknown > 0
+        if (outcome.emailed === 0 && (accountDown || outcome.fromFailed > 0)) {
+          if (accountDown) downAccounts.add(sender.account)
+          else downSenders.add(sender.key)
+          console.error(
+            `[feedback] summary run stops sending through ${
+              accountDown ? 'a Resend account' : 'a From address'
+            } that failed every email of a talk; its other talks stay unclaimed until the next run`,
+            {
+              orgId: outcome.orgId,
+              conferenceId: item.conferenceId,
+              talkId: item.talkId,
+            },
+          )
+        }
+      } catch (error) {
+        // A read cut off by the run's deadline: not reached, rather than failed.
+        if (deadline && Date.now() >= deadline.getTime()) report.notReached++
+        else report.failed++
         console.error(
-          `[feedback] summary run stops sending through ${
-            accountDown ? 'a Resend account' : 'a From address'
-          } that failed every email of a talk; its other talks stay unclaimed until the next run`,
-          {
-            orgId: outcome.orgId,
-            conferenceId: item.conferenceId,
-            talkId: item.talkId,
-          },
+          '[feedback] summary not sent for this talk',
+          { talkId: item.talkId, conferenceId: item.conferenceId },
+          error,
         )
       }
-    } catch (error) {
-      // A read cut off by the run's deadline: not reached, rather than failed.
-      if (deadline && Date.now() >= deadline.getTime()) report.notReached++
-      else report.failed++
-      console.error(
-        '[feedback] summary not sent for this talk',
-        { talkId: item.talkId, conferenceId: item.conferenceId },
-        error,
-      )
     }
   }
   return report
