@@ -21,6 +21,7 @@ import {
   vi,
 } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -500,7 +501,9 @@ describe('a configured list', () => {
     const scrolled = vi.fn()
     const original = Element.prototype.scrollIntoView
     Element.prototype.scrollIntoView = scrolled
-    const navigation = { currentEntry: { key: 'entry-1' } }
+    const navigation = Object.assign(new EventTarget(), {
+      currentEntry: { key: 'entry-1' },
+    })
     vi.stubGlobal('navigation', navigation)
     onTestFinished(() => {
       Element.prototype.scrollIntoView = original
@@ -529,6 +532,41 @@ describe('a configured list', () => {
     window.history.replaceState({ __NA: true }, '')
     render(card())
     expect(scrolled).toHaveBeenCalledTimes(2)
+  })
+
+  // A notification in the bell links here, and is followed while on the page:
+  // Next pushes an entry and keeps the page, with no `hashchange`. A refresh
+  // after a save replaces the entry, and does not reopen a card that was shut.
+  it('opens on a pushed entry with its anchor, and not on a replaced one', () => {
+    const navigation = Object.assign(new EventTarget(), {
+      currentEntry: { key: 'entry-a' },
+    })
+    vi.stubGlobal('navigation', navigation)
+    onTestFinished(() => {
+      vi.unstubAllGlobals()
+      sessionStorage.clear()
+      window.history.replaceState(null, '', window.location.pathname)
+    })
+    const entryChange = (navigationType: string, key: string) => {
+      navigation.currentEntry = { key }
+      act(() => {
+        navigation.dispatchEvent(
+          Object.assign(new Event('currententrychange'), { navigationType }),
+        )
+      })
+    }
+    section(['Two-day pass', 'Day pass'], roles.slice(0, 2))
+    const toggle = screen.getByRole('button', { name: /^Workshop tickets/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    window.history.pushState(null, '', '#workshop-tickets')
+    entryChange('push', 'entry-b')
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(toggle)
+    window.history.replaceState({ __NA: true }, '')
+    entryChange('replace', 'entry-b')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('shows a load failure even after the organizer closed the card', () => {

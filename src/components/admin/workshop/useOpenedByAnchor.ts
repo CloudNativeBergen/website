@@ -13,12 +13,14 @@ const shownKey = (anchor: string) => `anchorShown:${anchor}`
  */
 const storedKey = (entry: string, anchor: string) =>
   `anchorShown:${entry}:${anchor}`
-const entryKey = () =>
+/** The Navigation API, where the browser has it. */
+const navigationApi = () =>
   (
     window as unknown as {
-      navigation?: { currentEntry?: { key: string } | null }
+      navigation?: EventTarget & { currentEntry?: { key: string } | null }
     }
-  ).navigation?.currentEntry?.key
+  ).navigation
+const entryKey = () => navigationApi()?.currentEntry?.key
 
 function shownInThisEntry(anchor: string) {
   const key = entryKey()
@@ -70,7 +72,8 @@ const GO_TO_ANCHOR = 'workshops:go-to-anchor'
  * away. On Back or a reload the position is the browser's.
  *
  * A LINK ON THIS PAGE ({@link goToAnchor}) opens it and brings it into view
- * every time.
+ * every time. A Next link to the anchor followed while on the page (a
+ * notification) is an arrival in a new entry, and is treated as one.
  *
  * SCROLLED ONCE THE CARD IS OPEN, not before: the card is near the end of the
  * page, and scrolled while collapsed the page is too short to bring it to the
@@ -92,17 +95,38 @@ export function useOpenedByAnchor(
       setOpen(true)
       if (scroll) setRequested((n) => n + 1)
     }
-    // After mount: the server render has no address hash.
-    if (window.location.hash === `#${anchor}`) {
+    const arrive = () => {
+      if (window.location.hash !== `#${anchor}`) return
       const first = !shownInThisEntry(anchor)
       if (first) markShownInThisEntry(anchor)
       show(first)
     }
+    // After mount: the server render has no address hash.
+    arrive()
+    // ARRIVING WHILE ON THE PAGE: a Next link to this page with the anchor (a
+    // notification in the bell) keeps the page mounted and pushes an entry,
+    // which fires no `hashchange`. Only a NEW entry counts: a refresh after a
+    // save replaces the entry, and must not reopen a card the organizer shut.
+    const onEntryChange = (event: Event) => {
+      if (
+        (event as Event & { navigationType?: string }).navigationType === 'push'
+      ) {
+        arrive()
+      }
+    }
     const onGoTo = (event: Event) => {
       if ((event as CustomEvent<string>).detail === anchor) show(true)
     }
+    const navigation = navigationApi()
+    navigation?.addEventListener('currententrychange', onEntryChange)
+    // An address edited by hand.
+    window.addEventListener('hashchange', arrive)
     window.addEventListener(GO_TO_ANCHOR, onGoTo)
-    return () => window.removeEventListener(GO_TO_ANCHOR, onGoTo)
+    return () => {
+      navigation?.removeEventListener('currententrychange', onEntryChange)
+      window.removeEventListener('hashchange', arrive)
+      window.removeEventListener(GO_TO_ANCHOR, onGoTo)
+    }
   }, [anchor, setOpen])
 
   useEffect(() => {
