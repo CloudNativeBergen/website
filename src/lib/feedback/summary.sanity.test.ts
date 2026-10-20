@@ -972,6 +972,70 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
     expect(report).toMatchObject({ skipped: 1 })
   })
 
+  it('sends through the From and to the domain the conference has when the talk is claimed, not at the selection', async () => {
+    // The organizers change conf-A's speaker mail and domain once the run
+    // has selected talk-1.
+    h.beforeDocRead = (id) => {
+      if (id !== 'talk-1') return
+      h.beforeDocRead = null
+      store().put({
+        ...CONF_A,
+        cfpEmail: 'cfp@new.example.com',
+        domains: ['new.example.com'],
+      })
+    }
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    const sends = h.sendEmail.mock.calls.map(
+      ([arg]) =>
+        arg as {
+          sender: { key: string }
+          resultsUrl: string
+          conference: { cfpEmail: string }
+        },
+    )
+    expect(sends).toHaveLength(2)
+    for (const email of sends) {
+      expect(email.sender.key).toBe('sender-org-A|Org <cfp@new.example.com>')
+      expect(email.resultsUrl).toMatch(/^https:\/\/new\.example\.com\//)
+      expect(email.conference.cfpEmail).toBe('cfp@new.example.com')
+    }
+  })
+
+  it('resolves the sender again when the conference changes between two of its talks', async () => {
+    seed([
+      talk('talk-2', 'conf-A'),
+      response('talk-2', 'conf-A', 'green'),
+      day('day-3', 'conf-A', '2026-06-10', 'official', [
+        ['talk-2', '10:00', '10:40'],
+      ]),
+    ])
+    // Once the first talk has gone out, the organizers change conf-A's
+    // speaker mail: the next talk read sees it.
+    const talksRead = new Set<string>()
+    h.beforeDocRead = (id) => {
+      if (id !== 'talk-1' && id !== 'talk-2') return
+      talksRead.add(id)
+      if (talksRead.size === 2) {
+        h.beforeDocRead = null
+        store().put({ ...CONF_A, cfpEmail: 'cfp@new.example.com' })
+      }
+    }
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    const keyOf = new Map(
+      h.sendEmail.mock.calls.map(([arg]) => {
+        const a = arg as { talkId: string; sender: { key: string } }
+        return [a.talkId, a.sender.key]
+      }),
+    )
+    const [first, second] = [...talksRead]
+    expect(keyOf.get(first)).toBe('sender-org-A|Org <cfp@a.example.com>')
+    expect(keyOf.get(second)).toBe('sender-org-A|Org <cfp@new.example.com>')
+  })
+
   it('does not claim a talk withdrawn after the selection read', async () => {
     store().readsLagFor('talk-1', talk('talk-1', 'conf-A'))
     store().put({ ...talk('talk-1', 'conf-A'), status: 'withdrawn' })

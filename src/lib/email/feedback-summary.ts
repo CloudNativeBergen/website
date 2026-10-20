@@ -56,11 +56,15 @@ export async function resolveFeedbackSummarySender(
   conference: FeedbackSummaryConference,
 ): Promise<FeedbackSummarySender> {
   const orgId = conference.organization?._ref ?? null
-  const { client, platform } = await resolveEmailSender(orgId)
-  const from = resolveConferenceFrom(conference, {
-    field: 'cfpEmail',
-    localPart: 'cfp',
-  })
+  const { client, platform, from: tenantFrom } = await resolveEmailSender(orgId)
+  // A tenant's own account may carry its default From, verified there: it
+  // wins, as for the sign-in email. Otherwise the conference's speaker mail.
+  const from =
+    tenantFrom ||
+    resolveConferenceFrom(conference, {
+      field: 'cfpEmail',
+      localPart: 'cfp',
+    })
   // The ACTUAL account: an org without its own sends through the shared
   // platform client, and a failure of that account is every such org's.
   const account = platform ? 'platform' : (orgId ?? 'platform')

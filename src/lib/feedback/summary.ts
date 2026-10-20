@@ -297,11 +297,19 @@ export async function deliverFeedbackSummaries({
   // budgeted in holds (the client's default is five minutes).
   const claimClient = versionsClient({ timeout: CLAIM_REQUEST_TIMEOUT_MS })
   const pacing = { sends: 0 }
-  // One sender per conference, resolved once per run and BEFORE any of its
-  // talks is claimed: a sender that cannot be resolved leaves them unclaimed.
+  // One sender per conference as it reads now (its organization, its
+  // From), resolved BEFORE any of its talks is claimed: a sender that
+  // cannot be resolved leaves them unclaimed.
   const senders = new Map<string, Promise<FeedbackSummarySender>>()
   const senderFor = (conference: SummaryConference) => {
-    let sender = senders.get(conference._id)
+    const identity = JSON.stringify([
+      conference._id,
+      conference.organization?._ref ?? null,
+      conference.cfpEmail ?? null,
+      conference.organizer ?? null,
+      conference.domains?.[0] ?? null,
+    ])
+    let sender = senders.get(identity)
     if (!sender) {
       // Capped: a hung secret lookup fails this conference's talks (left
       // unclaimed), not the run.
@@ -310,7 +318,7 @@ export async function deliverFeedbackSummaries({
         cap(),
         'resolving the sender',
       )
-      senders.set(conference._id, sender)
+      senders.set(identity, sender)
     }
     return sender
   }
@@ -329,18 +337,19 @@ export async function deliverFeedbackSummaries({
       continue
     }
     try {
-      const sender = await senderFor(item.conference)
-      if (downAccounts.has(sender.account) || downSenders.has(sender.key)) {
-        report.senderDown++
-        continue
-      }
       const outcome = await deliverOne(client, claimClient, item, {
         now,
         deadline,
         pacing,
-        sender,
+        senderFor,
+        isDown: (sender) =>
+          downAccounts.has(sender.account) || downSenders.has(sender.key),
         cap,
       })
+      if (outcome === 'senderDown') {
+        report.senderDown++
+        continue
+      }
       if (outcome === 'skipped') {
         report.skipped++
         continue
@@ -349,6 +358,7 @@ export async function deliverFeedbackSummaries({
         report.notReached++
         continue
       }
+      const { sender } = outcome
       report.claimed++
       report.emailed += outcome.emailed
       report.emailFailed += outcome.emailFailed
@@ -400,20 +410,27 @@ async function deliverOne(
     now,
     deadline,
     pacing,
-    sender,
+    senderFor,
+    isDown,
     cap,
   }: {
     now: Date
     deadline: Date | undefined
     pacing: { sends: number }
-    sender: FeedbackSummarySender
+    /** The sender of the conference as {@link prepare} read it. */
+    senderFor: (conference: SummaryConference) => Promise<FeedbackSummarySender>
+    /** The sender's account, or its From, failed earlier this run. */
+    isDown: (sender: FeedbackSummarySender) => boolean
     /** Each read before the claim (see {@link readCapUntil}). */
     cap: ReadCap
   },
 ): Promise<
   | 'skipped'
   | 'notReached'
+  | 'senderDown'
   | {
+      /** What the emails went out through. */
+      sender: FeedbackSummarySender
       emailed: number
       emailFailed: number
       /** Of the failed, those every email from this From would fail too. */
@@ -427,9 +444,14 @@ async function deliverOne(
   // its counts) must be what was claimed. When the talk changed in between,
   // read it again.
   let prepared: Prepared | null = null
+  let sender: FeedbackSummarySender
   for (let attempt = 0; ; attempt++) {
     prepared = await prepare(client, talkId, conference, now, cap)
     if (!prepared) return 'skipped'
+    // From the conference as it reads now: an organizer may have changed
+    // its From, domain or organization since the selection read it.
+    sender = await senderFor(prepared.conference)
+    if (isDown(sender)) return 'senderDown'
     // Right before the claim: once claimed, a run killed before the sends
     // loses them for good. Unclaimed, the talk waits for the next run.
     const recipients = prepared.recipientIds.length
@@ -452,6 +474,8 @@ async function deliverOne(
   }
   console.log(`[feedback] claimed ${talkId} for its summary`)
   const { talk, totals, comments, speakerIds, recipientIds } = prepared
+  // The email and its link tell the conference as it reads now, too.
+  const current = prepared.conference
 
   // Before the emails, so a run that dies during them still leaves no
   // stale draft to publish the marker away (and bring a second summary);
@@ -482,6 +506,7 @@ async function deliverOne(
       error,
     )
     return {
+      sender,
       emailed: 0,
       emailFailed: 0,
       fromFailed: 0,
@@ -521,7 +546,7 @@ async function deliverOne(
   // Side by side, each started a pause after the run's previous one (Resend
   // allows about two requests a second): a talk's emails then take about
   // one email's worst case, whatever its number of speakers.
-  const resultsUrl = `${conferenceBaseUrl(conference)}${path}`
+  const resultsUrl = `${conferenceBaseUrl(current)}${path}`
   const sends: Promise<
     'sent' | 'unknown' | 'late' | ReturnType<typeof classifySendFailure>
   >[] = []
@@ -564,7 +589,7 @@ async function deliverOne(
         totals,
         comments,
         resultsUrl,
-        conference,
+        conference: current,
         sender,
       }).then(
         () => 'sent' as const,
@@ -595,6 +620,7 @@ async function deliverOne(
   const count = (r: (typeof results)[number]) =>
     results.filter((x) => x === r).length
   return {
+    sender,
     emailed: count('sent'),
     emailFailed:
       count('recipient') + count('from') + count('account') + count('late'),
@@ -686,6 +712,8 @@ function fitsBefore(deadline: Date, recipients: number): boolean {
 
 interface Prepared {
   talk: SummaryTalk
+  /** The talk's conference, read again with it. */
+  conference: SummaryConference
   totals: FeedbackTotals
   comments: number
   speakerIds: string[]
@@ -812,6 +840,7 @@ async function prepare(
 
   return {
     talk,
+    conference: current,
     totals: talkTotals(talk, rows),
     comments: rows.filter(isVisibleComment).length,
     speakerIds,

@@ -12,6 +12,8 @@ const h = vi.hoisted(() => ({
   orgIds: [] as unknown[],
   /** The org has no Resend account of its own: the shared platform one. */
   onPlatform: false,
+  /** The default From the org's own credentials carry, if any. */
+  tenantFrom: undefined as string | undefined,
 }))
 
 vi.mock('./config', async (original) => {
@@ -22,6 +24,7 @@ vi.mock('./config', async (original) => {
       h.orgIds.push(orgId)
       return {
         client: { emails: { send: h.send } },
+        from: h.tenantFrom,
         platform: h.onPlatform,
       }
     },
@@ -73,6 +76,7 @@ const sent = () => h.send.mock.calls[0][0] as Record<string, string>
 
 beforeEach(() => {
   h.onPlatform = false
+  h.tenantFrom = undefined
   h.send.mockReset()
   h.send.mockResolvedValue({ data: { id: 'email-1' }, error: null })
   h.orgIds = []
@@ -245,6 +249,16 @@ describe('resolveFeedbackSummarySender', () => {
     })
     expect(other.key).not.toBe(sender.key)
     expect(other.account).toBe(sender.account)
+  })
+
+  it('sends from the default From the tenant’s own credentials carry, when they carry one', async () => {
+    h.tenantFrom = 'Org A <hello@org-a.example.com>'
+    const sender = await resolveFeedbackSummarySender(request().conference)
+    expect(sender.from).toBe('Org A <hello@org-a.example.com>')
+    expect(sender.key).toBe('org-A|Org A <hello@org-a.example.com>')
+
+    await send({ sender })
+    expect(sent().from).toBe('Org A <hello@org-a.example.com>')
   })
 
   it('names a sender on the shared platform account by that account, whichever org it is', async () => {
