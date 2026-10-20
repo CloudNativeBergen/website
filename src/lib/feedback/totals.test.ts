@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { feedbackTotals, sharePercent } from './totals'
+import { combineTotals, feedbackTotals, sharePercent } from './totals'
 
 describe('feedbackTotals (speaker feedback spec §4.3)', () => {
   it('adds live responses, folded totals and Card Counts per colour', () => {
@@ -61,5 +61,28 @@ describe('feedbackTotals (speaker feedback spec §4.3)', () => {
     expect(
       feedbackTotals({ live: { green: 0, yellow: 0, red: 0 } }).lovedItPercent,
     ).toBeNull()
+  })
+})
+
+describe('combineTotals', () => {
+  it('adds sessions up colour by colour, keeping scanned and cards apart', () => {
+    const a = feedbackTotals({
+      live: { green: 2, yellow: 0, red: 1 },
+      folded: { greenCount: 1 },
+      cards: { greenCount: 3, yellowCount: 1 },
+    })
+    const b = feedbackTotals({ live: { green: 0, yellow: 4, red: 0 } })
+    const all = combineTotals([a, b])
+    expect(all.scanned).toEqual({ green: 3, yellow: 4, red: 1 })
+    expect(all.cards).toEqual({ green: 3, yellow: 1, red: 0 })
+    expect(all.combined).toEqual({ green: 6, yellow: 5, red: 1 })
+    expect(all.total).toBe(12)
+    // 6 of 12
+    expect(all.lovedItPercent).toBe(50)
+  })
+
+  it('has no share for no sessions', () => {
+    expect(combineTotals([]).lovedItPercent).toBeNull()
+    expect(combineTotals([]).total).toBe(0)
   })
 })
