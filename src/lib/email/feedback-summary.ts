@@ -10,7 +10,9 @@ import { summaryTitle } from '@/lib/feedback/summary-copy'
 import type { FeedbackTotals } from '@/lib/feedback/totals'
 import { formatConferenceDateLong } from '@/lib/time'
 import {
+  EMAIL_CONFIG,
   isTransientError,
+  resend,
   resolveEmailSender,
   retryWithBackoff,
 } from './config'
@@ -57,7 +59,10 @@ export async function resolveFeedbackSummarySender(
     field: 'cfpEmail',
     localPart: 'cfp',
   })
-  return { key: `${orgId ?? 'platform'}|${from}`, client, from }
+  // The ACTUAL account: an org without its own sends through the shared
+  // platform client, and a failure of that account is every such org's.
+  const account = client === resend ? 'platform' : (orgId ?? 'platform')
+  return { key: `${account}|${from}`, client, from }
 }
 
 export interface FeedbackSummaryEmail {
@@ -98,13 +103,17 @@ export function feedbackSummaryIdempotencyKey(
 }
 
 /**
- * Worth retrying: a transient failure, or Resend still processing an earlier
- * attempt under the same key (409 `concurrent_idempotent_requests`).
+ * Resend is still processing an earlier attempt under the same key (409
+ * `concurrent_idempotent_requests`): typically one that timed out here but
+ * went through. Whether the email went out is unknown, likely yes.
  */
-const mayStillDeliver = (error: unknown) =>
-  isTransientError(error) ||
+export const isOutcomeUnknown = (error: unknown): boolean =>
   (error as { resendErrorName?: string } | null)?.resendErrorName ===
-    'concurrent_idempotent_requests'
+  'concurrent_idempotent_requests'
+
+/** Worth retrying: a transient failure, or an outcome still unknown. */
+const mayStillDeliver = (error: unknown) =>
+  isTransientError(error) || isOutcomeUnknown(error)
 
 /**
  * Resend refused this one email for its request (a malformed or rejected
@@ -123,7 +132,23 @@ export function isRecipientRefusal(error: unknown): boolean {
 }
 
 /** How long one attempt may take before it counts as a timeout and is retried. */
-const SEND_TIMEOUT_MS = 20_000
+const SEND_TIMEOUT_MS = 10_000
+
+/**
+ * The longest one summary email can take, from the pause before it to its
+ * last attempt giving up: every attempt timing out, with the backoff
+ * `retryWithBackoff` waits between them (doubling from the rate-limit
+ * delay). Derived from the constants the send uses, so a run can check that
+ * a talk's emails fit its time before claiming it.
+ */
+export const FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS = (() => {
+  const attempts = EMAIL_CONFIG.MAX_RETRIES
+  let backoff = 0
+  for (let i = 0; i < attempts - 1; i++) {
+    backoff += EMAIL_CONFIG.RATE_LIMIT_DELAY * 2 ** i
+  }
+  return EMAIL_CONFIG.RATE_LIMIT_DELAY + attempts * SEND_TIMEOUT_MS + backoff
+})()
 
 function withTimeout<T>(attempt: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined

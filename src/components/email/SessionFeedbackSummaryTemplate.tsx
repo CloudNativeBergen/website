@@ -7,7 +7,7 @@ import {
   type FeedbackColour,
 } from '@/lib/feedback/colour'
 import type { FeedbackTotals } from '@/lib/feedback/totals'
-import { plural } from '@/lib/text/display'
+import { displayName, plural } from '@/lib/text/display'
 
 export interface SessionFeedbackSummaryTemplateProps {
   speakerName: string
@@ -58,7 +58,7 @@ export function SessionFeedbackSummaryTemplate({
       title="Your Session Feedback is in"
       titleTone="brand"
       // The base template refuses an empty name; a speaker may have none.
-      speakerName={speakerName.trim() || 'speaker'}
+      speakerName={displayName(speakerName) || 'speaker'}
       eventName={eventName}
       eventLocation={eventLocation}
       eventDate={eventDate}

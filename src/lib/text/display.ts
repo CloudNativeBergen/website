@@ -16,17 +16,27 @@
  * builds emoji like 🧑🏽‍💻, the non-joiner shapes Persian and Indic text, and
  * the soft hyphen is a line-break hint.
  *
+ * Empty when no visible character remains (a name of only joiners, soft
+ * hyphens or fillers), so the caller's fallback shows instead of `“”`.
+ *
  * FOR DISPLAY ONLY: never use the result as a key.
  */
 export function displayName(text: string): string {
-  return text
+  const shown = text
     .replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ')
     .replace(/[\u202A-\u202E\u2066-\u2069\u200B\uFEFF]/gu, '')
     .replace(/“/g, '‘')
     .replace(/”/g, '’')
     .replace(/\s+/g, ' ')
     .trim()
+  return VISIBLE.test(shown) ? shown : ''
 }
+
+/**
+ * A character that shows: not a format character (joiners, soft hyphen),
+ * separator or control, nor the combining grapheme joiner or a Hangul filler.
+ */
+const VISIBLE = /[^\p{Cf}\p{Z}\p{Cc}\u034F\u115F\u1160\u3164\uFFA0]/u
 
 /** "1 response", "2 responses". */
 export const plural = (n: number, one: string, many: string): string =>

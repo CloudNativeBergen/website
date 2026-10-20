@@ -17,6 +17,12 @@ describe('displayName', () => {
     expect(displayName('Kuber­netes')).toBe('Kuber­netes')
   })
 
+  it('is empty when no visible character remains', () => {
+    expect(displayName('\u200D\u2060\u00AD\u200B\u200C \uFEFF')).toBe('')
+    expect(displayName('\u034F\u3164')).toBe('')
+    expect(displayName('a\u200D')).toBe('a\u200D')
+  })
+
   it('turns curly double quotes into single ones, so ours cannot be closed', () => {
     expect(displayName('A “quoted” title')).toBe('A ‘quoted’ title')
   })

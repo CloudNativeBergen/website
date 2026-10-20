@@ -10,17 +10,26 @@ import { feedbackTotals } from '@/lib/feedback/totals'
 const h = vi.hoisted(() => ({
   send: vi.fn(),
   orgIds: [] as unknown[],
+  /** The org has no Resend account of its own: the shared platform one. */
+  onPlatform: false,
 }))
 
-vi.mock('./config', async (original) => ({
-  ...(await original<typeof import('./config')>()),
-  resolveEmailSender: async (orgId: unknown) => {
-    h.orgIds.push(orgId)
-    return { client: { emails: { send: h.send } } }
-  },
-}))
+vi.mock('./config', async (original) => {
+  const real = await original<typeof import('./config')>()
+  return {
+    ...real,
+    resolveEmailSender: async (orgId: unknown) => {
+      h.orgIds.push(orgId)
+      return h.onPlatform
+        ? { client: real.resend }
+        : { client: { emails: { send: h.send } } }
+    },
+  }
+})
 
 import {
+  FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS,
+  isOutcomeUnknown,
   isRecipientRefusal,
   resolveFeedbackSummarySender,
   sendFeedbackSummaryEmail,
@@ -62,6 +71,7 @@ const send = async (over: Partial<FeedbackSummaryEmail> = {}): Promise<void> =>
 const sent = () => h.send.mock.calls[0][0] as Record<string, string>
 
 beforeEach(() => {
+  h.onPlatform = false
   h.send.mockReset()
   h.send.mockResolvedValue({ data: { id: 'email-1' }, error: null })
   h.orgIds = []
@@ -176,6 +186,11 @@ describe('sendFeedbackSummaryEmail', () => {
     expect(sent().html).toMatch(/Dear (<!-- -->)?speaker(<!-- -->)?,/)
   })
 
+  it('greets a speaker whose name is only invisible characters neutrally', async () => {
+    await send({ speakerName: '\u200D\u2060\u00AD\u200B' })
+    expect(sent().html).toMatch(/Dear (<!-- -->)?speaker(<!-- -->)?,/)
+  })
+
   it('gives up on a send that hangs, after the retries, instead of hanging the run', async () => {
     vi.useFakeTimers()
     try {
@@ -185,7 +200,7 @@ describe('sendFeedbackSummaryEmail', () => {
         () => 'sent',
         (error: Error) => error.message,
       )
-      await vi.advanceTimersByTimeAsync(3 * 20_000 + 5_000)
+      await vi.advanceTimersByTimeAsync(FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS)
       expect(await outcome).toMatch(/timed out/)
       // Each attempt under the same key, so one that did land is not doubled.
       expect(h.send).toHaveBeenCalledTimes(3)
@@ -212,6 +227,40 @@ describe('resolveFeedbackSummarySender', () => {
       cfpEmail: 'cfp@other.example.com',
     })
     expect(other.key).not.toBe(sender.key)
+  })
+
+  it('names a sender on the shared platform account by that account, whichever org it is', async () => {
+    h.onPlatform = true
+    const a = await resolveFeedbackSummarySender(request().conference)
+    const b = await resolveFeedbackSummarySender({
+      ...request().conference,
+      organization: { _type: 'reference', _ref: 'org-B' },
+    })
+    expect(a.key).toBe('platform|Conf A Org <cfp@a.example.com>')
+    expect(b.key).toBe(a.key)
+  })
+})
+
+describe('isOutcomeUnknown', () => {
+  it('is Resend still processing an earlier attempt under the same key', () => {
+    const inProgress = Object.assign(new Error('in progress'), {
+      resendErrorName: 'concurrent_idempotent_requests',
+      status: 409,
+    })
+    expect(isOutcomeUnknown(inProgress)).toBe(true)
+    expect(
+      isOutcomeUnknown(
+        Object.assign(new Error('x'), { resendErrorName: 'invalid_api_key' }),
+      ),
+    ).toBe(false)
+  })
+})
+
+describe('FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS', () => {
+  it('stays small enough for a talk of several speakers inside one run', () => {
+    // Three attempts, each cut off, plus the backoff between them and the
+    // pause before the send: under 35 s, so a 5-speaker talk fits in 3 min.
+    expect(FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS).toBeLessThanOrEqual(35_000)
   })
 })
 
