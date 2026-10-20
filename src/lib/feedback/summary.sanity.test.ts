@@ -1003,6 +1003,21 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
     }
   })
 
+  it('resolves a conference’s sender once for all its talks while it does not change', async () => {
+    seed([
+      talk('talk-2', 'conf-A'),
+      response('talk-2', 'conf-A', 'green'),
+      day('day-3', 'conf-A', '2026-06-10', 'official', [
+        ['talk-2', '10:00', '10:40'],
+      ]),
+    ])
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(report).toMatchObject({ claimed: 2 })
+    expect(h.resolveSender).toHaveBeenCalledTimes(1)
+  })
+
   it('resolves the sender again when the conference changes between two of its talks', async () => {
     seed([
       talk('talk-2', 'conf-A'),
