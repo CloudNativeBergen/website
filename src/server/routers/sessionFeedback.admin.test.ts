@@ -28,6 +28,8 @@ const h = vi.hoisted(() => ({
   dataset: [] as (Record<string, unknown> & { _id: string })[],
   queries: [] as string[],
   commits: [] as unknown[][],
+  /** Fail the nth commit (1-based) from now; 0 never. */
+  failCommit: 0,
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -63,6 +65,8 @@ vi.mock('@/lib/sanity/client', async () => {
     }
   }
   async function commit(mutations: Record<string, Record<string, unknown>>[]) {
+    if (h.failCommit > 0 && --h.failCommit === 0)
+      throw Object.assign(new Error('503'), { statusCode: 503 })
     const next = structuredClone(h.dataset)
     for (const m of mutations) {
       const id = String((m.patch ?? m.delete)?.id)
@@ -165,6 +169,7 @@ beforeEach(() => {
   n = 0
   h.queries = []
   h.commits = []
+  h.failCommit = 0
   vi.mocked(revalidateTag).mockClear()
   ours = response('talk-a', 'red', { flaggedAt: '2026-06-10T11:00:00Z' })
   foreign = response('talk-foreign', 'red', { conference: ref('conf-B') })
@@ -222,6 +227,25 @@ describe('adminHide, adminUnhide, adminRemove', () => {
 })
 
 const ACTIONS = ['adminHide', 'adminUnhide', 'adminRemove'] as const
+
+describe('adminRemove — a chunk that fails', () => {
+  it('says how many went and to reload, not to try again (a retry is refused)', async () => {
+    const ids = [ours._id]
+    for (let i = 0; i < 120; i++) {
+      const r = response('talk-a', 'green')
+      h.dataset.push(r)
+      ids.push(r._id)
+    }
+    h.failCommit = 2
+    await expect(
+      organizer().adminRemove({ responseIds: ids }),
+    ).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message:
+        'Removed 100 of 121 responses. Reload to see what’s left, then remove those.',
+    })
+  })
+})
 
 describe('refusals', () => {
   it.each(ACTIONS)(

@@ -234,7 +234,9 @@ export const sessionFeedbackRouter = router({
       if (result.status === 'failed')
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: `Removed ${result.removed} of ${new Set(input.responseIds).size} responses. Try again to remove the rest.`,
+          // Not "try again": the guard refuses a list holding an id that has
+          // already gone, so a retry of the same list would be refused.
+          message: `Removed ${result.removed} of ${new Set(input.responseIds).size} responses. Reload to see what’s left, then remove those.`,
         })
       return { removed: result.removed }
     }),

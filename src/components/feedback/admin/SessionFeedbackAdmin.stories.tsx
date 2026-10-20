@@ -263,7 +263,9 @@ export const RemoveConfirmed: Story = {
 export const RemoveFailed: Story = {
   args: {
     onRemove: fn(async () => {
-      throw new Error('Removed 0 of 1 responses. Try again to remove the rest.')
+      throw new Error(
+        'Removed 0 of 1 responses. Reload to see what’s left, then remove those.',
+      )
     }),
   },
   play: async (context) => {

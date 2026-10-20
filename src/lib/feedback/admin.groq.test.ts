@@ -313,6 +313,30 @@ describe('Hide and Unhide (§10.3)', () => {
   })
 })
 
+describe('Hide and Unhide racing the device’s own Delete', () => {
+  for (const action of ['hide', 'unhide'] as const) {
+    it(`${action} answers a response deleted before its commit as refused, not as an error`, async () => {
+      const r = response('talk-a', 'red', { comment: 'x', hiddenAt: 'then' })
+      h.dataset.push(r)
+      // The attendee's Delete my answer lands between the guard and the patch.
+      h.beforeCommit.push(() => {
+        h.dataset = h.dataset.filter((d) => d._id !== r._id)
+      })
+      expect(await act[action]([r._id])).toEqual({ status: 'refused' })
+      expect(h.commits).toEqual([])
+    })
+  }
+
+  it('still fails on any other commit error', async () => {
+    const r = response('talk-a', 'red', { comment: 'x' })
+    h.dataset.push(r)
+    h.beforeCommit.push(() => {
+      throw Object.assign(new Error('503'), { statusCode: 503 })
+    })
+    await expect(act.hide([r._id])).rejects.toThrow('503')
+  })
+})
+
 describe('Remove (§10.3)', () => {
   it('deletes each response, in transactions of at most 100, and expires each one’s tag', async () => {
     const ids: string[] = []
@@ -332,7 +356,7 @@ describe('Remove (§10.3)', () => {
     )
   })
 
-  it('reports what was removed when a later chunk fails, expiring only those', async () => {
+  it('reports what was removed when a later chunk fails, and expires the failed chunk too', async () => {
     const ids: string[] = []
     for (let i = 0; i < 150; i++) {
       const r = response('talk-a', 'green')
@@ -347,7 +371,11 @@ describe('Remove (§10.3)', () => {
     )
     expect(await act.remove(ids)).toEqual({ status: 'failed', removed: 100 })
     expect(ids.filter((id) => doc(id))).toEqual(ids.slice(100))
-    expect(vi.mocked(revalidateTag)).toHaveBeenCalledTimes(100)
+    // A commit whose reply was lost may have applied: the failed chunk's
+    // entries are expired too, which is harmless for a live response.
+    expect(vi.mocked(revalidateTag).mock.calls).toEqual(
+      ids.map((id) => [feedbackResponseTag(id), { expire: 0 }]),
+    )
   })
 
   it('removes a duplicated id once', async () => {

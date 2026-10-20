@@ -197,6 +197,28 @@ async function ownedResponses(
   return ids.every((id) => found.has(id)) ? ids : null
 }
 
+const isNotFound = (error: unknown) =>
+  (error as { statusCode?: unknown } | null)?.statusCode === 404
+
+/**
+ * Commit Hide's or Unhide's patches. A response deleted between the guard
+ * and the commit (the device's own Delete my answer) makes Sanity answer
+ * 404 and roll the whole transaction back: that is the same refusal as a
+ * response that was never there, not a server error.
+ */
+async function commitPatches(
+  tx: ReturnType<typeof clientWrite.transaction>,
+  count: number,
+): Promise<ModerationResult> {
+  try {
+    await tx.commit()
+  } catch (error) {
+    if (isNotFound(error)) return { status: 'refused' }
+    throw error
+  }
+  return { status: 'ok', count }
+}
+
 /** Hide (§10.3): sets `hiddenAt`, clears `flaggedAt`; the colour still counts. */
 export async function hideResponses({
   conferenceId,
@@ -214,8 +236,7 @@ export async function hideResponses({
     tx.patch(id, (p) =>
       p.set({ hiddenAt: now.toISOString() }).unset(['flaggedAt']),
     )
-  await tx.commit()
-  return { status: 'ok', count: ids.length }
+  return commitPatches(tx, ids.length)
 }
 
 /** Unhide (§10.3): clears `hiddenAt`. */
@@ -230,8 +251,7 @@ export async function unhideResponses({
   if (!ids) return { status: 'refused' }
   const tx = clientWrite.transaction()
   for (const id of ids) tx.patch(id, (p) => p.unset(['hiddenAt']))
-  await tx.commit()
-  return { status: 'ok', count: ids.length }
+  return commitPatches(tx, ids.length)
 }
 
 /**
@@ -259,6 +279,9 @@ export async function removeResponses({
       await tx.commit()
     } catch (error) {
       console.error('Could not remove Feedback Responses', error)
+      // A commit whose reply was lost may have applied. Expiring a response
+      // that still exists is harmless; missing one that went is not.
+      for (const id of chunk) expireRemovedFeedbackResponse(id)
       return { status: 'failed', removed }
     }
     removed += chunk.length
