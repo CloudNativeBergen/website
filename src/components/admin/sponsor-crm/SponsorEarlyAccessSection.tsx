@@ -33,7 +33,7 @@ export interface SponsorEarlyAccessSectionProps {
    */
   recordUpdatedAt?: string
   /**
-   * Whether the conference has a "Sponsor Early Access Opens" time. `false`:
+   * Whether the conference has a "Sponsor early access opens" time. `false`:
    * a link gives no head start yet, and the section says so. Known from the
    * conference the page already holds; the section asks for nothing.
    */
@@ -300,13 +300,13 @@ export function SponsorEarlyAccessSection({
       </h4>
       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
         A link the sponsor can pass on to its people. Whoever opens it can sign
-        up for workshops from the time set as &ldquo;Sponsor Early Access
-        Opens&rdquo;, before registration opens for everyone. They still need a
+        up for workshops from the time set as &ldquo;Sponsor early access
+        opens&rdquo;, before registration opens for everyone. They still need a
         ticket that includes workshops.
       </p>
       {sponsorStartSet === false && (
         <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-          No &ldquo;Sponsor Early Access Opens&rdquo; time is set for this
+          No &ldquo;Sponsor early access opens&rdquo; time is set for this
           conference, so a link gives no head start yet. Set one under
           Workshops.
         </p>

@@ -113,7 +113,7 @@ export const LinkedWithSendDark: Story = { ...LinkedWithSend, ...dark }
 export const LinkedWithSendMobile: Story = { ...LinkedWithSend, ...mobile }
 
 /**
- * The conference has no "Sponsor Early Access Opens" time: a link can be
+ * The conference has no "Sponsor early access opens" time: a link can be
  * created, but gives no head start until one is set. The section says so, and
  * where to set it.
  */
@@ -123,7 +123,7 @@ export const NoSponsorStart: Story = {
     const canvas = within(canvasElement)
     await expect(
       canvas.getByText(
-        'No “Sponsor Early Access Opens” time is set for this conference, so a link gives no head start yet. Set one under Workshops.',
+        'No “Sponsor early access opens” time is set for this conference, so a link gives no head start yet. Set one under Workshops.',
       ),
     ).toBeInTheDocument()
     await expect(

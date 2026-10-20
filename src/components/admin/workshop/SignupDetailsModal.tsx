@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatDateSafe } from '@/lib/time'
 
 import { TrashIcon } from '@heroicons/react/24/outline'
@@ -20,7 +20,13 @@ interface SignupDetailsModalProps {
   onClose: () => void
   workshopTitle: string
   status: WorkshopSignupStatus | null
-  signups: WorkshopSignupExisting[]
+  /** `undefined` while they are being read: never shown as an empty list. */
+  signups: WorkshopSignupExisting[] | undefined
+  /** The read failed: said so, with a retry, never "reading" forever. */
+  readFailed?: boolean
+  onRetry?: () => void
+  /** A retry is on its way: the failure stays shown, with its button. */
+  retrying?: boolean
   onConfirmSignup: (signupId: string, userName: string) => void
   /** Runs after the organizer has answered the question this modal asks. */
   onMoveToWaitlist: (signupId: string, userName: string) => void
@@ -43,6 +49,9 @@ export function SignupDetailsModal({
   workshopTitle,
   status,
   signups,
+  readFailed = false,
+  onRetry,
+  retrying = false,
   onConfirmSignup,
   onMoveToWaitlist,
   onDeleteSignup,
@@ -62,6 +71,17 @@ export function SignupDetailsModal({
     userName: string
   } | null>(null)
   const isBusy = isConfirming || isMoving || isDeleting
+
+  // A RETRY THAT WORKED takes focus to the list it read: the button that had
+  // it is gone, and focus would otherwise fall out of the dialog.
+  const list = useRef<HTMLDivElement>(null)
+  const retried = useRef(false)
+  useEffect(() => {
+    if (retried.current && signups) {
+      retried.current = false
+      list.current?.focus()
+    }
+  }, [signups])
 
   const statusLabel = status
     ? status.charAt(0).toUpperCase() + status.slice(1)
@@ -159,14 +179,44 @@ export function SignupDetailsModal({
       size="4xl"
       title={`${workshopTitle} - ${statusLabel} Signups`}
     >
-      <DataTable<WorkshopSignupExisting>
-        data={signups}
-        columns={columns}
-        keyExtractor={(signup) => signup._id}
-        emptyState={{
-          title: `No ${status ?? ''} signups for this workshop`,
-        }}
-      />
+      <div ref={list} tabIndex={-1} className="outline-none">
+        {signups ? (
+          <DataTable<WorkshopSignupExisting>
+            data={signups}
+            columns={columns}
+            keyExtractor={(signup) => signup._id}
+            emptyState={{
+              title: `No ${status ?? ''} signups for this workshop`,
+            }}
+          />
+        ) : readFailed ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+              The sign-ups could not be read.
+            </p>
+            {onRetry && (
+              <button
+                type="button"
+                // Kept on the page while the retry runs, so focus stays on it;
+                // a second press would only start the read over.
+                onClick={() => {
+                  if (retrying) return
+                  retried.current = true
+                  onRetry()
+                }}
+                aria-disabled={retrying}
+                className="inline-flex min-h-11 cursor-pointer items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:hover:bg-white/10"
+              >
+                {retrying ? 'Trying again…' : 'Try again'}
+              </button>
+            )}
+          </div>
+        ) : (
+          <p role="status" className="text-sm text-gray-500 dark:text-gray-400">
+            Reading the sign-ups…
+          </p>
+        )}
+      </div>
 
       <SignupQuestions
         moveTarget={moveTarget && { ...moveTarget, workshopTitle }}

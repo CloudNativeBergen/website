@@ -19,6 +19,7 @@ import {
 } from '@testing-library/react'
 import { WorkshopRegistrationSettings } from './WorkshopRegistrationSettings'
 import { NotificationProvider } from './NotificationProvider'
+import { goToAnchor } from './workshop/useOpenedByAnchor'
 
 const mutate = vi.hoisted(() => vi.fn())
 
@@ -63,15 +64,21 @@ function renderCard(times: Times, now: string) {
 const row = (name: string) =>
   screen.getByText(name).nextElementSibling?.textContent
 
-/** The status label an organizer reads for these times, at `now`. */
+/**
+ * The status label an organizer reads for these times, at `now`: the badge
+ * beside the card's title, shown also while the card is collapsed.
+ */
 function statusAt(times: Times, now: string) {
   renderCard(times, now)
-  return row('Status')
+  return screen
+    .getByRole('button', { name: /^Workshop registration/ })
+    .textContent?.replace('Workshop registration', '')
 }
 
-/** The line under the status, which says what a half-set window means. */
+/** The line under the times, which says what a half-set window means. */
 const note = () =>
-  screen.getByText('Status').parentElement?.nextElementSibling?.textContent
+  screen.getByText('Registration closes').parentElement?.nextElementSibling
+    ?.textContent
 
 beforeEach(() => mutate.mockReset())
 
@@ -187,9 +194,9 @@ describe('the sponsor start time on the card', () => {
       },
       IN_EARLY_ACCESS,
     )
-    expect(row('Sponsor Early Access Opens')).toBe('1. juni 2026 kl. 08:00')
-    expect(row('Registration Opens')).toBe('15. juni 2026 kl. 08:30')
-    expect(row('Registration Closes')).toBe('1. juli 2026 kl. 09:00')
+    expect(row('Sponsor early access opens')).toBe('1. juni 2026 kl. 08:00')
+    expect(row('Registration opens')).toBe('15. juni 2026 kl. 08:30')
+    expect(row('Registration closes')).toBe('1. juli 2026 kl. 09:00')
   })
 
   it('reads "Not set" when there is none', () => {
@@ -197,7 +204,7 @@ describe('the sponsor start time on the card', () => {
       { workshopRegistrationStart: OFFICIAL, workshopRegistrationEnd: END },
       IN_EARLY_ACCESS,
     )
-    expect(row('Sponsor Early Access Opens')).toBe('Not set')
+    expect(row('Sponsor early access opens')).toBe('Not set')
   })
 })
 
@@ -223,9 +230,9 @@ describe('saving the registration times', () => {
       BEFORE_SPONSOR,
     )
     edit()
-    expect(field(/Sponsor Early Access Opens/).value).toBe('')
+    expect(field(/Sponsor early access opens/).value).toBe('')
 
-    fireEvent.change(field(/Sponsor Early Access Opens/), {
+    fireEvent.change(field(/Sponsor early access opens/), {
       target: { value: '2026-06-01T08:00' },
     })
     save()
@@ -236,9 +243,9 @@ describe('saving the registration times', () => {
   it('opens with the stored sponsor start time and sends null once it is cleared', () => {
     renderCard(ALL_THREE, BEFORE_SPONSOR)
     edit()
-    expect(field(/Sponsor Early Access Opens/).value).toBe('2026-06-01T08:00')
+    expect(field(/Sponsor early access opens/).value).toBe('2026-06-01T08:00')
 
-    fireEvent.change(field(/Sponsor Early Access Opens/), {
+    fireEvent.change(field(/Sponsor early access opens/), {
       target: { value: '' },
     })
     save()
@@ -251,7 +258,7 @@ describe('saving the registration times', () => {
     edit()
 
     // 10:00 in Oslo on 2 July is 08:00 UTC.
-    fireEvent.change(field(/Registration Closes/), {
+    fireEvent.change(field(/Registration closes/), {
       target: { value: '2026-07-02T10:00' },
     })
     save()
@@ -265,10 +272,10 @@ describe('saving the registration times', () => {
     renderCard(ALL_THREE, BEFORE_SPONSOR)
     edit()
 
-    fireEvent.change(field(/Sponsor Early Access Opens/), {
+    fireEvent.change(field(/Sponsor early access opens/), {
       target: { value: '2026-06-02T08:00' },
     })
-    fireEvent.change(field(/Registration Opens/), {
+    fireEvent.change(field(/Registration opens/), {
       target: { value: '' },
     })
     save()
@@ -286,16 +293,16 @@ describe('saving the registration times', () => {
       BEFORE_SPONSOR,
     )
     edit()
-    expect(field(/Sponsor Early Access Opens/).value).toBe('')
+    expect(field(/Sponsor early access opens/).value).toBe('')
     rerender(
       <NotificationProvider>
         <WorkshopRegistrationSettings {...ALL_THREE} />
       </NotificationProvider>,
     )
     // A field the organizer has not touched shows what is stored.
-    expect(field(/Sponsor Early Access Opens/).value).toBe('2026-06-01T08:00')
+    expect(field(/Sponsor early access opens/).value).toBe('2026-06-01T08:00')
 
-    fireEvent.change(field(/Registration Closes/), {
+    fireEvent.change(field(/Registration closes/), {
       target: { value: '2026-07-02T10:00' },
     })
     save()
@@ -310,7 +317,7 @@ describe('saving the registration times', () => {
   it('keeps a field the organizer changed when the card is drawn again, and still sends it', () => {
     const { rerender } = renderCard(ALL_THREE, BEFORE_SPONSOR)
     edit()
-    fireEvent.change(field(/Registration Closes/), {
+    fireEvent.change(field(/Registration closes/), {
       target: { value: '2026-07-02T10:00' },
     })
     // A colleague moves the end to 5 July meanwhile.
@@ -322,7 +329,7 @@ describe('saving the registration times', () => {
         />
       </NotificationProvider>,
     )
-    expect(field(/Registration Closes/).value).toBe('2026-07-02T10:00')
+    expect(field(/Registration closes/).value).toBe('2026-07-02T10:00')
 
     save()
 
@@ -341,5 +348,35 @@ describe('saving the registration times', () => {
     // The form leaves with a transition.
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0))
     expect(mutate.mock.calls).toEqual([])
+  })
+})
+
+// The sponsor early-access card links here (#1452): the card opens, so the
+// time the link points at is shown.
+describe('a link to the card', () => {
+  it('opens it', () => {
+    vi.useFakeTimers({
+      toFake: ['Date'],
+      now: new Date('2026-05-01T08:00:00Z'),
+    })
+    render(
+      <NotificationProvider>
+        <a
+          href="#workshop-registration"
+          onClick={goToAnchor('workshop-registration')}
+        >
+          Workshop registration link
+        </a>
+        <WorkshopRegistrationSettings />
+      </NotificationProvider>,
+    )
+    const toggle = screen.getByRole('button', {
+      name: /^Workshop registration/,
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(
+      screen.getByRole('link', { name: 'Workshop registration link' }),
+    )
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
   })
 })

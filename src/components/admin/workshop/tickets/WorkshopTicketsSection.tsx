@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -13,7 +12,6 @@ import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import {
-  ChevronDownIcon,
   ExclamationTriangleIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
@@ -30,6 +28,9 @@ import { quoteNames } from './names'
 import { useSaveWorkshopAccess } from './useSaveWorkshopAccess'
 import { typeKey } from '@/lib/tickets/classification'
 import { useTicketHolders } from '../holders'
+import { WorkshopSection } from '../WorkshopSection'
+import { useReportTicketsAttention } from '../attention'
+import { useOpenedByAnchor } from '../useOpenedByAnchor'
 
 const HEADING_ID = 'workshop-tickets-heading'
 
@@ -53,55 +54,25 @@ function WorkshopTicketsFrame({
   children: ReactNode
 }) {
   const [open, setOpen] = useState(initiallyOpen)
-  const contentId = useId()
-  // A link to the card (from the ticket-types page) opens it. After mount:
-  // the server render has no address hash.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (window.location.hash === `#${WORKSHOP_TICKETS_ANCHOR}`) setOpen(true)
-  }, [])
+  // A link to the card (from the ticket-types page, a notification, or
+  // "Needs attention" on this page) opens it, and an arrival shows it.
+  useOpenedByAnchor(WORKSHOP_TICKETS_ANCHOR, open, setOpen)
   return (
-    <section
+    <WorkshopSection
       id={WORKSHOP_TICKETS_ANCHOR}
-      aria-labelledby={HEADING_ID}
-      className="scroll-mt-24 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
+      headingId={HEADING_ID}
+      // Under the Settings h2. Focus lands on it when the control that held
+      // it leaves the page (a removed entry).
+      headingLevel={3}
+      icon={TicketIcon}
+      title="Workshop tickets"
+      description="Holders of a ticket type that grants workshop access can sign up for workshops."
+      badge={badge}
+      open={open}
+      onOpenChange={setOpen}
     >
-      {/* Collapsed by default: rarely changed once set. A button inside the
-          heading, not <summary>, which would hide the heading from
-          screen-reader heading navigation. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <TicketIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
-        <h3
-          id={HEADING_ID}
-          // Focusable from code only: focus lands here when the control that
-          // held it leaves the page (a removed entry).
-          tabIndex={-1}
-          className="flex-1 text-lg font-medium text-gray-900 outline-none dark:text-white"
-        >
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls={contentId}
-            onClick={() => setOpen((o) => !o)}
-            className="flex w-full items-center gap-2 text-left"
-          >
-            Workshop tickets
-            {badge}
-            <ChevronDownIcon
-              aria-hidden
-              className={`ml-auto size-5 shrink-0 text-gray-400 transition-transform dark:text-gray-500 ${open ? 'rotate-180' : ''}`}
-            />
-          </button>
-        </h3>
-      </div>
-      <div id={contentId} className={open ? undefined : 'hidden'}>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Holders of a ticket type that grants workshop access can sign up for
-          workshops.
-        </p>
-        {children}
-      </div>
-    </section>
+      {children}
+    </WorkshopSection>
   )
 }
 
@@ -137,6 +108,12 @@ export function WorkshopTicketsSkeleton() {
   )
 }
 
+/** A type is not set, or a stored answer names a type the provider lacks. */
+const needsDecision = (list: WorkshopTicketList) =>
+  list.types.some((type) => type.access === 'unclassified') ||
+  list.orphaned.length > 0 ||
+  list.orphanedEarlyAccess.length > 0
+
 export interface WorkshopTicketsSectionProps {
   /**
    * The list, built on the server from the provider's ticket types and the
@@ -151,7 +128,7 @@ export interface WorkshopTicketsSectionProps {
    * so the section names no cause it does not know.
    */
   causeUnknown?: boolean
-  /** "Sponsor Early Access Opens" is set: early access can take effect. */
+  /** "Sponsor early access opens" is set: early access can take effect. */
   sponsorStartSet?: boolean
 }
 
@@ -170,6 +147,11 @@ export function WorkshopTicketsSection({
   causeUnknown = false,
   sponsorStartSet = false,
 }: WorkshopTicketsSectionProps) {
+  // Named in "Needs attention" at the top of the page, which this card,
+  // collapsed under Settings, is far below.
+  useReportTicketsAttention(
+    !list ? 'unreadable' : needsDecision(list) ? 'decision' : null,
+  )
   if (!list) {
     return (
       <WorkshopTicketsFrame key="error" open>
@@ -211,24 +193,20 @@ export function WorkshopTicketsSection({
   const notSet = list.types
     .filter((type) => type.access === 'unclassified')
     .map((type) => type.typeName)
-
-  const needsDecision =
-    notSet.length > 0 ||
-    list.orphaned.length > 0 ||
-    list.orphanedEarlyAccess.length > 0
+  const decision = needsDecision(list)
 
   return (
     <WorkshopTicketsFrame
       // A key per branch: a switch starts the card over, with its own open.
       key="list"
-      open={needsDecision || !list.configured}
+      open={decision || !list.configured}
       badge={
         !list.configured && (
           <StatusBadge label="Not configured" color="yellow" />
         )
       }
     >
-      {needsDecision && (
+      {decision && (
         // A labelled region, NOT a live one: it holds buttons and questions,
         // and a live region would be read out again whole on every change.
         <section
@@ -292,7 +270,7 @@ export function WorkshopTicketsSection({
       )}
 
       <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-        Early access lets holders sign up from “Sponsor Early Access Opens”,
+        Early access lets holders sign up from “Sponsor early access opens”,
         with no link.
         {!sponsorStartSet &&
           ' No sponsor start time is set, so early access has no effect yet.'}

@@ -39,7 +39,7 @@ interface SponsorContractViewProps {
   onSendContract?: (options: ContractSendOptions) => void
   /** The conference has workshops: offer the early-access link (#1346). */
   workshopsEnabled?: boolean
-  /** The conference has a "Sponsor Early Access Opens" time (see the section). */
+  /** The conference has a "Sponsor early access opens" time (see the section). */
   sponsorStartSet?: boolean
   /** Send → Workshop early access (#1347): opens the host's Send modal on that kind. */
   onSendEarlyAccess?: () => void

@@ -1,7 +1,6 @@
 'use client'
 
 import { useId } from 'react'
-import { BoltIcon } from '@heroicons/react/24/outline'
 import { DataTable, type Column } from '@/components/DataTable'
 import { StatusBadge } from '@/components/StatusBadge'
 import { formatDateSafe } from '@/lib/time'
@@ -17,7 +16,6 @@ export interface EarlySignupsListProps {
   /**
    * The early sign-ups the server answered, already narrowed to `sponsorId`
    * when one is set. `undefined`: no answer yet. THE LIST FILTERS NOTHING: the
-   * page's general read of sign-ups holds the first hundred only, so the
    * server narrows, over every match.
    */
   signups: EarlySignupRow[] | undefined
@@ -132,19 +130,17 @@ export function EarlySignupsList({
     <section
       id={EARLY_SIGNUPS_ANCHOR}
       aria-labelledby={headingId}
-      className="scroll-mt-24 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
+      // Inside the "Sponsor early access" card, which is its frame.
+      className="scroll-mt-24"
     >
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <BoltIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
-            <h3
-              id={headingId}
-              className="text-lg font-medium text-gray-900 dark:text-white"
-            >
-              Early sign-ups
-            </h3>
-          </div>
+          <h3
+            id={headingId}
+            className="text-base font-medium text-gray-900 dark:text-white"
+          >
+            Early sign-ups
+          </h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Sign-ups made through a sponsor&rsquo;s early-access link, before
             registration opened for everyone.

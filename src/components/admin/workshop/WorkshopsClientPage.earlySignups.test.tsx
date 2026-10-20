@@ -3,10 +3,10 @@
  *
  * EARLY SIGN-UPS ON `/admin/workshops` (#1348, spec §9), as the page wires
  * them: the "Early sign-ups" list and its narrowing, and the badge in a
- * workshop's sign-up dialog from both reads that feed it.
+ * workshop's sign-up dialog.
  *
- * THE NARROWING IS THE SERVER'S. The page's general read of sign-ups holds the
- * first hundred only, so the page never filters: it asks
+ * THE NARROWING IS THE SERVER'S. The page holds no list of every sign-up, so
+ * it never filters: it asks
  * `workshop.admin.listEarlySignups` again with the sponsor in the input, and
  * shows what comes back. Here the server's narrowed answer holds a person NO
  * other answer holds, so a row that shows them cannot have been filtered out
@@ -157,12 +157,12 @@ const dialogRow = (
 })
 
 const server = {
-  /** `getAllSignups`: the page's first hundred sign-ups. */
-  general: [] as ReturnType<typeof dialogRow>[],
   /** `listSignups`: one workshop's sign-ups of one status. */
   ofWorkshop: [] as ReturnType<typeof dialogRow>[],
   /** While set, `listSignups` waits on it. */
   holdOfWorkshop: null as Promise<void> | null,
+  /** How many reads of `listSignups` fail before one answers. */
+  ofWorkshopFailures: 0,
   /** `listEarlySignups`, by the sponsor in its input (`''`: none). */
   early: {} as Record<
     string,
@@ -204,10 +204,18 @@ async function answer(procedure: string, input: unknown): Promise<unknown> {
           full: [],
         },
       })
-    case 'workshop.admin.getAllSignups':
-      return ok({ success: true, data: server.general })
     case 'workshop.admin.listSignups': {
       if (server.holdOfWorkshop) await server.holdOfWorkshop
+      if (server.ofWorkshopFailures > 0) {
+        server.ofWorkshopFailures -= 1
+        return {
+          error: {
+            message: 'Failed to fetch workshop signups',
+            code: -32603,
+            data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+          },
+        }
+      }
       const { status } = input as { status?: string }
       const data = server.ofWorkshop.filter((row) => row.status === status)
       return ok({ success: true, data, count: data.length })
@@ -282,9 +290,9 @@ async function answer(procedure: string, input: unknown): Promise<unknown> {
 
 beforeEach(() => {
   Object.assign(server, {
-    general: [],
     ofWorkshop: [],
     holdOfWorkshop: null,
+    ofWorkshopFailures: 0,
     early: {
       '': {
         signups: [
@@ -778,7 +786,7 @@ describe('the sponsor board’s rows after an action on a sign-up', () => {
 
 /**
  * THE COUNT'S LINK ENDS AT THE LIST, NOT AT THE TOP OF THE PAGE (#1348,
- * review round 2). The list is the last section of the page, and Next applies
+ * review round 2). The list is far down the page, and Next applies
  * a link's fragment once, at the first commit of the navigation, which is the
  * route's loading state: the section is not there yet (or is hidden, on a page
  * Next kept). So the page brings the list into view itself, when the address
@@ -954,18 +962,12 @@ describe('returning to a history entry that was already shown the list', () => {
   })
 })
 
-describe('the badge in a workshop’s sign-up dialog, from both reads that feed it', () => {
-  it('is shown from the page’s general read first, and then from the workshop’s own read', async () => {
-    // The two reads name the sponsor differently, so the badge says which
-    // read it came from.
-    server.general = [
-      dialogRow('su-ada', 'Ada Lovelace', { sponsor: ACME }),
-      dialogRow('su-bob', 'Bob Smith', null),
-    ]
+describe('the badge in a workshop’s sign-up dialog', () => {
+  // #1452: the dialog is fed by the workshop's own read only. Until it
+  // answers, the dialog says so, and lists nobody.
+  it('says it is reading until the workshop’s own read answers, then shows its badge', async () => {
     server.ofWorkshop = [
-      dialogRow('su-ada', 'Ada Lovelace', {
-        sponsor: { _id: 'sfc-acme', name: 'Acme Renamed' },
-      }),
+      dialogRow('su-ada', 'Ada Lovelace', { sponsor: ACME }),
       dialogRow('su-bob', 'Bob Smith', null),
     ]
     let release = () => {}
@@ -979,16 +981,53 @@ describe('the badge in a workshop’s sign-up dialog, from both reads that feed 
       name: 'Kubernetes 101 - Confirmed Signups',
     })
 
-    // From the general read: the workshop's own has not answered.
-    expect(await within(dialog).findAllByText('via Acme AS')).toHaveLength(2)
-    expect(within(dialog).queryAllByText(/^via /)).toHaveLength(2)
+    expect(within(dialog).getByRole('status')).toHaveTextContent(
+      'Reading the sign-ups…',
+    )
+    expect(within(dialog).queryByText(/No .* signups/)).toBeNull()
 
     release()
 
-    expect(await within(dialog).findAllByText('via Acme Renamed')).toHaveLength(
-      2,
-    )
+    expect(await within(dialog).findAllByText('via Acme AS')).toHaveLength(2)
     expect(within(dialog).queryAllByText(/^via /)).toHaveLength(2)
+  })
+
+  it('says a failed read failed, and reads again on "Try again"', async () => {
+    server.ofWorkshop = [dialogRow('su-ada', 'Ada Lovelace', { sponsor: ACME })]
+    server.ofWorkshopFailures = 1
+    renderPage()
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^Confirmed\s*2$/ }),
+    )
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Kubernetes 101 - Confirmed Signups',
+    })
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The sign-ups could not be read.',
+    )
+    expect(within(dialog).queryByText('Reading the sign-ups…')).toBeNull()
+
+    // Held, so the retry is seen on its way: the button stays, and keeps focus.
+    let release = () => {}
+    server.holdOfWorkshop = new Promise<void>((resolve) => (release = resolve))
+    const retry = within(dialog).getByRole('button', { name: 'Try again' })
+    retry.focus()
+    fireEvent.click(retry)
+    const busy = await within(dialog).findByRole('button', {
+      name: 'Trying again…',
+    })
+    expect(busy).toBe(retry)
+    expect(busy).toHaveAttribute('aria-disabled', 'true')
+    expect(document.activeElement).toBe(retry)
+
+    release()
+    expect(await within(dialog).findAllByText('via Acme AS')).not.toHaveLength(
+      0,
+    )
+    // The button is gone; focus is on the list it read, inside the dialog.
+    expect(dialog.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement).not.toBe(document.body)
   })
 })
 

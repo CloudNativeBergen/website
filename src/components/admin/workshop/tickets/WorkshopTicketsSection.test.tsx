@@ -11,7 +11,15 @@
  * leave stored, and what the portal then decides, is pinned against the real
  * procedure in `__tests__/app/admin/workshop-tickets.test.tsx`.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest'
 import {
   cleanup,
   fireEvent,
@@ -28,6 +36,7 @@ import {
   WorkshopTicketsSkeleton,
 } from './WorkshopTicketsSection'
 import { TicketHolderContext, type TicketHolderView } from '../holders'
+import { goToAnchor } from '../useOpenedByAnchor'
 
 /** The buttons that act, not the card's own show/hide toggle. */
 const actions = () =>
@@ -407,6 +416,210 @@ describe('a configured list', () => {
     fireEvent.click(toggle())
     rerender(list(1))
     expect(toggle()).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  // "Needs attention" on the page links here (#1452): followed while the card
+  // is closed, it opens it, and brings it into view once it is open.
+  it('opens when a link on the page goes to it', () => {
+    const scrolled = vi.fn(function (this: Element) {
+      return this.querySelector('[aria-expanded]')?.getAttribute(
+        'aria-expanded',
+      )
+    })
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    render(
+      <>
+        <a href="#workshop-tickets" onClick={goToAnchor('workshop-tickets')}>
+          Review workshop tickets
+        </a>
+        <WorkshopTicketsSection
+          list={buildWorkshopTicketList(
+            ['Two-day pass', 'Day pass'],
+            roles.slice(0, 2),
+          )}
+          providerLabel="Checkin.no"
+        />
+      </>,
+    )
+    const toggle = screen.getByRole('button', { name: /^Workshop tickets/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(
+      screen.getByRole('link', { name: 'Review workshop tickets' }),
+    )
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    // The last scroll is the one made once the card was open.
+    expect(scrolled.mock.results.at(-1)?.value).toBe('true')
+  })
+
+  // Arriving by a link (the ticket-types page, a notification): the card is
+  // far down the page, and Next applied the fragment before it was there.
+  it('arriving with its anchor in the address, opens and is brought into view once', () => {
+    // Whether the card was open when it was brought into view: scrolled while
+    // collapsed, its content would open below the fold.
+    const scrolled = vi.fn(function (this: Element) {
+      return this.querySelector('[aria-expanded]')?.getAttribute(
+        'aria-expanded',
+      )
+    })
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    window.history.replaceState(null, '', '#workshop-tickets')
+    // The skeleton first, then the list streams in: a new frame mounts.
+    const { rerender } = render(<WorkshopTicketsSkeleton />)
+    rerender(
+      <WorkshopTicketsSection
+        list={buildWorkshopTicketList(
+          ['Two-day pass', 'Day pass'],
+          roles.slice(0, 2),
+        )}
+        providerLabel="Checkin.no"
+      />,
+    )
+    expect(
+      screen.getByRole('button', { name: /^Workshop tickets/ }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    // Once for the entry: the list arriving does not pull the page back.
+    expect(scrolled.mock.contexts.map((el) => (el as Element).id)).toEqual([
+      'workshop-tickets',
+    ])
+    expect(scrolled.mock.results.map((r) => r.value)).toEqual(['true'])
+    window.history.replaceState(null, '', '#')
+  })
+
+  // A save refreshes the page, and Next writes the entry's state anew without
+  // the page's own keys. Shown again later (Back to a kept page), the card is
+  // not brought into view a second time; a NEW entry for the same address is.
+  it('is brought into view once per entry, also after a refresh or reload wiped the entry’s state', () => {
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    const navigation = Object.assign(new EventTarget(), {
+      currentEntry: { key: 'entry-1' },
+    })
+    vi.stubGlobal('navigation', navigation)
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+      vi.unstubAllGlobals()
+      sessionStorage.clear()
+      window.history.replaceState(null, '', window.location.pathname)
+    })
+    window.history.replaceState(null, '', '#workshop-tickets')
+    const list = buildWorkshopTicketList(
+      ['Two-day pass', 'Day pass'],
+      roles.slice(0, 2),
+    )
+    const card = () => (
+      <WorkshopTicketsSection list={list} providerLabel="Checkin.no" />
+    )
+
+    const first = render(card())
+    first.unmount()
+    // What `router.refresh()` writes: Next's keys only. Nothing is kept in
+    // memory either, so this is a reload of the entry as well.
+    window.history.replaceState({ __NA: true }, '')
+    render(card()).unmount()
+    expect(scrolled).toHaveBeenCalledTimes(1)
+
+    navigation.currentEntry = { key: 'entry-2' }
+    window.history.replaceState({ __NA: true }, '')
+    render(card())
+    expect(scrolled).toHaveBeenCalledTimes(2)
+  })
+
+  // A notification in the bell links here, and is followed while on the page:
+  // Next pushes an entry (or replaces it, for the address the page is at) and
+  // keeps the page, with no `hashchange`. The click opens the card; a refresh
+  // after a save, which replaces the entry too, does not reopen a shut card.
+  it('opens when a link to its anchor on this page is followed, also to the address it is at', () => {
+    onTestFinished(() => {
+      window.history.replaceState(null, '', window.location.pathname)
+    })
+    render(
+      <>
+        <a
+          href={`${window.location.pathname}#workshop-tickets`}
+          // As Next's <Link>: the router navigates, not the browser.
+          onClick={(event) => event.preventDefault()}
+        >
+          Notification
+        </a>
+        <WorkshopTicketsSection
+          list={buildWorkshopTicketList(
+            ['Two-day pass', 'Day pass'],
+            roles.slice(0, 2),
+          )}
+          providerLabel="Checkin.no"
+        />
+      </>,
+    )
+    const toggle = screen.getByRole('button', { name: /^Workshop tickets/ })
+    const notification = screen.getByRole('link', { name: 'Notification' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(notification)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    // Shut, then the same link again, from the address it points at.
+    fireEvent.click(toggle)
+    window.history.replaceState({ __NA: true }, '', '#workshop-tickets')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(notification)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  // The entry Next makes for that link is marked as shown: the page kept and
+  // shown again on it (Back) does not bring the card into view a second time.
+  it('marks the entry a link on this page makes, so showing the page again does not scroll', async () => {
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    const navigation = Object.assign(new EventTarget(), {
+      currentEntry: { key: 'before-link' },
+    })
+    vi.stubGlobal('navigation', navigation)
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+      vi.unstubAllGlobals()
+      sessionStorage.clear()
+      window.history.replaceState(null, '', window.location.pathname)
+    })
+    const page = () => (
+      <>
+        <a
+          href={`${window.location.pathname}#workshop-tickets`}
+          onClick={(event) => event.preventDefault()}
+        >
+          Notification
+        </a>
+        <WorkshopTicketsSection
+          list={buildWorkshopTicketList(
+            ['Two-day pass', 'Day pass'],
+            roles.slice(0, 2),
+          )}
+          providerLabel="Checkin.no"
+        />
+      </>
+    )
+    const { unmount } = render(page())
+    fireEvent.click(screen.getByRole('link', { name: 'Notification' }))
+    expect(scrolled).toHaveBeenCalledTimes(1)
+    // What Next does next: a new entry, with no `hashchange`.
+    window.history.pushState({ __NA: true }, '', '#workshop-tickets')
+    navigation.currentEntry = { key: 'after-link' }
+    navigation.dispatchEvent(new Event('currententrychange'))
+    await Promise.resolve()
+
+    // Away and Back: the kept page is shown again, its effects run anew.
+    unmount()
+    render(page())
+    expect(scrolled).toHaveBeenCalledTimes(1)
   })
 
   it('shows a load failure even after the organizer closed the card', () => {

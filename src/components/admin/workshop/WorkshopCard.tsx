@@ -22,6 +22,8 @@ interface WorkshopCardProps {
   onAddParticipant: () => void
   onEditCapacity: () => void
   onAnnounce: () => void
+  /** One below the heading the card sits under. */
+  titleLevel?: 3 | 4
 }
 
 export function WorkshopCard({
@@ -33,7 +35,9 @@ export function WorkshopCard({
   onAddParticipant,
   onEditCapacity,
   onAnnounce,
+  titleLevel = 3,
 }: WorkshopCardProps) {
+  const Title = `h${titleLevel}` as const
   const { capacityPercentage, utilizationPercentage, overCapacityBy } =
     calculateWorkshopStats(workshop, confirmedCount, waitlistCount)
   const overCapacity = overCapacityBy > 0
@@ -47,9 +51,9 @@ export function WorkshopCard({
     <div className="flex h-full flex-col rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <div className="flex flex-1 flex-col p-4">
         <div className="mb-3 min-h-12">
-          <h3 className="line-clamp-2 text-base leading-tight font-semibold text-gray-900 dark:text-white">
+          <Title className="line-clamp-2 text-base leading-tight font-semibold text-gray-900 dark:text-white">
             {workshop.title}
-          </h3>
+          </Title>
         </div>
 
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">

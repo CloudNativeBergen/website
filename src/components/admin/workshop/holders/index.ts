@@ -1,4 +1,4 @@
-export { TicketHolderPanel } from './TicketHolderPanel'
+export { TicketHolderPanel, TICKET_HOLDERS_ANCHOR } from './TicketHolderPanel'
 export { useRereadTicketHolders } from './useRereadTicketHolders'
 export {
   TicketHolderContext,

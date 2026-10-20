@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CalendarIcon,
-  ChevronDownIcon,
   PencilSquareIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
@@ -13,6 +12,11 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
+import { WorkshopSection } from './workshop/WorkshopSection'
+import { useOpenedByAnchor } from './workshop/useOpenedByAnchor'
+
+/** The card's anchor: the sponsor early-access card links to it (#1452). */
+export const WORKSHOP_REGISTRATION_ANCHOR = 'workshop-registration'
 import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import {
   formatDateTimeSafe,
@@ -56,7 +60,8 @@ export function WorkshopRegistrationSettings({
 
   const [isOpen, setIsOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
-  const contentId = useId()
+  // The sponsor early-access card links here, to the time it shows.
+  useOpenedByAnchor(WORKSHOP_REGISTRATION_ANCHOR, expanded, setExpanded)
   const [error, setError] = useState<string | null>(null)
   // A REFUSAL IS BROUGHT INTO VIEW when it arrives: on a short screen it sits
   // above the Save button that was just tapped. Counted, not keyed on the
@@ -246,26 +251,18 @@ export function WorkshopRegistrationSettings({
   const status = getRegistrationStatus()
 
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
-      <div className="flex items-center gap-2">
-        <CalendarIcon className="h-5 w-5 shrink-0 text-gray-400 dark:text-gray-500" />
-        {/* Collapsed by default. A button inside the heading, not <summary>,
-            which would hide the heading from heading navigation. */}
-        <h3 className="flex-1 text-lg font-medium text-gray-900 dark:text-white">
-          <button
-            type="button"
-            aria-expanded={expanded}
-            aria-controls={contentId}
-            onClick={() => setExpanded((e) => !e)}
-            className="flex w-full items-center gap-2 text-left"
-          >
-            Workshop registration
-            <ChevronDownIcon
-              aria-hidden
-              className={`ml-auto size-5 shrink-0 text-gray-400 transition-transform dark:text-gray-500 ${expanded ? 'rotate-180' : ''}`}
-            />
-          </button>
-        </h3>
+    <WorkshopSection
+      id={WORKSHOP_REGISTRATION_ANCHOR}
+      icon={CalendarIcon}
+      // Under the Settings h2.
+      headingLevel={3}
+      title="Workshop registration"
+      description="When workshop sign-ups open and close."
+      // The status, also while collapsed.
+      badge={<StatusBadge label={status.label} color={status.color} />}
+      open={expanded}
+      onOpenChange={setExpanded}
+      action={
         <button
           type="button"
           onClick={openModal}
@@ -274,13 +271,13 @@ export function WorkshopRegistrationSettings({
         >
           <PencilSquareIcon className="h-5 w-5" />
         </button>
-      </div>
-
-      <div id={contentId} className={expanded ? 'mt-4' : 'hidden'}>
+      }
+    >
+      <div className="mt-4">
         <div className="space-y-3">
           <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              Sponsor Early Access Opens
+              Sponsor early access opens
             </span>
             <span className="text-right text-sm text-gray-900 dark:text-white">
               {formatDateTime(workshopRegistrationSponsorStart)}
@@ -289,7 +286,7 @@ export function WorkshopRegistrationSettings({
 
           <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              Registration Opens
+              Registration opens
             </span>
             <span className="text-right text-sm text-gray-900 dark:text-white">
               {formatDateTime(workshopRegistrationStart)}
@@ -298,18 +295,11 @@ export function WorkshopRegistrationSettings({
 
           <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              Registration Closes
+              Registration closes
             </span>
             <span className="text-right text-sm text-gray-900 dark:text-white">
               {formatDateTime(workshopRegistrationEnd)}
             </span>
-          </div>
-
-          <div className="flex items-center justify-between py-2">
-            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              Status
-            </span>
-            <StatusBadge label={status.label} color={status.color} />
           </div>
 
           {status.note ? (
@@ -352,7 +342,7 @@ export function WorkshopRegistrationSettings({
               htmlFor="workshop-reg-sponsor-start"
               className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Sponsor Early Access Opens (Europe/Oslo)
+              Sponsor early access opens (Europe/Oslo)
             </label>
             <input
               id="workshop-reg-sponsor-start"
@@ -371,7 +361,7 @@ export function WorkshopRegistrationSettings({
               className="mt-1 text-sm text-gray-500 dark:text-gray-400"
             >
               Optional. When people with a sponsor&apos;s early-access link can
-              sign up. Must be earlier than Registration Opens.
+              sign up. Must be earlier than Registration opens.
             </p>
           </div>
 
@@ -380,7 +370,7 @@ export function WorkshopRegistrationSettings({
               htmlFor="workshop-reg-start"
               className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Registration Opens (Europe/Oslo)
+              Registration opens (Europe/Oslo)
             </label>
             <input
               id="workshop-reg-start"
@@ -397,7 +387,7 @@ export function WorkshopRegistrationSettings({
               htmlFor="workshop-reg-end"
               className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Registration Closes (Europe/Oslo)
+              Registration closes (Europe/Oslo)
             </label>
             <input
               id="workshop-reg-end"
@@ -433,6 +423,6 @@ export function WorkshopRegistrationSettings({
           </div>
         </form>
       </ModalShell>
-    </div>
+    </WorkshopSection>
   )
 }

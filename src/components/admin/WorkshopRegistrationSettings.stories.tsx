@@ -143,9 +143,9 @@ export const EarlyAccessOpenPhone: Story = {
     let wrapped = 0
 
     for (const name of [
-      'Sponsor Early Access Opens',
-      'Registration Opens',
-      'Registration Closes',
+      'Sponsor early access opens',
+      'Registration opens',
+      'Registration closes',
     ]) {
       const label = await canvas.findByText(name)
       const value = label.nextElementSibling!
@@ -192,7 +192,7 @@ export const Editing: Story = {
     const dialog = await within(document.body).findByRole('dialog')
     // 07:00 UTC on 10 April is 09:00 in Oslo.
     await expect(
-      within(dialog).getByLabelText(/Sponsor Early Access Opens/),
+      within(dialog).getByLabelText(/Sponsor early access opens/),
     ).toHaveValue('2026-04-10T09:00')
   },
 }
@@ -215,7 +215,7 @@ const STORED_BEHIND_THE_FORM = {
 
 /** The server's refusal, as `workshop.admin.updateRegistrationTimes` words it. */
 const REFUSAL =
-  'Sponsor early access must start before registration opens for everyone. Sponsor Early Access Opens is set to 20. april 2026 kl. 09:00.'
+  'Sponsor early access must start before registration opens for everyone. Sponsor early access opens is set to 20. april 2026 kl. 09:00.'
 
 /** `router.refresh()` in the story below: the page reads the card again. */
 let rereadCard = () => {}
@@ -280,9 +280,9 @@ export const RefusedSave: Story = {
     )
     const dialog = await within(document.body).findByRole('dialog')
     const sponsorStart = within(dialog).getByLabelText(
-      /Sponsor Early Access Opens/,
+      /Sponsor early access opens/,
     )
-    const opening = within(dialog).getByLabelText(/Registration Opens/)
+    const opening = within(dialog).getByLabelText(/Registration opens/)
     await expect(sponsorStart).toHaveValue('')
 
     // 18 April, two days before the sponsor start the form cannot see.

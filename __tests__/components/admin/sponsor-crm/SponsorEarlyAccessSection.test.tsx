@@ -119,7 +119,7 @@ describe('what the section says the link does', () => {
 
     expect(
       screen.getByText(
-        'A link the sponsor can pass on to its people. Whoever opens it can sign up for workshops from the time set as “Sponsor Early Access Opens”, before registration opens for everyone. They still need a ticket that includes workshops.',
+        'A link the sponsor can pass on to its people. Whoever opens it can sign up for workshops from the time set as “Sponsor early access opens”, before registration opens for everyone. They still need a ticket that includes workshops.',
       ),
     ).toBeVisible()
     expect(screen.queryByText(/gives no head start/)).toBeNull()
@@ -130,7 +130,7 @@ describe('what the section says the link does', () => {
 
     expect(
       screen.getByText(
-        'No “Sponsor Early Access Opens” time is set for this conference, so a link gives no head start yet. Set one under Workshops.',
+        'No “Sponsor early access opens” time is set for this conference, so a link gives no head start yet. Set one under Workshops.',
       ),
     ).toBeVisible()
     // Known from the conference the page already has: nothing is asked for.

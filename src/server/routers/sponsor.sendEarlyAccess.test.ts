@@ -807,7 +807,7 @@ const REFUSALS: Array<{
     name: 'the conference has no sponsor start time',
     reason: 'no-window',
     words:
-      'This conference has no early-access period. Under Workshops, set a "Sponsor Early Access Opens" time that is earlier than the time registration opens for everyone.',
+      'This conference has no early-access period. Under Workshops, set a "Sponsor early access opens" time that is earlier than the time registration opens for everyone.',
     arrange: () => {
       h.getConference.mockResolvedValue({
         conference: conference({ workshopRegistrationSponsorStart: undefined }),
@@ -820,7 +820,7 @@ const REFUSALS: Array<{
     name: 'the conference has no official opening',
     reason: 'no-window',
     words:
-      'This conference has no early-access period. Under Workshops, set a "Sponsor Early Access Opens" time that is earlier than the time registration opens for everyone.',
+      'This conference has no early-access period. Under Workshops, set a "Sponsor early access opens" time that is earlier than the time registration opens for everyone.',
     arrange: () => {
       h.getConference.mockResolvedValue({
         conference: conference({ workshopRegistrationStart: undefined }),
@@ -833,7 +833,7 @@ const REFUSALS: Array<{
     name: 'the sponsor start time is not earlier than the official opening',
     reason: 'no-window',
     words:
-      'This conference has no early-access period. Under Workshops, set a "Sponsor Early Access Opens" time that is earlier than the time registration opens for everyone.',
+      'This conference has no early-access period. Under Workshops, set a "Sponsor early access opens" time that is earlier than the time registration opens for everyone.',
     arrange: () => {
       h.getConference.mockResolvedValue({
         conference: conference({

@@ -2093,7 +2093,7 @@ export default defineType({
       type: 'array',
       of: [{ type: 'string' }],
       description:
-        'Holders of these ticket types can sign up for workshops from Sponsor Early Access Opens. No link needed.',
+        'Holders of these ticket types can sign up for workshops from Sponsor early access opens. No link needed.',
     }),
   ],
 
