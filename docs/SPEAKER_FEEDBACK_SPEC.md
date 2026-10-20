@@ -703,6 +703,14 @@ Decided on [#1423](https://github.com/CloudNativeBergen/website/issues/1423).
   like other speaker mail.
 - Not sent: zero responses; a second summary after Card Counts change; past
   editions; anything real-time.
+- _Refinement (F8):_ the cron is its own route, `/api/cron/feedback-summary`
+  at 08:00 UTC, so a failure cannot stop the purges in `cleanup-notifications`
+  and the emails get their own time budget. "Closed" is `answersClosed`
+  (`src/lib/feedback/window.ts`): the window has closed, or a talk with no slot
+  once its conference is over, the exact complement of §5's minting rule. A
+  talk with a version waiting in a release that is not `active`, or whose
+  releases cannot be listed, is not claimed and is tried again the next day.
+  "Comments" counts the comments the speaker sees (hidden ones excluded).
 
 ### 11.2 A flag notifies organizers
 

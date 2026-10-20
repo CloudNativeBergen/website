@@ -88,6 +88,12 @@ export default defineType({
           // A workshop reached 80% of capacity, or its waitlist started;
           // once per workshop per threshold.
           { title: 'Workshop Filling Up', value: 'workshop_capacity' },
+          // A session's Feedback Window closed: its totals, once per talk
+          // and speaker (speaker feedback spec §11.1).
+          {
+            title: 'Session Feedback Summary',
+            value: 'session_feedback_summary',
+          },
           { title: 'System', value: 'system' },
         ],
         layout: 'dropdown',

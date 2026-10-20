@@ -25,9 +25,10 @@ import type {
   AdminFeedbackSession,
 } from '@/lib/feedback/admin'
 import { formats } from '@/lib/proposal/types'
+import { plural } from '@/lib/text/display'
 import { formatFeedbackCommentTime } from '@/lib/time'
 import { ANSWERS } from '../answers'
-import { ColourBar, FEEDBACK_TONE, plural } from '../tone'
+import { ColourBar, FEEDBACK_TONE } from '../tone'
 
 /** The session list's columns at `sm` and up; a phone stacks each row. */
 const COLUMNS =

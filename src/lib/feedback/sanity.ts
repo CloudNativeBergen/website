@@ -28,8 +28,11 @@ export const VERSIONS_API_VERSION = '2025-02-19'
  * The one client for the version lookup, the write and the sweep (§4.2).
  * Every fetch through it passes `perspective: 'raw'`.
  */
-export function versionsClient() {
-  return clientWrite.withConfig({ apiVersion: VERSIONS_API_VERSION })
+export function versionsClient({ timeout }: { timeout?: number } = {}) {
+  return clientWrite.withConfig({
+    apiVersion: VERSIONS_API_VERSION,
+    ...(timeout !== undefined && { timeout }),
+  })
 }
 
 /** Published documents only (§4.4): no drafts, no Content Release versions. */
@@ -44,6 +47,7 @@ export const PUBLISHED_ONLY =
 export async function getFeedbackSlots(
   conferenceId: string,
   talkId: string,
+  { signal }: { signal?: AbortSignal } = {},
 ): Promise<FeedbackSlot[]> {
   const days = await scopedFetch<
     { date: string | null; slots: Omit<FeedbackSlot, 'date'>[] | null }[]
@@ -55,7 +59,7 @@ export async function getFeedbackSlots(
       "slots": tracks[].talks[][talk._ref == $talkId]{ startTime, endTime }
     }`,
     { talkId },
-    { cache: 'no-store' },
+    { cache: 'no-store', signal },
   )
   return (days ?? []).flatMap((day) =>
     (day.slots ?? []).map((s) => ({
@@ -124,6 +128,7 @@ export async function getConferenceFeedbackSlots(
   conferenceId: string,
   client:
     typeof clientReadUncached | typeof clientReadCached = clientReadUncached,
+  { signal }: { signal?: AbortSignal } = {},
 ): Promise<Map<string, FeedbackSlot[]>> {
   const days = await scopedFetch<
     | {
@@ -144,7 +149,7 @@ export async function getConferenceFeedbackSlots(
       }
     }`,
     {},
-    client === clientReadUncached ? { cache: 'no-store' } : {},
+    client === clientReadUncached ? { cache: 'no-store', signal } : { signal },
   )
   const byTalk = new Map<string, FeedbackSlot[]>()
   for (const day of days ?? []) {

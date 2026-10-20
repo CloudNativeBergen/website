@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/workshop-promotion-emails",
       "schedule": "40 * * * *"
+    },
+    {
+      "path": "/api/cron/feedback-summary",
+      "schedule": "0 8 * * *"
     }
   ]
 }

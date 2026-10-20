@@ -149,6 +149,15 @@ deterministic-id technique:
 organizer)` under `notification.workshop-capacity.<hash>.<organizerId>`, so
   a workshop that drops below and crosses again notifies no one twice. Bell
   only; the workshop's title and counts, no attendee data.
+- **`session_feedback_summary`** — tells each speaker of a talk who is not
+  erased that its Session Feedback Window has closed, with the totals per
+  colour and the response and comment counts (never comment text), linking to
+  `/cfp/proposal/<id>#session-feedback` (`docs/SPEAKER_FEEDBACK_SPEC.md`
+  §11.1). Written by the daily `/api/cron/feedback-summary` run
+  (`src/lib/feedback/summary.ts`) after it has claimed the talk
+  (`feedbackSummarySentAt`), alongside one email. Once-only like the notices
+  above, under `notification.feedback-summary.<talkId>.<speakerId>`, and bell
+  only.
 
 ### Deterministic-id schemes
 

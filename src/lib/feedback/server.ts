@@ -34,6 +34,7 @@ export {
   type SpeakerResults,
 } from './results'
 export { deleteFeedback } from './delete'
+export { deliverFeedbackSummaries, type SummaryReport } from './summary'
 export { deviceCookie, type DeviceCookie } from './device'
 export {
   hideResponses,

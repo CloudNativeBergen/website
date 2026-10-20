@@ -1061,6 +1061,8 @@ export function assertMergeable(
 //     (`@/lib/events/handlers/ticketTypeNotSetNotification`)
 //   - once-only capacity notice → `notification.workshop-capacity.<hash>.<recipientId>`
 //     (`@/lib/events/handlers/workshopCapacityNotification`)
+//   - once-only Session Feedback summary → `notification.feedback-summary.<talkId>.<recipientId>`
+//     (`@/lib/feedback/summary`)
 // A plain reference repoint (the generic path) rewrites the inner ref to the
 // survivor but LEAVES the doc keyed by the loser id. If the survivor already
 // holds the canonical-id sibling for the same conversation, BOTH docs then point
@@ -1084,6 +1086,7 @@ const DETERMINISTIC_ID_PREFIXES = [
   'notification.message.',
   'notification.workshop-not-set.',
   'notification.workshop-capacity.',
+  'notification.feedback-summary.',
   'reminder.',
 ] as const
 
@@ -1091,6 +1094,7 @@ const DETERMINISTIC_ID_PREFIXES = [
 const ONCE_NOTICE_PREFIXES = [
   'notification.workshop-not-set.',
   'notification.workshop-capacity.',
+  'notification.feedback-summary.',
 ] as const
 const isOnceNotice = (id: string) =>
   ONCE_NOTICE_PREFIXES.some((p) => id.startsWith(p))

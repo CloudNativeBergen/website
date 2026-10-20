@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import type { SpeakerComment } from '@/lib/feedback/results'
 import { sharePercent, type FeedbackTotals } from '@/lib/feedback/totals'
+import { plural } from '@/lib/text/display'
 import { formatFeedbackCommentTime } from '@/lib/time'
 import { ANSWERS } from './answers'
-import { ColourBar, FEEDBACK_TONE, plural } from './tone'
+import { ColourBar, FEEDBACK_TONE } from './tone'
 
 /**
  * The speaker's Session Feedback (speaker feedback spec §9.3): a stacked
