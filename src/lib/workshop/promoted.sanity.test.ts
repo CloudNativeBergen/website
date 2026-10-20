@@ -108,6 +108,7 @@ beforeEach(async () => {
   await promoteTwo()
 })
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.useRealTimers()
 })
@@ -474,8 +475,11 @@ describe('a promoted sign-up moved back in Studio, then confirmed by an organize
   })
 
   it('after the guard has forgotten it (the confirm reports it newly confirmed, and the router tells it): the cron sends nothing for it', async () => {
+    // Past the guard's 15 minutes (`RECENT_MS`) from the promotion, which
+    // `beforeEach` made at the real time: relative to it, never a fixed date.
+    const forgotten = Date.now() + 16 * 60_000
     vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date('2026-10-20T09:16:00Z'))
+    vi.setSystemTime(forgotten)
     movedBackInStudio()
     const outcome = await confirmSignups(WORKSHOP, CONF, ['signup-2'])
     expect(outcome).toMatchObject({ newlyConfirmed: ['signup-2'] })
