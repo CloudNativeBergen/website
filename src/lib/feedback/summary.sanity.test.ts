@@ -36,6 +36,8 @@ const h = vi.hoisted(() => ({
   speakerReadOptions: [] as unknown[],
   sendEmail: vi.fn(),
   resolveSender: vi.fn(),
+  /** The pause between sends: recorded, and immediate. */
+  delay: vi.fn(async (ms: number) => void ms),
 }))
 
 vi.mock('@/lib/sanity/client', async () => {
@@ -98,7 +100,7 @@ vi.mock('@/lib/email/feedback-summary', async (original) => ({
 
 vi.mock('@/lib/email/config', async (original) => ({
   ...(await original<typeof import('@/lib/email/config')>()),
-  delay: async () => {},
+  delay: (ms: number) => h.delay(ms),
 }))
 
 import { runGroq } from '../../../__tests__/helpers/sanityStore'
@@ -269,6 +271,7 @@ beforeEach(() => {
   h.speakerReadOptions = []
   h.sendEmail.mockReset()
   h.sendEmail.mockResolvedValue(undefined)
+  h.delay.mockClear()
   h.resolveSender.mockReset()
   // One sender per organization, as the tenant's own Resend account is.
   h.resolveSender.mockImplementation(
@@ -846,7 +849,9 @@ describe('deliverFeedbackSummaries: a claim whose reply is lost', () => {
 
   it('bounds the speaker read after the claim with a timeout signal', async () => {
     await deliverFeedbackSummaries({ now: NOW })
+    // Before the claim (to budget the emails) and after it (erasure).
     expect(h.speakerReadOptions).toEqual([
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     ])
   })
@@ -940,7 +945,7 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
     expect(report).toMatchObject({ claimed: 2, senderDown: 2 })
   })
 
-  it('counts an email whose outcome Resend still has in progress as unknown: not sent, not failed, no breaker', async () => {
+  it('counts an email whose outcome Resend still has in progress as unknown, and stops that sender: a stalled Resend', async () => {
     seed([
       ...moreDue().filter((d) => d._id !== 'talk-2' && d._id !== 'talk-3'),
       talk('talk-2', 'conf-A', bothSpeakers),
@@ -952,16 +957,17 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
 
     const report = await deliverFeedbackSummaries({ now: NOW })
 
+    // The first conf-A talk claimed trips it; the other two wait a day.
     expect(report).toMatchObject({
-      claimed: 4,
-      senderDown: 0,
+      claimed: 2,
+      senderDown: 2,
       emailed: 0,
       emailFailed: 0,
-      emailUnknown: 7,
+      emailUnknown: 3,
     })
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('outcome unknown'),
-      expect.objectContaining({ talkId: 'talk-1', speakerId: 'sp-1' }),
+      expect.objectContaining({ speakerId: expect.any(String) }),
       expect.any(Error),
     )
   })
@@ -1005,16 +1011,35 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
 })
 
 describe('deliverFeedbackSummaries: the run’s time', () => {
-  it('does not claim a talk whose emails could not all be sent before the deadline', async () => {
-    // talk-1 has three speakers: three emails' worst case does not fit.
+  /** `n` speakers of talk-1, `erased` of them erased. */
+  const manySpeakers = (n: number, erased: number) => {
+    const speakers = Array.from({ length: n }, (_, i) =>
+      speaker(
+        `sp-m${i}`,
+        i < erased ? { erasedAt: '2026-06-01T00:00:00Z' } : {},
+      ),
+    )
+    return {
+      speakers,
+      talk: talk('talk-1', 'conf-A', {
+        speakers: speakers.map((sp) => ({ ...ref(sp._id), _key: sp._id })),
+      }),
+    }
+  }
+
+  it('does not claim a talk whose emails could not all be sent before the deadline, and logs it', async () => {
     const report = await deliverFeedbackSummaries({
       now: NOW,
-      deadline: new Date(Date.now() + 60_000),
+      deadline: new Date(Date.now() + 40_000),
     })
 
     expect(sentAt('talk-1')).toBeUndefined()
     expect(h.sendEmail).not.toHaveBeenCalled()
     expect(report).toMatchObject({ claimed: 0, notReached: 1 })
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('does not fit'),
+      expect.objectContaining({ talkId: 'talk-1' }),
+    )
   })
 
   it('claims a talk whose emails fit', async () => {
@@ -1025,6 +1050,92 @@ describe('deliverFeedbackSummaries: the run’s time', () => {
 
     expect(sentAt('talk-1')).toBe(NOW.toISOString())
     expect(report).toMatchObject({ claimed: 1, notReached: 0 })
+  })
+
+  it('budgets only the speakers who will get an email', async () => {
+    // 20 listed, 18 erased: 2 emails to fit, not 20.
+    const { speakers, talk: big } = manySpeakers(20, 18)
+    for (const sp of speakers) store().put(sp)
+    store().put(big)
+
+    await deliverFeedbackSummaries({
+      now: NOW,
+      deadline: new Date(Date.now() + 55_000),
+    })
+
+    expect(sentAt('talk-1')).toBe(NOW.toISOString())
+    expect(emailsTo()).toHaveLength(2)
+  })
+
+  it('fits a talk of many speakers in a fresh run: its emails go out side by side', async () => {
+    const { speakers, talk: big } = manySpeakers(30, 0)
+    for (const sp of speakers) store().put(sp)
+    store().put(big)
+
+    const report = await deliverFeedbackSummaries({
+      now: NOW,
+      deadline: new Date(Date.now() + 290_000),
+    })
+
+    expect(report).toMatchObject({ claimed: 1, emailed: 30 })
+  })
+
+  it('sends a talk’s emails side by side, starting them a pause apart', async () => {
+    let inFlight = 0
+    let most = 0
+    h.sendEmail.mockImplementation(async () => {
+      inFlight++
+      most = Math.max(most, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      inFlight--
+    })
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(most).toBe(2)
+    // Every start after the run's first waits the rate limit's pause.
+    expect(h.delay.mock.calls).toEqual([[500]])
+  })
+
+  it('sweeps the talk’s versions after its emails, not before', async () => {
+    store().put(talk('drafts.talk-1', 'conf-A'))
+    let readsAtLastSend = 0
+    h.sendEmail.mockImplementation(async () => {
+      readsAtLastSend = store().docReads.length
+    })
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(
+      store().docReads.lastIndexOf('drafts.talk-1'),
+    ).toBeGreaterThanOrEqual(readsAtLastSend)
+    expect(sentAt('drafts.talk-1')).toBe(NOW.toISOString())
+  })
+
+  it('does not hold the emails, or the run, on a bell write that hangs', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      // The claim commits first; the next commit is the bell's, which hangs.
+      store().afterNextCommit(() => {
+        store().beforeNextCommit(() => new Promise(() => {}))
+      })
+      const run = deliverFeedbackSummaries({ now: NOW })
+      for (let i = 0; i < 200 && h.sendEmail.mock.calls.length < 2; i++) {
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+      expect(emailsTo().sort()).toEqual([
+        'sp-1@example.com',
+        'sp-2@example.com',
+      ])
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(await run).toMatchObject({ claimed: 1, emailed: 2 })
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('bell'),
+        expect.objectContaining({ talkId: 'talk-1' }),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

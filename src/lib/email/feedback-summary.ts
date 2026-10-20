@@ -134,11 +134,11 @@ export function isRecipientRefusal(error: unknown): boolean {
 const SEND_TIMEOUT_MS = 10_000
 
 /**
- * The longest one summary email can take, from the pause before it to its
- * last attempt giving up: every attempt timing out, with the backoff
- * `retryWithBackoff` waits between them (doubling from the rate-limit
- * delay). Derived from the constants the send uses, so a run can check that
- * a talk's emails fit its time before claiming it.
+ * The longest one summary email can take from its start: every attempt
+ * timing out, with the backoff `retryWithBackoff` waits between them
+ * (doubling from the rate-limit delay). Derived from the constants the send
+ * uses, so a run can check that a talk's emails fit its time before claiming
+ * it.
  */
 export const FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS = (() => {
   const attempts = EMAIL_CONFIG.MAX_RETRIES
@@ -146,7 +146,7 @@ export const FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS = (() => {
   for (let i = 0; i < attempts - 1; i++) {
     backoff += EMAIL_CONFIG.RATE_LIMIT_DELAY * 2 ** i
   }
-  return EMAIL_CONFIG.RATE_LIMIT_DELAY + attempts * SEND_TIMEOUT_MS + backoff
+  return attempts * SEND_TIMEOUT_MS + backoff
 })()
 
 function withTimeout<T>(attempt: Promise<T>): Promise<T> {

@@ -260,8 +260,13 @@ export async function deliverFeedbackSummaries({
       report.emailFailed += outcome.emailFailed
       report.emailUnknown += outcome.emailUnknown
       // No email of the talk went out, and at least one failed for the
-      // sender's reason (a refused co-speaker address does not hide that).
-      if (outcome.emailed === 0 && outcome.senderFailed > 0) {
+      // sender's reason (a refused co-speaker address does not hide that) or
+      // was left in progress at Resend (a stalled Resend). The cost is a
+      // day's delay for the sender's other talks, not their loss.
+      if (
+        outcome.emailed === 0 &&
+        (outcome.senderFailed > 0 || outcome.emailUnknown > 0)
+      ) {
         down.add(sender.key)
         console.error(
           '[feedback] summary run stops sending through a sender that failed every email of a talk; its other talks stay unclaimed until the next run',
@@ -324,7 +329,11 @@ async function deliverOne(
     if (!prepared) return 'skipped'
     // Right before the claim: once claimed, a run killed before the sends
     // loses them for good. Unclaimed, the talk waits for the next run.
-    if (deadline && !fitsBefore(deadline, prepared.speakerIds.length)) {
+    if (deadline && !fitsBefore(deadline, prepared.recipients)) {
+      console.error(
+        '[feedback] summary does not fit before the deadline; the talk stays unclaimed for the next run',
+        { talkId, recipients: prepared.recipients },
+      )
       return 'notReached'
     }
     const outcome = await claim(client, prepared.talk, conferenceId, now)
@@ -335,7 +344,6 @@ async function deliverOne(
     }
   }
   console.log(`[feedback] claimed ${talkId} for its summary`)
-  await sweepTalkVersions(client, talkId, 'feedbackSummarySentAt')
   const { talk, totals, comments, speakerIds } = prepared
 
   // Read again AFTER the claim: a speaker erased since the talk was read
@@ -357,34 +365,46 @@ async function deliverOne(
   // One line, no invisible or bidi characters, quotes that cannot close ours.
   const title = displayName(talk.title ?? '') || 'your session'
   const path = `/cfp/proposal/${talkId}#${SESSION_FEEDBACK_ANCHOR}`
-  await createNotificationsOnce(
-    summaryNotifications({
-      talkId,
-      conferenceId,
-      title,
-      totals,
-      comments,
-      link: path,
-      speakerIds: speakers.map((s) => s._id),
-    }),
-    { talkId, conferenceId, summary: true },
+
+  // The bell alongside the emails, never ahead of them, and waited for at
+  // most BELL_TIMEOUT_MS: it never fails the run, and a hung write must not
+  // take the emails' time.
+  const bell = bounded(
+    createNotificationsOnce(
+      summaryNotifications({
+        talkId,
+        conferenceId,
+        title,
+        totals,
+        comments,
+        link: path,
+        speakerIds: speakers.map((s) => s._id),
+      }),
+      { talkId, conferenceId, summary: true },
+    ),
+    BELL_TIMEOUT_MS,
+    () =>
+      console.error(
+        '[feedback] summary bell write still pending; going on without it',
+        { talkId, conferenceId },
+      ),
   )
 
-  let emailed = 0
-  let emailFailed = 0
-  let senderFailed = 0
-  let emailUnknown = 0
+  // Side by side, each started a pause after the run's previous one (Resend
+  // allows about two requests a second): a talk's emails then take about
+  // one email's worst case, whatever its number of speakers.
   const resultsUrl = `${conferenceBaseUrl(conference)}${path}`
+  const sends: Promise<'sent' | 'unknown' | 'recipient' | 'sender'>[] = []
   for (const speaker of speakers) {
-    if (!speaker.email) continue
-    // Resend allows about two requests a second, across the whole run.
+    const to = speaker.email
+    if (!to) continue
     if (pacing.sends > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
     pacing.sends++
-    try {
-      await sendFeedbackSummaryEmail({
+    sends.push(
+      sendFeedbackSummaryEmail({
         talkId,
         speakerId: speaker._id,
-        to: speaker.email,
+        to,
         speakerName: speaker.name ?? '',
         talkTitle: title,
         totals,
@@ -392,42 +412,86 @@ async function deliverOne(
         resultsUrl,
         conference,
         sender,
-      })
-      emailed++
-    } catch (error) {
-      if (isOutcomeUnknown(error)) {
-        // An earlier attempt is still in progress at Resend under this key:
-        // likely sent. Neither a failure nor the sender's fault.
-        emailUnknown++
-        console.error(
-          '[feedback] summary email outcome unknown (Resend still processing it; likely sent)',
-          { talkId, speakerId: speaker._id },
-          error,
-        )
-        continue
-      }
-      emailFailed++
-      if (!isRecipientRefusal(error)) senderFailed++
-      console.error(
-        '[feedback] summary email not sent (claimed, so not retried)',
-        { talkId, speakerId: speaker._id },
-        error,
-      )
-    }
+      }).then(
+        () => 'sent' as const,
+        (error: unknown) => {
+          if (isOutcomeUnknown(error)) {
+            // An earlier attempt is still in progress at Resend under this
+            // key: likely sent.
+            console.error(
+              '[feedback] summary email outcome unknown (Resend still processing it; likely sent)',
+              { talkId, speakerId: speaker._id },
+              error,
+            )
+            return 'unknown' as const
+          }
+          console.error(
+            '[feedback] summary email not sent (claimed, so not retried)',
+            { talkId, speakerId: speaker._id },
+            error,
+          )
+          return isRecipientRefusal(error)
+            ? ('recipient' as const)
+            : ('sender' as const)
+        },
+      ),
+    )
   }
-  return { emailed, emailFailed, senderFailed, emailUnknown }
+  const results = await Promise.all(sends)
+  await bell
+  // Last: it keeps a later publish of a stale draft from bringing the talk
+  // back, and does nothing for this delivery, so it never takes its time.
+  await sweepTalkVersions(client, talkId, 'feedbackSummarySentAt')
+
+  const count = (r: (typeof results)[number]) =>
+    results.filter((x) => x === r).length
+  return {
+    emailed: count('sent'),
+    emailFailed: count('recipient') + count('sender'),
+    senderFailed: count('sender'),
+    emailUnknown: count('unknown'),
+  }
+}
+
+/** How long the run waits for the bell write before going on. */
+const BELL_TIMEOUT_MS = 10_000
+
+/** `work`, or after `ms` whatever it has not done, with `onTimeout` told. */
+function bounded(
+  work: Promise<unknown>,
+  ms: number,
+  onTimeout: () => void,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    work.then(() => undefined),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        onTimeout()
+        resolve()
+      }, ms)
+    }),
+  ]).finally(() => clearTimeout(timer))
 }
 
 /**
- * Beyond the emails: the speaker read after the claim (bounded at
- * {@link SPEAKER_READ_TIMEOUT_MS}), the sweep and the bell, with room.
+ * After the fit check and before the first email: the claim's own read and
+ * commit, and the speaker read after it (bounded at
+ * {@link SPEAKER_READ_TIMEOUT_MS}). The bell runs alongside the emails and
+ * the sweep after them, so neither takes the emails' time.
  */
 const CLAIM_OVERHEAD_MS = 20_000
 
-/** A talk's every email, at its worst, ends before `deadline`. */
-function fitsBefore(deadline: Date, speakers: number): boolean {
+/**
+ * A talk's every email, at its worst, ends before `deadline`: started a
+ * pause apart, the last one starts after `recipients - 1` pauses and takes
+ * at most one email's worst case.
+ */
+function fitsBefore(deadline: Date, recipients: number): boolean {
   const worst =
-    CLAIM_OVERHEAD_MS + speakers * FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS
+    CLAIM_OVERHEAD_MS +
+    recipients * EMAIL_CONFIG.RATE_LIMIT_DELAY +
+    (recipients > 0 ? FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS : 0)
   return deadline.getTime() - Date.now() >= worst
 }
 
@@ -436,6 +500,8 @@ interface Prepared {
   totals: FeedbackTotals
   comments: number
   speakerIds: string[]
+  /** Speakers who are not erased and have an address: the emails to fit. */
+  recipients: number
 }
 
 const SPEAKER_READ_TIMEOUT_MS = 10_000
@@ -506,6 +572,8 @@ async function prepare(
     totals: talkTotals(talk, rows),
     comments: rows.filter(isVisibleComment).length,
     speakerIds,
+    recipients: (await liveSpeakers(client, speakerIds)).filter((s) => s.email)
+      .length,
   }
 }
 
