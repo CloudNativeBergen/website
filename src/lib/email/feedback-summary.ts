@@ -6,7 +6,11 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
 import type { FeedbackTotals } from '@/lib/feedback/totals'
 import { formatConferenceDateLong } from '@/lib/time'
-import { resolveEmailSender, retryWithBackoff } from './config'
+import {
+  isTransientError,
+  resolveEmailSender,
+  retryWithBackoff,
+} from './config'
 import { resolveConferenceFrom } from './from'
 
 export interface FeedbackSummaryEmail {
@@ -67,18 +71,31 @@ export async function sendFeedbackSummaryEmail({
     }),
   )
   const { client } = await resolveEmailSender(conference.organization?._ref)
-  const result = await retryWithBackoff(() =>
-    client.emails.send({
-      from: resolveConferenceFrom(conference, {
-        field: 'cfpEmail',
-        localPart: 'cfp',
-      }),
-      to,
-      subject: `Your Session Feedback for “${talkTitle}”`,
-      html,
-    }),
+  // Resend answers a refusal instead of throwing: thrown here, inside the
+  // retry, with its status and name, so a rate limit or a 5xx backs off and
+  // tries again while a permanent refusal (a bad address) does not.
+  await retryWithBackoff(
+    async () => {
+      const { error } = await client.emails.send({
+        from: resolveConferenceFrom(conference, {
+          field: 'cfpEmail',
+          localPart: 'cfp',
+        }),
+        to,
+        subject: `Your Session Feedback for “${talkTitle}”`,
+        html,
+      })
+      if (error) {
+        const wrapped = new Error(
+          `Resend refused the email: ${error.message}`,
+        ) as Error & { status?: number; resendErrorName?: string }
+        const status = (error as { statusCode?: unknown }).statusCode
+        if (typeof status === 'number') wrapped.status = status
+        if (typeof error.name === 'string') wrapped.resendErrorName = error.name
+        throw wrapped
+      }
+    },
+    undefined,
+    isTransientError,
   )
-  if (result.error) {
-    throw new Error(`Resend refused the email: ${result.error.message}`)
-  }
 }

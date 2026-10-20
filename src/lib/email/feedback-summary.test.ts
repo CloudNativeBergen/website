@@ -79,6 +79,34 @@ describe('sendFeedbackSummaryEmail', () => {
     expect(html).toMatch(/Dear (<!-- -->)?Ada Lovelace/)
   })
 
+  it('backs off and tries again when Resend answers with a rate limit', async () => {
+    h.send
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          message: 'Too many requests',
+          name: 'rate_limit_exceeded',
+          statusCode: 429,
+        },
+      })
+      .mockResolvedValueOnce({ data: { id: 'email-1' }, error: null })
+    await sendFeedbackSummaryEmail(request())
+    expect(h.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry a permanent refusal', async () => {
+    h.send.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'Invalid `to` field',
+        name: 'validation_error',
+        statusCode: 422,
+      },
+    })
+    await expect(sendFeedbackSummaryEmail(request())).rejects.toThrow()
+    expect(h.send).toHaveBeenCalledTimes(1)
+  })
+
   it('throws when Resend refuses it, so the caller logs it', async () => {
     h.send.mockResolvedValue({
       data: null,
