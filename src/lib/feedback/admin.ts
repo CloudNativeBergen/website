@@ -1,0 +1,291 @@
+/**
+ * THE ORGANIZERS' SESSION FEEDBACK (speaker feedback spec §10.1, §10.3).
+ *
+ * Every read is published-only (§4.4), scoped to the conference serving the
+ * request, and LIVE: the CDN can serve a response a Remove just deleted,
+ * which `revalidateTag` cannot reach. Totals come from the one totals
+ * function (§4.3). Organizers see every comment, hidden ones included.
+ *
+ * Every action proves, in ONE read and before any write, that each response
+ * id is a published response of a talk of the conference. One id that is
+ * not refuses the whole request, and a response of another conference is
+ * refused exactly like one that does not exist.
+ */
+import 'server-only'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import { scopedFetch } from '@/lib/sanity/scoped'
+import { formats, type Format } from '@/lib/proposal/types'
+import type { FeedbackColour } from './colour'
+import { expireRemovedFeedbackResponse } from './cache'
+import { commentOf } from './comment'
+import { getConferenceFeedbackSlots, PUBLISHED_ONLY } from './sanity'
+import {
+  combineTotals,
+  talkTotals,
+  type FeedbackTotals,
+  type TalkCounts,
+} from './totals'
+import { feedbackWindow } from './window'
+
+/** A comment as organizers see it: hidden and flagged ones too. */
+export interface AdminFeedbackComment {
+  id: string
+  colour: FeedbackColour
+  comment: string
+  submittedAt: string | null
+  hidden: boolean
+  flagged: boolean
+}
+
+export interface AdminFeedbackSession {
+  talkId: string
+  title: string
+  speakers: string[]
+  /** The talk's format; null when it has none this app knows. */
+  format: Format | null
+  /** When its earliest slot on the official schedule starts. */
+  slotAt: string | null
+  totals: FeedbackTotals
+  /** Every comment, oldest first. */
+  comments: AdminFeedbackComment[]
+}
+
+export interface AdminFeedbackOverview {
+  /** All sessions together, through the same totals function. */
+  totals: FeedbackTotals
+  comments: number
+  /** Comments a speaker flagged that no organizer has acted on (§10.3). */
+  flagged: number
+  sessions: AdminFeedbackSession[]
+}
+
+interface ResponseRow {
+  _id: string
+  talk: string | null
+  colour?: unknown
+  comment?: unknown
+  submittedAt?: unknown
+  hiddenAt?: unknown
+  flaggedAt?: unknown
+}
+
+interface TalkRow extends TalkCounts {
+  _id: string
+  title?: string | null
+  format?: string | null
+  speakers?: (string | null)[] | null
+}
+
+export async function readAdminFeedback({
+  conferenceId,
+  now,
+}: {
+  conferenceId: string
+  now: Date
+}): Promise<AdminFeedbackOverview> {
+  const scope = { conferenceId }
+  const rows =
+    (await scopedFetch<ResponseRow[] | null>(
+      clientReadUncached,
+      scope,
+      `*[_type == "feedbackResponse" && ${PUBLISHED_ONLY}] | order(submittedAt asc, _id asc){
+        _id, "talk": talk._ref, colour, comment, submittedAt, hiddenAt, flaggedAt
+      }`,
+      {},
+      { cache: 'no-store' },
+    )) ?? []
+  const responded = [
+    ...new Set(rows.map((r) => r.talk).filter((t): t is string => !!t)),
+  ]
+  // Confirmed talks, and any other talk of the conference that still holds
+  // responses (a withdrawn one), so its comments can still be moderated.
+  const talks =
+    (await scopedFetch<TalkRow[] | null>(
+      clientReadUncached,
+      scope,
+      `*[_type == "talk" && ${PUBLISHED_ONLY} && (status == "confirmed" || _id in $responded)] | order(title asc){
+        _id, title, format, audienceFeedback, feedbackFolded,
+        "speakers": speakers[]->name
+      }`,
+      { responded },
+      { cache: 'no-store' },
+    )) ?? []
+  const slots = await getConferenceFeedbackSlots(conferenceId)
+
+  const byTalk = new Map<string, ResponseRow[]>()
+  for (const r of rows) {
+    if (!r.talk) continue
+    byTalk.set(r.talk, [...(byTalk.get(r.talk) ?? []), r])
+  }
+
+  let flagged = 0
+  const sessions = talks.map((t): AdminFeedbackSession => {
+    const responses = byTalk.get(t._id) ?? []
+    const comments: AdminFeedbackComment[] = []
+    for (const r of responses) {
+      const shown = commentOf(r)
+      if (!shown) continue
+      const hidden = !!r.hiddenAt
+      const isFlagged = !!r.flaggedAt && !hidden
+      if (isFlagged) flagged++
+      comments.push({
+        id: r._id,
+        ...shown,
+        submittedAt: typeof r.submittedAt === 'string' ? r.submittedAt : null,
+        hidden,
+        flagged: isFlagged,
+      })
+    }
+    return {
+      talkId: t._id,
+      title: t.title ?? 'Untitled',
+      speakers: (t.speakers ?? []).filter((s): s is string => !!s),
+      format: formats.has(t.format as Format) ? (t.format as Format) : null,
+      // Where the window opens: the earliest start of the talk's well-formed
+      // slots, by the same rule the speaker's window uses (§6).
+      slotAt:
+        feedbackWindow({
+          slots: slots.get(t._id) ?? [],
+          conferenceEndDate: null,
+          now,
+        }).opensAt ?? null,
+      totals: talkTotals(t, responses),
+      comments,
+    }
+  })
+
+  return {
+    totals: combineTotals(sessions.map((s) => s.totals)),
+    comments: sessions.reduce((sum, s) => sum + s.comments.length, 0),
+    flagged,
+    sessions,
+  }
+}
+
+/** At most this many responses per Remove transaction (§10.3). */
+export const REMOVE_CHUNK_SIZE = 100
+
+export type ModerationResult =
+  { status: 'refused' } | { status: 'ok'; count: number }
+
+export type RemoveResult =
+  | { status: 'refused' }
+  | { status: 'ok'; removed: number }
+  /** A chunk failed: `removed` were deleted before it, the rest were not. */
+  | { status: 'failed'; removed: number }
+
+/**
+ * THE GUARD, before any write: the ids, deduplicated, if EVERY one is a
+ * published response of the conference whose talk is a published talk of the
+ * conference; otherwise null. One scoped read; a missing, draft or foreign id
+ * all fail it the same way.
+ */
+async function ownedResponses(
+  conferenceId: string,
+  responseIds: readonly string[],
+): Promise<string[] | null> {
+  const ids = [...new Set(responseIds)]
+  if (ids.length === 0) return null
+  const owned = await scopedFetch<string[] | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "feedbackResponse" && _id in $ids && ${PUBLISHED_ONLY} && talk->conference._ref == $conferenceId && !(talk._ref in path("drafts.**")) && !(talk._ref in path("versions.**"))]._id`,
+    { ids },
+    { cache: 'no-store' },
+  )
+  const found = new Set(owned ?? [])
+  return ids.every((id) => found.has(id)) ? ids : null
+}
+
+const isNotFound = (error: unknown) =>
+  (error as { statusCode?: unknown } | null)?.statusCode === 404
+
+/**
+ * Commit Hide's or Unhide's patches. A response deleted between the guard
+ * and the commit (the device's own Delete my answer) makes Sanity answer
+ * 404 and roll the whole transaction back: that is the same refusal as a
+ * response that was never there, not a server error.
+ */
+async function commitPatches(
+  tx: ReturnType<typeof clientWrite.transaction>,
+  count: number,
+): Promise<ModerationResult> {
+  try {
+    await tx.commit()
+  } catch (error) {
+    if (isNotFound(error)) return { status: 'refused' }
+    throw error
+  }
+  return { status: 'ok', count }
+}
+
+/** Hide (§10.3): sets `hiddenAt`, clears `flaggedAt`; the colour still counts. */
+export async function hideResponses({
+  conferenceId,
+  responseIds,
+  now,
+}: {
+  conferenceId: string
+  responseIds: readonly string[]
+  now: Date
+}): Promise<ModerationResult> {
+  const ids = await ownedResponses(conferenceId, responseIds)
+  if (!ids) return { status: 'refused' }
+  const tx = clientWrite.transaction()
+  for (const id of ids)
+    tx.patch(id, (p) =>
+      p.set({ hiddenAt: now.toISOString() }).unset(['flaggedAt']),
+    )
+  return commitPatches(tx, ids.length)
+}
+
+/** Unhide (§10.3): clears `hiddenAt`. */
+export async function unhideResponses({
+  conferenceId,
+  responseIds,
+}: {
+  conferenceId: string
+  responseIds: readonly string[]
+}): Promise<ModerationResult> {
+  const ids = await ownedResponses(conferenceId, responseIds)
+  if (!ids) return { status: 'refused' }
+  const tx = clientWrite.transaction()
+  for (const id of ids) tx.patch(id, (p) => p.unset(['hiddenAt']))
+  return commitPatches(tx, ids.length)
+}
+
+/**
+ * Remove (§10.3): deletes each whole response, colour and comment, in
+ * transactions of at most {@link REMOVE_CHUNK_SIZE}, and expires each removed
+ * response's tag so `/f/<code>` stops showing it as that device's answer.
+ * `revalidateTag`, not `updateTag`: this runs in the tRPC Route Handler,
+ * where `updateTag` throws. No undo, no log.
+ */
+export async function removeResponses({
+  conferenceId,
+  responseIds,
+}: {
+  conferenceId: string
+  responseIds: readonly string[]
+}): Promise<RemoveResult> {
+  const ids = await ownedResponses(conferenceId, responseIds)
+  if (!ids) return { status: 'refused' }
+  let removed = 0
+  for (let i = 0; i < ids.length; i += REMOVE_CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + REMOVE_CHUNK_SIZE)
+    const tx = clientWrite.transaction()
+    for (const id of chunk) tx.delete(id)
+    try {
+      await tx.commit()
+    } catch (error) {
+      console.error('Could not remove Feedback Responses', error)
+      // A commit whose reply was lost may have applied. Expiring a response
+      // that still exists is harmless; missing one that went is not.
+      for (const id of chunk) expireRemovedFeedbackResponse(id)
+      return { status: 'failed', removed }
+    }
+    removed += chunk.length
+    for (const id of chunk) expireRemovedFeedbackResponse(id)
+  }
+  return { status: 'ok', removed }
+}

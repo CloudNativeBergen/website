@@ -276,3 +276,15 @@ describe('searchDestinations', () => {
     expect(exact).toBeGreaterThan(loose)
   })
 })
+
+describe('Session Feedback nav entry (speaker feedback spec §10.1)', () => {
+  it('sits right after Proposals, for every organization, and is ⌘K-searchable', () => {
+    const items = visibleNavSections([]).flatMap((s) => s.items)
+    const at = items.findIndex((i) => i.href === '/admin/feedback')
+    expect(items[at]?.name).toBe('Session Feedback')
+    expect(items[at - 1]?.name).toBe('Proposals')
+    expect(searchDestinations('session feedback')[0]?.items[0]?.href).toBe(
+      '/admin/feedback',
+    )
+  })
+})

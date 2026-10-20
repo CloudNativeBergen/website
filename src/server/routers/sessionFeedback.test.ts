@@ -641,6 +641,10 @@ describe('sessionFeedbackRouter surface', () => {
     )._def
     expect(Object.keys(procedures).sort()).toEqual([
       'adminCode',
+      'adminHide',
+      'adminOverview',
+      'adminRemove',
+      'adminUnhide',
       'ensureCode',
       'mintAll',
       'mintCode',

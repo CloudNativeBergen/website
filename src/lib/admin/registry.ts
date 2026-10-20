@@ -21,6 +21,7 @@ import {
   BanknotesIcon,
   BuildingOfficeIcon,
   CalendarDaysIcon,
+  ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
   Cog6ToothIcon,
   CpuChipIcon,
@@ -103,6 +104,14 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         href: '/admin/proposals',
         icon: DocumentTextIcon,
         keywords: ['cfp', 'submissions', 'talks', 'review'],
+      },
+      {
+        // Next to Proposals and Speakers (speaker feedback spec §10.1). The
+        // flagged-count badge comes with flags (F7).
+        name: 'Session Feedback',
+        href: '/admin/feedback',
+        icon: ChatBubbleLeftRightIcon,
+        keywords: ['feedback', 'responses', 'comments', 'qr', 'loved it'],
       },
       {
         name: 'Schedule',

@@ -1,36 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import type { FeedbackColour } from '@/lib/feedback/colour'
 import type { SpeakerComment } from '@/lib/feedback/results'
 import { sharePercent, type FeedbackTotals } from '@/lib/feedback/totals'
 import { formatFeedbackCommentTime } from '@/lib/time'
 import { ANSWERS } from './answers'
-
-/** Per colour, the bar segment and the total's tile. */
-const TONE: Record<
-  FeedbackColour,
-  { bar: string; tile: string; text: string }
-> = {
-  green: {
-    bar: 'bg-green-600 dark:bg-green-500',
-    tile: 'bg-green-50 dark:bg-green-900/20',
-    text: 'text-green-800 dark:text-green-300',
-  },
-  yellow: {
-    bar: 'bg-yellow-400',
-    tile: 'bg-yellow-50 dark:bg-yellow-900/20',
-    text: 'text-yellow-900 dark:text-yellow-300',
-  },
-  red: {
-    bar: 'bg-red-600 dark:bg-red-500',
-    tile: 'bg-red-50 dark:bg-red-900/20',
-    text: 'text-red-800 dark:text-red-300',
-  },
-}
-
-const plural = (n: number, one: string, many: string) =>
-  `${n} ${n === 1 ? one : many}`
+import { ColourBar, FEEDBACK_TONE, plural } from './tone'
 
 /**
  * The speaker's Session Feedback (speaker feedback spec §9.3): a stacked
@@ -69,22 +44,7 @@ export function FeedbackResultsView({
         </p>
       ) : (
         <>
-          <div
-            aria-hidden="true"
-            className="flex h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700"
-          >
-            {ANSWERS.map(({ colour }) =>
-              totals.combined[colour] > 0 ? (
-                <div
-                  key={colour}
-                  className={TONE[colour].bar}
-                  style={{
-                    width: `${(totals.combined[colour] / totals.total) * 100}%`,
-                  }}
-                />
-              ) : null,
-            )}
-          </div>
+          <ColourBar totals={totals} className="h-3" />
 
           <dl className="grid grid-cols-3 gap-2 sm:gap-3">
             {ANSWERS.map(({ colour, label, Icon }) => (
@@ -92,7 +52,7 @@ export function FeedbackResultsView({
                 key={colour}
                 // The number first on screen, so a label that wraps at
                 // phone width never pushes one tile's number below another's.
-                className={`flex flex-col gap-1 rounded-lg p-2 sm:p-3 ${TONE[colour].tile} ${TONE[colour].text}`}
+                className={`flex flex-col gap-1 rounded-lg p-2 sm:p-3 ${FEEDBACK_TONE[colour].tile} ${FEEDBACK_TONE[colour].text}`}
               >
                 <dt className="order-2 flex items-center gap-1.5 text-xs font-medium sm:text-sm">
                   <Icon className="size-4 shrink-0" aria-hidden="true" />
@@ -155,7 +115,7 @@ function CommentItem({ comment }: { comment: SpeakerComment }) {
     <li className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
         <span
-          className={`inline-flex items-center gap-1 font-medium ${TONE[comment.colour].text}`}
+          className={`inline-flex items-center gap-1 font-medium ${FEEDBACK_TONE[comment.colour].text}`}
         >
           <Icon className="size-4 shrink-0" aria-hidden="true" />
           {answer.label}

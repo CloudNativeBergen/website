@@ -38,3 +38,23 @@ export function expireFeedbackResponse(responseId: string): void {
     )
   }
 }
+
+/**
+ * Expire a REMOVED response as `/f/<code>` reads it (speaker feedback spec
+ * §7.4, §10.3), so the page stops showing it as that device's answer.
+ * `revalidateTag(tag, { expire: 0 })`, not `updateTag`: Remove runs in the
+ * `/api/trpc` Route Handler, where `updateTag` throws. Never fails the
+ * Remove it rides on; a missed expiry is recovered by the read's own
+ * 5-minute `cacheLife`.
+ */
+export function expireRemovedFeedbackResponse(responseId: string): void {
+  const tag = feedbackResponseTag(responseId)
+  try {
+    revalidateTag(tag, { expire: 0 })
+  } catch (error) {
+    console.error(
+      `Could not expire the Feedback Response cache tag ${tag}`,
+      error,
+    )
+  }
+}

@@ -113,3 +113,27 @@ export const talkTotals = (
     folded: talk.feedbackFolded,
     cards: talk.audienceFeedback,
   })
+
+/**
+ * Several sessions' totals as one, e.g. a conference's (§10.1): scanned and
+ * Card Counts added colour by colour, then through {@link feedbackTotals},
+ * so the share is computed the one way.
+ */
+export function combineTotals(list: readonly FeedbackTotals[]): FeedbackTotals {
+  const scanned: ColourCounts = { green: 0, yellow: 0, red: 0 }
+  const cards: ColourCounts = { green: 0, yellow: 0, red: 0 }
+  for (const t of list) {
+    for (const colour of FEEDBACK_COLOURS) {
+      scanned[colour] += t.scanned[colour]
+      cards[colour] += t.cards[colour]
+    }
+  }
+  return feedbackTotals({
+    live: scanned,
+    cards: {
+      greenCount: cards.green,
+      yellowCount: cards.yellow,
+      redCount: cards.red,
+    },
+  })
+}

@@ -35,3 +35,15 @@ export {
 } from './results'
 export { deleteFeedback } from './delete'
 export { deviceCookie, type DeviceCookie } from './device'
+export {
+  hideResponses,
+  readAdminFeedback,
+  removeResponses,
+  unhideResponses,
+  REMOVE_CHUNK_SIZE,
+  type AdminFeedbackComment,
+  type AdminFeedbackOverview,
+  type AdminFeedbackSession,
+  type ModerationResult,
+  type RemoveResult,
+} from './admin'
