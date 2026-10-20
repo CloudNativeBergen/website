@@ -235,12 +235,12 @@ export function SessionFeedbackAdmin({
 
       {/* The refresh note. Its live region is always in the accessibility
           tree (sr-only while empty, never display:none) and holds only the
-          words; Retry sits beside it. Sticky below the admin top bar, so it
+          words; Retry sits beside it. Sticky below the admin top bar (72 px below `lg`, h-16 above), so it
           stays in view while the organizer works further down. */}
       <div
         className={
           refreshFailed
-            ? 'sticky top-16 z-30 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-900 shadow-sm dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200'
+            ? 'sticky top-[72px] z-30 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-900 shadow-sm lg:top-16 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200'
             : 'sr-only'
         }
       >
