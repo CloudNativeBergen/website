@@ -1038,6 +1038,20 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
       expect(report).toMatchObject({ claimed: 0, failed: 0, notReached: 3 })
     })
 
+    it('counts a talk whose own read the deadline cut off as not reached, not failed', async () => {
+      h.hangDocReadsOf = ['talk-1']
+      const start = Date.now()
+
+      const report = await deliverFeedbackSummaries({
+        now: NOW,
+        deadline: new Date(start + 150),
+      })
+
+      expect(Date.now() - start).toBeLessThan(2_000)
+      expect(sentAt('talk-1')).toBeUndefined()
+      expect(report).toMatchObject({ due: 1, failed: 0, notReached: 1 })
+    })
+
     it('gives up on a talk whose own read hangs, and goes on with the next', async () => {
       otherTenant()
       h.hangDocReadsOf = ['talk-1']
