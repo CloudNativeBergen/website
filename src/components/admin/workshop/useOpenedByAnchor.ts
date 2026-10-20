@@ -1,6 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 
 /** The mark, in the history entry's own state, that the card was shown. */
 const shownKey = (anchor: string) => `anchorShown:${anchor}`
@@ -13,14 +18,12 @@ const shownKey = (anchor: string) => `anchorShown:${anchor}`
  */
 const storedKey = (entry: string, anchor: string) =>
   `anchorShown:${entry}:${anchor}`
-/** The Navigation API, where the browser has it. */
-const navigationApi = () =>
+const entryKey = () =>
   (
     window as unknown as {
-      navigation?: EventTarget & { currentEntry?: { key: string } | null }
+      navigation?: { currentEntry?: { key: string } | null }
     }
-  ).navigation
-const entryKey = () => navigationApi()?.currentEntry?.key
+  ).navigation?.currentEntry?.key
 
 function shownInThisEntry(anchor: string) {
   const key = entryKey()
@@ -72,8 +75,8 @@ const GO_TO_ANCHOR = 'workshops:go-to-anchor'
  * away. On Back or a reload the position is the browser's.
  *
  * A LINK ON THIS PAGE ({@link goToAnchor}) opens it and brings it into view
- * every time. A Next link to the anchor followed while on the page (a
- * notification) is an arrival in a new entry, and is treated as one.
+ * every time, and so does any other link to this page and anchor followed
+ * while on it (a notification in the bell).
  *
  * SCROLLED ONCE THE CARD IS OPEN, not before: the card is near the end of the
  * page, and scrolled while collapsed the page is too short to bring it to the
@@ -103,27 +106,36 @@ export function useOpenedByAnchor(
     }
     // After mount: the server render has no address hash.
     arrive()
-    // ARRIVING WHILE ON THE PAGE: a Next link to this page with the anchor (a
-    // notification in the bell) keeps the page mounted and pushes an entry,
-    // which fires no `hashchange`. Only a NEW entry counts: a refresh after a
-    // save replaces the entry, and must not reopen a card the organizer shut.
-    const onEntryChange = (event: Event) => {
+    // ARRIVING WHILE ON THE PAGE: a link to this page and anchor (a
+    // notification in the bell) keeps the page mounted, and Next pushes or,
+    // for the address the page is at already, replaces the entry, with no
+    // `hashchange`. A replace is also what a refresh after a save does, which
+    // must not reopen a card the organizer shut, so it is the CLICK that
+    // counts, caught before the link's own handler.
+    const onClick = (event: MouseEvent) => {
+      if (event.button !== 0) return
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return
+      const link = (event.target as Element | null)?.closest?.('a[href]')
+      if (!(link instanceof HTMLAnchorElement)) return
+      const to = new URL(link.href, window.location.href)
       if (
-        (event as Event & { navigationType?: string }).navigationType === 'push'
+        to.origin === window.location.origin &&
+        to.pathname === window.location.pathname &&
+        to.hash === `#${anchor}`
       ) {
-        arrive()
+        show(true)
       }
     }
     const onGoTo = (event: Event) => {
       if ((event as CustomEvent<string>).detail === anchor) show(true)
     }
-    const navigation = navigationApi()
-    navigation?.addEventListener('currententrychange', onEntryChange)
+    document.addEventListener('click', onClick, true)
     // An address edited by hand.
     window.addEventListener('hashchange', arrive)
     window.addEventListener(GO_TO_ANCHOR, onGoTo)
     return () => {
-      navigation?.removeEventListener('currententrychange', onEntryChange)
+      document.removeEventListener('click', onClick, true)
       window.removeEventListener('hashchange', arrive)
       window.removeEventListener(GO_TO_ANCHOR, onGoTo)
     }
@@ -151,7 +163,7 @@ export function useOpenedByAnchor(
  * the link would have taken a keyboard user there.
  */
 export const goToAnchor =
-  (anchor: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+  (anchor: string) => (event: ReactMouseEvent<HTMLAnchorElement>) => {
     // A modified click (new tab, new window) is the browser's.
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault()

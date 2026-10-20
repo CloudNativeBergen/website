@@ -21,7 +21,6 @@ import {
   vi,
 } from 'vitest'
 import {
-  act,
   cleanup,
   fireEvent,
   render,
@@ -535,38 +534,44 @@ describe('a configured list', () => {
   })
 
   // A notification in the bell links here, and is followed while on the page:
-  // Next pushes an entry and keeps the page, with no `hashchange`. A refresh
-  // after a save replaces the entry, and does not reopen a card that was shut.
-  it('opens on a pushed entry with its anchor, and not on a replaced one', () => {
-    const navigation = Object.assign(new EventTarget(), {
-      currentEntry: { key: 'entry-a' },
-    })
-    vi.stubGlobal('navigation', navigation)
+  // Next pushes an entry (or replaces it, for the address the page is at) and
+  // keeps the page, with no `hashchange`. The click opens the card; a refresh
+  // after a save, which replaces the entry too, does not reopen a shut card.
+  it('opens when a link to its anchor on this page is followed, also to the address it is at', () => {
     onTestFinished(() => {
-      vi.unstubAllGlobals()
-      sessionStorage.clear()
       window.history.replaceState(null, '', window.location.pathname)
     })
-    const entryChange = (navigationType: string, key: string) => {
-      navigation.currentEntry = { key }
-      act(() => {
-        navigation.dispatchEvent(
-          Object.assign(new Event('currententrychange'), { navigationType }),
-        )
-      })
-    }
-    section(['Two-day pass', 'Day pass'], roles.slice(0, 2))
+    render(
+      <>
+        <a
+          href={`${window.location.pathname}#workshop-tickets`}
+          // As Next's <Link>: the router navigates, not the browser.
+          onClick={(event) => event.preventDefault()}
+        >
+          Notification
+        </a>
+        <WorkshopTicketsSection
+          list={buildWorkshopTicketList(
+            ['Two-day pass', 'Day pass'],
+            roles.slice(0, 2),
+          )}
+          providerLabel="Checkin.no"
+        />
+      </>,
+    )
     const toggle = screen.getByRole('button', { name: /^Workshop tickets/ })
+    const notification = screen.getByRole('link', { name: 'Notification' })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
-    window.history.pushState(null, '', '#workshop-tickets')
-    entryChange('push', 'entry-b')
+    fireEvent.click(notification)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
 
+    // Shut, then the same link again, from the address it points at.
     fireEvent.click(toggle)
-    window.history.replaceState({ __NA: true }, '')
-    entryChange('replace', 'entry-b')
+    window.history.replaceState({ __NA: true }, '', '#workshop-tickets')
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(notification)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('shows a load failure even after the organizer closed the card', () => {
