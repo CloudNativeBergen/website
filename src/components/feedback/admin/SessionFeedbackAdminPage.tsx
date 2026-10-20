@@ -45,7 +45,10 @@ export function SessionFeedbackAdminPage({
       onRemove={(ids) => remove.mutateAsync({ responseIds: ids })}
       refreshFailed={
         overview.isError
-          ? { onRetry: () => void overview.refetch() }
+          ? {
+              onRetry: () => void overview.refetch(),
+              retrying: overview.isFetching,
+            }
           : undefined
       }
     />

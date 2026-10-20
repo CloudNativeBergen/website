@@ -149,7 +149,7 @@ const meta = {
   args: {
     overview: overview(SESSIONS),
     conferenceTitle: 'Cloud Native Days Norway 2026',
-    onHide: fn(async () => {}),
+    onHide: fn<(id: string) => Promise<void>>(async () => {}),
     onUnhide: fn(async () => {}),
     onRemove: fn(async () => {}),
   },
@@ -208,7 +208,9 @@ const openFirst: Story['play'] = async ({ canvasElement }) => {
 
 /** The live region every outcome is announced in. */
 const announced = (canvasElement: HTMLElement) =>
-  within(canvasElement).getByRole('status')
+  within(canvasElement)
+    .getAllByRole('status')
+    .find((el: HTMLElement) => el.classList.contains('sr-only'))!
 
 /** The list item of the comment whose text starts with `text`. */
 const commentItem = (canvasElement: HTMLElement, text: RegExp) =>
@@ -283,11 +285,21 @@ export const RemoveConfirmed: Story = {
     await expect(context.args.onRemove).toHaveBeenCalledWith([
       SESSIONS[0].comments[3].id,
     ])
-    // Said where the organizer is working, and announced.
-    const panel = panelOf(context.canvasElement, /Kubernetes the hard parts/)
+    // The data here never refreshes, so the comment is still listed: the
+    // note says the removal worked and the list is behind, by the comment.
+    const item = commentItem(context.canvasElement, /^Good content/)
     await waitFor(() =>
-      expect(within(panel).getByText('1 response removed.')).toBeVisible(),
+      expect(
+        within(item).getByText(
+          'Removed. This list is out of date until it refreshes.',
+        ),
+      ).toBeVisible(),
     )
+    await expect(
+      within(
+        panelOf(context.canvasElement, /Kubernetes the hard parts/),
+      ).queryByText('1 response removed.'),
+    ).toBeNull()
     await expect(announced(context.canvasElement)).toHaveTextContent(
       '1 response removed.',
     )
@@ -377,13 +389,27 @@ export const RemoveKeepsRowInPlace: Story = {
       canvas.getByRole('button', { name: /Exactly ten answers/ }),
     ).toHaveAttribute('aria-expanded', 'true')
     await expect(canvas.getByText(/^too few/)).toBeVisible()
-    // Changing the sort ranks again: the session with too few goes last.
-    await userEvent.click(canvas.getByRole('button', { name: /Responses/ }))
-    await userEvent.click(canvas.getByRole('button', { name: /Loved it/ }))
+    // The order no longer matches the sort, and says so.
+    await expect(canvas.getByText(/Order kept while you work/)).toBeVisible()
+    // Collapsing the row clears its note.
+    await userEvent.click(
+      canvas.getByRole('button', { name: /Exactly ten answers/ }),
+    )
+    await userEvent.click(
+      canvas.getByRole('button', { name: /Exactly ten answers/ }),
+    )
+    await expect(
+      within(panelOf(canvasElement, /Exactly ten answers/)).queryByText(
+        '1 response removed.',
+      ),
+    ).toBeNull()
+    // Re-sort ranks again: the session with too few goes last.
+    await userEvent.click(canvas.getByRole('button', { name: 'Re-sort' }))
     await expect(rowTitles(canvasElement)).toEqual([
       'Another session',
       'Exactly ten answers',
     ])
+    await expect(canvas.queryByText(/Order kept while you work/)).toBeNull()
   },
 }
 
@@ -424,7 +450,7 @@ export const RemoveAsksDark: Story = {
 
 export const ActionFailed: Story = {
   args: {
-    onHide: fn(async () => {
+    onHide: fn<(id: string) => Promise<void>>(async () => {
       throw new Error('Feedback Response not found')
     }),
   },
@@ -460,14 +486,116 @@ export const ActionFailedDark: Story = {
 
 /** A refetch failed: the numbers on screen are kept and said to be earlier ones. */
 export const RefreshFailed: Story = {
-  args: { refreshFailed: { onRetry: fn() } },
+  args: { refreshFailed: { onRetry: fn(), retrying: false } },
   play: async (context) => {
     const canvas = within(context.canvasElement)
-    await expect(
-      canvas.getByText(/Couldn’t refresh, showing earlier numbers/),
-    ).toBeVisible()
+    const note = canvas.getByText(/Couldn’t refresh, showing earlier numbers/)
+    await expect(note).toBeVisible()
+    // Announced politely.
+    await expect(note.closest('[role="status"]')).toHaveAttribute(
+      'aria-live',
+      'polite',
+    )
     await userEvent.click(canvas.getByRole('button', { name: 'Retry' }))
     await expect(context.args.refreshFailed!.onRetry).toHaveBeenCalled()
+  },
+}
+
+/** A retry that fails again says so, after showing it is retrying. */
+function Retrying(args: React.ComponentProps<typeof SessionFeedbackAdmin>) {
+  const [retrying, setRetrying] = useState(false)
+  return (
+    <SessionFeedbackAdmin
+      {...args}
+      refreshFailed={{
+        retrying,
+        onRetry: () => {
+          setRetrying(true)
+          setTimeout(() => setRetrying(false), 300)
+        },
+      }}
+    />
+  )
+}
+
+export const RefreshFailsAgain: Story = {
+  render: (args) => <Retrying {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Retry' }))
+    await expect(
+      canvas.getByRole('button', { name: 'Retrying…' }),
+    ).toHaveAttribute('aria-disabled', 'true')
+    await waitFor(() =>
+      expect(
+        canvas.getByText(/Still couldn’t refresh, showing earlier numbers/),
+      ).toBeVisible(),
+    )
+  },
+}
+
+const ROW_A = (counts: [number, number, number]) =>
+  session('talk-row-a', 'Row A', counts)
+const ROW_B = (counts: [number, number, number]) =>
+  session('talk-row-b', 'Row B', counts)
+const STEPS = [
+  overview([]),
+  overview([ROW_A([12, 0, 0]), ROW_B([6, 6, 0])]),
+  overview([ROW_A([6, 6, 0]), ROW_B([12, 0, 0])]),
+]
+
+/** Data that changes on a story-only button, as refetches would. */
+function Stepping(args: React.ComponentProps<typeof SessionFeedbackAdmin>) {
+  const [step, setStep] = useState(0)
+  return (
+    <>
+      <button type="button" onClick={() => setStep((n) => n + 1)}>
+        Next data
+      </button>
+      <SessionFeedbackAdmin {...args} overview={STEPS[step]} />
+    </>
+  )
+}
+
+/**
+ * Rows that arrive after the page loaded keep their place too: the list was
+ * empty at load, then two rows came, then their numbers swapped.
+ */
+export const NewRowsKeepTheirPlace: Story = {
+  render: (args) => <Stepping {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const next = () =>
+      userEvent.click(canvas.getByRole('button', { name: 'Next data' }))
+    await next()
+    await expect(rowTitles(canvasElement)).toEqual(['Row A', 'Row B'])
+    await expect(canvas.queryByText(/Order kept while you work/)).toBeNull()
+    await next()
+    await expect(rowTitles(canvasElement)).toEqual(['Row A', 'Row B'])
+    await expect(canvas.getByText(/Order kept while you work/)).toBeVisible()
+  },
+}
+
+/** Two actions in flight: each failure stays by its own comment. */
+export const OverlappingFailures: Story = {
+  args: {
+    onHide: fn(async (id: string) => {
+      await new Promise((r) =>
+        setTimeout(r, id === SESSIONS[0].comments[0].id ? 300 : 50),
+      )
+      throw new Error(`Could not hide ${id.slice(-2)}`)
+    }),
+  },
+  play: async (context) => {
+    await openFirst(context)
+    const first = commentItem(context.canvasElement, /^Best talk/)
+    const last = commentItem(context.canvasElement, /^Good content/)
+    await userEvent.click(within(first).getByRole('button', { name: 'Hide' }))
+    await userEvent.click(within(last).getByRole('button', { name: 'Hide' }))
+    await waitFor(() =>
+      expect(within(first).getByText(/Could not hide/)).toBeVisible(),
+    )
+    await expect(within(last).getByText(/Could not hide/)).toBeVisible()
   },
 }
 

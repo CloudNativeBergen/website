@@ -55,18 +55,35 @@ export interface SessionFeedbackAdminProps {
   onRemove: (responseIds: string[]) => Promise<unknown>
   /**
    * The last refetch failed: the numbers shown are earlier ones. Offers
-   * Retry.
+   * Retry, which is `retrying` while it runs.
    */
-  refreshFailed?: { onRetry: () => void }
+  refreshFailed?: { onRetry: () => void; retrying?: boolean }
 }
 
-/** What the last Hide, Unhide or Remove did, where it did it. */
+type ActionKind = 'hide' | 'unhide' | 'remove'
+
+/** What a Hide, Unhide or Remove did, kept per response it acted on. */
 interface Outcome {
   talkId: string
   responseId: string
+  kind: ActionKind
   ok: boolean
   text: string
 }
+
+/** What a successful action says where it happened. */
+const DONE: Record<ActionKind, (count: number) => string> = {
+  hide: () => 'Comment hidden from speakers.',
+  unhide: () => 'Comment shown to speakers again.',
+  remove: (n) => `${plural(n, 'response', 'responses')} removed.`,
+}
+
+/** A successful Remove whose comment a refetch has not taken away yet. */
+const REMOVED_BUT_LISTED =
+  'Removed. This list is out of date until it refreshes.'
+
+const sameOrder = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((id, i) => id === b[i])
 
 /** A removal the dialog asks about, and the comment it quotes. */
 interface Removal {
@@ -98,7 +115,12 @@ export function SessionFeedbackAdmin({
   )
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
-  const [outcome, setOutcome] = useState<Outcome | null>(null)
+  const [outcomes, setOutcomes] = useState<ReadonlyMap<string, Outcome>>(
+    new Map(),
+  )
+  /** The latest outcome's words, for the live region. */
+  const [announcement, setAnnouncement] = useState('')
+  const [retried, setRetried] = useState(false)
   const [removing, setRemoving] = useState<Removal | null>(null)
   // Open apart from `removing`, which stays until the dialog has left, so
   // its title never changes during the closing transition.
@@ -106,6 +128,14 @@ export function SessionFeedbackAdmin({
   const removingNow = useRef<Removal | null>(null)
 
   const sessions = keepOrder(shown, overview.sessions, sort)
+  const displayed = sessions.map((s) => s.talkId)
+  // Rows new to the page join the kept order where they were placed, so a
+  // later refetch does not rank them again (React's state-from-render form).
+  if (!sameOrder(displayed, shown)) setShown(displayed)
+  const ranked = rankSessions(overview.sessions, sort).map((s) => s.talkId)
+  const orderKept = !sameOrder(displayed, ranked)
+  // A retry's own outcome lasts only while the refetch keeps failing.
+  if (!refreshFailed && retried) setRetried(false)
   const { totals } = overview
 
   function sortBy(key: FeedbackSort) {
@@ -113,40 +143,58 @@ export function SessionFeedbackAdmin({
     setShown(rankSessions(overview.sessions, key).map((s) => s.talkId))
   }
 
+  const record = (ids: string[], outcome: Outcome | null) =>
+    setOutcomes((all) => {
+      const next = new Map(all)
+      for (const id of ids) next.delete(id)
+      if (outcome) next.set(outcome.responseId, outcome)
+      return next
+    })
+
   async function run(
     talkId: string,
+    kind: ActionKind,
     ids: string[],
     action: () => Promise<unknown>,
-    done: string,
   ) {
-    setOutcome(null)
+    record(ids, null)
     setPending((p) => new Set([...p, ...ids]))
-    const at = { talkId, responseId: ids[0] }
+    const at = { talkId, responseId: ids[0], kind }
+    let outcome: Outcome
     try {
       await action()
-      setOutcome({ ...at, ok: true, text: done })
+      outcome = { ...at, ok: true, text: DONE[kind](ids.length) }
     } catch (e) {
-      setOutcome({
+      outcome = {
         ...at,
         ok: false,
         text:
           e instanceof Error && e.message
             ? e.message
             : 'That didn’t work. Reload the page to see where things stand.',
-      })
-    } finally {
-      setPending((p) => new Set([...p].filter((id) => !ids.includes(id))))
+      }
     }
+    record(ids, outcome)
+    setAnnouncement(outcome.text)
+    setPending((p) => new Set([...p].filter((id) => !ids.includes(id))))
   }
 
   const removePending = removing?.ids.some((id) => pending.has(id)) ?? false
 
-  const toggle = (talkId: string) =>
+  function toggle(talkId: string) {
+    const closing = open.has(talkId)
     setOpen((o) => {
       const next = new Set(o)
       if (!next.delete(talkId)) next.add(talkId)
       return next
     })
+    // A collapsed row forgets what went well in it; failures stay.
+    if (closing)
+      setOutcomes(
+        (all) =>
+          new Map([...all].filter(([, o]) => !(o.talkId === talkId && o.ok))),
+      )
+  }
 
   return (
     <div className="space-y-6">
@@ -177,21 +225,35 @@ export function SessionFeedbackAdmin({
       {/* Always rendered: a screen reader announces text SET in an existing
           live region, not a region that appears with its text. */}
       <p role="status" aria-live="polite" className="sr-only">
-        {outcome?.text ?? ''}
+        {announcement}
       </p>
 
-      {refreshFailed && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-900 dark:border-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-200">
-          <p>Couldn’t refresh, showing earlier numbers.</p>
-          <button
-            type="button"
-            onClick={refreshFailed.onRetry}
-            className="min-h-11 rounded-md px-3 font-semibold hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-700 sm:min-h-9 dark:hover:bg-yellow-900/40"
-          >
-            Retry
-          </button>
-        </div>
-      )}
+      {/* A live region that is always there, so its note is announced. */}
+      <div role="status" aria-live="polite" className="empty:hidden">
+        {refreshFailed && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-900 dark:border-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-200">
+            <p>
+              {refreshFailed.retrying
+                ? 'Refreshing…'
+                : retried
+                  ? 'Still couldn’t refresh, showing earlier numbers.'
+                  : 'Couldn’t refresh, showing earlier numbers.'}
+            </p>
+            <button
+              type="button"
+              aria-disabled={refreshFailed.retrying ?? false}
+              onClick={() => {
+                if (refreshFailed.retrying) return
+                setRetried(true)
+                refreshFailed.onRetry()
+              }}
+              className="min-h-11 rounded-md px-3 font-semibold hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-700 aria-disabled:cursor-wait aria-disabled:opacity-60 sm:min-h-9 dark:hover:bg-yellow-900/40"
+            >
+              {refreshFailed.retrying ? 'Retrying…' : 'Retry'}
+            </button>
+          </div>
+        )}
+      </div>
 
       <div>
         <section
@@ -220,6 +282,19 @@ export function SessionFeedbackAdmin({
             ))}
           </div>
 
+          {orderKept && (
+            <p className="flex flex-wrap items-center gap-x-2 border-b border-gray-200 px-4 py-1.5 text-xs text-gray-600 dark:border-gray-700 dark:text-gray-400">
+              Order kept while you work
+              <span aria-hidden="true">·</span>
+              <button
+                type="button"
+                onClick={() => sortBy(sort)}
+                className="min-h-11 rounded-md px-1 font-semibold text-brand-cloud-blue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue sm:min-h-0 dark:text-blue-300"
+              >
+                Re-sort
+              </button>
+            </p>
+          )}
           {sessions.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-gray-600 dark:text-gray-400">
               No confirmed sessions yet. Each confirmed talk appears here with
@@ -234,22 +309,14 @@ export function SessionFeedbackAdmin({
                   open={open.has(session.talkId)}
                   onToggle={() => toggle(session.talkId)}
                   pending={pending}
-                  outcome={outcome?.talkId === session.talkId ? outcome : null}
+                  outcomes={[...outcomes.values()].filter(
+                    (o) => o.talkId === session.talkId,
+                  )}
                   onHide={(id) =>
-                    run(
-                      session.talkId,
-                      [id],
-                      () => onHide(id),
-                      'Comment hidden from speakers.',
-                    )
+                    run(session.talkId, 'hide', [id], () => onHide(id))
                   }
                   onUnhide={(id) =>
-                    run(
-                      session.talkId,
-                      [id],
-                      () => onUnhide(id),
-                      'Comment shown to speakers again.',
-                    )
+                    run(session.talkId, 'unhide', [id], () => onUnhide(id))
                   }
                   onRemove={(c) => {
                     const removal = {
@@ -282,11 +349,8 @@ export function SessionFeedbackAdmin({
         onConfirm={async () => {
           const removal = removing
           if (!removal || removePending) return
-          await run(
-            removal.talkId,
-            removal.ids,
-            () => onRemove(removal.ids),
-            `${plural(removal.ids.length, 'response', 'responses')} removed.`,
+          await run(removal.talkId, 'remove', removal.ids, () =>
+            onRemove(removal.ids),
           )
           // Closed either way, the outcome is on the page behind it; but only
           // if this is still the question that asked for this delete.
@@ -318,7 +382,7 @@ function SessionRow({
   open,
   onToggle,
   pending,
-  outcome,
+  outcomes,
   onHide,
   onUnhide,
   onRemove,
@@ -327,8 +391,8 @@ function SessionRow({
   open: boolean
   onToggle: () => void
   pending: ReadonlySet<string>
-  /** The last action's outcome, when it was in this session. */
-  outcome: Outcome | null
+  /** The outcomes of actions in this session. */
+  outcomes: readonly Outcome[]
   onHide: (id: string) => void
   onUnhide: (id: string) => void
   onRemove: (comment: AdminFeedbackComment) => void
@@ -337,13 +401,19 @@ function SessionRow({
   const { totals, comments } = session
   const tooFew = hasTooFew(totals)
   const flagged = comments.some((c) => c.flagged)
-  // An outcome shows by its comment when that comment is still listed (a
-  // failure), otherwise at the top of the open row (a Remove, a success).
-  const byComment =
-    outcome && !outcome.ok && comments.some((c) => c.id === outcome.responseId)
-      ? outcome
-      : null
-  const atTop = outcome && !byComment ? outcome : null
+  // An outcome shows by its comment while that comment is listed (a
+  // failure, or a Remove a refetch has not caught up with), otherwise at
+  // the top of the open row (a Remove that went, a Hide or Unhide).
+  const listed = new Set(comments.map((c) => c.id))
+  const byComment = new Map<string, Outcome>()
+  const atTop: Outcome[] = []
+  for (const o of outcomes) {
+    if (!listed.has(o.responseId)) atTop.push(o)
+    else if (!o.ok) byComment.set(o.responseId, o)
+    else if (o.kind === 'remove')
+      byComment.set(o.responseId, { ...o, text: REMOVED_BUT_LISTED })
+    else atTop.push(o)
+  }
   const meta = [
     session.speakers.join(', '),
     session.format ? formats.get(session.format) : null,
@@ -427,7 +497,9 @@ function SessionRow({
       >
         {open && (
           <>
-            {atTop && <OutcomeNote outcome={atTop} className="mb-2" />}
+            {atTop.map((o) => (
+              <OutcomeNote key={o.responseId} outcome={o} className="mb-2" />
+            ))}
             <Breakdown totals={totals} />
             {comments.length === 0 ? (
               <p className="py-2 text-sm text-gray-600 dark:text-gray-400">
@@ -440,7 +512,7 @@ function SessionRow({
                     key={c.id}
                     comment={c}
                     pending={pending.has(c.id)}
-                    failure={byComment?.responseId === c.id ? byComment : null}
+                    note={byComment.get(c.id) ?? null}
                     onHide={() => onHide(c.id)}
                     onUnhide={() => onUnhide(c.id)}
                     onRemove={() => onRemove(c)}
@@ -499,15 +571,15 @@ function OutcomeNote({
 function CommentItem({
   comment,
   pending,
-  failure,
+  note,
   onHide,
   onUnhide,
   onRemove,
 }: {
   comment: AdminFeedbackComment
   pending: boolean
-  /** The last action on this comment failed, saying why. */
-  failure: Outcome | null
+  /** What the last action on this comment did, when it is said here. */
+  note: Outcome | null
   onHide: () => void
   onUnhide: () => void
   onRemove: () => void
@@ -552,7 +624,7 @@ function CommentItem({
         >
           {comment.comment}
         </p>
-        {failure && <OutcomeNote outcome={failure} className="mt-2" />}
+        {note && <OutcomeNote outcome={note} className="mt-2" />}
       </div>
       <div className="-ml-2.5 flex shrink-0 gap-1 sm:ml-0">
         {comment.hidden ? (
