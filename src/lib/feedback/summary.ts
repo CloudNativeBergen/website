@@ -286,7 +286,7 @@ export async function deliverFeedbackSummaries({
     } catch (error) {
       report.failed++
       console.error(
-        '[feedback] summary not sent; the talk stays unclaimed',
+        '[feedback] summary not sent for this talk',
         { talkId: item.talkId, conferenceId: item.conferenceId },
         error,
       )
@@ -480,8 +480,10 @@ const BELL_TIMEOUT_MS = 10_000
 const SPEAKER_READ_TIMEOUT_MS = 10_000
 /** How long the run waits for the version sweep before sending anyway. */
 const SWEEP_TIMEOUT_MS = 10_000
-/** Each Sanity request of the claim: the version reads, the commit, the read-back. */
+/** Each Sanity request of the claim: the version reads, the commit, the read-backs. */
 const CLAIM_REQUEST_TIMEOUT_MS = 5_000
+/** Before the second read-back of a claim whose commit failed. */
+const CLAIM_LANDING_GRACE_MS = 2_000
 
 /** `work`, or after `ms` whatever it has not done, with `onTimeout` told. */
 function bounded(
@@ -503,14 +505,16 @@ function bounded(
 
 /**
  * After the fit check and before the first email, each step bounded: the
- * claim's version reads (two rounds), its commit and a read-back of a
- * failed one ({@link CLAIM_REQUEST_TIMEOUT_MS} each), the sweep
+ * claim's version reads (two rounds), its commit and up to two read-backs
+ * of a failed one ({@link CLAIM_REQUEST_TIMEOUT_MS} each, with
+ * {@link CLAIM_LANDING_GRACE_MS} between them), the sweep
  * ({@link SWEEP_TIMEOUT_MS}) and the speaker read
  * ({@link SPEAKER_READ_TIMEOUT_MS}), and a margin. The bell runs alongside
  * the emails, so it takes none of this.
  */
 const CLAIM_OVERHEAD_MS =
-  4 * CLAIM_REQUEST_TIMEOUT_MS +
+  5 * CLAIM_REQUEST_TIMEOUT_MS +
+  CLAIM_LANDING_GRACE_MS +
   SWEEP_TIMEOUT_MS +
   SPEAKER_READ_TIMEOUT_MS +
   5_000
@@ -671,13 +675,23 @@ async function claim(
     // socket, a 502 after the write): `@sanity/client` never retries a
     // mutation. Treated as unclaimed, the talk would be marked sent and
     // never told; so read it back.
-    if (await claimLanded(client, talk._id, transactionId)) {
-      console.error(
-        `[feedback] the claim of ${talk._id} landed although its reply failed; sending`,
-        error,
-      )
-      return 'claimed'
+    // A client-side timeout does not cancel the mutation at Sanity, so an
+    // in-flight commit gets a moment and a second look.
+    for (const wait of [0, CLAIM_LANDING_GRACE_MS]) {
+      if (wait > 0) await delay(wait)
+      if (await claimLanded(client, talk._id, transactionId)) {
+        console.error(
+          `[feedback] the claim of ${talk._id} landed although its reply failed; sending`,
+          error,
+        )
+        return 'claimed'
+      }
     }
+    console.error(
+      '[feedback] summary claim failed with an unknown outcome: it may still land, and then this talk is never told',
+      { talkId: talk._id, transactionId },
+      error,
+    )
     throw error
   }
 }

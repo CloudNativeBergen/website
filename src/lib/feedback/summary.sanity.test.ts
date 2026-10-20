@@ -36,6 +36,7 @@ const h = vi.hoisted(() => ({
   speakerReadOptions: [] as unknown[],
   sendEmail: vi.fn(),
   resolveSender: vi.fn(),
+  lastTransactionId: undefined as string | undefined,
   /** Every config a client was made with (the pinned API version, a timeout). */
   clientConfigs: [] as Record<string, unknown>[],
   /** The pause between sends: recorded, and immediate. */
@@ -55,6 +56,17 @@ vi.mock('@/lib/sanity/client', async () => {
   // (MEASURED 2026-10-19: `[]` with the projection, null without).
   const withReleases = (w: Writer): Writer => ({
     ...w,
+    // The id of the last transaction built, for a test to land it late.
+    transaction: () => {
+      const tx = (w.transaction as () => { transactionId(): string })()
+      const commit = (tx as unknown as { commit: () => Promise<unknown> })
+        .commit
+      ;(tx as unknown as { commit: () => Promise<unknown> }).commit = () => {
+        h.lastTransactionId = tx.transactionId()
+        return commit()
+      }
+      return tx
+    },
     getDocuments: async (ids: string[], options?: unknown) => {
       if (ids.some((id) => id.startsWith('sp-'))) {
         h.speakerReadOptions.push(options)
@@ -277,6 +289,8 @@ beforeEach(() => {
   h.sendEmail.mockResolvedValue(undefined)
   h.delay.mockClear()
   h.clientConfigs = []
+  h.lastTransactionId = undefined
+  h.delay.mockImplementation(async (ms: number) => void ms)
   h.resolveSender.mockReset()
   // One sender per organization, as the tenant's own Resend account is.
   h.resolveSender.mockImplementation(
@@ -1067,7 +1081,7 @@ describe('deliverFeedbackSummaries: the run’s time', () => {
 
     await deliverFeedbackSummaries({
       now: NOW,
-      deadline: new Date(Date.now() + 80_000),
+      deadline: new Date(Date.now() + 88_000),
     })
 
     expect(sentAt('talk-1')).toBe(NOW.toISOString())
@@ -1172,6 +1186,29 @@ describe('deliverFeedbackSummaries: the run’s time', () => {
     expect(report).toMatchObject({ claimed: 1, failed: 0 })
   })
 
+  it('sends when the claim’s commit timed out and landed only after the first read-back', async () => {
+    store().beforeNextCommit(() => {
+      throw Object.assign(new Error('Request timed out'), {
+        code: 'ETIMEDOUT',
+      })
+    })
+    // Sanity applies the commit while the run waits to look again.
+    h.delay.mockImplementation(async (ms: number) => {
+      if (ms === 2_000 && !sentAt('talk-1')) {
+        store().put({
+          ...store().doc('talk-1')!,
+          feedbackSummarySentAt: NOW.toISOString(),
+          _rev: h.lastTransactionId!,
+        })
+      }
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(emailsTo()).toHaveLength(2)
+    expect(report).toMatchObject({ claimed: 1, failed: 0 })
+  })
+
   it('leaves the talk unclaimed when the claim’s commit timed out and did not land', async () => {
     store().beforeNextCommit(() => {
       throw Object.assign(new Error('Request timed out'), {
@@ -1184,6 +1221,12 @@ describe('deliverFeedbackSummaries: the run’s time', () => {
     expect(sentAt('talk-1')).toBeUndefined()
     expect(h.sendEmail).not.toHaveBeenCalled()
     expect(report).toMatchObject({ claimed: 0, failed: 1 })
+    // It may still land; the log does not say otherwise.
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('may still land'),
+      expect.objectContaining({ talkId: 'talk-1' }),
+      expect.any(Error),
+    )
   })
 
   it('does not commit a claim when the version reads used up the time it needed', async () => {
