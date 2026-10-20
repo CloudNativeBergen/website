@@ -388,13 +388,17 @@ function SessionRow({
         <span className="flex flex-wrap gap-x-3 gap-y-1 pl-6 text-sm text-gray-700 tabular-nums sm:contents dark:text-gray-300">
           <span className="sm:text-right">
             {tooFew ? (
-              <span className="text-gray-500 dark:text-gray-400">too few</span>
-            ) : (
-              <span className="font-semibold text-gray-900 dark:text-white">
-                {totals.lovedItPercent}%
+              <span className="text-gray-500 dark:text-gray-400">
+                too few<span className="sm:sr-only"> to rank</span>
               </span>
+            ) : (
+              <>
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  {totals.lovedItPercent}%
+                </span>
+                <span className="sm:sr-only"> loved it</span>
+              </>
             )}
-            <span className="sm:sr-only"> loved it</span>
           </span>
           <span className="sm:text-right">
             {totals.total}

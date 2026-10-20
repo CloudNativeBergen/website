@@ -179,7 +179,7 @@ export const Ranked: Story = {
       'Observability for small teams',
       'WebAssembly on the edge',
     ])
-    await expect(canvas.getAllByText('too few')).toHaveLength(2)
+    await expect(canvas.getAllByText(/^too few/)).toHaveLength(2)
     // Only the session holding a flagged comment carries the flag.
     await expect(
       canvas.getAllByRole('button', { name: /a comment is flagged/ }),
@@ -376,7 +376,7 @@ export const RemoveKeepsRowInPlace: Story = {
     await expect(
       canvas.getByRole('button', { name: /Exactly ten answers/ }),
     ).toHaveAttribute('aria-expanded', 'true')
-    await expect(canvas.getByText('too few')).toBeVisible()
+    await expect(canvas.getByText(/^too few/)).toBeVisible()
     // Changing the sort ranks again: the session with too few goes last.
     await userEvent.click(canvas.getByRole('button', { name: /Responses/ }))
     await userEvent.click(canvas.getByRole('button', { name: /Loved it/ }))
