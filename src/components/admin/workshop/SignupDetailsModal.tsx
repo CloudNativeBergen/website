@@ -22,6 +22,9 @@ interface SignupDetailsModalProps {
   status: WorkshopSignupStatus | null
   /** `undefined` while they are being read: never shown as an empty list. */
   signups: WorkshopSignupExisting[] | undefined
+  /** The read failed: said so, with a retry, never "reading" forever. */
+  readFailed?: boolean
+  onRetry?: () => void
   onConfirmSignup: (signupId: string, userName: string) => void
   /** Runs after the organizer has answered the question this modal asks. */
   onMoveToWaitlist: (signupId: string, userName: string) => void
@@ -44,6 +47,8 @@ export function SignupDetailsModal({
   workshopTitle,
   status,
   signups,
+  readFailed = false,
+  onRetry,
   onConfirmSignup,
   onMoveToWaitlist,
   onDeleteSignup,
@@ -169,6 +174,21 @@ export function SignupDetailsModal({
             title: `No ${status ?? ''} signups for this workshop`,
           }}
         />
+      ) : readFailed ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            The sign-ups could not be read.
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex min-h-11 cursor-pointer items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:hover:bg-white/10"
+            >
+              Try again
+            </button>
+          )}
+        </div>
       ) : (
         <p role="status" className="text-sm text-gray-500 dark:text-gray-400">
           Reading the sign-ups…

@@ -30,7 +30,7 @@ import { useSaveWorkshopAccess } from './useSaveWorkshopAccess'
 import { typeKey } from '@/lib/tickets/classification'
 import { useTicketHolders } from '../holders'
 import { WorkshopSection } from '../WorkshopSection'
-import { useReportTicketsNeedDecision } from '../attention'
+import { useReportTicketsAttention } from '../attention'
 
 const HEADING_ID = 'workshop-tickets-heading'
 
@@ -68,9 +68,9 @@ function WorkshopTicketsFrame({
     <WorkshopSection
       id={WORKSHOP_TICKETS_ANCHOR}
       headingId={HEADING_ID}
-      // Focus lands here when the control that held it leaves the page (a
-      // removed entry).
-      focusableHeading
+      // Under the Settings h2. Focus lands on it when the control that held
+      // it leaves the page (a removed entry).
+      headingLevel={3}
       icon={TicketIcon}
       title="Workshop tickets"
       description="Holders of a ticket type that grants workshop access can sign up for workshops."
@@ -156,7 +156,9 @@ export function WorkshopTicketsSection({
 }: WorkshopTicketsSectionProps) {
   // Named in "Needs attention" at the top of the page, which this card,
   // collapsed under Settings, is far below.
-  useReportTicketsNeedDecision(!!list && needsDecision(list))
+  useReportTicketsAttention(
+    !list ? 'unreadable' : needsDecision(list) ? 'decision' : null,
+  )
   if (!list) {
     return (
       <WorkshopTicketsFrame key="error" open>
@@ -198,19 +200,20 @@ export function WorkshopTicketsSection({
   const notSet = list.types
     .filter((type) => type.access === 'unclassified')
     .map((type) => type.typeName)
+  const decision = needsDecision(list)
 
   return (
     <WorkshopTicketsFrame
       // A key per branch: a switch starts the card over, with its own open.
       key="list"
-      open={needsDecision(list) || !list.configured}
+      open={decision || !list.configured}
       badge={
         !list.configured && (
           <StatusBadge label="Not configured" color="yellow" />
         )
       }
     >
-      {needsDecision(list) && (
+      {decision && (
         // A labelled region, NOT a live one: it holds buttons and questions,
         // and a live region would be read out again whole on every change.
         <section

@@ -720,7 +720,9 @@ describe('Needs attention (#1452)', () => {
   const attention = () =>
     screen.queryByRole('region', { name: 'Needs attention' })
 
-  function renderWithTickets(list: ReturnType<typeof buildWorkshopTicketList>) {
+  function renderWithTickets(
+    list: ReturnType<typeof buildWorkshopTicketList> | null,
+  ) {
     render(
       <Providers>
         <WorkshopsClientPage
@@ -747,9 +749,7 @@ describe('Needs attention (#1452)', () => {
     const region = await screen.findByRole('region', {
       name: 'Needs attention',
     })
-    expect(region).toHaveTextContent(
-      'A ticket type needs a decision before its holders can sign up.',
-    )
+    expect(region).toHaveTextContent('Workshop tickets need a decision.')
     const link = within(region).getByRole('link', {
       name: 'Review workshop tickets',
     })
@@ -758,6 +758,41 @@ describe('Needs attention (#1452)', () => {
       screen.getByRole('region', { name: /^Workshop tickets/ }),
     )
     // The page's own reads have settled before the test ends.
+    await cardButton(/^Confirmed\s*120$/)
+  })
+
+  it('says when the workshop tickets could not be read', async () => {
+    renderWithTickets(null)
+    const region = await screen.findByRole('region', {
+      name: 'Needs attention',
+    })
+    expect(region).toHaveTextContent('The workshop tickets could not be read.')
+    await cardButton(/^Confirmed\s*120$/)
+  })
+
+  // The address is at the anchor already (arrived by a link to it, or the
+  // link was followed before): following it again changes nothing in the
+  // address, and the card the organizer closed is opened all the same.
+  it('opens the tickets card the organizer closed, from the address it is already at', async () => {
+    renderWithTickets(
+      buildWorkshopTicketList(
+        ['Early Bird', 'Speaker'],
+        [{ typeName: 'Early Bird', grantsWorkshop: true }],
+      ),
+    )
+    window.location.hash = 'workshop-tickets'
+    const toggle = screen.getByRole('button', { name: /^Workshop tickets/ })
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    const region = await screen.findByRole('region', {
+      name: 'Needs attention',
+    })
+    fireEvent.click(
+      within(region).getByRole('link', { name: 'Review workshop tickets' }),
+    )
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    window.location.hash = ''
     await cardButton(/^Confirmed\s*120$/)
   })
 
@@ -775,7 +810,7 @@ describe('Needs attention (#1452)', () => {
     expect(region).toHaveTextContent(
       '2 people have signed up without a workshop ticket.',
     )
-    expect(region).not.toHaveTextContent('ticket type needs a decision')
+    expect(region).not.toHaveTextContent('Workshop tickets')
     const link = within(region).getByRole('link', {
       name: 'Review ticket holders',
     })

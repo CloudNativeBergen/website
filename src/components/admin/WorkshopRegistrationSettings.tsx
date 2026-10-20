@@ -247,6 +247,8 @@ export function WorkshopRegistrationSettings({
   return (
     <WorkshopSection
       icon={CalendarIcon}
+      // Under the Settings h2.
+      headingLevel={3}
       title="Workshop registration"
       description="When workshop sign-ups open and close."
       // The status, also while collapsed.

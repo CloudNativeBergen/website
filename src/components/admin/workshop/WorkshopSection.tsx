@@ -24,10 +24,11 @@ export interface WorkshopSectionProps {
   headingId?: string
   /**
    * Focus lands on the heading when the control that held it leaves the
-   * page. Focusable from code only.
+   * page: it is focusable from code (never by Tab).
    */
   headingRef?: Ref<HTMLHeadingElement>
-  focusableHeading?: boolean
+  /** 3 for a card inside a group with its own h2 (Settings). */
+  headingLevel?: 2 | 3
   /**
    * Collapsible when set: whether the content is shown. A button inside the
    * heading, not <summary>, which would hide the heading from screen-reader
@@ -40,9 +41,24 @@ export interface WorkshopSectionProps {
   children?: ReactNode
 }
 
+const TONES = {
+  default: {
+    card: 'bg-white ring-gray-200 dark:bg-gray-900 dark:ring-gray-700',
+    icon: 'text-gray-400 dark:text-gray-500',
+    heading: 'text-gray-900 dark:text-white',
+    description: 'text-gray-600 dark:text-gray-400',
+  },
+  attention: {
+    card: 'bg-amber-50 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900',
+    icon: 'text-amber-600 dark:text-amber-400',
+    heading: 'text-amber-900 dark:text-amber-100',
+    description: 'text-amber-800 dark:text-amber-300',
+  },
+} as const
+
 /**
  * THE CARD EVERY SECTION OF `/admin/workshops` SITS IN (#1452): icon, a
- * sentence-case h3 and one line of description, then the content.
+ * sentence-case heading and one line of description, then the content.
  */
 export function WorkshopSection({
   id,
@@ -53,7 +69,7 @@ export function WorkshopSection({
   action,
   headingId,
   headingRef,
-  focusableHeading = false,
+  headingLevel = 2,
   open,
   onOpenChange,
   tone = 'default',
@@ -63,36 +79,22 @@ export function WorkshopSection({
   const contentId = useId()
   const labelId = headingId ?? generatedId
   const collapsible = open !== undefined
-  const attention = tone === 'attention'
+  const Heading = `h${headingLevel}` as const
+  const colors = TONES[tone]
 
   return (
     <section
       id={id}
       aria-labelledby={labelId}
-      className={`scroll-mt-24 rounded-lg p-6 shadow-sm ring-1 ${
-        attention
-          ? 'bg-amber-50 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900'
-          : 'bg-white ring-gray-200 dark:bg-gray-900 dark:ring-gray-700'
-      }`}
+      className={`scroll-mt-24 rounded-lg p-6 shadow-sm ring-1 ${colors.card}`}
     >
       <div className="flex items-center gap-2">
-        <Icon
-          aria-hidden
-          className={`size-5 shrink-0 ${
-            attention
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-gray-400 dark:text-gray-500'
-          }`}
-        />
-        <h3
+        <Icon aria-hidden className={`size-5 shrink-0 ${colors.icon}`} />
+        <Heading
           ref={headingRef}
           id={labelId}
-          tabIndex={focusableHeading || headingRef ? -1 : undefined}
-          className={`min-w-0 flex-1 text-lg font-medium outline-none ${
-            attention
-              ? 'text-amber-900 dark:text-amber-100'
-              : 'text-gray-900 dark:text-white'
-          }`}
+          tabIndex={-1}
+          className={`min-w-0 flex-1 text-lg font-medium outline-none ${colors.heading}`}
         >
           {collapsible ? (
             <button
@@ -115,19 +117,11 @@ export function WorkshopSection({
               {badge}
             </span>
           )}
-        </h3>
+        </Heading>
         {action}
       </div>
       {description && (
-        <p
-          className={`mt-1 text-sm ${
-            attention
-              ? 'text-amber-800 dark:text-amber-300'
-              : 'text-gray-600 dark:text-gray-400'
-          }`}
-        >
-          {description}
-        </p>
+        <p className={`mt-1 text-sm ${colors.description}`}>{description}</p>
       )}
       {collapsible ? (
         <div id={contentId} className={open ? undefined : 'hidden'}>

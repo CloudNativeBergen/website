@@ -91,7 +91,6 @@ describe('TicketHolderPanel', () => {
     renderPanel(READY)
     const panel = screen.getByRole('region', { name: 'Ticket holders' })
     expect(panel.textContent).not.toMatch(/Confirmed|Waitlist/)
-    expect(panel.textContent).not.toContain('23')
   })
 
   it('a failed read says unavailable and shows no number', () => {

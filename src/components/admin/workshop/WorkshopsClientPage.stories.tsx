@@ -215,7 +215,7 @@ export const NeedsAttention: Story = {
     await expect(
       await within(region).findByText(/2 people have signed up/),
     ).toBeInTheDocument()
-    await expect(region).toHaveTextContent('A ticket type needs a decision')
+    await expect(region).toHaveTextContent('Workshop tickets need a decision')
   },
 }
 

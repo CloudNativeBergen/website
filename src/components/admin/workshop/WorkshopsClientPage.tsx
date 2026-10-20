@@ -21,7 +21,7 @@ import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
 import { SponsorEarlyAccessCard } from './SponsorEarlyAccessCard'
 import { WorkshopSection } from './WorkshopSection'
-import { TicketsAttentionContext } from './attention'
+import { TicketsAttentionContext, type TicketsAttention } from './attention'
 import { WORKSHOP_TICKETS_ANCHOR } from './tickets/anchor'
 import { WorkshopScheduleGrid } from './WorkshopScheduleGrid'
 import { useNotification } from '@/components/admin/NotificationProvider'
@@ -158,7 +158,8 @@ function WorkshopsClientPageFor({
   const flaggedCount =
     holderView.state === 'ready' ? holderView.stats.flagged.length : 0
   // Told by the "Workshop tickets" card (see `TicketsAttentionContext`).
-  const [ticketsNeedDecision, setTicketsNeedDecision] = useState(false)
+  const [ticketsAttention, setTicketsAttention] =
+    useState<TicketsAttention>(null)
   const rereadTicketHolders = useRereadTicketHolders()
 
   // THE "EARLY SIGN-UPS" LIST (#1348). Narrowing it to a sponsor is a new
@@ -430,18 +431,30 @@ function WorkshopsClientPageFor({
 
       {/* ONLY WHEN SOMETHING NEEDS THE ORGANIZER: what the cards further
           down hold, named where it is seen first. */}
-      {(ticketsNeedDecision || flaggedCount > 0) && (
+      {(ticketsAttention || flaggedCount > 0) && (
         <WorkshopSection
           tone="attention"
           icon={ExclamationTriangleIcon}
           title="Needs attention"
         >
           <ul className="mt-2 space-y-1 text-sm text-amber-900 dark:text-amber-200">
-            {ticketsNeedDecision && (
+            {ticketsAttention && (
               <li>
-                A ticket type needs a decision before its holders can sign up.{' '}
+                {ticketsAttention === 'decision'
+                  ? 'Workshop tickets need a decision.'
+                  : 'The workshop tickets could not be read.'}{' '}
                 <a
                   href={`#${WORKSHOP_TICKETS_ANCHOR}`}
+                  // Already at the anchor (arrived by a link to it, or
+                  // clicked before), the address does not change, so the
+                  // card, which opens on a change, is told here.
+                  onClick={() => {
+                    if (
+                      window.location.hash === `#${WORKSHOP_TICKETS_ANCHOR}`
+                    ) {
+                      window.dispatchEvent(new HashChangeEvent('hashchange'))
+                    }
+                  }}
                   className="font-medium underline hover:no-underline"
                 >
                   Review workshop tickets
@@ -493,7 +506,7 @@ function WorkshopsClientPageFor({
                 const waitlistCount =
                   live?.waitlistSignups ?? workshop.waitlistCount ?? 0
                 const capacity = live?.capacity ?? workshop.capacity
-                const ref = {
+                const workshopRef = {
                   workshopId: workshop._id,
                   workshopTitle: workshop.title,
                 }
@@ -506,26 +519,26 @@ function WorkshopsClientPageFor({
                     waitlistCount={waitlistCount}
                     onViewConfirmed={() =>
                       signupDialog.open({
-                        ...ref,
+                        ...workshopRef,
                         status: WorkshopSignupStatus.CONFIRMED,
                       })
                     }
                     onViewWaitlist={() =>
                       signupDialog.open({
-                        ...ref,
+                        ...workshopRef,
                         status: WorkshopSignupStatus.WAITLIST,
                       })
                     }
-                    onAddParticipant={() => addDialog.open(ref)}
+                    onAddParticipant={() => addDialog.open(workshopRef)}
                     onEditCapacity={() =>
                       capacityDialog.open({
-                        ...ref,
+                        ...workshopRef,
                         currentCapacity: capacity || 30,
                         currentSignups: confirmedCount,
                       })
                     }
                     onAnnounce={() =>
-                      announceDialog.open({ ...ref, confirmedCount })
+                      announceDialog.open({ ...workshopRef, confirmedCount })
                     }
                   />
                 )
@@ -582,7 +595,7 @@ function WorkshopsClientPageFor({
             page read, and it tells "Needs attention" when a type needs a
             decision, through the contexts. */}
         <TicketHolderContext.Provider value={holderView}>
-          <TicketsAttentionContext.Provider value={setTicketsNeedDecision}>
+          <TicketsAttentionContext.Provider value={setTicketsAttention}>
             {ticketsSection}
           </TicketsAttentionContext.Provider>
         </TicketHolderContext.Provider>
@@ -598,6 +611,8 @@ function WorkshopsClientPageFor({
         workshopTitle={signupDialog.about?.workshopTitle ?? ''}
         status={signupDialog.about?.status ?? null}
         signups={workshopSignups.data?.data}
+        readFailed={workshopSignups.isError}
+        onRetry={() => void workshopSignups.refetch()}
         onConfirmSignup={signupActions.confirm}
         fullRefusal={signupActions.full}
         onConfirmBeyondCapacity={signupActions.confirmBeyondCapacity}

@@ -135,12 +135,12 @@ export function EarlySignupsList({
     >
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
-          <h4
+          <h3
             id={headingId}
             className="text-base font-medium text-gray-900 dark:text-white"
           >
             Early sign-ups
-          </h4>
+          </h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Sign-ups made through a sponsor&rsquo;s early-access link, before
             registration opened for everyone.

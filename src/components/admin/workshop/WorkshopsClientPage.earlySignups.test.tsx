@@ -161,6 +161,8 @@ const server = {
   ofWorkshop: [] as ReturnType<typeof dialogRow>[],
   /** While set, `listSignups` waits on it. */
   holdOfWorkshop: null as Promise<void> | null,
+  /** How many reads of `listSignups` fail before one answers. */
+  ofWorkshopFailures: 0,
   /** `listEarlySignups`, by the sponsor in its input (`''`: none). */
   early: {} as Record<
     string,
@@ -204,6 +206,16 @@ async function answer(procedure: string, input: unknown): Promise<unknown> {
       })
     case 'workshop.admin.listSignups': {
       if (server.holdOfWorkshop) await server.holdOfWorkshop
+      if (server.ofWorkshopFailures > 0) {
+        server.ofWorkshopFailures -= 1
+        return {
+          error: {
+            message: 'Failed to fetch workshop signups',
+            code: -32603,
+            data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+          },
+        }
+      }
       const { status } = input as { status?: string }
       const data = server.ofWorkshop.filter((row) => row.status === status)
       return ok({ success: true, data, count: data.length })
@@ -280,6 +292,7 @@ beforeEach(() => {
   Object.assign(server, {
     ofWorkshop: [],
     holdOfWorkshop: null,
+    ofWorkshopFailures: 0,
     early: {
       '': {
         signups: [
@@ -977,6 +990,28 @@ describe('the badge in a workshop’s sign-up dialog', () => {
 
     expect(await within(dialog).findAllByText('via Acme AS')).toHaveLength(2)
     expect(within(dialog).queryAllByText(/^via /)).toHaveLength(2)
+  })
+
+  it('says a failed read failed, and reads again on "Try again"', async () => {
+    server.ofWorkshop = [dialogRow('su-ada', 'Ada Lovelace', { sponsor: ACME })]
+    server.ofWorkshopFailures = 1
+    renderPage()
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^Confirmed\s*2$/ }),
+    )
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Kubernetes 101 - Confirmed Signups',
+    })
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The sign-ups could not be read.',
+    )
+    expect(within(dialog).queryByText('Reading the sign-ups…')).toBeNull()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Try again' }))
+    expect(await within(dialog).findAllByText('via Acme AS')).not.toHaveLength(
+      0,
+    )
   })
 })
 

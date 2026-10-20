@@ -3,20 +3,27 @@
 import { createContext, useContext, useEffect } from 'react'
 
 /**
- * How the "Workshop tickets" card tells the page that a ticket type needs a
- * decision (#1452). The card is rendered by the server and passed in whole, so
- * the page cannot read its list; the card says it instead, and the page names
- * it in "Needs attention". Absent outside the page: nothing to tell.
+ * What the "Workshop tickets" card needs from the organizer: a decision (a
+ * type not set, or a stored answer naming a type the provider no longer
+ * lists), or nothing it can do because the list could not be read.
+ */
+export type TicketsAttention = 'decision' | 'unreadable' | null
+
+/**
+ * How the "Workshop tickets" card tells the page it needs the organizer
+ * (#1452). The card is rendered by the server and passed in whole, so the
+ * page cannot read its list; the card says it instead, and the page names it
+ * in "Needs attention". Absent outside the page: nothing to tell.
  */
 export const TicketsAttentionContext = createContext<
-  ((needsDecision: boolean) => void) | undefined
+  ((attention: TicketsAttention) => void) | undefined
 >(undefined)
 
-export function useReportTicketsNeedDecision(needsDecision: boolean) {
+export function useReportTicketsAttention(attention: TicketsAttention) {
   const report = useContext(TicketsAttentionContext)
   useEffect(() => {
-    report?.(needsDecision)
-    // A card that leaves the page (a refresh that failed) asks for nothing.
-    return () => report?.(false)
-  }, [report, needsDecision])
+    report?.(attention)
+    // A card that leaves the page asks for nothing.
+    return () => report?.(null)
+  }, [report, attention])
 }
