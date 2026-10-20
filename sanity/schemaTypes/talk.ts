@@ -249,6 +249,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'feedbackSummarySentAt',
+      title: 'Feedback Summary Sent At',
+      type: 'datetime',
+      description:
+        'When the app claimed sending this talk’s Session Feedback summary to its speakers. Set once, before the summary goes out; never edit it here.',
+      readOnly: true,
+    }),
+    defineField({
       name: 'audienceFeedback',
       title: 'Audience Feedback',
       type: 'object',

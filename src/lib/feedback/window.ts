@@ -157,10 +157,14 @@ export function isConferenceOverAt(
 }
 
 /**
- * §5: no code once the talk's window has closed, or, for a talk with no
- * slot, once its conference is over (for an unscheduled talk
- * `feedbackVisible` is exactly "the conference is over").
+ * No answer can arrive any more: the window has closed, or, for a talk with
+ * no slot, its conference is over (for an unscheduled talk `feedbackVisible`
+ * is exactly "the conference is over"). The summary goes out from here
+ * (§11.1), and §5 mints no code.
  */
-export const mayMint = (window: FeedbackWindow) =>
-  window.state !== 'closed' &&
-  !(window.state === 'unscheduled' && window.feedbackVisible)
+export const answersClosed = (window: FeedbackWindow) =>
+  window.state === 'closed' ||
+  (window.state === 'unscheduled' && window.feedbackVisible)
+
+/** §5: a code may be minted until {@link answersClosed}. */
+export const mayMint = (window: FeedbackWindow) => !answersClosed(window)

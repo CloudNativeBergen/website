@@ -55,6 +55,16 @@ interface ResponseRow {
   hiddenAt?: unknown
 }
 
+/**
+ * A comment the talk's speakers see (§9.3): not hidden, of a real colour,
+ * and not blank. The one rule for the results tab and the summary's count.
+ */
+export function isVisibleComment(
+  r: Pick<ResponseRow, 'colour' | 'comment' | 'hiddenAt'>,
+): r is { colour: FeedbackColour; comment: string; hiddenAt?: unknown } {
+  return !r.hiddenAt && commentOf(r) !== null
+}
+
 export async function readSpeakerResults({
   talkId,
   speakerId,

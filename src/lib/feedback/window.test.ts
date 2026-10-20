@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  answersClosed,
   feedbackVisibleAt,
   feedbackWindow,
   feedbackWindowStateAt,
@@ -271,5 +272,23 @@ describe('feedbackWindowStateAt — the state a shown window has at a later time
         at('2030-01-01T00:00:00Z'),
       ),
     ).toBe('unscheduled')
+  })
+})
+
+describe('answersClosed', () => {
+  const window = (
+    now: string,
+    slots = [slot('2026-06-10', '10:00', '10:40')],
+  ) => feedbackWindow({ slots, conferenceEndDate: '2026-06-11', now: at(now) })
+
+  it('is false before and while the window is open, true from when it closes', () => {
+    expect(answersClosed(window('2026-06-10T07:59:59Z'))).toBe(false)
+    expect(answersClosed(window('2026-06-11T08:39:59Z'))).toBe(false)
+    expect(answersClosed(window('2026-06-11T08:40:00Z'))).toBe(true)
+  })
+
+  it('for a talk with no slot, is true only once the conference is over', () => {
+    expect(answersClosed(window('2026-06-11T23:59:59Z', []))).toBe(false)
+    expect(answersClosed(window('2026-06-12T00:00:00Z', []))).toBe(true)
   })
 })

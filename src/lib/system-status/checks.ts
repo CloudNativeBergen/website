@@ -57,6 +57,7 @@ const VERCEL_CRONS: ReadonlyArray<{ path: string; schedule: string }> = [
   { path: '/api/cron/cleanup-orphaned-blobs', schedule: '0 3 * * *' },
   { path: '/api/cron/contract-reminders', schedule: '0 9 * * *' },
   { path: '/api/cron/cleanup-notifications', schedule: '0 4 * * *' },
+  { path: '/api/cron/feedback-summary', schedule: '0 8 * * *' },
 ]
 
 /** sha256 fingerprint (first 8 hex) + length. NEVER returns the raw value. */

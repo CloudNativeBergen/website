@@ -58,6 +58,12 @@ export type NotificationType =
   // the conference's organizers; links to `/admin/workshops`. Bell only.
   // Rendered generically by the hub.
   | 'workshop_capacity'
+  // A session's Feedback Window closed (speaker feedback spec §11.1): its
+  // totals, to each of its speakers who is not erased. Emitted once per talk
+  // and speaker by the daily summary cron (`src/lib/feedback/summary.ts`);
+  // links to the Session Feedback section of `/cfp/proposal/<id>`. Counts
+  // only, never comment text. Bell only. Rendered generically by the hub.
+  | 'session_feedback_summary'
   | 'system'
 
 /**

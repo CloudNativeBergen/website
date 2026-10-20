@@ -34,6 +34,9 @@ export function SessionFeedbackPrivacy() {
           <strong>Who sees it:</strong> the session&apos;s speakers see the
           totals and the comments, each with the time it was given, to the
           minute; organizers see everything and can hide or remove comments.
+          When a session&apos;s feedback closes, each of its speakers gets one
+          summary by email and in the app, with the counts only, never the
+          comments.
         </li>
         <li>
           <strong>Purpose and legal basis:</strong> helping speakers and
