@@ -545,6 +545,48 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
     expect(emailsTo()).toHaveLength(2)
   })
 
+  it('tells the speakers of the revision it claimed: speakers changed during the claim are read again', async () => {
+    store().put(speaker('sp-new'))
+    // An organizer replaces the speakers between this run's reads and its
+    // claim's commit.
+    store().beforeNextCommit(() =>
+      store().put({
+        ...store().doc('talk-1')!,
+        speakers: [{ ...ref('sp-new'), _key: 'kn' }],
+        _rev: 'rev-speakers-changed',
+      }),
+    )
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-1')).toBe(NOW.toISOString())
+    expect(emailsTo()).toEqual(['sp-new@example.com'])
+    expect(notifications().map((n) => n._id)).toEqual([
+      'notification.feedback-summary.talk-1.sp-new',
+    ])
+  })
+
+  it('tells the speakers of the revision it claimed: speakers changed before the claim’s read are read again', async () => {
+    store().put(speaker('sp-new'))
+    // The change lands after the talk was read, before the claim reads it.
+    store().beforeEachRead((read) => {
+      if (
+        read.query.includes('sanity::versionOf') &&
+        store().doc('talk-1')!._rev === 'rev-talk-1'
+      ) {
+        store().put({
+          ...store().doc('talk-1')!,
+          speakers: [{ ...ref('sp-new'), _key: 'kn' }],
+          _rev: 'rev-speakers-changed',
+        })
+      }
+    })
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(emailsTo()).toEqual(['sp-new@example.com'])
+  })
+
   it('sweeps a draft created between the claim’s read and its commit', async () => {
     store().beforeNextCommit(() => store().put(talk('drafts.talk-1', 'conf-A')))
 

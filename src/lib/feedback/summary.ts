@@ -234,45 +234,22 @@ async function deliverOne(
   now: Date,
   pacing: { sends: number },
 ): Promise<'skipped' | { emailed: number; emailFailed: number }> {
-  // The doc endpoint, not GROQ: the selection may lag a withdrawal or
-  // another run's claim by about a second.
-  const talk = await client.getDocument<SummaryTalk>(talkId)
-  if (!mayClaim(talk, talkId, conferenceId)) return 'skipped'
-
-  const rows =
-    (await scopedFetch<
-      { colour?: unknown; comment?: unknown; hiddenAt?: unknown }[] | null
-    >(
-      clientReadUncached,
-      { conferenceId },
-      `*[_type == "feedbackResponse" && talk._ref == $talkId && ${PUBLISHED_ONLY}]{ colour, comment, hiddenAt }`,
-      { talkId },
-      { cache: 'no-store' },
-    )) ?? []
-  // Every answer removed since the selection: nothing to tell.
-  if (rows.length === 0) return 'skipped'
-
-  const speakerIds = [
-    ...new Set(
-      (talk.speakers ?? [])
-        .map((s) => s._ref)
-        .filter((id): id is string => typeof id === 'string'),
-    ),
-  ]
-  const found: (SpeakerDoc | null)[] =
-    speakerIds.length > 0
-      ? await client.getDocuments<SpeakerDoc>(speakerIds)
-      : []
-  // Erased speakers hear nothing (§11.1).
-  const speakers = found.filter(
-    (s): s is SpeakerDoc => !!s && s._type === 'speaker' && !s.erasedAt,
-  )
-
-  const totals = talkTotals(talk, rows)
-  const comments = rows.filter(isVisibleComment).length
-
-  if (!(await claim(client, talkId, conferenceId, now))) return 'skipped'
+  // Read, then claim THAT revision of the talk: what is sent (its speakers,
+  // its counts) must be what was claimed. When the talk changed in between,
+  // read it again.
+  let prepared: Prepared | null = null
+  for (let attempt = 0; ; attempt++) {
+    prepared = await prepare(client, talkId, conferenceId)
+    if (!prepared) return 'skipped'
+    const outcome = await claim(client, prepared.talk, conferenceId, now)
+    if (outcome === 'claimed') break
+    if (outcome === 'refused') return 'skipped'
+    if (attempt >= MAX_RETRIES) {
+      throw new Error(`the talk kept changing during ${MAX_RETRIES + 1} claims`)
+    }
+  }
   await sweepTalkVersions(client, talkId, 'feedbackSummarySentAt')
+  const { talk, totals, comments, speakers } = prepared
 
   // One line, no invisible or bidi characters, quotes that cannot close ours.
   const title = displayName(talk.title ?? '') || 'your session'
@@ -321,52 +298,114 @@ async function deliverOne(
   return { emailed, emailFailed }
 }
 
+interface Prepared {
+  talk: SummaryTalk
+  totals: FeedbackTotals
+  comments: number
+  /** The talk's speakers who are not erased. */
+  speakers: SpeakerDoc[]
+}
+
 /**
- * Write `feedbackSummarySentAt` on the published talk, guarded by its
- * revision, and on the draft and every active release version, each guarded
- * by its own, in one transaction (§4.2). `false` when this run must not
- * send: another run claimed it first, the talk stopped qualifying, or a
- * version waits in a release that is not `active` (Sanity locks it, so
- * publishing it would bring a second summary; the talk is tried again on
- * the next run). Throws on anything else; nothing was claimed.
+ * Everything the summary sends, read before anything is claimed: a read
+ * that fails then costs nothing. `null` when the talk no longer qualifies.
  */
-async function claim(
+async function prepare(
   client: VersionsClient,
   talkId: string,
   conferenceId: string,
+): Promise<Prepared | null> {
+  // The doc endpoint, not GROQ: the selection may lag a withdrawal or
+  // another run's claim by about a second.
+  const talk = await client.getDocument<SummaryTalk>(talkId)
+  if (!mayClaim(talk, talkId, conferenceId)) return null
+
+  const rows =
+    (await scopedFetch<
+      { colour?: unknown; comment?: unknown; hiddenAt?: unknown }[] | null
+    >(
+      clientReadUncached,
+      { conferenceId },
+      `*[_type == "feedbackResponse" && talk._ref == $talkId && ${PUBLISHED_ONLY}]{ colour, comment, hiddenAt }`,
+      { talkId },
+      { cache: 'no-store' },
+    )) ?? []
+  // Every answer removed since the selection: nothing to tell.
+  if (rows.length === 0) return null
+
+  const speakerIds = [
+    ...new Set(
+      (talk.speakers ?? [])
+        .map((s) => s._ref)
+        .filter((id): id is string => typeof id === 'string'),
+    ),
+  ]
+  const found: (SpeakerDoc | null)[] =
+    speakerIds.length > 0
+      ? await client.getDocuments<SpeakerDoc>(speakerIds)
+      : []
+  return {
+    talk,
+    totals: talkTotals(talk, rows),
+    comments: rows.filter(isVisibleComment).length,
+    // Erased speakers hear nothing (§11.1).
+    speakers: found.filter(
+      (s): s is SpeakerDoc => !!s && s._type === 'speaker' && !s.erasedAt,
+    ),
+  }
+}
+
+/**
+ * Write `feedbackSummarySentAt` on the published talk, guarded by the
+ * revision {@link prepare} read, and on the draft and every active release
+ * version, each guarded by its own, in one transaction (§4.2).
+ *
+ * - `claimed`: this run sends.
+ * - `stale`: the talk changed since it was read (another edit, or a version
+ *   edited during the commit); read it again and retry.
+ * - `refused`: this run must not send: another run claimed it, it stopped
+ *   qualifying, or a version waits in a release that is not `active` (Sanity
+ *   locks it, so publishing it would bring a second summary; the talk is
+ *   tried again on the next run).
+ *
+ * Throws on anything else; nothing was claimed.
+ */
+async function claim(
+  client: VersionsClient,
+  talk: SummaryTalk,
+  conferenceId: string,
   now: Date,
-): Promise<boolean> {
+): Promise<'claimed' | 'stale' | 'refused'> {
+  const { published, versions, locked, releasesListed } =
+    await readTalkVersions(client, talk._id)
+  if (!mayClaim(published, talk._id, conferenceId)) return 'refused'
+  if (!releasesListed || locked.length > 0) {
+    console.error(
+      `[feedback] summary of ${talk._id} waits: ${
+        releasesListed
+          ? 'a version is in a release that is not active'
+          : 'could not list releases'
+      }`,
+    )
+    return 'refused'
+  }
   const sentAt = now.toISOString()
-  for (let attempt = 0; ; attempt++) {
-    const { published, versions, locked, releasesListed } =
-      await readTalkVersions(client, talkId)
-    if (!mayClaim(published, talkId, conferenceId)) return false
-    if (!releasesListed || locked.length > 0) {
-      console.error(
-        `[feedback] summary of ${talkId} waits: ${
-          releasesListed
-            ? 'a version is in a release that is not active'
-            : 'could not list releases'
-        }`,
-      )
-      return false
-    }
-    const tx = client
-      .transaction()
-      .patch(published._id, (p) =>
-        p.ifRevisionId(published._rev).set({ feedbackSummarySentAt: sentAt }),
-      )
-    for (const v of versions) {
-      tx.patch(v._id, (p) =>
-        p.ifRevisionId(v._rev).set({ feedbackSummarySentAt: sentAt }),
-      )
-    }
-    try {
-      await tx.commit()
-      return true
-    } catch (error) {
-      if (!isRetryable(error) || attempt >= MAX_RETRIES) throw error
-    }
+  const tx = client
+    .transaction()
+    .patch(talk._id, (p) =>
+      p.ifRevisionId(talk._rev).set({ feedbackSummarySentAt: sentAt }),
+    )
+  for (const v of versions) {
+    tx.patch(v._id, (p) =>
+      p.ifRevisionId(v._rev).set({ feedbackSummarySentAt: sentAt }),
+    )
+  }
+  try {
+    await tx.commit()
+    return 'claimed'
+  } catch (error) {
+    if (isRetryable(error)) return 'stale'
+    throw error
   }
 }
 
