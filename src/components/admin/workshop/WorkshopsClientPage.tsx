@@ -441,7 +441,7 @@ function WorkshopsClientPageFor({
             {ticketsAttention && (
               <li>
                 {ticketsAttention === 'decision'
-                  ? 'Workshop tickets need a decision.'
+                  ? 'Workshop tickets need a decision: a ticket type is not set, or an answer names a type that no longer exists.'
                   : 'The workshop tickets could not be read.'}{' '}
                 <a
                   href={`#${WORKSHOP_TICKETS_ANCHOR}`}
@@ -494,7 +494,7 @@ function WorkshopsClientPageFor({
           ) : (
             <WorkshopScheduleGrid
               workshops={initialWorkshops}
-              renderCard={(workshop) => {
+              renderCard={(workshop, titleLevel) => {
                 // The summary is read again after every action; the server
                 // render (`workshop`) never is. Once the summary is in, its
                 // numbers are the card's; until then, the server render's.
@@ -514,6 +514,7 @@ function WorkshopsClientPageFor({
                 return (
                   <WorkshopCard
                     key={workshop._id}
+                    titleLevel={titleLevel}
                     workshop={{ ...workshop, capacity }}
                     confirmedCount={confirmedCount}
                     waitlistCount={waitlistCount}
@@ -579,7 +580,7 @@ function WorkshopsClientPageFor({
           has something to say (the tickets card opens itself when a type
           needs a decision, and "Needs attention" links to it). */}
       <div className="space-y-4">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
+        <h2 className="flex items-center gap-2 text-lg font-medium text-gray-900 dark:text-white">
           <Cog6ToothIcon
             aria-hidden
             className="size-5 text-gray-400 dark:text-gray-500"

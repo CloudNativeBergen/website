@@ -13,6 +13,9 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import { WorkshopSection } from './workshop/WorkshopSection'
+
+/** The card's anchor: the sponsor early-access card links to it (#1452). */
+export const WORKSHOP_REGISTRATION_ANCHOR = 'workshop-registration'
 import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import {
   formatDateTimeSafe,
@@ -246,6 +249,7 @@ export function WorkshopRegistrationSettings({
 
   return (
     <WorkshopSection
+      id={WORKSHOP_REGISTRATION_ANCHOR}
       icon={CalendarIcon}
       // Under the Settings h2.
       headingLevel={3}

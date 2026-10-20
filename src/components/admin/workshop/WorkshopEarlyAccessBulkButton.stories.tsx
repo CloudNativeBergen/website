@@ -128,7 +128,7 @@ export const NoWindow: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement)
     await expect(
-      await page.findByText(/under Settings, in Workshop registration/),
+      await page.findByText(/in Workshop registration, under Settings/),
     ).toBeInTheDocument()
     await expect(page.getByRole('button', { name: BUTTON })).toBeDisabled()
   },

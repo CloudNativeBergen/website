@@ -5,6 +5,7 @@ import { BoltIcon } from '@heroicons/react/24/outline'
 import { formatDateTimeSafe } from '@/lib/time'
 import { WorkshopSection } from './WorkshopSection'
 import { WorkshopEarlyAccessBulkButton } from './WorkshopEarlyAccessBulkButton'
+import { WORKSHOP_REGISTRATION_ANCHOR } from '../WorkshopRegistrationSettings'
 
 /**
  * "Sponsor early access" on `/admin/workshops` (#1452): when it opens, the
@@ -37,7 +38,14 @@ export function SponsorEarlyAccessCard({
         </dd>
       </dl>
       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        Changed under Settings, in Workshop registration.
+        Change it in{' '}
+        <a
+          href={`#${WORKSHOP_REGISTRATION_ANCHOR}`}
+          className="font-medium text-indigo-600 underline hover:no-underline dark:text-indigo-400"
+        >
+          Workshop registration
+        </a>
+        , under Settings.
       </p>
       <div className="mt-4">
         <WorkshopEarlyAccessBulkButton />

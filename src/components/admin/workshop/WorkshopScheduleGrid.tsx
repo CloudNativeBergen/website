@@ -6,7 +6,14 @@ import { groupWorkshopsBySchedule } from './utils'
 
 interface WorkshopScheduleGridProps {
   workshops: ProposalWithWorkshopData[]
-  renderCard: (workshop: ProposalWithWorkshopData) => ReactNode
+  /**
+   * `titleLevel`: the card's title is a level below the day or "Not in the
+   * schedule" heading when one is shown, under the section's h2 (#1452).
+   */
+  renderCard: (
+    workshop: ProposalWithWorkshopData,
+    titleLevel: 3 | 4,
+  ) => ReactNode
 }
 
 /**
@@ -25,9 +32,9 @@ export function WorkshopScheduleGrid({
       {days.map((day) => (
         <section key={day.date} aria-label={`Workshops on ${day.date}`}>
           {days.length > 1 && (
-            <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
+            <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
               {day.date}
-            </h2>
+            </h3>
           )}
           <div className="overflow-x-auto">
             <div
@@ -64,7 +71,9 @@ export function WorkshopScheduleGrid({
                       className="space-y-4"
                     >
                       {cell.map((workshop) => (
-                        <div key={workshop._id}>{renderCard(workshop)}</div>
+                        <div key={workshop._id}>
+                          {renderCard(workshop, days.length > 1 ? 4 : 3)}
+                        </div>
                       ))}
                     </div>
                   ) : (
@@ -83,13 +92,15 @@ export function WorkshopScheduleGrid({
       {unscheduled.length > 0 && (
         <section aria-label="Unscheduled workshops">
           {days.length > 0 && (
-            <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
+            <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
               Not in the schedule
-            </h2>
+            </h3>
           )}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {unscheduled.map((workshop) => (
-              <div key={workshop._id}>{renderCard(workshop)}</div>
+              <div key={workshop._id}>
+                {renderCard(workshop, days.length > 0 ? 4 : 3)}
+              </div>
             ))}
           </div>
         </section>

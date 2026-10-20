@@ -749,7 +749,9 @@ describe('Needs attention (#1452)', () => {
     const region = await screen.findByRole('region', {
       name: 'Needs attention',
     })
-    expect(region).toHaveTextContent('Workshop tickets need a decision.')
+    expect(region).toHaveTextContent(
+      'Workshop tickets need a decision: a ticket type is not set, or an answer names a type that no longer exists.',
+    )
     const link = within(region).getByRole('link', {
       name: 'Review workshop tickets',
     })
