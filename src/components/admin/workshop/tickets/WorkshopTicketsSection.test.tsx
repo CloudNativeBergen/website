@@ -11,7 +11,15 @@
  * leave stored, and what the portal then decides, is pinned against the real
  * procedure in `__tests__/app/admin/workshop-tickets.test.tsx`.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest'
 import {
   act,
   cleanup,
@@ -423,6 +431,26 @@ describe('a configured list', () => {
     })
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     window.location.hash = ''
+  })
+
+  // Arriving by a link (the ticket-types page, a notification): the card is
+  // far down the page, and Next applied the fragment before it was there.
+  it('arriving with its anchor in the address, opens and is brought into view', () => {
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    window.history.replaceState(null, '', '#workshop-tickets')
+    section(['Two-day pass', 'Day pass'], roles.slice(0, 2))
+    expect(
+      screen.getByRole('button', { name: /^Workshop tickets/ }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    expect(scrolled.mock.contexts.map((el) => (el as Element).id)).toEqual([
+      'workshop-tickets',
+    ])
+    window.history.replaceState(null, '', '#')
   })
 
   it('shows a load failure even after the organizer closed the card', () => {

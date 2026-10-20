@@ -786,7 +786,7 @@ describe('the sponsor board’s rows after an action on a sign-up', () => {
 
 /**
  * THE COUNT'S LINK ENDS AT THE LIST, NOT AT THE TOP OF THE PAGE (#1348,
- * review round 2). The list is the last section of the page, and Next applies
+ * review round 2). The list is far down the page, and Next applies
  * a link's fragment once, at the first commit of the navigation, which is the
  * route's loading state: the section is not there yet (or is hidden, on a page
  * Next kept). So the page brings the list into view itself, when the address

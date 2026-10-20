@@ -186,8 +186,8 @@ function WorkshopsClientPageFor({
       placeholderData: keepPreviousData,
     },
   )
-  // The count's link carries the list's fragment, and the list is the last
-  // section of the page: it is brought into view, once per history entry
+  // The count's link carries the list's fragment, and the list is far down
+  // the page: it is brought into view, once per history entry
   // (see the hook for why Next does not, and why once).
   useBringEarlySignupsIntoView(earlySponsorId)
   const narrowEarlySignups = (sponsorId: string | null) => {

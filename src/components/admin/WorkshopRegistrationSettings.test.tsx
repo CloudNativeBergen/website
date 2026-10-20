@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -347,5 +348,23 @@ describe('saving the registration times', () => {
     // The form leaves with a transition.
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0))
     expect(mutate.mock.calls).toEqual([])
+  })
+})
+
+// The sponsor early-access card links here (#1452): the card opens, so the
+// time the link points at is shown.
+describe('a link to the card', () => {
+  it('opens it when the address moves to its anchor', () => {
+    renderCard({}, '2026-05-01T08:00:00Z')
+    const toggle = screen.getByRole('button', {
+      name: /^Workshop registration/,
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    act(() => {
+      window.location.hash = 'workshop-registration'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    window.history.replaceState(null, '', '#')
   })
 })

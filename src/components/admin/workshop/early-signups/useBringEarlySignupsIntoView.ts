@@ -20,8 +20,8 @@ export const earlySignupsShownState = () => ({ [SHOWN]: true })
 /**
  * BRINGS THE "EARLY SIGN-UPS" LIST INTO VIEW WHEN THE ADDRESS ASKS FOR IT
  * (#1348): the count on a sponsor's record links to
- * `/admin/workshops?earlySponsor=…#early-sign-ups`, and the list is the last
- * section of a long page.
+ * `/admin/workshops?earlySponsor=…#early-sign-ups`, and the list is far down
+ * a long page.
  *
  * Next does not do this for that link. It applies a navigation's fragment
  * once, at the first commit, which is the route's loading state: the section

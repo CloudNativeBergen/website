@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -31,6 +30,7 @@ import { typeKey } from '@/lib/tickets/classification'
 import { useTicketHolders } from '../holders'
 import { WorkshopSection } from '../WorkshopSection'
 import { useReportTicketsAttention } from '../attention'
+import { useOpenedByAnchor } from '../useOpenedByAnchor'
 
 const HEADING_ID = 'workshop-tickets-heading'
 
@@ -54,16 +54,9 @@ function WorkshopTicketsFrame({
   children: ReactNode
 }) {
   const [open, setOpen] = useState(initiallyOpen)
-  // A link to the card (from the ticket-types page, or "Needs attention" on
-  // this page) opens it. After mount: the server render has no address hash.
-  useEffect(() => {
-    const openIfLinked = () => {
-      if (window.location.hash === `#${WORKSHOP_TICKETS_ANCHOR}`) setOpen(true)
-    }
-    openIfLinked()
-    window.addEventListener('hashchange', openIfLinked)
-    return () => window.removeEventListener('hashchange', openIfLinked)
-  }, [])
+  // A link to the card (from the ticket-types page, a notification, or
+  // "Needs attention" on this page) opens it, and an arrival shows it.
+  useOpenedByAnchor(WORKSHOP_TICKETS_ANCHOR, setOpen)
   return (
     <WorkshopSection
       id={WORKSHOP_TICKETS_ANCHOR}

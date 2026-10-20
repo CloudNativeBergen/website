@@ -72,9 +72,11 @@ counts as not set in §3, §4 and §8.
 - **A conference without the workshops feature keeps the control where it is.** `/admin/workshops`
   answers 404 for it, while `/admin/tickets/types` shows the control whatever the feature says. For
   such a conference the ticket-types page stays editable and shows no link.
-- **A banner above the statistics** names each not-set type and each orphaned entry. An orphaned
+- **A banner in the section** names each not-set type and each orphaned entry. An orphaned
   entry has a remove action. Once the statistics exist (§4) the banner also says how many people
-  hold each not-set type and are refused.
+  hold each not-set type and are refused. Since #1452 the section sits under Settings, below the
+  statistics: it opens by itself while the banner has something to say, and "Needs attention" at
+  the top of the page says that the section needs a decision, with a link that opens it.
 - **Losing the last granting type is the same cliff in the other direction.** The built-in list
   applies whenever no entry grants workshops, whatever the entries that say no. Unmarking the last
   granting type, or removing an orphaned entry that is the last one, therefore brings the built-in
