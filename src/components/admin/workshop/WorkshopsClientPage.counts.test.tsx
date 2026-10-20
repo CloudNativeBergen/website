@@ -716,6 +716,20 @@ describe('the ticket holders (#1333)', () => {
  * "Needs attention" (#1452): at the top of the page, only when something
  * further down needs the organizer, with a link to where it is settled.
  */
+/**
+ * Clicks a link and says whether the page kept the browser from following
+ * it: an in-page link must not add a history entry Next does not know.
+ * (jsdom follows a fragment out of step, so the address is no proof.)
+ */
+function clickIsHandledByThePage(link: HTMLElement) {
+  let prevented: boolean | undefined
+  const see = (event: Event) => (prevented = event.defaultPrevented)
+  document.addEventListener('click', see)
+  fireEvent.click(link)
+  document.removeEventListener('click', see)
+  return prevented
+}
+
 describe('Needs attention (#1452)', () => {
   const attention = () =>
     screen.queryByRole('region', { name: 'Needs attention' })
@@ -790,15 +804,15 @@ describe('Needs attention (#1452)', () => {
     const region = await screen.findByRole('region', {
       name: 'Needs attention',
     })
-    const entries = window.history.length
-    fireEvent.click(
-      within(region).getByRole('link', { name: 'Review workshop tickets' }),
-    )
+    expect(
+      clickIsHandledByThePage(
+        within(region).getByRole('link', { name: 'Review workshop tickets' }),
+      ),
+    ).toBe(true)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(document.activeElement).toBe(
       screen.getByRole('heading', { name: /^Workshop tickets/ }),
     )
-    expect([window.location.hash, window.history.length]).toEqual(['', entries])
     await cardButton(/^Confirmed\s*120$/)
   })
 
@@ -815,14 +829,15 @@ describe('Needs attention (#1452)', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
     const sponsor = screen.getByRole('region', { name: 'Sponsor early access' })
-    fireEvent.click(
-      within(sponsor).getByRole('link', { name: 'Workshop registration' }),
-    )
+    expect(
+      clickIsHandledByThePage(
+        within(sponsor).getByRole('link', { name: 'Workshop registration' }),
+      ),
+    ).toBe(true)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(document.activeElement).toBe(
       screen.getByRole('heading', { name: /^Workshop registration/ }),
     )
-    expect(window.location.hash).toBe('')
     await cardButton(/^Confirmed\s*120$/)
   })
 
@@ -847,11 +862,10 @@ describe('Needs attention (#1452)', () => {
     expect(document.getElementById(link.getAttribute('href')!.slice(1))).toBe(
       screen.getByRole('region', { name: 'Ticket holders' }),
     )
-    fireEvent.click(link)
+    expect(clickIsHandledByThePage(link)).toBe(true)
     expect(document.activeElement).toBe(
       screen.getByRole('heading', { name: 'Ticket holders' }),
     )
-    expect(window.location.hash).toBe('')
   })
 
   it('is not on the page when nothing needs the organizer', async () => {
