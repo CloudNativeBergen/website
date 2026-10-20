@@ -190,7 +190,8 @@ const mayClaim = (
 /**
  * Sends the summary of every talk due at `now`, talk by talk, one email at
  * a time. Never throws for one talk: it is logged, and the next goes on. A
- * talk not started by `deadline` is left for the next run, unclaimed.
+ * talk whose emails would not all end by `deadline` at their worst is left
+ * for the next run, unclaimed (checked right before each claim).
  */
 export async function deliverFeedbackSummaries({
   now,
@@ -231,10 +232,6 @@ export async function deliverFeedbackSummaries({
   // rather than being claimed and failing too.
   const down = new Set<string>()
   for (const item of due) {
-    if (deadline && Date.now() >= deadline.getTime()) {
-      report.notReached++
-      continue
-    }
     try {
       const sender = await senderFor(item.conference)
       if (down.has(sender.key)) {
