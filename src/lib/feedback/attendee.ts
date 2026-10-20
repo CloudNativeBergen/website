@@ -26,6 +26,7 @@ import { normalizeShortCode } from '@/lib/marketing/short-code'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { OFFICIAL_SCHEDULE_FILTER } from '@/lib/speaker/sanity'
+import { devOpenWindow } from './dev-window'
 import { PUBLISHED_ONLY } from './sanity'
 import { feedbackWindow, type FeedbackSlot } from './window'
 
@@ -221,7 +222,9 @@ export async function resolveFeedbackTarget(
   })
 
   const target = { talkId: entry.talkId, code }
-  switch (window.state) {
+  // `next dev` with FEEDBACK_DEV_OPEN_WINDOW=1 only (see `devOpenWindow`).
+  const state = devOpenWindow(entry.talkId) ? 'open' : window.state
+  switch (state) {
     case 'open':
       return {
         page: {
