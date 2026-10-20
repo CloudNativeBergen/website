@@ -20,7 +20,12 @@ vi.mock('./config', async (original) => ({
   },
 }))
 
-import { sendFeedbackSummaryEmail } from './feedback-summary'
+import {
+  isRecipientRefusal,
+  resolveFeedbackSummarySender,
+  sendFeedbackSummaryEmail,
+  type FeedbackSummaryEmail,
+} from './feedback-summary'
 
 const request = () => ({
   talkId: 'talk-1',
@@ -46,6 +51,14 @@ const request = () => ({
   },
 })
 
+/** A send through the conference's own sender, resolved as the cron does. */
+const send = async (over: Partial<FeedbackSummaryEmail> = {}): Promise<void> =>
+  sendFeedbackSummaryEmail({
+    ...request(),
+    sender: await resolveFeedbackSummarySender(request().conference),
+    ...over,
+  })
+
 const sent = () => h.send.mock.calls[0][0] as Record<string, string>
 
 beforeEach(() => {
@@ -56,7 +69,7 @@ beforeEach(() => {
 
 describe('sendFeedbackSummaryEmail', () => {
   it('sends speaker mail in the conference’s name, through its own tenant’s sender', async () => {
-    await sendFeedbackSummaryEmail(request())
+    await send()
     expect(h.orgIds).toEqual(['org-A'])
     expect(sent()).toMatchObject({
       from: 'Conf A Org <cfp@a.example.com>',
@@ -66,7 +79,7 @@ describe('sendFeedbackSummaryEmail', () => {
   })
 
   it('carries the combined totals, the response and comment counts and the link', async () => {
-    await sendFeedbackSummaryEmail(request())
+    await send()
     const html = sent().html
     // Combined: 16 green, 3 yellow, 2 red; 21 responses, 5 of them cards.
     expect(html).toMatch(/>16<\/div><div[^>]*>Loved it</)
@@ -92,7 +105,7 @@ describe('sendFeedbackSummaryEmail', () => {
         },
       })
       .mockResolvedValueOnce({ data: { id: 'email-1' }, error: null })
-    await sendFeedbackSummaryEmail(request())
+    await send()
     expect(h.send).toHaveBeenCalledTimes(2)
   })
 
@@ -107,7 +120,7 @@ describe('sendFeedbackSummaryEmail', () => {
         },
       })
       .mockResolvedValueOnce({ data: { id: 'email-1' }, error: null })
-    await sendFeedbackSummaryEmail(request())
+    await send()
     expect(h.send).toHaveBeenCalledTimes(2)
     const keys = h.send.mock.calls.map(
       (call) =>
@@ -130,13 +143,12 @@ describe('sendFeedbackSummaryEmail', () => {
         },
       })
       .mockResolvedValueOnce({ data: { id: 'email-1' }, error: null })
-    await sendFeedbackSummaryEmail(request())
+    await send()
     expect(h.send).toHaveBeenCalledTimes(2)
   })
 
   it('keeps the key within Resend’s 256 characters for the longest ids', async () => {
-    await sendFeedbackSummaryEmail({
-      ...request(),
+    await send({
       talkId: 't'.repeat(128),
       speakerId: 's'.repeat(128),
     })
@@ -155,13 +167,31 @@ describe('sendFeedbackSummaryEmail', () => {
         statusCode: 422,
       },
     })
-    await expect(sendFeedbackSummaryEmail(request())).rejects.toThrow()
+    await expect(send()).rejects.toThrow()
     expect(h.send).toHaveBeenCalledTimes(1)
   })
 
   it('greets a speaker with no name neutrally instead of failing to render', async () => {
-    await sendFeedbackSummaryEmail({ ...request(), speakerName: '  ' })
+    await send({ speakerName: '  ' })
     expect(sent().html).toMatch(/Dear (<!-- -->)?speaker(<!-- -->)?,/)
+  })
+
+  it('gives up on a send that hangs, after the retries, instead of hanging the run', async () => {
+    vi.useFakeTimers()
+    try {
+      h.send.mockReturnValue(new Promise(() => {}))
+      const pending = send()
+      const outcome = pending.then(
+        () => 'sent',
+        (error: Error) => error.message,
+      )
+      await vi.advanceTimersByTimeAsync(3 * 20_000 + 5_000)
+      expect(await outcome).toMatch(/timed out/)
+      // Each attempt under the same key, so one that did land is not doubled.
+      expect(h.send).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('throws when Resend refuses it, so the caller logs it', async () => {
@@ -169,8 +199,34 @@ describe('sendFeedbackSummaryEmail', () => {
       data: null,
       error: { message: 'Invalid `to` field', name: 'validation_error' },
     })
-    await expect(sendFeedbackSummaryEmail(request())).rejects.toThrow(
-      'Invalid `to` field',
-    )
+    await expect(send()).rejects.toThrow('Invalid `to` field')
+  })
+})
+
+describe('resolveFeedbackSummarySender', () => {
+  it('names the sender by its account and its From, so a breaker can stop exactly that one', async () => {
+    const sender = await resolveFeedbackSummarySender(request().conference)
+    expect(sender.key).toBe('org-A|Conf A Org <cfp@a.example.com>')
+    const other = await resolveFeedbackSummarySender({
+      ...request().conference,
+      cfpEmail: 'cfp@other.example.com',
+    })
+    expect(other.key).not.toBe(sender.key)
+  })
+})
+
+describe('isRecipientRefusal', () => {
+  const refusal = (name: string, status: number) =>
+    Object.assign(new Error(name), { resendErrorName: name, status })
+
+  it('is a 422 about the request (a bad address), and nothing about the sender', () => {
+    expect(isRecipientRefusal(refusal('validation_error', 422))).toBe(true)
+    expect(isRecipientRefusal(refusal('invalid_parameter', 422))).toBe(true)
+    // An unverified domain is a 403 validation_error: the sender's fault.
+    expect(isRecipientRefusal(refusal('validation_error', 403))).toBe(false)
+    expect(isRecipientRefusal(refusal('invalid_from_address', 422))).toBe(false)
+    expect(isRecipientRefusal(refusal('invalid_api_key', 401))).toBe(false)
+    expect(isRecipientRefusal(refusal('daily_quota_exceeded', 429))).toBe(false)
+    expect(isRecipientRefusal(new Error('fetch failed'))).toBe(false)
   })
 })

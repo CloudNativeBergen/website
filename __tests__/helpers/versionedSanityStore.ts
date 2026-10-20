@@ -22,7 +22,9 @@
  *    pins that such a write is sent at the newer version.
  *  - `ifRevisionID`, which the mutator ignores: checked here, and a mismatch
  *    refuses the whole transaction. Every commit gives the documents it
- *    touched a new `_rev`.
+ *    touched a new `_rev`: the transaction's own id when the caller set one
+ *    (`transaction().transactionId(id)`), as Sanity's `_rev` is the id of the
+ *    transaction that last changed the document.
  *  - A patch of a document that does not exist refuses the whole transaction.
  *  - A `create` of an id that is already stored refuses the whole transaction.
  *    Sanity documents that it fails, not with which status: 409 here, MODELLED.
@@ -211,11 +213,12 @@ export function createVersionedSanityStore(): VersionedSanityStore {
   const apply = async (
     apiVersion: string,
     mutations: SerializedMutation[],
+    transactionId?: string,
   ): Promise<{ docs: Doc[]; results: (Doc | undefined)[] }> => {
     const hook = hooks.shift()
     if (hook) await hook()
     if (writeFailure) throw writeFailure
-    const rev = `rev-${++revCounter}`
+    const rev = transactionId ?? `rev-${++revCounter}`
     // Applied to a copy: a transaction that throws leaves the dataset as it was.
     const next = structuredClone(documents)
     const touched: string[] = []
@@ -317,6 +320,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         const { docs, results } = await apply(
           apiVersion,
           tx.serialize() as SerializedMutation[],
+          tx.transactionId(),
         )
         if (options?.returnDocuments) return withholdDocuments ? [] : results
         return {

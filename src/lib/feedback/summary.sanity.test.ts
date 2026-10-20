@@ -32,7 +32,10 @@ const h = vi.hoisted(() => ({
   releasesFail: false,
   /** Speaker reads through the doc endpoint reject once a claim has landed. */
   speakerReadsFailAfterClaim: false,
+  /** The options of every doc-endpoint read of speakers. */
+  speakerReadOptions: [] as unknown[],
   sendEmail: vi.fn(),
+  resolveSender: vi.fn(),
 }))
 
 vi.mock('@/lib/sanity/client', async () => {
@@ -48,7 +51,10 @@ vi.mock('@/lib/sanity/client', async () => {
   // (MEASURED 2026-10-19: `[]` with the projection, null without).
   const withReleases = (w: Writer): Writer => ({
     ...w,
-    getDocuments: async (ids: string[]) => {
+    getDocuments: async (ids: string[], options?: unknown) => {
+      if (ids.some((id) => id.startsWith('sp-'))) {
+        h.speakerReadOptions.push(options)
+      }
       if (
         h.speakerReadsFailAfterClaim &&
         ids.some((id) => id.startsWith('sp-')) &&
@@ -81,8 +87,13 @@ vi.mock('@/lib/sanity/client', async () => {
   }
 })
 
-vi.mock('@/lib/email/feedback-summary', () => ({
+vi.mock('@/lib/email/feedback-summary', async (original) => ({
+  // The pure refusal classifier stays real; the sends and the sender are
+  // the boundary.
+  ...(await original<typeof import('@/lib/email/feedback-summary')>()),
   sendFeedbackSummaryEmail: (...args: unknown[]) => h.sendEmail(...args),
+  resolveFeedbackSummarySender: (...args: unknown[]) =>
+    h.resolveSender(...args),
 }))
 
 vi.mock('@/lib/email/config', async (original) => ({
@@ -255,8 +266,16 @@ beforeEach(() => {
   h.releases = []
   h.releasesFail = false
   h.speakerReadsFailAfterClaim = false
+  h.speakerReadOptions = []
   h.sendEmail.mockReset()
   h.sendEmail.mockResolvedValue(undefined)
+  h.resolveSender.mockReset()
+  // One sender per organization, as the tenant's own Resend account is.
+  h.resolveSender.mockImplementation(
+    async (conference: { organization?: { _ref?: string } }) => ({
+      key: `sender-${conference.organization?._ref}`,
+    }),
+  )
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
   seed()
@@ -752,5 +771,172 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
     })
     expect(sentAt('talk-1')).toBeUndefined()
     expect(report).toMatchObject({ claimed: 0, notReached: 1 })
+  })
+})
+
+describe('deliverFeedbackSummaries: a claim whose reply is lost', () => {
+  it('sends when the claim landed but its reply did not arrive', async () => {
+    // Sanity applied the claim; the socket reset before the answer came back.
+    store().afterNextCommit(() => {
+      throw Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' })
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-1')).toBe(NOW.toISOString())
+    expect(emailsTo().sort()).toEqual(['sp-1@example.com', 'sp-2@example.com'])
+    expect(notifications()).toHaveLength(2)
+    expect(report).toMatchObject({ claimed: 1, failed: 0 })
+  })
+
+  it('knows its own claim by the transaction id, even after a later edit changed the stored time', async () => {
+    store().afterNextCommit(() => {
+      // Only the transaction id is left to recognize the claim by.
+      store().put({
+        ...store().doc('talk-1')!,
+        feedbackSummarySentAt: '2026-06-12T07:00:00.000Z',
+      })
+      throw Object.assign(new Error('502 Bad Gateway'), { statusCode: 502 })
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(emailsTo()).toHaveLength(2)
+    expect(report).toMatchObject({ claimed: 1, failed: 0 })
+  })
+
+  it('knows its own claim by the time it wrote, when a later edit changed the revision', async () => {
+    store().afterNextCommit(() => {
+      store().put({ ...store().doc('talk-1')!, _rev: 'rev-later-edit' })
+      throw Object.assign(new Error('502 Bad Gateway'), { statusCode: 502 })
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(emailsTo()).toHaveLength(2)
+    expect(report).toMatchObject({ claimed: 1, failed: 0 })
+  })
+
+  it('leaves the talk unclaimed when the failed commit did not land', async () => {
+    store().beforeNextCommit(() => {
+      throw Object.assign(new Error('502 Bad Gateway'), { statusCode: 502 })
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-1')).toBeUndefined()
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(report).toMatchObject({ claimed: 0, failed: 1 })
+  })
+
+  it('logs each claim as it lands, so a run killed mid-send leaves a trace', async () => {
+    await deliverFeedbackSummaries({ now: NOW })
+    expect(console.log).toHaveBeenCalledWith(
+      '[feedback] claimed talk-1 for its summary',
+    )
+  })
+
+  it('bounds the speaker read after the claim with a timeout signal', async () => {
+    await deliverFeedbackSummaries({ now: NOW })
+    expect(h.speakerReadOptions).toEqual([
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    ])
+  })
+})
+
+describe('deliverFeedbackSummaries: a sender that cannot send', () => {
+  /** Two more due talks of conf-A (same sender), one of conf-B (another). */
+  const moreDue = () => [
+    talk('talk-2', 'conf-A'),
+    talk('talk-3', 'conf-A'),
+    talk('talk-b', 'conf-B', { speakers: [{ ...ref('sp-b'), _key: 'k' }] }),
+    response('talk-2', 'conf-A', 'green'),
+    response('talk-3', 'conf-A', 'green'),
+    response('talk-b', 'conf-B', 'green'),
+    day('day-3', 'conf-A', '2026-06-10', 'official', [
+      ['talk-2', '10:00', '10:40'],
+      ['talk-3', '11:00', '11:40'],
+    ]),
+    day('day-B1', 'conf-B', '2026-06-10', 'official', [
+      ['talk-b', '10:00', '10:40'],
+    ]),
+  ]
+  const refusal = (name: string, status: number) =>
+    Object.assign(new Error(`Resend refused the email: ${name}`), {
+      resendErrorName: name,
+      status,
+    })
+
+  it('claims nothing when the tenant’s sender cannot be resolved', async () => {
+    h.resolveSender.mockRejectedValue(new Error('tenant env slug unavailable'))
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-1')).toBeUndefined()
+    expect(notifications()).toEqual([])
+    expect(report).toMatchObject({ claimed: 0, failed: 1 })
+  })
+
+  it('stops claiming a sender’s talks once every email of one talk failed for a reason that is not the address', async () => {
+    seed(moreDue())
+    h.sendEmail.mockImplementation(async ({ to }: { to: string }) => {
+      if (to !== 'sp-b@example.com') throw refusal('invalid_api_key', 401)
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    const claimed = ['talk-1', 'talk-2', 'talk-3'].filter((id) => sentAt(id))
+    expect(claimed).toHaveLength(1)
+    // Another tenant's sender is not affected.
+    expect(sentAt('talk-b')).toBe(NOW.toISOString())
+    expect(report).toMatchObject({ claimed: 2, senderDown: 2 })
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('stops sending through'),
+      expect.objectContaining({ sender: 'sender-org-A' }),
+    )
+
+    // The next run, with the sender working again, sends the two it left.
+    h.sendEmail.mockReset()
+    h.sendEmail.mockResolvedValue(undefined)
+    await deliverFeedbackSummaries({ now: LATER })
+    expect(['talk-1', 'talk-2', 'talk-3'].every((id) => sentAt(id))).toBe(true)
+    expect(h.sendEmail).toHaveBeenCalled()
+  })
+
+  it('keeps going when the only failures are bad addresses', async () => {
+    seed(moreDue())
+    h.sendEmail.mockImplementation(async ({ to }: { to: string }) => {
+      if (to !== 'sp-b@example.com') throw refusal('validation_error', 422)
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(
+      ['talk-1', 'talk-2', 'talk-3', 'talk-b'].every((id) => sentAt(id)),
+    ).toBe(true)
+    expect(report).toMatchObject({ claimed: 4, senderDown: 0 })
+  })
+
+  it('keeps going when some email of the talk went out', async () => {
+    // Every conf-A talk has a speaker whose email fails and one whose
+    // email goes out, whatever order the run takes them in.
+    const both = {
+      speakers: [
+        { ...ref('sp-1'), _key: 'k1' },
+        { ...ref('sp-2'), _key: 'k2' },
+      ],
+    }
+    seed([
+      ...moreDue().filter((d) => d._id !== 'talk-2' && d._id !== 'talk-3'),
+      talk('talk-2', 'conf-A', both),
+      talk('talk-3', 'conf-A', both),
+    ])
+    h.sendEmail.mockImplementation(async ({ to }: { to: string }) => {
+      if (to === 'sp-1@example.com') throw refusal('internal_server_error', 500)
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(report).toMatchObject({ claimed: 4, senderDown: 0 })
   })
 })

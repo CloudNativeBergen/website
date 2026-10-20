@@ -17,10 +17,16 @@
  *   costs nothing: the talk stays unclaimed for the next run.
  */
 import 'server-only'
+import { randomUUID } from 'node:crypto'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
 import { EMAIL_CONFIG, delay } from '@/lib/email/config'
-import { sendFeedbackSummaryEmail } from '@/lib/email/feedback-summary'
+import {
+  isRecipientRefusal,
+  resolveFeedbackSummarySender,
+  sendFeedbackSummaryEmail,
+  type FeedbackSummarySender,
+} from '@/lib/email/feedback-summary'
 import {
   NOTIFICATION_TITLE_MAX,
   createNotificationsOnce,
@@ -89,6 +95,11 @@ export interface SummaryReport {
   failed: number
   /** Not started before the deadline; the next run picks them up. */
   notReached: number
+  /**
+   * Not claimed because their sender failed every email of an earlier talk
+   * this run, for a reason that was not the address; the next run sends them.
+   */
+  senderDown: number
 }
 
 // groq-global-scoped: correlated to the talk being tested, and to its own conference, by `^._id` and `^.conference._ref`
@@ -191,16 +202,38 @@ export async function deliverFeedbackSummaries({
     skipped: 0,
     failed: 0,
     notReached: 0,
+    senderDown: 0,
   }
   const client = versionsClient()
   const pacing = { sends: 0 }
+  // One sender per conference, resolved once per run and BEFORE any of its
+  // talks is claimed: a sender that cannot be resolved leaves them unclaimed.
+  const senders = new Map<string, Promise<FeedbackSummarySender>>()
+  const senderFor = (conference: SummaryConference) => {
+    let sender = senders.get(conference._id)
+    if (!sender) {
+      sender = resolveFeedbackSummarySender(conference)
+      senders.set(conference._id, sender)
+    }
+    return sender
+  }
+  // Senders that failed every email of a talk for a reason that was not the
+  // address (an outage past the retries, a revoked key, an unverified
+  // domain, a quota): their remaining talks stay unclaimed for the next run
+  // rather than being claimed and failing too.
+  const down = new Set<string>()
   for (const item of due) {
     if (deadline && Date.now() >= deadline.getTime()) {
       report.notReached++
       continue
     }
     try {
-      const outcome = await deliverOne(client, item, now, pacing)
+      const sender = await senderFor(item.conference)
+      if (down.has(sender.key)) {
+        report.senderDown++
+        continue
+      }
+      const outcome = await deliverOne(client, item, now, pacing, sender)
       if (outcome === 'skipped') {
         report.skipped++
         continue
@@ -208,6 +241,17 @@ export async function deliverFeedbackSummaries({
       report.claimed++
       report.emailed += outcome.emailed
       report.emailFailed += outcome.emailFailed
+      if (
+        outcome.emailed === 0 &&
+        outcome.emailFailed > 0 &&
+        outcome.senderFailed === outcome.emailFailed
+      ) {
+        down.add(sender.key)
+        console.error(
+          '[feedback] summary run stops sending through a sender that failed every email of a talk; its other talks stay unclaimed until the next run',
+          { sender: sender.key, talkId: item.talkId },
+        )
+      }
     } catch (error) {
       report.failed++
       console.error(
@@ -231,7 +275,16 @@ async function deliverOne(
   },
   now: Date,
   pacing: { sends: number },
-): Promise<'skipped' | { emailed: number; emailFailed: number }> {
+  sender: FeedbackSummarySender,
+): Promise<
+  | 'skipped'
+  | {
+      emailed: number
+      emailFailed: number
+      /** Of the failed, those Resend did not refuse for the address. */
+      senderFailed: number
+    }
+> {
   // Read, then claim THAT revision of the talk: what is sent (its speakers,
   // its counts) must be what was claimed. When the talk changed in between,
   // read it again.
@@ -246,6 +299,7 @@ async function deliverOne(
       throw new Error(`the talk kept changing during ${MAX_RETRIES + 1} claims`)
     }
   }
+  console.log(`[feedback] claimed ${talkId} for its summary`)
   await sweepTalkVersions(client, talkId, 'feedbackSummarySentAt')
   const { talk, totals, comments, speakerIds } = prepared
 
@@ -262,7 +316,7 @@ async function deliverOne(
       { talkId, conferenceId },
       error,
     )
-    return { emailed: 0, emailFailed: 0 }
+    return { emailed: 0, emailFailed: 0, senderFailed: 0 }
   }
 
   // One line, no invisible or bidi characters, quotes that cannot close ours.
@@ -283,6 +337,7 @@ async function deliverOne(
 
   let emailed = 0
   let emailFailed = 0
+  let senderFailed = 0
   const resultsUrl = `${conferenceBaseUrl(conference)}${path}`
   for (const speaker of speakers) {
     if (!speaker.email) continue
@@ -300,10 +355,12 @@ async function deliverOne(
         comments,
         resultsUrl,
         conference,
+        sender,
       })
       emailed++
     } catch (error) {
       emailFailed++
+      if (!isRecipientRefusal(error)) senderFailed++
       console.error(
         '[feedback] summary email not sent (claimed, so not retried)',
         { talkId, speakerId: speaker._id },
@@ -311,7 +368,7 @@ async function deliverOne(
       )
     }
   }
-  return { emailed, emailFailed }
+  return { emailed, emailFailed, senderFailed }
 }
 
 interface Prepared {
@@ -321,14 +378,19 @@ interface Prepared {
   speakerIds: string[]
 }
 
+const SPEAKER_READ_TIMEOUT_MS = 10_000
+
 /** The speakers who exist and are not erased, as the doc endpoint has them now. */
 async function liveSpeakers(
   client: VersionsClient,
   ids: string[],
 ): Promise<SpeakerDoc[]> {
   if (ids.length === 0) return []
-  const found: (SpeakerDoc | null)[] =
-    await client.getDocuments<SpeakerDoc>(ids)
+  // Bounded: a hung read must not hold the run past its time budget.
+  const found: (SpeakerDoc | null)[] = await client.getDocuments<SpeakerDoc>(
+    ids,
+    { signal: AbortSignal.timeout(SPEAKER_READ_TIMEOUT_MS) },
+  )
   return found.filter(
     (s): s is SpeakerDoc => !!s && s._type === 'speaker' && !s.erasedAt,
   )
@@ -422,8 +484,12 @@ async function claim(
     return 'refused'
   }
   const sentAt = now.toISOString()
+  // Our own transaction id: Sanity stores it as the talk's `_rev`, so a
+  // claim whose reply was lost can be recognized as ours.
+  const transactionId = randomUUID()
   const tx = client
     .transaction()
+    .transactionId(transactionId)
     .patch(talk._id, (p) =>
       p.ifRevisionId(talk._rev).set({ feedbackSummarySentAt: sentAt }),
     )
@@ -437,7 +503,39 @@ async function claim(
     return 'claimed'
   } catch (error) {
     if (isRetryable(error)) return 'stale'
+    // The commit may have landed and only its reply been lost (a reset
+    // socket, a 502 after the write): `@sanity/client` never retries a
+    // mutation. Treated as unclaimed, the talk would be marked sent and
+    // never told; so read it back.
+    if (await claimLanded(client, talk._id, transactionId, sentAt)) {
+      console.error(
+        `[feedback] the claim of ${talk._id} landed although its reply failed; sending`,
+        error,
+      )
+      return 'claimed'
+    }
     throw error
+  }
+}
+
+/**
+ * The talk carries this claim: our transaction id as its revision, or, when
+ * a later write has replaced that, our `feedbackSummarySentAt`. False when
+ * it cannot be read: then nothing is sent and the error is reported.
+ */
+async function claimLanded(
+  client: VersionsClient,
+  talkId: string,
+  transactionId: string,
+  sentAt: string,
+): Promise<boolean> {
+  try {
+    const talk = await client.getDocument<SummaryTalk>(talkId)
+    return (
+      talk?._rev === transactionId || talk?.feedbackSummarySentAt === sentAt
+    )
+  } catch {
+    return false
   }
 }
 
