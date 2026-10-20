@@ -36,6 +36,7 @@ import { isVisibleComment } from './results'
 import {
   PUBLISHED_ONLY,
   getConferenceFeedbackSlots,
+  getFeedbackSlots,
   versionsClient,
 } from './sanity'
 import {
@@ -239,7 +240,7 @@ async function deliverOne(
   // read it again.
   let prepared: Prepared | null = null
   for (let attempt = 0; ; attempt++) {
-    prepared = await prepare(client, talkId, conferenceId)
+    prepared = await prepare(client, talkId, conference, now)
     if (!prepared) return 'skipped'
     const outcome = await claim(client, prepared.talk, conferenceId, now)
     if (outcome === 'claimed') break
@@ -249,7 +250,23 @@ async function deliverOne(
     }
   }
   await sweepTalkVersions(client, talkId, 'feedbackSummarySentAt')
-  const { talk, totals, comments, speakers } = prepared
+  const { talk, totals, comments, speakerIds } = prepared
+
+  // Read again AFTER the claim: a speaker erased since the talk was read
+  // must hear nothing (§11.1), and erasure does not touch the talk, so the
+  // claim's revision guard cannot see it. A failed read sends nothing: a
+  // missed summary is better than mail to someone who asked to be erased.
+  let speakers: SpeakerDoc[]
+  try {
+    speakers = await liveSpeakers(client, speakerIds)
+  } catch (error) {
+    console.error(
+      '[feedback] summary not sent: its speakers could not be read after the claim',
+      { talkId, conferenceId },
+      error,
+    )
+    return { emailed: 0, emailFailed: 0 }
+  }
 
   // One line, no invisible or bidi characters, quotes that cannot close ours.
   const title = displayName(talk.title ?? '') || 'your session'
@@ -302,8 +319,20 @@ interface Prepared {
   talk: SummaryTalk
   totals: FeedbackTotals
   comments: number
-  /** The talk's speakers who are not erased. */
-  speakers: SpeakerDoc[]
+  speakerIds: string[]
+}
+
+/** The speakers who exist and are not erased, as the doc endpoint has them now. */
+async function liveSpeakers(
+  client: VersionsClient,
+  ids: string[],
+): Promise<SpeakerDoc[]> {
+  if (ids.length === 0) return []
+  const found: (SpeakerDoc | null)[] =
+    await client.getDocuments<SpeakerDoc>(ids)
+  return found.filter(
+    (s): s is SpeakerDoc => !!s && s._type === 'speaker' && !s.erasedAt,
+  )
 }
 
 /**
@@ -313,8 +342,10 @@ interface Prepared {
 async function prepare(
   client: VersionsClient,
   talkId: string,
-  conferenceId: string,
+  conference: SummaryConference,
+  now: Date,
 ): Promise<Prepared | null> {
+  const conferenceId = conference._id
   // The doc endpoint, not GROQ: the selection may lag a withdrawal or
   // another run's claim by about a second.
   const talk = await client.getDocument<SummaryTalk>(talkId)
@@ -340,18 +371,20 @@ async function prepare(
         .filter((id): id is string => typeof id === 'string'),
     ),
   ]
-  const found: (SpeakerDoc | null)[] =
-    speakerIds.length > 0
-      ? await client.getDocuments<SpeakerDoc>(speakerIds)
-      : []
+  // The window again, from this talk's own slots as they are now: the
+  // schedule is another document, so the claim's guard cannot see a move.
+  const window = feedbackWindow({
+    slots: await getFeedbackSlots(conferenceId, talkId),
+    conferenceEndDate: conference.endDate,
+    now,
+  })
+  if (!answersClosed(window)) return null
+
   return {
     talk,
     totals: talkTotals(talk, rows),
     comments: rows.filter(isVisibleComment).length,
-    // Erased speakers hear nothing (§11.1).
-    speakers: found.filter(
-      (s): s is SpeakerDoc => !!s && s._type === 'speaker' && !s.erasedAt,
-    ),
+    speakerIds,
   }
 }
 

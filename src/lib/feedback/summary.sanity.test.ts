@@ -30,6 +30,8 @@ const h = vi.hoisted(() => ({
   store: null as null | VersionedSanityStore,
   releases: [] as { name: string; state: string }[],
   releasesFail: false,
+  /** Speaker reads through the doc endpoint reject once a claim has landed. */
+  speakerReadsFailAfterClaim: false,
   sendEmail: vi.fn(),
 }))
 
@@ -46,6 +48,16 @@ vi.mock('@/lib/sanity/client', async () => {
   // (MEASURED 2026-10-19: `[]` with the projection, null without).
   const withReleases = (w: Writer): Writer => ({
     ...w,
+    getDocuments: async (ids: string[]) => {
+      if (
+        h.speakerReadsFailAfterClaim &&
+        ids.some((id) => id.startsWith('sp-')) &&
+        h.store!.doc('talk-1')?.feedbackSummarySentAt
+      ) {
+        throw new Error('503: read refused (test)')
+      }
+      return (w.getDocuments as (ids: string[]) => Promise<unknown>)(ids)
+    },
     fetch: async (query, params, options) => {
       if (!query.includes('releases::all()')) {
         return w.fetch(query, params, options)
@@ -242,6 +254,7 @@ const emailsTo = () =>
 beforeEach(() => {
   h.releases = []
   h.releasesFail = false
+  h.speakerReadsFailAfterClaim = false
   h.sendEmail.mockReset()
   h.sendEmail.mockResolvedValue(undefined)
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -643,6 +656,60 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
 
     expect(sentAt('talk-1')).toBeUndefined()
     expect(h.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('does not tell a speaker erased after the talk was read, just before the claim landed', async () => {
+    store().afterNextCommit(() =>
+      store().put({
+        ...speaker('sp-2'),
+        erasedAt: '2026-06-12T08:00:01.000Z',
+      }),
+    )
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-1')).toBe(NOW.toISOString())
+    expect(emailsTo()).toEqual(['sp-1@example.com'])
+    expect(notifications().map((n) => n._id)).toEqual([
+      'notification.feedback-summary.talk-1.sp-1',
+    ])
+  })
+
+  it('sends nothing when the speakers cannot be read again after the claim', async () => {
+    h.speakerReadsFailAfterClaim = true
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-1')).toBe(NOW.toISOString())
+    // Reported as claimed and logged as such, not as "stays unclaimed".
+    expect(report).toMatchObject({ claimed: 1, failed: 0, emailed: 0 })
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('could not be read after the claim'),
+      expect.objectContaining({ talkId: 'talk-1' }),
+      expect.any(Error),
+    )
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(notifications()).toEqual([])
+  })
+
+  it('does not claim a talk moved later on the schedule after the selection read', async () => {
+    // The organizers move talk-1 to a slot whose window is still open while
+    // the run reads its answers.
+    store().beforeEachRead((read) => {
+      if (read.query.includes('talk._ref == $talkId')) {
+        store().put(
+          day('day-1', 'conf-A', '2026-06-12', 'official', [
+            ['talk-1', '09:00', '09:40'],
+          ]),
+        )
+      }
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-1')).toBeUndefined()
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(report).toMatchObject({ claimed: 0, skipped: 1 })
   })
 
   it('does not claim a talk withdrawn after the selection read', async () => {
