@@ -46,6 +46,8 @@ const h = {
   requests: [] as string[],
   /** Answer queries (with an empty list) instead of hanging. */
   answerQueries: false,
+  /** Except the release list, which hangs. */
+  hangReleases: false,
   /** Answer this many doc-endpoint reads, then hang. */
   answerDocs: 0,
   /** The documents a doc read answers with. */
@@ -66,7 +68,10 @@ const server = http.createServer((req, res) => {
     res.setHeader('content-type', 'application/json')
     res.end(JSON.stringify(body))
   }
-  if (kind === 'query' && h.answerQueries) return answer({ result: [], ms: 1 })
+  const releases = decodeURIComponent(req.url ?? '').includes('releases::')
+  if (kind === 'query' && h.answerQueries && !(releases && h.hangReleases)) {
+    return answer({ result: [], ms: 1 })
+  }
   if (kind === 'doc' && h.answerDocs > 0) {
     h.answerDocs--
     return answer({ documents: h.docs })
@@ -100,6 +105,7 @@ afterAll(async () => {
 beforeEach(() => {
   h.requests = []
   h.answerQueries = false
+  h.hangReleases = false
   h.answerDocs = 0
   h.docs = []
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -126,6 +132,24 @@ describe('the claim path on the real client, against a server that never answers
     // The version lookup and the release list, in parallel.
     expect(h.requests).toEqual(['query', 'query'])
   })
+
+  it('a release list that hangs gives up within its cap, and is read as not listed', async () => {
+    h.answerQueries = true
+    h.hangReleases = true
+    h.answerDocs = 1
+    h.docs = [TALK]
+
+    const { outcome, ms } = await timed(async () => {
+      const read = await readTalkVersions(client, 'talk-1', {
+        requestTimeoutMs: CAP,
+      })
+      expect(read.releasesListed).toBe(false)
+    })
+
+    expect(outcome).toBe('resolved')
+    expect(ms).toBeLessThan(CAP + SLACK)
+    expect(count('query')).toBe(2)
+  }, 15_000)
 
   it('the by-id read of the versions gives up within its cap, one request', async () => {
     h.answerQueries = true
