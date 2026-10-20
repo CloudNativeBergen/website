@@ -1,7 +1,6 @@
 'use client'
 
 import { AdminTablePageLoading } from '@/components/admin/PageLoadingSkeleton'
-import { ErrorDisplay } from '@/components/admin/ErrorDisplay'
 import { api } from '@/lib/trpc/client'
 import { SessionFeedbackAdmin } from './SessionFeedbackAdmin'
 
@@ -28,10 +27,11 @@ export function SessionFeedbackAdminPage({
   if (overview.isPending) return <AdminTablePageLoading />
   if (overview.error)
     return (
-      <ErrorDisplay
-        title="Could not load Session Feedback"
-        message={overview.error.message}
-      />
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+        <p className="text-sm text-red-800 dark:text-red-300">
+          Could not load Session Feedback: {overview.error.message}
+        </p>
+      </div>
     )
   return (
     <SessionFeedbackAdmin

@@ -197,6 +197,15 @@ describe('readAdminFeedback (§10.1)', () => {
 })
 
 describe('readAdminFeedback — what is read', () => {
+  it('gives a format it does not know as none', async () => {
+    h.dataset.push(talk('talk-odd', { format: 'keynote_90' }))
+    const out = await read()
+    expect(out.sessions.find((s) => s.talkId === 'talk-odd')!.format).toBeNull()
+    expect(out.sessions.find((s) => s.talkId === 'talk-a')!.format).toBe(
+      'presentation_40',
+    )
+  })
+
   it('reads published documents of this conference only (§4.4), never through the CDN', async () => {
     h.dataset.push(
       response('talk-a', 'green'),

@@ -12,11 +12,12 @@
  * refused exactly like one that does not exist.
  */
 import 'server-only'
-import { revalidateTag } from 'next/cache'
-import { feedbackResponseTag } from '@/lib/cache/tags'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { isFeedbackColour, type FeedbackColour } from './colour'
+import { formats, type Format } from '@/lib/proposal/types'
+import type { FeedbackColour } from './colour'
+import { expireRemovedFeedbackResponse } from './cache'
+import { commentOf } from './comment'
 import { getConferenceFeedbackSlots, PUBLISHED_ONLY } from './sanity'
 import {
   combineTotals,
@@ -40,8 +41,8 @@ export interface AdminFeedbackSession {
   talkId: string
   title: string
   speakers: string[]
-  /** The talk's `format` value, e.g. `presentation_40`. */
-  format: string | null
+  /** The talk's format; null when it has none this app knows. */
+  format: Format | null
   /** When its earliest slot on the official schedule starts. */
   slotAt: string | null
   totals: FeedbackTotals
@@ -75,8 +76,6 @@ interface TalkRow extends TalkCounts {
   speakers?: (string | null)[] | null
 }
 
-const LIVE = { cache: 'no-store' } as const
-
 export async function readAdminFeedback({
   conferenceId,
   now,
@@ -93,7 +92,7 @@ export async function readAdminFeedback({
         _id, "talk": talk._ref, colour, comment, submittedAt, hiddenAt, flaggedAt
       }`,
       {},
-      LIVE,
+      { cache: 'no-store' },
     )) ?? []
   const responded = [
     ...new Set(rows.map((r) => r.talk).filter((t): t is string => !!t)),
@@ -109,7 +108,7 @@ export async function readAdminFeedback({
         "speakers": speakers[]->name
       }`,
       { responded },
-      LIVE,
+      { cache: 'no-store' },
     )) ?? []
   const slots = await getConferenceFeedbackSlots(conferenceId)
 
@@ -124,15 +123,14 @@ export async function readAdminFeedback({
     const responses = byTalk.get(t._id) ?? []
     const comments: AdminFeedbackComment[] = []
     for (const r of responses) {
-      if (!isFeedbackColour(r.colour)) continue
-      if (typeof r.comment !== 'string' || !r.comment.trim()) continue
+      const shown = commentOf(r)
+      if (!shown) continue
       const hidden = !!r.hiddenAt
       const isFlagged = !!r.flaggedAt && !hidden
       if (isFlagged) flagged++
       comments.push({
         id: r._id,
-        colour: r.colour,
-        comment: r.comment,
+        ...shown,
         submittedAt: typeof r.submittedAt === 'string' ? r.submittedAt : null,
         hidden,
         flagged: isFlagged,
@@ -142,7 +140,9 @@ export async function readAdminFeedback({
       talkId: t._id,
       title: t.title ?? 'Untitled',
       speakers: (t.speakers ?? []).filter((s): s is string => !!s),
-      format: t.format ?? null,
+      format: formats.has(t.format as Format) ? (t.format as Format) : null,
+      // Where the window opens: the earliest start of the talk's well-formed
+      // slots, by the same rule the speaker's window uses (§6).
       slotAt:
         feedbackWindow({
           slots: slots.get(t._id) ?? [],
@@ -191,7 +191,7 @@ async function ownedResponses(
     { conferenceId },
     `*[_type == "feedbackResponse" && _id in $ids && ${PUBLISHED_ONLY} && talk->conference._ref == $conferenceId && !(talk._ref in path("drafts.**")) && !(talk._ref in path("versions.**"))]._id`,
     { ids },
-    LIVE,
+    { cache: 'no-store' },
   )
   const found = new Set(owned ?? [])
   return ids.every((id) => found.has(id)) ? ids : null
@@ -262,20 +262,7 @@ export async function removeResponses({
       return { status: 'failed', removed }
     }
     removed += chunk.length
-    for (const id of chunk) expireResponseTag(id)
+    for (const id of chunk) expireRemovedFeedbackResponse(id)
   }
   return { status: 'ok', removed }
-}
-
-/** Never fails the Remove it rides on; the read's own `cacheLife` recovers it. */
-function expireResponseTag(responseId: string) {
-  const tag = feedbackResponseTag(responseId)
-  try {
-    revalidateTag(tag, { expire: 0 })
-  } catch (error) {
-    console.error(
-      `Could not expire the Feedback Response cache tag ${tag}`,
-      error,
-    )
-  }
 }

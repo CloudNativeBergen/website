@@ -11,7 +11,6 @@ import {
 } from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
-import { FEEDBACK_COLOURS, type FeedbackColour } from '@/lib/feedback/colour'
 import {
   hasTooFew,
   MIN_RANKED_RESPONSES,
@@ -24,24 +23,10 @@ import type {
   AdminFeedbackOverview,
   AdminFeedbackSession,
 } from '@/lib/feedback/admin'
-import { formats, type Format } from '@/lib/proposal/types'
+import { formats } from '@/lib/proposal/types'
 import { formatFeedbackCommentTime } from '@/lib/time'
 import { ANSWERS } from '../answers'
-
-const TONE: Record<FeedbackColour, { bar: string; text: string }> = {
-  green: {
-    bar: 'bg-green-600 dark:bg-green-500',
-    text: 'text-green-800 dark:text-green-300',
-  },
-  yellow: {
-    bar: 'bg-yellow-400',
-    text: 'text-yellow-900 dark:text-yellow-300',
-  },
-  red: {
-    bar: 'bg-red-600 dark:bg-red-500',
-    text: 'text-red-800 dark:text-red-300',
-  },
-}
+import { ColourBar, FEEDBACK_TONE, plural } from '../tone'
 
 /** The session list's columns at `sm` and up; a phone stacks each row. */
 const COLUMNS =
@@ -55,9 +40,6 @@ const SORTS: { key: FeedbackSort; label: string }[] = [
 
 const ACTION =
   'inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:cursor-wait aria-disabled:opacity-50'
-
-const plural = (n: number, one: string, many: string) =>
-  `${n} ${n === 1 ? one : many}`
 
 /** The Remove confirmation's question, naming the count (§10.3). */
 export const removeQuestion = (count: number) =>
@@ -90,7 +72,14 @@ export function SessionFeedbackAdmin({
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
-  const [removing, setRemoving] = useState<AdminFeedbackComment | null>(null)
+  /** The responses the Remove question is about, and the comment to quote. */
+  const [removing, setRemoving] = useState<{
+    ids: string[]
+    comment?: string
+  } | null>(null)
+  // Open apart from `removing`, which stays until the dialog has left, so
+  // its title never changes during the closing transition.
+  const [asking, setAsking] = useState(false)
 
   const sessions = rankSessions(overview.sessions, sort)
   const { totals } = overview
@@ -119,7 +108,7 @@ export function SessionFeedbackAdmin({
     })
 
   return (
-    <div>
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<ChatBubbleLeftRightIcon />}
         title="Session Feedback"
@@ -148,83 +137,93 @@ export function SessionFeedbackAdmin({
         role="alert"
         className={
           error
-            ? 'mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-900/30 dark:text-red-200'
+            ? 'rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300'
             : 'sr-only'
         }
       >
         {error ?? ''}
       </p>
 
-      <section
-        aria-label="Sessions"
-        className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xs dark:border-gray-700 dark:bg-gray-800"
-      >
-        <div
-          role="group"
-          aria-label="Sort sessions"
-          className={`flex flex-wrap items-center gap-x-1 gap-y-2 border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400 ${COLUMNS}`}
+      <div>
+        <section
+          aria-label="Sessions"
+          className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xs dark:border-gray-700 dark:bg-gray-800"
         >
-          <span className="mr-1 sm:hidden">Sort by</span>
-          <span className="hidden sm:block">Session</span>
-          <span className="hidden sm:block">Spread</span>
-          {SORTS.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={sort === key}
-              onClick={() => setSort(key)}
-              className="rounded-md px-2 py-1 text-xs font-semibold tracking-wide uppercase hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-pressed:bg-brand-sky-mist aria-pressed:text-brand-cloud-blue sm:-mx-2 sm:justify-self-end dark:hover:bg-gray-700 dark:aria-pressed:bg-blue-900/40 dark:aria-pressed:text-blue-300"
-            >
-              {label}
-              {sort === key && <span aria-hidden="true"> ↓</span>}
-            </button>
-          ))}
-        </div>
-
-        {sessions.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-gray-600 dark:text-gray-400">
-            No confirmed sessions yet. Each confirmed talk appears here with its
-            feedback.
-          </p>
-        ) : (
-          <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-            {sessions.map((session) => (
-              <SessionRow
-                key={session.talkId}
-                session={session}
-                open={open.has(session.talkId)}
-                onToggle={() => toggle(session.talkId)}
-                pending={pending}
-                onHide={(id) => run([id], () => onHide(id))}
-                onUnhide={(id) => run([id], () => onUnhide(id))}
-                onRemove={setRemoving}
-              />
+          <div
+            role="group"
+            aria-label="Sort sessions"
+            className={`flex flex-wrap items-center gap-x-1 gap-y-2 border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400 ${COLUMNS}`}
+          >
+            <span className="mr-1 sm:hidden">Sort by</span>
+            <span className="hidden sm:block">Session</span>
+            <span className="hidden sm:block">Spread</span>
+            {SORTS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={sort === key}
+                onClick={() => setSort(key)}
+                className="rounded-md px-2 py-1 text-xs font-semibold tracking-wide uppercase hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-pressed:bg-brand-sky-mist aria-pressed:text-brand-cloud-blue sm:-mx-2 sm:justify-self-end dark:hover:bg-gray-700 dark:aria-pressed:bg-blue-900/40 dark:aria-pressed:text-blue-300"
+              >
+                {label}
+                {sort === key && <span aria-hidden="true"> ↓</span>}
+              </button>
             ))}
-          </ul>
-        )}
-      </section>
-      <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-        Sessions with fewer than {MIN_RANKED_RESPONSES} responses show “too few”
-        and rank after the rest.
-      </p>
+          </div>
+
+          {sessions.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-gray-600 dark:text-gray-400">
+              No confirmed sessions yet. Each confirmed talk appears here with
+              its feedback.
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+              {sessions.map((session) => (
+                <SessionRow
+                  key={session.talkId}
+                  session={session}
+                  open={open.has(session.talkId)}
+                  onToggle={() => toggle(session.talkId)}
+                  pending={pending}
+                  onHide={(id) => run([id], () => onHide(id))}
+                  onUnhide={(id) => run([id], () => onUnhide(id))}
+                  onRemove={(c) => {
+                    setRemoving({ ids: [c.id], comment: c.comment })
+                    setAsking(true)
+                  }}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+        <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+          Sessions with fewer than {MIN_RANKED_RESPONSES} responses show “too
+          few” and rank after the rest.
+        </p>
+      </div>
 
       <ConfirmationModal
-        isOpen={removing !== null}
-        onClose={() => setRemoving(null)}
+        isOpen={asking}
+        onClose={() => setAsking(false)}
+        afterLeave={() => setRemoving(null)}
         onConfirm={async () => {
           if (!removing) return
-          await run([removing.id], () => onRemove([removing.id]))
+          await run(removing.ids, () => onRemove(removing.ids))
           // Closed either way: a failure's message is on the page behind it.
-          setRemoving(null)
+          setAsking(false)
         }}
-        title={removeQuestion(1)}
-        message="Its colour and comment are deleted for good and no longer count. There is no undo."
+        title={removeQuestion(removing?.ids.length ?? 0)}
+        message={
+          removing?.ids.length === 1
+            ? 'Its colour and comment are deleted for good and no longer count. There is no undo.'
+            : 'Their colours and comments are deleted for good and no longer count. There is no undo.'
+        }
         confirmButtonText="Remove"
         variant="danger"
-        isLoading={removing !== null && pending.has(removing.id)}
+        isLoading={removing?.ids.some((id) => pending.has(id)) ?? false}
         guardSecondTap
       >
-        {removing && (
+        {removing?.comment && (
           <blockquote className="mt-3 border-l-2 border-gray-300 pl-3 text-sm wrap-break-word whitespace-pre-line text-gray-700 dark:border-gray-600 dark:text-gray-300">
             {removing.comment}
           </blockquote>
@@ -257,9 +256,7 @@ function SessionRow({
   const flagged = comments.some((c) => c.flagged)
   const meta = [
     session.speakers.join(', '),
-    session.format
-      ? (formats.get(session.format as Format) ?? session.format)
-      : null,
+    session.format ? formats.get(session.format) : null,
     session.slotAt ? formatFeedbackCommentTime(session.slotAt) : null,
   ].filter(Boolean)
 
@@ -297,7 +294,7 @@ function SessionRow({
             )}
           </span>
         </span>
-        <ColourBar totals={totals} />
+        <ColourBar totals={totals} className="ml-6 h-2 sm:ml-0" />
         <span className="flex flex-wrap gap-x-3 gap-y-1 pl-6 text-sm text-gray-700 tabular-nums sm:contents dark:text-gray-300">
           <span className="sm:text-right">
             {tooFew ? (
@@ -368,7 +365,9 @@ function Breakdown({ totals }: { totals: FeedbackTotals }) {
     <dl className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 tabular-nums dark:text-gray-400">
       {ANSWERS.map(({ colour, label }) => (
         <div key={colour} className="flex gap-1">
-          <dt className={`font-medium ${TONE[colour].text}`}>{label}</dt>
+          <dt className={`font-medium ${FEEDBACK_TONE[colour].text}`}>
+            {label}
+          </dt>
           <dd>
             {totals.combined[colour]} ({totals.scanned[colour]} scanned
             {totals.cards[colour] > 0 && `, ${totals.cards[colour]} cards`})
@@ -376,28 +375,6 @@ function Breakdown({ totals }: { totals: FeedbackTotals }) {
         </div>
       ))}
     </dl>
-  )
-}
-
-function ColourBar({ totals }: { totals: FeedbackTotals }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="ml-6 flex h-2 overflow-hidden rounded-full bg-gray-100 sm:ml-0 dark:bg-gray-700"
-    >
-      {totals.total > 0 &&
-        FEEDBACK_COLOURS.map((colour) =>
-          totals.combined[colour] > 0 ? (
-            <span
-              key={colour}
-              className={TONE[colour].bar}
-              style={{
-                width: `${(totals.combined[colour] / totals.total) * 100}%`,
-              }}
-            />
-          ) : null,
-        )}
-    </span>
   )
 }
 
@@ -425,7 +402,7 @@ function CommentItem({
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
           <span
-            className={`inline-flex items-center gap-1 font-medium ${TONE[comment.colour].text}`}
+            className={`inline-flex items-center gap-1 font-medium ${FEEDBACK_TONE[comment.colour].text}`}
           >
             <Icon className="size-4 shrink-0" aria-hidden="true" />
             {answer.label}

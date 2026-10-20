@@ -10,7 +10,8 @@
 import 'server-only'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { isFeedbackColour, type FeedbackColour } from './colour'
+import type { FeedbackColour } from './colour'
+import { commentOf } from './comment'
 import { getFeedbackSlots, PUBLISHED_ONLY } from './sanity'
 import { talkTotals, type FeedbackTotals, type TalkCounts } from './totals'
 import { feedbackWindow, type FeedbackWindow } from './window'
@@ -96,14 +97,9 @@ export async function readSpeakerResults({
   const responses = rows ?? []
   const comments: SpeakerComment[] = []
   for (const r of responses) {
-    if (r.hiddenAt || !isFeedbackColour(r.colour)) continue
-    if (typeof r.comment !== 'string' || !r.comment.trim()) continue
-    comments.push({
-      id: r._id,
-      colour: r.colour,
-      comment: r.comment,
-      submittedAt: toMinute(r.submittedAt),
-    })
+    const shown = r.hiddenAt ? null : commentOf(r)
+    if (!shown) continue
+    comments.push({ id: r._id, ...shown, submittedAt: toMinute(r.submittedAt) })
   }
   return {
     status: 'ok',

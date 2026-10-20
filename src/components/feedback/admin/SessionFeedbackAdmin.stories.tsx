@@ -9,6 +9,7 @@ import type {
   AdminFeedbackSession,
 } from '@/lib/feedback/admin'
 import { combineTotals } from '@/lib/feedback/totals'
+import { Format } from '@/lib/proposal/types'
 import { SessionFeedbackAdmin } from './SessionFeedbackAdmin'
 import { SessionFeedbackAdminPage } from './SessionFeedbackAdminPage'
 
@@ -40,7 +41,7 @@ const session = (
     talkId,
     title,
     speakers: ['Ada Lovelace'],
-    format: 'presentation_40',
+    format: Format.presentation_40,
     slotAt: '2026-10-27T08:00:00.000Z',
     totals: feedbackTotals({
       live: { green, yellow, red },
@@ -73,7 +74,7 @@ const SESSIONS: AdminFeedbackSession[] = [
     ],
   }),
   session('talk-ebpf', 'Lightning: eBPF in five minutes', [8, 3, 0], {
-    format: 'lightning_10',
+    format: Format.lightning_10,
     slotAt: '2026-10-27T12:30:00.000Z',
   }),
   session(
@@ -88,7 +89,7 @@ const SESSIONS: AdminFeedbackSession[] = [
   ),
   session('talk-few', 'Observability for small teams', [3, 1, 0], {
     speakers: ['Kari Nordmann'],
-    format: 'presentation_20',
+    format: Format.presentation_20,
   }),
   session('talk-none', 'WebAssembly on the edge', [0, 0, 0], {
     speakers: ['Ola Nordmann'],

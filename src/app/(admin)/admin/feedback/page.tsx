@@ -1,3 +1,4 @@
+import { ErrorDisplay } from '@/components/admin'
 import { denyNonOrganizer } from '@/lib/authz/page-guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { SessionFeedbackAdminPage } from '@/components/feedback/admin'
@@ -10,6 +11,14 @@ import { SessionFeedbackAdminPage } from '@/components/feedback/admin'
 export default async function AdminFeedbackPage() {
   const denied = await denyNonOrganizer()
   if (denied) return denied
-  const { conference } = await getConferenceForCurrentDomain()
-  return <SessionFeedbackAdminPage conferenceTitle={conference?.title} />
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || !conference) {
+    return (
+      <ErrorDisplay
+        title="Conference Not Found"
+        message={error?.message || 'Could not load conference data'}
+      />
+    )
+  }
+  return <SessionFeedbackAdminPage conferenceTitle={conference.title} />
 }
