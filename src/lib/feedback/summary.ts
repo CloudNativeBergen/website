@@ -105,7 +105,10 @@ export interface SummaryReport {
    * selection; not claimed, so the next run tries again.
    */
   failed: number
-  /** Not started before the deadline; the next run picks them up. */
+  /**
+   * Not started before the deadline (or candidates of a conference the run
+   * had no time to read); the next run picks them up.
+   */
   notReached: number
   /**
    * Not claimed because their sender failed every email of an earlier talk
@@ -134,16 +137,25 @@ export async function findDueFeedbackSummaries(
   }))
 }
 
-async function selectDue(now: Date): Promise<{
+async function selectDue(
+  now: Date,
+  deadline?: Date,
+): Promise<{
   candidates: number
   due: (DueSummary & { conference: SummaryConference })[]
   /** Candidates of a conference whose reads failed: not tried this run. */
   unread: number
+  /** Candidates of a conference not read before the deadline. */
+  late: number
 }> {
   const rows =
     (await clientReadUncached.fetch<
       { _id: string; conferenceId: string | null }[] | null
-    >(DUE_TALKS, {}, { cache: 'no-store' })) ?? []
+    >(
+      DUE_TALKS,
+      {},
+      { cache: 'no-store', signal: AbortSignal.timeout(SELECTION_TIMEOUT_MS) },
+    )) ?? []
   const byConference = new Map<string, string[]>()
   for (const row of rows) {
     if (!row.conferenceId) continue
@@ -155,9 +167,14 @@ async function selectDue(now: Date): Promise<{
   const client = versionsClient()
   const due: (DueSummary & { conference: SummaryConference })[] = []
   let unread = 0
+  let late = 0
   for (const [conferenceId, talkIds] of byConference) {
-    // One conference's failed read holds back only its own talks: nothing
-    // of them is claimed, so the next run selects them again.
+    if (deadline && Date.now() >= deadline.getTime()) {
+      late += talkIds.length
+      continue
+    }
+    // One conference's failed or hung read holds back only its own talks:
+    // nothing of them is claimed, so the next run selects them again.
     let read: {
       conference: SummaryConference
       slots: Awaited<ReturnType<typeof getConferenceFeedbackSlots>>
@@ -165,12 +182,16 @@ async function selectDue(now: Date): Promise<{
     try {
       const conference = await client.getDocument<
         SummaryConference & { _type?: string }
-      >(conferenceId)
+      >(conferenceId, { signal: AbortSignal.timeout(READ_TIMEOUT_MS) })
       read =
         conference?._type === 'conference'
           ? {
               conference,
-              slots: await getConferenceFeedbackSlots(conferenceId),
+              slots: await getConferenceFeedbackSlots(
+                conferenceId,
+                clientReadUncached,
+                { signal: AbortSignal.timeout(READ_TIMEOUT_MS) },
+              ),
             }
           : null
     } catch (error) {
@@ -193,8 +214,13 @@ async function selectDue(now: Date): Promise<{
       if (answersClosed(window)) due.push({ talkId, conferenceId, conference })
     }
   }
-  return { candidates: rows.length, due, unread }
+  return { candidates: rows.length, due, unread, late }
 }
+
+/** The run's one cross-tenant read of the candidates. */
+const SELECTION_TIMEOUT_MS = 30_000
+/** Each read before a talk is claimed: a hang there claims nothing. */
+const READ_TIMEOUT_MS = 10_000
 
 interface SpeakerDoc {
   _id: string
@@ -231,7 +257,7 @@ export async function deliverFeedbackSummaries({
   now: Date
   deadline?: Date
 }): Promise<SummaryReport> {
-  const { candidates, due, unread } = await selectDue(now)
+  const { candidates, due, unread, late } = await selectDue(now, deadline)
   const report: SummaryReport = {
     candidates,
     due: due.length,
@@ -241,7 +267,7 @@ export async function deliverFeedbackSummaries({
     emailUnknown: 0,
     skipped: 0,
     failed: unread,
-    notReached: 0,
+    notReached: late,
     senderDown: 0,
   }
   const client = versionsClient()
@@ -683,9 +709,19 @@ async function prepare(
 ): Promise<Prepared | null> {
   const conferenceId = conference._id
   // The doc endpoint, not GROQ: the selection may lag a withdrawal or
-  // another run's claim by about a second.
-  const talk = await client.getDocument<SummaryTalk>(talkId)
+  // another run's claim by about a second. The conference again too: its
+  // end date closes the window of a talk with no slot, and may have moved
+  // since the selection read it.
+  const [talk, current] = await Promise.all([
+    client.getDocument<SummaryTalk>(talkId, {
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+    }),
+    client.getDocument<SummaryConference & { _type?: string }>(conferenceId, {
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+    }),
+  ])
   if (!mayClaim(talk, talkId, conferenceId)) return null
+  if (current?._type !== 'conference') return null
 
   const rows =
     (await scopedFetch<
@@ -695,7 +731,7 @@ async function prepare(
       { conferenceId },
       `*[_type == "feedbackResponse" && talk._ref == $talkId && ${PUBLISHED_ONLY}]{ colour, comment, hiddenAt }`,
       { talkId },
-      { cache: 'no-store' },
+      { cache: 'no-store', signal: AbortSignal.timeout(READ_TIMEOUT_MS) },
     )) ?? []
   // Every answer removed since the selection: nothing to tell.
   if (rows.length === 0) return null
@@ -704,8 +740,10 @@ async function prepare(
   // The window again, from this talk's own slots as they are now: the
   // schedule is another document, so the claim's guard cannot see a move.
   const window = feedbackWindow({
-    slots: await getFeedbackSlots(conferenceId, talkId),
-    conferenceEndDate: conference.endDate,
+    slots: await getFeedbackSlots(conferenceId, talkId, {
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+    }),
+    conferenceEndDate: current.endDate,
     now,
   })
   if (!answersClosed(window)) return null

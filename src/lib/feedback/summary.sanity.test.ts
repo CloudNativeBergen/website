@@ -38,6 +38,12 @@ const h = vi.hoisted(() => ({
   talkReadOptions: [] as unknown[],
   /** Doc-endpoint reads of these ids reject: a 5xx for one tenant. */
   failDocReadsOf: [] as string[],
+  /** Doc-endpoint reads of these ids never answer, until their signal aborts. */
+  hangDocReadsOf: [] as string[],
+  /** Runs before each doc-endpoint read: a write landing just then. */
+  beforeDocRead: null as null | ((id: string) => void),
+  /** The options of every read on the uncached read client. */
+  uncachedReadOptions: [] as unknown[],
   /** Runs before each doc-endpoint read of speakers: a write landing then. */
   beforeSpeakerRead: null as null | ((ids: string[]) => void),
   sendEmail: vi.fn(),
@@ -76,6 +82,13 @@ vi.mock('@/lib/sanity/client', async () => {
     getDocument: async (id: string, options?: unknown) => {
       if (id === 'talk-1') h.talkReadOptions.push(options)
       if (h.failDocReadsOf.includes(id)) throw new Error('503 (test)')
+      h.beforeDocRead?.(id)
+      if (h.hangDocReadsOf.includes(id)) {
+        const signal = (options as { signal?: AbortSignal } | undefined)?.signal
+        return new Promise((_, reject) =>
+          signal?.addEventListener('abort', () => reject(signal.reason)),
+        )
+      }
       return (w.getDocument as (id: string) => Promise<unknown>)(id)
     },
     getDocuments: async (ids: string[], options?: unknown) => {
@@ -105,8 +118,20 @@ vi.mock('@/lib/sanity/client', async () => {
       }))
     },
   })
+  const uncached = clients.clientReadUncached as Writer
   return {
     ...clients,
+    clientReadUncached: {
+      ...uncached,
+      fetch: (
+        query: string,
+        params?: Record<string, unknown>,
+        options?: Record<string, unknown>,
+      ) => {
+        h.uncachedReadOptions.push(options)
+        return uncached.fetch(query, params, options)
+      },
+    },
     clientWrite: {
       ...clients.clientWrite,
       withConfig: (c: { apiVersion: string }) => {
@@ -315,6 +340,9 @@ beforeEach(() => {
   h.talkReadOptions = []
   h.beforeSpeakerRead = null
   h.failDocReadsOf = []
+  h.hangDocReadsOf = []
+  h.beforeDocRead = null
+  h.uncachedReadOptions = []
   h.sendEmail.mockReset()
   h.sendEmail.mockResolvedValue(undefined)
   h.delay.mockClear()
@@ -918,6 +946,26 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
     expect(report).toMatchObject({ claimed: 0, skipped: 1 })
   })
 
+  it('does not claim an unscheduled talk whose conference was extended after the selection read', async () => {
+    store().put(
+      talk('talk-b', 'conf-B', { speakers: [{ ...ref('sp-b'), _key: 'k' }] }),
+    )
+    store().put(response('talk-b', 'conf-B', 'green'))
+    // The organizers move conf-B's end past NOW once the run has selected
+    // talk-b as due by the old one.
+    h.beforeDocRead = (id) => {
+      if (id !== 'talk-b') return
+      h.beforeDocRead = null
+      store().put({ ...CONF_B, endDate: '2026-06-20' })
+    }
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-b')).toBeUndefined()
+    expect(emailsTo()).not.toContain('sp-b@example.com')
+    expect(report).toMatchObject({ skipped: 1 })
+  })
+
   it('does not claim a talk withdrawn after the selection read', async () => {
     store().readsLagFor('talk-1', talk('talk-1', 'conf-A'))
     store().put({ ...talk('talk-1', 'conf-A'), status: 'withdrawn' })
@@ -953,6 +1001,32 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
         { conferenceId: 'conf-A', talks: 2 },
         expect.any(Error),
       )
+    })
+
+    it('holds back only its own talks when the conference read hangs', async () => {
+      otherTenant()
+      h.hangDocReadsOf = ['conf-A']
+      // The real limit, shortened: the read is given up on, not waited out.
+      const timeout = AbortSignal.timeout.bind(AbortSignal)
+      vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(20))
+
+      const report = await deliverFeedbackSummaries({ now: NOW })
+
+      expect(sentAt('talk-b')).toBe(NOW.toISOString())
+      expect(report).toMatchObject({ claimed: 1, failed: 2 })
+    })
+
+    it('bounds every uncached read of the run with a signal', async () => {
+      otherTenant()
+
+      await deliverFeedbackSummaries({ now: NOW })
+
+      // The selection, each conference's schedule, each talk's answers
+      // and slots.
+      expect(h.uncachedReadOptions.length).toBeGreaterThanOrEqual(5)
+      for (const options of h.uncachedReadOptions) {
+        expect(options).toMatchObject({ signal: expect.any(AbortSignal) })
+      }
     })
 
     it('holds back only its own talks when its schedule cannot be read', async () => {
@@ -998,9 +1072,11 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
       deadline: new Date(0),
     })
     expect(sentAt('talk-1')).toBeUndefined()
-    expect(report).toMatchObject({ claimed: 0, notReached: 1 })
+    // Not even its conference is read: both of conf-A's candidates wait.
+    expect(report).toMatchObject({ claimed: 0, due: 0, notReached: 2 })
     expect(h.resolveSender).not.toHaveBeenCalled()
     expect(store().docReads).not.toContain('talk-1')
+    expect(store().docReads).not.toContain('conf-A')
   })
 })
 

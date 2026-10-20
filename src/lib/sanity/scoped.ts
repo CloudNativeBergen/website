@@ -124,6 +124,8 @@ export interface ScopedFetchOptions {
   next?: { revalidate?: number | false; tags?: string[] }
   /** `'raw'` sees drafts and, from API version 2025-02-19, release versions. */
   perspective?: 'raw' | 'published'
+  /** Ends the request: the client's own `timeout` does not bound a no-store read. */
+  signal?: AbortSignal
 }
 
 /**

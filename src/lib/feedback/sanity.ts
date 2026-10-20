@@ -47,6 +47,7 @@ export const PUBLISHED_ONLY =
 export async function getFeedbackSlots(
   conferenceId: string,
   talkId: string,
+  { signal }: { signal?: AbortSignal } = {},
 ): Promise<FeedbackSlot[]> {
   const days = await scopedFetch<
     { date: string | null; slots: Omit<FeedbackSlot, 'date'>[] | null }[]
@@ -58,7 +59,7 @@ export async function getFeedbackSlots(
       "slots": tracks[].talks[][talk._ref == $talkId]{ startTime, endTime }
     }`,
     { talkId },
-    { cache: 'no-store' },
+    { cache: 'no-store', signal },
   )
   return (days ?? []).flatMap((day) =>
     (day.slots ?? []).map((s) => ({
@@ -127,6 +128,7 @@ export async function getConferenceFeedbackSlots(
   conferenceId: string,
   client:
     typeof clientReadUncached | typeof clientReadCached = clientReadUncached,
+  { signal }: { signal?: AbortSignal } = {},
 ): Promise<Map<string, FeedbackSlot[]>> {
   const days = await scopedFetch<
     | {
@@ -147,7 +149,7 @@ export async function getConferenceFeedbackSlots(
       }
     }`,
     {},
-    client === clientReadUncached ? { cache: 'no-store' } : {},
+    client === clientReadUncached ? { cache: 'no-store', signal } : { signal },
   )
   const byTalk = new Map<string, FeedbackSlot[]>()
   for (const day of days ?? []) {
