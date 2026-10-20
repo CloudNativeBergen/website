@@ -1386,6 +1386,25 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
     expect(h.sendEmail).toHaveBeenCalled()
   })
 
+  it('names the organization the conference has when the talk is claimed in the breaker’s log', async () => {
+    // conf-A moves to org-C once the run has selected talk-1.
+    h.beforeDocRead = (id) => {
+      if (id !== 'talk-1') return
+      h.beforeDocRead = null
+      store().put({ ...CONF_A, organization: ref('org-C') })
+    }
+    h.sendEmail.mockRejectedValue(
+      refusal('validation_error', 401, 'API key is invalid'),
+    )
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('stops sending through a Resend account'),
+      { orgId: 'org-C', conferenceId: 'conf-A', talkId: 'talk-1' },
+    )
+  })
+
   it('stops on a dead sender even when a co-speaker’s address was refused too', async () => {
     // Every conf-A talk: sp-1's address is refused, sp-2's email fails for
     // the sender's reason. No email of the talk went out.

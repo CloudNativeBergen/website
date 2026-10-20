@@ -376,7 +376,7 @@ export async function deliverFeedbackSummaries({
             accountDown ? 'a Resend account' : 'a From address'
           } that failed every email of a talk; its other talks stay unclaimed until the next run`,
           {
-            orgId: item.conference.organization?._ref ?? null,
+            orgId: outcome.orgId,
             conferenceId: item.conferenceId,
             talkId: item.talkId,
           },
@@ -431,6 +431,8 @@ async function deliverOne(
   | {
       /** What the emails went out through. */
       sender: FeedbackSummarySender
+      /** The conference's organization when the talk was claimed. */
+      orgId: string | null
       emailed: number
       emailFailed: number
       /** Of the failed, those every email from this From would fail too. */
@@ -507,6 +509,7 @@ async function deliverOne(
     )
     return {
       sender,
+      orgId: current.organization?._ref ?? null,
       emailed: 0,
       emailFailed: 0,
       fromFailed: 0,
@@ -621,6 +624,7 @@ async function deliverOne(
     results.filter((x) => x === r).length
   return {
     sender,
+    orgId: current.organization?._ref ?? null,
     emailed: count('sent'),
     emailFailed:
       count('recipient') + count('from') + count('account') + count('late'),
