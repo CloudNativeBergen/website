@@ -87,6 +87,18 @@ describe('SessionFeedbackAdminPage', () => {
     expect(h.refetch).toHaveBeenCalled()
   })
 
+  it('shows the retry running while the refetch is in flight', () => {
+    h.query = {
+      isPending: false,
+      isError: true,
+      isFetching: true,
+      data: DATA,
+      error: { message: 'Sanity is down' },
+    }
+    render(<SessionFeedbackAdminPage />)
+    expect(screen.getByRole('button', { name: 'Retrying…' })).toBeTruthy()
+  })
+
   it('says nothing about refreshing when the read is fine', () => {
     h.query = { isPending: false, isError: false, data: DATA, error: null }
     render(<SessionFeedbackAdminPage />)
