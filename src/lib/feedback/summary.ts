@@ -525,13 +525,15 @@ const CLAIM_OVERHEAD_MS =
 /**
  * A talk's every email, at its worst, ends before `deadline`: started a
  * pause apart, the last one starts after `recipients - 1` pauses and takes
- * at most one email's worst case.
+ * at most one email's worst case. That worst case is counted even with no
+ * recipient: a speaker merged after the claim may bring one (see
+ * {@link speakersAfterClaim}); a further one's pause fits in the margin.
  */
 function fitsBefore(deadline: Date, recipients: number): boolean {
   const worst =
     CLAIM_OVERHEAD_MS +
     recipients * EMAIL_CONFIG.RATE_LIMIT_DELAY +
-    (recipients > 0 ? FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS : 0)
+    FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS
   return deadline.getTime() - Date.now() >= worst
 }
 
@@ -582,7 +584,8 @@ async function liveSpeakers(
  * The claimed talk's speakers, read after the claim. A speaker merged into
  * another since (`mergeSpeakers` repoints the talk to the one kept and
  * deletes the duplicate, in one transaction) is gone by then: the talk is
- * read again, for the speakers it names now. All of it within one
+ * read again, for the speakers it names now, and again while each read
+ * finds one gone that the talk no longer names. All of it within one
  * {@link SPEAKER_READ_TIMEOUT_MS}.
  */
 async function speakersAfterClaim(
@@ -591,11 +594,24 @@ async function speakersAfterClaim(
   claimedIds: string[],
 ): Promise<SpeakerDoc[]> {
   const signal = AbortSignal.timeout(SPEAKER_READ_TIMEOUT_MS)
-  const found = await readSpeakers(client, claimedIds, signal)
-  if (found.every((s) => s !== null)) return live(found)
-  const talk = await client.getDocument<SummaryTalk>(talkId, { signal })
-  if (!talk) return live(found)
-  return live(await readSpeakers(client, speakerRefs(talk), signal))
+  let ids = claimedIds
+  for (let attempt = 0; ; attempt++) {
+    const found = await readSpeakers(client, ids, signal)
+    if (found.every((s) => s !== null)) return live(found)
+    if (attempt >= MAX_RETRIES) {
+      console.error(
+        '[feedback] summary speakers kept being merged; sending to those found',
+        { talkId },
+      )
+      return live(found)
+    }
+    const talk = await client.getDocument<SummaryTalk>(talkId, { signal })
+    const named = talk ? speakerRefs(talk) : ids
+    // Gone, and still named (deleted, not merged): nobody else to tell.
+    if (named.length === ids.length && named.every((id, i) => id === ids[i]))
+      return live(found)
+    ids = named
+  }
 }
 
 /**

@@ -36,6 +36,8 @@ const h = vi.hoisted(() => ({
   speakerReadOptions: [] as unknown[],
   /** The options of every doc-endpoint read of `talk-1`. */
   talkReadOptions: [] as unknown[],
+  /** Runs before each doc-endpoint read of speakers: a write landing then. */
+  beforeSpeakerRead: null as null | ((ids: string[]) => void),
   sendEmail: vi.fn(),
   resolveSender: vi.fn(),
   lastTransactionId: undefined as string | undefined,
@@ -76,6 +78,7 @@ vi.mock('@/lib/sanity/client', async () => {
     getDocuments: async (ids: string[], options?: unknown) => {
       if (ids.some((id) => id.startsWith('sp-'))) {
         h.speakerReadOptions.push(options)
+        h.beforeSpeakerRead?.(ids)
       }
       if (
         h.speakerReadsFailAfterClaim &&
@@ -292,6 +295,7 @@ beforeEach(() => {
   h.speakerReadsFailAfterClaim = false
   h.speakerReadOptions = []
   h.talkReadOptions = []
+  h.beforeSpeakerRead = null
   h.sendEmail.mockReset()
   h.sendEmail.mockResolvedValue(undefined)
   h.delay.mockClear()
@@ -726,22 +730,22 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
     ])
   })
 
-  it('tells the speaker a duplicate was merged into after the claim, and not the duplicate', async () => {
-    store().afterNextCommit(() => {
-      // mergeSpeakers, in one transaction: the talk now names the speaker
-      // kept, and the duplicate is deleted.
-      store().put(speaker('sp-kept'))
-      store().put({
-        ...store().doc('talk-1')!,
-        _rev: 'rev-merged',
-        speakers: [
-          { ...ref('sp-1'), _key: 'k1' },
-          { ...ref('sp-kept'), _key: 'k2' },
-          { ...ref('sp-erased'), _key: 'k3' },
-        ],
-      })
-      store().remove('sp-2')
+  /** mergeSpeakers, in one transaction: `talk-1` names `kept` for `gone`. */
+  const merge = (gone: string, kept: string, extra: object = {}) => {
+    store().put(speaker(kept, extra))
+    const t = store().doc('talk-1')!
+    store().put({
+      ...t,
+      _rev: `rev-merged-${kept}`,
+      speakers: (t.speakers as { _ref: string; _key: string }[]).map((s) =>
+        s._ref === gone ? { ...ref(kept), _key: s._key } : s,
+      ),
     })
+    store().remove(gone)
+  }
+
+  it('tells the speaker a duplicate was merged into after the claim, and not the duplicate', async () => {
+    store().afterNextCommit(() => merge('sp-2', 'sp-kept'))
 
     const report = await deliverFeedbackSummaries({ now: NOW })
 
@@ -762,26 +766,84 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
   })
 
   it('reads the merged talk again within the one time limit of the speaker read', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    store().afterNextCommit(() => merge('sp-2', 'sp-kept'))
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(emailsTo().sort()).toEqual([
+      'sp-1@example.com',
+      'sp-kept@example.com',
+    ])
+    // Before the claim; after it; and again for the talk's speakers now.
+    const [, after, again] = h.speakerReadOptions as { signal: AbortSignal }[]
+    const reread = (h.talkReadOptions.at(-1) ?? {}) as { signal?: unknown }
+    // One signal, made to abort after the speaker read's 10 s, for all three.
+    const made = timeout.mock.results.findIndex((r) => r.value === after.signal)
+    expect(timeout.mock.calls[made]).toEqual([10_000])
+    expect(again.signal).toBe(after.signal)
+    expect(reread.signal).toBe(after.signal)
+  })
+
+  it('follows a second merge that lands between its reads', async () => {
+    store().afterNextCommit(() => merge('sp-2', 'sp-mid'))
+    h.beforeSpeakerRead = (ids) => {
+      if (ids.includes('sp-mid')) {
+        h.beforeSpeakerRead = null
+        merge('sp-mid', 'sp-kept')
+      }
+    }
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(emailsTo().sort()).toEqual([
+      'sp-1@example.com',
+      'sp-kept@example.com',
+    ])
+    expect(
+      notifications()
+        .map((n) => n._id)
+        .sort(),
+    ).toEqual([
+      'notification.feedback-summary.talk-1.sp-1',
+      'notification.feedback-summary.talk-1.sp-kept',
+    ])
+  })
+
+  it('reads the talk once when a gone speaker is still named on it: nobody to follow', async () => {
+    store().afterNextCommit(() => store().remove('sp-2'))
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(emailsTo()).toEqual(['sp-1@example.com'])
+    // Before the claim, and once after it.
+    expect(h.speakerReadOptions).toHaveLength(2)
+    expect(console.error).not.toHaveBeenCalledWith(
+      expect.stringContaining('kept being merged'),
+      expect.anything(),
+    )
+  })
+
+  it('tells the speakers still there when the talk itself is gone after the claim', async () => {
     store().afterNextCommit(() => {
-      store().put(speaker('sp-kept'))
-      store().put({
-        ...store().doc('talk-1')!,
-        _rev: 'rev-merged',
-        speakers: [{ ...ref('sp-kept'), _key: 'k1' }],
-      })
-      store().remove('sp-1')
       store().remove('sp-2')
+      store().remove('talk-1')
     })
 
     await deliverFeedbackSummaries({ now: NOW })
 
+    expect(emailsTo()).toEqual(['sp-1@example.com'])
+  })
+
+  it('tells a merged-in speaker of a talk that had no one to email', async () => {
+    store().put(speaker('sp-1', { email: undefined }))
+    store().put(talk('talk-1', 'conf-A'))
+    store().afterNextCommit(() => merge('sp-1', 'sp-kept'))
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
     expect(emailsTo()).toEqual(['sp-kept@example.com'])
-    // Before the claim; after it; and again for the talk's speakers now.
-    const [, after, again] = h.speakerReadOptions as { signal: AbortSignal }[]
-    const reread = (h.talkReadOptions.at(-1) ?? {}) as { signal?: unknown }
-    expect(after.signal).toBeInstanceOf(AbortSignal)
-    expect(again.signal).toBe(after.signal)
-    expect(reread.signal).toBe(after.signal)
+    expect(report).toMatchObject({ claimed: 1, emailed: 1 })
   })
 
   it('reads the talk again only when a claimed speaker is gone', async () => {
@@ -1139,6 +1201,20 @@ describe('deliverFeedbackSummaries: the run’s time', () => {
       expect.stringContaining('does not fit'),
       expect.objectContaining({ talkId: 'talk-1' }),
     )
+  })
+
+  it('budgets one email for a talk with no one to email: a merge after the claim may bring one', async () => {
+    store().put(speaker('sp-1', { email: undefined }))
+    store().put(talk('talk-1', 'conf-A'))
+
+    const report = await deliverFeedbackSummaries({
+      now: NOW,
+      // The claim's steps fit (52 s), one email's worst case after them not.
+      deadline: new Date(Date.now() + 60_000),
+    })
+
+    expect(sentAt('talk-1')).toBeUndefined()
+    expect(report).toMatchObject({ claimed: 0, notReached: 1 })
   })
 
   it('claims a talk whose emails fit', async () => {
