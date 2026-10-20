@@ -12,7 +12,6 @@ import { formatConferenceDateLong } from '@/lib/time'
 import {
   EMAIL_CONFIG,
   isTransientError,
-  resend,
   resolveEmailSender,
   retryWithBackoff,
 } from './config'
@@ -54,14 +53,14 @@ export async function resolveFeedbackSummarySender(
   conference: FeedbackSummaryConference,
 ): Promise<FeedbackSummarySender> {
   const orgId = conference.organization?._ref ?? null
-  const { client } = await resolveEmailSender(orgId)
+  const { client, platform } = await resolveEmailSender(orgId)
   const from = resolveConferenceFrom(conference, {
     field: 'cfpEmail',
     localPart: 'cfp',
   })
   // The ACTUAL account: an org without its own sends through the shared
   // platform client, and a failure of that account is every such org's.
-  const account = client === resend ? 'platform' : (orgId ?? 'platform')
+  const account = platform ? 'platform' : (orgId ?? 'platform')
   return { key: `${account}|${from}`, client, from }
 }
 

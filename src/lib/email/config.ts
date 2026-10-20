@@ -65,6 +65,11 @@ export interface EmailSender {
   client: Resend
   /** Per-org default From address, when the tenant provides one. */
   from?: string
+  /**
+   * The shared platform account, not the tenant's own: every org without
+   * credentials of its own sends through this one account.
+   */
+  platform: boolean
 }
 
 /**
@@ -94,9 +99,10 @@ export async function resolveEmailSender(
     return {
       client: getResendClient(creds, { orgId }),
       from: creds.fallbackFrom,
+      platform: false,
     }
   }
-  return { client: resend }
+  return { client: resend, platform: true }
 }
 
 export function isRateLimitError(error: unknown): boolean {

@@ -20,9 +20,10 @@ vi.mock('./config', async (original) => {
     ...real,
     resolveEmailSender: async (orgId: unknown) => {
       h.orgIds.push(orgId)
-      return h.onPlatform
-        ? { client: real.resend }
-        : { client: { emails: { send: h.send } } }
+      return {
+        client: { emails: { send: h.send } },
+        platform: h.onPlatform,
+      }
     },
   }
 })
