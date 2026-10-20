@@ -86,7 +86,11 @@ export type SummaryConference = Pick<
 export interface SummaryReport {
   /** Talks the selection query returned, before the window check. */
   candidates: number
-  /** Of those, talks whose window no longer takes answers. */
+  /**
+   * Of those, talks whose window no longer takes answers, among the
+   * conferences the run reached (the candidates of one it did not reach
+   * count in `notReached`, due or not).
+   */
   due: number
   /** Talks this run claimed and sent for. */
   claimed: number
@@ -240,6 +244,19 @@ async function selectConference(
   return { due, unread: 0, late: 0 }
 }
 
+/** Failed talks of one conference in a row before its rest waits a run. */
+const MAX_FAILED_IN_A_ROW = 2
+
+/** `items` in a random order (Fisher–Yates). */
+function shuffled<T>(items: T[]): T[] {
+  const out = [...items]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
 /** The run's one cross-tenant read of the candidates. */
 const SELECTION_TIMEOUT_MS = 30_000
 /** Each read before a talk is claimed: a hang there claims nothing. */
@@ -349,7 +366,9 @@ export async function deliverFeedbackSummaries({
   // From on it; a From failure (an unverified domain) stops only that pair.
   const downAccounts = new Set<string>()
   const downSenders = new Set<string>()
-  for (const [conferenceId, talkIds] of byConference) {
+  // In a new order each run: a conference that is slow or failing cannot be
+  // the first, and take the time, every day.
+  for (const [conferenceId, talkIds] of shuffled([...byConference])) {
     const selected = await selectConference(client, conferenceId, talkIds, {
       now,
       deadline,
@@ -358,11 +377,19 @@ export async function deliverFeedbackSummaries({
     report.due += selected.due.length
     report.failed += selected.unread
     report.notReached += selected.late
+    // Talks of this conference that failed one after another: past
+    // MAX_FAILED_IN_A_ROW the rest wait for the next run, unclaimed, rather
+    // than each taking its reads' time from the other tenants.
+    let failedInARow = 0
     for (const item of selected.due) {
       // Past the deadline nothing more is read: a backlog must not run the
       // function past its budget and lose this report.
       if (deadline && Date.now() >= deadline.getTime()) {
         report.notReached++
+        continue
+      }
+      if (failedInARow >= MAX_FAILED_IN_A_ROW) {
+        report.failed++
         continue
       }
       try {
@@ -375,6 +402,7 @@ export async function deliverFeedbackSummaries({
             downAccounts.has(sender.account) || downSenders.has(sender.key),
           cap,
         })
+        failedInARow = 0
         if (outcome === 'senderDown') {
           report.senderDown++
           continue
@@ -415,7 +443,16 @@ export async function deliverFeedbackSummaries({
       } catch (error) {
         // A read cut off by the run's deadline: not reached, rather than failed.
         if (deadline && Date.now() >= deadline.getTime()) report.notReached++
-        else report.failed++
+        else {
+          report.failed++
+          failedInARow++
+          if (failedInARow === MAX_FAILED_IN_A_ROW) {
+            console.error(
+              '[feedback] summary run leaves the rest of a conference whose talks keep failing for the next run',
+              { conferenceId: item.conferenceId },
+            )
+          }
+        }
         console.error(
           '[feedback] summary not sent for this talk',
           { talkId: item.talkId, conferenceId: item.conferenceId },

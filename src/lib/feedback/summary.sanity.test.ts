@@ -38,6 +38,8 @@ const h = vi.hoisted(() => ({
   talkReadOptions: [] as unknown[],
   /** Doc-endpoint reads of these ids reject: a 5xx for one tenant. */
   failDocReadsOf: [] as string[],
+  /** Every doc-endpoint read tried, failed ones too. */
+  docReadsTried: [] as string[],
   /** Doc-endpoint reads of these ids never answer, until their signal aborts. */
   hangDocReadsOf: [] as string[],
   /** Runs before each doc-endpoint read: a write landing just then. */
@@ -81,6 +83,7 @@ vi.mock('@/lib/sanity/client', async () => {
     },
     getDocument: async (id: string, options?: unknown) => {
       if (id === 'talk-1') h.talkReadOptions.push(options)
+      h.docReadsTried.push(id)
       if (h.failDocReadsOf.includes(id)) throw new Error('503 (test)')
       h.beforeDocRead?.(id)
       if (h.hangDocReadsOf.includes(id)) {
@@ -340,6 +343,7 @@ beforeEach(() => {
   h.talkReadOptions = []
   h.beforeSpeakerRead = null
   h.failDocReadsOf = []
+  h.docReadsTried = []
   h.hangDocReadsOf = []
   h.beforeDocRead = null
   h.uncachedReadOptions = []
@@ -1363,6 +1367,62 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
     expect(sentAt('talk-b')).toBe(NOW.toISOString())
     expect(['talk-1', 'talk-2', 'talk-3'].some((id) => sentAt(id))).toBe(false)
     expect(report).toMatchObject({ claimed: 1, failed: 3 })
+  })
+
+  it('leaves the rest of a conference whose talks fail one after another for the next run', async () => {
+    seed(moreDue())
+    h.failDocReadsOf = ['talk-1', 'talk-2', 'talk-3']
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    // Two of conf-A's three talks tried; the third waits, unclaimed.
+    const tried = new Set(
+      h.docReadsTried.filter((id) =>
+        ['talk-1', 'talk-2', 'talk-3'].includes(id),
+      ),
+    )
+    expect(tried.size).toBe(2)
+    expect(sentAt('talk-b')).toBe(NOW.toISOString())
+    expect(report).toMatchObject({ claimed: 1, failed: 3 })
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('whose talks keep failing'),
+      { conferenceId: 'conf-A' },
+    )
+  })
+
+  it('counts failures in a row only: a talk sent in between starts the count again', async () => {
+    seed([
+      ...moreDue(),
+      talk('talk-4', 'conf-A'),
+      response('talk-4', 'conf-A', 'green'),
+      day('day-4', 'conf-A', '2026-06-10', 'official', [
+        ['talk-4', '12:00', '12:40'],
+      ]),
+    ])
+    h.failDocReadsOf = ['talk-1', 'talk-3']
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    // The store keeps conf-A's talks in this order: fail, sent, fail, sent.
+    expect(
+      [...new Set(h.docReadsTried)].filter((id) => /^talk-\d$/.test(id)),
+    ).toEqual(['talk-1', 'talk-2', 'talk-3', 'talk-4'])
+    expect(sentAt('talk-4')).toBe(NOW.toISOString())
+  })
+
+  it('takes the conferences in a new order each run', async () => {
+    const firstConference = () =>
+      store().docReads.find((id) => id === 'conf-A' || id === 'conf-B')
+    const firsts: (string | undefined)[] = []
+    for (const r of [0, 0.99]) {
+      seed(moreDue())
+      h.sendEmail.mockClear()
+      vi.spyOn(Math, 'random').mockReturnValue(r)
+      await deliverFeedbackSummaries({ now: NOW })
+      firsts.push(firstConference())
+      vi.mocked(Math.random).mockRestore()
+    }
+    expect(new Set(firsts).size).toBe(2)
   })
 
   it('claims nothing when the tenant’s sender cannot be resolved', async () => {
