@@ -21,21 +21,16 @@ import {
   getFeedbackSlots,
   versionsClient,
 } from './sanity'
+import {
+  isRetryable,
+  readTalkVersions,
+  sweepTalkVersions,
+  type TalkDoc,
+  type VersionsClient,
+} from './talk-versions'
 import { feedbackWindow, mayMint, type FeedbackWindow } from './window'
 
 export { mayMint }
-
-interface TalkDoc {
-  _id: string
-  _rev: string
-  _type: string
-  status?: string
-  conference?: { _ref?: string }
-  speakers?: { _ref?: string }[]
-  feedbackCode?: string
-}
-
-type VersionsClient = ReturnType<typeof versionsClient>
 
 export type EnsureFeedbackCodeResult =
   /** Missing, foreign, not the caller's, or not confirmed: one answer for all. */
@@ -99,8 +94,6 @@ export async function reserveHeldCodes(
 
 /** How often a write that lost a revision guard re-reads and tries again. */
 const MAX_RETRIES = 3
-/** How often the post-commit sweep may re-patch a stale version. */
-const MAX_SWEEP_PATCHES = 3
 
 const isPublishedId = (id: string) =>
   !id.startsWith('drafts.') && !id.startsWith('versions.')
@@ -128,19 +121,6 @@ function mayHoldCode(
     ('organizer' in actor ||
       (talk.speakers ?? []).some((s) => s._ref === actor.speakerId))
   )
-}
-
-/**
- * A write that lost to a concurrent edit and should re-read and try again: a
- * failed `ifRevisionId` (409), or a version deleted since the read (Sanity
- * answers a patch of a missing document with 404 and rolls the whole
- * transaction back).
- */
-function isRetryable(error: unknown): boolean {
-  const status = (error as { statusCode?: unknown } | null)?.statusCode
-  if (status === 409 || status === 404) return true
-  const message = error instanceof Error ? error.message.toLowerCase() : ''
-  return message.includes('revision')
 }
 
 /**
@@ -326,145 +306,3 @@ async function mint(
     current = reread
   }
 }
-
-/**
- * §4.2's post-commit sweep. A revision guard cannot catch a version created
- * between the version lookup and the commit, because it is not in the
- * transaction, and the GROQ lookup can lag a write by about a second. So
- * re-read the published talk, `drafts.<id>` and every release's
- * `versions.<release>.<id>` BY ID through the doc endpoint, and re-patch any
- * version whose code differs from the PUBLISHED talk's as it is now (not the
- * value this request wrote: a later write may have replaced it). At most
- * {@link MAX_SWEEP_PATCHES} times; logged at the cap.
- *
- * Never throws: the write it follows has committed.
- */
-export async function sweepTalkVersions(
-  client: VersionsClient,
-  talkId: string,
-): Promise<void> {
-  try {
-    for (let patches = 0; ; patches++) {
-      const { published, versions, locked } = await readTalkVersions(
-        client,
-        talkId,
-      )
-      const code = published?.feedbackCode
-      if (!code) return
-      if (patches === 0 && locked.some((d) => d.feedbackCode !== code)) {
-        // Locked while this write ran; publishing it would erase the code.
-        console.error(
-          `[feedback] a locked release holds a stale version of ${talkId}`,
-        )
-      }
-      const stale = versions.filter((d) => d.feedbackCode !== code)
-      if (stale.length === 0) return
-      if (patches >= MAX_SWEEP_PATCHES) {
-        console.error(
-          `[feedback] gave up sweeping stale versions of ${talkId} after ${MAX_SWEEP_PATCHES} patches`,
-        )
-        return
-      }
-      const tx = client.transaction()
-      for (const d of stale) {
-        tx.patch(d._id, (p) =>
-          p.ifRevisionId(d._rev).set({ feedbackCode: code }),
-        )
-      }
-      try {
-        await tx.commit()
-      } catch (error) {
-        if (!isRetryable(error)) throw error
-      }
-    }
-  } catch (error) {
-    console.error(`[feedback] sweeping versions of ${talkId} failed`, error)
-  }
-}
-
-/**
- * The published talk and every other version of it, each as the doc endpoint
- * has it NOW. GROQ finds versions (`sanity::versionOf`) but can lag a write by
- * about a second, so it only contributes ids: `drafts.<id>` and each release's
- * `versions.<release>.<id>` are always asked for by id too, and every revision
- * a guard uses comes from the doc endpoint. A stale revision from GROQ would
- * fail every retry of a write after one finished draft edit.
- *
- * `versions` holds the draft and the versions in an `active` release, which
- * a write patches. `locked` holds the versions in any other release: Sanity
- * locks a scheduled release's versions, and patching one would fail the whole
- * transaction on every attempt. `releasesListed` is false when the release
- * list did not load; release versions are then left out of both.
- */
-async function readTalkVersions(
-  client: VersionsClient,
-  talkId: string,
-): Promise<{
-  published: TalkDoc | null
-  versions: TalkDoc[]
-  locked: TalkDoc[]
-  releasesListed: boolean
-}> {
-  const raw = { cache: 'no-store', perspective: 'raw' } as const
-  const [found, releases] = await Promise.all([
-    client.fetch<unknown>(
-      // groq-global-scoped: the versions of ONE talk, whose conference was checked on its published document
-      `*[sanity::versionOf($id) && _id != $id]._id`,
-      { id: talkId },
-      raw,
-    ),
-    client
-      // `[]` projects each release: without it Sanity answers null when
-      // the dataset has no releases (measured), which read as a failed list.
-      .fetch<unknown>('releases::all()[]{ _id, state }', {}, raw)
-      .catch(() => null),
-  ])
-  const releasesListed = Array.isArray(releases)
-  const releaseOf = (id: string) => /^versions\.([^.]+)\./.exec(id)?.[1]
-  const stateOf = new Map(
-    (releasesListed ? releases : [])
-      .filter(
-        (r): r is { _id: string; state: string } =>
-          typeof r?._id === 'string' && typeof r.state === 'string',
-      )
-      .map((r) => [r._id.replace(/^_\.releases\./, ''), r.state]),
-  )
-  if (!releasesListed && Array.isArray(found) && found.some(isReleaseId)) {
-    console.error(
-      `[feedback] could not list releases; skipping release versions of ${talkId}`,
-    )
-  }
-  const ids = new Set([
-    `drafts.${talkId}`,
-    // Asked for by id too, since GROQ can lag; a release that ended holds
-    // no versions.
-    ...[...stateOf]
-      .filter(([, state]) => !ENDED_RELEASE_STATES.has(state))
-      .map(([name]) => `versions.${name}.${talkId}`),
-    ...(Array.isArray(found) ? found : []).filter(
-      (id): id is string =>
-        typeof id === 'string' && (releasesListed || !isReleaseId(id)),
-    ),
-  ])
-  const [published, ...rest] = await client.getDocuments<TalkDoc>([
-    talkId,
-    ...ids,
-  ])
-  const docs = rest.filter((d): d is NonNullable<typeof d> => !!d)
-  const writable = (d: TalkDoc) => {
-    const release = releaseOf(d._id)
-    return !release || stateOf.get(release) === 'active'
-  }
-  return {
-    published: published ?? null,
-    versions: docs.filter(writable),
-    locked: docs.filter((d) => !writable(d)),
-    releasesListed,
-  }
-}
-
-const isReleaseId = (id: unknown) =>
-  typeof id === 'string' && id.startsWith('versions.')
-
-/** Releases whose versions are gone: published or archived. */
-const ENDED_RELEASE_STATES = new Set(['published', 'archived'])
