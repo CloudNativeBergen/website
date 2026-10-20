@@ -138,6 +138,8 @@ export function SessionFeedbackAdmin({
   if (!refreshFailed && retried) setRetried(false)
   const { totals } = overview
 
+  const sortButtons = useRef(new Map<FeedbackSort, HTMLButtonElement>())
+
   function sortBy(key: FeedbackSort) {
     setSort(key)
     setShown(rankSessions(overview.sessions, key).map((s) => s.talkId))
@@ -158,6 +160,9 @@ export function SessionFeedbackAdmin({
     action: () => Promise<unknown>,
   ) {
     record(ids, null)
+    // Emptied in this render and refilled in a later one, so the same words
+    // twice in a row still change the region and are announced again.
+    setAnnouncement('')
     setPending((p) => new Set([...p, ...ids]))
     const at = { talkId, responseId: ids[0], kind }
     let outcome: Outcome
@@ -228,30 +233,39 @@ export function SessionFeedbackAdmin({
         {announcement}
       </p>
 
-      {/* A live region that is always there, so its note is announced. */}
-      <div role="status" aria-live="polite" className="empty:hidden">
+      {/* The refresh note. Its live region is always in the accessibility
+          tree (sr-only while empty, never display:none) and holds only the
+          words; Retry sits beside it. Sticky below the admin top bar, so it
+          stays in view while the organizer works further down. */}
+      <div
+        className={
+          refreshFailed
+            ? 'sticky top-16 z-30 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-900 shadow-sm dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200'
+            : 'sr-only'
+        }
+      >
+        <p role="status" aria-live="polite">
+          {refreshFailed
+            ? refreshFailed.retrying
+              ? 'Refreshing…'
+              : retried
+                ? 'Still couldn’t refresh, showing earlier numbers.'
+                : 'Couldn’t refresh, showing earlier numbers.'
+            : ''}
+        </p>
         {refreshFailed && (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-900 dark:border-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-200">
-            <p>
-              {refreshFailed.retrying
-                ? 'Refreshing…'
-                : retried
-                  ? 'Still couldn’t refresh, showing earlier numbers.'
-                  : 'Couldn’t refresh, showing earlier numbers.'}
-            </p>
-            <button
-              type="button"
-              aria-disabled={refreshFailed.retrying ?? false}
-              onClick={() => {
-                if (refreshFailed.retrying) return
-                setRetried(true)
-                refreshFailed.onRetry()
-              }}
-              className="min-h-11 rounded-md px-3 font-semibold hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-700 aria-disabled:cursor-wait aria-disabled:opacity-60 sm:min-h-9 dark:hover:bg-yellow-900/40"
-            >
-              {refreshFailed.retrying ? 'Retrying…' : 'Retry'}
-            </button>
-          </div>
+          <button
+            type="button"
+            aria-disabled={refreshFailed.retrying ?? false}
+            onClick={() => {
+              if (refreshFailed.retrying) return
+              setRetried(true)
+              refreshFailed.onRetry()
+            }}
+            className="min-h-11 rounded-md px-3 font-semibold hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-700 aria-disabled:cursor-wait aria-disabled:opacity-60 sm:min-h-9 dark:hover:bg-yellow-900/40"
+          >
+            {refreshFailed.retrying ? 'Retrying…' : 'Retry'}
+          </button>
         )}
       </div>
 
@@ -271,6 +285,10 @@ export function SessionFeedbackAdmin({
             {SORTS.map(({ key, label }) => (
               <button
                 key={key}
+                ref={(el) => {
+                  if (el) sortButtons.current.set(key, el)
+                  else sortButtons.current.delete(key)
+                }}
                 type="button"
                 aria-pressed={sort === key}
                 onClick={() => sortBy(key)}
@@ -288,7 +306,11 @@ export function SessionFeedbackAdmin({
               <span aria-hidden="true">·</span>
               <button
                 type="button"
-                onClick={() => sortBy(sort)}
+                onClick={() => {
+                  sortBy(sort)
+                  // This button goes with the cue; keep focus on the sort.
+                  sortButtons.current.get(sort)?.focus()
+                }}
                 className="min-h-11 rounded-md px-1 font-semibold text-brand-cloud-blue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue sm:min-h-0 dark:text-blue-300"
               >
                 Re-sort
@@ -401,18 +423,18 @@ function SessionRow({
   const { totals, comments } = session
   const tooFew = hasTooFew(totals)
   const flagged = comments.some((c) => c.flagged)
-  // An outcome shows by its comment while that comment is listed (a
-  // failure, or a Remove a refetch has not caught up with), otherwise at
-  // the top of the open row (a Remove that went, a Hide or Unhide).
+  // An outcome shows beside its comment while that comment is listed (a
+  // Hide, an Unhide, a failure, or a Remove a refetch has not caught up
+  // with). A comment that went (a Remove) is said once at the top of the
+  // row: the latest only, outcomes being kept in the order they happened.
   const listed = new Set(comments.map((c) => c.id))
   const byComment = new Map<string, Outcome>()
-  const atTop: Outcome[] = []
+  let atTop: Outcome | null = null
   for (const o of outcomes) {
-    if (!listed.has(o.responseId)) atTop.push(o)
-    else if (!o.ok) byComment.set(o.responseId, o)
-    else if (o.kind === 'remove')
+    if (!listed.has(o.responseId)) atTop = o
+    else if (o.ok && o.kind === 'remove')
       byComment.set(o.responseId, { ...o, text: REMOVED_BUT_LISTED })
-    else atTop.push(o)
+    else byComment.set(o.responseId, o)
   }
   const meta = [
     session.speakers.join(', '),
@@ -497,9 +519,7 @@ function SessionRow({
       >
         {open && (
           <>
-            {atTop.map((o) => (
-              <OutcomeNote key={o.responseId} outcome={o} className="mb-2" />
-            ))}
+            {atTop && <OutcomeNote outcome={atTop} className="mb-2" />}
             <Breakdown totals={totals} />
             {comments.length === 0 ? (
               <p className="py-2 text-sm text-gray-600 dark:text-gray-400">

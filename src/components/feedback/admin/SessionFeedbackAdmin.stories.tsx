@@ -180,6 +180,8 @@ export const Ranked: Story = {
       'WebAssembly on the edge',
     ])
     await expect(canvas.getAllByText(/^too few/)).toHaveLength(2)
+    // Both live regions are in the accessibility tree before they speak.
+    await expect(canvas.getAllByRole('status')).toHaveLength(2)
     // Only the session holding a flagged comment carries the flag.
     await expect(
       canvas.getAllByRole('button', { name: /a comment is flagged/ }),
@@ -207,10 +209,9 @@ const openFirst: Story['play'] = async ({ canvasElement }) => {
 }
 
 /** The live region every outcome is announced in. */
+/** The live region every outcome is announced in: the page's first. */
 const announced = (canvasElement: HTMLElement) =>
-  within(canvasElement)
-    .getAllByRole('status')
-    .find((el: HTMLElement) => el.classList.contains('sr-only'))!
+  within(canvasElement).getAllByRole('status')[0]
 
 /** The list item of the comment whose text starts with `text`. */
 const commentItem = (canvasElement: HTMLElement, text: RegExp) =>
@@ -239,6 +240,12 @@ export const Expanded: Story = {
         'Comment hidden from speakers.',
       ),
     )
+    // Said beside the comment it was about, not at the top of the row.
+    await expect(
+      within(commentItem(context.canvasElement, /^Best talk/)).getByText(
+        'Comment hidden from speakers.',
+      ),
+    ).toBeVisible()
     await userEvent.click(canvas.getByRole('button', { name: 'Unhide' }))
     await expect(context.args.onUnhide).toHaveBeenCalledWith(
       SESSIONS[0].comments[2].id,
@@ -248,6 +255,85 @@ export const Expanded: Story = {
         'Comment shown to speakers again.',
       ),
     )
+  },
+}
+
+/**
+ * Two Hides in a row say the same words: the live region is emptied first,
+ * in its own render, so the second is announced too.
+ */
+export const SameOutcomeTwice: Story = {
+  play: async (context) => {
+    await openFirst(context)
+    const region = announced(context.canvasElement)
+    const seen: string[] = []
+    const observer = new MutationObserver(() =>
+      seen.push(region.textContent ?? ''),
+    )
+    observer.observe(region, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    })
+    for (const text of [/^Best talk/, /^Clear and practical/]) {
+      const item = commentItem(context.canvasElement, text)
+      await userEvent.click(within(item).getByRole('button', { name: 'Hide' }))
+      await waitFor(() =>
+        expect(
+          within(item).getByText('Comment hidden from speakers.'),
+        ).toBeVisible(),
+      )
+    }
+    observer.disconnect()
+    await expect(
+      seen.filter((t) => t === 'Comment hidden from speakers.').length,
+    ).toBeGreaterThanOrEqual(2)
+    await expect(seen.indexOf('')).toBeGreaterThan(
+      seen.indexOf('Comment hidden from speakers.'),
+    )
+  },
+}
+
+/** Data that drops removed comments, as a refetch would. */
+function Removing(args: React.ComponentProps<typeof SessionFeedbackAdmin>) {
+  const [data, setData] = useState(overview(SESSIONS))
+  return (
+    <SessionFeedbackAdmin
+      {...args}
+      overview={data}
+      onRemove={async (ids) => {
+        await args.onRemove(ids)
+        setData((d) =>
+          overview(
+            d.sessions.map((s) => ({
+              ...s,
+              comments: s.comments.filter((c) => !ids.includes(c.id)),
+            })),
+          ),
+        )
+      }}
+    />
+  )
+}
+
+/** Two Removes in one row: only the latest one's note stays. */
+export const TwoRemovals: Story = {
+  render: (args) => <Removing {...args} />,
+  play: async (context) => {
+    await openFirst(context)
+    const canvas = within(context.canvasElement)
+    for (const text of [/^Best talk/, /^Clear and practical/]) {
+      const item = commentItem(context.canvasElement, text)
+      await userEvent.click(
+        within(item).getByRole('button', { name: 'Remove' }),
+      )
+      await confirmRemove()
+      await waitFor(() => expect(canvas.queryByText(text)).toBeNull())
+    }
+    const panel = panelOf(context.canvasElement, /Kubernetes the hard parts/)
+    await expect(
+      within(panel).getAllByText('1 response removed.'),
+    ).toHaveLength(1)
   },
 }
 
@@ -405,6 +491,10 @@ export const RemoveKeepsRowInPlace: Story = {
     ).toBeNull()
     // Re-sort ranks again: the session with too few goes last.
     await userEvent.click(canvas.getByRole('button', { name: 'Re-sort' }))
+    // The cue and its button go: focus moves to the active sort.
+    await expect(document.activeElement).toBe(
+      canvas.getByRole('button', { name: /Loved it/, pressed: true }),
+    )
     await expect(rowTitles(canvasElement)).toEqual([
       'Another session',
       'Exactly ten answers',
@@ -491,11 +581,10 @@ export const RefreshFailed: Story = {
     const canvas = within(context.canvasElement)
     const note = canvas.getByText(/Couldn’t refresh, showing earlier numbers/)
     await expect(note).toBeVisible()
-    // Announced politely.
-    await expect(note.closest('[role="status"]')).toHaveAttribute(
-      'aria-live',
-      'polite',
-    )
+    // Announced politely, from a region that holds the words only.
+    const region = note.closest('[role="status"]') as HTMLElement
+    await expect(region).toHaveAttribute('aria-live', 'polite')
+    await expect(within(region).queryByRole('button')).toBeNull()
     await userEvent.click(canvas.getByRole('button', { name: 'Retry' }))
     await expect(context.args.refreshFailed!.onRetry).toHaveBeenCalled()
   },
@@ -601,6 +690,27 @@ export const OverlappingFailures: Story = {
 
 export const RefreshFailedDark: Story = {
   ...RefreshFailed,
+  globals: { theme: 'dark' },
+}
+
+/** Further down the page on a phone, the note stays in view. */
+export const RefreshFailedPhone: Story = {
+  args: { refreshFailed: { onRetry: fn(), retrying: false } },
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async (context) => {
+    await openFirst(context)
+    window.scrollTo(0, document.documentElement.scrollHeight)
+    await new Promise((r) => setTimeout(r, 100))
+    const box = within(context.canvasElement)
+      .getByText(/Couldn’t refresh/)
+      .getBoundingClientRect()
+    await expect(box.top).toBeGreaterThanOrEqual(0)
+    await expect(box.bottom).toBeLessThanOrEqual(window.innerHeight)
+  },
+}
+
+export const RefreshFailedPhoneDark: Story = {
+  ...RefreshFailedPhone,
   globals: { theme: 'dark' },
 }
 
