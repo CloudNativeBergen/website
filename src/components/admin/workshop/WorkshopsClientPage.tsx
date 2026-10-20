@@ -605,7 +605,13 @@ function WorkshopsClientPageFor({
         workshopTitle={signupDialog.about?.workshopTitle ?? ''}
         status={signupDialog.about?.status ?? null}
         signups={workshopSignups.data?.data}
-        readFailed={workshopSignups.isError}
+        // Failed, and still failed while a retry is on its way: TanStack
+        // sets a query with no data back to pending when it reads again.
+        readFailed={
+          workshopSignups.isError ||
+          (workshopSignups.errorUpdateCount > 0 && !workshopSignups.data)
+        }
+        retrying={workshopSignups.isFetching}
         onRetry={() => void workshopSignups.refetch()}
         onConfirmSignup={signupActions.confirm}
         fullRefusal={signupActions.full}

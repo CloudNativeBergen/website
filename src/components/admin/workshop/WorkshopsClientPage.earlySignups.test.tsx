@@ -1008,10 +1008,26 @@ describe('the badge in a workshop’s sign-up dialog', () => {
     )
     expect(within(dialog).queryByText('Reading the sign-ups…')).toBeNull()
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Try again' }))
+    // Held, so the retry is seen on its way: the button stays, and keeps focus.
+    let release = () => {}
+    server.holdOfWorkshop = new Promise<void>((resolve) => (release = resolve))
+    const retry = within(dialog).getByRole('button', { name: 'Try again' })
+    retry.focus()
+    fireEvent.click(retry)
+    const busy = await within(dialog).findByRole('button', {
+      name: 'Trying again…',
+    })
+    expect(busy).toBe(retry)
+    expect(busy).toHaveAttribute('aria-disabled', 'true')
+    expect(document.activeElement).toBe(retry)
+
+    release()
     expect(await within(dialog).findAllByText('via Acme AS')).not.toHaveLength(
       0,
     )
+    // The button is gone; focus is on the list it read, inside the dialog.
+    expect(dialog.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement).not.toBe(document.body)
   })
 })
 
