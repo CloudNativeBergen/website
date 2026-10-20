@@ -294,6 +294,8 @@ async function deliverOne(
     pacing.sends++
     try {
       await sendFeedbackSummaryEmail({
+        talkId,
+        speakerId: speaker._id,
         to: speaker.email,
         speakerName: speaker.name ?? '',
         talkTitle: title,

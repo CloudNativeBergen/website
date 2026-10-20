@@ -427,6 +427,8 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
 
     const [email] = h.sendEmail.mock.calls[0] as [Record<string, unknown>]
     expect(email).toMatchObject({
+      talkId: 'talk-1',
+      speakerId: 'sp-1',
       to: 'sp-1@example.com',
       speakerName: 'Name sp-1',
       talkTitle: 'Title of talk-1',

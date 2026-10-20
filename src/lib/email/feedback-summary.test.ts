@@ -23,6 +23,8 @@ vi.mock('./config', async (original) => ({
 import { sendFeedbackSummaryEmail } from './feedback-summary'
 
 const request = () => ({
+  talkId: 'talk-1',
+  speakerId: 'sp-1',
   to: 'ada@example.com',
   speakerName: 'Ada Lovelace',
   talkTitle: 'Kubernetes at the edge',
@@ -92,6 +94,56 @@ describe('sendFeedbackSummaryEmail', () => {
       .mockResolvedValueOnce({ data: { id: 'email-1' }, error: null })
     await sendFeedbackSummaryEmail(request())
     expect(h.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('sends a retry under the same idempotency key, one per talk and speaker, so a lost reply cannot mean two emails', async () => {
+    h.send
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          message: 'Internal server error',
+          name: 'internal_server_error',
+          statusCode: 500,
+        },
+      })
+      .mockResolvedValueOnce({ data: { id: 'email-1' }, error: null })
+    await sendFeedbackSummaryEmail(request())
+    expect(h.send).toHaveBeenCalledTimes(2)
+    const keys = h.send.mock.calls.map(
+      (call) =>
+        (call[1] as { idempotencyKey?: string } | undefined)?.idempotencyKey,
+    )
+    expect(keys).toEqual([
+      'feedback-summary/talk-1/sp-1',
+      'feedback-summary/talk-1/sp-1',
+    ])
+  })
+
+  it('retries while Resend is still processing the first attempt under that key', async () => {
+    h.send
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          message: 'Same idempotency key in progress',
+          name: 'concurrent_idempotent_requests',
+          statusCode: 409,
+        },
+      })
+      .mockResolvedValueOnce({ data: { id: 'email-1' }, error: null })
+    await sendFeedbackSummaryEmail(request())
+    expect(h.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the key within Resend’s 256 characters for the longest ids', async () => {
+    await sendFeedbackSummaryEmail({
+      ...request(),
+      talkId: 't'.repeat(128),
+      speakerId: 's'.repeat(128),
+    })
+    const key = (h.send.mock.calls[0][1] as { idempotencyKey: string })
+      .idempotencyKey
+    expect(key.length).toBeLessThanOrEqual(256)
+    expect(key).toMatch(/^feedback-summary\//)
   })
 
   it('does not retry a permanent refusal', async () => {

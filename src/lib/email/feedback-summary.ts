@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import React from 'react'
 import { render } from '@react-email/render'
 import { SessionFeedbackSummaryTemplate } from '@/components/email/SessionFeedbackSummaryTemplate'
@@ -14,6 +15,9 @@ import {
 import { resolveConferenceFrom } from './from'
 
 export interface FeedbackSummaryEmail {
+  /** With `speakerId`, the email's idempotency key: one email per pair. */
+  talkId: string
+  speakerId: string
   to: string
   speakerName: string
   talkTitle: string
@@ -42,7 +46,40 @@ export interface FeedbackSummaryEmail {
  * own Resend account when it has one. Throws when it is not sent: the caller
  * logs it, and never sends it again.
  */
+/** Resend keeps a key for 24 hours and takes at most 256 characters. */
+const MAX_KEY_LENGTH = 256
+
+/**
+ * One key per talk and speaker: a retry after a reply that was lost (the
+ * first attempt may have been accepted) is then not delivered twice. Resend
+ * remembers a key for 24 hours, which covers every retry of one run; later
+ * runs never send for the talk again, because it is claimed. Hashed when the
+ * ids would not fit.
+ */
+export function feedbackSummaryIdempotencyKey(
+  talkId: string,
+  speakerId: string,
+): string {
+  const key = `feedback-summary/${talkId}/${speakerId}`
+  if (key.length <= MAX_KEY_LENGTH) return key
+  const digest = createHash('sha256')
+    .update(JSON.stringify([talkId, speakerId]))
+    .digest('hex')
+  return `feedback-summary/${digest}`
+}
+
+/**
+ * Worth retrying: a transient failure, or Resend still processing an earlier
+ * attempt under the same key (409 `concurrent_idempotent_requests`).
+ */
+const mayStillDeliver = (error: unknown) =>
+  isTransientError(error) ||
+  (error as { resendErrorName?: string } | null)?.resendErrorName ===
+    'concurrent_idempotent_requests'
+
 export async function sendFeedbackSummaryEmail({
+  talkId,
+  speakerId,
   to,
   speakerName,
   talkTitle,
@@ -74,17 +111,21 @@ export async function sendFeedbackSummaryEmail({
   // Resend answers a refusal instead of throwing: thrown here, inside the
   // retry, with its status and name, so a rate limit or a 5xx backs off and
   // tries again while a permanent refusal (a bad address) does not.
+  const idempotencyKey = feedbackSummaryIdempotencyKey(talkId, speakerId)
   await retryWithBackoff(
     async () => {
-      const { error } = await client.emails.send({
-        from: resolveConferenceFrom(conference, {
-          field: 'cfpEmail',
-          localPart: 'cfp',
-        }),
-        to,
-        subject: `Your Session Feedback for “${talkTitle}”`,
-        html,
-      })
+      const { error } = await client.emails.send(
+        {
+          from: resolveConferenceFrom(conference, {
+            field: 'cfpEmail',
+            localPart: 'cfp',
+          }),
+          to,
+          subject: `Your Session Feedback for “${talkTitle}”`,
+          html,
+        },
+        { idempotencyKey },
+      )
       if (error) {
         const wrapped = new Error(
           `Resend refused the email: ${error.message}`,
@@ -96,6 +137,6 @@ export async function sendFeedbackSummaryEmail({
       }
     },
     undefined,
-    isTransientError,
+    mayStillDeliver,
   )
 }
