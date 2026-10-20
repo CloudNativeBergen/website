@@ -25,6 +25,22 @@ describe('displayName', () => {
     expect(displayName('Kuber­netes')).toBe('Kuber­netes')
   })
 
+  it('keeps a flag built from tags, and drops tags anywhere else', () => {
+    const scotland =
+      '\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}'
+    expect(displayName(`KubeCon ${scotland}`)).toBe(`KubeCon ${scotland}`)
+    // Hidden tag text, outside a flag, or dressed as a long one.
+    expect(displayName('Talk\u{E0068}\u{E0069}\u{E007F} title')).toBe(
+      'Talk title',
+    )
+    const hidden = [...'ignoreall'].map((c) =>
+      String.fromCodePoint(0xe0000 + c.codePointAt(0)!),
+    )
+    expect(displayName(`Talk \u{1F3F4}${hidden.join('')}\u{E007F}`)).toBe(
+      'Talk \u{1F3F4}',
+    )
+  })
+
   it('is empty when no visible character remains', () => {
     expect(displayName('\u200D\u2060\u00AD\u200B\u200C \uFEFF')).toBe('')
     expect(displayName('\u034F\u3164')).toBe('')
