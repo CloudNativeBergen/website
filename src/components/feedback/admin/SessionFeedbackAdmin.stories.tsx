@@ -158,10 +158,11 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** The session rows' titles, top to bottom. */
+/** The session rows' titles, top to bottom, open or not. */
 const rowTitles = (canvasElement: HTMLElement) =>
   within(canvasElement)
-    .getAllByRole('button', { expanded: false })
+    .getAllByRole('button')
+    .filter((b: HTMLElement) => b.hasAttribute('aria-expanded'))
     .map(
       (b: HTMLElement) =>
         b.querySelector('span.font-medium')?.firstChild?.textContent,
@@ -367,23 +368,22 @@ export const RemoveKeepsRowInPlace: Story = {
     await waitFor(() =>
       expect(within(panel).getByText('1 response removed.')).toBeVisible(),
     )
-    const rows = canvas
-      .getAllByRole('button', { expanded: true })
-      .concat(canvas.getAllByRole('button', { expanded: false }))
+    // Still first and still open, though it now has too few to rank.
+    await expect(rowTitles(canvasElement)).toEqual([
+      'Exactly ten answers',
+      'Another session',
+    ])
     await expect(
-      rows[0].querySelector('span.font-medium')?.firstChild?.textContent,
-    ).toBe('Exactly ten answers')
+      canvas.getByRole('button', { name: /Exactly ten answers/ }),
+    ).toHaveAttribute('aria-expanded', 'true')
     await expect(canvas.getByText('too few')).toBeVisible()
     // Changing the sort ranks again: the session with too few goes last.
     await userEvent.click(canvas.getByRole('button', { name: /Responses/ }))
     await userEvent.click(canvas.getByRole('button', { name: /Loved it/ }))
-    await expect(
-      canvas
-        .getAllByRole('button', { expanded: false })
-        .map(
-          (b) => b.querySelector('span.font-medium')?.firstChild?.textContent,
-        ),
-    ).toEqual(['Another session'])
+    await expect(rowTitles(canvasElement)).toEqual([
+      'Another session',
+      'Exactly ten answers',
+    ])
   },
 }
 
