@@ -563,6 +563,22 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
     expect(report).toMatchObject({ claimed: 0, failed: 1 })
   })
 
+  it('does not claim a talk whose answers were all removed after the selection read', async () => {
+    // An organizer removes the answers while the run reads the schedule.
+    store().beforeEachRead((read) => {
+      if (read.query.includes('"schedule"')) {
+        for (const d of store().all()) {
+          if (d._type === 'feedbackResponse') store().remove(d._id)
+        }
+      }
+    })
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-1')).toBeUndefined()
+    expect(h.sendEmail).not.toHaveBeenCalled()
+  })
+
   it('does not claim a talk withdrawn after the selection read', async () => {
     store().readsLagFor('talk-1', talk('talk-1', 'conf-A'))
     store().put({ ...talk('talk-1', 'conf-A'), status: 'withdrawn' })
