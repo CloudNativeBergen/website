@@ -11,7 +11,7 @@ import {
 import type { OnceNotificationInput } from '@/lib/notification/types'
 import { getConferenceOrganizerIds } from '@/lib/organizer-invite/sanity'
 import { fitsDocumentId } from '@/lib/sanity/helpers'
-import { displayName } from './ticketTypeNotSetNotification'
+import { displayName } from '@/lib/text/display'
 
 const ID_PREFIX = 'notification.workshop-capacity.'
 const DIGEST_LENGTH = 32

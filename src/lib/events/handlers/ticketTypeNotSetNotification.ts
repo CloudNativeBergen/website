@@ -9,6 +9,7 @@ import type { OnceNotificationInput } from '@/lib/notification/types'
 import { getConferenceOrganizerIds } from '@/lib/organizer-invite/sanity'
 import { fitsDocumentId } from '@/lib/sanity/helpers'
 import { typeKey } from '@/lib/tickets/classification'
+import { displayName } from '@/lib/text/display'
 
 const ID_PREFIX = 'notification.workshop-not-set.'
 const DIGEST_LENGTH = 32
@@ -49,30 +50,6 @@ function noticeId(
  */
 const fitsADocumentId = (organizerId: string) =>
   fitsDocumentId(noticeId('', '', organizerId))
-
-/**
- * A type name made safe to show inside the title's quotes.
- *
- * The name is the provider's free text. Shown as it arrives, a `”` in it would
- * close the title's quote and let the rest read as this system's own words,
- * and a bidi override, a NUL or a line break would be stored into the bell.
- * So control characters and line breaks become spaces, invisible formatting
- * characters (zero-width, bidi, BOM) are dropped, whitespace is collapsed, and
- * a curly double quote inside the name becomes a single one.
- *
- * FOR DISPLAY ONLY. The document id still uses {@link typeKey}: the rule
- * treats two names that differ by such a character as two types, each with its
- * own decision to make, so each gets its own notification.
- */
-export function displayName(typeName: string): string {
-  return typeName
-    .replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ')
-    .replace(/\p{Cf}/gu, '')
-    .replace(/“/g, '‘')
-    .replace(/”/g, '’')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
 
 /**
  * One notification per organizer for one not-set type. It stores the ticket

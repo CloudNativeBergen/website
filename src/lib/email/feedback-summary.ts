@@ -5,6 +5,7 @@ import { SessionFeedbackSummaryTemplate } from '@/components/email/SessionFeedba
 import { emailBrandColor } from '@/lib/branding/theme'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
+import { summaryTitle } from '@/lib/feedback/summary-copy'
 import type { FeedbackTotals } from '@/lib/feedback/totals'
 import { formatConferenceDateLong } from '@/lib/time'
 import {
@@ -121,7 +122,7 @@ export async function sendFeedbackSummaryEmail({
             localPart: 'cfp',
           }),
           to,
-          subject: `Your Session Feedback for “${talkTitle}”`,
+          subject: summaryTitle(talkTitle),
           html,
         },
         { idempotencyKey },

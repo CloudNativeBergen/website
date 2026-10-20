@@ -7,6 +7,7 @@ import {
   type FeedbackColour,
 } from '@/lib/feedback/colour'
 import type { FeedbackTotals } from '@/lib/feedback/totals'
+import { plural } from '@/lib/text/display'
 
 export interface SessionFeedbackSummaryTemplateProps {
   speakerName: string
@@ -31,9 +32,6 @@ const TILE: Record<FeedbackColour, { background: string; text: string }> = {
   yellow: { background: '#FEFCE8', text: '#854D0E' },
   red: { background: '#FEF2F2', text: '#991B1B' },
 }
-
-const plural = (n: number, one: string, many: string) =>
-  `${n} ${n === 1 ? one : many}`
 
 /**
  * The summary a speaker gets once their session's Feedback Window has closed

@@ -21,8 +21,6 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
 import { EMAIL_CONFIG, delay } from '@/lib/email/config'
 import { sendFeedbackSummaryEmail } from '@/lib/email/feedback-summary'
-import { displayName } from '@/lib/events/handlers/ticketTypeNotSetNotification'
-import { truncateToGraphemeBoundary } from '@/lib/messaging/links'
 import {
   NOTIFICATION_TITLE_MAX,
   createNotificationsOnce,
@@ -31,6 +29,7 @@ import type { OnceNotificationInput } from '@/lib/notification/types'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { fitsDocumentId } from '@/lib/sanity/helpers'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { displayName, plural } from '@/lib/text/display'
 import { FEEDBACK_COLOURS, FEEDBACK_COLOUR_LABELS } from './colour'
 import { isVisibleComment } from './results'
 import {
@@ -40,12 +39,14 @@ import {
   versionsClient,
 } from './sanity'
 import {
+  MAX_RETRIES,
   isRetryable,
   readTalkVersions,
   sweepTalkVersions,
   type TalkDoc,
   type VersionsClient,
 } from './talk-versions'
+import { summaryTitle } from './summary-copy'
 import { talkTotals, type FeedbackTotals, type TalkCounts } from './totals'
 import { SESSION_FEEDBACK_ANCHOR } from './url'
 import { answersClosed, feedbackWindow } from './window'
@@ -63,7 +64,6 @@ export type SummaryConference = Pick<
   | 'title'
   | 'organizer'
   | 'cfpEmail'
-  | 'contactEmail'
   | 'domains'
   | 'theme'
   | 'organization'
@@ -90,9 +90,6 @@ export interface SummaryReport {
   /** Not started before the deadline; the next run picks them up. */
   notReached: number
 }
-
-/** How often a claim that lost a revision guard re-reads and tries again. */
-const MAX_RETRIES = 3
 
 // groq-global-scoped: correlated to the talk being tested, and to its own conference, by `^._id` and `^.conference._ref`
 const LIVE_RESPONSES = `*[_type == "feedbackResponse" && talk._ref == ^._id && conference._ref == ^.conference._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]`
@@ -456,8 +453,6 @@ export const summaryNotificationId = (talkId: string, speakerId: string) =>
 
 /** "Loved it 5 · It was OK 1 · Not for me 2. 8 responses, 1 comment." */
 export function summaryLine(totals: FeedbackTotals, comments: number): string {
-  const plural = (n: number, one: string, many: string) =>
-    `${n} ${n === 1 ? one : many}`
   const colours = FEEDBACK_COLOURS.map(
     (c) => `${FEEDBACK_COLOUR_LABELS[c]} ${totals.combined[c]}`,
   ).join(' · ')
@@ -482,12 +477,6 @@ export function summaryNotifications({
   link: string
   speakerIds: readonly string[]
 }): OnceNotificationInput[] {
-  const start = 'Your Session Feedback for “'
-  const room = NOTIFICATION_TITLE_MAX - start.length - 1
-  const name =
-    title.length > room
-      ? `${truncateToGraphemeBoundary(title, room - 1)}…`
-      : title
   return speakerIds
     .map((speakerId) => ({
       speakerId,
@@ -499,7 +488,7 @@ export function summaryNotifications({
       recipientId: speakerId,
       conferenceId,
       notificationType: 'session_feedback_summary' as const,
-      title: `${start}${name}”`,
+      title: summaryTitle(title, NOTIFICATION_TITLE_MAX),
       message: summaryLine(totals, comments),
       link,
       relatedProposalId: talkId,

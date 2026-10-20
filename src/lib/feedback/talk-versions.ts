@@ -33,6 +33,9 @@ export type VersionedTalkField = 'feedbackCode' | 'feedbackSummarySentAt'
 
 export type VersionsClient = ReturnType<typeof versionsClient>
 
+/** How often a write that lost a revision guard re-reads and tries again. */
+export const MAX_RETRIES = 3
+
 /** How often the post-commit sweep may re-patch a stale version. */
 const MAX_SWEEP_PATCHES = 3
 

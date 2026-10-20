@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { unstable_noStore as noStore } from 'next/cache'
-import { deliverFeedbackSummaries } from '@/lib/feedback/summary'
+import { deliverFeedbackSummaries } from '@/lib/feedback/server'
 
 /**
  * The Session Feedback summary (speaker feedback spec §11.1, #1437): daily,
- * each talk whose Feedback Window has closed since the last run gets its one
- * summary, bell and email, for every speaker who is not erased.
+ * every talk whose Feedback Window has closed and that has not had its
+ * summary yet gets its one summary, bell and email, for every speaker who is
+ * not erased. No lookback: the talk's `feedbackSummarySentAt` marker alone
+ * decides, so a failed run's talks go out on the next one.
  *
  * Its own route rather than a step of `cleanup-notifications`: a failure here
  * (an outage mid-run) must not stop the GDPR purges that route carries, nor

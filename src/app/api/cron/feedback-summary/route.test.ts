@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 vi.mock('next/cache', () => ({ unstable_noStore: () => {} }))
 
 const deliver = vi.fn()
-vi.mock('@/lib/feedback/summary', () => ({
+vi.mock('@/lib/feedback/server', () => ({
   deliverFeedbackSummaries: (...a: unknown[]) => deliver(...a),
 }))
 

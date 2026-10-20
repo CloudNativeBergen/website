@@ -22,6 +22,7 @@ import {
   versionsClient,
 } from './sanity'
 import {
+  MAX_RETRIES,
   isRetryable,
   readTalkVersions,
   sweepTalkVersions,
@@ -91,9 +92,6 @@ export async function reserveHeldCodes(
     }
   }
 }
-
-/** How often a write that lost a revision guard re-reads and tries again. */
-const MAX_RETRIES = 3
 
 const isPublishedId = (id: string) =>
   !id.startsWith('drafts.') && !id.startsWith('versions.')
