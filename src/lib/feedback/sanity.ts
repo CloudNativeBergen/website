@@ -28,8 +28,11 @@ export const VERSIONS_API_VERSION = '2025-02-19'
  * The one client for the version lookup, the write and the sweep (§4.2).
  * Every fetch through it passes `perspective: 'raw'`.
  */
-export function versionsClient() {
-  return clientWrite.withConfig({ apiVersion: VERSIONS_API_VERSION })
+export function versionsClient({ timeout }: { timeout?: number } = {}) {
+  return clientWrite.withConfig({
+    apiVersion: VERSIONS_API_VERSION,
+    ...(timeout !== undefined && { timeout }),
+  })
 }
 
 /** Published documents only (§4.4): no drafts, no Content Release versions. */

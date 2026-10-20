@@ -36,6 +36,8 @@ const h = vi.hoisted(() => ({
   speakerReadOptions: [] as unknown[],
   sendEmail: vi.fn(),
   resolveSender: vi.fn(),
+  /** Every config a client was made with (the pinned API version, a timeout). */
+  clientConfigs: [] as Record<string, unknown>[],
   /** The pause between sends: recorded, and immediate. */
   delay: vi.fn(async (ms: number) => void ms),
 }))
@@ -83,8 +85,10 @@ vi.mock('@/lib/sanity/client', async () => {
     ...clients,
     clientWrite: {
       ...clients.clientWrite,
-      withConfig: (c: { apiVersion: string }) =>
-        withReleases(clients.clientWrite.withConfig(c)),
+      withConfig: (c: { apiVersion: string }) => {
+        h.clientConfigs.push(c)
+        return withReleases(clients.clientWrite.withConfig(c))
+      },
     },
   }
 })
@@ -272,6 +276,7 @@ beforeEach(() => {
   h.sendEmail.mockReset()
   h.sendEmail.mockResolvedValue(undefined)
   h.delay.mockClear()
+  h.clientConfigs = []
   h.resolveSender.mockReset()
   // One sender per organization, as the tenant's own Resend account is.
   h.resolveSender.mockImplementation(
@@ -768,13 +773,15 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
     expect(report).toMatchObject({ claimed: 1, failed: 1 })
   })
 
-  it('starts no talk past the deadline', async () => {
+  it('starts no talk past the deadline, and reads nothing for it', async () => {
     const report = await deliverFeedbackSummaries({
       now: NOW,
       deadline: new Date(0),
     })
     expect(sentAt('talk-1')).toBeUndefined()
     expect(report).toMatchObject({ claimed: 0, notReached: 1 })
+    expect(h.resolveSender).not.toHaveBeenCalled()
+    expect(store().docReads).not.toContain('talk-1')
   })
 })
 
@@ -1060,7 +1067,7 @@ describe('deliverFeedbackSummaries: the run’s time', () => {
 
     await deliverFeedbackSummaries({
       now: NOW,
-      deadline: new Date(Date.now() + 55_000),
+      deadline: new Date(Date.now() + 80_000),
     })
 
     expect(sentAt('talk-1')).toBe(NOW.toISOString())
@@ -1097,19 +1104,110 @@ describe('deliverFeedbackSummaries: the run’s time', () => {
     expect(h.delay.mock.calls).toEqual([[500]])
   })
 
-  it('sweeps the talk’s versions after its emails, not before', async () => {
+  it('sweeps the talk’s versions before its emails', async () => {
     store().put(talk('drafts.talk-1', 'conf-A'))
-    let readsAtLastSend = 0
+    let readsAtFirstSend = -1
     h.sendEmail.mockImplementation(async () => {
-      readsAtLastSend = store().docReads.length
+      if (readsAtFirstSend < 0) readsAtFirstSend = store().docReads.length
     })
 
     await deliverFeedbackSummaries({ now: NOW })
 
+    // The sweep's by-id read of the draft lands before the first email.
+    const sweepRead = store().docReads.lastIndexOf('drafts.talk-1')
+    expect(sweepRead).toBeLessThan(readsAtFirstSend)
     expect(
-      store().docReads.lastIndexOf('drafts.talk-1'),
-    ).toBeGreaterThanOrEqual(readsAtLastSend)
+      store().docReads.filter((id) => id === 'drafts.talk-1').length,
+    ).toBeGreaterThanOrEqual(2)
     expect(sentAt('drafts.talk-1')).toBe(NOW.toISOString())
+  })
+
+  it('does not hold the emails on a sweep that hangs', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      // The first version lookup is the claim's; the second, the sweep's.
+      let lookups = 0
+      store().beforeEachRead((read) => {
+        if (read.query.includes('sanity::versionOf') && ++lookups === 2) {
+          return new Promise(() => {})
+        }
+      })
+      const run = deliverFeedbackSummaries({ now: NOW })
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(await run).toMatchObject({ claimed: 1, emailed: 2 })
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('sweep'),
+        expect.objectContaining({ talkId: 'talk-1' }),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('makes the claim’s requests through a client with a timeout inside the reserve', async () => {
+    await deliverFeedbackSummaries({ now: NOW })
+    expect(h.clientConfigs).toContainEqual(
+      expect.objectContaining({
+        apiVersion: '2025-02-19',
+        timeout: expect.any(Number),
+      }),
+    )
+    const timeouts = h.clientConfigs
+      .map((c) => c.timeout)
+      .filter((t): t is number => typeof t === 'number')
+    expect(Math.max(...timeouts)).toBeLessThanOrEqual(5_000)
+  })
+
+  it('sends when the claim’s commit timed out here but landed', async () => {
+    store().afterNextCommit(() => {
+      throw Object.assign(new Error('Request timed out'), {
+        code: 'ETIMEDOUT',
+      })
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-1')).toBe(NOW.toISOString())
+    expect(emailsTo()).toHaveLength(2)
+    expect(report).toMatchObject({ claimed: 1, failed: 0 })
+  })
+
+  it('leaves the talk unclaimed when the claim’s commit timed out and did not land', async () => {
+    store().beforeNextCommit(() => {
+      throw Object.assign(new Error('Request timed out'), {
+        code: 'ETIMEDOUT',
+      })
+    })
+
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(sentAt('talk-1')).toBeUndefined()
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(report).toMatchObject({ claimed: 0, failed: 1 })
+  })
+
+  it('does not commit a claim when the version reads used up the time it needed', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const start = Date.now()
+      // Fits when the run reads the talk; the version lookup then takes 30 s.
+      store().beforeEachRead((read) => {
+        if (read.query.includes('sanity::versionOf')) {
+          vi.setSystemTime(start + 30_000)
+        }
+      })
+
+      const report = await deliverFeedbackSummaries({
+        now: NOW,
+        deadline: new Date(start + 100_000),
+      })
+
+      expect(sentAt('talk-1')).toBeUndefined()
+      expect(h.sendEmail).not.toHaveBeenCalled()
+      expect(report).toMatchObject({ claimed: 0, notReached: 1 })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not hold the emails, or the run, on a bell write that hangs', async () => {

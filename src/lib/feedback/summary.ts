@@ -214,6 +214,9 @@ export async function deliverFeedbackSummaries({
     senderDown: 0,
   }
   const client = versionsClient()
+  // The claim's reads and commit, each bounded, so the reserve they are
+  // budgeted in holds (the client's default is five minutes).
+  const claimClient = versionsClient({ timeout: CLAIM_REQUEST_TIMEOUT_MS })
   const pacing = { sends: 0 }
   // One sender per conference, resolved once per run and BEFORE any of its
   // talks is claimed: a sender that cannot be resolved leaves them unclaimed.
@@ -232,13 +235,19 @@ export async function deliverFeedbackSummaries({
   // rather than being claimed and failing too.
   const down = new Set<string>()
   for (const item of due) {
+    // Past the deadline nothing more is read: a backlog must not run the
+    // function past its budget and lose this report.
+    if (deadline && Date.now() >= deadline.getTime()) {
+      report.notReached++
+      continue
+    }
     try {
       const sender = await senderFor(item.conference)
       if (down.has(sender.key)) {
         report.senderDown++
         continue
       }
-      const outcome = await deliverOne(client, item, {
+      const outcome = await deliverOne(client, claimClient, item, {
         now,
         deadline,
         pacing,
@@ -288,6 +297,7 @@ export async function deliverFeedbackSummaries({
 
 async function deliverOne(
   client: VersionsClient,
+  claimClient: VersionsClient,
   {
     talkId,
     conferenceId,
@@ -326,14 +336,18 @@ async function deliverOne(
     if (!prepared) return 'skipped'
     // Right before the claim: once claimed, a run killed before the sends
     // loses them for good. Unclaimed, the talk waits for the next run.
-    if (deadline && !fitsBefore(deadline, prepared.recipients)) {
+    const recipients = prepared.recipients
+    const fits = () => !deadline || fitsBefore(deadline, recipients)
+    const outcome = fits()
+      ? await claim(claimClient, prepared.talk, conferenceId, now, fits)
+      : 'late'
+    if (outcome === 'late') {
       console.error(
         '[feedback] summary does not fit before the deadline; the talk stays unclaimed for the next run',
-        { talkId, recipients: prepared.recipients },
+        { talkId, recipients },
       )
       return 'notReached'
     }
-    const outcome = await claim(client, prepared.talk, conferenceId, now)
     if (outcome === 'claimed') break
     if (outcome === 'refused') return 'skipped'
     if (attempt >= MAX_RETRIES) {
@@ -342,6 +356,19 @@ async function deliverOne(
   }
   console.log(`[feedback] claimed ${talkId} for its summary`)
   const { talk, totals, comments, speakerIds } = prepared
+
+  // Before the emails, so a run that dies during them still leaves no
+  // stale draft to publish the marker away (and bring a second summary);
+  // bounded, so it cannot take their time. On a timeout it goes on alone.
+  await bounded(
+    sweepTalkVersions(claimClient, talkId, 'feedbackSummarySentAt'),
+    SWEEP_TIMEOUT_MS,
+    () =>
+      console.error(
+        '[feedback] summary sweep of the talk versions still pending; sending anyway',
+        { talkId, conferenceId },
+      ),
+  )
 
   // Read again AFTER the claim: a speaker erased since the talk was read
   // must hear nothing (§11.1), and erasure does not touch the talk, so the
@@ -436,9 +463,6 @@ async function deliverOne(
   }
   const results = await Promise.all(sends)
   await bell
-  // Last: it keeps a later publish of a stale draft from bringing the talk
-  // back, and does nothing for this delivery, so it never takes its time.
-  await sweepTalkVersions(client, talkId, 'feedbackSummarySentAt')
 
   const count = (r: (typeof results)[number]) =>
     results.filter((x) => x === r).length
@@ -452,6 +476,12 @@ async function deliverOne(
 
 /** How long the run waits for the bell write before going on. */
 const BELL_TIMEOUT_MS = 10_000
+/** Each speaker read through the doc endpoint. */
+const SPEAKER_READ_TIMEOUT_MS = 10_000
+/** How long the run waits for the version sweep before sending anyway. */
+const SWEEP_TIMEOUT_MS = 10_000
+/** Each Sanity request of the claim: the version reads, the commit, the read-back. */
+const CLAIM_REQUEST_TIMEOUT_MS = 5_000
 
 /** `work`, or after `ms` whatever it has not done, with `onTimeout` told. */
 function bounded(
@@ -472,12 +502,18 @@ function bounded(
 }
 
 /**
- * After the fit check and before the first email: the claim's own read and
- * commit, and the speaker read after it (bounded at
- * {@link SPEAKER_READ_TIMEOUT_MS}). The bell runs alongside the emails and
- * the sweep after them, so neither takes the emails' time.
+ * After the fit check and before the first email, each step bounded: the
+ * claim's version reads (two rounds), its commit and a read-back of a
+ * failed one ({@link CLAIM_REQUEST_TIMEOUT_MS} each), the sweep
+ * ({@link SWEEP_TIMEOUT_MS}) and the speaker read
+ * ({@link SPEAKER_READ_TIMEOUT_MS}), and a margin. The bell runs alongside
+ * the emails, so it takes none of this.
  */
-const CLAIM_OVERHEAD_MS = 20_000
+const CLAIM_OVERHEAD_MS =
+  4 * CLAIM_REQUEST_TIMEOUT_MS +
+  SWEEP_TIMEOUT_MS +
+  SPEAKER_READ_TIMEOUT_MS +
+  5_000
 
 /**
  * A talk's every email, at its worst, ends before `deadline`: started a
@@ -500,8 +536,6 @@ interface Prepared {
   /** Speakers who are not erased and have an address: the emails to fit. */
   recipients: number
 }
-
-const SPEAKER_READ_TIMEOUT_MS = 10_000
 
 /** The speakers who exist and are not erased, as the doc endpoint has them now. */
 async function liveSpeakers(
@@ -594,7 +628,9 @@ async function claim(
   talk: SummaryTalk,
   conferenceId: string,
   now: Date,
-): Promise<'claimed' | 'stale' | 'refused'> {
+  /** The talk's emails still fit the run, checked again before the commit. */
+  fits: () => boolean,
+): Promise<'claimed' | 'stale' | 'refused' | 'late'> {
   const { published, versions, locked, releasesListed } =
     await readTalkVersions(client, talk._id)
   if (!mayClaim(published, talk._id, conferenceId)) return 'refused'
@@ -608,6 +644,9 @@ async function claim(
     )
     return 'refused'
   }
+  // The version reads took time: once committed, a run killed before the
+  // sends loses them, so the commit waits for nothing that no longer fits.
+  if (!fits()) return 'late'
   const sentAt = now.toISOString()
   // Our own transaction id: Sanity stores it as the talk's `_rev`, so a
   // claim whose reply was lost can be recognized as ours.
