@@ -107,9 +107,13 @@ export async function readSpeakerResults({
   const responses = rows ?? []
   const comments: SpeakerComment[] = []
   for (const r of responses) {
-    const shown = r.hiddenAt ? null : commentOf(r)
-    if (!shown) continue
-    comments.push({ id: r._id, ...shown, submittedAt: toMinute(r.submittedAt) })
+    if (!isVisibleComment(r)) continue
+    comments.push({
+      id: r._id,
+      colour: r.colour,
+      comment: r.comment,
+      submittedAt: toMinute(r.submittedAt),
+    })
   }
   return {
     status: 'ok',

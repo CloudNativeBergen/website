@@ -24,9 +24,6 @@ export const FEEDBACK_TONE: Record<
   },
 }
 
-export const plural = (n: number, one: string, many: string) =>
-  `${n} ${n === 1 ? one : many}`
-
 /**
  * The combined totals as one stacked bar, green to red (§4.3). Decorative:
  * the numbers beside it say the same. Spans, so it may sit inside a button.
