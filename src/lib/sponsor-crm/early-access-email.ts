@@ -28,7 +28,7 @@ export const EARLY_ACCESS_SEND_REFUSALS: Record<
   localhost:
     'Workshop early access cannot be sent from localhost. Deploy to a production domain first.',
   'no-window':
-    'This conference has no early-access period. Under Workshops, set a "Sponsor Early Access Opens" time that is earlier than the time registration opens for everyone.',
+    'This conference has no early-access period. Under Workshops, set a "Sponsor early access opens" time that is earlier than the time registration opens for everyone.',
   'opening-passed':
     'The early-access period is over. Workshop registration has already opened for everyone or has closed, so a link gives no head start.',
   'not-won':

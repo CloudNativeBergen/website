@@ -36,6 +36,8 @@ import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { TAP_GUARD_MS } from '@/hooks/useOpenedLongEnough'
 import { WorkshopsClientPage } from './WorkshopsClientPage'
+import { WorkshopTicketsSection } from './tickets/WorkshopTicketsSection'
+import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }))
 vi.mock('next/navigation', () => ({
@@ -68,6 +70,8 @@ const server = {
   holdHolders: null as Promise<void> | null,
   /** Sign-ups whose owner holds no workshop ticket: the flagged list. */
   flaggedIds: [] as string[],
+  /** Holders with no sign-up. A test changes it to tell two reads apart. */
+  notSignedUp: 3,
   /** The conference the request's domain resolves to, as the server says. */
   conferenceId: 'conf-1',
 }
@@ -103,8 +107,6 @@ async function answer(
   input: unknown,
 ): Promise<[unknown, number]> {
   switch (procedure) {
-    case 'workshop.admin.getAllSignups':
-      return [ok({ success: true, data: server.signups.map(row) }), 200]
     case 'workshop.admin.listSignups': {
       const { status } = input as { status?: string }
       const data = server.signups.filter((s) => s.status === status).map(row)
@@ -155,7 +157,7 @@ async function answer(
         holders: server.signups.length + 3,
         confirmed: count('confirmed'),
         waitlistOnly: count('waitlist'),
-        notSignedUp: 3,
+        notSignedUp: server.notSignedUp,
         flagged: server.signups
           .filter((s) => server.flaggedIds.includes(s._id))
           .map((s) => ({
@@ -258,6 +260,7 @@ beforeEach(() => {
     holdersFail: false,
     holdHolders: null,
     flaggedIds: [],
+    notSignedUp: 3,
     conferenceId: 'conf-1',
   })
   router.refresh.mockReset()
@@ -476,9 +479,9 @@ describe('the registration card on the page', () => {
     const row = (name: string) =>
       screen.getByText(name).nextElementSibling?.textContent
     expect({
-      sponsorStart: row('Sponsor Early Access Opens'),
-      start: row('Registration Opens'),
-      end: row('Registration Closes'),
+      sponsorStart: row('Sponsor early access opens'),
+      start: row('Registration opens'),
+      end: row('Registration closes'),
     }).toEqual({
       sponsorStart: '1. juni 2026 kl. 08:00',
       start: '15. juni 2026 kl. 08:30',
@@ -498,25 +501,26 @@ describe('the ticket holders (#1333)', () => {
 
   it('follow an action on a sign-up: read again after "Move to waitlist"', async () => {
     renderPage()
-    expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent('2')
+    expect((await tile('Not signed up')).nextElementSibling).toHaveTextContent(
+      '3',
+    )
+    // Another holder turns up before the re-read: only a new read shows it.
+    server.notSignedUp = 4
     await moveAdaToTheWaitlist()
     await screen.findByText('Moved to waitlist')
 
     await waitFor(async () =>
-      expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent(
-        '1',
-      ),
-    )
-    expect((await tile('Waitlist only')).nextElementSibling).toHaveTextContent(
-      '1',
+      expect(
+        (await tile('Not signed up')).nextElementSibling,
+      ).toHaveTextContent('4'),
     )
     expect(server.holderReads).toBe(2)
   })
 
-  // Spec §3: the banner that names the not-set types (in the "Workshop
-  // tickets" section) sits above the statistics, so the people it explains
-  // are explained before the totals that leave them out.
-  it('come after the "Workshop tickets" section and its banner', async () => {
+  // #1452: the day-to-day sections first, setup last. A ticket type that
+  // needs a decision is named at the top, in "Needs attention", above the
+  // totals that leave its holders out (spec §3 of #1333).
+  it('come after the workshops and before the settings', async () => {
     render(
       <Providers>
         <WorkshopsClientPage
@@ -528,11 +532,18 @@ describe('the ticket holders (#1333)', () => {
         />
       </Providers>,
     )
-    const tickets = screen.getByRole('region', { name: 'Workshop tickets' })
-    expect(
-      tickets.compareDocumentPosition(await panel()) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
+    const order = [
+      screen.getByRole('region', { name: 'Workshops' }),
+      await panel(),
+      screen.getByRole('region', { name: 'Sponsor early access' }),
+      screen.getByRole('region', { name: 'Workshop tickets' }),
+    ]
+    for (let i = 1; i < order.length; i++) {
+      expect(
+        order[i - 1].compareDocumentPosition(order[i]) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    }
   })
 
   // An action while the FIRST read is still on its way: that read began
@@ -545,17 +556,17 @@ describe('the ticket holders (#1333)', () => {
       providerAnswers = resolve
     })
     renderPage()
+    // The first read has taken its answer (3) and waits on the provider.
+    await waitFor(() => expect(server.holderReads).toBe(1))
+    server.notSignedUp = 4
     await moveAdaToTheWaitlist()
     await screen.findByText('Moved to waitlist')
     providerAnswers()
 
     await waitFor(async () =>
-      expect((await tile('Confirmed')).nextElementSibling).toHaveTextContent(
-        '1',
-      ),
-    )
-    expect((await tile('Waitlist only')).nextElementSibling).toHaveTextContent(
-      '1',
+      expect(
+        (await tile('Not signed up')).nextElementSibling,
+      ).toHaveTextContent('4'),
     )
     expect(server.holderReads).toBe(2)
   })
@@ -699,4 +710,92 @@ describe('the ticket holders (#1333)', () => {
       expect(await screen.findByText('Total sign-ups')).toBeInTheDocument()
     },
   )
+})
+
+/**
+ * "Needs attention" (#1452): at the top of the page, only when something
+ * further down needs the organizer, with a link to where it is settled.
+ */
+describe('Needs attention (#1452)', () => {
+  const attention = () =>
+    screen.queryByRole('region', { name: 'Needs attention' })
+
+  function renderWithTickets(list: ReturnType<typeof buildWorkshopTicketList>) {
+    render(
+      <Providers>
+        <WorkshopsClientPage
+          conferenceId="conf-1"
+          initialWorkshops={SERVER_RENDER}
+          reminderDisabledReason={null}
+          lastReminder={null}
+          ticketsSection={
+            <WorkshopTicketsSection list={list} providerLabel="Checkin.no" />
+          }
+        />
+      </Providers>,
+    )
+  }
+
+  it('names a ticket type that needs a decision, and links to its card', async () => {
+    // Configured, with one type nobody has answered for.
+    renderWithTickets(
+      buildWorkshopTicketList(
+        ['Early Bird', 'Speaker'],
+        [{ typeName: 'Early Bird', grantsWorkshop: true }],
+      ),
+    )
+    const region = await screen.findByRole('region', {
+      name: 'Needs attention',
+    })
+    expect(region).toHaveTextContent(
+      'A ticket type needs a decision before its holders can sign up.',
+    )
+    const link = within(region).getByRole('link', {
+      name: 'Review workshop tickets',
+    })
+    const target = document.getElementById(link.getAttribute('href')!.slice(1))
+    expect(target).toBe(
+      screen.getByRole('region', { name: /^Workshop tickets/ }),
+    )
+    // The page's own reads have settled before the test ends.
+    await cardButton(/^Confirmed\s*120$/)
+  })
+
+  it('names the people flagged, and links to the ticket holders', async () => {
+    server.flaggedIds = ['signup-ada', 'signup-bob']
+    renderWithTickets(
+      buildWorkshopTicketList(
+        ['Early Bird'],
+        [{ typeName: 'Early Bird', grantsWorkshop: true }],
+      ),
+    )
+    const region = await screen.findByRole('region', {
+      name: 'Needs attention',
+    })
+    expect(region).toHaveTextContent(
+      '2 people have signed up without a workshop ticket.',
+    )
+    expect(region).not.toHaveTextContent('ticket type needs a decision')
+    const link = within(region).getByRole('link', {
+      name: 'Review ticket holders',
+    })
+    expect(document.getElementById(link.getAttribute('href')!.slice(1))).toBe(
+      screen.getByRole('region', { name: 'Ticket holders' }),
+    )
+  })
+
+  it('is not on the page when nothing needs the organizer', async () => {
+    renderWithTickets(
+      buildWorkshopTicketList(
+        ['Early Bird'],
+        [{ typeName: 'Early Bird', grantsWorkshop: true }],
+      ),
+    )
+    // The ticket holders have been read, and flag nobody.
+    const holders = await screen.findByRole('region', {
+      name: 'Ticket holders',
+    })
+    await within(holders).findByText('Flagged', { selector: 'span' })
+    expect(attention()).toBeNull()
+  })
 })

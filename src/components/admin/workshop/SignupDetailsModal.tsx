@@ -20,7 +20,8 @@ interface SignupDetailsModalProps {
   onClose: () => void
   workshopTitle: string
   status: WorkshopSignupStatus | null
-  signups: WorkshopSignupExisting[]
+  /** `undefined` while they are being read: never shown as an empty list. */
+  signups: WorkshopSignupExisting[] | undefined
   onConfirmSignup: (signupId: string, userName: string) => void
   /** Runs after the organizer has answered the question this modal asks. */
   onMoveToWaitlist: (signupId: string, userName: string) => void
@@ -159,14 +160,20 @@ export function SignupDetailsModal({
       size="4xl"
       title={`${workshopTitle} - ${statusLabel} Signups`}
     >
-      <DataTable<WorkshopSignupExisting>
-        data={signups}
-        columns={columns}
-        keyExtractor={(signup) => signup._id}
-        emptyState={{
-          title: `No ${status ?? ''} signups for this workshop`,
-        }}
-      />
+      {signups ? (
+        <DataTable<WorkshopSignupExisting>
+          data={signups}
+          columns={columns}
+          keyExtractor={(signup) => signup._id}
+          emptyState={{
+            title: `No ${status ?? ''} signups for this workshop`,
+          }}
+        />
+      ) : (
+        <p role="status" className="text-sm text-gray-500 dark:text-gray-400">
+          Reading the sign-ups…
+        </p>
+      )}
 
       <SignupQuestions
         moveTarget={moveTarget && { ...moveTarget, workshopTitle }}

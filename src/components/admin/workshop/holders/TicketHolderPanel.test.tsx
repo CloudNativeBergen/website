@@ -83,10 +83,15 @@ describe('TicketHolderPanel', () => {
   it('shows each number on its value', () => {
     renderPanel(READY)
     expect(valueOf('Holders')).toBe('41')
-    expect(valueOf('Confirmed')).toBe('23')
-    expect(valueOf('Waitlist only')).toBe('5')
     expect(valueOf('Not signed up')).toBe('13')
     expect(valueOf('Flagged')).toBe('1')
+  })
+
+  it('counts no seats or waitlists: the header counts those (#1452)', () => {
+    renderPanel(READY)
+    const panel = screen.getByRole('region', { name: 'Ticket holders' })
+    expect(panel.textContent).not.toMatch(/Confirmed|Waitlist/)
+    expect(panel.textContent).not.toContain('23')
   })
 
   it('a failed read says unavailable and shows no number', () => {

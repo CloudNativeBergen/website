@@ -16,7 +16,7 @@ const sponsors = (n: number) => `${n} ${n === 1 ? 'sponsor' : 'sponsors'}`
 
 /** The organizer is on the workshops page already: point at the field. */
 const NO_WINDOW_HERE =
-  'Set a Sponsor Early Access Opens time above, earlier than the time registration opens for everyone.'
+  'Set when sponsor early access opens under Settings, in Workshop registration, earlier than the time registration opens for everyone.'
 
 /**
  * "Send early access to sponsors" (#1347): mails the workshop early-access

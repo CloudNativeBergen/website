@@ -120,7 +120,7 @@ export const NoWindow: Story = {
         preview({
           count: 7,
           refusal:
-            'This conference has no early-access period. Under Workshops, set a "Sponsor Early Access Opens" time that is earlier than the time registration opens for everyone.',
+            'This conference has no early-access period. Under Workshops, set a "Sponsor early access opens" time that is earlier than the time registration opens for everyone.',
         }),
       ],
     },
@@ -128,7 +128,7 @@ export const NoWindow: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement)
     await expect(
-      await page.findByText(/Sponsor Early Access Opens time above/),
+      await page.findByText(/under Settings, in Workshop registration/),
     ).toBeInTheDocument()
     await expect(page.getByRole('button', { name: BUTTON })).toBeDisabled()
   },

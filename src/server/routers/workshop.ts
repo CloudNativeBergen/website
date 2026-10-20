@@ -329,9 +329,9 @@ function workshopUserName(user: WorkshopUserIdentity): string {
  * times, for a refusal that has to point an organizer at one of them.
  */
 const REGISTRATION_TIME_LABELS = {
-  workshopRegistrationSponsorStart: 'Sponsor Early Access Opens',
-  workshopRegistrationStart: 'Registration Opens',
-  workshopRegistrationEnd: 'Registration Closes',
+  workshopRegistrationSponsorStart: 'Sponsor early access opens',
+  workshopRegistrationStart: 'Registration opens',
+  workshopRegistrationEnd: 'Registration closes',
 } as const
 
 export const workshopRouter = router({
@@ -913,8 +913,8 @@ export const workshopRouter = router({
      * The "Early sign-ups" list (#1348, spec §9): every sign-up of the
      * request's conference that a sponsor's early-access link admitted,
      * narrowed to one sponsor when `sponsorId` is sent. THE NARROWING IS DONE
-     * HERE, over every match: the page's general read (`getAllSignups`) holds
-     * the first hundred sign-ups only. One read, see `listEarlySignups`.
+     * HERE, over every match: a page of sign-ups would hold some of them
+     * only. One read, see `listEarlySignups`.
      */
     listEarlySignups: workshopAdminProcedure
       .input(workshopEarlySignupsSchema)
@@ -1726,7 +1726,7 @@ export const workshopRouter = router({
           ) {
             throw refusal(
               // By the names the form gives the two fields.
-              'Registration Closes must be later than Registration Opens',
+              'Registration closes must be later than Registration opens',
               'workshopRegistrationStart',
               'workshopRegistrationEnd',
             )

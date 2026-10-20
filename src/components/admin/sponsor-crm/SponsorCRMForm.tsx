@@ -64,7 +64,7 @@ interface SponsorCRMFormProps {
   onSendContract?: (options: ContractSendOptions) => void
   /** The conference has workshops: the contract view offers an early-access link (#1346). */
   workshopsEnabled?: boolean
-  /** The conference has a "Sponsor Early Access Opens" time, passed on with it. */
+  /** The conference has a "Sponsor early access opens" time, passed on with it. */
   sponsorStartSet?: boolean
   /** Send → Workshop early access (#1347), raised from the contract view's early-access section. */
   onSendEarlyAccess?: () => void

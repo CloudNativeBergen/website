@@ -39,7 +39,7 @@ const END = '2026-07-01T07:00:00.000Z'
 type Times = Parameters<typeof WorkshopRegistrationSettings>[0]
 
 const REFUSAL =
-  'Sponsor early access must start before registration opens for everyone. Sponsor Early Access Opens is set to 1. juni 2026 kl. 08:00.'
+  'Sponsor early access must start before registration opens for everyone. Sponsor early access opens is set to 1. juni 2026 kl. 08:00.'
 
 const h = vi.hoisted(() => ({
   /** What is stored: what the page hands the card when it is read again. */
@@ -168,14 +168,14 @@ describe('a save refused about a time the form does not show', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Edit workshop registration' }),
     )
-    expect(field(/Sponsor Early Access Opens/).value).toBe('')
+    expect(field(/Sponsor early access opens/).value).toBe('')
     // No refusal yet: nothing describes the fields but the sponsor field's help.
     expect({
-      sponsorStart: field(/Sponsor Early Access Opens/).getAttribute(
+      sponsorStart: field(/Sponsor early access opens/).getAttribute(
         'aria-describedby',
       ),
-      start: field(/Registration Opens/).getAttribute('aria-describedby'),
-      end: field(/Registration Closes/).getAttribute('aria-describedby'),
+      start: field(/Registration opens/).getAttribute('aria-describedby'),
+      end: field(/Registration closes/).getAttribute('aria-describedby'),
     }).toEqual({
       sponsorStart: 'workshop-reg-sponsor-start-help',
       start: null,
@@ -184,7 +184,7 @@ describe('a save refused about a time the form does not show', () => {
     expect(scrolledIntoView.mock.calls).toEqual([])
 
     // The organizer moves the opening to 30 May, before that sponsor start.
-    fireEvent.change(field(/Registration Opens/), {
+    fireEvent.change(field(/Registration opens/), {
       target: { value: '2026-05-30T09:00' },
     })
     h.refuseWith = REFUSAL
@@ -210,11 +210,11 @@ describe('a save refused about a time the form does not show', () => {
     // its help text as well.
     expect(alert.id).toBe('workshop-reg-error')
     expect({
-      sponsorStart: field(/Sponsor Early Access Opens/).getAttribute(
+      sponsorStart: field(/Sponsor early access opens/).getAttribute(
         'aria-describedby',
       ),
-      start: field(/Registration Opens/).getAttribute('aria-describedby'),
-      end: field(/Registration Closes/).getAttribute('aria-describedby'),
+      start: field(/Registration opens/).getAttribute('aria-describedby'),
+      end: field(/Registration closes/).getAttribute('aria-describedby'),
     }).toEqual({
       sponsorStart: 'workshop-reg-sponsor-start-help workshop-reg-error',
       start: 'workshop-reg-error',
@@ -223,15 +223,15 @@ describe('a save refused about a time the form does not show', () => {
 
     // The card was read again, once, and the form took in what is stored…
     expect(h.refreshes).toBe(1)
-    expect(field(/Sponsor Early Access Opens/).value).toBe('2026-06-01T08:00')
+    expect(field(/Sponsor early access opens/).value).toBe('2026-06-01T08:00')
     // …without discarding what the organizer typed, or the refusal.
-    expect(field(/Registration Opens/).value).toBe('2026-05-30T09:00')
+    expect(field(/Registration opens/).value).toBe('2026-05-30T09:00')
     expect(
       within(screen.getByRole('dialog')).getByRole('alert'),
     ).toHaveTextContent(REFUSAL)
 
     // Now the time can be cleared: emptying the field IS a change.
-    fireEvent.change(field(/Sponsor Early Access Opens/), {
+    fireEvent.change(field(/Sponsor early access opens/), {
       target: { value: '' },
     })
     save()
@@ -261,7 +261,7 @@ describe('a save refused about a time the form does not show', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Edit workshop registration' }),
     )
-    fireEvent.change(field(/Registration Closes/), {
+    fireEvent.change(field(/Registration closes/), {
       target: { value: '2026-07-02T10:00' },
     })
     save()
@@ -302,13 +302,13 @@ describe('a save that changes nothing, over a card that is out of date', () => {
       workshopRegistrationStart: '2026-10-21T07:00:00.000Z',
       workshopRegistrationEnd: '2026-11-01T08:00:00.000Z',
     }
-    expect(row('Registration Opens')).toBe('20. oktober 2026 kl. 09:00')
+    expect(row('Registration opens')).toBe('20. oktober 2026 kl. 09:00')
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Edit workshop registration' }),
     )
     // Retyped as it stands: 20 October is what the form believes is stored.
-    fireEvent.change(field(/Registration Opens/), {
+    fireEvent.change(field(/Registration opens/), {
       target: { value: '2026-10-20T09:00' },
     })
     save()
@@ -316,7 +316,7 @@ describe('a save that changes nothing, over a card that is out of date', () => {
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0))
     expect(h.saves).toEqual([])
     expect(h.refreshes).toBe(1)
-    expect(row('Registration Opens')).toBe('21. oktober 2026 kl. 09:00')
+    expect(row('Registration opens')).toBe('21. oktober 2026 kl. 09:00')
   })
 })
 
@@ -360,7 +360,7 @@ describe('closing the form while a save is pending', () => {
       screen.getByRole('button', { name: 'Edit workshop registration' }),
     )
     await waitFor(() => expect(formIs()).toBe('open'))
-    fireEvent.change(field(/Registration Closes/), {
+    fireEvent.change(field(/Registration closes/), {
       target: { value: '2026-07-02T10:00' },
     })
   }
@@ -404,7 +404,7 @@ describe('closing the form while a save is pending', () => {
     )
     expect(formIs()).toBe('open')
     // What was typed is still there to be corrected.
-    expect(field(/Registration Closes/).value).toBe('2026-07-02T10:00')
+    expect(field(/Registration closes/).value).toBe('2026-07-02T10:00')
   })
 
   it('stays open under the X and Escape until the save’s success closes it', async () => {

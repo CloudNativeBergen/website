@@ -9,21 +9,21 @@ import { StatCard } from '@/components/admin/stats'
 import { FlaggedSignupsModal } from './FlaggedSignupsModal'
 import type { FlaggedPerson } from '@/lib/workshop/holders'
 import type { TicketHolderView } from './view'
+import { WorkshopSection } from '../WorkshopSection'
 
 const HEADING_ID = 'ticket-holders-heading'
 
-const LABELS = [
-  'Holders',
-  'Confirmed',
-  'Waitlist only',
-  'Not signed up',
-  'Flagged',
-] as const
+/** The anchor "Needs attention" links to. */
+export const TICKET_HOLDERS_ANCHOR = 'ticket-holders'
+
+const LABELS = ['Holders', 'Not signed up', 'Flagged'] as const
 
 /**
  * "Ticket holders" on `/admin/workshops` (#1333, spec §4): the people who hold
  * a ticket that grants workshop access, and how many of them have signed up.
- * People, by email, where the totals above count sign-ups.
+ * People, by email, where the totals above count sign-ups. It shows no count of
+ * seats or waitlists: those are the header's, counted from the sign-ups, and a
+ * second count by person said different numbers for the same words (#1452).
  *
  * Read after the page: the numbers say they are coming, and a read that
  * failed says the numbers are unavailable. Never a zero it does not know.
@@ -66,31 +66,24 @@ export function TicketHolderPanel({
   if (!flagged && flaggedOpen) setFlaggedOpen(false)
 
   return (
-    <section
-      aria-labelledby={HEADING_ID}
-      className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
+    <WorkshopSection
+      id={TICKET_HOLDERS_ANCHOR}
+      headingId={HEADING_ID}
+      // Focus lands here when the button that opened the flagged list has
+      // left the page (its last person went).
+      headingRef={heading}
+      icon={UserGroupIcon}
+      title="Ticket holders"
+      description={
+        <>
+          People holding a ticket that grants workshop access, counted once each
+          by email.
+          {view.state === 'ready' &&
+            !view.stats.configured &&
+            ' No ticket type is set yet, so the built-in list decides who holds one, as it does at sign-up.'}
+        </>
+      }
     >
-      <div className="flex items-center gap-2">
-        <UserGroupIcon className="size-5 shrink-0 text-gray-400 dark:text-gray-500" />
-        <h3
-          ref={heading}
-          id={HEADING_ID}
-          // Focusable from code only: focus lands here when the button that
-          // opened the flagged list has left the page (its last person went).
-          tabIndex={-1}
-          className="text-lg font-medium text-gray-900 outline-none dark:text-white"
-        >
-          Ticket holders
-        </h3>
-      </div>
-      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        People holding a ticket that grants workshop access, counted once each
-        by email.
-        {view.state === 'ready' &&
-          !view.stats.configured &&
-          ' No ticket type is set yet, so the built-in list decides who holds one, as it does at sign-up.'}
-      </p>
-
       {view.state === 'loading' && (
         <>
           <p className="sr-only" role="status">
@@ -98,7 +91,7 @@ export function TicketHolderPanel({
           </p>
           <div
             aria-hidden
-            className="mt-4 grid animate-pulse grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5"
+            className="mt-4 grid animate-pulse grid-cols-2 gap-3 sm:grid-cols-3"
           >
             {LABELS.map((label) => (
               <div
@@ -140,23 +133,11 @@ export function TicketHolderPanel({
 
       {view.state === 'ready' && (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             <StatCard
               label="Holders"
               value={view.stats.holders}
               subtitle="Hold a workshop ticket"
-            />
-            <StatCard
-              label="Confirmed"
-              value={view.stats.confirmed}
-              color="green"
-              subtitle="Have a seat"
-            />
-            <StatCard
-              label="Waitlist only"
-              value={view.stats.waitlistOnly}
-              color="blue"
-              subtitle="Waiting, no seat"
             />
             <StatCard
               label="Not signed up"
@@ -205,6 +186,6 @@ export function TicketHolderPanel({
         isDeleting={isDeleting}
         isRefreshing={isRefreshing}
       />
-    </section>
+    </WorkshopSection>
   )
 }

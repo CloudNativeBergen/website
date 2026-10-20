@@ -245,7 +245,7 @@ const REFUSALS = [
   ],
   [
     'no-window',
-    'This conference has no early-access period. Under Workshops, set a "Sponsor Early Access Opens" time that is earlier than the time registration opens for everyone.',
+    'This conference has no early-access period. Under Workshops, set a "Sponsor early access opens" time that is earlier than the time registration opens for everyone.',
   ],
   [
     'opening-passed',

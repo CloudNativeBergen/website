@@ -13,6 +13,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -407,6 +408,21 @@ describe('a configured list', () => {
     fireEvent.click(toggle())
     rerender(list(1))
     expect(toggle()).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  // "Needs attention" on the page links here (#1452): a link followed while
+  // the card is closed opens it.
+  it('opens when the address moves to its anchor', () => {
+    // Every type answered: nothing opens the card by itself.
+    section(['Two-day pass', 'Day pass'], roles.slice(0, 2))
+    const toggle = screen.getByRole('button', { name: /^Workshop tickets/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    act(() => {
+      window.location.hash = 'workshop-tickets'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    window.location.hash = ''
   })
 
   it('shows a load failure even after the organizer closed the card', () => {
