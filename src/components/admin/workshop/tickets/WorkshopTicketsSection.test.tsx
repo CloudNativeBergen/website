@@ -464,6 +464,42 @@ describe('a configured list', () => {
     window.history.replaceState(null, '', '#')
   })
 
+  // A save refreshes the page, and Next writes the entry's state anew without
+  // the page's own keys. Shown again later (Back to a kept page), the card is
+  // not brought into view a second time; a NEW entry for the same address is.
+  it('is brought into view once per entry, also after a refresh wiped the entry’s state', () => {
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    const navigation = { currentEntry: { key: 'entry-1' } }
+    vi.stubGlobal('navigation', navigation)
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+      vi.unstubAllGlobals()
+      window.history.replaceState(null, '', window.location.pathname)
+    })
+    window.history.replaceState(null, '', '#workshop-tickets')
+    const list = buildWorkshopTicketList(
+      ['Two-day pass', 'Day pass'],
+      roles.slice(0, 2),
+    )
+    const card = () => (
+      <WorkshopTicketsSection list={list} providerLabel="Checkin.no" />
+    )
+
+    const first = render(card())
+    first.unmount()
+    // What `router.refresh()` writes: Next's keys only.
+    window.history.replaceState({ __NA: true }, '')
+    render(card()).unmount()
+    expect(scrolled).toHaveBeenCalledTimes(1)
+
+    navigation.currentEntry = { key: 'entry-2' }
+    window.history.replaceState({ __NA: true }, '')
+    render(card())
+    expect(scrolled).toHaveBeenCalledTimes(2)
+  })
+
   it('shows a load failure even after the organizer closed the card', () => {
     // Opens on a decision to make; the organizer closes it.
     const { rerender } = section(

@@ -6,6 +6,44 @@ import { useEffect } from 'react'
 const shownKey = (anchor: string) => `anchorShown:${anchor}`
 
 /**
+ * The marks kept by the Navigation API's entry key, where the browser has it.
+ * Next drops the page's own keys from `history.state` on `router.refresh()`
+ * (every save on this page refreshes), and the entry key survives that.
+ */
+const shownEntries = new Set<string>()
+const entryKey = () =>
+  (
+    window as unknown as {
+      navigation?: { currentEntry?: { key: string } | null }
+    }
+  ).navigation?.currentEntry?.key
+
+function shownInThisEntry(anchor: string) {
+  const key = entryKey()
+  if (key && shownEntries.has(`${key}:${anchor}`)) return true
+  const state: unknown = window.history.state
+  return (
+    !!state &&
+    typeof state === 'object' &&
+    !!(state as Record<string, unknown>)[shownKey(anchor)]
+  )
+}
+
+function markShownInThisEntry(anchor: string) {
+  const key = entryKey()
+  if (key) shownEntries.add(`${key}:${anchor}`)
+  const state: unknown = window.history.state
+  // Next's own keys in the entry are kept, so it passes this through.
+  window.history.replaceState(
+    {
+      ...(state && typeof state === 'object' ? state : {}),
+      [shownKey(anchor)]: true,
+    },
+    '',
+  )
+}
+
+/**
  * A COLLAPSED CARD THAT A LINK POINTS AT OPENS, AND IS SHOWN (#1452).
  *
  * Arriving with the card's anchor in the address (a link from another page,
@@ -19,7 +57,8 @@ const shownKey = (anchor: string) => `anchorShown:${anchor}`
  * tickets card mounts twice on arrival (its skeleton, then the list that
  * streams in seconds later), and a page Next kept runs its effects again
  * when shown. Neither may pull the organizer back once they have scrolled
- * away; on Back, the position is the browser's.
+ * away; on Back, the position is the browser's. A reload of the address
+ * (a new page) brings it into view again, as the browser itself would.
  *
  * `setOpen` must be stable (a state setter).
  */
@@ -31,17 +70,11 @@ export function useOpenedByAnchor(
     const linked = () => window.location.hash === `#${anchor}`
     if (linked()) {
       setOpen(true)
-      const state: unknown = window.history.state
-      const entry =
-        state && typeof state === 'object'
-          ? (state as Record<string, unknown>)
-          : {}
       const section = document.getElementById(anchor)
-      if (section && !entry[shownKey(anchor)]) {
+      if (section && !shownInThisEntry(anchor)) {
         // The section's `scroll-mt-*` keeps it clear of the fixed header.
         section.scrollIntoView?.({ block: 'start', behavior: 'instant' })
-        // Next's own keys in the entry are kept, so it passes this through.
-        window.history.replaceState({ ...entry, [shownKey(anchor)]: true }, '')
+        markShownInThisEntry(anchor)
       }
     }
     const openIfLinked = () => {
