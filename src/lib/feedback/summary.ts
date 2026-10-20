@@ -50,6 +50,7 @@ import {
   MAX_RETRIES,
   isRetryable,
   readTalkVersions,
+  requestCap,
   sweepTalkVersions,
   type TalkDoc,
   type VersionsClient,
@@ -339,7 +340,7 @@ async function deliverOne(
     const recipients = prepared.recipients
     const fits = () => !deadline || fitsBefore(deadline, recipients)
     const outcome = fits()
-      ? await claim(claimClient, prepared.talk, conferenceId, now, fits)
+      ? await claimSummary(claimClient, prepared.talk, conferenceId, now, fits)
       : 'late'
     if (outcome === 'late') {
       console.error(
@@ -361,7 +362,9 @@ async function deliverOne(
   // stale draft to publish the marker away (and bring a second summary);
   // bounded, so it cannot take their time. On a timeout it goes on alone.
   await bounded(
-    sweepTalkVersions(claimClient, talkId, 'feedbackSummarySentAt'),
+    sweepTalkVersions(claimClient, talkId, 'feedbackSummarySentAt', {
+      requestTimeoutMs: CLAIM_REQUEST_TIMEOUT_MS,
+    }),
     SWEEP_TIMEOUT_MS,
     () =>
       console.error(
@@ -627,16 +630,18 @@ async function prepare(
  *
  * Throws on anything else; nothing was claimed.
  */
-async function claim(
+export async function claimSummary(
   client: VersionsClient,
   talk: SummaryTalk,
   conferenceId: string,
   now: Date,
   /** The talk's emails still fit the run, checked again before the commit. */
   fits: () => boolean,
+  /** Each request of the claim ends after this long (see `requestCap`). */
+  requestTimeoutMs: number = CLAIM_REQUEST_TIMEOUT_MS,
 ): Promise<'claimed' | 'stale' | 'refused' | 'late'> {
   const { published, versions, locked, releasesListed } =
-    await readTalkVersions(client, talk._id)
+    await readTalkVersions(client, talk._id, { requestTimeoutMs })
   if (!mayClaim(published, talk._id, conferenceId)) return 'refused'
   if (!releasesListed || locked.length > 0) {
     console.error(
@@ -667,7 +672,7 @@ async function claim(
     )
   }
   try {
-    await tx.commit()
+    await tx.commit(requestCap(requestTimeoutMs))
     return 'claimed'
   } catch (error) {
     if (isRetryable(error)) return 'stale'
@@ -679,7 +684,9 @@ async function claim(
     // in-flight commit gets a moment and a second look.
     for (const wait of [0, CLAIM_LANDING_GRACE_MS]) {
       if (wait > 0) await delay(wait)
-      if (await claimLanded(client, talk._id, transactionId)) {
+      if (
+        await claimLanded(client, talk._id, transactionId, requestTimeoutMs)
+      ) {
         console.error(
           `[feedback] the claim of ${talk._id} landed although its reply failed; sending`,
           error,
@@ -707,9 +714,13 @@ async function claimLanded(
   client: VersionsClient,
   talkId: string,
   transactionId: string,
+  requestTimeoutMs: number,
 ): Promise<boolean> {
   try {
-    const talk = await client.getDocument<SummaryTalk>(talkId)
+    const talk = await client.getDocument<SummaryTalk>(
+      talkId,
+      requestCap(requestTimeoutMs),
+    )
     return talk?._rev === transactionId
   } catch {
     return false

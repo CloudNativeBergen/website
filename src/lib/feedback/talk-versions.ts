@@ -36,6 +36,16 @@ export type VersionsClient = ReturnType<typeof versionsClient>
 /** How often a write that lost a revision guard re-reads and tries again. */
 export const MAX_RETRIES = 3
 
+/**
+ * Options for one Sanity request that ends it after `ms`: an abort signal.
+ * The client's own `timeout` does not bound every request (measured on
+ * @sanity/client 7.27: a no-store fetch ignores it, and doc reads retry a
+ * socket timeout up to six times); a signal aborts on time, once.
+ * `undefined` leaves the request unbounded.
+ */
+export const requestCap = (ms: number | undefined) =>
+  ms === undefined ? {} : { signal: AbortSignal.timeout(ms) }
+
 /** How often the post-commit sweep may re-patch a stale version. */
 const MAX_SWEEP_PATCHES = 3
 
@@ -68,12 +78,14 @@ export async function sweepTalkVersions(
   client: VersionsClient,
   talkId: string,
   field: VersionedTalkField = 'feedbackCode',
+  { requestTimeoutMs }: { requestTimeoutMs?: number } = {},
 ): Promise<void> {
   try {
     for (let patches = 0; ; patches++) {
       const { published, versions, locked } = await readTalkVersions(
         client,
         talkId,
+        { requestTimeoutMs },
       )
       const value = published?.[field]
       if (!value) return
@@ -96,7 +108,7 @@ export async function sweepTalkVersions(
         tx.patch(d._id, (p) => p.ifRevisionId(d._rev).set({ [field]: value }))
       }
       try {
-        await tx.commit()
+        await tx.commit(requestCap(requestTimeoutMs))
       } catch (error) {
         if (!isRetryable(error)) throw error
       }
@@ -123,6 +135,8 @@ export async function sweepTalkVersions(
 export async function readTalkVersions(
   client: VersionsClient,
   talkId: string,
+  /** Each request ends after this long (see {@link requestCap}). */
+  { requestTimeoutMs }: { requestTimeoutMs?: number } = {},
 ): Promise<{
   published: TalkDoc | null
   versions: TalkDoc[]
@@ -135,12 +149,19 @@ export async function readTalkVersions(
       // groq-global-scoped: the versions of ONE talk, whose conference was checked on its published document
       `*[sanity::versionOf($id) && _id != $id]._id`,
       { id: talkId },
-      raw,
+      { ...raw, ...requestCap(requestTimeoutMs) },
     ),
     client
       // `[]` projects each release: without it Sanity answers null when
       // the dataset has no releases (measured), which read as a failed list.
-      .fetch<unknown>('releases::all()[]{ _id, state }', {}, raw)
+      .fetch<unknown>(
+        'releases::all()[]{ _id, state }',
+        {},
+        {
+          ...raw,
+          ...requestCap(requestTimeoutMs),
+        },
+      )
       .catch(() => null),
   ])
   const releasesListed = Array.isArray(releases)
@@ -170,10 +191,10 @@ export async function readTalkVersions(
         typeof id === 'string' && (releasesListed || !isReleaseId(id)),
     ),
   ])
-  const [published, ...rest] = await client.getDocuments<TalkDoc>([
-    talkId,
-    ...ids,
-  ])
+  const [published, ...rest] = await client.getDocuments<TalkDoc>(
+    [talkId, ...ids],
+    requestCap(requestTimeoutMs),
+  )
   const docs = rest.filter((d): d is NonNullable<typeof d> => !!d)
   const writable = (d: TalkDoc) => {
     const release = releaseOf(d._id)
