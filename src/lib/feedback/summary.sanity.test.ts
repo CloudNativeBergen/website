@@ -1022,6 +1022,22 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
       expect(report).toMatchObject({ claimed: 1, failed: 2 })
     })
 
+    it('ends a read at the run’s deadline, not after its own limit, and counts what it held back as not reached', async () => {
+      otherTenant()
+      h.hangDocReadsOf = ['conf-A']
+      const start = Date.now()
+
+      const report = await deliverFeedbackSummaries({
+        now: NOW,
+        deadline: new Date(start + 150),
+      })
+
+      // Far inside the read's own 10 s.
+      expect(Date.now() - start).toBeLessThan(2_000)
+      // conf-A's two candidates, and talk-b, past the deadline.
+      expect(report).toMatchObject({ claimed: 0, failed: 0, notReached: 3 })
+    })
+
     it('gives up on a talk whose own read hangs, and goes on with the next', async () => {
       otherTenant()
       h.hangDocReadsOf = ['talk-1']

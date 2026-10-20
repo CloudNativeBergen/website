@@ -140,6 +140,7 @@ export async function findDueFeedbackSummaries(
 async function selectDue(
   now: Date,
   deadline?: Date,
+  cap: ReadCap = readCapUntil(deadline),
 ): Promise<{
   candidates: number
   due: (DueSummary & { conference: SummaryConference })[]
@@ -154,7 +155,7 @@ async function selectDue(
     >(
       DUE_TALKS,
       {},
-      { cache: 'no-store', signal: AbortSignal.timeout(SELECTION_TIMEOUT_MS) },
+      { cache: 'no-store', signal: cap(SELECTION_TIMEOUT_MS) },
     )) ?? []
   const byConference = new Map<string, string[]>()
   for (const row of rows) {
@@ -182,7 +183,7 @@ async function selectDue(
     try {
       const conference = await client.getDocument<
         SummaryConference & { _type?: string }
-      >(conferenceId, { signal: AbortSignal.timeout(READ_TIMEOUT_MS) })
+      >(conferenceId, { signal: cap() })
       read =
         conference?._type === 'conference'
           ? {
@@ -190,7 +191,7 @@ async function selectDue(
               slots: await getConferenceFeedbackSlots(
                 conferenceId,
                 clientReadUncached,
-                { signal: AbortSignal.timeout(READ_TIMEOUT_MS) },
+                { signal: cap() },
               ),
             }
           : null
@@ -200,7 +201,9 @@ async function selectDue(
         { conferenceId, talks: talkIds.length },
         error,
       )
-      unread += talkIds.length
+      // Cut off by the run's deadline: not reached, rather than failed.
+      if (deadline && Date.now() >= deadline.getTime()) late += talkIds.length
+      else unread += talkIds.length
       continue
     }
     if (!read) continue
@@ -221,6 +224,24 @@ async function selectDue(
 const SELECTION_TIMEOUT_MS = 30_000
 /** Each read before a talk is claimed: a hang there claims nothing. */
 const READ_TIMEOUT_MS = 10_000
+
+/** A signal for one read before a claim, given its own limit. */
+type ReadCap = (ms?: number) => AbortSignal
+
+/**
+ * Each read before a claim ends after its own limit, and at the run's
+ * deadline at the latest: reads that each end in time must not, one after
+ * another, run the function past it and lose the report.
+ */
+function readCapUntil(deadline: Date | undefined): ReadCap {
+  const run = deadline
+    ? AbortSignal.timeout(Math.max(0, deadline.getTime() - Date.now()))
+    : undefined
+  return (ms = READ_TIMEOUT_MS) =>
+    run
+      ? AbortSignal.any([AbortSignal.timeout(ms), run])
+      : AbortSignal.timeout(ms)
+}
 
 interface SpeakerDoc {
   _id: string
@@ -257,7 +278,8 @@ export async function deliverFeedbackSummaries({
   now: Date
   deadline?: Date
 }): Promise<SummaryReport> {
-  const { candidates, due, unread, late } = await selectDue(now, deadline)
+  const cap = readCapUntil(deadline)
+  const { candidates, due, unread, late } = await selectDue(now, deadline, cap)
   const report: SummaryReport = {
     candidates,
     due: due.length,
@@ -285,7 +307,7 @@ export async function deliverFeedbackSummaries({
       // unclaimed), not the run.
       sender = capped(
         resolveFeedbackSummarySender(conference),
-        READ_TIMEOUT_MS,
+        cap(),
         'resolving the sender',
       )
       senders.set(conference._id, sender)
@@ -317,6 +339,7 @@ export async function deliverFeedbackSummaries({
         deadline,
         pacing,
         sender,
+        cap,
       })
       if (outcome === 'skipped') {
         report.skipped++
@@ -350,7 +373,9 @@ export async function deliverFeedbackSummaries({
         )
       }
     } catch (error) {
-      report.failed++
+      // A read cut off by the run's deadline: not reached, rather than failed.
+      if (deadline && Date.now() >= deadline.getTime()) report.notReached++
+      else report.failed++
       console.error(
         '[feedback] summary not sent for this talk',
         { talkId: item.talkId, conferenceId: item.conferenceId },
@@ -376,11 +401,14 @@ async function deliverOne(
     deadline,
     pacing,
     sender,
+    cap,
   }: {
     now: Date
     deadline: Date | undefined
     pacing: { sends: number }
     sender: FeedbackSummarySender
+    /** Each read before the claim (see {@link readCapUntil}). */
+    cap: ReadCap
   },
 ): Promise<
   | 'skipped'
@@ -400,7 +428,7 @@ async function deliverOne(
   // read it again.
   let prepared: Prepared | null = null
   for (let attempt = 0; ; attempt++) {
-    prepared = await prepare(client, talkId, conference, now)
+    prepared = await prepare(client, talkId, conference, now, cap)
     if (!prepared) return 'skipped'
     // Right before the claim: once claimed, a run killed before the sends
     // loses them for good. Unclaimed, the talk waits for the next run.
@@ -587,18 +615,23 @@ const CLAIM_REQUEST_TIMEOUT_MS = 5_000
 /** Before the second read-back of a claim whose commit failed. */
 const CLAIM_LANDING_GRACE_MS = 2_000
 
-/** `work`, or a rejection after `ms`: a step that must not hold the run. */
-function capped<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
+/** `work`, or a rejection once `signal` aborts: a step that must not hold the run. */
+function capped<T>(
+  work: Promise<T>,
+  signal: AbortSignal,
+  what: string,
+): Promise<T> {
+  let onAbort: (() => void) | undefined
   return Promise.race([
     work,
     new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error(`${what} took longer than ${ms} ms`)),
-        ms,
-      )
+      onAbort = () => reject(new Error(`${what} took too long`))
+      if (signal.aborted) onAbort()
+      else signal.addEventListener('abort', onAbort, { once: true })
     }),
-  ]).finally(() => clearTimeout(timer))
+  ]).finally(() => {
+    if (onAbort) signal.removeEventListener('abort', onAbort)
+  })
 }
 
 /** `work`, or after `ms` whatever it has not done, with `onTimeout` told. */
@@ -688,9 +721,9 @@ const live = (found: (SpeakerDoc | null)[]): SpeakerDoc[] =>
 async function liveSpeakers(
   client: VersionsClient,
   ids: string[],
-): Promise<SpeakerDoc[]> {
   // Bounded: a hung read must not hold the run past its time budget.
-  const signal = AbortSignal.timeout(SPEAKER_READ_TIMEOUT_MS)
+  signal: AbortSignal = AbortSignal.timeout(SPEAKER_READ_TIMEOUT_MS),
+): Promise<SpeakerDoc[]> {
   return live(await readSpeakers(client, ids, signal))
 }
 
@@ -738,6 +771,7 @@ async function prepare(
   talkId: string,
   conference: SummaryConference,
   now: Date,
+  cap: ReadCap,
 ): Promise<Prepared | null> {
   const conferenceId = conference._id
   // The doc endpoint, not GROQ: the selection may lag a withdrawal or
@@ -745,11 +779,9 @@ async function prepare(
   // end date closes the window of a talk with no slot, and may have moved
   // since the selection read it.
   const [talk, current] = await Promise.all([
-    client.getDocument<SummaryTalk>(talkId, {
-      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
-    }),
+    client.getDocument<SummaryTalk>(talkId, { signal: cap() }),
     client.getDocument<SummaryConference & { _type?: string }>(conferenceId, {
-      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+      signal: cap(),
     }),
   ])
   if (!mayClaim(talk, talkId, conferenceId)) return null
@@ -763,7 +795,7 @@ async function prepare(
       { conferenceId },
       `*[_type == "feedbackResponse" && talk._ref == $talkId && ${PUBLISHED_ONLY}]{ colour, comment, hiddenAt }`,
       { talkId },
-      { cache: 'no-store', signal: AbortSignal.timeout(READ_TIMEOUT_MS) },
+      { cache: 'no-store', signal: cap() },
     )) ?? []
   // Every answer removed since the selection: nothing to tell.
   if (rows.length === 0) return null
@@ -772,9 +804,7 @@ async function prepare(
   // The window again, from this talk's own slots as they are now: the
   // schedule is another document, so the claim's guard cannot see a move.
   const window = feedbackWindow({
-    slots: await getFeedbackSlots(conferenceId, talkId, {
-      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
-    }),
+    slots: await getFeedbackSlots(conferenceId, talkId, { signal: cap() }),
     conferenceEndDate: current.endDate,
     now,
   })
@@ -785,7 +815,7 @@ async function prepare(
     totals: talkTotals(talk, rows),
     comments: rows.filter(isVisibleComment).length,
     speakerIds,
-    recipientIds: (await liveSpeakers(client, speakerIds))
+    recipientIds: (await liveSpeakers(client, speakerIds, cap()))
       .filter((s) => s.email)
       .map((s) => s._id),
   }
