@@ -1254,20 +1254,17 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
         return { account, key: `${account}|Org <${conference.cfpEmail}>` }
       },
     )
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    try {
-      const run = deliverFeedbackSummaries({ now: NOW })
-      await vi.advanceTimersByTimeAsync(10_000)
-      const report = await run
+    // The real limit, shortened: the resolution is given up on, not waited out.
+    const timeout = AbortSignal.timeout.bind(AbortSignal)
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(20))
+    const start = Date.now()
 
-      expect(sentAt('talk-b')).toBe(NOW.toISOString())
-      expect(['talk-1', 'talk-2', 'talk-3'].some((id) => sentAt(id))).toBe(
-        false,
-      )
-      expect(report).toMatchObject({ claimed: 1, failed: 3 })
-    } finally {
-      vi.useRealTimers()
-    }
+    const report = await deliverFeedbackSummaries({ now: NOW })
+
+    expect(Date.now() - start).toBeLessThan(2_000)
+    expect(sentAt('talk-b')).toBe(NOW.toISOString())
+    expect(['talk-1', 'talk-2', 'talk-3'].some((id) => sentAt(id))).toBe(false)
+    expect(report).toMatchObject({ claimed: 1, failed: 3 })
   })
 
   it('claims nothing when the tenant’s sender cannot be resolved', async () => {
