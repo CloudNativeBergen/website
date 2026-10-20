@@ -36,18 +36,19 @@ describe('rankSessions (speaker feedback spec §10.1)', () => {
   })
 
   it('ranks on the exact share, not the rounded percent, then on more responses', () => {
-    // 199/200 and 99/100 both round to 99 %; 20/20 and 10/10 tie exactly.
+    // 99/100 (99.0 %) beats 197/199 (98.99 %), though both round to 99 %
+    // and the second has more responses; 20/20 and 10/10 tie exactly.
     const list = [
+      session('197 of 199', [197, 2, 0]),
       session('99 of 100', [99, 1, 0]),
-      session('199 of 200', [199, 1, 0]),
       session('10 of 10', [10, 0, 0]),
       session('20 of 20', [20, 0, 0]),
     ]
     expect(titles(rankSessions(list, 'lovedIt'))).toEqual([
       '20 of 20',
       '10 of 10',
-      '199 of 200',
       '99 of 100',
+      '197 of 199',
     ])
   })
 
