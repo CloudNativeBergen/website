@@ -281,7 +281,13 @@ export async function deliverFeedbackSummaries({
   const senderFor = (conference: SummaryConference) => {
     let sender = senders.get(conference._id)
     if (!sender) {
-      sender = resolveFeedbackSummarySender(conference)
+      // Capped: a hung secret lookup fails this conference's talks (left
+      // unclaimed), not the run.
+      sender = capped(
+        resolveFeedbackSummarySender(conference),
+        READ_TIMEOUT_MS,
+        'resolving the sender',
+      )
       senders.set(conference._id, sender)
     }
     return sender
@@ -580,6 +586,20 @@ const SWEEP_TIMEOUT_MS = 10_000
 const CLAIM_REQUEST_TIMEOUT_MS = 5_000
 /** Before the second read-back of a claim whose commit failed. */
 const CLAIM_LANDING_GRACE_MS = 2_000
+
+/** `work`, or a rejection after `ms`: a step that must not hold the run. */
+function capped<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`${what} took longer than ${ms} ms`)),
+        ms,
+      )
+    }),
+  ]).finally(() => clearTimeout(timer))
+}
 
 /** `work`, or after `ms` whatever it has not done, with `onTimeout` told. */
 function bounded(

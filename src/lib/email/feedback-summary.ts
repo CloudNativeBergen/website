@@ -123,11 +123,11 @@ const mayStillDeliver = (error: unknown) =>
  *
  * - `recipient`: this one email's address. A 400 or 422 refusal whose
  *   message names the `to` field.
- * - `from`: every email from this From on its account. An invalid From, or
- *   a domain that is not verified.
+ * - `from`: every email from this From on its account. An invalid From, a
+ *   domain that is not verified, or the testing-only restriction of a
+ *   `resend.dev` From (the account's verified domains still send).
  * - `account`: every email through the account. A key, quota or plan error
- *   (some of them also named `validation_error`), the testing-only
- *   restriction, an outage, a timeout.
+ *   (some of them also named `validation_error`), an outage, a timeout.
  *
  * Resend names `validation_error` for all three, so the message decides.
  * Anything not recognized counts as the account's: a run then holds its
@@ -148,10 +148,11 @@ export function classifySendFailure(
   if ((e?.status === 422 || e?.status === 400) && refusal) {
     if (/`to`/i.test(message)) return 'recipient'
   }
-  if (/only send testing emails/i.test(message)) return 'account'
   if (
     e?.resendErrorName === 'invalid_from_address' ||
-    /`from`|domain is not verified|send emails from/i.test(message)
+    /`from`|domain is not verified|send emails from|only send testing emails/i.test(
+      message,
+    )
   ) {
     return 'from'
   }

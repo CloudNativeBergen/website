@@ -313,7 +313,17 @@ describe('classifySendFailure', () => {
     ).toBe('from')
   })
 
-  it('is the From’s for an unverified domain or a From Resend will not send from', () => {
+  it('is the From’s for an unverified domain, a From Resend will not send from, or the testing-only restriction', () => {
+    // A `resend.dev` From: the account's verified domains still send.
+    expect(
+      classifySendFailure(
+        refusal(
+          'validation_error',
+          403,
+          'You can only send testing emails to your own email address (you@example.com).',
+        ),
+      ),
+    ).toBe('from')
     expect(
       classifySendFailure(
         refusal(
@@ -333,7 +343,7 @@ describe('classifySendFailure', () => {
     ).toBe('from')
   })
 
-  it('is the account’s for a key, a quota, the testing restriction, an outage or a timeout', () => {
+  it('is the account’s for a key, a quota, an outage or a timeout', () => {
     // A bad key is also a `validation_error` (400 and 401).
     expect(
       classifySendFailure(
@@ -356,16 +366,6 @@ describe('classifySendFailure', () => {
           'daily_quota_exceeded',
           429,
           'You have exceeded your daily email sending quota.',
-        ),
-      ),
-    ).toBe('account')
-    // Mentions `from`, but no From on the account can send to others.
-    expect(
-      classifySendFailure(
-        refusal(
-          'validation_error',
-          403,
-          'You can only send testing emails to your own email address (you@example.com). To send emails to other recipients, please verify a domain at resend.com/domains, and change the `from` address to an email using this domain.',
         ),
       ),
     ).toBe('account')

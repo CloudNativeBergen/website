@@ -1021,6 +1021,19 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
       expect(report).toMatchObject({ claimed: 1, failed: 2 })
     })
 
+    it('gives up on a talk whose own read hangs, and goes on with the next', async () => {
+      otherTenant()
+      h.hangDocReadsOf = ['talk-1']
+      const timeout = AbortSignal.timeout.bind(AbortSignal)
+      vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(20))
+
+      const report = await deliverFeedbackSummaries({ now: NOW })
+
+      expect(sentAt('talk-1')).toBeUndefined()
+      expect(sentAt('talk-b')).toBe(NOW.toISOString())
+      expect(report).toMatchObject({ claimed: 1, failed: 1 })
+    })
+
     it('bounds every uncached read of the run with a signal', async () => {
       otherTenant()
 
@@ -1197,6 +1210,35 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
   const badAddress = () =>
     refusal('validation_error', 422, 'Invalid `to` field.')
 
+  it('gives up on a sender whose resolution hangs, and goes on with the other tenants', async () => {
+    seed(moreDue())
+    h.resolveSender.mockImplementation(
+      async (conference: {
+        _id: string
+        organization?: { _ref?: string }
+        cfpEmail?: string
+      }) => {
+        if (conference._id === 'conf-A') return new Promise(() => {})
+        const account = `sender-${conference.organization?._ref}`
+        return { account, key: `${account}|Org <${conference.cfpEmail}>` }
+      },
+    )
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const run = deliverFeedbackSummaries({ now: NOW })
+      await vi.advanceTimersByTimeAsync(10_000)
+      const report = await run
+
+      expect(sentAt('talk-b')).toBe(NOW.toISOString())
+      expect(['talk-1', 'talk-2', 'talk-3'].some((id) => sentAt(id))).toBe(
+        false,
+      )
+      expect(report).toMatchObject({ claimed: 1, failed: 3 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('claims nothing when the tenant’s sender cannot be resolved', async () => {
     h.resolveSender.mockRejectedValue(new Error('tenant env slug unavailable'))
 
@@ -1358,6 +1400,25 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
         expect.stringContaining('stops sending through a From address'),
         expect.objectContaining({ conferenceId: 'conf-A' }),
       )
+    })
+
+    it('holds only that From on the testing-only restriction of a resend.dev From', async () => {
+      seed(withA2())
+      h.sendEmail.mockImplementation(
+        async ({ sender }: { sender: { key: string } }) => {
+          if (sender.key.includes('cfp@a.example.com'))
+            throw refusal(
+              'validation_error',
+              403,
+              'You can only send testing emails to your own email address (you@example.com).',
+            )
+        },
+      )
+
+      const report = await deliverFeedbackSummaries({ now: NOW })
+
+      expect(sentAt('talk-a2')).toBe(NOW.toISOString())
+      expect(report).toMatchObject({ claimed: 3, senderDown: 2, emailed: 3 })
     })
 
     it('does not take a malformed From for bad addresses', async () => {
