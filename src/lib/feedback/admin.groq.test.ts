@@ -374,6 +374,20 @@ describe('every action — refused before any write (§10.3)', () => {
       () => response('talk-gone', 'red', { comment: 'x' }),
     ],
     [
+      'a response that points at a draft of one of our talks',
+      () => {
+        h.dataset.push(talk('drafts.talk-a'))
+        return response('drafts.talk-a', 'red', { comment: 'x' })
+      },
+    ],
+    [
+      'a Content Release version of a response',
+      () => ({
+        ...response('talk-a', 'red', { comment: 'x' }),
+        _id: `versions.r1.${rid(98)}`,
+      }),
+    ],
+    [
       'a draft response',
       () => ({
         ...response('talk-a', 'red', { comment: 'x' }),

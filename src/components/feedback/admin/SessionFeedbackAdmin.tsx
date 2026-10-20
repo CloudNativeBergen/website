@@ -254,6 +254,7 @@ function SessionRow({
   const panelId = useId()
   const { totals, comments } = session
   const tooFew = hasTooFew(totals)
+  const flagged = comments.some((c) => c.flagged)
   const meta = [
     session.speakers.join(', '),
     session.format
@@ -279,6 +280,15 @@ function SessionRow({
           <span className="min-w-0">
             <span className="block font-medium wrap-break-word text-gray-900 dark:text-white">
               {session.title}
+              {flagged && (
+                <>
+                  <FlagIcon
+                    aria-hidden="true"
+                    className="ml-1.5 inline size-4 align-[-2px] text-red-600 dark:text-red-400"
+                  />
+                  <span className="sr-only"> (a comment is flagged)</span>
+                </>
+              )}
             </span>
             {meta.length > 0 && (
               <span className="mt-0.5 block text-xs wrap-break-word text-gray-600 dark:text-gray-400">

@@ -161,7 +161,10 @@ type Story = StoryObj<typeof meta>
 const rowTitles = (canvasElement: HTMLElement) =>
   within(canvasElement)
     .getAllByRole('button', { expanded: false })
-    .map((b: HTMLElement) => b.querySelector('span.font-medium')?.textContent)
+    .map(
+      (b: HTMLElement) =>
+        b.querySelector('span.font-medium')?.firstChild?.textContent,
+    )
 
 export const Ranked: Story = {
   play: async ({ canvasElement }) => {
@@ -175,6 +178,10 @@ export const Ranked: Story = {
       'WebAssembly on the edge',
     ])
     await expect(canvas.getAllByText('too few')).toHaveLength(2)
+    // Only the session holding a flagged comment carries the flag.
+    await expect(
+      canvas.getAllByRole('button', { name: /a comment is flagged/ }),
+    ).toHaveLength(1)
     await userEvent.click(canvas.getByRole('button', { name: /Comments/ }))
     await expect(rowTitles(canvasElement)[0]).toBe(
       'Kubernetes the hard parts, the easy way',
