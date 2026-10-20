@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { feedbackTotals } from './totals'
-import { hasTooFew, MIN_RANKED_RESPONSES, rankSessions } from './ranking'
+import {
+  hasTooFew,
+  keepOrder,
+  MIN_RANKED_RESPONSES,
+  rankSessions,
+} from './ranking'
 
 const session = (
   title: string,
@@ -74,5 +79,32 @@ describe('rankSessions (speaker feedback spec §10.1)', () => {
     expect(
       hasTooFew(feedbackTotals({ live: { green: 5 }, cards: { redCount: 5 } })),
     ).toBe(false)
+  })
+})
+
+describe('keepOrder: rows stay put across refetches', () => {
+  const withId = (talkId: string, counts: [number, number, number]) => ({
+    talkId,
+    ...session(talkId, counts),
+  })
+
+  it('keeps the order already shown, even when the numbers would rank it differently', () => {
+    // b now has too few, a would rank last by share: neither moves.
+    const now = [withId('a', [1, 0, 10]), withId('b', [3, 0, 0])]
+    expect(keepOrder(['b', 'a'], now, 'lovedIt').map((s) => s.talkId)).toEqual([
+      'b',
+      'a',
+    ])
+  })
+
+  it('drops rows that went and appends new ones, ranked among themselves', () => {
+    const now = [
+      withId('a', [10, 0, 0]),
+      withId('new-low', [0, 0, 12]),
+      withId('new-high', [12, 0, 0]),
+    ]
+    expect(
+      keepOrder(['gone', 'a'], now, 'lovedIt').map((s) => s.talkId),
+    ).toEqual(['a', 'new-high', 'new-low'])
   })
 })

@@ -25,11 +25,14 @@ export function SessionFeedbackAdminPage({
   const remove = api.sessionFeedback.adminRemove.useMutation(refresh)
 
   if (overview.isPending) return <AdminTablePageLoading />
-  if (overview.error)
+  // React Query keeps the last data when a refetch fails: the page stays,
+  // saying its numbers are earlier ones. Only a first read that failed has
+  // nothing else to show.
+  if (!overview.data)
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
         <p className="text-sm text-red-800 dark:text-red-300">
-          Could not load Session Feedback: {overview.error.message}
+          Could not load Session Feedback: {overview.error?.message}
         </p>
       </div>
     )
@@ -40,6 +43,11 @@ export function SessionFeedbackAdminPage({
       onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
       onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
       onRemove={(ids) => remove.mutateAsync({ responseIds: ids })}
+      refreshFailed={
+        overview.isError
+          ? { onRetry: () => void overview.refetch() }
+          : undefined
+      }
     />
   )
 }

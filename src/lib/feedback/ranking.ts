@@ -44,3 +44,26 @@ export function rankSessions<T extends Rankable>(
 ): T[] {
   return [...sessions].sort(COMPARE[sort])
 }
+
+/**
+ * `sessions` in the order the page already shows (`shown`, talk ids), so a
+ * refetch after Hide or Remove never moves the row the organizer is working
+ * in. Rows that went are dropped; rows new to the page follow, ranked by
+ * `sort` among themselves. Only a change of sort re-ranks everything.
+ */
+export function keepOrder<T extends Rankable & { talkId: string }>(
+  shown: readonly string[],
+  sessions: readonly T[],
+  sort: FeedbackSort,
+): T[] {
+  const byId = new Map(sessions.map((s) => [s.talkId, s]))
+  const kept = shown.flatMap((id) => byId.get(id) ?? [])
+  const known = new Set(shown)
+  return [
+    ...kept,
+    ...rankSessions(
+      sessions.filter((s) => !known.has(s.talkId)),
+      sort,
+    ),
+  ]
+}

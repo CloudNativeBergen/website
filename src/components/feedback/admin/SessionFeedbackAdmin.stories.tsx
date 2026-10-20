@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test'
@@ -205,6 +205,22 @@ const openFirst: Story['play'] = async ({ canvasElement }) => {
   ).toBeVisible()
 }
 
+/** The live region every outcome is announced in. */
+const announced = (canvasElement: HTMLElement) =>
+  within(canvasElement).getByRole('status')
+
+/** The list item of the comment whose text starts with `text`. */
+const commentItem = (canvasElement: HTMLElement, text: RegExp) =>
+  within(canvasElement).getByText(text).closest('li') as HTMLElement
+
+/** The open panel of the row titled `title`. */
+const panelOf = (canvasElement: HTMLElement, title: RegExp) => {
+  const button = within(canvasElement).getByRole('button', { name: title })
+  return document.getElementById(
+    button.getAttribute('aria-controls')!,
+  ) as HTMLElement
+}
+
 export const Expanded: Story = {
   play: async (context) => {
     await openFirst(context)
@@ -215,9 +231,19 @@ export const Expanded: Story = {
     await expect(context.args.onHide).toHaveBeenCalledWith(
       SESSIONS[0].comments[0].id,
     )
+    await waitFor(() =>
+      expect(announced(context.canvasElement)).toHaveTextContent(
+        'Comment hidden from speakers.',
+      ),
+    )
     await userEvent.click(canvas.getByRole('button', { name: 'Unhide' }))
     await expect(context.args.onUnhide).toHaveBeenCalledWith(
       SESSIONS[0].comments[2].id,
+    )
+    await waitFor(() =>
+      expect(announced(context.canvasElement)).toHaveTextContent(
+        'Comment shown to speakers again.',
+      ),
     )
   },
 }
@@ -256,6 +282,108 @@ export const RemoveConfirmed: Story = {
     await expect(context.args.onRemove).toHaveBeenCalledWith([
       SESSIONS[0].comments[3].id,
     ])
+    // Said where the organizer is working, and announced.
+    const panel = panelOf(context.canvasElement, /Kubernetes the hard parts/)
+    await waitFor(() =>
+      expect(within(panel).getByText('1 response removed.')).toBeVisible(),
+    )
+    await expect(announced(context.canvasElement)).toHaveTextContent(
+      '1 response removed.',
+    )
+  },
+}
+
+const confirmRemove = async () => {
+  // The confirm button ignores taps for a moment after it opens.
+  await new Promise((r) => setTimeout(r, 600))
+  await userEvent.click(
+    within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove' }),
+  )
+}
+
+/** While the delete runs, Escape does not close the question. */
+export const RemovePending: Story = {
+  args: { onRemove: fn(() => new Promise<never>(() => {})) },
+  play: async (context) => {
+    await askRemove(context)
+    await confirmRemove()
+    await userEvent.keyboard('{Escape}')
+    await new Promise((r) => setTimeout(r, 400))
+    await expect(
+      screen.getByRole('heading', { name: 'Remove 1 response?' }),
+    ).toBeVisible()
+  },
+}
+
+const TEN = session('talk-ten', 'Exactly ten answers', [10, 0, 0], {
+  speakers: ['Kari Nordmann'],
+  comments: [comment('green', 'Ten out of ten.')],
+})
+const OTHER = session('talk-other', 'Another session', [9, 3, 0], {
+  speakers: ['Ola Nordmann'],
+})
+/** After the one comment of TEN is removed: 9 answers, too few to rank. */
+const TEN_AFTER: AdminFeedbackSession = {
+  ...TEN,
+  totals: feedbackTotals({ live: { green: 9, yellow: 0, red: 0 } }),
+  comments: [],
+}
+
+/** The page with its data in state, so Remove changes what it shows. */
+function Refetching(args: React.ComponentProps<typeof SessionFeedbackAdmin>) {
+  const [data, setData] = useState(overview([TEN, OTHER]))
+  return (
+    <SessionFeedbackAdmin
+      {...args}
+      overview={data}
+      onRemove={async (ids) => {
+        await args.onRemove(ids)
+        setData(overview([TEN_AFTER, OTHER]))
+      }}
+    />
+  )
+}
+
+/**
+ * Removing a response can drop a session under 10 answers. Its row stays
+ * where it is (and open) instead of jumping to the end of the list.
+ */
+export const RemoveKeepsRowInPlace: Story = {
+  render: (args) => <Refetching {...args} />,
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async (context) => {
+    const { canvasElement } = context
+    const canvas = within(canvasElement)
+    await expect(rowTitles(canvasElement)).toEqual([
+      'Exactly ten answers',
+      'Another session',
+    ])
+    await userEvent.click(
+      canvas.getByRole('button', { name: /Exactly ten answers/ }),
+    )
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove' }))
+    await confirmRemove()
+    const panel = panelOf(canvasElement, /Exactly ten answers/)
+    await waitFor(() =>
+      expect(within(panel).getByText('1 response removed.')).toBeVisible(),
+    )
+    const rows = canvas
+      .getAllByRole('button', { expanded: true })
+      .concat(canvas.getAllByRole('button', { expanded: false }))
+    await expect(
+      rows[0].querySelector('span.font-medium')?.firstChild?.textContent,
+    ).toBe('Exactly ten answers')
+    await expect(canvas.getByText('too few')).toBeVisible()
+    // Changing the sort ranks again: the session with too few goes last.
+    await userEvent.click(canvas.getByRole('button', { name: /Responses/ }))
+    await userEvent.click(canvas.getByRole('button', { name: /Loved it/ }))
+    await expect(
+      canvas
+        .getAllByRole('button', { expanded: false })
+        .map(
+          (b) => b.querySelector('span.font-medium')?.firstChild?.textContent,
+        ),
+    ).toEqual(['Another session'])
   },
 }
 
@@ -276,11 +404,16 @@ export const RemoveFailed: Story = {
         name: 'Remove',
       }),
     )
-    const canvas = within(context.canvasElement)
-    await waitFor(() =>
-      expect(canvas.getByRole('alert')).toHaveTextContent('Removed 0 of 1'),
-    )
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    // Under the comment it was about, and announced.
+    await expect(
+      within(commentItem(context.canvasElement, /^Good content/)).getByText(
+        /Removed 0 of 1/,
+      ),
+    ).toBeVisible()
+    await expect(announced(context.canvasElement)).toHaveTextContent(
+      'Removed 0 of 1',
+    )
   },
 }
 
@@ -295,16 +428,52 @@ export const ActionFailed: Story = {
       throw new Error('Feedback Response not found')
     }),
   },
+  parameters: { viewport: { defaultViewport: 'phone' } },
   play: async (context) => {
     await openFirst(context)
     const canvas = within(context.canvasElement)
-    await userEvent.click(canvas.getAllByRole('button', { name: 'Hide' })[0])
+    // The last comment's Hide, far down the page on a phone.
+    const item = commentItem(context.canvasElement, /^Good content/)
+    await userEvent.click(within(item).getByRole('button', { name: 'Hide' }))
+    // The message sits under that comment, on screen, and is announced.
     await waitFor(() =>
-      expect(canvas.getByRole('alert')).toHaveTextContent(
-        'Feedback Response not found',
-      ),
+      expect(
+        within(item).getByText('Feedback Response not found'),
+      ).toBeVisible(),
     )
+    const box = within(item)
+      .getByText('Feedback Response not found')
+      .getBoundingClientRect()
+    await expect(box.top).toBeGreaterThanOrEqual(0)
+    await expect(box.bottom).toBeLessThanOrEqual(window.innerHeight)
+    await expect(announced(context.canvasElement)).toHaveTextContent(
+      'Feedback Response not found',
+    )
+    await expect(canvas.queryByRole('alert')).toBeNull()
   },
+}
+
+export const ActionFailedDark: Story = {
+  ...ActionFailed,
+  globals: { theme: 'dark' },
+}
+
+/** A refetch failed: the numbers on screen are kept and said to be earlier ones. */
+export const RefreshFailed: Story = {
+  args: { refreshFailed: { onRetry: fn() } },
+  play: async (context) => {
+    const canvas = within(context.canvasElement)
+    await expect(
+      canvas.getByText(/Couldn’t refresh, showing earlier numbers/),
+    ).toBeVisible()
+    await userEvent.click(canvas.getByRole('button', { name: 'Retry' }))
+    await expect(context.args.refreshFailed!.onRetry).toHaveBeenCalled()
+  },
+}
+
+export const RefreshFailedDark: Story = {
+  ...RefreshFailed,
+  globals: { theme: 'dark' },
 }
 
 export const NoSessions: Story = { args: { overview: overview([]) } }
@@ -322,6 +491,24 @@ export const Phone: Story = {
     const canvas = within(context.canvasElement)
     await expect(canvas.getByText('Sort by')).toBeVisible()
     await expect(canvas.getAllByText('loved it')[0]).toBeVisible()
+    // Sort buttons are a full tap target on a phone.
+    for (const b of within(
+      canvas.getByRole('group', { name: 'Sort sessions' }),
+    ).getAllByRole('button'))
+      await expect(b.getBoundingClientRect().height).toBeGreaterThanOrEqual(44)
+  },
+}
+
+/** 320 px: the breakdown's colour labels stay on one line. */
+export const PhoneNarrow: Story = {
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async (context) => {
+    await openFirst(context)
+    const panel = panelOf(context.canvasElement, /Kubernetes the hard parts/)
+    for (const label of ['Loved it', 'It was OK', 'Not for me']) {
+      const dt = within(panel).getByText(label, { selector: 'dt' })
+      await expect(dt.getBoundingClientRect().height).toBeLessThan(20)
+    }
   },
 }
 

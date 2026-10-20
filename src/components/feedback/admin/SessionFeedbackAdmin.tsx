@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import {
   ChatBubbleLeftRightIcon,
   ChevronRightIcon,
@@ -13,6 +13,7 @@ import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import {
   hasTooFew,
+  keepOrder,
   MIN_RANKED_RESPONSES,
   rankSessions,
   type FeedbackSort,
@@ -52,6 +53,26 @@ export interface SessionFeedbackAdminProps {
   onHide: (responseId: string) => Promise<unknown>
   onUnhide: (responseId: string) => Promise<unknown>
   onRemove: (responseIds: string[]) => Promise<unknown>
+  /**
+   * The last refetch failed: the numbers shown are earlier ones. Offers
+   * Retry.
+   */
+  refreshFailed?: { onRetry: () => void }
+}
+
+/** What the last Hide, Unhide or Remove did, where it did it. */
+interface Outcome {
+  talkId: string
+  responseId: string
+  ok: boolean
+  text: string
+}
+
+/** A removal the dialog asks about, and the comment it quotes. */
+interface Removal {
+  talkId: string
+  ids: string[]
+  comment?: string
 }
 
 /**
@@ -67,38 +88,58 @@ export function SessionFeedbackAdmin({
   onHide,
   onUnhide,
   onRemove,
+  refreshFailed,
 }: SessionFeedbackAdminProps) {
   const [sort, setSort] = useState<FeedbackSort>('lovedIt')
+  // The order on screen, by talk id. A refetch after Hide or Remove keeps
+  // it, so the row being worked in never jumps; only a new sort re-ranks.
+  const [shown, setShown] = useState<string[]>(() =>
+    rankSessions(overview.sessions, 'lovedIt').map((s) => s.talkId),
+  )
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
-  const [error, setError] = useState<string | null>(null)
-  /** The responses the Remove question is about, and the comment to quote. */
-  const [removing, setRemoving] = useState<{
-    ids: string[]
-    comment?: string
-  } | null>(null)
+  const [outcome, setOutcome] = useState<Outcome | null>(null)
+  const [removing, setRemoving] = useState<Removal | null>(null)
   // Open apart from `removing`, which stays until the dialog has left, so
   // its title never changes during the closing transition.
   const [asking, setAsking] = useState(false)
+  const removingNow = useRef<Removal | null>(null)
 
-  const sessions = rankSessions(overview.sessions, sort)
+  const sessions = keepOrder(shown, overview.sessions, sort)
   const { totals } = overview
 
-  async function run(ids: string[], action: () => Promise<unknown>) {
-    setError(null)
+  function sortBy(key: FeedbackSort) {
+    setSort(key)
+    setShown(rankSessions(overview.sessions, key).map((s) => s.talkId))
+  }
+
+  async function run(
+    talkId: string,
+    ids: string[],
+    action: () => Promise<unknown>,
+    done: string,
+  ) {
+    setOutcome(null)
     setPending((p) => new Set([...p, ...ids]))
+    const at = { talkId, responseId: ids[0] }
     try {
       await action()
+      setOutcome({ ...at, ok: true, text: done })
     } catch (e) {
-      setError(
-        e instanceof Error && e.message
-          ? e.message
-          : 'That didn’t work. Try again.',
-      )
+      setOutcome({
+        ...at,
+        ok: false,
+        text:
+          e instanceof Error && e.message
+            ? e.message
+            : 'That didn’t work. Reload the page to see where things stand.',
+      })
     } finally {
       setPending((p) => new Set([...p].filter((id) => !ids.includes(id))))
     }
   }
+
+  const removePending = removing?.ids.some((id) => pending.has(id)) ?? false
 
   const toggle = (talkId: string) =>
     setOpen((o) => {
@@ -133,16 +174,24 @@ export function SessionFeedbackAdmin({
         ]}
       />
 
-      <p
-        role="alert"
-        className={
-          error
-            ? 'rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300'
-            : 'sr-only'
-        }
-      >
-        {error ?? ''}
+      {/* Always rendered: a screen reader announces text SET in an existing
+          live region, not a region that appears with its text. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {outcome?.text ?? ''}
       </p>
+
+      {refreshFailed && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-900 dark:border-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-200">
+          <p>Couldn’t refresh, showing earlier numbers.</p>
+          <button
+            type="button"
+            onClick={refreshFailed.onRetry}
+            className="min-h-11 rounded-md px-3 font-semibold hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-700 sm:min-h-9 dark:hover:bg-yellow-900/40"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <div>
         <section
@@ -162,8 +211,8 @@ export function SessionFeedbackAdmin({
                 key={key}
                 type="button"
                 aria-pressed={sort === key}
-                onClick={() => setSort(key)}
-                className="rounded-md px-2 py-1 text-xs font-semibold tracking-wide uppercase hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-pressed:bg-brand-sky-mist aria-pressed:text-brand-cloud-blue sm:-mx-2 sm:justify-self-end dark:hover:bg-gray-700 dark:aria-pressed:bg-blue-900/40 dark:aria-pressed:text-blue-300"
+                onClick={() => sortBy(key)}
+                className="min-h-11 rounded-md px-2 py-1 text-xs font-semibold tracking-wide uppercase hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-pressed:bg-brand-sky-mist aria-pressed:text-brand-cloud-blue sm:-mx-2 sm:min-h-0 sm:justify-self-end dark:hover:bg-gray-700 dark:aria-pressed:bg-blue-900/40 dark:aria-pressed:text-blue-300"
               >
                 {label}
                 {sort === key && <span aria-hidden="true"> ↓</span>}
@@ -185,10 +234,31 @@ export function SessionFeedbackAdmin({
                   open={open.has(session.talkId)}
                   onToggle={() => toggle(session.talkId)}
                   pending={pending}
-                  onHide={(id) => run([id], () => onHide(id))}
-                  onUnhide={(id) => run([id], () => onUnhide(id))}
+                  outcome={outcome?.talkId === session.talkId ? outcome : null}
+                  onHide={(id) =>
+                    run(
+                      session.talkId,
+                      [id],
+                      () => onHide(id),
+                      'Comment hidden from speakers.',
+                    )
+                  }
+                  onUnhide={(id) =>
+                    run(
+                      session.talkId,
+                      [id],
+                      () => onUnhide(id),
+                      'Comment shown to speakers again.',
+                    )
+                  }
                   onRemove={(c) => {
-                    setRemoving({ ids: [c.id], comment: c.comment })
+                    const removal = {
+                      talkId: session.talkId,
+                      ids: [c.id],
+                      comment: c.comment,
+                    }
+                    removingNow.current = removal
+                    setRemoving(removal)
                     setAsking(true)
                   }}
                 />
@@ -204,13 +274,23 @@ export function SessionFeedbackAdmin({
 
       <ConfirmationModal
         isOpen={asking}
-        onClose={() => setAsking(false)}
+        // Not while the delete runs: its outcome belongs to this question.
+        onClose={() => {
+          if (!removePending) setAsking(false)
+        }}
         afterLeave={() => setRemoving(null)}
         onConfirm={async () => {
-          if (!removing) return
-          await run(removing.ids, () => onRemove(removing.ids))
-          // Closed either way: a failure's message is on the page behind it.
-          setAsking(false)
+          const removal = removing
+          if (!removal || removePending) return
+          await run(
+            removal.talkId,
+            removal.ids,
+            () => onRemove(removal.ids),
+            `${plural(removal.ids.length, 'response', 'responses')} removed.`,
+          )
+          // Closed either way, the outcome is on the page behind it; but only
+          // if this is still the question that asked for this delete.
+          if (removingNow.current === removal) setAsking(false)
         }}
         title={removeQuestion(removing?.ids.length ?? 0)}
         message={
@@ -220,7 +300,7 @@ export function SessionFeedbackAdmin({
         }
         confirmButtonText="Remove"
         variant="danger"
-        isLoading={removing?.ids.some((id) => pending.has(id)) ?? false}
+        isLoading={removePending}
         guardSecondTap
       >
         {removing?.comment && (
@@ -238,6 +318,7 @@ function SessionRow({
   open,
   onToggle,
   pending,
+  outcome,
   onHide,
   onUnhide,
   onRemove,
@@ -246,6 +327,8 @@ function SessionRow({
   open: boolean
   onToggle: () => void
   pending: ReadonlySet<string>
+  /** The last action's outcome, when it was in this session. */
+  outcome: Outcome | null
   onHide: (id: string) => void
   onUnhide: (id: string) => void
   onRemove: (comment: AdminFeedbackComment) => void
@@ -254,6 +337,13 @@ function SessionRow({
   const { totals, comments } = session
   const tooFew = hasTooFew(totals)
   const flagged = comments.some((c) => c.flagged)
+  // An outcome shows by its comment when that comment is still listed (a
+  // failure), otherwise at the top of the open row (a Remove, a success).
+  const byComment =
+    outcome && !outcome.ok && comments.some((c) => c.id === outcome.responseId)
+      ? outcome
+      : null
+  const atTop = outcome && !byComment ? outcome : null
   const meta = [
     session.speakers.join(', '),
     session.format ? formats.get(session.format) : null,
@@ -333,6 +423,7 @@ function SessionRow({
       >
         {open && (
           <>
+            {atTop && <OutcomeNote outcome={atTop} className="mb-2" />}
             <Breakdown totals={totals} />
             {comments.length === 0 ? (
               <p className="py-2 text-sm text-gray-600 dark:text-gray-400">
@@ -345,6 +436,7 @@ function SessionRow({
                     key={c.id}
                     comment={c}
                     pending={pending.has(c.id)}
+                    failure={byComment?.responseId === c.id ? byComment : null}
                     onHide={() => onHide(c.id)}
                     onUnhide={() => onUnhide(c.id)}
                     onRemove={() => onRemove(c)}
@@ -364,8 +456,10 @@ function Breakdown({ totals }: { totals: FeedbackTotals }) {
   return (
     <dl className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 tabular-nums dark:text-gray-400">
       {ANSWERS.map(({ colour, label }) => (
-        <div key={colour} className="flex gap-1">
-          <dt className={`font-medium ${FEEDBACK_TONE[colour].text}`}>
+        <div key={colour} className="flex items-baseline gap-1">
+          <dt
+            className={`font-medium whitespace-nowrap ${FEEDBACK_TONE[colour].text}`}
+          >
             {label}
           </dt>
           <dd>
@@ -378,15 +472,38 @@ function Breakdown({ totals }: { totals: FeedbackTotals }) {
   )
 }
 
+/**
+ * What an action did, in words, where the organizer is working. Not a live
+ * region: the page's one status region announces the same words.
+ */
+function OutcomeNote({
+  outcome,
+  className = '',
+}: {
+  outcome: Outcome
+  className?: string
+}) {
+  return (
+    <p
+      className={`text-sm font-medium ${outcome.ok ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'} ${className}`}
+    >
+      {outcome.text}
+    </p>
+  )
+}
+
 function CommentItem({
   comment,
   pending,
+  failure,
   onHide,
   onUnhide,
   onRemove,
 }: {
   comment: AdminFeedbackComment
   pending: boolean
+  /** The last action on this comment failed, saying why. */
+  failure: Outcome | null
   onHide: () => void
   onUnhide: () => void
   onRemove: () => void
@@ -431,6 +548,7 @@ function CommentItem({
         >
           {comment.comment}
         </p>
+        {failure && <OutcomeNote outcome={failure} className="mt-2" />}
       </div>
       <div className="-ml-2.5 flex shrink-0 gap-1 sm:ml-0">
         {comment.hidden ? (
