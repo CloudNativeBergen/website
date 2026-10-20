@@ -106,7 +106,9 @@ export interface SummaryReport {
   skipped: number
   /**
    * A read or the claim threw, for the talk or for its conference's
-   * selection; not claimed, so the next run tries again.
+   * selection, or the talk was left because its conference's talks kept
+   * failing (`MAX_FAILED_IN_A_ROW`); not claimed, so the next run tries
+   * again.
    */
   failed: number
   /**
