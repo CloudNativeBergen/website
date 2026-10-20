@@ -97,7 +97,7 @@ const MAX_RETRIES = 3
 const LIVE_RESPONSES = `*[_type == "feedbackResponse" && talk._ref == ^._id && conference._ref == ^.conference._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]`
 
 // groq-global: platform CRON SWEEP. The summary is owed per talk across every tenant; each talk is then handled in its OWN conference's scope (its schedule, its responses, its domain).
-const DUE_TALKS = `*[_type == "talk" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "confirmed" && !defined(feedbackSummarySentAt) && count(${LIVE_RESPONSES}) > 0]{ _id, "conferenceId": conference._ref }`
+export const DUE_TALKS = `*[_type == "talk" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "confirmed" && !defined(feedbackSummarySentAt) && count(${LIVE_RESPONSES}) > 0]{ _id, "conferenceId": conference._ref }`
 
 /**
  * The talks whose summary is due at `now` (§11.1). One cross-tenant read

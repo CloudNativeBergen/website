@@ -78,7 +78,12 @@ vi.mock('@/lib/email/config', async (original) => ({
   delay: async () => {},
 }))
 
-import { deliverFeedbackSummaries, findDueFeedbackSummaries } from './summary'
+import { runGroq } from '../../../__tests__/helpers/sanityStore'
+import {
+  DUE_TALKS,
+  deliverFeedbackSummaries,
+  findDueFeedbackSummaries,
+} from './summary'
 
 const store = () => h.store!
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
@@ -293,6 +298,25 @@ describe('findDueFeedbackSummaries: which talks are summarized', () => {
       ]),
     ])
     expect(await dueIds()).toEqual(['talk-1'])
+  })
+
+  it('needs its own published-only filters: run over every document, drafts and release copies included, it still picks one published talk', async () => {
+    // What a `raw` read would see. The default API version hides
+    // `versions.**` from the selection read anyway; the filters must not
+    // rest on that.
+    seed([
+      talk('drafts.talk-1', 'conf-A'),
+      talk('versions.r1.talk-1', 'conf-A'),
+      talk('talk-v', 'conf-A'),
+      response('talk-v', 'conf-A', 'green', {}, 'versions.r1.resp-v'),
+      response('talk-v', 'conf-A', 'green', {}, 'drafts.resp-v'),
+      talk('drafts.talk-d', 'conf-A'),
+      response('drafts.talk-d', 'conf-A', 'green'),
+    ])
+    const rows = (await runGroq(store().all(), DUE_TALKS)) as {
+      _id: string
+    }[]
+    expect(rows.map((r) => r._id).sort()).toEqual(['talk-1', 'talk-open'])
   })
 
   it('leaves out a talk that is not confirmed', async () => {
