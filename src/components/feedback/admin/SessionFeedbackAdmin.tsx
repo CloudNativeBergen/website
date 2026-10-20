@@ -289,7 +289,7 @@ function SessionRow({
           </span>
         </span>
         <ColourBar totals={totals} />
-        <span className="flex flex-wrap gap-x-4 gap-y-1 pl-6 text-sm text-gray-700 tabular-nums sm:contents dark:text-gray-300">
+        <span className="flex flex-wrap gap-x-3 gap-y-1 pl-6 text-sm text-gray-700 tabular-nums sm:contents dark:text-gray-300">
           <span className="sm:text-right">
             {tooFew ? (
               <span className="text-gray-500 dark:text-gray-400">too few</span>
@@ -303,8 +303,9 @@ function SessionRow({
           <span className="sm:text-right">
             {totals.total}
             <span className="sm:sr-only"> responses</span>
+            {/* On a phone the open row's breakdown carries the cards. */}
             {totals.cardsTotal > 0 && (
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+              <span className="hidden text-xs text-gray-500 sm:inline dark:text-gray-400">
                 {' '}
                 ({totals.cardsTotal} cards)
               </span>
