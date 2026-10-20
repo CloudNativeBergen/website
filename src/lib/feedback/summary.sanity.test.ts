@@ -350,12 +350,17 @@ beforeEach(() => {
   h.lastTransactionId = undefined
   h.delay.mockImplementation(async (ms: number) => void ms)
   h.resolveSender.mockReset()
-  // One sender per organization, as the tenant's own Resend account is.
+  // One Resend account per organization, as the tenant's own is; the From
+  // is the conference's.
   h.resolveSender.mockImplementation(
-    async (conference: { organization?: { _ref?: string } }) => ({
+    async (conference: {
+      organization?: { _ref?: string }
+      cfpEmail?: string
+    }) => {
+      const account = `sender-${conference.organization?._ref}`
       // As the real key: the account and the From, which names an address.
-      key: `sender-${conference.organization?._ref}|Org <cfp@org.example.com>`,
-    }),
+      return { account, key: `${account}|Org <${conference.cfpEmail}>` }
+    },
   )
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -1183,11 +1188,14 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
       ['talk-b', '10:00', '10:40'],
     ]),
   ]
-  const refusal = (name: string, status: number) =>
-    Object.assign(new Error(`Resend refused the email: ${name}`), {
+  const refusal = (name: string, status: number, message = name) =>
+    Object.assign(new Error(`Resend refused the email: ${message}`), {
       resendErrorName: name,
       status,
     })
+  /** A bad address, as Resend words it. */
+  const badAddress = () =>
+    refusal('validation_error', 422, 'Invalid `to` field.')
 
   it('claims nothing when the tenant’s sender cannot be resolved', async () => {
     h.resolveSender.mockRejectedValue(new Error('tenant env slug unavailable'))
@@ -1213,12 +1221,12 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
     expect(sentAt('talk-b')).toBe(NOW.toISOString())
     expect(report).toMatchObject({ claimed: 2, senderDown: 2 })
     expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('stops sending through'),
+      expect.stringContaining('stops sending through a Resend account'),
       { orgId: 'org-A', conferenceId: 'conf-A', talkId: expect.any(String) },
     )
     // The sender's From address is not logged.
     expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
-      'cfp@org.example.com',
+      'cfp@a.example.com',
     )
 
     // The next run, with the sender working again, sends the two it left.
@@ -1238,7 +1246,7 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
       talk('talk-3', 'conf-A', bothSpeakers),
     ])
     h.sendEmail.mockImplementation(async ({ to }: { to: string }) => {
-      if (to === 'sp-1@example.com') throw refusal('validation_error', 422)
+      if (to === 'sp-1@example.com') throw badAddress()
       if (to === 'sp-2@example.com') throw refusal('invalid_api_key', 401)
     })
 
@@ -1277,7 +1285,7 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
   it('keeps going when the only failures are bad addresses', async () => {
     seed(moreDue())
     h.sendEmail.mockImplementation(async ({ to }: { to: string }) => {
-      if (to !== 'sp-b@example.com') throw refusal('validation_error', 422)
+      if (to !== 'sp-b@example.com') throw badAddress()
     })
 
     const report = await deliverFeedbackSummaries({ now: NOW })
@@ -1286,6 +1294,92 @@ describe('deliverFeedbackSummaries: a sender that cannot send', () => {
       ['talk-1', 'talk-2', 'talk-3', 'talk-b'].every((id) => sentAt(id)),
     ).toBe(true)
     expect(report).toMatchObject({ claimed: 4, senderDown: 0 })
+  })
+
+  describe('two conferences on one Resend account, each with its own From', () => {
+    const CONF_A2 = {
+      ...CONF_A,
+      _id: 'conf-A2',
+      title: 'Conf A2',
+      cfpEmail: 'cfp@a2.example.com',
+      domains: ['a2.example.com'],
+    }
+    const withA2 = () => [
+      ...moreDue(),
+      CONF_A2,
+      talk('talk-a2', 'conf-A2', bothSpeakers),
+      response('talk-a2', 'conf-A2', 'green'),
+      day('day-A2', 'conf-A2', '2026-06-10', 'official', [
+        ['talk-a2', '10:00', '10:40'],
+      ]),
+    ]
+    const orgA = ['talk-1', 'talk-2', 'talk-3', 'talk-a2']
+
+    it('holds every From of the account once the account fails: a revoked key', async () => {
+      seed(withA2())
+      h.sendEmail.mockImplementation(async ({ to }: { to: string }) => {
+        if (to !== 'sp-b@example.com')
+          throw refusal('validation_error', 401, 'API key is invalid')
+      })
+
+      const report = await deliverFeedbackSummaries({ now: NOW })
+
+      // One org-A talk is claimed and trips it; the rest, of both its
+      // conferences, wait for the next run.
+      expect(orgA.filter((id) => sentAt(id))).toHaveLength(1)
+      expect(sentAt('talk-b')).toBe(NOW.toISOString())
+      expect(report).toMatchObject({ claimed: 2, senderDown: 3 })
+    })
+
+    it('holds only that From when its domain is not verified', async () => {
+      seed(withA2())
+      h.sendEmail.mockImplementation(
+        async ({ sender }: { sender: { key: string } }) => {
+          if (sender.key.includes('cfp@a.example.com'))
+            throw refusal(
+              'validation_error',
+              403,
+              'The `a.example.com` domain is not verified. Please, add and verify your domain.',
+            )
+        },
+      )
+
+      const report = await deliverFeedbackSummaries({ now: NOW })
+
+      // conf-A: one talk trips its From, two wait. conf-A2, the same
+      // account with another From, still sends.
+      expect(
+        ['talk-1', 'talk-2', 'talk-3'].filter((id) => sentAt(id)),
+      ).toHaveLength(1)
+      expect(sentAt('talk-a2')).toBe(NOW.toISOString())
+      // talk-a2's two emails and talk-b's one went out.
+      expect(report).toMatchObject({ claimed: 3, senderDown: 2, emailed: 3 })
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('stops sending through a From address'),
+        expect.objectContaining({ conferenceId: 'conf-A' }),
+      )
+    })
+
+    it('does not take a malformed From for bad addresses', async () => {
+      seed(withA2())
+      h.sendEmail.mockImplementation(
+        async ({ sender }: { sender: { key: string } }) => {
+          if (sender.key.includes('cfp@a.example.com'))
+            throw refusal(
+              'validation_error',
+              422,
+              'Invalid `from` field. The email address needs to follow the `email@example.com` format.',
+            )
+        },
+      )
+
+      const report = await deliverFeedbackSummaries({ now: NOW })
+
+      expect(
+        ['talk-1', 'talk-2', 'talk-3'].filter((id) => sentAt(id)),
+      ).toHaveLength(1)
+      expect(report).toMatchObject({ senderDown: 2 })
+    })
   })
 
   it('keeps going when some email of the talk went out', async () => {

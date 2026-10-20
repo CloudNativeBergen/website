@@ -33,11 +33,14 @@ export type FeedbackSummaryConference = Pick<
 >
 
 /**
- * The account and the From a conference's summaries go out through. `key`
- * names the pair, so a run can stop using one that fails (a revoked key, an
- * unverified domain) without stopping the others.
+ * The account and the From a conference's summaries go out through.
+ * `account` names the Resend account and `key` the pair, so a run can stop
+ * using an account that fails (a revoked key, a quota, an outage), or only
+ * the pair for a failure of its From (an unverified domain), without
+ * stopping the others.
  */
 export interface FeedbackSummarySender {
+  account: string
   key: string
   client: Pick<Resend, 'emails'>
   from: string
@@ -61,7 +64,7 @@ export async function resolveFeedbackSummarySender(
   // The ACTUAL account: an org without its own sends through the shared
   // platform client, and a failure of that account is every such org's.
   const account = platform ? 'platform' : (orgId ?? 'platform')
-  return { key: `${account}|${from}`, client, from }
+  return { account, key: `${account}|${from}`, client, from }
 }
 
 export interface FeedbackSummaryEmail {
@@ -115,19 +118,44 @@ const mayStillDeliver = (error: unknown) =>
   isTransientError(error) || isOutcomeUnknown(error)
 
 /**
- * Resend refused this one email for its request (a malformed or rejected
- * recipient: 422 `validation_error` / `invalid_parameter`), not for anything
- * about the sender. A 403 `validation_error` (an unverified domain), a bad
- * From, a key or quota error, an outage: the sender's, and every other email
- * through it would fail the same way.
+ * How far a failed email's cause reaches (Resend's errors,
+ * resend.com/docs/api-reference/errors):
+ *
+ * - `recipient`: this one email's address. A 400 or 422 refusal whose
+ *   message names the `to` field.
+ * - `from`: every email from this From on its account. An invalid From, or
+ *   a domain that is not verified.
+ * - `account`: every email through the account. A key, quota or plan error
+ *   (some of them also named `validation_error`), the testing-only
+ *   restriction, an outage, a timeout.
+ *
+ * Resend names `validation_error` for all three, so the message decides.
+ * Anything not recognized counts as the account's: a run then holds its
+ * talks for a day rather than claiming and losing them.
  */
-export function isRecipientRefusal(error: unknown): boolean {
-  const e = error as { status?: unknown; resendErrorName?: unknown } | null
-  return (
-    e?.status === 422 &&
-    (e.resendErrorName === 'validation_error' ||
-      e.resendErrorName === 'invalid_parameter')
-  )
+export function classifySendFailure(
+  error: unknown,
+): 'recipient' | 'from' | 'account' {
+  const e = error as {
+    status?: unknown
+    resendErrorName?: unknown
+    message?: unknown
+  } | null
+  const message = typeof e?.message === 'string' ? e.message : ''
+  const refusal =
+    e?.resendErrorName === 'validation_error' ||
+    e?.resendErrorName === 'invalid_parameter'
+  if ((e?.status === 422 || e?.status === 400) && refusal) {
+    if (/`to`/i.test(message)) return 'recipient'
+  }
+  if (/only send testing emails/i.test(message)) return 'account'
+  if (
+    e?.resendErrorName === 'invalid_from_address' ||
+    /`from`|domain is not verified|send emails from/i.test(message)
+  ) {
+    return 'from'
+  }
+  return 'account'
 }
 
 /** How long one attempt may take before it counts as a timeout and is retried. */
@@ -212,8 +240,11 @@ export async function sendFeedbackSummaryEmail({
         ),
       )
       if (error) {
+        // Resend has answered with the text under `error` instead of
+        // `message` (resend-node#538): either way it is kept to classify.
+        const text = error.message ?? (error as { error?: unknown }).error ?? ''
         const wrapped = new Error(
-          `Resend refused the email: ${error.message}`,
+          `Resend refused the email: ${String(text)}`,
         ) as Error & { status?: number; resendErrorName?: string }
         const status = (error as { statusCode?: unknown }).statusCode
         if (typeof status === 'number') wrapped.status = status

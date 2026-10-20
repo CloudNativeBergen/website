@@ -24,7 +24,7 @@ import { EMAIL_CONFIG, delay } from '@/lib/email/config'
 import {
   FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS,
   isOutcomeUnknown,
-  isRecipientRefusal,
+  classifySendFailure,
   resolveFeedbackSummarySender,
   sendFeedbackSummaryEmail,
   type FeedbackSummarySender,
@@ -286,11 +286,13 @@ export async function deliverFeedbackSummaries({
     }
     return sender
   }
-  // Senders that failed every email of a talk for a reason that was not the
-  // address (an outage past the retries, a revoked key, an unverified
-  // domain, a quota): their remaining talks stay unclaimed for the next run
-  // rather than being claimed and failing too.
-  const down = new Set<string>()
+  // Accounts, and From pairs, that failed every email of a talk for a
+  // reason that was not the address: their remaining talks stay unclaimed
+  // for the next run rather than being claimed and failing too. An account
+  // failure (an outage past the retries, a revoked key, a quota) stops every
+  // From on it; a From failure (an unverified domain) stops only that pair.
+  const downAccounts = new Set<string>()
+  const downSenders = new Set<string>()
   for (const item of due) {
     // Past the deadline nothing more is read: a backlog must not run the
     // function past its budget and lose this report.
@@ -300,7 +302,7 @@ export async function deliverFeedbackSummaries({
     }
     try {
       const sender = await senderFor(item.conference)
-      if (down.has(sender.key)) {
+      if (downAccounts.has(sender.account) || downSenders.has(sender.key)) {
         report.senderDown++
         continue
       }
@@ -326,13 +328,14 @@ export async function deliverFeedbackSummaries({
       // sender's reason (a refused co-speaker address does not hide that) or
       // was left in progress at Resend (a stalled Resend). The cost is a
       // day's delay for the sender's other talks, not their loss.
-      if (
-        outcome.emailed === 0 &&
-        (outcome.senderFailed > 0 || outcome.emailUnknown > 0)
-      ) {
-        down.add(sender.key)
+      const accountDown = outcome.accountFailed > 0 || outcome.emailUnknown > 0
+      if (outcome.emailed === 0 && (accountDown || outcome.fromFailed > 0)) {
+        if (accountDown) downAccounts.add(sender.account)
+        else downSenders.add(sender.key)
         console.error(
-          '[feedback] summary run stops sending through a sender that failed every email of a talk; its other talks stay unclaimed until the next run',
+          `[feedback] summary run stops sending through ${
+            accountDown ? 'a Resend account' : 'a From address'
+          } that failed every email of a talk; its other talks stay unclaimed until the next run`,
           {
             orgId: item.conference.organization?._ref ?? null,
             conferenceId: item.conferenceId,
@@ -379,8 +382,10 @@ async function deliverOne(
   | {
       emailed: number
       emailFailed: number
-      /** Of the failed, those Resend did not refuse for the address. */
-      senderFailed: number
+      /** Of the failed, those every email from this From would fail too. */
+      fromFailed: number
+      /** Of the failed, those every email through the account would fail too. */
+      accountFailed: number
       emailUnknown: number
     }
 > {
@@ -442,7 +447,13 @@ async function deliverOne(
       { talkId, conferenceId },
       error,
     )
-    return { emailed: 0, emailFailed: 0, senderFailed: 0, emailUnknown: 0 }
+    return {
+      emailed: 0,
+      emailFailed: 0,
+      fromFailed: 0,
+      accountFailed: 0,
+      emailUnknown: 0,
+    }
   }
 
   // One line, no invisible or bidi characters, quotes that cannot close ours.
@@ -477,8 +488,9 @@ async function deliverOne(
   // allows about two requests a second): a talk's emails then take about
   // one email's worst case, whatever its number of speakers.
   const resultsUrl = `${conferenceBaseUrl(conference)}${path}`
-  const sends: Promise<'sent' | 'unknown' | 'recipient' | 'sender' | 'late'>[] =
-    []
+  const sends: Promise<
+    'sent' | 'unknown' | 'late' | ReturnType<typeof classifySendFailure>
+  >[] = []
   // Each email starts only if its worst case, after its pause, still ends
   // before the deadline. The fit check budgeted the recipients read before
   // the claim, so they go first; one the talk gained since (a speaker
@@ -538,9 +550,7 @@ async function deliverOne(
             { talkId, speakerId: speaker._id },
             error,
           )
-          return isRecipientRefusal(error)
-            ? ('recipient' as const)
-            : ('sender' as const)
+          return classifySendFailure(error)
         },
       ),
     )
@@ -552,8 +562,10 @@ async function deliverOne(
     results.filter((x) => x === r).length
   return {
     emailed: count('sent'),
-    emailFailed: count('recipient') + count('sender') + count('late'),
-    senderFailed: count('sender'),
+    emailFailed:
+      count('recipient') + count('from') + count('account') + count('late'),
+    fromFailed: count('from'),
+    accountFailed: count('account'),
     emailUnknown: count('unknown'),
   }
 }

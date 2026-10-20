@@ -31,7 +31,7 @@ vi.mock('./config', async (original) => {
 import {
   FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS,
   isOutcomeUnknown,
-  isRecipientRefusal,
+  classifySendFailure,
   resolveFeedbackSummarySender,
   sendFeedbackSummaryEmail,
   type FeedbackSummaryEmail,
@@ -217,17 +217,34 @@ describe('sendFeedbackSummaryEmail', () => {
     })
     await expect(send()).rejects.toThrow('Invalid `to` field')
   })
+
+  it('keeps Resend’s text when it comes under `error`, so the refusal is still the address’s', async () => {
+    // A shape Resend has answered with (resend-node#538).
+    h.send.mockResolvedValue({
+      data: null,
+      error: {
+        error:
+          'Invalid `to` field. The email address needs to follow the `email@example.com` format.',
+        name: 'validation_error',
+        statusCode: 422,
+      },
+    })
+    const failure = await send().catch((e: unknown) => e)
+    expect(classifySendFailure(failure)).toBe('recipient')
+  })
 })
 
 describe('resolveFeedbackSummarySender', () => {
   it('names the sender by its account and its From, so a breaker can stop exactly that one', async () => {
     const sender = await resolveFeedbackSummarySender(request().conference)
+    expect(sender.account).toBe('org-A')
     expect(sender.key).toBe('org-A|Conf A Org <cfp@a.example.com>')
     const other = await resolveFeedbackSummarySender({
       ...request().conference,
       cfpEmail: 'cfp@other.example.com',
     })
     expect(other.key).not.toBe(sender.key)
+    expect(other.account).toBe(sender.account)
   })
 
   it('names a sender on the shared platform account by that account, whichever org it is', async () => {
@@ -239,6 +256,8 @@ describe('resolveFeedbackSummarySender', () => {
     })
     expect(a.key).toBe('platform|Conf A Org <cfp@a.example.com>')
     expect(b.key).toBe(a.key)
+    expect(a.account).toBe('platform')
+    expect(b.account).toBe('platform')
   })
 })
 
@@ -265,18 +284,108 @@ describe('FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS', () => {
   })
 })
 
-describe('isRecipientRefusal', () => {
-  const refusal = (name: string, status: number) =>
-    Object.assign(new Error(name), { resendErrorName: name, status })
+describe('classifySendFailure', () => {
+  // As `sendFeedbackSummaryEmail` throws them, with Resend's text.
+  const refusal = (name: string, status: number, message: string) =>
+    Object.assign(new Error(`Resend refused the email: ${message}`), {
+      resendErrorName: name,
+      status,
+    })
 
-  it('is a 422 about the request (a bad address), and nothing about the sender', () => {
-    expect(isRecipientRefusal(refusal('validation_error', 422))).toBe(true)
-    expect(isRecipientRefusal(refusal('invalid_parameter', 422))).toBe(true)
-    // An unverified domain is a 403 validation_error: the sender's fault.
-    expect(isRecipientRefusal(refusal('validation_error', 403))).toBe(false)
-    expect(isRecipientRefusal(refusal('invalid_from_address', 422))).toBe(false)
-    expect(isRecipientRefusal(refusal('invalid_api_key', 401))).toBe(false)
-    expect(isRecipientRefusal(refusal('daily_quota_exceeded', 429))).toBe(false)
-    expect(isRecipientRefusal(new Error('fetch failed'))).toBe(false)
+  it('is the address’s only when Resend names the `to` field', () => {
+    const invalidTo =
+      'Invalid `to` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` format.'
+    expect(
+      classifySendFailure(refusal('validation_error', 422, invalidTo)),
+    ).toBe('recipient')
+    expect(
+      classifySendFailure(refusal('invalid_parameter', 422, invalidTo)),
+    ).toBe('recipient')
+    // A malformed From comes back with the same status and name.
+    expect(
+      classifySendFailure(
+        refusal(
+          'validation_error',
+          422,
+          'Invalid `from` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` format.',
+        ),
+      ),
+    ).toBe('from')
+  })
+
+  it('is the From’s for an unverified domain or a From Resend will not send from', () => {
+    expect(
+      classifySendFailure(
+        refusal(
+          'validation_error',
+          403,
+          'The `a.example.com` domain is not verified. Please, add and verify your domain.',
+        ),
+      ),
+    ).toBe('from')
+    expect(
+      classifySendFailure(refusal('invalid_from_address', 422, 'Invalid from')),
+    ).toBe('from')
+    expect(
+      classifySendFailure(
+        refusal('', 403, 'Not authorized to send emails from example.com'),
+      ),
+    ).toBe('from')
+  })
+
+  it('is the account’s for a key, a quota, the testing restriction, an outage or a timeout', () => {
+    // A bad key is also a `validation_error` (400 and 401).
+    expect(
+      classifySendFailure(
+        refusal('validation_error', 401, 'API key is invalid'),
+      ),
+    ).toBe('account')
+    expect(
+      classifySendFailure(
+        refusal('validation_error', 400, 'API key is invalid'),
+      ),
+    ).toBe('account')
+    expect(
+      classifySendFailure(
+        refusal('suspended_api_key', 403, 'This API key is suspended'),
+      ),
+    ).toBe('account')
+    expect(
+      classifySendFailure(
+        refusal(
+          'daily_quota_exceeded',
+          429,
+          'You have exceeded your daily email sending quota.',
+        ),
+      ),
+    ).toBe('account')
+    // Mentions `from`, but no From on the account can send to others.
+    expect(
+      classifySendFailure(
+        refusal(
+          'validation_error',
+          403,
+          'You can only send testing emails to your own email address (you@example.com). To send emails to other recipients, please verify a domain at resend.com/domains, and change the `from` address to an email using this domain.',
+        ),
+      ),
+    ).toBe('account')
+    expect(
+      classifySendFailure(
+        refusal('application_error', 500, 'An unexpected error occurred.'),
+      ),
+    ).toBe('account')
+    expect(
+      classifySendFailure(new Error('Resend send timed out after 10000 ms')),
+    ).toBe('account')
+    // A 422 that names no field is not taken for the address.
+    expect(
+      classifySendFailure(
+        refusal(
+          'validation_error',
+          422,
+          'An error was found with one or more fields in the request.',
+        ),
+      ),
+    ).toBe('account')
   })
 })
