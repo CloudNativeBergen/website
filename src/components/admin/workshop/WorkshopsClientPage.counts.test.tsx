@@ -780,9 +780,16 @@ describe('Needs attention (#1452)', () => {
         [{ typeName: 'Early Bird', grantsWorkshop: true }],
       ),
     )
+    // The address moves to the anchor, and the change has been handled.
+    const moved = new Promise((resolve) =>
+      window.addEventListener('hashchange', resolve, { once: true }),
+    )
     window.location.hash = 'workshop-tickets'
+    await moved
     const toggle = screen.getByRole('button', { name: /^Workshop tickets/ })
     fireEvent.click(toggle)
+    // Nothing reopens it by itself.
+    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
     const region = await screen.findByRole('region', {
