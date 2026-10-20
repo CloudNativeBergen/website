@@ -338,7 +338,7 @@ async function deliverOne(
     if (!prepared) return 'skipped'
     // Right before the claim: once claimed, a run killed before the sends
     // loses them for good. Unclaimed, the talk waits for the next run.
-    const recipients = prepared.recipients
+    const recipients = prepared.recipientIds.length
     const fits = () => !deadline || fitsBefore(deadline, recipients)
     const outcome = fits()
       ? await claimSummary(claimClient, prepared.talk, conferenceId, now, fits)
@@ -357,7 +357,7 @@ async function deliverOne(
     }
   }
   console.log(`[feedback] claimed ${talkId} for its summary`)
-  const { talk, totals, comments, speakerIds } = prepared
+  const { talk, totals, comments, speakerIds, recipientIds } = prepared
 
   // Before the emails, so a run that dies during them still leaves no
   // stale draft to publish the marker away (and bring a second summary);
@@ -424,17 +424,25 @@ async function deliverOne(
   const resultsUrl = `${conferenceBaseUrl(conference)}${path}`
   const sends: Promise<'sent' | 'unknown' | 'recipient' | 'sender' | 'late'>[] =
     []
-  for (const speaker of speakers) {
+  // Each email starts only if its worst case, after its pause, still ends
+  // before the deadline. The fit check budgeted the recipients read before
+  // the claim, so they go first; one the talk gained since (a speaker
+  // merged, added, or who gave an address) takes only the time left.
+  const budgeted = new Set(recipientIds)
+  const ordered = [
+    ...speakers.filter((s) => budgeted.has(s._id)),
+    ...speakers.filter((s) => !budgeted.has(s._id)),
+  ]
+  for (const speaker of ordered) {
     const to = speaker.email
     if (!to) continue
-    if (pacing.sends > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
-    // Each email starts only if its worst case still ends before the
-    // deadline. The fit check budgeted the talk's recipients as read before
-    // the claim; one the talk gained since (a speaker merged, added, or who
-    // gave an address) may not fit.
+    const pause = pacing.sends > 0 ? EMAIL_CONFIG.RATE_LIMIT_DELAY : 0
+    // Time only runs out: once one does not fit, none after it does, and
+    // none waits for its pause.
     if (
       deadline &&
-      deadline.getTime() - Date.now() < FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS
+      deadline.getTime() - Date.now() - pause <
+        FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS
     ) {
       console.error(
         '[feedback] summary email not sent: no time left before the deadline (claimed, so not retried)',
@@ -443,6 +451,7 @@ async function deliverOne(
       sends.push(Promise.resolve('late' as const))
       continue
     }
+    if (pause > 0) await delay(pause)
     pacing.sends++
     sends.push(
       sendFeedbackSummaryEmail({
@@ -561,7 +570,7 @@ interface Prepared {
   comments: number
   speakerIds: string[]
   /** Speakers who are not erased and have an address: the emails to fit. */
-  recipients: number
+  recipientIds: string[]
 }
 
 /** The talk's speaker ids, each once. */
@@ -677,8 +686,9 @@ async function prepare(
     totals: talkTotals(talk, rows),
     comments: rows.filter(isVisibleComment).length,
     speakerIds,
-    recipients: (await liveSpeakers(client, speakerIds)).filter((s) => s.email)
-      .length,
+    recipientIds: (await liveSpeakers(client, speakerIds))
+      .filter((s) => s.email)
+      .map((s) => s._id),
   }
 }
 

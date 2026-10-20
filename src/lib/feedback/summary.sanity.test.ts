@@ -129,6 +129,7 @@ vi.mock('@/lib/email/config', async (original) => ({
 }))
 
 import { runGroq } from '../../../__tests__/helpers/sanityStore'
+import { EMAIL_CONFIG } from '@/lib/email/config'
 import {
   DUE_TALKS,
   deliverFeedbackSummaries,
@@ -288,6 +289,20 @@ const notifications = () =>
     .filter((d) => d._type === 'notification')
 const emailsTo = () =>
   h.sendEmail.mock.calls.map(([arg]) => (arg as { to: string }).to)
+
+/** mergeSpeakers, in one transaction: `talk-1` names `kept` for `gone`. */
+const merge = (gone: string, kept: string, extra: object = {}) => {
+  store().put(speaker(kept, extra))
+  const t = store().doc('talk-1')!
+  store().put({
+    ...t,
+    _rev: `rev-merged-${kept}`,
+    speakers: (t.speakers as { _ref: string; _key: string }[]).map((s) =>
+      s._ref === gone ? { ...ref(kept), _key: s._key } : s,
+    ),
+  })
+  store().remove(gone)
+}
 
 beforeEach(() => {
   h.releases = []
@@ -729,20 +744,6 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
       'notification.feedback-summary.talk-1.sp-1',
     ])
   })
-
-  /** mergeSpeakers, in one transaction: `talk-1` names `kept` for `gone`. */
-  const merge = (gone: string, kept: string, extra: object = {}) => {
-    store().put(speaker(kept, extra))
-    const t = store().doc('talk-1')!
-    store().put({
-      ...t,
-      _rev: `rev-merged-${kept}`,
-      speakers: (t.speakers as { _ref: string; _key: string }[]).map((s) =>
-        s._ref === gone ? { ...ref(kept), _key: s._key } : s,
-      ),
-    })
-    store().remove(gone)
-  }
 
   it('tells the speaker a duplicate was merged into after the claim, and not the duplicate', async () => {
     store().afterNextCommit(() => merge('sp-2', 'sp-kept'))
@@ -1264,6 +1265,40 @@ describe('deliverFeedbackSummaries: the run’s time', () => {
       expect.stringContaining('stops sending through a sender'),
       expect.anything(),
     )
+  })
+
+  it('sends the recipients it budgeted first, and pauses for none that no longer fits', async () => {
+    // sp-2 has no address when the talk is read, so one email is budgeted:
+    // sp-1's. After the claim sp-2 is merged into sp-kept, who has one, and
+    // is listed first.
+    store().put(speaker('sp-2', { email: undefined }))
+    store().put(
+      talk('talk-1', 'conf-A', {
+        speakers: [
+          { ...ref('sp-2'), _key: 'k2' },
+          { ...ref('sp-1'), _key: 'k1' },
+        ],
+      }),
+    )
+    const start = Date.now()
+    store().afterNextCommit(() => {
+      merge('sp-2', 'sp-kept')
+      // Time for one email's worst case left, not for a pause and another.
+      vi.spyOn(Date, 'now').mockReturnValue(start + 53_200)
+    })
+
+    const report = await deliverFeedbackSummaries({
+      now: NOW,
+      deadline: new Date(start + 85_000),
+    })
+
+    expect(emailsTo()).toEqual(['sp-1@example.com'])
+    expect(report).toMatchObject({ emailed: 1, emailFailed: 1 })
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('no time left before the deadline'),
+      { talkId: 'talk-1', speakerId: 'sp-kept' },
+    )
+    expect(h.delay).not.toHaveBeenCalledWith(EMAIL_CONFIG.RATE_LIMIT_DELAY)
   })
 
   it('claims a talk whose emails fit', async () => {
