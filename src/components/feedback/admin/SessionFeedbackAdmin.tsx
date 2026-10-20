@@ -100,14 +100,12 @@ export function SessionFeedbackAdmin({
     setPending((p) => new Set([...p, ...ids]))
     try {
       await action()
-      return true
     } catch (e) {
       setError(
         e instanceof Error && e.message
           ? e.message
           : 'That didn’t work. Try again.',
       )
-      return false
     } finally {
       setPending((p) => new Set([...p].filter((id) => !ids.includes(id))))
     }
@@ -215,8 +213,9 @@ export function SessionFeedbackAdmin({
         onClose={() => setRemoving(null)}
         onConfirm={async () => {
           if (!removing) return
-          if (await run([removing.id], () => onRemove([removing.id])))
-            setRemoving(null)
+          await run([removing.id], () => onRemove([removing.id]))
+          // Closed either way: a failure's message is on the page behind it.
+          setRemoving(null)
         }}
         title={removeQuestion(1)}
         message="Its colour and comment are deleted for good and no longer count. There is no undo."

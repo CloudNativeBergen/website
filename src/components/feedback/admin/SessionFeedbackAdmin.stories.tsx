@@ -251,6 +251,29 @@ export const RemoveConfirmed: Story = {
   },
 }
 
+/** A failed Remove closes the dialog so its message on the page is seen. */
+export const RemoveFailed: Story = {
+  args: {
+    onRemove: fn(async () => {
+      throw new Error('Removed 0 of 1 responses. Try again to remove the rest.')
+    }),
+  },
+  play: async (context) => {
+    await askRemove(context)
+    await new Promise((r) => setTimeout(r, 600))
+    await userEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Remove',
+      }),
+    )
+    const canvas = within(context.canvasElement)
+    await waitFor(() =>
+      expect(canvas.getByRole('alert')).toHaveTextContent('Removed 0 of 1'),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  },
+}
+
 export const RemoveAsksDark: Story = {
   play: askRemove,
   globals: { theme: 'dark' },
