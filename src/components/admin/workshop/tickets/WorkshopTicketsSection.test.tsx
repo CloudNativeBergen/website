@@ -435,7 +435,7 @@ describe('a configured list', () => {
 
   // Arriving by a link (the ticket-types page, a notification): the card is
   // far down the page, and Next applied the fragment before it was there.
-  it('arriving with its anchor in the address, opens and is brought into view', () => {
+  it('arriving with its anchor in the address, opens and is brought into view once', () => {
     const scrolled = vi.fn()
     const original = Element.prototype.scrollIntoView
     Element.prototype.scrollIntoView = scrolled
@@ -443,10 +443,21 @@ describe('a configured list', () => {
       Element.prototype.scrollIntoView = original
     })
     window.history.replaceState(null, '', '#workshop-tickets')
-    section(['Two-day pass', 'Day pass'], roles.slice(0, 2))
+    // The skeleton first, then the list streams in: a new frame mounts.
+    const { rerender } = render(<WorkshopTicketsSkeleton />)
+    rerender(
+      <WorkshopTicketsSection
+        list={buildWorkshopTicketList(
+          ['Two-day pass', 'Day pass'],
+          roles.slice(0, 2),
+        )}
+        providerLabel="Checkin.no"
+      />,
+    )
     expect(
       screen.getByRole('button', { name: /^Workshop tickets/ }),
     ).toHaveAttribute('aria-expanded', 'true')
+    // Once for the entry: the list arriving does not pull the page back.
     expect(scrolled.mock.contexts.map((el) => (el as Element).id)).toEqual([
       'workshop-tickets',
     ])

@@ -716,6 +716,23 @@ describe('the ticket holders (#1333)', () => {
  * "Needs attention" (#1452): at the top of the page, only when something
  * further down needs the organizer, with a link to where it is settled.
  */
+/**
+ * Moves the address to an anchor and waits for THAT change to be handled: a
+ * change made by an earlier test may still be on its way.
+ */
+function moveAddressTo(anchor: string) {
+  const moved = new Promise<void>((resolve) => {
+    const onChange = (event: HashChangeEvent) => {
+      if (!event.newURL.endsWith(`#${anchor}`)) return
+      window.removeEventListener('hashchange', onChange)
+      resolve()
+    }
+    window.addEventListener('hashchange', onChange)
+  })
+  window.location.hash = anchor
+  return moved
+}
+
 describe('Needs attention (#1452)', () => {
   const attention = () =>
     screen.queryByRole('region', { name: 'Needs attention' })
@@ -783,11 +800,7 @@ describe('Needs attention (#1452)', () => {
       ),
     )
     // The address moves to the anchor, and the change has been handled.
-    const moved = new Promise((resolve) =>
-      window.addEventListener('hashchange', resolve, { once: true }),
-    )
-    window.location.hash = 'workshop-tickets'
-    await moved
+    await moveAddressTo('workshop-tickets')
     const toggle = screen.getByRole('button', { name: /^Workshop tickets/ })
     fireEvent.click(toggle)
     // Nothing reopens it by itself.
@@ -801,7 +814,34 @@ describe('Needs attention (#1452)', () => {
       within(region).getByRole('link', { name: 'Review workshop tickets' }),
     )
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    window.location.hash = ''
+    window.history.replaceState(null, '', window.location.pathname)
+    await cardButton(/^Confirmed\s*120$/)
+  })
+
+  // The sponsor card's link to the registration card (#1452), followed again
+  // after the organizer closed that card.
+  it('the sponsor card opens the registration card the organizer closed, from the address it is already at', async () => {
+    renderWithTickets(
+      buildWorkshopTicketList(
+        ['Early Bird'],
+        [{ typeName: 'Early Bird', grantsWorkshop: true }],
+      ),
+    )
+    await moveAddressTo('workshop-registration')
+    const toggle = screen.getByRole('button', {
+      name: /^Workshop registration/,
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(toggle)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    const sponsor = screen.getByRole('region', { name: 'Sponsor early access' })
+    fireEvent.click(
+      within(sponsor).getByRole('link', { name: 'Workshop registration' }),
+    )
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    window.history.replaceState(null, '', window.location.pathname)
     await cardButton(/^Confirmed\s*120$/)
   })
 

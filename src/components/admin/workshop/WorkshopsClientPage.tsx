@@ -22,6 +22,7 @@ import { api } from '@/lib/trpc/client'
 import { SponsorEarlyAccessCard } from './SponsorEarlyAccessCard'
 import { WorkshopSection } from './WorkshopSection'
 import { TicketsAttentionContext, type TicketsAttention } from './attention'
+import { reopenAnchor } from './useOpenedByAnchor'
 import { WORKSHOP_TICKETS_ANCHOR } from './tickets/anchor'
 import { WorkshopScheduleGrid } from './WorkshopScheduleGrid'
 import { useNotification } from '@/components/admin/NotificationProvider'
@@ -445,16 +446,7 @@ function WorkshopsClientPageFor({
                   : 'The workshop tickets could not be read.'}{' '}
                 <a
                   href={`#${WORKSHOP_TICKETS_ANCHOR}`}
-                  // Already at the anchor (arrived by a link to it, or
-                  // clicked before), the address does not change, so the
-                  // card, which opens on a change, is told here.
-                  onClick={() => {
-                    if (
-                      window.location.hash === `#${WORKSHOP_TICKETS_ANCHOR}`
-                    ) {
-                      window.dispatchEvent(new HashChangeEvent('hashchange'))
-                    }
-                  }}
+                  onClick={reopenAnchor(WORKSHOP_TICKETS_ANCHOR)}
                   className="font-medium underline hover:no-underline"
                 >
                   Review workshop tickets

@@ -88,8 +88,10 @@ export function WorkshopSection({
       aria-labelledby={labelId}
       className={`scroll-mt-24 rounded-lg p-6 shadow-sm ring-1 ${colors.card}`}
     >
-      <div className="flex items-center gap-2">
-        <Icon aria-hidden className={`size-5 shrink-0 ${colors.icon}`} />
+      {/* Top-aligned: a title that wraps on a phone keeps the icon and the
+          action beside its first line. */}
+      <div className="flex items-start gap-2">
+        <Icon aria-hidden className={`mt-1 size-5 shrink-0 ${colors.icon}`} />
         <Heading
           ref={headingRef}
           id={labelId}
@@ -102,13 +104,17 @@ export function WorkshopSection({
               aria-expanded={open}
               aria-controls={contentId}
               onClick={() => onOpenChange?.(!open)}
-              className="flex w-full flex-wrap items-center gap-2 text-left"
+              className="flex w-full items-start gap-2 text-left"
             >
-              {title}
-              {badge}
+              {/* Title and badge wrap; the chevron stays at the end of the
+                  first line, on a phone too. */}
+              <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                {title}
+                {badge}
+              </span>
               <ChevronDownIcon
                 aria-hidden
-                className={`ml-auto size-5 shrink-0 text-gray-400 transition-transform dark:text-gray-500 ${open ? 'rotate-180' : ''}`}
+                className={`mt-1 size-5 shrink-0 text-gray-400 transition-transform dark:text-gray-500 ${open ? 'rotate-180' : ''}`}
               />
             </button>
           ) : (
@@ -118,7 +124,7 @@ export function WorkshopSection({
             </span>
           )}
         </Heading>
-        {action}
+        {action && <div className="-my-2 shrink-0">{action}</div>}
       </div>
       {description && (
         <p className={`mt-1 text-sm ${colors.description}`}>{description}</p>
