@@ -13,7 +13,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
 
 const h = vi.hoisted(() => ({
@@ -324,6 +324,59 @@ describe('resolveFeedbackTarget().page — "public" is computed per request', ()
         title: 'Kubernetes for everyone',
         speakers: ['Ada Lovelace', 'Bob Builder'],
       },
+    })
+  })
+})
+
+describe('resolveFeedbackTarget().page — the local dev override', () => {
+  /** Before the session: the real window is not yet open. */
+  const BEFORE = new Date('2026-10-26T08:00:00.000Z')
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('opens every window under `next dev` with FEEDBACK_DEV_OPEN_WINDOW=1, and says so', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('FEEDBACK_DEV_OPEN_WINDOW', '1')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(await pageFor(CONF, 'k7m2qx', BEFORE)).toMatchObject({
+      state: 'open',
+      closesAt: '2026-10-27T09:40:00.000Z',
+    })
+    // After the real window closed, too.
+    expect(
+      await pageFor(CONF, 'k7m2qx', new Date('2026-11-01T00:00:00.000Z')),
+    ).toMatchObject({ state: 'open' })
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('FEEDBACK_DEV_OPEN_WINDOW'),
+    )
+    warn.mockRestore()
+  })
+
+  it('keeps the real window under `next dev` without the flag', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+
+    expect(await pageFor(CONF, 'k7m2qx', BEFORE)).toMatchObject({
+      state: 'not-yet-open',
+    })
+  })
+
+  it('ignores the flag in a production build', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('FEEDBACK_DEV_OPEN_WINDOW', '1')
+
+    expect(await pageFor(CONF, 'k7m2qx', BEFORE)).toMatchObject({
+      state: 'not-yet-open',
+    })
+  })
+
+  it('ignores the flag in tests', async () => {
+    vi.stubEnv('FEEDBACK_DEV_OPEN_WINDOW', '1')
+
+    expect(await pageFor(CONF, 'k7m2qx', BEFORE)).toMatchObject({
+      state: 'not-yet-open',
     })
   })
 })
