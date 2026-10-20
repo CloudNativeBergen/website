@@ -91,6 +91,7 @@ export interface SummaryReport {
   /** Talks this run claimed and sent for. */
   claimed: number
   emailed: number
+  /** Not sent: refused, failed, or no time left before the deadline. */
   emailFailed: number
   /**
    * Emails whose outcome is unknown: Resend was still processing an earlier
@@ -421,11 +422,27 @@ async function deliverOne(
   // allows about two requests a second): a talk's emails then take about
   // one email's worst case, whatever its number of speakers.
   const resultsUrl = `${conferenceBaseUrl(conference)}${path}`
-  const sends: Promise<'sent' | 'unknown' | 'recipient' | 'sender'>[] = []
+  const sends: Promise<'sent' | 'unknown' | 'recipient' | 'sender' | 'late'>[] =
+    []
   for (const speaker of speakers) {
     const to = speaker.email
     if (!to) continue
     if (pacing.sends > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+    // Each email starts only if its worst case still ends before the
+    // deadline. The fit check budgeted the talk's recipients as read before
+    // the claim; one the talk gained since (a speaker merged, added, or who
+    // gave an address) may not fit.
+    if (
+      deadline &&
+      deadline.getTime() - Date.now() < FEEDBACK_SUMMARY_EMAIL_WORST_CASE_MS
+    ) {
+      console.error(
+        '[feedback] summary email not sent: no time left before the deadline (claimed, so not retried)',
+        { talkId, speakerId: speaker._id },
+      )
+      sends.push(Promise.resolve('late' as const))
+      continue
+    }
     pacing.sends++
     sends.push(
       sendFeedbackSummaryEmail({
@@ -471,7 +488,7 @@ async function deliverOne(
     results.filter((x) => x === r).length
   return {
     emailed: count('sent'),
-    emailFailed: count('recipient') + count('sender'),
+    emailFailed: count('recipient') + count('sender') + count('late'),
     senderFailed: count('sender'),
     emailUnknown: count('unknown'),
   }
@@ -527,7 +544,8 @@ const CLAIM_OVERHEAD_MS =
  * pause apart, the last one starts after `recipients - 1` pauses and takes
  * at most one email's worst case. That worst case is counted even with no
  * recipient: a speaker merged after the claim may bring one (see
- * {@link speakersAfterClaim}); a further one's pause fits in the margin.
+ * {@link speakersAfterClaim}). A recipient beyond the budget is sent only
+ * if its own worst case still fits (checked as each email starts).
  */
 function fitsBefore(deadline: Date, recipients: number): boolean {
   const worst =
@@ -608,7 +626,8 @@ async function speakersAfterClaim(
     const talk = await client.getDocument<SummaryTalk>(talkId, { signal })
     const named = talk ? speakerRefs(talk) : ids
     // Gone, and still named (deleted, not merged): nobody else to tell.
-    if (named.length === ids.length && named.every((id, i) => id === ids[i]))
+    const read = new Set(ids)
+    if (named.length === read.size && named.every((id) => read.has(id)))
       return live(found)
     ids = named
   }

@@ -824,6 +824,23 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
     )
   })
 
+  it('reads no further when the gone speaker is still named, in another order', async () => {
+    store().afterNextCommit(() => {
+      store().remove('sp-2')
+      const t = store().doc('talk-1')!
+      store().put({
+        ...t,
+        _rev: 'rev-reordered',
+        speakers: [...(t.speakers as unknown[])].reverse(),
+      })
+    })
+
+    await deliverFeedbackSummaries({ now: NOW })
+
+    expect(emailsTo()).toEqual(['sp-1@example.com'])
+    expect(h.speakerReadOptions).toHaveLength(2)
+  })
+
   it('tells the speakers still there when the talk itself is gone after the claim', async () => {
     store().afterNextCommit(() => {
       store().remove('sp-2')
@@ -1215,6 +1232,38 @@ describe('deliverFeedbackSummaries: the run’s time', () => {
 
     expect(sentAt('talk-1')).toBeUndefined()
     expect(report).toMatchObject({ claimed: 0, notReached: 1 })
+  })
+
+  it('starts no email whose worst case would end past the deadline, and logs it', async () => {
+    store().put(talk('talk-1', 'conf-A'))
+    const start = Date.now()
+    store().afterNextCommit(() => {
+      // The claim's bounded steps took most of their time.
+      vi.spyOn(Date, 'now').mockReturnValue(start + 60_000)
+    })
+
+    const report = await deliverFeedbackSummaries({
+      now: NOW,
+      // One recipient fits at the claim (84 s), with 25 s left after it.
+      deadline: new Date(start + 85_000),
+    })
+
+    expect(sentAt('talk-1')).toBe(NOW.toISOString())
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(report).toMatchObject({
+      claimed: 1,
+      emailed: 0,
+      emailFailed: 1,
+    })
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('no time left before the deadline'),
+      { talkId: 'talk-1', speakerId: 'sp-1' },
+    )
+    // Not the sender's failure: the breaker does not trip.
+    expect(console.error).not.toHaveBeenCalledWith(
+      expect.stringContaining('stops sending through a sender'),
+      expect.anything(),
+    )
   })
 
   it('claims a talk whose emails fit', async () => {
