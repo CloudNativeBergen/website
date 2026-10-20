@@ -18,12 +18,14 @@ const shownKey = (anchor: string) => `anchorShown:${anchor}`
  */
 const storedKey = (entry: string, anchor: string) =>
   `anchorShown:${entry}:${anchor}`
-const entryKey = () =>
+/** The Navigation API, where the browser has it. */
+const navigationApi = () =>
   (
     window as unknown as {
-      navigation?: { currentEntry?: { key: string } | null }
+      navigation?: EventTarget & { currentEntry?: { key: string } | null }
     }
-  ).navigation?.currentEntry?.key
+  ).navigation
+const entryKey = () => navigationApi()?.currentEntry?.key
 
 function shownInThisEntry(anchor: string) {
   const key = entryKey()
@@ -112,6 +114,17 @@ export function useOpenedByAnchor(
     // `hashchange`. A replace is also what a refresh after a save does, which
     // must not reopen a card the organizer shut, so it is the CLICK that
     // counts, caught before the link's own handler.
+    // The entry that link makes is marked once Next has made it, so a page
+    // kept and shown again on it (Back) does not pull the organizer back.
+    let markNextEntry = false
+    const onEntryChange = () => {
+      if (!markNextEntry) return
+      markNextEntry = false
+      // After Next's commit, which made the entry: nothing is rendered here.
+      queueMicrotask(() => {
+        if (window.location.hash === `#${anchor}`) markShownInThisEntry(anchor)
+      })
+    }
     const onClick = (event: MouseEvent) => {
       if (event.button !== 0) return
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
@@ -124,17 +137,21 @@ export function useOpenedByAnchor(
         to.pathname === window.location.pathname &&
         to.hash === `#${anchor}`
       ) {
+        markNextEntry = true
         show(true)
       }
     }
     const onGoTo = (event: Event) => {
       if ((event as CustomEvent<string>).detail === anchor) show(true)
     }
+    const navigation = navigationApi()
+    navigation?.addEventListener('currententrychange', onEntryChange)
     document.addEventListener('click', onClick, true)
     // An address edited by hand.
     window.addEventListener('hashchange', arrive)
     window.addEventListener(GO_TO_ANCHOR, onGoTo)
     return () => {
+      navigation?.removeEventListener('currententrychange', onEntryChange)
       document.removeEventListener('click', onClick, true)
       window.removeEventListener('hashchange', arrive)
       window.removeEventListener(GO_TO_ANCHOR, onGoTo)

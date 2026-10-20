@@ -574,6 +574,54 @@ describe('a configured list', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
   })
 
+  // The entry Next makes for that link is marked as shown: the page kept and
+  // shown again on it (Back) does not bring the card into view a second time.
+  it('marks the entry a link on this page makes, so showing the page again does not scroll', async () => {
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    const navigation = Object.assign(new EventTarget(), {
+      currentEntry: { key: 'before-link' },
+    })
+    vi.stubGlobal('navigation', navigation)
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+      vi.unstubAllGlobals()
+      sessionStorage.clear()
+      window.history.replaceState(null, '', window.location.pathname)
+    })
+    const page = () => (
+      <>
+        <a
+          href={`${window.location.pathname}#workshop-tickets`}
+          onClick={(event) => event.preventDefault()}
+        >
+          Notification
+        </a>
+        <WorkshopTicketsSection
+          list={buildWorkshopTicketList(
+            ['Two-day pass', 'Day pass'],
+            roles.slice(0, 2),
+          )}
+          providerLabel="Checkin.no"
+        />
+      </>
+    )
+    const { unmount } = render(page())
+    fireEvent.click(screen.getByRole('link', { name: 'Notification' }))
+    expect(scrolled).toHaveBeenCalledTimes(1)
+    // What Next does next: a new entry, with no `hashchange`.
+    window.history.pushState({ __NA: true }, '', '#workshop-tickets')
+    navigation.currentEntry = { key: 'after-link' }
+    navigation.dispatchEvent(new Event('currententrychange'))
+    await Promise.resolve()
+
+    // Away and Back: the kept page is shown again, its effects run anew.
+    unmount()
+    render(page())
+    expect(scrolled).toHaveBeenCalledTimes(1)
+  })
+
   it('shows a load failure even after the organizer closed the card', () => {
     // Opens on a decision to make; the organizer closes it.
     const { rerender } = section(
