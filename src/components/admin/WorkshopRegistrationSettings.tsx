@@ -61,7 +61,7 @@ export function WorkshopRegistrationSettings({
   const [isOpen, setIsOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   // The sponsor early-access card links here, to the time it shows.
-  useOpenedByAnchor(WORKSHOP_REGISTRATION_ANCHOR, setExpanded)
+  useOpenedByAnchor(WORKSHOP_REGISTRATION_ANCHOR, expanded, setExpanded)
   const [error, setError] = useState<string | null>(null)
   // A REFUSAL IS BROUGHT INTO VIEW when it arrives: on a short screen it sits
   // above the Save button that was just tapped. Counted, not keyed on the

@@ -11,7 +11,6 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
-  act,
   cleanup,
   fireEvent,
   render,
@@ -20,6 +19,7 @@ import {
 } from '@testing-library/react'
 import { WorkshopRegistrationSettings } from './WorkshopRegistrationSettings'
 import { NotificationProvider } from './NotificationProvider'
+import { goToAnchor } from './workshop/useOpenedByAnchor'
 
 const mutate = vi.hoisted(() => vi.fn())
 
@@ -354,17 +354,29 @@ describe('saving the registration times', () => {
 // The sponsor early-access card links here (#1452): the card opens, so the
 // time the link points at is shown.
 describe('a link to the card', () => {
-  it('opens it when the address moves to its anchor', () => {
-    renderCard({}, '2026-05-01T08:00:00Z')
+  it('opens it', () => {
+    vi.useFakeTimers({
+      toFake: ['Date'],
+      now: new Date('2026-05-01T08:00:00Z'),
+    })
+    render(
+      <NotificationProvider>
+        <a
+          href="#workshop-registration"
+          onClick={goToAnchor('workshop-registration')}
+        >
+          Workshop registration link
+        </a>
+        <WorkshopRegistrationSettings />
+      </NotificationProvider>,
+    )
     const toggle = screen.getByRole('button', {
       name: /^Workshop registration/,
     })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    act(() => {
-      window.location.hash = 'workshop-registration'
-      window.dispatchEvent(new HashChangeEvent('hashchange'))
-    })
+    fireEvent.click(
+      screen.getByRole('link', { name: 'Workshop registration link' }),
+    )
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    window.history.replaceState(null, '', '#')
   })
 })

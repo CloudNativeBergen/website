@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 
 /** The mark, in the history entry's own state, that the card was shown. */
 const shownKey = (anchor: string) => `anchorShown:${anchor}`
@@ -43,55 +43,88 @@ function markShownInThisEntry(anchor: string) {
   )
 }
 
+/** Sent by a link on this page to a card ({@link goToAnchor}). */
+const GO_TO_ANCHOR = 'workshops:go-to-anchor'
+
 /**
  * A COLLAPSED CARD THAT A LINK POINTS AT OPENS, AND IS SHOWN (#1452).
  *
- * Arriving with the card's anchor in the address (a link from another page,
+ * ARRIVING with the card's anchor in the address (a link from another page,
  * a notification), the card opens and is brought into view: Next applies a
  * link's fragment once, at the route's loading state, before the card is on
  * the page (see `useBringEarlySignupsIntoView`), and the card sits far down.
- * After mount, a link on this page that moves the address to the anchor opens
- * it too; the browser does the scrolling then.
- *
- * BROUGHT INTO VIEW ONCE PER HISTORY ENTRY, as the early sign-ups are: the
+ * Brought into view ONCE PER HISTORY ENTRY, as the early sign-ups are: the
  * tickets card mounts twice on arrival (its skeleton, then the list that
  * streams in seconds later), and a page Next kept runs its effects again
  * when shown. Neither may pull the organizer back once they have scrolled
- * away; on Back, the position is the browser's. A reload of the address
- * (a new page) brings it into view again, as the browser itself would.
+ * away. On Back or a reload the position is the browser's.
+ *
+ * A LINK ON THIS PAGE ({@link goToAnchor}) opens it and brings it into view
+ * every time.
+ *
+ * SCROLLED ONCE THE CARD IS OPEN, not before: the card is near the end of the
+ * page, and scrolled while collapsed the page is too short to bring it to the
+ * top, so its content would open below the fold.
  *
  * `setOpen` must be stable (a state setter).
  */
 export function useOpenedByAnchor(
   anchor: string,
+  open: boolean,
   setOpen: (open: boolean) => void,
 ) {
+  // A request to bring the card into view, carried out once it is open.
+  const [requested, setRequested] = useState(0)
+  const handled = useRef(0)
+
   useEffect(() => {
-    const linked = () => window.location.hash === `#${anchor}`
-    if (linked()) {
+    const show = (scroll: boolean) => {
       setOpen(true)
-      const section = document.getElementById(anchor)
-      if (section && !shownInThisEntry(anchor)) {
-        // The section's `scroll-mt-*` keeps it clear of the fixed header.
-        section.scrollIntoView?.({ block: 'start', behavior: 'instant' })
-        markShownInThisEntry(anchor)
-      }
+      if (scroll) setRequested((n) => n + 1)
     }
-    const openIfLinked = () => {
-      if (linked()) setOpen(true)
+    // After mount: the server render has no address hash.
+    if (window.location.hash === `#${anchor}`) {
+      const first = !shownInThisEntry(anchor)
+      if (first) markShownInThisEntry(anchor)
+      show(first)
     }
-    window.addEventListener('hashchange', openIfLinked)
-    return () => window.removeEventListener('hashchange', openIfLinked)
+    const onGoTo = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === anchor) show(true)
+    }
+    window.addEventListener(GO_TO_ANCHOR, onGoTo)
+    return () => window.removeEventListener(GO_TO_ANCHOR, onGoTo)
   }, [anchor, setOpen])
+
+  useEffect(() => {
+    if (!open || requested === handled.current) return
+    handled.current = requested
+    // The section's `scroll-mt-*` keeps it clear of the fixed header.
+    document
+      .getElementById(anchor)
+      ?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
+  }, [anchor, open, requested])
 }
 
 /**
- * The `onClick` of a link on this page to such a card. Already at the anchor
- * (arrived by a link to it, or followed before), following it again changes
- * nothing in the address, so the card, which opens on a change, is told here.
+ * THE `onClick` OF A LINK ON THIS PAGE TO ONE OF ITS SECTIONS. The link keeps
+ * its `href` (copy, open in a new tab), but a click is handled here and does
+ * NOT move the address: a fragment the browser adds makes a history entry
+ * Next does not know, and Next ignores Back to it and writes the old address
+ * over it on the next `router.refresh()` (every save on this page).
+ *
+ * The section is brought into view (a collapsed card opens first, through
+ * {@link useOpenedByAnchor}), and focus moves to its heading, as following
+ * the link would have taken a keyboard user there.
  */
-export const reopenAnchor = (anchor: string) => () => {
-  if (window.location.hash === `#${anchor}`) {
-    window.dispatchEvent(new HashChangeEvent('hashchange'))
+export const goToAnchor =
+  (anchor: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+    // A modified click (new tab, new window) is the browser's.
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    const section = document.getElementById(anchor)
+    section?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
+    window.dispatchEvent(new CustomEvent(GO_TO_ANCHOR, { detail: anchor }))
+    section
+      ?.querySelector<HTMLElement>('h2, h3')
+      ?.focus({ preventScroll: true })
   }
-}

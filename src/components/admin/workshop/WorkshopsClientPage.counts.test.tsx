@@ -716,23 +716,6 @@ describe('the ticket holders (#1333)', () => {
  * "Needs attention" (#1452): at the top of the page, only when something
  * further down needs the organizer, with a link to where it is settled.
  */
-/**
- * Moves the address to an anchor and waits for THAT change to be handled: a
- * change made by an earlier test may still be on its way.
- */
-function moveAddressTo(anchor: string) {
-  const moved = new Promise<void>((resolve) => {
-    const onChange = (event: HashChangeEvent) => {
-      if (!event.newURL.endsWith(`#${anchor}`)) return
-      window.removeEventListener('hashchange', onChange)
-      resolve()
-    }
-    window.addEventListener('hashchange', onChange)
-  })
-  window.location.hash = anchor
-  return moved
-}
-
 describe('Needs attention (#1452)', () => {
   const attention = () =>
     screen.queryByRole('region', { name: 'Needs attention' })
@@ -789,51 +772,46 @@ describe('Needs attention (#1452)', () => {
     await cardButton(/^Confirmed\s*120$/)
   })
 
-  // The address is at the anchor already (arrived by a link to it, or the
-  // link was followed before): following it again changes nothing in the
-  // address, and the card the organizer closed is opened all the same.
-  it('opens the tickets card the organizer closed, from the address it is already at', async () => {
+  // In-page links move no address (#1452): a fragment the browser adds is a
+  // history entry Next does not know. The card opens, also one the organizer
+  // closed, is brought into view, and its heading takes focus.
+  it('"Review workshop tickets" opens the card the organizer closed, and moves no address', async () => {
     renderWithTickets(
       buildWorkshopTicketList(
         ['Early Bird', 'Speaker'],
         [{ typeName: 'Early Bird', grantsWorkshop: true }],
       ),
     )
-    // The address moves to the anchor, and the change has been handled.
-    await moveAddressTo('workshop-tickets')
     const toggle = screen.getByRole('button', { name: /^Workshop tickets/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
     fireEvent.click(toggle)
-    // Nothing reopens it by itself.
-    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
     const region = await screen.findByRole('region', {
       name: 'Needs attention',
     })
+    const entries = window.history.length
     fireEvent.click(
       within(region).getByRole('link', { name: 'Review workshop tickets' }),
     )
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    window.history.replaceState(null, '', window.location.pathname)
+    expect(document.activeElement).toBe(
+      screen.getByRole('heading', { name: /^Workshop tickets/ }),
+    )
+    expect([window.location.hash, window.history.length]).toEqual(['', entries])
     await cardButton(/^Confirmed\s*120$/)
   })
 
-  // The sponsor card's link to the registration card (#1452), followed again
-  // after the organizer closed that card.
-  it('the sponsor card opens the registration card the organizer closed, from the address it is already at', async () => {
+  it('the sponsor card opens the registration card, and moves no address', async () => {
     renderWithTickets(
       buildWorkshopTicketList(
         ['Early Bird'],
         [{ typeName: 'Early Bird', grantsWorkshop: true }],
       ),
     )
-    await moveAddressTo('workshop-registration')
     const toggle = screen.getByRole('button', {
       name: /^Workshop registration/,
     })
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    fireEvent.click(toggle)
-    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
     const sponsor = screen.getByRole('region', { name: 'Sponsor early access' })
@@ -841,7 +819,10 @@ describe('Needs attention (#1452)', () => {
       within(sponsor).getByRole('link', { name: 'Workshop registration' }),
     )
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    window.history.replaceState(null, '', window.location.pathname)
+    expect(document.activeElement).toBe(
+      screen.getByRole('heading', { name: /^Workshop registration/ }),
+    )
+    expect(window.location.hash).toBe('')
     await cardButton(/^Confirmed\s*120$/)
   })
 
@@ -866,6 +847,11 @@ describe('Needs attention (#1452)', () => {
     expect(document.getElementById(link.getAttribute('href')!.slice(1))).toBe(
       screen.getByRole('region', { name: 'Ticket holders' }),
     )
+    fireEvent.click(link)
+    expect(document.activeElement).toBe(
+      screen.getByRole('heading', { name: 'Ticket holders' }),
+    )
+    expect(window.location.hash).toBe('')
   })
 
   it('is not on the page when nothing needs the organizer', async () => {

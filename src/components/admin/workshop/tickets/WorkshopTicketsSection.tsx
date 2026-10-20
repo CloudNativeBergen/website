@@ -56,7 +56,7 @@ function WorkshopTicketsFrame({
   const [open, setOpen] = useState(initiallyOpen)
   // A link to the card (from the ticket-types page, a notification, or
   // "Needs attention" on this page) opens it, and an arrival shows it.
-  useOpenedByAnchor(WORKSHOP_TICKETS_ANCHOR, setOpen)
+  useOpenedByAnchor(WORKSHOP_TICKETS_ANCHOR, open, setOpen)
   return (
     <WorkshopSection
       id={WORKSHOP_TICKETS_ANCHOR}

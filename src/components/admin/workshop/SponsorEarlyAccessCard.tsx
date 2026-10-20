@@ -6,7 +6,7 @@ import { formatDateTimeSafe } from '@/lib/time'
 import { WorkshopSection } from './WorkshopSection'
 import { WorkshopEarlyAccessBulkButton } from './WorkshopEarlyAccessBulkButton'
 import { WORKSHOP_REGISTRATION_ANCHOR } from '../WorkshopRegistrationSettings'
-import { reopenAnchor } from './useOpenedByAnchor'
+import { goToAnchor } from './useOpenedByAnchor'
 
 /**
  * "Sponsor early access" on `/admin/workshops` (#1452): when it opens, the
@@ -42,7 +42,7 @@ export function SponsorEarlyAccessCard({
         Change it in{' '}
         <a
           href={`#${WORKSHOP_REGISTRATION_ANCHOR}`}
-          onClick={reopenAnchor(WORKSHOP_REGISTRATION_ANCHOR)}
+          onClick={goToAnchor(WORKSHOP_REGISTRATION_ANCHOR)}
           className="font-medium text-indigo-600 underline hover:no-underline dark:text-indigo-400"
         >
           Workshop registration

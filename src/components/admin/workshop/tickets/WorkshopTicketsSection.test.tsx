@@ -21,7 +21,6 @@ import {
   vi,
 } from 'vitest'
 import {
-  act,
   cleanup,
   fireEvent,
   render,
@@ -37,6 +36,7 @@ import {
   WorkshopTicketsSkeleton,
 } from './WorkshopTicketsSection'
 import { TicketHolderContext, type TicketHolderView } from '../holders'
+import { goToAnchor } from '../useOpenedByAnchor'
 
 /** The buttons that act, not the card's own show/hide toggle. */
 const actions = () =>
@@ -418,25 +418,53 @@ describe('a configured list', () => {
     expect(toggle()).toHaveAttribute('aria-expanded', 'false')
   })
 
-  // "Needs attention" on the page links here (#1452): a link followed while
-  // the card is closed opens it.
-  it('opens when the address moves to its anchor', () => {
-    // Every type answered: nothing opens the card by itself.
-    section(['Two-day pass', 'Day pass'], roles.slice(0, 2))
+  // "Needs attention" on the page links here (#1452): followed while the card
+  // is closed, it opens it, and brings it into view once it is open.
+  it('opens when a link on the page goes to it', () => {
+    const scrolled = vi.fn(function (this: Element) {
+      return this.querySelector('[aria-expanded]')?.getAttribute(
+        'aria-expanded',
+      )
+    })
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    render(
+      <>
+        <a href="#workshop-tickets" onClick={goToAnchor('workshop-tickets')}>
+          Review workshop tickets
+        </a>
+        <WorkshopTicketsSection
+          list={buildWorkshopTicketList(
+            ['Two-day pass', 'Day pass'],
+            roles.slice(0, 2),
+          )}
+          providerLabel="Checkin.no"
+        />
+      </>,
+    )
     const toggle = screen.getByRole('button', { name: /^Workshop tickets/ })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    act(() => {
-      window.location.hash = 'workshop-tickets'
-      window.dispatchEvent(new HashChangeEvent('hashchange'))
-    })
+    fireEvent.click(
+      screen.getByRole('link', { name: 'Review workshop tickets' }),
+    )
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    window.location.hash = ''
+    // The last scroll is the one made once the card was open.
+    expect(scrolled.mock.results.at(-1)?.value).toBe('true')
   })
 
   // Arriving by a link (the ticket-types page, a notification): the card is
   // far down the page, and Next applied the fragment before it was there.
   it('arriving with its anchor in the address, opens and is brought into view once', () => {
-    const scrolled = vi.fn()
+    // Whether the card was open when it was brought into view: scrolled while
+    // collapsed, its content would open below the fold.
+    const scrolled = vi.fn(function (this: Element) {
+      return this.querySelector('[aria-expanded]')?.getAttribute(
+        'aria-expanded',
+      )
+    })
     const original = Element.prototype.scrollIntoView
     Element.prototype.scrollIntoView = scrolled
     onTestFinished(() => {
@@ -461,6 +489,7 @@ describe('a configured list', () => {
     expect(scrolled.mock.contexts.map((el) => (el as Element).id)).toEqual([
       'workshop-tickets',
     ])
+    expect(scrolled.mock.results.map((r) => r.value)).toEqual(['true'])
     window.history.replaceState(null, '', '#')
   })
 

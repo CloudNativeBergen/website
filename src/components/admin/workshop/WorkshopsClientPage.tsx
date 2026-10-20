@@ -22,7 +22,7 @@ import { api } from '@/lib/trpc/client'
 import { SponsorEarlyAccessCard } from './SponsorEarlyAccessCard'
 import { WorkshopSection } from './WorkshopSection'
 import { TicketsAttentionContext, type TicketsAttention } from './attention'
-import { reopenAnchor } from './useOpenedByAnchor'
+import { goToAnchor } from './useOpenedByAnchor'
 import { WORKSHOP_TICKETS_ANCHOR } from './tickets/anchor'
 import { WorkshopScheduleGrid } from './WorkshopScheduleGrid'
 import { useNotification } from '@/components/admin/NotificationProvider'
@@ -446,7 +446,7 @@ function WorkshopsClientPageFor({
                   : 'The workshop tickets could not be read.'}{' '}
                 <a
                   href={`#${WORKSHOP_TICKETS_ANCHOR}`}
-                  onClick={reopenAnchor(WORKSHOP_TICKETS_ANCHOR)}
+                  onClick={goToAnchor(WORKSHOP_TICKETS_ANCHOR)}
                   className="font-medium underline hover:no-underline"
                 >
                   Review workshop tickets
@@ -460,6 +460,7 @@ function WorkshopsClientPageFor({
                   : `${flaggedCount} people have signed up without a workshop ticket.`}{' '}
                 <a
                   href={`#${TICKET_HOLDERS_ANCHOR}`}
+                  onClick={goToAnchor(TICKET_HOLDERS_ANCHOR)}
                   className="font-medium underline hover:no-underline"
                 >
                   Review ticket holders
