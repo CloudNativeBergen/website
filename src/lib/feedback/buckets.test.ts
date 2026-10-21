@@ -50,6 +50,16 @@ describe('responseBuckets (§10.2: 10-minute buckets across the window)', () => 
     expect(buckets.at(-1)!.end).toBe('2026-06-11T07:40:00.000Z')
   })
 
+  it('starts at the window’s opening, not at the first answer', () => {
+    const buckets = responseBuckets({
+      responses: [r('late', '2026-06-10T07:25:00Z')],
+      window: WINDOW,
+      now: new Date('2026-06-10T07:26:00Z'),
+    })
+    expect(buckets.map((b) => b.ids)).toEqual([[], [], ['late']])
+    expect(buckets[0].start).toBe('2026-06-10T07:00:00.000Z')
+  })
+
   it('stretches to hold a response outside the window (the session moved)', () => {
     const buckets = responseBuckets({
       responses: [r('early', '2026-06-10T06:31:00Z')],
