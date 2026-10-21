@@ -26,6 +26,8 @@ const h = vi.hoisted(() => ({
   revs: 0,
   /** What GROQ sees when it lags the doc endpoint; null means no lag. */
   groqSnapshot: null as null | (Record<string, unknown> & { _id: string })[],
+  /** How many ids each doc-endpoint read asked for. */
+  docReads: [] as number[],
 }))
 
 vi.mock('server-only', () => ({}))
@@ -94,10 +96,12 @@ vi.mock('@/lib/sanity/client', async () => {
     clientWrite: {
       fetch,
       // The doc endpoint: never lags.
-      getDocuments: async (ids: string[]) =>
-        ids.map((id) =>
+      getDocuments: async (ids: string[]) => {
+        h.docReads.push(ids.length)
+        return ids.map((id) =>
           structuredClone(h.dataset.find((d) => d._id === id) ?? null),
-        ),
+        )
+      },
       transaction: () => {
         const tx = real.transaction()
         tx.commit = (async () =>
@@ -180,6 +184,7 @@ beforeEach(() => {
   h.beforeCommit = []
   h.revs = 0
   h.groqSnapshot = null
+  h.docReads = []
   vi.mocked(revalidateTag).mockClear()
   h.dataset = [
     SCHEDULE,
@@ -898,6 +903,8 @@ describe('Remove a range: bounds, lag and lost replies (§10.2)', () => {
     expect(docs.filter((d) => doc(d._id)).map((d) => d._id)).toEqual([
       docs[5]._id,
     ])
+    // The first chunk's 100 ids re-read in requests of at most 50.
+    expect(h.docReads).toEqual([50, 50])
   })
 
   it('re-plans by id when one answer is deleted during the burst (404), GROQ lagging', async () => {

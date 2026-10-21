@@ -381,6 +381,9 @@ export interface RemoveResult {
   changed: number
 }
 
+/** Ids per doc-endpoint read: they travel in the URL (as in `code.ts`). */
+const DOC_READ_CHUNK = 50
+
 /** How often a chunk whose revision guard failed is re-planned. */
 const MAX_REPLANS = 3
 
@@ -465,12 +468,14 @@ export async function removeResponses({
         }
       }
       // Re-read the chunk by id: drop what went or changed, keep the rest.
-      const now = await clientWrite.getDocuments<{ _rev: string }>(
-        chunk.map((c) => c.id),
-      )
-      const revOf = new Map(
-        now.filter((d) => d !== null).map((d) => [d._id, d._rev]),
-      )
+      // The ids travel in the URL: at most DOC_READ_CHUNK a request.
+      const revOf = new Map<string, string>()
+      for (let k = 0; k < chunk.length; k += DOC_READ_CHUNK) {
+        const docs = await clientWrite.getDocuments<{ _rev: string }>(
+          chunk.slice(k, k + DOC_READ_CHUNK).map((c) => c.id),
+        )
+        for (const d of docs) if (d) revOf.set(d._id, d._rev)
+      }
       chunk = chunk.filter(({ id, rev }) => {
         const current = revOf.get(id)
         if (current === undefined) out.gone++
