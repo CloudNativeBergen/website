@@ -5,7 +5,7 @@ const ids = (n: number) => Array.from({ length: n }, (_, i) => `r${i}`)
 
 describe('removeInRequests', () => {
   it('sends a range larger than one request allows in several, in order', async () => {
-    const send = vi.fn(async (_chunk: string[]) => {})
+    const send = vi.fn<(chunk: string[]) => Promise<void>>(async () => {})
     await removeInRequests(ids(2400), send)
     expect(send.mock.calls.map(([chunk]) => chunk.length)).toEqual([
       MAX_RESPONSES_PER_REQUEST,
