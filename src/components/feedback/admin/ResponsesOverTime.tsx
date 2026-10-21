@@ -120,6 +120,18 @@ export function ResponsesOverTime({
     scrolled && scrolled.last <= last
       ? scrolled
       : { first: 0, last: Math.max(0, last), before: false, after: false }
+  // The box changes size with the page (and as fonts land): measure again.
+  const measureRef = useRef(measure)
+  useEffect(() => {
+    measureRef.current = measure
+  })
+  useEffect(() => {
+    const box = scroller.current
+    if (!box || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => measureRef.current())
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [])
   // Opened on a chart wider than its box: scroll to the busiest bucket, so
   // a burst is in view rather than somewhere off to the side. Once.
   const opened = useRef(false)
