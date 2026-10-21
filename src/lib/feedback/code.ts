@@ -56,6 +56,8 @@ export type ReadFeedbackCodeResult =
       window: FeedbackWindow
       /** §5 would mint a code now. */
       mayMint: boolean
+      /** {@link rotateFeedbackCode} would rotate the code now (§10.4). */
+      mayRotate: boolean
     }
 
 /**
@@ -201,6 +203,7 @@ export async function readFeedbackCode({
     code: read.existing,
     window: read.window,
     mayMint: !read.existing && mayMint(read.window),
+    mayRotate: !!read.existing && mayMint(read.window),
   }
 }
 
@@ -301,6 +304,96 @@ async function mint(
     }
     const won = normalizeShortCode(reread.feedbackCode)
     if (won) return { code: won, minted: false }
+    current = reread
+  }
+}
+
+export type RotateFeedbackCodeResult =
+  /**
+   * Missing, foreign, not confirmed, no speaker left, no code to rotate, or
+   * §5 would not mint one now: one answer for all, nothing written.
+   */
+  | { status: 'refused' }
+  /**
+   * Not rotated: a version of the talk waits in a release that is not
+   * `active`. Sanity locks its versions, and publishing it would bring the
+   * old code back.
+   */
+  | { status: 'locked' }
+  | { status: 'ok'; code: string; window: FeedbackWindow }
+
+/**
+ * ROTATE a talk's Feedback Code (spec §10.4): an organizer replaces the
+ * code, so the old one stops resolving at once; responses are kept.
+ *
+ * Read like a mint, through the doc endpoint, and refused where the
+ * organizer's mint is refused, and also when the talk has no code (never
+ * minted, folded, or its only speaker erased) or §5 would not mint one (its
+ * window has closed): rotating then would restart collection that erasure or
+ * the window had ended. The new code is drawn against every code the
+ * conference holds, drafts included, and written in ONE transaction to the
+ * published talk, guarded by the revision this request read, and to every
+ * other version, each under its own guard (§4.2). A failed guard re-reads
+ * and tries again, up to {@link MAX_RETRIES}; then the sweep catches a
+ * version created meanwhile, and the index expires at once.
+ *
+ * Two rotations at once converge: the one whose guard fails re-reads, finds
+ * the code it read gone, and returns the code that replaced it.
+ */
+export async function rotateFeedbackCode({
+  talkId,
+  conference,
+  now,
+}: {
+  talkId: string
+  conference: { _id: string; endDate?: string | null }
+  now: Date
+}): Promise<RotateFeedbackCodeResult> {
+  const client = versionsClient()
+  const actor: FeedbackCodeActor = { organizer: true }
+  const read = await readTalkForCode(client, talkId, actor, conference, now)
+  if (!read?.existing || !mayMint(read.window)) return { status: 'refused' }
+  const { window, existing } = read
+
+  let current = read.talk
+  for (let attempt = 0; ; attempt++) {
+    const { versions, locked, releasesListed } = await readTalkVersions(
+      client,
+      current._id,
+    )
+    if (!releasesListed) {
+      throw new Error(
+        `[feedback] could not list releases; not rotating the code of ${current._id}`,
+      )
+    }
+    if (locked.length > 0) return { status: 'locked' }
+    const code = createShortCodeMinter(
+      await conferenceFeedbackCodes(conference._id),
+    )()
+    const tx = client
+      .transaction()
+      .patch(current._id, (p) =>
+        p.ifRevisionId(current._rev).set({ feedbackCode: code }),
+      )
+    for (const v of versions) {
+      tx.patch(v._id, (p) => p.ifRevisionId(v._rev).set({ feedbackCode: code }))
+    }
+    try {
+      await tx.commit()
+      await sweepTalkVersions(client, current._id)
+      expireFeedbackCodeIndex(conference._id)
+      return { status: 'ok', code, window }
+    } catch (error) {
+      if (!isRetryable(error) || attempt >= MAX_RETRIES) throw error
+    }
+    const reread = await client.getDocument<TalkDoc>(current._id)
+    if (!mayHoldCode(reread, conference._id, actor))
+      return { status: 'refused' }
+    if (!(await hasLiveSpeaker(client, reread))) return { status: 'refused' }
+    const held = normalizeShortCode(reread.feedbackCode)
+    if (!held) return { status: 'refused' }
+    // Another rotation won: the code this organizer saw is already gone.
+    if (held !== existing) return { status: 'ok', code: held, window }
     current = reread
   }
 }

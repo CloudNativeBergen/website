@@ -2,8 +2,10 @@ export {
   ensureFeedbackCode,
   type EnsureFeedbackCodeResult,
   readFeedbackCode,
+  rotateFeedbackCode,
   type FeedbackCodeActor,
   type ReadFeedbackCodeResult,
+  type RotateFeedbackCodeResult,
 } from './code'
 export { expireFeedbackCodeIndex } from './cache'
 export { conferenceFeedbackCodes, getFeedbackSlots } from './sanity'

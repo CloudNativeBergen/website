@@ -18,6 +18,7 @@ import {
   mintConferenceFeedbackCodes,
   readFeedbackCode,
   readSpeakerResults,
+  rotateFeedbackCode,
 } from '@/lib/feedback/server'
 
 /**
@@ -157,7 +158,11 @@ export const sessionFeedbackRouter = router({
       now: new Date(),
     })
     if (result.status === 'refused') throw notFound()
-    return { ...toCodeResponse(conference, result), mayMint: result.mayMint }
+    return {
+      ...toCodeResponse(conference, result),
+      mayMint: result.mayMint,
+      mayRotate: result.mayRotate,
+    }
   }),
 
   /** How many confirmed talks the bulk mint would give a code (#1459). */
@@ -240,4 +245,30 @@ export const sessionFeedbackRouter = router({
         })
       return { removed: result.removed }
     }),
+
+  /**
+   * Rotate the talk's Feedback Code (§10.4), after the page's confirmation:
+   * the old code stops resolving at once, responses are kept. Refused
+   * (NOT_FOUND, nothing written) where {@link adminCode} offers no rotation:
+   * a talk that is missing, foreign, not confirmed, has no speaker left or
+   * no code, or whose window has closed. CONFLICT while a version of the
+   * talk waits in a scheduled release.
+   */
+  rotateCode: adminProcedure.input(talkInput).mutation(async ({ input }) => {
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) throw notFound()
+    const result = await rotateFeedbackCode({
+      talkId: input.talkId,
+      conference,
+      now: new Date(),
+    })
+    if (result.status === 'refused') throw notFound()
+    if (result.status === 'locked')
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          'A version of this talk waits in a scheduled release. Rotate the code once it is published.',
+      })
+    return toCodeResponse(conference, result)
+  }),
 })

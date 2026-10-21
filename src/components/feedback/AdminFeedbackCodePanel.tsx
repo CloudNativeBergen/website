@@ -38,7 +38,8 @@ export function AdminFeedbackCodePanel({
       }
       utils.sessionFeedback.adminCode.setData(
         { talkId },
-        { ...minted, mayMint: false },
+        // A code was minted, so §5 would mint now: it may be rotated.
+        { ...minted, mayMint: false, mayRotate: true },
       )
       heading.current?.focus()
     },
