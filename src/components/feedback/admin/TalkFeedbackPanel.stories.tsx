@@ -334,7 +334,7 @@ export const RemoveFailed: Story = {
   args: {
     onRemove: fn(async () => {
       throw new Error(
-        'Removed 2000 of 2400 responses. Reload to see what’s left, then remove those.',
+        'Not all 2400 responses were removed (at least 2000 were). Reload to see what’s left, then remove those.',
       )
     }),
   },
@@ -349,7 +349,7 @@ export const RemoveFailed: Story = {
     )
     await confirmWith('Remove')
     expect(await canvas.findByRole('alert')).toHaveTextContent(
-      'Removed 2000 of 2400 responses.',
+      'Not all 2400 responses were removed (at least 2000 were).',
     )
   },
 }

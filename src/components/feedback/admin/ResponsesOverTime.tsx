@@ -58,15 +58,24 @@ export function ResponsesOverTime({
   }, [])
   const buckets = responseBuckets({ responses, window, now: new Date(now) })
   const last = buckets.length - 1
-  const [stored, setRange] = useState<BucketRange | null>(null)
+  // The range by its buckets' start instants, not their places: a refetch
+  // that drops the earliest response moves every bucket, never the range.
+  const [stored, setStored] = useState<{
+    anchor: string
+    focus: string
+  } | null>(null)
+  const setRange = (next: BucketRange | null) =>
+    setStored(
+      next && {
+        anchor: buckets[next.anchor].start,
+        focus: buckets[next.focus].start,
+      },
+    )
   const [focused, setFocused] = useState(false)
-  // A refetch can shorten the chart: keep the range inside it.
-  const range =
-    stored && last >= 0
-      ? {
-          anchor: Math.min(stored.anchor, last),
-          focus: Math.min(stored.focus, last),
-        }
+  const at = (start: string) => buckets.findIndex((b) => b.start === start)
+  const range: BucketRange | null =
+    stored && at(stored.anchor) >= 0 && at(stored.focus) >= 0
+      ? { anchor: at(stored.anchor), focus: at(stored.focus) }
       : null
   const active = range?.focus ?? 0
   const [removing, setRemoving] = useState<string[] | null>(null)

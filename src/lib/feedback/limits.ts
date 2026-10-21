@@ -7,8 +7,9 @@ export const MAX_RESPONSES_PER_REQUEST = 2000
 
 /**
  * Remove `ids` in requests of at most {@link MAX_RESPONSES_PER_REQUEST},
- * one after another. A failure stops the rest: the first request's own
- * error as it is, a later one's as how many went before it.
+ * one after another; a failure stops the rest. One request's own error
+ * counts the whole range, so it is passed on as it is; with several, a
+ * failing request counts only its chunk, so the range is described instead.
  */
 export async function removeInRequests(
   ids: readonly string[],
@@ -18,9 +19,9 @@ export async function removeInRequests(
     try {
       await send(ids.slice(i, i + MAX_RESPONSES_PER_REQUEST))
     } catch (error) {
-      if (i === 0) throw error
+      if (ids.length <= MAX_RESPONSES_PER_REQUEST) throw error
       throw new Error(
-        `Removed ${i} of ${ids.length} responses. Reload to see what’s left, then remove those.`,
+        `Not all ${ids.length} responses were removed${i > 0 ? ` (at least ${i} were)` : ''}. Reload to see what’s left, then remove those.`,
       )
     }
   }

@@ -1,0 +1,116 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * Remove by range (speaker feedback spec §10.2, §10.3) removes exactly the
+ * responses the organizer saw when they pressed Remove, and a range keeps
+ * its place in time when a refetch reshapes the chart.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
+import type { ChartResponse } from '@/lib/feedback/buckets'
+import { ResponsesOverTime } from './ResponsesOverTime'
+
+const r = (id: string, submittedAt: string): ChartResponse => ({
+  id,
+  colour: 'red',
+  submittedAt,
+})
+// A talk with no slot: the chart spans its responses.
+const NO_WINDOW = {}
+
+beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-27T12:00:00Z'))
+})
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+const chart = () => screen.getByRole('listbox', { name: 'Responses over time' })
+const key = (k: string, shiftKey = false) =>
+  fireEvent.keyDown(chart(), { key: k, shiftKey })
+
+async function confirmRemove() {
+  const button = within(await screen.findByRole('dialog')).getByRole(
+    'button',
+    { name: 'Remove' },
+  )
+  // The confirmation ignores a press for a moment after it opens.
+  await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'), {
+    timeout: 2000,
+  })
+  fireEvent.click(button)
+}
+
+describe('ResponsesOverTime', () => {
+  it('removes the ids shown when Remove was pressed, not one that arrived while the dialog was open', async () => {
+    const onRemove = vi.fn(async () => {})
+    const shown = [
+      r('a', '2026-10-27T09:01:00Z'),
+      r('b', '2026-10-27T09:05:00Z'),
+    ]
+    const { rerender } = render(
+      <ResponsesOverTime
+        responses={shown}
+        window={NO_WINDOW}
+        onRemove={onRemove}
+      />,
+    )
+    act(() => chart().focus())
+    key('Home')
+    fireEvent.click(screen.getByRole('button', { name: 'Remove these 2' }))
+    await screen.findByRole('dialog')
+    // A refetch brings a third answer in the same bucket.
+    rerender(
+      <ResponsesOverTime
+        responses={[...shown, r('late', '2026-10-27T09:07:00Z')]}
+        window={NO_WINDOW}
+        onRemove={onRemove}
+      />,
+    )
+    await confirmRemove()
+    await waitFor(() => expect(onRemove).toHaveBeenCalledTimes(1))
+    expect(onRemove).toHaveBeenCalledWith(['a', 'b'])
+  })
+
+  it('keeps the range on the same minutes when a refetch drops the earliest bucket', () => {
+    const responses = [
+      r('early', '2026-10-27T08:01:00Z'),
+      r('x', '2026-10-27T08:31:00Z'),
+      r('y', '2026-10-27T08:41:00Z'),
+    ]
+    const { rerender } = render(
+      <ResponsesOverTime
+        responses={responses}
+        window={NO_WINDOW}
+        onRemove={vi.fn()}
+      />,
+    )
+    act(() => chart().focus())
+    // Buckets 08:00 … 08:40: pick 08:30 alone.
+    key('End')
+    key('ArrowLeft')
+    expect(screen.getByText(/· 1 response$/)).toBeTruthy()
+    // The 08:00 answer is removed elsewhere: the chart now starts at 08:30.
+    rerender(
+      <ResponsesOverTime
+        responses={responses.slice(1)}
+        window={NO_WINDOW}
+        onRemove={vi.fn()}
+      />,
+    )
+    const selected = within(chart())
+      .getAllByRole('option')
+      .filter((o) => o.getAttribute('aria-selected') === 'true')
+    expect(selected).toHaveLength(1)
+    expect(selected[0].getAttribute('aria-label')).toMatch(/09:30–09:40/)
+  })
+})
