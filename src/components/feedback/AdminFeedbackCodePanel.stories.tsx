@@ -377,17 +377,27 @@ const rotated = {
   window: before,
 }
 
+/** What each Rotate request sent. */
+const rotateBodies: string[] = []
+
 /**
  * Rotate asks first, with the spec’s words (§10.4), then shows the new code.
+ * The request names the code the dialog named: only that one is rotated.
  */
 export const RotatesTheCode: Story = {
   parameters: {
     msw: {
       handlers: [
         http.get(READ, () => trpc(withCode)),
-        http.post(ROTATE, () => trpc(rotated)),
+        http.post(ROTATE, async ({ request }) => {
+          rotateBodies.push(await request.text())
+          return trpc(rotated)
+        }),
       ],
     },
+  },
+  beforeEach: () => {
+    rotateBodies.length = 0
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
@@ -413,6 +423,11 @@ export const RotatesTheCode: Story = {
     expect(
       canvas.getByText(`Feedback Code rotated. The new code is ${ROTATED}.`),
     ).toBeInTheDocument()
+    expect(rotateBodies).toHaveLength(1)
+    expect(JSON.parse(rotateBodies[0])).toMatchObject({
+      talkId: 'talk-1',
+      code: 'k7m2qx',
+    })
   },
 }
 
@@ -475,6 +490,43 @@ export const RotateRefused: Story = {
     await confirmWith('Rotate')
     expect(await canvas.findByRole('alert')).toHaveTextContent(
       'can no longer be rotated',
+    )
+  },
+}
+
+/**
+ * Someone rotated the code since this page loaded: nothing is rotated, the
+ * page says so and shows the current code.
+ */
+export const RotateChangedMeanwhile: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(READ, () => trpc(withCode)),
+        http.post(ROTATE, () =>
+          HttpResponse.json(
+            {
+              error: {
+                message:
+                  'This talk’s code is now w9nn3r: someone changed it since this page loaded. Check it before rotating again.',
+                code: -32009,
+                data: { code: 'CONFLICT', httpStatus: 409 },
+              },
+            },
+            { status: 409 },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    await confirmWith('Rotate')
+    expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'someone changed it since this page loaded',
     )
   },
 }
