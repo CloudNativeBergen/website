@@ -36,6 +36,9 @@ const feedback = (
   window: { state: 'closed', feedbackVisible: true },
 })
 
+/** One read object, as React Query hands the same one back. */
+const READ3 = feedback(3)
+
 const props = {
   onHide: vi.fn(),
   onUnhide: vi.fn(),
@@ -59,29 +62,77 @@ async function saveGreen(value: string) {
 describe('TalkFeedbackPanel Card Counts', () => {
   it('keeps the saved counts while the read still shows the old ones, and no longer than its time', async () => {
     const onSaveCards = vi.fn(async () => null)
-    const onCardsExpired = vi.fn()
-    const at = (green: number) => (
+    const onCardsExpired = vi.fn(async () => true)
+    // One read object throughout: React Query keeps the same data object
+    // when a refetch returns equal data, so nothing may wait for a new one.
+    const read = feedback(3)
+    const at = (
       <TalkFeedbackPanel
-        feedback={feedback(green)}
+        feedback={read}
         onSaveCards={onSaveCards}
         onCardsExpired={onCardsExpired}
         cardsOverlayMs={60}
         {...props}
       />
     )
-    const { rerender } = render(at(3))
+    const { rerender } = render(at)
     expect(greenTotal()).toBe('13')
     await saveGreen('5')
     expect(onSaveCards).toHaveBeenCalledWith({ green: 5, yellow: 1, red: 0 })
-    // The refetch lags the commit: it still says 3.
-    rerender(at(3))
+    rerender(at)
     expect(greenCards().value).toBe('5')
     expect(greenTotal()).toBe('15')
-    // Its time is up: the page asks for a read, and shows the next one.
+    // Its time is up: the page reads once more and, once that landed, the
+    // read is shown as it is.
+    await waitFor(() => expect(greenCards().value).toBe('3'))
+    expect(onCardsExpired).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the saved counts when the read it asks for fails, and asks again', async () => {
+    const onCardsExpired = vi
+      .fn<() => Promise<boolean>>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true)
+    render(
+      <TalkFeedbackPanel
+        feedback={feedback(3)}
+        onSaveCards={vi.fn(async () => null)}
+        onCardsExpired={onCardsExpired}
+        cardsOverlayMs={60}
+        {...props}
+      />,
+    )
+    await saveGreen('5')
     await waitFor(() => expect(onCardsExpired).toHaveBeenCalledTimes(1))
-    rerender(at(7))
-    expect(greenCards().value).toBe('7')
-    expect(greenTotal()).toBe('17')
+    expect(greenCards().value).toBe('5')
+    await waitFor(() => expect(onCardsExpired).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(greenCards().value).toBe('3'))
+  })
+
+  it('a parent’s re-renders with a new callback never restart the time', async () => {
+    const calls: number[] = []
+    const at = (k: number) => (
+      <TalkFeedbackPanel
+        feedback={READ3}
+        onSaveCards={vi.fn(async () => null)}
+        onCardsExpired={async () => {
+          calls.push(k)
+          return true
+        }}
+        cardsOverlayMs={80}
+        {...props}
+      />
+    )
+    const { rerender } = render(at(0))
+    await saveGreen('5')
+    // Re-rendered every 20 ms with a fresh callback, well past the 80 ms.
+    for (let k = 1; k <= 10; k++) {
+      await act(() => new Promise((r) => setTimeout(r, 20)))
+      rerender(at(k))
+    }
+    // It fired once, calling the callback of its own time.
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toBeGreaterThan(0)
   })
 
   it('keeps the counts being saved when Escape is pressed during the save', async () => {
@@ -166,7 +217,7 @@ describe('TalkFeedbackPanel Card Counts', () => {
 
   describe('another organizer’s save, in every order against ours (committed at 10:00:02)', () => {
     const CA = '2026-10-27T10:00:02.000Z'
-    const expired = vi.fn()
+    const expired = vi.fn(async () => true)
     beforeEach(() => expired.mockClear())
     const setup = (green: number, at: string) => {
       const view = render(
@@ -226,12 +277,10 @@ describe('TalkFeedbackPanel Card Counts', () => {
       // The refetch sees B directly: a tie, another revision, B never changes.
       read(3, CA)
       expect(greenCards().value).toBe('5')
-      await waitFor(() => expect(expired).toHaveBeenCalledTimes(1))
-      // Until that read arrives, ours stays: a quiet page asked for one.
-      expect(greenCards().value).toBe('5')
-      // The read the expiry asked for, still B's.
-      read(3, CA)
-      expect(greenCards().value).toBe('3')
+      // The read the expiry asks for lands with the very same data (B's,
+      // unchanged): ours goes, and B's 3 shows.
+      await waitFor(() => expect(greenCards().value).toBe('3'))
+      expect(expired).toHaveBeenCalledTimes(1)
     })
 
     it('a read strictly after our commit shows as it is, even with the counts we saved over', async () => {
@@ -264,30 +313,27 @@ describe('TalkFeedbackPanel Card Counts', () => {
       await saveGreen('5')
       read(6, CA)
       expect(greenCards().value).toBe('5')
-      await waitFor(() => expect(expired).toHaveBeenCalled())
-      read(6, CA)
-      expect(greenCards().value).toBe('6')
+      await waitFor(() => expect(greenCards().value).toBe('6'))
     })
   })
 
   it('shows another organizer’s counts, when nothing orders them, once the saved counts’ time is up', async () => {
-    const expired = vi.fn()
-    const at = (green: number) => (
+    const expired = vi.fn(async () => true)
+    const read8 = feedback(8)
+    const at = (read: AdminTalkFeedback) => (
       <TalkFeedbackPanel
-        feedback={feedback(green)}
+        feedback={read}
         onSaveCards={vi.fn(async () => null)}
         onCardsExpired={expired}
         cardsOverlayMs={60}
         {...props}
       />
     )
-    const { rerender } = render(at(3))
+    const { rerender } = render(at(READ3))
     await saveGreen('5')
-    rerender(at(8))
+    rerender(at(read8))
     expect(greenCards().value).toBe('5')
-    await waitFor(() => expect(expired).toHaveBeenCalled())
-    rerender(at(8))
-    expect(greenCards().value).toBe('8')
+    await waitFor(() => expect(greenCards().value).toBe('8'))
   })
 
   it('locks the counts while a save runs, so nothing typed then is lost under “saved”', async () => {

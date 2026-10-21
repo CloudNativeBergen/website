@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import { removeInRequests } from '@/lib/feedback/bulk-remove'
 import { AdminFeedbackCodePanel } from '../AdminFeedbackCodePanel'
@@ -43,6 +43,13 @@ export function TalkFeedbackAdminPanel({
   const unhide = api.sessionFeedback.adminUnhide.useMutation(refresh)
   const remove = api.sessionFeedback.adminRemove.useMutation(refresh)
   const cards = api.proposal.admin.updateAudienceFeedback.useMutation(refresh)
+  // Saved Card Counts' time is up: read the talk again. Stable, so the
+  // panel's timer is never restarted by this component's re-renders.
+  const { refetch } = feedback
+  const readAgain = useCallback(
+    async () => !(await refetch()).isError,
+    [refetch],
+  )
   // A Retry that worked takes the Retry button away: say so, and put
   // focus where the numbers are, not on <body>.
   const heading = useRef<HTMLHeadingElement>(null)
@@ -157,9 +164,7 @@ export function TalkFeedbackAdminPanel({
         onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
         onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
         headingRef={heading}
-        onCardsExpired={() =>
-          void utils.sessionFeedback.adminTalk.invalidate({ talkId })
-        }
+        onCardsExpired={readAgain}
         onRemove={(request) =>
           removeInRequests(request, (chunk) => remove.mutateAsync(chunk))
         }

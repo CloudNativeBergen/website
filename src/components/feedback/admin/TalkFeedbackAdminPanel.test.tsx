@@ -199,10 +199,19 @@ describe('TalkFeedbackAdminPanel', () => {
     }
   })
 
-  it('reads the talk again when saved Card Counts’ time is up', () => {
-    panel()
-    h.panel!.onCardsExpired!()
-    expect(h.invalidateTalk).toHaveBeenCalledWith({ talkId: 'talk-1' })
+  it('reads the talk again when saved Card Counts’ time is up, and says whether that read landed', async () => {
+    const view = panel()
+    h.refetch.mockResolvedValueOnce({ isError: false })
+    await expect(h.panel!.onCardsExpired!()).resolves.toBe(true)
+    h.refetch.mockResolvedValueOnce({ isError: true })
+    await expect(h.panel!.onCardsExpired!()).resolves.toBe(false)
+    expect(h.refetch).toHaveBeenCalledTimes(2)
+    // The same callback across this component's re-renders.
+    const first = h.panel!.onCardsExpired
+    view.rerender(
+      <TalkFeedbackAdminPanel talkId="talk-1" title="T" showCode={false} />,
+    )
+    expect(h.panel!.onCardsExpired).toBe(first)
   })
 
   it('says nothing about refreshing when the read is fine', () => {
