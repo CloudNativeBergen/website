@@ -164,7 +164,10 @@ export const LateBurst: Story = {
     await waitFor(() =>
       expect(chart.parentElement!.scrollLeft).toBeGreaterThan(0),
     )
-    expect(canvas.getByText(/Scroll sideways for the rest/)).toBeVisible()
+    // Measured after the scroll lands, in the next render.
+    expect(
+      await canvas.findByText(/Scroll sideways for the rest/),
+    ).toBeVisible()
   },
 }
 
