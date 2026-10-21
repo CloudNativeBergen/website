@@ -181,4 +181,94 @@ describe('AdminFeedbackCodePanel against a read in flight', () => {
       code: 'k7m2qx',
     })
   })
+
+  const NEW = {
+    code: 'p4hw7c',
+    url: 'https://x/f/p4hw7c',
+    window: WINDOW,
+    mayMint: false,
+    mayRotate: true,
+  }
+  const failedRead = async () => {
+    throw new Error('502 bad gateway')
+  }
+  const notice =
+    'Couldn’t confirm the current code. Retry before printing or sharing it.'
+
+  it('a Rotate whose reply is lost, then a failed read: nothing printable until a Retry confirms the code', async () => {
+    setup(OLD)
+    expect(await screen.findByText('QR for https://x/f/k7m2qx')).toBeTruthy()
+    // The rotation landed, but its reply is lost; so is the read after it.
+    h.rotate.mockRejectedValue(new Error('502 bad gateway'))
+    h.reads.push(failedRead)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    await confirm('Rotate')
+    expect(await screen.findByText(notice)).toBeTruthy()
+    // React Query still holds the old code: none of it is offered.
+    expect(h.client.getQueryData(key('talk-1'))).toMatchObject({
+      code: 'k7m2qx',
+    })
+    expect(screen.queryByText(/^QR for/)).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Rotate Feedback Code' }),
+    ).toBeNull()
+    // Retry: the read says which code is current.
+    h.reads.push(async () => NEW)
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText('QR for https://x/f/p4hw7c')).toBeTruthy()
+    expect(screen.queryByText(notice)).toBeNull()
+  })
+
+  it('while the read after a lost reply is still on its way, nothing is printable', async () => {
+    setup(OLD)
+    await screen.findByText('QR for https://x/f/k7m2qx')
+    h.rotate.mockRejectedValue(new Error('502 bad gateway'))
+    const late = heldRead(NEW)
+    h.reads.push(late.read)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    await confirm('Rotate')
+    expect(await screen.findByText(notice)).toBeTruthy()
+    expect(screen.queryByText(/^QR for/)).toBeNull()
+    await act(async () => late.land())
+    expect(await screen.findByText('QR for https://x/f/p4hw7c')).toBeTruthy()
+  })
+
+  it('a Rotate whose reply is lost, then a read that lands: the code it holds is shown, no notice', async () => {
+    setup(OLD)
+    await screen.findByText('QR for https://x/f/k7m2qx')
+    h.rotate.mockRejectedValue(new Error('502 bad gateway'))
+    h.reads.push(async () => NEW)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    await confirm('Rotate')
+    expect(await screen.findByText('QR for https://x/f/p4hw7c')).toBeTruthy()
+    expect(screen.queryByText(notice)).toBeNull()
+  })
+
+  it('after a Rotate, a read that fails hides the code until one lands', async () => {
+    setup(OLD)
+    await screen.findByText('QR for https://x/f/k7m2qx')
+    h.rotate.mockResolvedValue({
+      code: 'p4hw7c',
+      url: 'https://x/f/p4hw7c',
+      window: WINDOW,
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    await confirm('Rotate')
+    await screen.findByText('QR for https://x/f/p4hw7c')
+    // A later read of the code fails.
+    h.reads.push(failedRead)
+    await act(async () => {
+      await h.client.refetchQueries({ queryKey: key('talk-1') })
+    })
+    expect(await screen.findByText(notice)).toBeTruthy()
+    expect(screen.queryByText(/^QR for/)).toBeNull()
+  })
 })

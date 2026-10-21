@@ -67,6 +67,10 @@ export function AdminFeedbackCodePanel({
   const refused = mint.error?.data?.code === 'NOT_FOUND'
 
   const [asking, setAsking] = useState(false)
+  // When a Rotate failed, the read on screen then: the code may have
+  // changed (a lost reply), so it is unconfirmed until a newer read lands.
+  const [verifyAfter, setVerifyAfter] = useState<number | null>(null)
+  const [rotateTried, setRotateTried] = useState(false)
   const rotate = api.sessionFeedback.rotateCode.useMutation({
     onSuccess: async (rotated) => {
       // A read started before the rotation could land after it with the
@@ -84,6 +88,8 @@ export function AdminFeedbackCodePanel({
     // way, or a lost reply after which the rotation may well have landed.
     onError: () => {
       setAsking(false)
+      // Until a read lands after this, the code on screen may be dead.
+      setVerifyAfter(code.dataUpdatedAt ?? 0)
       void utils.sessionFeedback.adminCode.invalidate({ talkId })
     },
   })
@@ -98,6 +104,11 @@ export function AdminFeedbackCodePanel({
   const mayMint = !!code.data?.mayMint && answering && !refused
   const mayRotate = !!code.data?.mayRotate && answering
   const shownCode = code.data?.code ?? null
+  // Unconfirmed: no read has landed since a Rotate failed, or, after any
+  // Rotate, the latest read failed (React Query keeps the earlier code).
+  const unconfirmed =
+    (verifyAfter !== null && (code.dataUpdatedAt ?? 0) <= verifyAfter) ||
+    (rotateTried && code.isError)
 
   if (code.error?.data?.code === 'NOT_FOUND') return null
 
@@ -127,13 +138,34 @@ export function AdminFeedbackCodePanel({
       </p>
       {code.data?.code && code.data.url && shownWindow ? (
         <div className="space-y-3">
-          <FeedbackCodePanel
-            url={code.data.url}
-            title={title}
-            window={shownWindow}
-            audience="organizer"
-          />
-          {mayRotate && (
+          {unconfirmed ? (
+            // The code may have been rotated: nothing to print or share
+            // until a read says which code is current.
+            <div className="space-y-2 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
+              <p role="alert">
+                Couldn’t confirm the current code. Retry before printing or
+                sharing it.
+              </p>
+              <button
+                type="button"
+                aria-disabled={code.isFetching}
+                onClick={() => {
+                  if (!code.isFetching) void code.refetch()
+                }}
+                className="min-h-9 rounded-md px-3 font-semibold hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-700 aria-disabled:cursor-wait aria-disabled:opacity-60 dark:hover:bg-yellow-900/40"
+              >
+                {code.isFetching ? 'Retrying…' : 'Retry'}
+              </button>
+            </div>
+          ) : (
+            <FeedbackCodePanel
+              url={code.data.url}
+              title={title}
+              window={shownWindow}
+              audience="organizer"
+            />
+          )}
+          {mayRotate && !unconfirmed && (
             <button
               type="button"
               onClick={() => {
@@ -162,7 +194,9 @@ export function AdminFeedbackCodePanel({
             }}
             onConfirm={() => {
               // The code the dialog names: only it is rotated.
-              if (shownCode) rotate.mutate({ talkId, code: shownCode })
+              if (!shownCode) return
+              setRotateTried(true)
+              rotate.mutate({ talkId, code: shownCode })
             }}
             title="Rotate Feedback Code?"
             message={rotateMessage(code.data.code)}
