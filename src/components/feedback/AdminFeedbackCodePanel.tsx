@@ -1,24 +1,45 @@
 'use client'
 
-import { useRef } from 'react'
-import { QrCodeIcon } from '@heroicons/react/24/outline'
+import { useRef, useState } from 'react'
+import { ArrowPathIcon, QrCodeIcon } from '@heroicons/react/24/outline'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { api } from '@/lib/trpc/client'
+import { answersClosed } from '@/lib/feedback/window'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
 import { useWindowOnTheClock } from './useWindowOnTheClock'
 
 /**
+ * Rotate's one answer that proves the code on screen is still current: a
+ * version waits in a scheduled release, so nothing was rotated. Any other
+ * failure (a lost reply, a code changed by someone else, a talk that
+ * changed) leaves the code on screen unconfirmed until a read lands.
+ */
+const CODE_UNCHANGED = 'PRECONDITION_FAILED'
+
+/**
+ * The confirmation before a rotation, word for word (speaker feedback spec
+ * §10.4).
+ */
+export const rotateMessage = (code: string) =>
+  `/f/${code} stops working now. Printed sheets and slides showing it will reach a dead page. Existing responses are kept.`
+
+/**
  * A talk's Feedback Code on its admin page (#1459). Viewing never mints: an
  * organizer presses Mint, so a room has a code to print whether or not its
- * speakers ever opened their page. A talk that is not a confirmed talk of
- * this conference shows nothing.
+ * speakers ever opened their page. Rotate replaces a code (§10.4), offered
+ * only where the server says it would rotate. A talk that is not a confirmed
+ * talk of this conference shows nothing.
  */
 export function AdminFeedbackCodePanel({
   talkId,
   title,
+  embedded = false,
 }: {
   talkId: string
   /** The talk's title, for the print sheet and the download file names. */
   title: string
+  /** Inside another panel: no card of its own. */
+  embedded?: boolean
 }) {
   const utils = api.useUtils()
   // The Mint button goes once the code is minted: focus moves to the heading.
@@ -30,15 +51,19 @@ export function AdminFeedbackCodePanel({
   const mint = api.sessionFeedback.mintCode.useMutation({
     // No code back: the window closed meanwhile, or a release locks the
     // talk. Read again; a still-open window then means the release.
-    onSuccess: (minted) => {
+    onSuccess: async (minted) => {
       void utils.sessionFeedback.mintPreview.invalidate()
       if (!minted.code) {
         void utils.sessionFeedback.adminCode.invalidate({ talkId })
         return
       }
+      // A read started before the write could land after it with no code:
+      // stop it before putting the minted code in its place.
+      await utils.sessionFeedback.adminCode.cancel({ talkId })
       utils.sessionFeedback.adminCode.setData(
         { talkId },
-        { ...minted, mayMint: false },
+        // A code was minted, so §5 would mint now: it may be rotated.
+        { ...minted, mayMint: false, mayRotate: true },
       )
       heading.current?.focus()
     },
@@ -49,37 +74,150 @@ export function AdminFeedbackCodePanel({
   })
   const refused = mint.error?.data?.code === 'NOT_FOUND'
 
+  const [asking, setAsking] = useState(false)
+  // When a Rotate failed, the read on screen then: the code may have
+  // changed (a lost reply), so it is unconfirmed until a newer read lands.
+  const [verifyAfter, setVerifyAfter] = useState<number | null>(null)
+  const [rotateTried, setRotateTried] = useState(false)
+  const rotate = api.sessionFeedback.rotateCode.useMutation({
+    onSuccess: async (rotated) => {
+      // A read started before the rotation could land after it with the
+      // old code, a dead QR: stop it before putting the new code in place.
+      await utils.sessionFeedback.adminCode.cancel({ talkId })
+      utils.sessionFeedback.adminCode.setData(
+        { talkId },
+        { ...rotated, mayMint: false, mayRotate: true },
+      )
+      // Focus goes back to Rotate as the dialog closes; the live region
+      // says the code changed.
+      setAsking(false)
+    },
+    // Read the code again whatever went wrong: refused, a release in the
+    // way, or a lost reply after which the rotation may well have landed.
+    onError: (error) => {
+      setAsking(false)
+      // Until a read lands after this, the code on screen may be dead: a
+      // lost reply may have rotated it, or someone else already did.
+      if (error.data?.code !== CODE_UNCHANGED)
+        setVerifyAfter(code.dataUpdatedAt ?? 0)
+      void utils.sessionFeedback.adminCode.invalidate({ talkId })
+    },
+  })
+
   // An organizer may leave the page up through the session's start.
   const shownWindow = useWindowOnTheClock(code.data?.window)
   // The window may close while the page is up; the offer closes with it.
-  const mayMint =
-    !!code.data?.mayMint && shownWindow?.state !== 'closed' && !refused
+  // The server's own rule on the window as the clock has moved it: no code
+  // once answers are closed (§5), which for a talk with no slot is when the
+  // conference is over, not only a window's close.
+  const answering = !!shownWindow && !answersClosed(shownWindow)
+  const mayMint = !!code.data?.mayMint && answering && !refused
+  const mayRotate = !!code.data?.mayRotate && answering
+  const shownCode = code.data?.code ?? null
+  // Unconfirmed: no read has landed since a Rotate failed, or, after any
+  // Rotate, the latest read failed (React Query keeps the earlier code).
+  const unconfirmed =
+    (verifyAfter !== null && (code.dataUpdatedAt ?? 0) <= verifyAfter) ||
+    (rotateTried && code.isError)
 
   if (code.error?.data?.code === 'NOT_FOUND') return null
 
   return (
     <section
       aria-label="Feedback Code"
-      className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+      className={
+        embedded
+          ? ''
+          : 'rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800'
+      }
     >
       <h3
         ref={heading}
         tabIndex={-1}
-        className="mb-3 flex items-center text-lg font-semibold text-gray-900 focus:outline-none dark:text-white"
+        className={`mb-3 flex items-center font-semibold text-gray-900 focus:outline-none dark:text-white ${embedded ? 'text-sm' : 'text-lg'}`}
       >
         <QrCodeIcon className="mr-2 size-5" aria-hidden="true" />
         Feedback Code
       </h3>
       <p className="sr-only" aria-live="polite">
-        {mint.data?.code ? 'Feedback Code minted.' : ''}
+        {rotate.data?.code
+          ? `Feedback Code rotated. The new code is ${rotate.data.code}.`
+          : mint.data?.code
+            ? 'Feedback Code minted.'
+            : ''}
       </p>
       {code.data?.code && code.data.url && shownWindow ? (
-        <FeedbackCodePanel
-          url={code.data.url}
-          title={title}
-          window={shownWindow}
-          audience="organizer"
-        />
+        <div className="space-y-3">
+          {unconfirmed ? (
+            // The code may have been rotated: nothing to print or share
+            // until a read says which code is current.
+            <div className="space-y-2 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
+              <p role="alert">
+                Couldn’t confirm the current code. Retry before printing or
+                sharing it.
+              </p>
+              <button
+                type="button"
+                aria-disabled={code.isFetching}
+                onClick={() => {
+                  if (!code.isFetching) void code.refetch()
+                }}
+                className="min-h-9 rounded-md px-3 font-semibold hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-700 aria-disabled:cursor-wait aria-disabled:opacity-60 dark:hover:bg-yellow-900/40"
+              >
+                {code.isFetching ? 'Retrying…' : 'Retry'}
+              </button>
+            </div>
+          ) : (
+            <FeedbackCodePanel
+              url={code.data.url}
+              title={title}
+              window={shownWindow}
+              audience="organizer"
+            />
+          )}
+          {mayRotate && !unconfirmed && (
+            <button
+              type="button"
+              onClick={() => {
+                rotate.reset()
+                setAsking(true)
+              }}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <ArrowPathIcon className="size-4" aria-hidden="true" />
+              Rotate Feedback Code
+            </button>
+          )}
+          {/* While unconfirmed, the notice above says it all: the rotation may have landed. */}
+          {rotate.error && !unconfirmed && (
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+              {rotate.error.data?.code === 'NOT_FOUND'
+                ? 'This code can no longer be rotated: the feedback window has closed, or the talk changed.'
+                : rotate.error.data?.code === 'CONFLICT' ||
+                    rotate.error.data?.code === CODE_UNCHANGED
+                  ? rotate.error.message
+                  : 'The code could not be rotated. Try again.'}
+            </p>
+          )}
+          <ConfirmationModal
+            isOpen={asking}
+            onClose={() => {
+              if (!rotate.isPending) setAsking(false)
+            }}
+            onConfirm={() => {
+              // The code the dialog names: only it is rotated.
+              if (!shownCode) return
+              setRotateTried(true)
+              rotate.mutate({ talkId, code: shownCode })
+            }}
+            title="Rotate Feedback Code?"
+            message={rotateMessage(code.data.code)}
+            confirmButtonText="Rotate"
+            variant="danger"
+            isLoading={rotate.isPending}
+            guardSecondTap
+          />
+        </div>
       ) : code.data ? (
         <div className="space-y-3">
           {/* Live: a refused mint replaces the button with its reason here. */}

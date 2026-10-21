@@ -56,6 +56,8 @@ export type ReadFeedbackCodeResult =
       window: FeedbackWindow
       /** §5 would mint a code now. */
       mayMint: boolean
+      /** {@link rotateFeedbackCode} would rotate the code now (§10.4). */
+      mayRotate: boolean
     }
 
 /**
@@ -201,6 +203,7 @@ export async function readFeedbackCode({
     code: read.existing,
     window: read.window,
     mayMint: !read.existing && mayMint(read.window),
+    mayRotate: !!read.existing && mayMint(read.window),
   }
 }
 
@@ -261,6 +264,65 @@ async function mint(
   actor: FeedbackCodeActor,
   batch: MintBatch | undefined,
 ): Promise<{ code: string | null; minted: boolean } | null> {
+  const out = await writeNewCode(client, talk, conferenceId, actor, {
+    what: 'minting a code for',
+    versionPatch: 'setIfMissing',
+    avoid: batch?.codes,
+    // A code another request minted meanwhile wins.
+    settled: (held) => held !== null,
+  })
+  switch (out.status) {
+    case 'written':
+      return { code: out.code, minted: true }
+    case 'locked':
+      return { code: null, minted: false }
+    case 'refused':
+      return null
+    case 'settled':
+      return { code: out.code, minted: false }
+  }
+}
+
+type WriteOutcome =
+  | { status: 'written'; code: string }
+  /** A version waits in a release that is not `active`: nothing written. */
+  | { status: 'locked' }
+  /** The talk stopped qualifying while the write ran: nothing written. */
+  | { status: 'refused' }
+  /** A lost guard's re-read settled it (`settled`): the code held then. */
+  | { status: 'settled'; code: string | null }
+
+/**
+ * THE CODE WRITE shared by mint and rotation (spec §4.2, §5, §10.4): draw a
+ * code against every code the conference holds (drafts included) and any
+ * `avoid`ed, then in ONE transaction `set` it on the published talk under
+ * the revision this request read, and patch every other version under its
+ * own guard (`set`, or `setIfMissing` for a mint). A failed guard re-reads
+ * the talk by id, re-checks it still qualifies, and asks `settled` whether
+ * the code it holds now ends the write; otherwise it tries again, up to
+ * {@link MAX_RETRIES}. Throws when the release list does not load (which
+ * versions exist is then unknown) and on a commit error that is not a lost
+ * guard. The caller sweeps and expires.
+ */
+async function writeNewCode(
+  client: VersionsClient,
+  talk: TalkDoc,
+  conferenceId: string,
+  actor: FeedbackCodeActor,
+  {
+    what,
+    versionPatch,
+    avoid,
+    settled,
+  }: {
+    /** For the log, e.g. "minting a code for". */
+    what: string
+    versionPatch: 'set' | 'setIfMissing'
+    /** Codes to avoid besides the conference's; each draw joins them. */
+    avoid?: Set<string>
+    settled: (held: string | null) => boolean
+  },
+): Promise<WriteOutcome> {
   let current = talk
   for (let attempt = 0; ; attempt++) {
     const { versions, locked, releasesListed } = await readTalkVersions(
@@ -269,15 +331,15 @@ async function mint(
     )
     if (!releasesListed) {
       throw new Error(
-        `[feedback] could not list releases; not minting a code for ${current._id}`,
+        `[feedback] could not list releases; not ${what} ${current._id}`,
       )
     }
-    if (locked.length > 0) return { code: null, minted: false }
+    if (locked.length > 0) return { status: 'locked' }
     const code = createShortCodeMinter([
       ...(await conferenceFeedbackCodes(conferenceId)),
-      ...(batch?.codes ?? []),
+      ...(avoid ?? []),
     ])()
-    batch?.codes.add(code)
+    avoid?.add(code)
     const tx = client
       .transaction()
       .patch(current._id, (p) =>
@@ -285,22 +347,118 @@ async function mint(
       )
     for (const v of versions) {
       tx.patch(v._id, (p) =>
-        p.ifRevisionId(v._rev).setIfMissing({ feedbackCode: code }),
+        p.ifRevisionId(v._rev)[versionPatch]({ feedbackCode: code }),
       )
     }
     try {
       await tx.commit()
-      return { code, minted: true }
+      return { status: 'written', code }
     } catch (error) {
       if (!isRetryable(error) || attempt >= MAX_RETRIES) throw error
     }
     const reread = await client.getDocument<TalkDoc>(current._id)
-    if (!mayHoldCode(reread, conferenceId, actor)) return null
+    if (!mayHoldCode(reread, conferenceId, actor)) return { status: 'refused' }
     if ('organizer' in actor && !(await hasLiveSpeaker(client, reread))) {
-      return null
+      return { status: 'refused' }
     }
-    const won = normalizeShortCode(reread.feedbackCode)
-    if (won) return { code: won, minted: false }
+    const held = normalizeShortCode(reread.feedbackCode)
+    if (settled(held)) return { status: 'settled', code: held }
     current = reread
+  }
+}
+
+export type RotateFeedbackCodeResult =
+  /**
+   * Missing, foreign, not confirmed, no speaker left, no code to rotate, or
+   * §5 would not mint one now: one answer for all, nothing written.
+   */
+  | { status: 'refused' }
+  /**
+   * Not rotated: a version of the talk waits in a release that is not
+   * `active`. Sanity locks its versions, and publishing it would bring the
+   * old code back.
+   */
+  | { status: 'locked' }
+  /**
+   * Not rotated: the talk holds another code than the one the organizer
+   * saw (another organizer rotated it since), which may already be printed.
+   */
+  | { status: 'changed'; code: string }
+  | { status: 'ok'; code: string; window: FeedbackWindow }
+
+/**
+ * ROTATE a talk's Feedback Code (spec §10.4): an organizer replaces the
+ * code, so the old one stops resolving at once; responses are kept.
+ *
+ * Read like a mint, through the doc endpoint, and refused where the
+ * organizer's mint is refused, and also when the talk has no code (never
+ * minted, folded, or its only speaker erased) or §5 would not mint one (its
+ * window has closed): rotating then would restart collection that erasure or
+ * the window had ended. The new code is drawn against every code the
+ * conference holds, drafts included, and written in ONE transaction to the
+ * published talk, guarded by the revision this request read, and to every
+ * other version, each under its own guard (§4.2). A failed guard re-reads
+ * and tries again, up to {@link MAX_RETRIES}; then the sweep catches a
+ * version created meanwhile, and the index expires at once.
+ *
+ * Only the code the organizer saw (`expected`) is rotated: a code another
+ * organizer put there since may already be printed. Two rotations of the
+ * same code at once converge: the one whose guard fails re-reads, finds that
+ * code gone, and returns the code that replaced it.
+ */
+export async function rotateFeedbackCode({
+  talkId,
+  expected,
+  conference,
+  now,
+}: {
+  talkId: string
+  /** The code the organizer confirmed would stop working. */
+  expected: string
+  conference: { _id: string; endDate?: string | null }
+  now: Date
+}): Promise<RotateFeedbackCodeResult> {
+  const client = versionsClient()
+  const actor: FeedbackCodeActor = { organizer: true }
+  const read = await readTalkForCode(client, talkId, actor, conference, now)
+  if (!read?.existing || !mayMint(read.window)) return { status: 'refused' }
+  const { window, existing } = read
+  if (existing !== normalizeShortCode(expected))
+    return { status: 'changed', code: existing }
+
+  let out: WriteOutcome
+  try {
+    out = await writeNewCode(client, read.talk, conference._id, actor, {
+      what: 'rotating the code of',
+      versionPatch: 'set',
+      // Another rotation of the same code won: the code this organizer saw
+      // is already gone. Erasure unsetting it ends the write too.
+      settled: (held) => held !== existing,
+    })
+  } catch (error) {
+    // A commit whose reply was lost may have applied: the old code must not
+    // go on resolving for the index's whole `cacheLife`. Expiring an index
+    // that did not change only costs one refill. A lost guard (409, 404)
+    // applied nothing.
+    if (!isRetryable(error)) expireFeedbackCodeIndex(conference._id)
+    throw error
+  }
+  switch (out.status) {
+    case 'written':
+      // The old code stops resolving now, not after the sweep's round trips.
+      expireFeedbackCodeIndex(conference._id)
+      await sweepTalkVersions(client, read.talk._id)
+      // And again: a refill during the sweep goes through GROQ, which can
+      // lag the commit and cache the old mapping for the index's lifetime.
+      expireFeedbackCodeIndex(conference._id)
+      return { status: 'ok', code: out.code, window }
+    case 'locked':
+      return { status: 'locked' }
+    case 'refused':
+      return { status: 'refused' }
+    case 'settled':
+      return out.code
+        ? { status: 'ok', code: out.code, window }
+        : { status: 'refused' }
   }
 }

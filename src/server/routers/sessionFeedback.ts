@@ -8,6 +8,8 @@ import {
 } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { feedbackCodeUrl, type FeedbackWindow } from '@/lib/feedback'
+import { MAX_RESPONSES_PER_REQUEST } from '@/lib/feedback/bulk-remove'
+import { SHORT_CODE_SHAPE } from '@/lib/marketing/short-code'
 import {
   countTalksWithoutCode,
   ensureFeedbackCode,
@@ -18,6 +20,8 @@ import {
   mintConferenceFeedbackCodes,
   readFeedbackCode,
   readSpeakerResults,
+  rotateFeedbackCode,
+  readTalkFeedback,
 } from '@/lib/feedback/server'
 
 /**
@@ -30,24 +34,41 @@ const TALK_ID = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/
 
 const talkInput = z.object({ talkId: z.string().max(200).regex(TALK_ID) })
 
+/** Rotation names the code it ends, as the organizer saw it (§10.4). */
+const rotateInput = talkInput.extend({
+  code: z.string().regex(SHORT_CODE_SHAPE),
+})
+
 /**
  * A published Feedback Response id as `feedbackResponseId` makes them
  * (`src/lib/feedback/device.ts`), and nothing else: no draft, no comma list.
  */
 const RESPONSE_ID = /^feedbackResponse-[a-f0-9]{32}$/
 
-/**
- * Up to this many responses per request. Remove deletes them in chunks of
- * 100 (§10.3); a scripted flood the talk panel removes by time range (F6)
- * fits.
- */
-const MAX_RESPONSES_PER_REQUEST = 2000
-
 const responsesInput = z.object({
   responseIds: z
     .array(z.string().regex(RESPONSE_ID))
     .min(1)
     .max(MAX_RESPONSES_PER_REQUEST),
+})
+
+/**
+ * Remove's input (§10.2, §10.3), for a comment and a range alike: each
+ * response with the `submittedAt` the page showed for it (null when it
+ * showed none), and, for a range from the chart, its bounds. A response is
+ * removed only while it is still that answer, inside the range.
+ */
+const removeInput = z.object({
+  responses: z
+    .array(
+      z.object({
+        id: z.string().regex(RESPONSE_ID),
+        submittedAt: z.string().max(40).nullable(),
+      }),
+    )
+    .min(1)
+    .max(MAX_RESPONSES_PER_REQUEST),
+  range: z.object({ from: z.iso.datetime(), to: z.iso.datetime() }).optional(),
 })
 
 /**
@@ -157,7 +178,11 @@ export const sessionFeedbackRouter = router({
       now: new Date(),
     })
     if (result.status === 'refused') throw notFound()
-    return { ...toCodeResponse(conference, result), mayMint: result.mayMint }
+    return {
+      ...toCodeResponse(conference, result),
+      mayMint: result.mayMint,
+      mayRotate: result.mayRotate,
+    }
   }),
 
   /** How many confirmed talks the bulk mint would give a code (#1459). */
@@ -218,26 +243,83 @@ export const sessionFeedbackRouter = router({
     }),
 
   /**
-   * Remove (§10.3): deletes the whole responses, colour and comment, after
-   * the page's confirmation naming the count. Guarded like
-   * {@link adminHide}. A chunk that fails after others committed says how
-   * many went.
+   * Remove (§10.2, §10.3), for a comment and a chart range alike: deletes
+   * the whole responses, colour and comment, after the page's confirmation
+   * naming the count. Only answers still as the page showed them are
+   * deleted, each under its revision guard; one given again since is kept
+   * (`changed`). An id that is not a response of this conference (gone, or
+   * another conference's) is skipped (`gone`), never written, and answered
+   * exactly like a missing one. A chunk that fails after others committed
+   * says how many went.
    */
-  adminRemove: adminProcedure
-    .input(responsesInput)
-    .mutation(async ({ input }) => {
-      const result = await removeResponses({
-        conferenceId: await resolveConferenceId(),
-        responseIds: input.responseIds,
+  adminRemove: adminProcedure.input(removeInput).mutation(async ({ input }) => {
+    const result = await removeResponses({
+      conferenceId: await resolveConferenceId(),
+      responses: input.responses,
+      range: input.range,
+    })
+    if (result.status === 'failed')
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        // Not "try again": what went is gone; a reload shows what is left.
+        message: `Removed ${result.removed} of ${new Set(input.responses.map((r) => r.id)).size} responses. Reload to see what’s left, then remove those.`,
       })
-      if (result.status === 'refused') throw responseNotFound()
-      if (result.status === 'failed')
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          // Not "try again": the guard refuses a list holding an id that has
-          // already gone, so a retry of the same list would be refused.
-          message: `Removed ${result.removed} of ${new Set(input.responseIds).size} responses. Reload to see what’s left, then remove those.`,
-        })
-      return { removed: result.removed }
-    }),
+    return {
+      removed: result.removed,
+      gone: result.gone,
+      changed: result.changed,
+    }
+  }),
+
+  /**
+   * Rotate the talk's Feedback Code (§10.4), after the page's confirmation:
+   * the old code stops resolving at once, responses are kept. Refused
+   * (NOT_FOUND, nothing written) where {@link adminCode} offers no rotation:
+   * a talk that is missing, foreign, not confirmed, has no speaker left or
+   * no code, or whose window has closed. PRECONDITION_FAILED while a version of the
+   * talk waits in a scheduled release, or when the talk holds another code
+   * than the one the organizer confirmed (rotated by someone else since).
+   */
+  rotateCode: adminProcedure.input(rotateInput).mutation(async ({ input }) => {
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) throw notFound()
+    const result = await rotateFeedbackCode({
+      talkId: input.talkId,
+      expected: input.code,
+      conference,
+      now: new Date(),
+    })
+    if (result.status === 'refused') throw notFound()
+    // Its own code, apart from CONFLICT: the code is certainly unchanged, so
+    // the page may go on offering it.
+    if (result.status === 'locked')
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message:
+          'A version of this talk waits in a scheduled release. Rotate the code once it is published.',
+      })
+    if (result.status === 'changed')
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: `This talk’s code is now ${result.code}: someone changed it since this page loaded. Check it before rotating again.`,
+      })
+    return toCodeResponse(conference, result)
+  }),
+
+  /**
+   * One talk's Session Feedback on its admin page (§10.2): totals, every
+   * comment, and every response's time for the chart. Another conference's
+   * talk gets the same NOT_FOUND as a missing one.
+   */
+  adminTalk: adminProcedure.input(talkInput).query(async ({ input }) => {
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) throw notFound()
+    const result = await readTalkFeedback({
+      conference,
+      talkId: input.talkId,
+      now: new Date(),
+    })
+    if (!result) throw notFound()
+    return result
+  }),
 })

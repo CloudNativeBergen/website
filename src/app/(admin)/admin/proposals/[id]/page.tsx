@@ -12,11 +12,12 @@ import {
   ProposalReviewPanel,
   AdminActionBar,
   ProposalPublishedContent,
-  AudienceFeedbackPanel,
 } from '@/components/admin'
 import { BackLink } from '@/components/BackButton'
 import { ProposalMessagesRedirect } from '@/components/messaging'
 import { AdminFeedbackCodePanel } from '@/components/feedback'
+import { TalkFeedbackAdminPanel } from '@/components/feedback/admin'
+import { talkFeedbackView } from '@/lib/feedback/talk-panel'
 import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
 import { getAuthSession } from '@/lib/auth'
 import { getProposalVideoUrl } from '@/lib/proposal/video'
@@ -79,6 +80,13 @@ export default async function ProposalDetailPage({
             ? 'draft'
             : null
         : null
+
+    const feedbackView = talkFeedbackView({
+      status: proposal.status,
+      conferenceStartDate: conference?.startDate,
+      now: new Date(),
+      codesLive: ATTENDEE_PAGE_LIVE,
+    })
 
     return (
       <div className="flex h-full min-h-screen flex-col lg:flex-row">
@@ -150,18 +158,21 @@ export default async function ProposalDetailPage({
               status={proposal.status}
               conferenceEndDate={conference.endDate}
             />
-            {ATTENDEE_PAGE_LIVE && proposal.status === 'confirmed' && (
+            {/* Session Feedback (§10.2): the whole panel once the
+                conference has started; before that a confirmed talk's
+                Feedback Code alone, so its sheet can be printed. */}
+            {feedbackView === 'panel' ? (
+              <TalkFeedbackAdminPanel
+                talkId={proposal._id}
+                title={proposal.title}
+                showCode={ATTENDEE_PAGE_LIVE && proposal.status === 'confirmed'}
+              />
+            ) : feedbackView === 'code' ? (
               <AdminFeedbackCodePanel
                 talkId={proposal._id}
                 title={proposal.title}
               />
-            )}
-            <AudienceFeedbackPanel
-              proposalId={proposal._id}
-              currentFeedback={proposal.audienceFeedback}
-              status={proposal.status}
-              conferenceStartDate={conference.startDate}
-            />
+            ) : null}
           </div>
         </div>
       </div>

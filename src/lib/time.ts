@@ -247,6 +247,19 @@ export function formatFeedbackCommentTime(value: string): string {
 }
 
 /**
+ * A clock time in the conference's time zone, e.g. "10:50": the end of a
+ * range whose start {@link formatFeedbackCommentTime} gave the day of.
+ */
+export function formatConferenceClock(value: string): string {
+  return new Date(value).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: CONFERENCE_TIME_ZONE,
+  })
+}
+
+/**
  * A workshop registration opening or closing instant, in English and in the
  * conference's time zone (e.g. "Thursday, October 1, 2026 at 10:00 AM"). The
  * /workshop page and the sign-up instructions email both use it, so an

@@ -4,10 +4,7 @@ import { useId, useRef, useState } from 'react'
 import {
   ChatBubbleLeftRightIcon,
   ChevronRightIcon,
-  EyeIcon,
-  EyeSlashIcon,
   FlagIcon,
-  TrashIcon,
 } from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
@@ -24,11 +21,22 @@ import type {
   AdminFeedbackOverview,
   AdminFeedbackSession,
 } from '@/lib/feedback/admin'
+import type { RemoveRequest, RemovedCounts } from '@/lib/feedback/bulk-remove'
 import { formats } from '@/lib/proposal/types'
-import { plural } from '@/lib/text/display'
 import { formatFeedbackCommentTime } from '@/lib/time'
 import { ANSWERS } from '../answers'
 import { ColourBar, FEEDBACK_TONE } from '../tone'
+import {
+  CommentItem,
+  doneNote,
+  errorText,
+  OutcomeNote,
+  REMOVED_BUT_LISTED,
+  removeMessage,
+  removeQuestion,
+  type ActionKind,
+  type Outcome,
+} from './FeedbackCommentItem'
 
 /** The session list's columns at `sm` and up; a phone stacks each row. */
 const COLUMNS =
@@ -40,48 +48,20 @@ const SORTS: { key: FeedbackSort; label: string }[] = [
   { key: 'comments', label: 'Comments' },
 ]
 
-const ACTION =
-  'inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:cursor-wait aria-disabled:opacity-50'
-
-/** The Remove confirmation's question, naming the count (§10.3). */
-export const removeQuestion = (count: number) =>
-  `Remove ${plural(count, 'response', 'responses')}?`
-
 export interface SessionFeedbackAdminProps {
   overview: AdminFeedbackOverview
   /** The conference, shown under the title. */
   conferenceTitle?: string
   onHide: (responseId: string) => Promise<unknown>
   onUnhide: (responseId: string) => Promise<unknown>
-  onRemove: (responseIds: string[]) => Promise<unknown>
+  /** Remove (`sessionFeedback.adminRemove`): only answers still as seen. */
+  onRemove: (request: RemoveRequest) => Promise<RemovedCounts>
   /**
    * The last refetch failed: the numbers shown are earlier ones. Offers
    * Retry, which is `retrying` while it runs.
    */
   refreshFailed?: { onRetry: () => void; retrying?: boolean }
 }
-
-type ActionKind = 'hide' | 'unhide' | 'remove'
-
-/** What a Hide, Unhide or Remove did, kept per response it acted on. */
-interface Outcome {
-  talkId: string
-  responseId: string
-  kind: ActionKind
-  ok: boolean
-  text: string
-}
-
-/** What a successful action says where it happened. */
-const DONE: Record<ActionKind, (count: number) => string> = {
-  hide: () => 'Comment hidden from speakers.',
-  unhide: () => 'Comment shown to speakers again.',
-  remove: (n) => `${plural(n, 'response', 'responses')} removed.`,
-}
-
-/** A successful Remove whose comment a refetch has not taken away yet. */
-const REMOVED_BUT_LISTED =
-  'Removed. This list is out of date until it refreshes.'
 
 const sameOrder = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id, i) => id === b[i])
@@ -90,6 +70,7 @@ const sameOrder = (a: readonly string[], b: readonly string[]) =>
 interface Removal {
   talkId: string
   ids: string[]
+  request: RemoveRequest
   comment?: string
 }
 
@@ -168,16 +149,12 @@ export function SessionFeedbackAdmin({
     const at = { talkId, responseId: ids[0], kind }
     let outcome: Outcome
     try {
-      await action()
-      outcome = { ...at, ok: true, text: DONE[kind](ids.length) }
+      outcome = { ...at, ...doneNote(kind, ids.length, await action()) }
     } catch (e) {
       outcome = {
         ...at,
         ok: false,
-        text:
-          e instanceof Error && e.message
-            ? e.message
-            : 'That didn’t work. Reload the page to see where things stand.',
+        text: errorText(e),
       }
     }
     record(ids, outcome)
@@ -345,6 +322,10 @@ export function SessionFeedbackAdmin({
                     const removal = {
                       talkId: session.talkId,
                       ids: [c.id],
+                      // The answer as shown: removed only while still it.
+                      request: {
+                        responses: [{ id: c.id, submittedAt: c.submittedAt }],
+                      },
                       comment: c.comment,
                     }
                     removingNow.current = removal
@@ -373,18 +354,14 @@ export function SessionFeedbackAdmin({
           const removal = removing
           if (!removal || removePending) return
           await run(removal.talkId, 'remove', removal.ids, () =>
-            onRemove(removal.ids),
+            onRemove(removal.request),
           )
           // Closed either way, the outcome is on the page behind it; but only
           // if this is still the question that asked for this delete.
           if (removingNow.current === removal) setAsking(false)
         }}
         title={removeQuestion(removing?.ids.length ?? 0)}
-        message={
-          removing?.ids.length === 1
-            ? 'Its colour and comment are deleted for good and no longer count. There is no undo.'
-            : 'Their colours and comments are deleted for good and no longer count. There is no undo.'
-        }
+        message={removeMessage(removing?.ids.length ?? 0)}
         confirmButtonText="Remove"
         variant="danger"
         isLoading={removePending}
@@ -566,122 +543,5 @@ function Breakdown({ totals }: { totals: FeedbackTotals }) {
         </div>
       ))}
     </dl>
-  )
-}
-
-/**
- * What an action did, in words, where the organizer is working. Not a live
- * region: the page's one status region announces the same words.
- */
-function OutcomeNote({
-  outcome,
-  className = '',
-}: {
-  outcome: Outcome
-  className?: string
-}) {
-  return (
-    <p
-      className={`text-sm font-medium ${outcome.ok ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'} ${className}`}
-    >
-      {outcome.text}
-    </p>
-  )
-}
-
-function CommentItem({
-  comment,
-  pending,
-  note,
-  onHide,
-  onUnhide,
-  onRemove,
-}: {
-  comment: AdminFeedbackComment
-  pending: boolean
-  /** What the last action on this comment did, when it is said here. */
-  note: Outcome | null
-  onHide: () => void
-  onUnhide: () => void
-  onRemove: () => void
-}) {
-  const textId = useId()
-  const answer = ANSWERS.find((a) => a.colour === comment.colour)!
-  const { Icon } = answer
-  const guard = (action: () => void) => () => {
-    if (!pending) action()
-  }
-  return (
-    <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:gap-4">
-      <div className="min-w-0 flex-1">
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
-          <span
-            className={`inline-flex items-center gap-1 font-medium ${FEEDBACK_TONE[comment.colour].text}`}
-          >
-            <Icon className="size-4 shrink-0" aria-hidden="true" />
-            {answer.label}
-          </span>
-          {comment.submittedAt && (
-            <time dateTime={comment.submittedAt}>
-              {formatFeedbackCommentTime(comment.submittedAt)}
-            </time>
-          )}
-          {comment.hidden && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-gray-200 px-2 py-0.5 font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-200">
-              <EyeSlashIcon className="size-3.5" aria-hidden="true" />
-              Hidden from speakers
-            </span>
-          )}
-          {comment.flagged && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
-              <FlagIcon className="size-3.5" aria-hidden="true" />
-              Flagged by a speaker
-            </span>
-          )}
-        </p>
-        <p
-          id={textId}
-          className={`mt-1 text-sm wrap-break-word whitespace-pre-line ${comment.hidden ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}
-        >
-          {comment.comment}
-        </p>
-        {note && <OutcomeNote outcome={note} className="mt-2" />}
-      </div>
-      <div className="-ml-2.5 flex shrink-0 gap-1 sm:ml-0">
-        {comment.hidden ? (
-          <button
-            type="button"
-            aria-describedby={textId}
-            aria-disabled={pending}
-            onClick={guard(onUnhide)}
-            className={`${ACTION} text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700`}
-          >
-            <EyeIcon className="size-4" aria-hidden="true" />
-            Unhide
-          </button>
-        ) : (
-          <button
-            type="button"
-            aria-describedby={textId}
-            aria-disabled={pending}
-            onClick={guard(onHide)}
-            className={`${ACTION} text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700`}
-          >
-            <EyeSlashIcon className="size-4" aria-hidden="true" />
-            Hide
-          </button>
-        )}
-        <button
-          type="button"
-          aria-describedby={textId}
-          aria-disabled={pending}
-          onClick={guard(onRemove)}
-          className={`${ACTION} text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30`}
-        >
-          <TrashIcon className="size-4" aria-hidden="true" />
-          Remove
-        </button>
-      </div>
-    </li>
   )
 }

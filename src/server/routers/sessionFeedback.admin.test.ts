@@ -86,12 +86,18 @@ vi.mock('@/lib/sanity/client', async () => {
   const refuse = () => {
     throw new Error('the admin procedures must not use the doc endpoint')
   }
+  // Only Remove's re-plan reads by id, after a lost revision guard.
+  const getDocuments = async (ids: string[]) =>
+    ids.map((id) =>
+      structuredClone(h.dataset.find((d) => d._id === id) ?? null),
+    )
   return {
     clientReadUncached: { fetch, getDocument: refuse },
     clientReadCached: { fetch },
     clientWrite: {
       fetch,
       getDocument: refuse,
+      getDocuments,
       transaction: () => {
         const tx = real.transaction()
         tx.commit = (async () =>
@@ -148,6 +154,7 @@ const response = (
   fields: Record<string, unknown> = {},
 ): Doc => ({
   _id: rid(++n),
+  _rev: `rev-r${n}`,
   _type: 'feedbackResponse',
   talk: ref(talkId),
   conference: ref('conf-A'),
@@ -157,6 +164,11 @@ const response = (
   ...fields,
 })
 const doc = (id: string) => h.dataset.find((d) => d._id === id)
+/** A response as the page showed it. */
+const seen = (d: Doc) => ({
+  id: d._id,
+  submittedAt: (d.submittedAt as string | undefined) ?? null,
+})
 /**
  * The refusal, by its message: a missing procedure answers NOT_FOUND too, so
  * the code alone would pass with nothing built.
@@ -206,8 +218,8 @@ describe('adminHide, adminUnhide, adminRemove', () => {
 
   it('Remove deletes it and expires its tag at once', async () => {
     await expect(
-      organizer().adminRemove({ responseIds: [ours._id] }),
-    ).resolves.toEqual({ removed: 1 })
+      organizer().adminRemove({ responses: [seen(ours)] }),
+    ).resolves.toEqual({ removed: 1, gone: 0, changed: 0 })
     expect(doc(ours._id)).toBeUndefined()
     expect(revalidateTag).toHaveBeenCalledWith(feedbackResponseTag(ours._id), {
       expire: 0,
@@ -217,16 +229,52 @@ describe('adminHide, adminUnhide, adminRemove', () => {
   it('acts on the conference serving the request, whatever the input says', async () => {
     await expect(
       organizer().adminRemove({
-        responseIds: [foreign._id],
+        responses: [seen(foreign)],
         conferenceId: 'conf-B',
-      } as { responseIds: string[] }),
-    ).rejects.toMatchObject(REFUSED)
+      } as { responses: { id: string; submittedAt: string | null }[] }),
+    ).resolves.toEqual({ removed: 0, gone: 1, changed: 0 })
     expect(doc(foreign._id)).toBeDefined()
     expect(h.commits).toEqual([])
   })
+
+  it('Remove keeps an answer given again since the page showed it', async () => {
+    const shown = seen(ours)
+    h.dataset = h.dataset.map((d) =>
+      d._id === ours._id
+        ? {
+            ...d,
+            comment: 'changed my mind',
+            submittedAt: '2026-06-10T12:00:00Z',
+            _rev: 'again',
+          }
+        : d,
+    )
+    await expect(
+      organizer().adminRemove({ responses: [shown] }),
+    ).resolves.toEqual({ removed: 0, gone: 0, changed: 1 })
+    expect(doc(ours._id)).toMatchObject({ comment: 'changed my mind' })
+  })
+
+  it('Remove of a range takes its bounds, and never touches a foreign response', async () => {
+    await expect(
+      organizer().adminRemove({
+        range: {
+          from: '2026-06-10T10:00:00.000Z',
+          to: '2026-06-10T11:00:00.000Z',
+        },
+        responses: [
+          seen(ours),
+          seen(foreign),
+          { id: rid(4242), submittedAt: '2026-06-10T10:30:00Z' },
+        ],
+      }),
+    ).resolves.toEqual({ removed: 1, gone: 2, changed: 0 })
+    expect(doc(ours._id)).toBeUndefined()
+    expect(doc(foreign._id)).toBeDefined()
+  })
 })
 
-const ACTIONS = ['adminHide', 'adminUnhide', 'adminRemove'] as const
+const ACTIONS = ['adminHide', 'adminUnhide'] as const
 
 describe('adminRemove — a chunk that fails', () => {
   it('says how many went and to reload, not to try again (a retry is refused)', async () => {
@@ -238,7 +286,9 @@ describe('adminRemove — a chunk that fails', () => {
     }
     h.failCommit = 2
     await expect(
-      organizer().adminRemove({ responseIds: ids }),
+      organizer().adminRemove({
+        responses: ids.map((id) => seen(doc(id)!)),
+      }),
     ).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
       message:
@@ -293,6 +343,28 @@ describe('refusals', () => {
     },
   )
 
+  it('adminRemove answers another conference’s response exactly as a missing one, writing nothing', async () => {
+    const before = structuredClone(h.dataset)
+    const a = await organizer().adminRemove({ responses: [seen(foreign)] })
+    const b = await organizer().adminRemove({
+      responses: [{ id: rid(4242), submittedAt: '2026-06-10T10:30:00Z' }],
+    })
+    expect(a).toEqual({ removed: 0, gone: 1, changed: 0 })
+    expect(b).toEqual(a)
+    expect(h.commits).toEqual([])
+    expect(h.dataset).toEqual(before)
+    expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('adminRemove refuses a speaker who is not an organizer, before any read', async () => {
+    for (const who of [caller(), caller(['org-B'])])
+      await expect(
+        who.adminRemove({ responses: [seen(ours)] }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.queries).toEqual([])
+    expect(doc(ours._id)).toEqual(ours)
+  })
+
   it('adminOverview refuses a speaker who is not an organizer, before any read', async () => {
     await expect(caller().adminOverview()).rejects.toMatchObject({
       code: 'FORBIDDEN',
@@ -307,9 +379,59 @@ describe('refusals', () => {
     ['an empty list', null],
   ])('refuses %s as input, before any read', async (_, id) => {
     await expect(
-      organizer().adminRemove({ responseIds: id === null ? [] : [id] }),
+      organizer().adminRemove({
+        responses:
+          id === null ? [] : [{ id, submittedAt: '2026-06-10T10:30:00Z' }],
+      }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect(h.queries).toEqual([])
     expect(h.commits).toEqual([])
+  })
+})
+
+describe('adminTalk — one talk’s panel (§10.2)', () => {
+  it('gives an organizer the talk’s totals, comments and responses', async () => {
+    const out = await organizer().adminTalk({ talkId: 'talk-a' })
+    expect(out.totals.scanned).toEqual({ green: 0, yellow: 0, red: 1 })
+    expect(out.comments).toEqual([
+      expect.objectContaining({ id: ours._id, comment: 'comment 1' }),
+    ])
+    expect(out.responses).toEqual([
+      { id: ours._id, colour: 'red', submittedAt: '2026-06-10T10:01:00Z' },
+    ])
+  })
+
+  it('answers another conference’s talk exactly like a missing one', async () => {
+    for (const talkId of ['talk-foreign', 'talk-missing'])
+      await expect(organizer().adminTalk({ talkId })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Talk not found',
+      })
+  })
+
+  it('refuses a speaker who is not an organizer, before any read', async () => {
+    await expect(
+      caller().adminTalk({ talkId: 'talk-a' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.queries).toEqual([])
+  })
+
+  it('takes a talk id and nothing else', async () => {
+    await expect(
+      organizer().adminTalk({ talkId: 'talk-a,talk-foreign' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.queries).toEqual([])
+  })
+})
+
+describe('adminRemove — input', () => {
+  it('takes a range’s bounds as instants and nothing else', async () => {
+    await expect(
+      organizer().adminRemove({
+        range: { from: 'yesterday', to: '2026-06-10T11:00:00.000Z' },
+        responses: [seen(ours)],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.queries).toEqual([])
   })
 })

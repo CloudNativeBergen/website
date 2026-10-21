@@ -2,8 +2,10 @@ export {
   ensureFeedbackCode,
   type EnsureFeedbackCodeResult,
   readFeedbackCode,
+  rotateFeedbackCode,
   type FeedbackCodeActor,
   type ReadFeedbackCodeResult,
+  type RotateFeedbackCodeResult,
 } from './code'
 export { expireFeedbackCodeIndex } from './cache'
 export { conferenceFeedbackCodes, getFeedbackSlots } from './sanity'
@@ -39,12 +41,14 @@ export { deviceCookie, type DeviceCookie } from './device'
 export {
   hideResponses,
   readAdminFeedback,
+  readTalkFeedback,
   removeResponses,
   unhideResponses,
   REMOVE_CHUNK_SIZE,
   type AdminFeedbackComment,
   type AdminFeedbackOverview,
   type AdminFeedbackSession,
+  type AdminTalkFeedback,
   type ModerationResult,
   type RemoveResult,
 } from './admin'

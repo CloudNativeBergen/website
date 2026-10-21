@@ -29,7 +29,7 @@ export const SHORT_CODE_LENGTH = 6
  * route's guard is a literal, greppable regex; `short-code.test.ts` pins the
  * two against each other.
  */
-const SHORT_CODE_SHAPE = /^[a-hjkmnp-z2-9]{6}$/
+export const SHORT_CODE_SHAPE = /^[a-hjkmnp-z2-9]{6}$/
 
 /**
  * How many times a draw may collide before the mint gives up. At 887M codes
