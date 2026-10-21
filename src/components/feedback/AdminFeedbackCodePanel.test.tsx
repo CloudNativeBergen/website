@@ -53,7 +53,8 @@ describe('AdminFeedbackCodePanel Rotate', () => {
   it.each([
     ['a lost reply', 'INTERNAL_SERVER_ERROR'],
     ['a refusal', 'NOT_FOUND'],
-    ['a release in the way, or a code changed meanwhile', 'CONFLICT'],
+    ['a code changed meanwhile', 'CONFLICT'],
+    ['a release in the way', 'PRECONDITION_FAILED'],
   ])('reads the code again after %s', (_, code) => {
     render(<AdminFeedbackCodePanel talkId="talk-1" title="T" />)
     h.rotate!.onError({ data: { code } })

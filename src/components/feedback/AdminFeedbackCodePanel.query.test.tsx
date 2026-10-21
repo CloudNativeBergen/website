@@ -239,13 +239,38 @@ describe('AdminFeedbackCodePanel against a read in flight', () => {
     expect(await screen.findByText('QR for https://x/f/p4hw7c')).toBeTruthy()
   })
 
-  it('a refused Rotate wrote nothing: the code stays printable while it is read again', async () => {
+  it('someone rotated it first (CONFLICT): the dead code is not printable while the current one is read', async () => {
     setup(OLD)
     await screen.findByText('QR for https://x/f/k7m2qx')
     h.rotate.mockRejectedValue(
       Object.assign(new Error('This talk’s code is now w9nn3r'), {
         data: { code: 'CONFLICT' },
       }),
+    )
+    const late = heldRead({ ...OLD, code: 'w9nn3r', url: 'https://x/f/w9nn3r' })
+    h.reads.push(late.read)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    await confirm('Rotate')
+    expect(await screen.findByText(notice)).toBeTruthy()
+    expect(screen.queryByText('QR for https://x/f/k7m2qx')).toBeNull()
+    // The read lands: the current code, and why it is not the one rotated.
+    await act(async () => late.land())
+    expect(await screen.findByText('QR for https://x/f/w9nn3r')).toBeTruthy()
+    expect(screen.getByText('This talk’s code is now w9nn3r')).toBeTruthy()
+  })
+
+  it('a release in the way (PRECONDITION_FAILED): nothing rotated, the code stays printable', async () => {
+    setup(OLD)
+    await screen.findByText('QR for https://x/f/k7m2qx')
+    h.rotate.mockRejectedValue(
+      Object.assign(
+        new Error('A version of this talk waits in a scheduled release.'),
+        {
+          data: { code: 'PRECONDITION_FAILED' },
+        },
+      ),
     )
     const late = heldRead(OLD)
     h.reads.push(late.read)
@@ -254,7 +279,9 @@ describe('AdminFeedbackCodePanel against a read in flight', () => {
     )
     await confirm('Rotate')
     expect(
-      await screen.findByText('This talk’s code is now w9nn3r'),
+      await screen.findByText(
+        'A version of this talk waits in a scheduled release.',
+      ),
     ).toBeTruthy()
     expect(screen.queryByText(notice)).toBeNull()
     expect(screen.getByText('QR for https://x/f/k7m2qx')).toBeTruthy()

@@ -488,9 +488,8 @@ export const RotateRefused: Story = {
       await canvas.findByRole('button', { name: 'Rotate Feedback Code' }),
     )
     await confirmWith('Rotate')
-    expect(await canvas.findByRole('alert')).toHaveTextContent(
-      'can no longer be rotated',
-    )
+    // Said once the code has been read again.
+    expect(await canvas.findByText(/can no longer be rotated/)).toBeVisible()
   },
 }
 
@@ -525,9 +524,10 @@ export const RotateChangedMeanwhile: Story = {
       await canvas.findByRole('button', { name: 'Rotate Feedback Code' }),
     )
     await confirmWith('Rotate')
-    expect(await canvas.findByRole('alert')).toHaveTextContent(
-      'someone changed it since this page loaded',
-    )
+    // Once the current code is read, the reason shows.
+    expect(
+      await canvas.findByText(/someone changed it since this page loaded/),
+    ).toBeVisible()
   },
 }
 

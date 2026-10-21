@@ -8,8 +8,13 @@ import { answersClosed } from '@/lib/feedback/window'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
 import { useWindowOnTheClock } from './useWindowOnTheClock'
 
-/** Rotate's answers that say nothing was written. */
-const REFUSALS = new Set(['NOT_FOUND', 'CONFLICT', 'BAD_REQUEST', 'FORBIDDEN'])
+/**
+ * Rotate's one answer that proves the code on screen is still current: a
+ * version waits in a scheduled release, so nothing was rotated. Any other
+ * failure (a lost reply, a code changed by someone else, a talk that
+ * changed) leaves the code on screen unconfirmed until a read lands.
+ */
+const CODE_UNCHANGED = 'PRECONDITION_FAILED'
 
 /**
  * The confirmation before a rotation, word for word (speaker feedback spec
@@ -91,11 +96,9 @@ export function AdminFeedbackCodePanel({
     // way, or a lost reply after which the rotation may well have landed.
     onError: (error) => {
       setAsking(false)
-      // A server error or a lost reply may have rotated the code: until a
-      // read lands after this, the code on screen may be dead. A refusal
-      // (the talk changed, a release, a code changed meanwhile) wrote
-      // nothing.
-      if (!REFUSALS.has(error.data?.code ?? ''))
+      // Until a read lands after this, the code on screen may be dead: a
+      // lost reply may have rotated it, or someone else already did.
+      if (error.data?.code !== CODE_UNCHANGED)
         setVerifyAfter(code.dataUpdatedAt ?? 0)
       void utils.sessionFeedback.adminCode.invalidate({ talkId })
     },
@@ -190,7 +193,8 @@ export function AdminFeedbackCodePanel({
             <p role="alert" className="text-sm text-red-700 dark:text-red-400">
               {rotate.error.data?.code === 'NOT_FOUND'
                 ? 'This code can no longer be rotated: the feedback window has closed, or the talk changed.'
-                : rotate.error.data?.code === 'CONFLICT'
+                : rotate.error.data?.code === 'CONFLICT' ||
+                    rotate.error.data?.code === CODE_UNCHANGED
                   ? rotate.error.message
                   : 'The code could not be rotated. Try again.'}
             </p>

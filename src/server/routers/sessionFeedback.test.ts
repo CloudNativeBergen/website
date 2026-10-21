@@ -1329,12 +1329,12 @@ describe('rotateCode — refused, and nothing written', () => {
     expect(doc('talk-1')?.feedbackCode).toBe('k7m2qx')
   })
 
-  it('a version waiting in a scheduled release: CONFLICT, the old code stays', async () => {
+  it('a version waiting in a scheduled release: PRECONDITION_FAILED (the code is unchanged), the old code stays', async () => {
     h.dataset.push(talk('versions.r1.talk-1', { feedbackCode: 'k7m2qx' }))
     h.releases = [{ name: 'r1', state: 'scheduled' }]
     await expect(
       organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
     expect(h.attempts).toBe(0)
     expect(doc('talk-1')?.feedbackCode).toBe('k7m2qx')
   })

@@ -276,7 +276,7 @@ export const sessionFeedbackRouter = router({
    * the old code stops resolving at once, responses are kept. Refused
    * (NOT_FOUND, nothing written) where {@link adminCode} offers no rotation:
    * a talk that is missing, foreign, not confirmed, has no speaker left or
-   * no code, or whose window has closed. CONFLICT while a version of the
+   * no code, or whose window has closed. PRECONDITION_FAILED while a version of the
    * talk waits in a scheduled release, or when the talk holds another code
    * than the one the organizer confirmed (rotated by someone else since).
    */
@@ -290,9 +290,11 @@ export const sessionFeedbackRouter = router({
       now: new Date(),
     })
     if (result.status === 'refused') throw notFound()
+    // Its own code, apart from CONFLICT: the code is certainly unchanged, so
+    // the page may go on offering it.
     if (result.status === 'locked')
       throw new TRPCError({
-        code: 'CONFLICT',
+        code: 'PRECONDITION_FAILED',
         message:
           'A version of this talk waits in a scheduled release. Rotate the code once it is published.',
       })
