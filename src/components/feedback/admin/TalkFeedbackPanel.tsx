@@ -139,7 +139,7 @@ export function TalkFeedbackPanel({
               <p className="text-2xl font-bold text-gray-900 tabular-nums dark:text-white">
                 {totals.combined[colour]}
               </p>
-              <p className="text-xs text-gray-600 tabular-nums dark:text-gray-400">
+              <p className="text-xs whitespace-nowrap text-gray-600 tabular-nums dark:text-gray-400">
                 {totals.scanned[colour]} scanned
               </p>
               <label className="mt-1 block text-xs text-gray-600 dark:text-gray-400">
