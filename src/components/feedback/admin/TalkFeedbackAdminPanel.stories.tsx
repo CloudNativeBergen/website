@@ -14,13 +14,15 @@ const WINDOW = {
   closesAt: '2026-10-28T08:40:00.000Z',
   feedbackVisible: false,
 }
-const code = trpc({
-  code: 'k7m2qx',
-  url: 'https://2026.cloudnativedays.no/f/k7m2qx',
-  window: WINDOW,
-  mayMint: false,
-  mayRotate: true,
-})
+/** A fresh response each time: a Response body can be read only once. */
+const code = () =>
+  trpc({
+    code: 'k7m2qx',
+    url: 'https://2026.cloudnativedays.no/f/k7m2qx',
+    window: WINDOW,
+    mayMint: false,
+    mayRotate: true,
+  })
 
 /** Deterministic dates with real timers (AGENTS.md). */
 const runningClockFrom = (start: Date) => () => {
@@ -73,7 +75,7 @@ export const Loading: Story = {
           await delay('infinite')
           return trpc(null)
         }),
-        http.get(CODE, () => code),
+        http.get(CODE, code),
       ],
     },
   },
@@ -113,20 +115,20 @@ export const LoadFailed: Story = {
             { status: 500 },
           )
         }),
-        http.get(CODE, () => code),
+        http.get(CODE, code),
       ],
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    expect(await canvas.findByRole('alert')).toHaveTextContent(
-      'Session Feedback could not be loaded.',
-    )
+    expect(
+      await canvas.findByText('Session Feedback could not be loaded.'),
+    ).toHaveAttribute('role', 'alert')
     expect(
       await canvas.findByRole('region', { name: 'Feedback Code' }),
     ).toBeVisible()
     expect(
-      canvas.getByRole('button', { name: 'Rotate Feedback Code' }),
+      await canvas.findByRole('button', { name: 'Rotate Feedback Code' }),
     ).toBeVisible()
     const before = talkReads.n
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }))
