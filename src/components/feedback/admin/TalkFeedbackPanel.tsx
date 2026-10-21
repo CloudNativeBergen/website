@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useState, type ReactNode, type Ref } from 'react'
 import { ChatBubbleLeftRightIcon, CheckIcon } from '@heroicons/react/24/outline'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import type {
@@ -74,6 +74,8 @@ export interface TalkFeedbackPanelProps {
    * only answers still as the page showed them.
    */
   onRemove: (request: RemoveRequest) => Promise<RemovedCounts>
+  /** The heading, for a page that moves focus to it (after a Retry). */
+  headingRef?: Ref<HTMLHeadingElement>
 }
 
 /**
@@ -91,6 +93,7 @@ export function TalkFeedbackPanel({
   onHide,
   onUnhide,
   onRemove,
+  headingRef,
 }: TalkFeedbackPanelProps) {
   const { comments } = feedback
   const formId = useId()
@@ -153,7 +156,11 @@ export function TalkFeedbackPanel({
     >
       {/* A container: the tiles sit three abreast only where they fit. */}
       <div className="@container space-y-3 p-4">
-        <h3 className="flex items-center text-lg font-semibold text-gray-900 dark:text-white">
+        <h3
+          ref={headingRef}
+          tabIndex={-1}
+          className="flex items-center text-lg font-semibold text-gray-900 focus:outline-none dark:text-white"
+        >
           <ChatBubbleLeftRightIcon className="mr-2 size-5" aria-hidden="true" />
           Session Feedback
         </h3>

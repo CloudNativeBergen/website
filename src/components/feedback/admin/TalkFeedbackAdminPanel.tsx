@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import { removeInRequests } from '@/lib/feedback/bulk-remove'
 import { AdminFeedbackCodePanel } from '../AdminFeedbackCodePanel'
@@ -11,6 +12,9 @@ import { TalkFeedbackPanel } from './TalkFeedbackPanel'
  * Remove. Each action resolves once the talk has been read again. A talk
  * that is not one of this conference's shows nothing.
  */
+/** How long "Refreshed." stays in the live region after a Retry. */
+const REFRESHED_MS = 4000
+
 export function TalkFeedbackAdminPanel({
   talkId,
   title,
@@ -39,6 +43,15 @@ export function TalkFeedbackAdminPanel({
   const unhide = api.sessionFeedback.adminUnhide.useMutation(refresh)
   const remove = api.sessionFeedback.adminRemove.useMutation(refresh)
   const cards = api.proposal.admin.updateAudienceFeedback.useMutation(refresh)
+  // A Retry that worked takes the Retry button away: say so, and put
+  // focus where the numbers are, not on <body>.
+  const heading = useRef<HTMLHeadingElement>(null)
+  const [refreshed, setRefreshed] = useState(false)
+  useEffect(() => {
+    if (!refreshed) return
+    const timer = setTimeout(() => setRefreshed(false), REFRESHED_MS)
+    return () => clearTimeout(timer)
+  }, [refreshed])
 
   // The Feedback Code stands on its own while the feedback read is not
   // there: an organizer can still print, mint or rotate.
@@ -93,14 +106,22 @@ export function TalkFeedbackAdminPanel({
             ? feedback.isFetching
               ? 'Refreshing…'
               : 'Couldn’t refresh, showing earlier numbers.'
-            : ''}
+            : refreshed
+              ? 'Refreshed.'
+              : ''}
         </p>
         {stale && (
           <button
             type="button"
             aria-disabled={feedback.isFetching}
             onClick={() => {
-              if (!feedback.isFetching) void feedback.refetch()
+              if (feedback.isFetching) return
+              setRefreshed(false)
+              void feedback.refetch().then((result) => {
+                if (result.isError) return
+                setRefreshed(true)
+                heading.current?.focus()
+              })
             }}
             className="min-h-9 rounded-md px-3 font-semibold hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-700 aria-disabled:cursor-wait aria-disabled:opacity-60 dark:hover:bg-yellow-900/40"
           >
@@ -131,6 +152,7 @@ export function TalkFeedbackAdminPanel({
         }}
         onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
         onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
+        headingRef={heading}
         onRemove={(request) =>
           removeInRequests(request, (chunk) => remove.mutateAsync(chunk))
         }

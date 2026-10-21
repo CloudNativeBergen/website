@@ -28,6 +28,8 @@ const h = vi.hoisted(() => ({
   groqSnapshot: null as null | (Record<string, unknown> & { _id: string })[],
   /** How many ids each doc-endpoint read asked for. */
   docReads: [] as number[],
+  /** The doc endpoint fails. */
+  docReadsFail: false,
 }))
 
 vi.mock('server-only', () => ({}))
@@ -97,6 +99,8 @@ vi.mock('@/lib/sanity/client', async () => {
       fetch,
       // The doc endpoint: never lags.
       getDocuments: async (ids: string[]) => {
+        if (h.docReadsFail)
+          throw Object.assign(new Error('502 bad gateway'), { statusCode: 502 })
         h.docReads.push(ids.length)
         return ids.map((id) =>
           structuredClone(h.dataset.find((d) => d._id === id) ?? null),
@@ -185,6 +189,7 @@ beforeEach(() => {
   h.revs = 0
   h.groqSnapshot = null
   h.docReads = []
+  h.docReadsFail = false
   vi.mocked(revalidateTag).mockClear()
   h.dataset = [
     SCHEDULE,
@@ -920,6 +925,35 @@ describe('Remove a range: bounds, lag and lost replies (§10.2)', () => {
       gone: 1,
       changed: 0,
     })
+  })
+
+  it('reports what went when a re-plan’s own read fails, instead of throwing', async () => {
+    const docs = burst(101)
+    h.dataset.push(...docs)
+    h.beforeCommit.push(
+      () => {},
+      () => {
+        throw Object.assign(new Error('Revision mismatch'), {
+          statusCode: 409,
+        })
+      },
+    )
+    h.docReadsFail = true
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await range(docs)).toEqual({
+      status: 'failed',
+      removed: 100,
+      gone: 0,
+      changed: 0,
+    })
+    error.mockRestore()
+    // The first chunk went, and its answers' tags expired.
+    expect(docs.slice(0, 100).filter((d) => doc(d._id))).toEqual([])
+    expect(doc(docs[100]._id)).toBeDefined()
+    for (const d of docs.slice(0, 100))
+      expect(revalidateTag).toHaveBeenCalledWith(feedbackResponseTag(d._id), {
+        expire: 0,
+      })
   })
 
   it('expires a failed chunk’s answers too: a commit whose reply was lost may have applied', async () => {

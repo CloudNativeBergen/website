@@ -9,7 +9,7 @@
  * is a stub here: these are the container's jobs.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { TalkFeedbackPanelProps } from './TalkFeedbackPanel'
 
 const h = vi.hoisted(() => ({
@@ -67,7 +67,11 @@ vi.mock('@/lib/trpc/client', () => {
 vi.mock('./TalkFeedbackPanel', () => ({
   TalkFeedbackPanel: (props: TalkFeedbackPanelProps) => {
     h.panel = props
-    return <p>the panel</p>
+    return (
+      <h3 ref={props.headingRef} tabIndex={-1}>
+        the panel
+      </h3>
+    )
   },
 }))
 vi.mock('../AdminFeedbackCodePanel', () => ({
@@ -79,6 +83,8 @@ import { TalkFeedbackAdminPanel } from './TalkFeedbackAdminPanel'
 const DATA = { totals: {}, comments: [], responses: [], window: {} }
 
 beforeEach(() => {
+  // A refetch that fails again, unless a test says otherwise.
+  h.refetch.mockReset().mockResolvedValue({ isError: true })
   h.settled = []
   h.panel = null
   h.cardsInput = []
@@ -112,6 +118,43 @@ describe('TalkFeedbackAdminPanel', () => {
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(h.refetch).toHaveBeenCalled()
+  })
+
+  it('says it is refreshing while a Retry runs, and takes no second press', () => {
+    h.query = {
+      data: DATA,
+      error: { message: 'down' },
+      isError: true,
+      isFetching: true,
+    }
+    panel()
+    expect(screen.getByText('Refreshing…')).toBeTruthy()
+    const retry = screen.getByRole('button', { name: 'Retry' })
+    expect(retry.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(retry)
+    expect(h.refetch).not.toHaveBeenCalled()
+  })
+
+  it('after a Retry that worked, says so in the same region and puts focus on the panel', async () => {
+    h.query = { data: DATA, error: { message: 'down' }, isError: true }
+    h.refetch.mockImplementation(async () => {
+      // The query's state turns fine before its promise settles.
+      h.query = { data: DATA, error: null, isError: false }
+      view.rerender(
+        <TalkFeedbackAdminPanel talkId="talk-1" title="T" showCode={false} />,
+      )
+      return { isError: false }
+    })
+    const view = panel()
+    const region = screen.getByText(
+      'Couldn’t refresh, showing earlier numbers.',
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    })
+    expect(region.textContent).toBe('Refreshed.')
+    expect(document.activeElement).toBe(screen.getByText('the panel'))
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
 
   it('says nothing about refreshing when the read is fine', () => {

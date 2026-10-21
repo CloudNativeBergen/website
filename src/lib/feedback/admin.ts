@@ -469,11 +469,18 @@ export async function removeResponses({
       // Re-read the chunk by id: drop what went or changed, keep the rest.
       // The ids travel in the URL: at most DOC_READ_CHUNK a request.
       const revOf = new Map<string, string>()
-      for (let k = 0; k < chunk.length; k += DOC_READ_CHUNK) {
-        const docs = await clientWrite.getDocuments<{ _rev: string }>(
-          chunk.slice(k, k + DOC_READ_CHUNK).map((c) => c.id),
-        )
-        for (const d of docs) if (d) revOf.set(d._id, d._rev)
+      try {
+        for (let k = 0; k < chunk.length; k += DOC_READ_CHUNK) {
+          const docs = await clientWrite.getDocuments<{ _rev: string }>(
+            chunk.slice(k, k + DOC_READ_CHUNK).map((c) => c.id),
+          )
+          for (const d of docs) if (d) revOf.set(d._id, d._rev)
+        }
+      } catch (error) {
+        // What went before this chunk is still reported; nothing of this
+        // chunk was written (its commit lost a guard, which rolls it back).
+        console.error('Could not re-read Feedback Responses to remove', error)
+        return { ...out, status: 'failed' }
       }
       chunk = chunk.filter(({ id, rev }) => {
         const current = revOf.get(id)
