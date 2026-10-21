@@ -88,6 +88,7 @@ export function AdminFeedbackCodePanel({
   const mayMint =
     !!code.data?.mayMint && shownWindow?.state !== 'closed' && !refused
   const mayRotate = !!code.data?.mayRotate && shownWindow?.state !== 'closed'
+  const shownCode = code.data?.code ?? null
 
   if (code.error?.data?.code === 'NOT_FOUND') return null
 
@@ -150,7 +151,10 @@ export function AdminFeedbackCodePanel({
             onClose={() => {
               if (!rotate.isPending) setAsking(false)
             }}
-            onConfirm={() => rotate.mutate({ talkId, code: code.data!.code! })}
+            onConfirm={() => {
+              // The code the dialog names: only it is rotated.
+              if (shownCode) rotate.mutate({ talkId, code: shownCode })
+            }}
             title="Rotate Feedback Code?"
             message={rotateMessage(code.data.code)}
             confirmButtonText="Rotate"
