@@ -531,6 +531,25 @@ describe('Remove a range (§10.2): only the answers the organizer saw', () => {
     expect(doc(kept._id)).toMatchObject({ colour: 'green' })
   })
 
+  it('keeps an answer given again inside the range while the confirmation was open', async () => {
+    const docs = burst(2)
+    h.dataset.push(...docs)
+    const [kept] = docs
+    // The range includes the current bucket: the new answer lands in it.
+    h.dataset = h.dataset.map((d) =>
+      d._id === kept._id
+        ? {
+            ...d,
+            colour: 'green',
+            submittedAt: '2026-06-10T10:20:00Z',
+            _rev: 'resubmitted',
+          }
+        : d,
+    )
+    expect(await range(docs)).toMatchObject({ removed: 1, changed: 1 })
+    expect(doc(kept._id)).toMatchObject({ colour: 'green' })
+  })
+
   it('keeps an answer changed between the guard read and the commit (the revision guard)', async () => {
     const docs = burst(3)
     h.dataset.push(...docs)
