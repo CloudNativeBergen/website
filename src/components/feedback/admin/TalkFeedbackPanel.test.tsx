@@ -267,7 +267,9 @@ describe('TalkFeedbackPanel Card Counts', () => {
     let finish: () => void = () => {}
     const onSaveCards = vi.fn(
       () =>
-        new Promise<CardsSave | null>((resolve) => (finish = () => resolve(null))),
+        new Promise<CardsSave | null>(
+          (resolve) => (finish = () => resolve(null)),
+        ),
     )
     render(
       <TalkFeedbackPanel
