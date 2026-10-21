@@ -33,6 +33,11 @@ const TALK_ID = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/
 
 const talkInput = z.object({ talkId: z.string().max(200).regex(TALK_ID) })
 
+/** Rotation names the code it ends, as the organizer saw it (§10.4). */
+const rotateInput = talkInput.extend({
+  code: z.string().regex(/^[a-z0-9]{6}$/),
+})
+
 /**
  * A published Feedback Response id as `feedbackResponseId` makes them
  * (`src/lib/feedback/device.ts`), and nothing else: no draft, no comma list.
@@ -247,13 +252,15 @@ export const sessionFeedbackRouter = router({
    * (NOT_FOUND, nothing written) where {@link adminCode} offers no rotation:
    * a talk that is missing, foreign, not confirmed, has no speaker left or
    * no code, or whose window has closed. CONFLICT while a version of the
-   * talk waits in a scheduled release.
+   * talk waits in a scheduled release, or when the talk holds another code
+   * than the one the organizer confirmed (rotated by someone else since).
    */
-  rotateCode: adminProcedure.input(talkInput).mutation(async ({ input }) => {
+  rotateCode: adminProcedure.input(rotateInput).mutation(async ({ input }) => {
     const { conference } = await getConferenceForCurrentDomain()
     if (!conference?._id) throw notFound()
     const result = await rotateFeedbackCode({
       talkId: input.talkId,
+      expected: input.code,
       conference,
       now: new Date(),
     })
@@ -263,6 +270,11 @@ export const sessionFeedbackRouter = router({
         code: 'CONFLICT',
         message:
           'A version of this talk waits in a scheduled release. Rotate the code once it is published.',
+      })
+    if (result.status === 'changed')
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: `This talk’s code is now ${result.code}: someone changed it since this page loaded. Check it before rotating again.`,
       })
     return toCodeResponse(conference, result)
   }),

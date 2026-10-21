@@ -77,7 +77,7 @@ export function AdminFeedbackCodePanel({
     // the offer goes if it should, and say why where the button was.
     onError: (error) => {
       setAsking(false)
-      if (error.data?.code === 'NOT_FOUND')
+      if (error.data?.code === 'NOT_FOUND' || error.data?.code === 'CONFLICT')
         void utils.sessionFeedback.adminCode.invalidate({ talkId })
     },
   })
@@ -150,7 +150,7 @@ export function AdminFeedbackCodePanel({
             onClose={() => {
               if (!rotate.isPending) setAsking(false)
             }}
-            onConfirm={() => rotate.mutate({ talkId })}
+            onConfirm={() => rotate.mutate({ talkId, code: code.data!.code! })}
             title="Rotate Feedback Code?"
             message={rotateMessage(code.data.code)}
             confirmButtonText="Rotate"

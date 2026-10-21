@@ -1150,7 +1150,10 @@ describe('rotateCode — a new code, everywhere at once (§10.4)', () => {
   beforeEach(() => setTalk('talk-1', { feedbackCode: 'k7m2qx' }))
 
   it('replaces the code on the published talk, returns it, and expires the index at once', async () => {
-    const out = await organizer().rotateCode({ talkId: 'talk-1' })
+    const out = await organizer().rotateCode({
+      talkId: 'talk-1',
+      code: 'k7m2qx',
+    })
     expect(out.code).toMatch(CODE)
     expect(out.code).not.toBe('k7m2qx')
     expect(out.url).toBe(`https://2026.example.no/f/${out.code}`)
@@ -1166,7 +1169,10 @@ describe('rotateCode — a new code, everywhere at once (§10.4)', () => {
       talk('versions.r1.talk-1', { feedbackCode: 'k7m2qx' }),
     )
     h.releases = [{ name: 'r1', state: 'active' }]
-    const out = await organizer().rotateCode({ talkId: 'talk-1' })
+    const out = await organizer().rotateCode({
+      talkId: 'talk-1',
+      code: 'k7m2qx',
+    })
     expect(doc('drafts.talk-1')?.feedbackCode).toBe(out.code)
     expect(doc('drafts.talk-1')?.title).toBe('edited')
     expect(doc('versions.r1.talk-1')?.feedbackCode).toBe(out.code)
@@ -1191,7 +1197,10 @@ describe('rotateCode — a new code, everywhere at once (§10.4)', () => {
         return array
       })
     h.dataset.push(talk('drafts.talk-other', { feedbackCode: 'aaaaaa' }))
-    const out = await organizer().rotateCode({ talkId: 'talk-1' })
+    const out = await organizer().rotateCode({
+      talkId: 'talk-1',
+      code: 'k7m2qx',
+    })
     random.mockRestore()
     expect(out.code).toBe('bbbbbb')
   })
@@ -1217,7 +1226,10 @@ describe('rotateCode — a version that predates the rotation keeps the new code
 
   it('a draft that existed before the rotation', async () => {
     h.dataset.push(talk('drafts.talk-1', { feedbackCode: 'k7m2qx' }))
-    const out = await organizer().rotateCode({ talkId: 'talk-1' })
+    const out = await organizer().rotateCode({
+      talkId: 'talk-1',
+      code: 'k7m2qx',
+    })
     publish('drafts.talk-1', 'talk-1')
     expect(doc('talk-1')?.feedbackCode).toBe(out.code)
   })
@@ -1227,7 +1239,10 @@ describe('rotateCode — a version that predates the rotation keeps the new code
       // Copied from the published talk while it still held the old code.
       h.dataset.push(talk('drafts.talk-1', { feedbackCode: 'k7m2qx' }))
     })
-    const out = await organizer().rotateCode({ talkId: 'talk-1' })
+    const out = await organizer().rotateCode({
+      talkId: 'talk-1',
+      code: 'k7m2qx',
+    })
     // Not in the transaction: only the sweep can have written it.
     expect(h.commits).toBe(2)
     publish('drafts.talk-1', 'talk-1')
@@ -1238,7 +1253,10 @@ describe('rotateCode — a version that predates the rotation keeps the new code
     h.releases = [{ name: 'r1', state: 'active' }]
     h.groqSnapshot = structuredClone(h.dataset)
     h.dataset.push(talk('versions.r1.talk-1', { feedbackCode: 'k7m2qx' }))
-    const out = await organizer().rotateCode({ talkId: 'talk-1' })
+    const out = await organizer().rotateCode({
+      talkId: 'talk-1',
+      code: 'k7m2qx',
+    })
     publish('versions.r1.talk-1', 'talk-1')
     expect(doc('talk-1')?.feedbackCode).toBe(out.code)
   })
@@ -1266,9 +1284,17 @@ describe('rotateCode — refused, and nothing written', () => {
     )
   })
 
+  /** Each talk's own code: a refusal must not come from a mismatch. */
+  const HELD: Record<string, string> = {
+    'talk-foreign-coded': 'fxr3gn',
+    'talk-accepted-coded': 'acc3pt',
+    'talk-erased-coded': 'er4sed',
+  }
   const refused = async (talkId: string) => {
     const before = structuredClone(h.dataset)
-    await expect(organizer().rotateCode({ talkId })).rejects.toMatchObject({
+    await expect(
+      organizer().rotateCode({ talkId, code: HELD[talkId] ?? 'k7m2qx' }),
+    ).rejects.toMatchObject({
       code: 'NOT_FOUND',
       message: 'Talk not found',
     })
@@ -1297,7 +1323,7 @@ describe('rotateCode — refused, and nothing written', () => {
 
   it('a speaker who is not an organizer, before any read', async () => {
     await expect(
-      caller('sp-ada').rotateCode({ talkId: 'talk-1' }),
+      caller('sp-ada').rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect(h.docReads).toEqual([])
     expect(doc('talk-1')?.feedbackCode).toBe('k7m2qx')
@@ -1307,7 +1333,7 @@ describe('rotateCode — refused, and nothing written', () => {
     h.dataset.push(talk('versions.r1.talk-1', { feedbackCode: 'k7m2qx' }))
     h.releases = [{ name: 'r1', state: 'scheduled' }]
     await expect(
-      organizer().rotateCode({ talkId: 'talk-1' }),
+      organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
     ).rejects.toMatchObject({ code: 'CONFLICT' })
     expect(h.attempts).toBe(0)
     expect(doc('talk-1')?.feedbackCode).toBe('k7m2qx')
@@ -1316,7 +1342,7 @@ describe('rotateCode — refused, and nothing written', () => {
   it('the release list does not load: an error, nothing written', async () => {
     h.releasesFail = true
     await expect(
-      organizer().rotateCode({ talkId: 'talk-1' }),
+      organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
     ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
     expect(h.attempts).toBe(0)
     expect(doc('talk-1')?.feedbackCode).toBe('k7m2qx')
@@ -1331,7 +1357,10 @@ describe('rotateCode — concurrent writes', () => {
     h.beforeCommit.push(() => {
       h.dataset.find((d) => d._id === 'drafts.talk-1')!._rev = 'typing'
     })
-    const out = await organizer().rotateCode({ talkId: 'talk-1' })
+    const out = await organizer().rotateCode({
+      talkId: 'talk-1',
+      code: 'k7m2qx',
+    })
     expect(h.attempts).toBe(2)
     expect(doc('talk-1')?.feedbackCode).toBe(out.code)
     expect(doc('drafts.talk-1')?.feedbackCode).toBe(out.code)
@@ -1339,7 +1368,10 @@ describe('rotateCode — concurrent writes', () => {
 
   it('converges on the code another rotation wrote first', async () => {
     h.beforeCommit.push(() => setTalk('talk-1', { feedbackCode: 'w9nn3r' }))
-    const out = await organizer().rotateCode({ talkId: 'talk-1' })
+    const out = await organizer().rotateCode({
+      talkId: 'talk-1',
+      code: 'k7m2qx',
+    })
     expect(out.code).toBe('w9nn3r')
     expect(doc('talk-1')?.feedbackCode).toBe('w9nn3r')
     expect(h.commits).toBe(0)
@@ -1348,7 +1380,7 @@ describe('rotateCode — concurrent writes', () => {
   it('refuses when the talk is withdrawn during the write', async () => {
     h.beforeCommit.push(() => setTalk('talk-1', { status: 'withdrawn' }))
     await expect(
-      organizer().rotateCode({ talkId: 'talk-1' }),
+      organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(doc('talk-1')?.feedbackCode).toBe('k7m2qx')
   })
@@ -1356,7 +1388,7 @@ describe('rotateCode — concurrent writes', () => {
   it('refuses when the last speaker goes during the write', async () => {
     h.beforeCommit.push(() => setTalk('talk-1', { speakers: [ref('sp-gone')] }))
     await expect(
-      organizer().rotateCode({ talkId: 'talk-1' }),
+      organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(doc('talk-1')?.feedbackCode).toBe('k7m2qx')
   })
@@ -1364,7 +1396,7 @@ describe('rotateCode — concurrent writes', () => {
   it('refuses when erasure unsets the code during the write', async () => {
     h.beforeCommit.push(() => setTalk('talk-1', { feedbackCode: undefined }))
     await expect(
-      organizer().rotateCode({ talkId: 'talk-1' }),
+      organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(doc('talk-1')?.feedbackCode).toBeUndefined()
   })
@@ -1376,7 +1408,7 @@ describe('rotateCode — concurrent writes', () => {
         h.dataset.find((d) => d._id === 'drafts.talk-1')!._rev = `typing-${i}`
       })
     await expect(
-      organizer().rotateCode({ talkId: 'talk-1' }),
+      organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
     ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
     expect(h.attempts).toBe(4)
     expect(doc('talk-1')?.feedbackCode).toBe('k7m2qx')
@@ -1408,5 +1440,43 @@ describe('adminCode — says whether rotation is offered', () => {
       code: 'k7m2qx',
       mayRotate: false,
     })
+  })
+})
+
+describe('rotateCode — rotates only the code the organizer saw', () => {
+  beforeEach(() => setTalk('talk-1', { feedbackCode: 'w9nn3r' }))
+
+  it('refuses with CONFLICT, writing nothing, when the talk already holds another code', async () => {
+    // Another organizer rotated k7m2qx to w9nn3r and printed it; this page
+    // still shows k7m2qx.
+    await expect(
+      organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(h.attempts).toBe(0)
+    expect(doc('talk-1')?.feedbackCode).toBe('w9nn3r')
+    expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('takes a code and nothing else', async () => {
+    await expect(
+      organizer().rotateCode({ talkId: 'talk-1', code: 'w9nn3r,x' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.docReads).toEqual([])
+  })
+
+  it('expires the index before the sweep runs', async () => {
+    h.dataset.push(talk('drafts.talk-1', { feedbackCode: 'w9nn3r' }))
+    const order: string[] = []
+    vi.mocked(revalidateTag).mockImplementation(() => {
+      order.push(`expire after ${h.docReads.length} reads`)
+    })
+    const readsBefore = h.docReads.length
+    await organizer().rotateCode({ talkId: 'talk-1', code: 'w9nn3r' })
+    vi.mocked(revalidateTag).mockReset()
+    // The first read and the write's version lookup come before the commit;
+    // the sweep's reads come after the expiry.
+    const expireAt = Number(/after (\d+)/.exec(order[0])![1])
+    expect(h.docReads.length).toBeGreaterThan(expireAt)
+    expect(expireAt).toBeGreaterThan(readsBefore)
   })
 })

@@ -320,6 +320,11 @@ export type RotateFeedbackCodeResult =
    * old code back.
    */
   | { status: 'locked' }
+  /**
+   * Not rotated: the talk holds another code than the one the organizer
+   * saw (another organizer rotated it since), which may already be printed.
+   */
+  | { status: 'changed'; code: string }
   | { status: 'ok'; code: string; window: FeedbackWindow }
 
 /**
@@ -337,15 +342,20 @@ export type RotateFeedbackCodeResult =
  * and tries again, up to {@link MAX_RETRIES}; then the sweep catches a
  * version created meanwhile, and the index expires at once.
  *
- * Two rotations at once converge: the one whose guard fails re-reads, finds
- * the code it read gone, and returns the code that replaced it.
+ * Only the code the organizer saw (`expected`) is rotated: a code another
+ * organizer put there since may already be printed. Two rotations of the
+ * same code at once converge: the one whose guard fails re-reads, finds that
+ * code gone, and returns the code that replaced it.
  */
 export async function rotateFeedbackCode({
   talkId,
+  expected,
   conference,
   now,
 }: {
   talkId: string
+  /** The code the organizer confirmed would stop working. */
+  expected: string
   conference: { _id: string; endDate?: string | null }
   now: Date
 }): Promise<RotateFeedbackCodeResult> {
@@ -354,6 +364,8 @@ export async function rotateFeedbackCode({
   const read = await readTalkForCode(client, talkId, actor, conference, now)
   if (!read?.existing || !mayMint(read.window)) return { status: 'refused' }
   const { window, existing } = read
+  if (existing !== normalizeShortCode(expected))
+    return { status: 'changed', code: existing }
 
   let current = read.talk
   for (let attempt = 0; ; attempt++) {
@@ -380,8 +392,9 @@ export async function rotateFeedbackCode({
     }
     try {
       await tx.commit()
-      await sweepTalkVersions(client, current._id)
+      // The old code stops resolving now, not after the sweep's round trips.
       expireFeedbackCodeIndex(conference._id)
+      await sweepTalkVersions(client, current._id)
       return { status: 'ok', code, window }
     } catch (error) {
       if (!isRetryable(error) || attempt >= MAX_RETRIES) throw error
