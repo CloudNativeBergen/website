@@ -1,12 +1,23 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MAX_RESPONSES_PER_REQUEST, removeInRequests } from './bulk-remove'
+import {
+  MAX_RESPONSES_PER_REQUEST,
+  removeInRequests,
+  type RangeRemoved,
+} from './bulk-remove'
 
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `r${i}`)
 
 describe('removeInRequests', () => {
   it('sends a range larger than one request allows in several, in order', async () => {
-    const send = vi.fn<(chunk: string[]) => Promise<void>>(async () => {})
-    await removeInRequests(ids(2400), send)
+    const send = vi.fn(async (chunk: string[]) => ({
+      removed: chunk.length - 1,
+      gone: 1,
+    }))
+    // Each request skips one response already gone; the counts add up.
+    expect(await removeInRequests(ids(2400), send)).toEqual({
+      removed: 2398,
+      gone: 2,
+    })
     expect(send.mock.calls.map(([chunk]) => chunk.length)).toEqual([
       MAX_RESPONSES_PER_REQUEST,
       400,
@@ -16,19 +27,19 @@ describe('removeInRequests', () => {
 
   it('says at least how many went when a later request fails, and sends no more', async () => {
     const send = vi
-      .fn<(chunk: string[]) => Promise<unknown>>()
-      .mockResolvedValueOnce(undefined)
+      .fn<(chunk: string[]) => Promise<RangeRemoved>>()
+      .mockResolvedValueOnce({ removed: 1990, gone: 10 })
       .mockRejectedValueOnce(new Error('Removed 300 of 2000 responses.'))
     // The failing request's own count is of its chunk, not of the range.
     await expect(removeInRequests(ids(4500), send)).rejects.toThrow(
-      'Not all 4500 responses were removed (at least 2000 were). Reload to see what’s left, then remove those.',
+      'Not all 4500 responses were removed (at least 1990 were). Reload to see what’s left, then remove those.',
     )
     expect(send).toHaveBeenCalledTimes(2)
   })
 
   it('never passes on a chunk’s count as the range’s when the first of several fails', async () => {
     const send = vi
-      .fn<(chunk: string[]) => Promise<unknown>>()
+      .fn<(chunk: string[]) => Promise<RangeRemoved>>()
       .mockRejectedValue(new Error('Removed 300 of 2000 responses.'))
     await expect(removeInRequests(ids(4500), send)).rejects.toThrow(
       'Not all 4500 responses were removed. Reload to see what’s left, then remove those.',

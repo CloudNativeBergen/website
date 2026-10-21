@@ -51,7 +51,10 @@ async function confirmRemove() {
 
 describe('ResponsesOverTime', () => {
   it('removes the ids shown when Remove was pressed, not one that arrived while the dialog was open', async () => {
-    const onRemove = vi.fn(async () => {})
+    const onRemove = vi.fn(async (ids: string[]) => ({
+      removed: ids.length,
+      gone: 0,
+    }))
     const shown = [
       r('a', '2026-10-27T09:01:00Z'),
       r('b', '2026-10-27T09:05:00Z'),
@@ -80,6 +83,26 @@ describe('ResponsesOverTime', () => {
     expect(onRemove).toHaveBeenCalledWith(['a', 'b'])
   })
 
+  it('says how many went and how many were already gone', async () => {
+    render(
+      <ResponsesOverTime
+        responses={[
+          r('a', '2026-10-27T09:01:00Z'),
+          r('b', '2026-10-27T09:02:00Z'),
+        ]}
+        window={NO_WINDOW}
+        onRemove={vi.fn(async () => ({ removed: 1, gone: 1 }))}
+      />,
+    )
+    act(() => chart().focus())
+    key('Home')
+    fireEvent.click(screen.getByRole('button', { name: 'Remove these 2' }))
+    await confirmRemove()
+    expect(
+      await screen.findByText('1 response removed. 1 was already gone.'),
+    ).toBeTruthy()
+  })
+
   it('keeps the range on the same minutes when a refetch drops the earliest bucket', () => {
     const responses = [
       r('early', '2026-10-27T08:01:00Z'),
@@ -90,7 +113,7 @@ describe('ResponsesOverTime', () => {
       <ResponsesOverTime
         responses={responses}
         window={NO_WINDOW}
-        onRemove={vi.fn()}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0 }))}
       />,
     )
     act(() => chart().focus())
@@ -103,7 +126,7 @@ describe('ResponsesOverTime', () => {
       <ResponsesOverTime
         responses={responses.slice(1)}
         window={NO_WINDOW}
-        onRemove={vi.fn()}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0 }))}
       />,
     )
     const selected = within(chart())

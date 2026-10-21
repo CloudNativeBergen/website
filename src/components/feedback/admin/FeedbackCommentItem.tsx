@@ -35,14 +35,24 @@ export const removeMessage = (count: number) =>
 
 export type ActionKind = 'hide' | 'unhide' | 'remove'
 
-/** What a Hide, Unhide or Remove did, kept per response it acted on. */
-export interface Outcome {
-  talkId: string
-  responseId: string
-  kind: ActionKind
+/** What an action did, in words: whether it worked, and what to say. */
+export interface Note {
   ok: boolean
   text: string
 }
+
+/** What a Hide, Unhide or Remove did, kept per response it acted on. */
+export interface Outcome extends Note {
+  talkId: string
+  responseId: string
+  kind: ActionKind
+}
+
+/** What a failed action says: the server's words, or a plain fallback. */
+export const errorText = (
+  error: unknown,
+  fallback = 'That didn’t work. Reload the page to see where things stand.',
+) => (error instanceof Error && error.message ? error.message : fallback)
 
 /** What a successful action says where it happened. */
 export const DONE: Record<ActionKind, (count: number) => string> = {
@@ -63,7 +73,7 @@ export function OutcomeNote({
   outcome,
   className = '',
 }: {
-  outcome: Outcome
+  outcome: Note
   className?: string
 }) {
   return (
@@ -86,7 +96,7 @@ export function CommentItem({
   comment: AdminFeedbackComment
   pending: boolean
   /** What the last action on this comment did, when it is said here. */
-  note: Outcome | null
+  note: Note | null
   onHide: () => void
   onUnhide: () => void
   onRemove: () => void

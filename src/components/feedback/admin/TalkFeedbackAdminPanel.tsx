@@ -32,29 +32,42 @@ export function TalkFeedbackAdminPanel({
   const hide = api.sessionFeedback.adminHide.useMutation(refresh)
   const unhide = api.sessionFeedback.adminUnhide.useMutation(refresh)
   const remove = api.sessionFeedback.adminRemove.useMutation(refresh)
+  const removeRange = api.sessionFeedback.adminRemoveRange.useMutation(refresh)
   const cards = api.proposal.admin.updateAudienceFeedback.useMutation(refresh)
 
-  if (feedback.error?.data?.code === 'NOT_FOUND') return null
+  // The Feedback Code stands on its own while the feedback read is not
+  // there: an organizer can still print, mint or rotate.
+  const ownCode = showCode ? (
+    <AdminFeedbackCodePanel talkId={talkId} title={title} />
+  ) : null
+
+  // Not a talk of this conference: the code panel refuses the same way.
+  if (feedback.error?.data?.code === 'NOT_FOUND') return ownCode
   if (!feedback.data)
-    return feedback.error ? (
-      <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-          Session Feedback could not be loaded.
-        </p>
-        <button
-          type="button"
-          onClick={() => feedback.refetch()}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-        >
-          Try again
-        </button>
+    return (
+      <div className="space-y-4">
+        {feedback.error ? (
+          <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+              Session Feedback could not be loaded.
+            </p>
+            <button
+              type="button"
+              onClick={() => feedback.refetch()}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <div
+            role="status"
+            aria-label="Loading Session Feedback"
+            className="h-48 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800"
+          />
+        )}
+        {ownCode}
       </div>
-    ) : (
-      <div
-        role="status"
-        aria-label="Loading Session Feedback"
-        className="h-48 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800"
-      />
     )
 
   return (
@@ -77,9 +90,10 @@ export function TalkFeedbackAdminPanel({
       }
       onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
       onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
-      onRemove={(ids) =>
+      onRemove={(ids) => remove.mutateAsync({ responseIds: ids })}
+      onRemoveRange={(ids) =>
         removeInRequests(ids, (chunk) =>
-          remove.mutateAsync({ responseIds: chunk }),
+          removeRange.mutateAsync({ responseIds: chunk }),
         )
       }
     />

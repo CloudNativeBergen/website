@@ -28,6 +28,7 @@ import { ColourBar, FEEDBACK_TONE } from '../tone'
 import {
   CommentItem,
   DONE,
+  errorText,
   OutcomeNote,
   REMOVED_BUT_LISTED,
   removeMessage,
@@ -35,8 +36,6 @@ import {
   type ActionKind,
   type Outcome,
 } from './FeedbackCommentItem'
-
-export { removeQuestion } from './FeedbackCommentItem'
 
 /** The session list's columns at `sm` and up; a phone stacks each row. */
 const COLUMNS =
@@ -153,10 +152,7 @@ export function SessionFeedbackAdmin({
       outcome = {
         ...at,
         ok: false,
-        text:
-          e instanceof Error && e.message
-            ? e.message
-            : 'That didn’t work. Reload the page to see where things stand.',
+        text: errorText(e),
       }
     }
     record(ids, outcome)

@@ -76,7 +76,11 @@ const meta = {
       </DocumentTheme>
     ),
   ],
-  args: { responses: RESPONSES, window: WINDOW, onRemove: fn(async () => {}) },
+  args: {
+    responses: RESPONSES,
+    window: WINDOW,
+    onRemove: fn(async (ids: string[]) => ({ removed: ids.length, gone: 0 })),
+  },
   beforeEach: runningClockFrom(new Date('2026-10-27T10:30:00Z')),
 } satisfies Meta<typeof ResponsesOverTime>
 

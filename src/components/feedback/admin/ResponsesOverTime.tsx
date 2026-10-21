@@ -16,7 +16,28 @@ import { plural } from '@/lib/text/display'
 import { formatConferenceClock, formatFeedbackCommentTime } from '@/lib/time'
 import { ANSWERS } from '../answers'
 import { FEEDBACK_TONE } from '../tone'
-import { removeMessage, removeQuestion } from './FeedbackCommentItem'
+import {
+  DONE,
+  errorText,
+  removeMessage,
+  removeQuestion,
+  type Note,
+} from './FeedbackCommentItem'
+
+/** A removed range in words: what went, and what was already gone. */
+export const rangeRemovedText = ({
+  removed,
+  gone,
+}: {
+  removed: number
+  gone: number
+}) =>
+  DONE.remove(removed) +
+  (gone === 0
+    ? ''
+    : gone === 1
+      ? ' 1 was already gone.'
+      : ` ${gone} were already gone.`)
 
 /** The range's span in words, e.g. "Wed 10 Jun, 09:00–09:30". */
 const spanOf = (buckets: readonly ResponseBucket[], range: BucketRange) => {
@@ -41,8 +62,11 @@ export function ResponsesOverTime({
 }: {
   responses: readonly ChartResponse[]
   window: Pick<FeedbackWindow, 'opensAt' | 'closesAt'>
-  /** Remove these responses; rejects with the words to show. */
-  onRemove: (ids: string[]) => Promise<unknown>
+  /**
+   * Remove these responses, skipping any already gone; resolves with the
+   * counts, rejects with the words to show.
+   */
+  onRemove: (ids: string[]) => Promise<{ removed: number; gone: number }>
 }) {
   const headingId = useId()
   const helpId = useId()
@@ -81,9 +105,7 @@ export function ResponsesOverTime({
   const [removing, setRemoving] = useState<string[] | null>(null)
   const [asking, setAsking] = useState(false)
   const [pending, setPending] = useState(false)
-  const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(
-    null,
-  )
+  const [outcome, setOutcome] = useState<Note | null>(null)
 
   if (buckets.length === 0)
     return (
@@ -134,19 +156,12 @@ export function ResponsesOverTime({
     if (!removing || pending) return
     setPending(true)
     try {
-      await onRemove(removing)
-      setOutcome({
-        ok: true,
-        text: `${plural(removing.length, 'response', 'responses')} removed.`,
-      })
+      setOutcome({ ok: true, text: rangeRemovedText(await onRemove(removing)) })
       setRange(null)
     } catch (e) {
       setOutcome({
         ok: false,
-        text:
-          e instanceof Error && e.message
-            ? e.message
-            : 'That didn’t work. Reload the page to see where things stand.',
+        text: errorText(e),
       })
     }
     setPending(false)
@@ -265,7 +280,7 @@ export function ResponsesOverTime({
               >
                 <TrashIcon className="size-4" aria-hidden="true" />
                 {ids.length === 1
-                  ? 'Remove this 1'
+                  ? 'Remove this response'
                   : `Remove these ${ids.length}`}
               </button>
             )}

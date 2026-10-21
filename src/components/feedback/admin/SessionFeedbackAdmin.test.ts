@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { removeQuestion } from './SessionFeedbackAdmin'
+import { removeQuestion } from './FeedbackCommentItem'
 
 describe('removeQuestion (speaker feedback spec §10.3)', () => {
   it('names the count', () => {

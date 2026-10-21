@@ -8,25 +8,35 @@ import type {
   AdminTalkFeedback,
 } from '@/lib/feedback/admin'
 import type { FeedbackColour } from '@/lib/feedback/colour'
-import type { ColourCounts } from '@/lib/feedback/totals'
+import { feedbackTotals, type ColourCounts } from '@/lib/feedback/totals'
 import { plural } from '@/lib/text/display'
 import { ANSWERS } from '../answers'
 import { ColourBar, FEEDBACK_TONE } from '../tone'
 import {
   CommentItem,
   DONE,
+  errorText,
   OutcomeNote,
   REMOVED_BUT_LISTED,
   removeMessage,
   removeQuestion,
   type ActionKind,
-  type Outcome,
+  type Note,
 } from './FeedbackCommentItem'
 import { ResponsesOverTime } from './ResponsesOverTime'
 
 type CardDraft = Record<FeedbackColour, string>
 
 const COUNT = /^\d{1,6}$/
+
+const sameCounts = (a: ColourCounts, b: ColourCounts) =>
+  ANSWERS.every(({ colour }) => a[colour] === b[colour])
+
+/** Counts saved, and the counts the read showed when they were. */
+interface SavedCards {
+  cards: ColourCounts
+  over: ColourCounts
+}
 
 export interface TalkFeedbackPanelProps {
   feedback: AdminTalkFeedback
@@ -36,7 +46,12 @@ export interface TalkFeedbackPanelProps {
   onSaveCards: (cards: ColourCounts) => Promise<unknown>
   onHide: (responseId: string) => Promise<unknown>
   onUnhide: (responseId: string) => Promise<unknown>
+  /** Remove comments (all or nothing). */
   onRemove: (responseIds: string[]) => Promise<unknown>
+  /** Remove a range from the chart, skipping any already gone. */
+  onRemoveRange: (
+    responseIds: string[],
+  ) => Promise<{ removed: number; gone: number }>
 }
 
 /**
@@ -54,15 +69,31 @@ export function TalkFeedbackPanel({
   onHide,
   onUnhide,
   onRemove,
+  onRemoveRange,
 }: TalkFeedbackPanelProps) {
-  const { totals, comments } = feedback
+  const { comments } = feedback
   const formId = useId()
   const [draft, setDraft] = useState<CardDraft | null>(null)
   const [saving, setSaving] = useState(false)
-  const [cardsNote, setCardsNote] = useState<{
-    ok: boolean
-    text: string
-  } | null>(null)
+  const [cardsNote, setCardsNote] = useState<Note | null>(null)
+  // The read after a save goes through GROQ, which can lag the commit by
+  // about a second: the saved counts stay on screen until a read shows them,
+  // or shows anything newer than what was on screen when they were saved.
+  const [saved, setSaved] = useState<SavedCards | null>(null)
+  const read = feedback.totals.cards
+  if (saved && (sameCounts(read, saved.cards) || !sameCounts(read, saved.over)))
+    setSaved(null)
+  const totals = saved
+    ? feedbackTotals({
+        // `scanned` holds the live and folded answers; only cards change.
+        live: feedback.totals.scanned,
+        cards: {
+          greenCount: saved.cards.green,
+          yellowCount: saved.cards.yellow,
+          redCount: saved.cards.red,
+        },
+      })
+    : feedback.totals
 
   const shown = (colour: FeedbackColour) =>
     draft?.[colour] ?? String(totals.cards[colour])
@@ -75,20 +106,19 @@ export function TalkFeedbackPanel({
     setSaving(true)
     setCardsNote(null)
     try {
-      await onSaveCards({
+      const cards = {
         green: Number(draft.green),
         yellow: Number(draft.yellow),
         red: Number(draft.red),
-      })
+      }
+      await onSaveCards(cards)
+      setSaved({ cards, over: totals.cards })
       setDraft(null)
       setCardsNote({ ok: true, text: 'Card Counts saved.' })
     } catch (e) {
       setCardsNote({
         ok: false,
-        text:
-          e instanceof Error && e.message
-            ? e.message
-            : 'The Card Counts could not be saved. Try again.',
+        text: errorText(e, 'The Card Counts could not be saved. Try again.'),
       })
     }
     setSaving(false)
@@ -212,7 +242,7 @@ export function TalkFeedbackPanel({
         <ResponsesOverTime
           responses={feedback.responses}
           window={feedback.window}
-          onRemove={onRemove}
+          onRemove={onRemoveRange}
         />
       </div>
 
@@ -226,6 +256,9 @@ export function TalkFeedbackPanel({
   )
 }
 
+/** What the last action on a comment did. */
+type CommentNote = Note & { kind: ActionKind }
+
 /** The talk's comments with Hide, Unhide and Remove (§10.3). */
 function TalkComments({
   comments,
@@ -236,7 +269,10 @@ function TalkComments({
   comments: AdminFeedbackComment[]
 }) {
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
-  const [notes, setNotes] = useState<ReadonlyMap<string, Outcome>>(new Map())
+  // What the last action on each comment did, by response id.
+  const [notes, setNotes] = useState<ReadonlyMap<string, CommentNote>>(
+    new Map(),
+  )
   const [announcement, setAnnouncement] = useState('')
   const [removing, setRemoving] = useState<AdminFeedbackComment | null>(null)
   const [asking, setAsking] = useState(false)
@@ -248,20 +284,12 @@ function TalkComments({
   ) {
     setAnnouncement('')
     setPending((p) => new Set([...p, id]))
-    const at = { talkId: '', responseId: id, kind }
-    let outcome: Outcome
+    let outcome: CommentNote
     try {
       await action()
-      outcome = { ...at, ok: true, text: DONE[kind](1) }
+      outcome = { kind, ok: true, text: DONE[kind](1) }
     } catch (e) {
-      outcome = {
-        ...at,
-        ok: false,
-        text:
-          e instanceof Error && e.message
-            ? e.message
-            : 'That didn’t work. Reload the page to see where things stand.',
-      }
+      outcome = { kind, ok: false, text: errorText(e) }
     }
     setNotes((all) => new Map(all).set(id, outcome))
     setAnnouncement(outcome.text)
@@ -270,7 +298,9 @@ function TalkComments({
 
   const listed = new Set(comments.map((c) => c.id))
   // A removed comment's outcome, once a refetch took it away, shows above.
-  const gone = [...notes.values()].filter((o) => !listed.has(o.responseId))
+  const gone = [...notes]
+    .filter(([id]) => !listed.has(id))
+    .map(([, note]) => note)
   const removePending = removing ? pending.has(removing.id) : false
 
   return (

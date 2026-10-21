@@ -185,6 +185,10 @@ const meta = {
     onHide: fn(async () => {}),
     onUnhide: fn(async () => {}),
     onRemove: fn(async () => {}),
+    onRemoveRange: fn(async (ids: string[]) => ({
+      removed: ids.length,
+      gone: 0,
+    })),
   },
   beforeEach: runningClockFrom(new Date('2026-10-27T10:30:00Z')),
 } satisfies Meta<typeof TalkFeedbackPanel>
@@ -255,8 +259,8 @@ export const RemovesARangeByKeyboard: Story = {
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Remove 40 responses?')).toBeInTheDocument()
     await confirmWith('Remove')
-    await waitFor(() => expect(args.onRemove).toHaveBeenCalledTimes(1))
-    expect(args.onRemove).toHaveBeenCalledWith(BURST_IDS)
+    await waitFor(() => expect(args.onRemoveRange).toHaveBeenCalledTimes(1))
+    expect(args.onRemoveRange).toHaveBeenCalledWith(BURST_IDS)
     expect(await canvas.findByText('40 responses removed.')).toBeVisible()
   },
 }
@@ -283,7 +287,7 @@ export const RemovesARangeByDragging: Story = {
     )
     await confirmWith('Remove')
     await waitFor(() =>
-      expect(args.onRemove).toHaveBeenCalledWith(
+      expect(args.onRemoveRange).toHaveBeenCalledWith(
         RESPONSES.slice(3, 12).map((r) => r.id),
       ),
     )
@@ -332,7 +336,9 @@ export const RangeSelectedDark: Story = {
 /** A failed Remove says what happened where the organizer is working. */
 export const RemoveFailed: Story = {
   args: {
-    onRemove: fn(async () => {
+    onRemoveRange: fn<
+      (ids: string[]) => Promise<{ removed: number; gone: number }>
+    >(async () => {
       throw new Error(
         'Not all 2400 responses were removed (at least 2000 were). Reload to see what’s left, then remove those.',
       )

@@ -1,8 +1,8 @@
 export {
   SessionFeedbackAdmin,
-  removeQuestion,
   type SessionFeedbackAdminProps,
 } from './SessionFeedbackAdmin'
+export { removeQuestion } from './FeedbackCommentItem'
 export { SessionFeedbackAdminPage } from './SessionFeedbackAdminPage'
 export { TalkFeedbackAdminPanel } from './TalkFeedbackAdminPanel'
 export {
