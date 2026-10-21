@@ -133,6 +133,17 @@ function DocumentTheme({
   return children
 }
 
+/**
+ * Press the confirmation's button once its second-tap guard has passed (it
+ * says `aria-disabled` until then, and ignores the press).
+ */
+async function confirmWith(name: string) {
+  const dialog = await screen.findByRole('dialog')
+  const button = within(dialog).getByRole('button', { name })
+  await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'))
+  await userEvent.click(button)
+}
+
 const meta = {
   title: 'Systems/Proposals/Session Feedback/TalkFeedbackPanel',
   component: TalkFeedbackPanel,
@@ -243,9 +254,7 @@ export const RemovesARangeByKeyboard: Story = {
     )
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Remove 40 responses?')).toBeInTheDocument()
-    await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Remove' }),
-    )
+    await confirmWith('Remove')
     await waitFor(() => expect(args.onRemove).toHaveBeenCalledTimes(1))
     expect(args.onRemove).toHaveBeenCalledWith(BURST_IDS)
     expect(await canvas.findByText('40 responses removed.')).toBeVisible()
@@ -272,11 +281,7 @@ export const RemovesARangeByDragging: Story = {
     await userEvent.click(
       canvas.getByRole('button', { name: 'Remove these 9' }),
     )
-    await userEvent.click(
-      within(await screen.findByRole('dialog')).getByRole('button', {
-        name: 'Remove',
-      }),
-    )
+    await confirmWith('Remove')
     await waitFor(() =>
       expect(args.onRemove).toHaveBeenCalledWith(
         RESPONSES.slice(3, 12).map((r) => r.id),
@@ -342,11 +347,7 @@ export const RemoveFailed: Story = {
     await userEvent.click(
       canvas.getByRole('button', { name: 'Remove these 40' }),
     )
-    await userEvent.click(
-      within(await screen.findByRole('dialog')).getByRole('button', {
-        name: 'Remove',
-      }),
-    )
+    await confirmWith('Remove')
     expect(await canvas.findByRole('alert')).toHaveTextContent(
       'Removed 2000 of 2400 responses.',
     )
@@ -408,7 +409,9 @@ export const HidesAComment: Story = {
     await userEvent.click(comments.getAllByRole('button', { name: 'Hide' })[0])
     await waitFor(() => expect(args.onHide).toHaveBeenCalledWith(id(1)))
     expect(
-      await comments.findByText('Comment hidden from speakers.'),
+      await comments.findByText('Comment hidden from speakers.', {
+        selector: 'p:not([role])',
+      }),
     ).toBeVisible()
   },
 }

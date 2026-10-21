@@ -70,6 +70,17 @@ const runningClockFrom = (start: Date) => () => {
   }
 }
 
+/**
+ * Press the confirmation's button once its second-tap guard has passed (it
+ * says `aria-disabled` until then, and ignores the press).
+ */
+async function confirmWith(name: string) {
+  const dialog = await screen.findByRole('dialog')
+  const button = within(dialog).getByRole('button', { name })
+  await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'))
+  await userEvent.click(button)
+}
+
 const meta = {
   title: 'Systems/Proposals/Session Feedback/AdminFeedbackCodePanel',
   component: AdminFeedbackCodePanel,
@@ -380,7 +391,7 @@ export const RotatesTheCode: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    expect(await canvas.findByText(/k7m2qx/)).toBeVisible()
+    expect((await canvas.findAllByText(/k7m2qx/))[0]).toBeVisible()
     await userEvent.click(
       canvas.getByRole('button', { name: 'Rotate Feedback Code' }),
     )
@@ -396,10 +407,8 @@ export const RotatesTheCode: Story = {
     expect(rotateMessage('k7m2qx')).toBe(
       '/f/k7m2qx stops working now. Printed sheets and slides showing it will reach a dead page. Existing responses are kept.',
     )
-    await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Rotate' }),
-    )
-    expect(await canvas.findByText(new RegExp(ROTATED))).toBeVisible()
+    await confirmWith('Rotate')
+    expect((await canvas.findAllByText(new RegExp(ROTATED)))[0]).toBeVisible()
     expect(canvas.queryByText(/k7m2qx/)).toBeNull()
     expect(
       canvas.getByText(`Feedback Code rotated. The new code is ${ROTATED}.`),
@@ -441,7 +450,7 @@ export const NoRotationWindowClosed: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    expect(await canvas.findByText(/k7m2qx/)).toBeVisible()
+    expect((await canvas.findAllByText(/k7m2qx/))[0]).toBeVisible()
     expect(
       canvas.queryByRole('button', { name: 'Rotate Feedback Code' }),
     ).toBeNull()
@@ -463,11 +472,7 @@ export const RotateRefused: Story = {
     await userEvent.click(
       await canvas.findByRole('button', { name: 'Rotate Feedback Code' }),
     )
-    await userEvent.click(
-      within(await screen.findByRole('dialog')).getByRole('button', {
-        name: 'Rotate',
-      }),
-    )
+    await confirmWith('Rotate')
     expect(await canvas.findByRole('alert')).toHaveTextContent(
       'can no longer be rotated',
     )
