@@ -26,8 +26,14 @@ export function TalkFeedbackAdminPanel({
     { talkId },
     { retry: false },
   )
+  // `/admin/feedback` holds the same responses and totals: a visit there
+  // after acting here must not show what this page just changed.
   const refresh = {
-    onSettled: () => utils.sessionFeedback.adminTalk.invalidate({ talkId }),
+    onSettled: () =>
+      Promise.all([
+        utils.sessionFeedback.adminTalk.invalidate({ talkId }),
+        utils.sessionFeedback.adminOverview.invalidate(),
+      ]),
   }
   const hide = api.sessionFeedback.adminHide.useMutation(refresh)
   const unhide = api.sessionFeedback.adminUnhide.useMutation(refresh)

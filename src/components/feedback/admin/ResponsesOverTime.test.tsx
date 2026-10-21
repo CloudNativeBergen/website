@@ -150,4 +150,56 @@ describe('ResponsesOverTime', () => {
     expect(selected).toHaveLength(1)
     expect(selected[0].getAttribute('aria-label')).toMatch(/09:30–09:40/)
   })
+
+  it('still says what happened when the range took every response', async () => {
+    let finish: (v: { removed: number; gone: number }) => void = () => {}
+    const onRemove = vi.fn(
+      () => new Promise<{ removed: number; gone: number }>((r) => (finish = r)),
+    )
+    const all = [r('a', '2026-10-27T09:01:00Z')]
+    const { rerender } = render(
+      <ResponsesOverTime
+        responses={all}
+        window={NO_WINDOW}
+        onRemove={onRemove}
+      />,
+    )
+    act(() => chart().focus())
+    key('Home')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove this response' }),
+    )
+    await confirmRemove()
+    // The refetch lands before the mutation resolves: the chart is empty.
+    rerender(
+      <ResponsesOverTime
+        responses={[]}
+        window={NO_WINDOW}
+        onRemove={onRemove}
+      />,
+    )
+    await act(async () => finish({ removed: 1, gone: 0 }))
+    expect(await screen.findByText('1 response removed.')).toBeTruthy()
+    expect(screen.getByText('No scanned responses yet.')).toBeTruthy()
+  })
+
+  it('names both days when a range crosses midnight', () => {
+    render(
+      <ResponsesOverTime
+        responses={[
+          r('a', '2026-10-27T22:51:00Z'),
+          r('b', '2026-10-27T23:05:00Z'),
+        ]}
+        window={NO_WINDOW}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0 }))}
+      />,
+    )
+    act(() => chart().focus())
+    key('Home')
+    key('End', true)
+    // 23:50–00:10 Oslo (CET), across midnight.
+    expect(
+      screen.getByText(/^Tue 27 Oct, 23:50–Wed 28 Oct, 00:10 · 2 responses$/),
+    ).toBeTruthy()
+  })
 })

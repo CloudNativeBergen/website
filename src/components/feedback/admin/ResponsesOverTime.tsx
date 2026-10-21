@@ -13,7 +13,11 @@ import {
 } from '@/lib/feedback/buckets'
 import type { FeedbackWindow } from '@/lib/feedback/window'
 import { plural } from '@/lib/text/display'
-import { formatConferenceClock, formatFeedbackCommentTime } from '@/lib/time'
+import {
+  formatConferenceClock,
+  formatFeedbackCommentTime,
+  osloTodayDateString,
+} from '@/lib/time'
 import { ANSWERS } from '../answers'
 import { FEEDBACK_TONE } from '../tone'
 import {
@@ -42,7 +46,12 @@ export const rangeRemovedText = ({
 /** The range's span in words, e.g. "Wed 10 Jun, 09:00–09:30". */
 const spanOf = (buckets: readonly ResponseBucket[], range: BucketRange) => {
   const [from, to] = rangeBounds(range)
-  return `${formatFeedbackCommentTime(buckets[from].start)}–${formatConferenceClock(buckets[to].end)}`
+  const { start } = buckets[from]
+  const { end } = buckets[to]
+  // The end's day too when the range crosses midnight in Oslo.
+  const sameDay =
+    osloTodayDateString(new Date(start)) === osloTodayDateString(new Date(end))
+  return `${formatFeedbackCommentTime(start)}–${sameDay ? formatConferenceClock(end) : formatFeedbackCommentTime(end)}`
 }
 
 /** Bottom to top: green, yellow, red, as a stacked column. */
@@ -107,13 +116,6 @@ export function ResponsesOverTime({
   const [pending, setPending] = useState(false)
   const [outcome, setOutcome] = useState<Note | null>(null)
 
-  if (buckets.length === 0)
-    return (
-      <p className="text-sm text-gray-600 dark:text-gray-400">
-        No scanned responses yet.
-      </p>
-    )
-
   const max = Math.max(1, ...buckets.map((b) => b.ids.length))
   const ids = range ? selectionIds(buckets, range) : []
   const [from, to] = range ? rangeBounds(range) : [-1, -1]
@@ -176,127 +178,139 @@ export function ResponsesOverTime({
       >
         Responses over time
       </h4>
-      <p
-        id={helpId}
-        className="mt-0.5 text-xs text-gray-600 dark:text-gray-400"
-      >
-        10-minute buckets. Drag across the bars, or use Shift with the arrow
-        keys, to pick a range to remove.
-      </p>
-      <div
-        ref={chart}
-        role="listbox"
-        aria-multiselectable="true"
-        aria-labelledby={headingId}
-        aria-describedby={helpId}
-        aria-activedescendant={focused ? `${optionId}-${active}` : undefined}
-        tabIndex={0}
-        onKeyDown={onKeyDown}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onPointerDown={(e) => {
-          if (e.button !== 0) return
-          e.preventDefault()
-          chart.current?.focus()
-          chart.current?.setPointerCapture(e.pointerId)
-          dragging.current = true
-          const i = indexAt(e.clientX)
-          select(
-            e.shiftKey && range
-              ? { anchor: range.anchor, focus: i }
-              : { anchor: i, focus: i },
-          )
-        }}
-        onPointerMove={(e) => {
-          if (!dragging.current) return
-          const i = indexAt(e.clientX)
-          if (range && i !== range.focus)
-            setRange({ anchor: range.anchor, focus: i })
-        }}
-        onPointerUp={() => (dragging.current = false)}
-        onPointerCancel={() => (dragging.current = false)}
-        className={`mt-2 flex h-24 cursor-crosshair touch-pan-y items-end rounded-md border border-gray-200 px-0.5 pt-1 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:border-gray-700 ${buckets.length <= 48 ? 'gap-px' : ''}`}
-      >
-        {buckets.map((b, i) => (
-          <div
-            key={b.start}
-            id={`${optionId}-${i}`}
-            role="option"
-            aria-selected={selected(i)}
-            aria-label={`${formatFeedbackCommentTime(b.start)}–${formatConferenceClock(b.end)}: ${plural(b.ids.length, 'response', 'responses')}`}
-            className={`flex h-full min-w-0 flex-1 flex-col justify-end ${selected(i) ? 'bg-brand-sky-mist dark:bg-blue-900/50' : range ? 'opacity-35' : ''} ${focused && i === active ? 'outline-1 -outline-offset-1 outline-brand-cloud-blue dark:outline-blue-300' : ''}`}
+      {/* Not an early return: a Remove that took the last responses
+          still says so, and its dialog closes in place. */}
+      {buckets.length === 0 ? (
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          No scanned responses yet.
+        </p>
+      ) : (
+        <>
+          <p
+            id={helpId}
+            className="mt-0.5 text-xs text-gray-600 dark:text-gray-400"
           >
-            {b.ids.length > 0 && (
+            10-minute buckets. Drag across the bars, or use Shift with the arrow
+            keys, to pick a range to remove.
+          </p>
+          <div
+            ref={chart}
+            role="listbox"
+            aria-multiselectable="true"
+            aria-labelledby={headingId}
+            aria-describedby={helpId}
+            aria-activedescendant={
+              focused ? `${optionId}-${active}` : undefined
+            }
+            tabIndex={0}
+            onKeyDown={onKeyDown}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return
+              e.preventDefault()
+              chart.current?.focus()
+              chart.current?.setPointerCapture(e.pointerId)
+              dragging.current = true
+              const i = indexAt(e.clientX)
+              select(
+                e.shiftKey && range
+                  ? { anchor: range.anchor, focus: i }
+                  : { anchor: i, focus: i },
+              )
+            }}
+            onPointerMove={(e) => {
+              if (!dragging.current) return
+              const i = indexAt(e.clientX)
+              if (range && i !== range.focus)
+                setRange({ anchor: range.anchor, focus: i })
+            }}
+            onPointerUp={() => (dragging.current = false)}
+            onPointerCancel={() => (dragging.current = false)}
+            className={`mt-2 flex h-24 cursor-crosshair touch-pan-y items-end rounded-md border border-gray-200 px-0.5 pt-1 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:border-gray-700 ${buckets.length <= 48 ? 'gap-px' : ''}`}
+          >
+            {buckets.map((b, i) => (
               <div
-                className="flex min-h-0.5 flex-col-reverse overflow-hidden"
-                style={{ height: `${(b.ids.length / max) * 100}%` }}
+                key={b.start}
+                id={`${optionId}-${i}`}
+                role="option"
+                aria-selected={selected(i)}
+                aria-label={`${formatFeedbackCommentTime(b.start)}–${formatConferenceClock(b.end)}: ${plural(b.ids.length, 'response', 'responses')}`}
+                className={`flex h-full min-w-0 flex-1 flex-col justify-end ${selected(i) ? 'bg-brand-sky-mist dark:bg-blue-900/50' : range ? 'opacity-35' : ''} ${focused && i === active ? 'outline-1 -outline-offset-1 outline-brand-cloud-blue dark:outline-blue-300' : ''}`}
               >
-                {STACK.map(({ colour }) =>
-                  b.counts[colour] > 0 ? (
-                    <div
-                      key={colour}
-                      className={FEEDBACK_TONE[colour].bar}
-                      style={{
-                        height: `${(b.counts[colour] / b.ids.length) * 100}%`,
-                      }}
-                    />
-                  ) : null,
+                {b.ids.length > 0 && (
+                  <div
+                    className="flex min-h-0.5 flex-col-reverse overflow-hidden"
+                    style={{ height: `${(b.ids.length / max) * 100}%` }}
+                  >
+                    {STACK.map(({ colour }) =>
+                      b.counts[colour] > 0 ? (
+                        <div
+                          key={colour}
+                          className={FEEDBACK_TONE[colour].bar}
+                          style={{
+                            height: `${(b.counts[colour] / b.ids.length) * 100}%`,
+                          }}
+                        />
+                      ) : null,
+                    )}
+                  </div>
                 )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-1 flex justify-between gap-2 text-xs text-gray-600 tabular-nums dark:text-gray-400">
+            <time dateTime={buckets[0].start}>
+              {formatFeedbackCommentTime(buckets[0].start)}
+            </time>
+            <time dateTime={buckets[last].end} className="text-right">
+              {formatFeedbackCommentTime(buckets[last].end)}
+            </time>
+          </div>
+
+          <div className="mt-3 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-2">
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-sm text-gray-700 dark:text-gray-300"
+            >
+              {range
+                ? `${spanOf(buckets, range)} · ${plural(ids.length, 'response', 'responses')}`
+                : ''}
+            </p>
+            {range && (
+              <div className="flex gap-1">
+                {ids.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Exactly these: the ids on screen when Remove was pressed.
+                      setRemoving(ids)
+                      setAsking(true)
+                    }}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-red-600 px-3 text-sm font-semibold text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-red-500 dark:hover:bg-red-400"
+                  >
+                    <TrashIcon className="size-4" aria-hidden="true" />
+                    {ids.length === 1
+                      ? 'Remove this response'
+                      : `Remove these ${ids.length}`}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    select(null)
+                    chart.current?.focus()
+                  }}
+                  className="min-h-9 rounded-md px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                  Clear
+                </button>
               </div>
             )}
           </div>
-        ))}
-      </div>
-      <div className="mt-1 flex justify-between gap-2 text-xs text-gray-600 tabular-nums dark:text-gray-400">
-        <time dateTime={buckets[0].start}>
-          {formatFeedbackCommentTime(buckets[0].start)}
-        </time>
-        <time dateTime={buckets[last].end} className="text-right">
-          {formatFeedbackCommentTime(buckets[last].end)}
-        </time>
-      </div>
-
-      <div className="mt-3 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-2">
-        <p
-          role="status"
-          aria-live="polite"
-          className="text-sm text-gray-700 dark:text-gray-300"
-        >
-          {range
-            ? `${spanOf(buckets, range)} · ${plural(ids.length, 'response', 'responses')}`
-            : ''}
-        </p>
-        {range && (
-          <div className="flex gap-1">
-            {ids.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  // Exactly these: the ids on screen when Remove was pressed.
-                  setRemoving(ids)
-                  setAsking(true)
-                }}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-red-600 px-3 text-sm font-semibold text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-red-500 dark:hover:bg-red-400"
-              >
-                <TrashIcon className="size-4" aria-hidden="true" />
-                {ids.length === 1
-                  ? 'Remove this response'
-                  : `Remove these ${ids.length}`}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                select(null)
-                chart.current?.focus()
-              }}
-              className="min-h-9 rounded-md px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              Clear
-            </button>
-          </div>
-        )}
-      </div>
+        </>
+      )}
       {outcome && (
         <p
           role={outcome.ok ? 'status' : 'alert'}
