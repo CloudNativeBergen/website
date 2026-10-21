@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MAX_RESPONSES_PER_REQUEST, removeInRequests } from './limits'
+import { MAX_RESPONSES_PER_REQUEST, removeInRequests } from './bulk-remove'
 
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `r${i}`)
 

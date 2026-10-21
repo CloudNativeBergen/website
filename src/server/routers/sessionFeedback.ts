@@ -8,7 +8,8 @@ import {
 } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { feedbackCodeUrl, type FeedbackWindow } from '@/lib/feedback'
-import { MAX_RESPONSES_PER_REQUEST } from '@/lib/feedback/limits'
+import { MAX_RESPONSES_PER_REQUEST } from '@/lib/feedback/bulk-remove'
+import { SHORT_CODE_SHAPE } from '@/lib/marketing/short-code'
 import {
   countTalksWithoutCode,
   ensureFeedbackCode,
@@ -21,6 +22,7 @@ import {
   readSpeakerResults,
   rotateFeedbackCode,
   readTalkFeedback,
+  removeResponseRange,
 } from '@/lib/feedback/server'
 
 /**
@@ -35,7 +37,7 @@ const talkInput = z.object({ talkId: z.string().max(200).regex(TALK_ID) })
 
 /** Rotation names the code it ends, as the organizer saw it (§10.4). */
 const rotateInput = talkInput.extend({
-  code: z.string().regex(/^[a-z0-9]{6}$/),
+  code: z.string().regex(SHORT_CODE_SHAPE),
 })
 
 /**
@@ -295,4 +297,27 @@ export const sessionFeedbackRouter = router({
     if (!result) throw notFound()
     return result
   }),
+
+  /**
+   * Remove a range from a talk's responses-over-time chart (§10.2), after
+   * the page's confirmation naming the count. Unlike {@link adminRemove}, an
+   * id that is no longer a response of this conference (gone, or foreign) is
+   * skipped and counted, not a refusal of the range: a scripted burst must
+   * not survive one attendee deleting their own answer. Nothing foreign is
+   * ever written, checked in the same one read before any write.
+   */
+  adminRemoveRange: adminProcedure
+    .input(responsesInput)
+    .mutation(async ({ input }) => {
+      const result = await removeResponseRange({
+        conferenceId: await resolveConferenceId(),
+        responseIds: input.responseIds,
+      })
+      if (result.status === 'failed')
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Removed ${result.removed} of ${new Set(input.responseIds).size} responses. Reload to see what’s left, then remove those.`,
+        })
+      return { removed: result.removed, gone: result.gone }
+    }),
 })

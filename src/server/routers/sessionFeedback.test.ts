@@ -644,6 +644,7 @@ describe('sessionFeedbackRouter surface', () => {
       'adminHide',
       'adminOverview',
       'adminRemove',
+      'adminRemoveRange',
       'adminTalk',
       'adminUnhide',
       'ensureCode',
@@ -1399,6 +1400,22 @@ describe('rotateCode — concurrent writes', () => {
       organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+  })
+
+  it('expires the index when a commit’s reply is lost, since the write may have applied', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.afterCommit.push(() => {
+      throw Object.assign(new Error('socket hang up'), { statusCode: 502 })
+    })
+    await expect(
+      organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    error.mockRestore()
+    // It did apply: the old code must stop resolving now.
+    expect(doc('talk-1')?.feedbackCode).not.toBe('k7m2qx')
+    expect(revalidateTag).toHaveBeenCalledWith(feedbackCodeIndexTag('conf-A'), {
+      expire: 0,
+    })
   })
 
   it('gives up after three retries, writes nothing and keeps the index', async () => {

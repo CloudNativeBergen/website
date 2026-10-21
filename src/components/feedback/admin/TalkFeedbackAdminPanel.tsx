@@ -1,7 +1,7 @@
 'use client'
 
 import { api } from '@/lib/trpc/client'
-import { removeInRequests } from '@/lib/feedback/limits'
+import { removeInRequests } from '@/lib/feedback/bulk-remove'
 import { AdminFeedbackCodePanel } from '../AdminFeedbackCodePanel'
 import { TalkFeedbackPanel } from './TalkFeedbackPanel'
 

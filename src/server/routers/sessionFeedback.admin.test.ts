@@ -348,3 +348,30 @@ describe('adminTalk — one talk’s panel (§10.2)', () => {
     expect(h.queries).toEqual([])
   })
 })
+
+describe('adminRemoveRange — a range from the chart (§10.2)', () => {
+  it('removes this conference’s responses and counts the rest as gone, never touching a foreign one', async () => {
+    await expect(
+      organizer().adminRemoveRange({
+        responseIds: [ours._id, foreign._id, rid(4242)],
+      }),
+    ).resolves.toEqual({ removed: 1, gone: 2 })
+    expect(doc(ours._id)).toBeUndefined()
+    expect(doc(foreign._id)).toBeDefined()
+  })
+
+  it('refuses a speaker who is not an organizer, before any read', async () => {
+    await expect(
+      caller().adminRemoveRange({ responseIds: [ours._id] }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.queries).toEqual([])
+    expect(doc(ours._id)).toBeDefined()
+  })
+
+  it('takes response ids and nothing else', async () => {
+    await expect(
+      organizer().adminRemoveRange({ responseIds: [`drafts.${ours._id}`] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.queries).toEqual([])
+  })
+})

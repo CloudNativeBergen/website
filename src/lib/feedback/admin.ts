@@ -64,14 +64,19 @@ export interface AdminFeedbackOverview {
   sessions: AdminFeedbackSession[]
 }
 
-interface ResponseRow {
+/** A response as one talk's reads project it. */
+interface TalkResponseRow {
   _id: string
-  talk?: string | null
   colour?: unknown
   comment?: unknown
   submittedAt?: unknown
   hiddenAt?: unknown
   flaggedAt?: unknown
+}
+
+/** A response as the conference-wide read projects it, with its talk. */
+interface ResponseRow extends TalkResponseRow {
+  talk: string | null
 }
 
 interface TalkRow extends TalkCounts {
@@ -158,7 +163,9 @@ export async function readAdminFeedback({
  * The rows' comments as organizers see them, in the rows' order: hidden ones
  * too, and a flag only while the comment is not hidden.
  */
-function adminComments(rows: readonly ResponseRow[]): AdminFeedbackComment[] {
+function adminComments(
+  rows: readonly TalkResponseRow[],
+): AdminFeedbackComment[] {
   const comments: AdminFeedbackComment[] = []
   for (const r of rows) {
     const shown = commentOf(r)
@@ -214,7 +221,7 @@ export async function readTalkFeedback({
   )
   if (!talk) return null
   const [rows, slots] = await Promise.all([
-    scopedFetch<ResponseRow[] | null>(
+    scopedFetch<TalkResponseRow[] | null>(
       clientReadUncached,
       scope,
       `*[_type == "feedbackResponse" && talk._ref == $talkId && ${PUBLISHED_ONLY}] | order(submittedAt asc, _id asc){
@@ -255,17 +262,16 @@ export type RemoveResult =
   | { status: 'failed'; removed: number }
 
 /**
- * THE GUARD, before any write: the ids, deduplicated, if EVERY one is a
- * published response of the conference whose talk is a published talk of the
- * conference; otherwise null. One scoped read; a missing, draft or foreign id
- * all fail it the same way.
+ * THE GUARD, before any write: of the ids, deduplicated, those that are a
+ * published response of the conference whose talk is a published talk of
+ * the conference. One scoped read; a missing, draft or foreign id is left
+ * out the same way.
  */
-async function ownedResponses(
+async function ownedResponseIds(
   conferenceId: string,
-  responseIds: readonly string[],
-): Promise<string[] | null> {
-  const ids = [...new Set(responseIds)]
-  if (ids.length === 0) return null
+  ids: readonly string[],
+): Promise<Set<string>> {
+  if (ids.length === 0) return new Set()
   const owned = await scopedFetch<string[] | null>(
     clientReadUncached,
     { conferenceId },
@@ -273,7 +279,20 @@ async function ownedResponses(
     { ids },
     { cache: 'no-store' },
   )
-  const found = new Set(owned ?? [])
+  return new Set(owned ?? [])
+}
+
+/**
+ * The ids, deduplicated, if EVERY one passes {@link ownedResponseIds};
+ * otherwise null.
+ */
+async function ownedResponses(
+  conferenceId: string,
+  responseIds: readonly string[],
+): Promise<string[] | null> {
+  const ids = [...new Set(responseIds)]
+  if (ids.length === 0) return null
+  const found = await ownedResponseIds(conferenceId, ids)
   return ids.every((id) => found.has(id)) ? ids : null
 }
 
@@ -350,6 +369,17 @@ export async function removeResponses({
 }): Promise<RemoveResult> {
   const ids = await ownedResponses(conferenceId, responseIds)
   if (!ids) return { status: 'refused' }
+  const { removed, failed } = await deleteInChunks(ids)
+  return { status: failed ? 'failed' : 'ok', removed }
+}
+
+/**
+ * Delete the responses in transactions of at most {@link REMOVE_CHUNK_SIZE},
+ * expiring each one's tag, until a chunk fails.
+ */
+async function deleteInChunks(
+  ids: readonly string[],
+): Promise<{ removed: number; failed: boolean }> {
   let removed = 0
   for (let i = 0; i < ids.length; i += REMOVE_CHUNK_SIZE) {
     const chunk = ids.slice(i, i + REMOVE_CHUNK_SIZE)
@@ -362,10 +392,44 @@ export async function removeResponses({
       // A commit whose reply was lost may have applied. Expiring a response
       // that still exists is harmless; missing one that went is not.
       for (const id of chunk) expireRemovedFeedbackResponse(id)
-      return { status: 'failed', removed }
+      return { removed, failed: true }
     }
     removed += chunk.length
     for (const id of chunk) expireRemovedFeedbackResponse(id)
   }
-  return { status: 'ok', removed }
+  return { removed, failed: false }
+}
+
+export type RangeRemoveResult = {
+  status: 'ok' | 'failed'
+  removed: number
+  /** Ids that were not a response of this conference (any more). */
+  gone: number
+}
+
+/**
+ * Remove a RANGE from the responses-over-time chart (§10.2): like
+ * {@link removeResponses}, but an id that is no longer a published response
+ * of this conference is skipped, not a refusal of the range. An attendee's
+ * own Delete my answer, or a chart read lagging a moment, must not keep a
+ * scripted burst on the page (§15). A foreign id is skipped exactly like a
+ * missing one, after the same one read and before any write, so nothing
+ * leaks and nothing foreign is deleted.
+ */
+export async function removeResponseRange({
+  conferenceId,
+  responseIds,
+}: {
+  conferenceId: string
+  responseIds: readonly string[]
+}): Promise<RangeRemoveResult> {
+  const ids = [...new Set(responseIds)]
+  const found = await ownedResponseIds(conferenceId, ids)
+  const owned = ids.filter((id) => found.has(id))
+  const { removed, failed } = await deleteInChunks(owned)
+  return {
+    status: failed ? 'failed' : 'ok',
+    removed,
+    gone: ids.length - owned.length,
+  }
 }

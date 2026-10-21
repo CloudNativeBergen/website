@@ -95,6 +95,7 @@ import {
   hideResponses,
   readAdminFeedback,
   readTalkFeedback,
+  removeResponseRange,
   removeResponses,
   unhideResponses,
 } from './admin'
@@ -464,6 +465,85 @@ describe('every action — refused before any write (§10.3)', () => {
       expect(h.commits).toEqual([])
     })
   }
+})
+
+describe('Remove a range (§10.2): what is gone is skipped, never refused', () => {
+  const range = (responseIds: string[]) =>
+    removeResponseRange({ conferenceId: 'conf-A', responseIds })
+
+  it('removes the rest when one response of the range is already gone', async () => {
+    const burst = [1, 2, 3].map(() => response('talk-a', 'red'))
+    h.dataset.push(...burst)
+    // The attendee deleted their own answer after the chart was read.
+    h.dataset = h.dataset.filter((d) => d._id !== burst[1]._id)
+    expect(await range(burst.map((r) => r._id))).toEqual({
+      status: 'ok',
+      removed: 2,
+      gone: 1,
+    })
+    expect(burst.filter((r) => doc(r._id))).toEqual([])
+  })
+
+  it('never deletes a foreign response: it is skipped exactly like a missing one', async () => {
+    h.dataset.push(talk('talk-foreign', { conference: ref('conf-B') }))
+    const foreign = response('talk-foreign', 'red', {
+      conference: ref('conf-B'),
+    })
+    // Claims this conference; its talk is another's.
+    const disguised = response('talk-foreign', 'red')
+    const draft = {
+      ...response('talk-a', 'red'),
+      _id: `drafts.${rid(97)}`,
+    }
+    const ours = response('talk-a', 'red')
+    h.dataset.push(foreign, disguised, draft, ours)
+    const out = await range([
+      foreign._id,
+      disguised._id,
+      draft._id,
+      rid(54321),
+      ours._id,
+    ])
+    expect(out).toEqual({ status: 'ok', removed: 1, gone: 4 })
+    expect(doc(foreign._id)).toBeDefined()
+    expect(doc(disguised._id)).toBeDefined()
+    expect(doc(draft._id)).toBeDefined()
+    expect(doc(ours._id)).toBeUndefined()
+    // Only ours was in a transaction, and only its tag expired.
+    expect(h.commits.flat()).toEqual([{ delete: { id: ours._id } }])
+    expect(vi.mocked(revalidateTag).mock.calls).toEqual([
+      [feedbackResponseTag(ours._id), { expire: 0 }],
+    ])
+  })
+
+  it('writes nothing when the whole range is gone', async () => {
+    expect(await range([rid(1), rid(2)])).toEqual({
+      status: 'ok',
+      removed: 0,
+      gone: 2,
+    })
+    expect(h.commits).toEqual([])
+  })
+
+  it('reports what was removed when a later chunk fails', async () => {
+    const ids: string[] = []
+    for (let i = 0; i < 150; i++) {
+      const r = response('talk-a', 'green')
+      h.dataset.push(r)
+      ids.push(r._id)
+    }
+    h.beforeCommit.push(
+      () => {},
+      () => {
+        throw new Error('503')
+      },
+    )
+    expect(await range([...ids, rid(99999)])).toEqual({
+      status: 'failed',
+      removed: 100,
+      gone: 1,
+    })
+  })
 })
 
 describe('readTalkFeedback — one talk’s panel (§10.2)', () => {
