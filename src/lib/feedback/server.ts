@@ -49,7 +49,6 @@ export {
   type AdminFeedbackOverview,
   type AdminFeedbackSession,
   type AdminTalkFeedback,
-  type TimedResponse,
   type ModerationResult,
   type RemoveResult,
 } from './admin'

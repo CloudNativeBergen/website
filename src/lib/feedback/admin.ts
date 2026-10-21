@@ -15,6 +15,7 @@ import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { formats, type Format } from '@/lib/proposal/types'
+import type { ChartResponse } from './buckets'
 import { isFeedbackColour, type FeedbackColour } from './colour'
 import { expireRemovedFeedbackResponse } from './cache'
 import { commentOf } from './comment'
@@ -174,20 +175,13 @@ function adminComments(rows: readonly ResponseRow[]): AdminFeedbackComment[] {
   return comments
 }
 
-/** One response as the responses-over-time chart places it (§10.2). */
-export interface TimedResponse {
-  id: string
-  colour: FeedbackColour
-  submittedAt: string
-}
-
 /** One talk's Session Feedback as its admin panel shows it (§10.2). */
 export interface AdminTalkFeedback {
   totals: FeedbackTotals
   /** Every comment, oldest first, hidden ones included. */
   comments: AdminFeedbackComment[]
   /** Every live response with a colour and a time, oldest first. */
-  responses: TimedResponse[]
+  responses: ChartResponse[]
   window: FeedbackWindow
 }
 
