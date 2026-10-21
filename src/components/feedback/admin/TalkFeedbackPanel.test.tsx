@@ -140,7 +140,7 @@ describe('TalkFeedbackPanel Card Counts', () => {
     expect(greenTotal()).toBe('17')
   })
 
-  it('keeps the last of two quick saves until a read carries its stamp, not just the first save’s', async () => {
+  it('keeps the last of two quick saves until a read includes it, not just the first', async () => {
     const T1 = '2026-10-27T10:00:01.000Z'
     const T2 = '2026-10-27T10:00:02.000Z'
     const stamps = [T1, T2]
