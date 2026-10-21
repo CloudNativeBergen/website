@@ -2,7 +2,7 @@ import { Suspense } from 'react'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { CalendarIcon } from '@heroicons/react/20/solid'
 import { notFound } from 'next/navigation'
-import { formatDate } from '@/lib/time'
+import { formatDate, osloTodayDateString } from '@/lib/time'
 import { ClockIcon } from '@heroicons/react/20/solid'
 import { getProposalSanity } from '@/lib/proposal/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -15,7 +15,9 @@ import {
 } from '@/components/admin'
 import { BackLink } from '@/components/BackButton'
 import { ProposalMessagesRedirect } from '@/components/messaging'
+import { AdminFeedbackCodePanel } from '@/components/feedback'
 import { TalkFeedbackAdminPanel } from '@/components/feedback/admin'
+import { talkFeedbackView } from '@/lib/feedback/talk-panel'
 import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
 import { getAuthSession } from '@/lib/auth'
 import { getProposalVideoUrl } from '@/lib/proposal/video'
@@ -78,6 +80,13 @@ export default async function ProposalDetailPage({
             ? 'draft'
             : null
         : null
+
+    const feedbackView = talkFeedbackView({
+      status: proposal.status,
+      conferenceStartDate: conference?.startDate,
+      today: osloTodayDateString(),
+      codesLive: ATTENDEE_PAGE_LIVE,
+    })
 
     return (
       <div className="flex h-full min-h-screen flex-col lg:flex-row">
@@ -149,19 +158,21 @@ export default async function ProposalDetailPage({
               status={proposal.status}
               conferenceEndDate={conference.endDate}
             />
-            {/* Session Feedback (§10.2): a confirmed talk's code and
-                feedback; an accepted one's Card Counts once the
-                conference has started, as before. */}
-            {(proposal.status === 'confirmed' ||
-              (proposal.status === 'accepted' &&
-                !!conference.startDate &&
-                new Date(conference.startDate) <= new Date())) && (
+            {/* Session Feedback (§10.2): the whole panel once the
+                conference has started; before that a confirmed talk's
+                Feedback Code alone, so its sheet can be printed. */}
+            {feedbackView === 'panel' ? (
               <TalkFeedbackAdminPanel
                 talkId={proposal._id}
                 title={proposal.title}
                 showCode={ATTENDEE_PAGE_LIVE && proposal.status === 'confirmed'}
               />
-            )}
+            ) : feedbackView === 'code' ? (
+              <AdminFeedbackCodePanel
+                talkId={proposal._id}
+                title={proposal.title}
+              />
+            ) : null}
           </div>
         </div>
       </div>
