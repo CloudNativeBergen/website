@@ -382,6 +382,11 @@ export function ResponsesOverTime({
                       : { anchor: i, focus: i },
                   )
                 }}
+                // Capture lost without an up or a cancel: the drag is over.
+                onLostPointerCapture={() => {
+                  dragging.current = false
+                  clearInterval(holding.current)
+                }}
                 onPointerCancel={() => {
                   dragging.current = false
                   clearInterval(holding.current)

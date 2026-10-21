@@ -75,35 +75,68 @@ export function TalkFeedbackAdminPanel({
       </div>
     )
 
+  // A refetch after an action failed: React Query keeps the earlier data,
+  // so say the numbers are earlier ones (as /admin/feedback does).
+  const stale = feedback.isError
   return (
-    <TalkFeedbackPanel
-      feedback={feedback.data}
-      code={
-        showCode ? (
-          <AdminFeedbackCodePanel talkId={talkId} title={title} embedded />
-        ) : undefined
-      }
-      onSaveCards={async (c) => {
-        const saved = await cards.mutateAsync({
-          id: talkId,
-          feedback: {
-            greenCount: c.green,
-            yellowCount: c.yellow,
-            redCount: c.red,
-          },
-        })
-        // The save's own stamp: the panel keeps the counts on screen until
-        // a read carries it.
-        const at = (
-          saved as { audienceFeedback?: { lastUpdatedAt?: unknown } } | null
-        )?.audienceFeedback?.lastUpdatedAt
-        return typeof at === 'string' ? at : null
-      }}
-      onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
-      onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
-      onRemove={(request) =>
-        removeInRequests(request, (chunk) => remove.mutateAsync(chunk))
-      }
-    />
+    <div className="space-y-2">
+      {/* Always mounted: words set in a live region are announced. */}
+      <div
+        className={
+          stale
+            ? 'flex flex-wrap items-center justify-between gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-900 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200'
+            : 'sr-only'
+        }
+      >
+        <p role="status" aria-live="polite">
+          {stale
+            ? feedback.isFetching
+              ? 'Refreshing…'
+              : 'Couldn’t refresh, showing earlier numbers.'
+            : ''}
+        </p>
+        {stale && (
+          <button
+            type="button"
+            aria-disabled={feedback.isFetching}
+            onClick={() => {
+              if (!feedback.isFetching) void feedback.refetch()
+            }}
+            className="min-h-9 rounded-md px-3 font-semibold hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-700 aria-disabled:cursor-wait aria-disabled:opacity-60 dark:hover:bg-yellow-900/40"
+          >
+            Retry
+          </button>
+        )}
+      </div>
+      <TalkFeedbackPanel
+        feedback={feedback.data}
+        code={
+          showCode ? (
+            <AdminFeedbackCodePanel talkId={talkId} title={title} embedded />
+          ) : undefined
+        }
+        onSaveCards={async (c) => {
+          const saved = await cards.mutateAsync({
+            id: talkId,
+            feedback: {
+              greenCount: c.green,
+              yellowCount: c.yellow,
+              redCount: c.red,
+            },
+          })
+          // The save's own stamp: the panel keeps the counts on screen until
+          // a read carries it.
+          const at = (
+            saved as { audienceFeedback?: { lastUpdatedAt?: unknown } } | null
+          )?.audienceFeedback?.lastUpdatedAt
+          return typeof at === 'string' ? at : null
+        }}
+        onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
+        onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
+        onRemove={(request) =>
+          removeInRequests(request, (chunk) => remove.mutateAsync(chunk))
+        }
+      />
+    </div>
   )
 }

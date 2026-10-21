@@ -38,21 +38,28 @@ interface SavedCards {
   cards: ColourCounts
   /** When the save was stamped (`audienceFeedback.lastUpdatedAt`). */
   at: string | null
+  /**
+   * The stamps a read could carry and still not show this save: the one on
+   * screen when it started, and earlier saves' of this panel.
+   */
+  stale: (string | null)[]
   over: ColourCounts
 }
 
 /**
- * The read has caught up with a save: it carries that save's stamp or a
- * later one (another organizer's newer counts show too). Without stamps, by
- * the counts: the read shows the saved ones, or anything newer than what
- * was on screen when they were saved.
+ * The read shows a write this panel did not already know of when it saved:
+ * its own save, or anyone's since. Every write gets a new stamp, so a stamp
+ * outside `stale` is one, whatever the order stamps were taken in (a save
+ * stamps its time before it commits, so stamp order is not commit order).
+ * Without a stamp from the save, by the counts: the read shows the saved
+ * ones, or anything other than what was on screen when they were saved.
  */
 function caughtUp(
   saved: SavedCards,
   read: ColourCounts,
   readAt: string | null,
 ): boolean {
-  if (saved.at && readAt) return Date.parse(readAt) >= Date.parse(saved.at)
+  if (saved.at) return !saved.stale.includes(readAt)
   return sameCounts(read, saved.cards) || !sameCounts(read, saved.over)
 }
 
@@ -133,7 +140,16 @@ export function TalkFeedbackPanel({
       }
       const at = await onSaveCards(cards)
       // Against the server's read, never an earlier save's counts on screen.
-      setSaved({ cards, at, over: read })
+      setSaved({
+        cards,
+        at,
+        // A save on top of another not yet read keeps that one's stamps.
+        stale: [
+          ...(saved ? [...saved.stale, saved.at] : []),
+          feedback.cardsSavedAt,
+        ],
+        over: read,
+      })
       setDraft(null)
       setCardsNote({ ok: true, text: 'Card Counts saved.' })
     } catch (e) {

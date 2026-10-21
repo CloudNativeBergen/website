@@ -437,6 +437,29 @@ describe('ResponsesOverTime', () => {
     }
   })
 
+  it('ends a drag that loses its pointer capture without letting go', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      chartOf()
+      const box = scrolledBox(0)
+      chart().setPointerCapture = vi.fn()
+      const mouse = { pointerType: 'mouse', button: 0, clientY: 50 }
+      fireEvent.pointerDown(chart(), { ...mouse, clientX: 55 })
+      fireEvent.pointerMove(chart(), { ...mouse, clientX: 99 })
+      fireEvent.lostPointerCapture(chart(), { pointerId: 1 })
+      const at = box.scrollLeft
+      const picked = selected()
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      fireEvent.pointerMove(chart(), { ...mouse, clientX: 99 })
+      expect(box.scrollLeft).toBe(at)
+      expect(selected()).toEqual(picked)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('opens scrolled to the busiest bucket when the chart is wider than its box', () => {
     // Every scroll box here is 100 px wide over a 300 px chart.
     const proto = HTMLElement.prototype

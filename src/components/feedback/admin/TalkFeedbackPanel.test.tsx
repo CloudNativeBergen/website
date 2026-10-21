@@ -170,6 +170,43 @@ describe('TalkFeedbackPanel Card Counts', () => {
     expect(greenCards().value).toBe('9')
   })
 
+  it('shows another organizer’s save even when its stamp is older than ours (stamped first, committed last)', async () => {
+    const T0 = '2026-10-27T10:00:00.000Z'
+    const onSaveCards = vi.fn(async () => '2026-10-27T10:00:02.000Z')
+    const panel = (green: number, at: string | null) => (
+      <TalkFeedbackPanel
+        feedback={feedback(green, at)}
+        onSaveCards={onSaveCards}
+        {...props}
+      />
+    )
+    const { rerender } = render(panel(3, T0))
+    await saveGreen('5')
+    // B stamped T1 before our T2 but committed after us: Sanity holds B's 4.
+    rerender(panel(4, '2026-10-27T10:00:01.000Z'))
+    expect(greenCards().value).toBe('4')
+  })
+
+  it('shows another write that carries the same stamp as ours', async () => {
+    const T2 = '2026-10-27T10:00:02.000Z'
+    const { rerender } = render(
+      <TalkFeedbackPanel
+        feedback={feedback(3, '2026-10-27T10:00:00.000Z')}
+        onSaveCards={vi.fn(async () => T2)}
+        {...props}
+      />,
+    )
+    await saveGreen('5')
+    rerender(
+      <TalkFeedbackPanel
+        feedback={feedback(6, T2)}
+        onSaveCards={vi.fn()}
+        {...props}
+      />,
+    )
+    expect(greenCards().value).toBe('6')
+  })
+
   it('shows a newer read over the saved counts (another organizer saved since)', async () => {
     const { rerender } = render(
       <TalkFeedbackPanel
