@@ -234,6 +234,15 @@ describe('TalkFeedbackPanel Card Counts', () => {
       expect(greenCards().value).toBe('3')
     })
 
+    it('a read strictly after our commit shows as it is, even with the counts we saved over', async () => {
+      const read = setup(3, '2026-10-27T09:59:00.000Z')
+      await saveGreen('5')
+      // Another write a second after ours put 3 back: it is the truth.
+      read(3, '2026-10-27T10:00:03.000Z')
+      expect(greenCards().value).toBe('3')
+      expect(expired).not.toHaveBeenCalled()
+    })
+
     it('a lagging read within the time keeps ours, however often it comes', async () => {
       const read = setup(3, '2026-10-27T09:59:00.000Z')
       await saveGreen('5')
