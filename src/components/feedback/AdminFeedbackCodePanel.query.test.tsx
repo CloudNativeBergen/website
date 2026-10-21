@@ -239,6 +239,28 @@ describe('AdminFeedbackCodePanel against a read in flight', () => {
     expect(await screen.findByText('QR for https://x/f/p4hw7c')).toBeTruthy()
   })
 
+  it('a refused Rotate wrote nothing: the code stays printable while it is read again', async () => {
+    setup(OLD)
+    await screen.findByText('QR for https://x/f/k7m2qx')
+    h.rotate.mockRejectedValue(
+      Object.assign(new Error('This talk’s code is now w9nn3r'), {
+        data: { code: 'CONFLICT' },
+      }),
+    )
+    const late = heldRead(OLD)
+    h.reads.push(late.read)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    await confirm('Rotate')
+    expect(
+      await screen.findByText('This talk’s code is now w9nn3r'),
+    ).toBeTruthy()
+    expect(screen.queryByText(notice)).toBeNull()
+    expect(screen.getByText('QR for https://x/f/k7m2qx')).toBeTruthy()
+    await act(async () => late.land())
+  })
+
   it('a Rotate whose reply is lost, then a read that lands: the code it holds is shown, no notice', async () => {
     setup(OLD)
     await screen.findByText('QR for https://x/f/k7m2qx')

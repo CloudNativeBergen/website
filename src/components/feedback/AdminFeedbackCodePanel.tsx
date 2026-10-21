@@ -8,6 +8,9 @@ import { answersClosed } from '@/lib/feedback/window'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
 import { useWindowOnTheClock } from './useWindowOnTheClock'
 
+/** Rotate's answers that say nothing was written. */
+const REFUSALS = new Set(['NOT_FOUND', 'CONFLICT', 'BAD_REQUEST', 'FORBIDDEN'])
+
 /**
  * The confirmation before a rotation, word for word (speaker feedback spec
  * §10.4).
@@ -86,10 +89,14 @@ export function AdminFeedbackCodePanel({
     },
     // Read the code again whatever went wrong: refused, a release in the
     // way, or a lost reply after which the rotation may well have landed.
-    onError: () => {
+    onError: (error) => {
       setAsking(false)
-      // Until a read lands after this, the code on screen may be dead.
-      setVerifyAfter(code.dataUpdatedAt ?? 0)
+      // A server error or a lost reply may have rotated the code: until a
+      // read lands after this, the code on screen may be dead. A refusal
+      // (the talk changed, a release, a code changed meanwhile) wrote
+      // nothing.
+      if (!REFUSALS.has(error.data?.code ?? ''))
+        setVerifyAfter(code.dataUpdatedAt ?? 0)
       void utils.sessionFeedback.adminCode.invalidate({ talkId })
     },
   })
