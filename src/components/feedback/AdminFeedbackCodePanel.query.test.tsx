@@ -214,6 +214,8 @@ describe('AdminFeedbackCodePanel against a read in flight', () => {
     expect(
       screen.queryByRole('button', { name: 'Rotate Feedback Code' }),
     ).toBeNull()
+    // Not "try again": the rotation may have landed.
+    expect(screen.queryByText(/could not be rotated/)).toBeNull()
     // Retry: the read says which code is current.
     h.reads.push(async () => NEW)
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))

@@ -563,3 +563,47 @@ export const RotateReplyLost: Story = {
     expect((await canvas.findAllByText(new RegExp(ROTATED)))[0]).toBeVisible()
   },
 }
+
+/**
+ * The rotation's reply was lost and the read after it failed too: the code
+ * on screen may be dead, so it is not offered to print or share until a
+ * Retry confirms which code is current.
+ */
+const unconfirmedReads = { n: 0 }
+export const RotateUnconfirmed: Story = {
+  beforeEach: () => {
+    unconfirmedReads.n = 0
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(READ, () =>
+          unconfirmedReads.n++ === 0
+            ? trpc(withCode)
+            : failWith('INTERNAL_SERVER_ERROR', 500),
+        ),
+        http.post(ROTATE, () => failWith('INTERNAL_SERVER_ERROR', 502)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    await confirmWith('Rotate')
+    expect(
+      await canvas.findByText(
+        'Couldn’t confirm the current code. Retry before printing or sharing it.',
+      ),
+    ).toBeVisible()
+    // Once the read after it has failed too, Retry is offered.
+    expect(await canvas.findByRole('button', { name: 'Retry' })).toBeVisible()
+    expect(canvas.queryByRole('button', { name: /PNG for slides/ })).toBeNull()
+  },
+}
+
+export const RotateUnconfirmedDark: Story = {
+  ...RotateUnconfirmed,
+  globals: { theme: 'dark' },
+}

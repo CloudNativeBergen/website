@@ -178,7 +178,8 @@ export function AdminFeedbackCodePanel({
               Rotate Feedback Code
             </button>
           )}
-          {rotate.error && (
+          {/* While unconfirmed, the notice above says it all: the rotation may have landed. */}
+          {rotate.error && !unconfirmed && (
             <p role="alert" className="text-sm text-red-700 dark:text-red-400">
               {rotate.error.data?.code === 'NOT_FOUND'
                 ? 'This code can no longer be rotated: the feedback window has closed, or the talk changed.'
