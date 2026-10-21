@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { ArrowPathIcon, QrCodeIcon } from '@heroicons/react/24/outline'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { api } from '@/lib/trpc/client'
+import { answersClosed } from '@/lib/feedback/window'
 import { FeedbackCodePanel } from './FeedbackCodePanel'
 import { useWindowOnTheClock } from './useWindowOnTheClock'
 
@@ -84,9 +85,12 @@ export function AdminFeedbackCodePanel({
   // An organizer may leave the page up through the session's start.
   const shownWindow = useWindowOnTheClock(code.data?.window)
   // The window may close while the page is up; the offer closes with it.
-  const mayMint =
-    !!code.data?.mayMint && shownWindow?.state !== 'closed' && !refused
-  const mayRotate = !!code.data?.mayRotate && shownWindow?.state !== 'closed'
+  // The server's own rule on the window as the clock has moved it: no code
+  // once answers are closed (§5), which for a talk with no slot is when the
+  // conference is over, not only a window's close.
+  const answering = !!shownWindow && !answersClosed(shownWindow)
+  const mayMint = !!code.data?.mayMint && answering && !refused
+  const mayRotate = !!code.data?.mayRotate && answering
   const shownCode = code.data?.code ?? null
 
   if (code.error?.data?.code === 'NOT_FOUND') return null

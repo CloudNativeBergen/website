@@ -7,11 +7,12 @@
  * showing a QR that may already be dead.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 
 const h = vi.hoisted(() => ({
   rotate: null as null | { onError: (error: unknown) => void },
   invalidate: vi.fn(),
+  data: undefined as unknown,
 }))
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -24,7 +25,7 @@ vi.mock('@/lib/trpc/client', () => ({
     }),
     sessionFeedback: {
       adminCode: {
-        useQuery: () => ({ data: undefined, error: null, refetch: vi.fn() }),
+        useQuery: () => ({ data: h.data, error: null, refetch: vi.fn() }),
       },
       mintCode: { useMutation: () => ({ mutate: vi.fn() }) },
       rotateCode: {
@@ -37,11 +38,15 @@ vi.mock('@/lib/trpc/client', () => ({
   },
 }))
 
+// The QR and its buttons are not what is tested here.
+vi.mock('./FeedbackCodePanel', () => ({ FeedbackCodePanel: () => null }))
+
 import { AdminFeedbackCodePanel } from './AdminFeedbackCodePanel'
 
 afterEach(() => {
   cleanup()
   h.invalidate.mockClear()
+  h.data = undefined
 })
 
 describe('AdminFeedbackCodePanel Rotate', () => {
@@ -54,4 +59,52 @@ describe('AdminFeedbackCodePanel Rotate', () => {
     h.rotate!.onError({ data: { code } })
     expect(h.invalidate).toHaveBeenCalledWith({ talkId: 'talk-1' })
   })
+})
+
+describe('AdminFeedbackCodePanel offers no code once answers are closed (§5, §10.4)', () => {
+  // A talk with no slot: answers close when the conference is over.
+  const OVER = '2026-11-01T00:00:00.000Z'
+  const unscheduled = {
+    state: 'unscheduled',
+    feedbackVisible: false,
+    conferenceOverAt: OVER,
+  }
+
+  it.each([
+    [
+      'Rotate',
+      'Rotate Feedback Code',
+      {
+        code: 'k7m2qx',
+        url: 'https://x/f/k7m2qx',
+        mayMint: false,
+        mayRotate: true,
+      },
+    ],
+    [
+      'Mint',
+      'Mint Feedback Code',
+      { code: null, url: null, mayMint: true, mayRotate: false },
+    ],
+  ])(
+    'takes %s away when the conference ends with the page open',
+    (_, name, code) => {
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(new Date('2026-10-31T23:59:50Z'))
+        h.data = { ...code, window: unscheduled }
+        render(<AdminFeedbackCodePanel talkId="talk-1" title="T" />)
+        act(() => {
+          vi.advanceTimersByTime(0)
+        })
+        expect(screen.getByRole('button', { name })).toBeTruthy()
+        act(() => {
+          vi.advanceTimersByTime(20_000)
+        })
+        expect(screen.queryByRole('button', { name })).toBeNull()
+      } finally {
+        vi.useRealTimers()
+      }
+    },
+  )
 })

@@ -157,6 +157,48 @@ describe('TalkFeedbackAdminPanel', () => {
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
 
+  it('a Retry that fails again neither says “Refreshed.” nor moves focus', async () => {
+    h.query = { data: DATA, error: { message: 'down' }, isError: true }
+    panel()
+    const retry = screen.getByRole('button', { name: 'Retry' })
+    retry.focus()
+    await act(async () => {
+      fireEvent.click(retry)
+    })
+    expect(h.refetch).toHaveBeenCalled()
+    expect(screen.queryByText('Refreshed.')).toBeNull()
+    expect(document.activeElement).toBe(retry)
+  })
+
+  it('“Refreshed.” leaves the region after a few seconds', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      h.query = { data: DATA, error: { message: 'down' }, isError: true }
+      h.refetch.mockImplementation(async () => {
+        h.query = { data: DATA, error: null, isError: false }
+        view.rerender(
+          <TalkFeedbackAdminPanel talkId="talk-1" title="T" showCode={false} />,
+        )
+        return { isError: false }
+      })
+      const view = panel()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+      })
+      const region = screen.getByText('Refreshed.')
+      act(() => {
+        vi.advanceTimersByTime(3_900)
+      })
+      expect(region.textContent).toBe('Refreshed.')
+      act(() => {
+        vi.advanceTimersByTime(200)
+      })
+      expect(region.textContent).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('says nothing about refreshing when the read is fine', () => {
     panel()
     expect(screen.queryByText(/Couldn’t refresh/)).toBeNull()
