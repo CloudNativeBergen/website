@@ -36,30 +36,24 @@ const sameCounts = (a: ColourCounts, b: ColourCounts) =>
 /** Counts saved, and the counts the read showed when they were. */
 interface SavedCards {
   cards: ColourCounts
-  /** When the save was stamped (`audienceFeedback.lastUpdatedAt`). */
+  /** When the save committed: the talk's `_updatedAt` in its reply. */
   at: string | null
-  /**
-   * The stamps a read could carry and still not show this save: the one on
-   * screen when it started, and earlier saves' of this panel.
-   */
-  stale: (string | null)[]
   over: ColourCounts
 }
 
 /**
- * The read shows a write this panel did not already know of when it saved:
- * its own save, or anyone's since. Every write gets a new stamp, so a stamp
- * outside `stale` is one, whatever the order stamps were taken in (a save
- * stamps its time before it commits, so stamp order is not commit order).
- * Without a stamp from the save, by the counts: the read shows the saved
- * ones, or anything other than what was on screen when they were saved.
+ * The read includes the save: the talk it shows changed at or after the
+ * save committed (`_updatedAt` is the commit's time, so its order is the
+ * order the writes landed in; a stamp taken before the commit is not).
+ * Without the commit's time, by the counts: the read shows the saved ones,
+ * or anything other than what was on screen when they were saved.
  */
 function caughtUp(
   saved: SavedCards,
   read: ColourCounts,
   readAt: string | null,
 ): boolean {
-  if (saved.at) return !saved.stale.includes(readAt)
+  if (saved.at && readAt) return Date.parse(readAt) >= Date.parse(saved.at)
   return sameCounts(read, saved.cards) || !sameCounts(read, saved.over)
 }
 
@@ -70,7 +64,7 @@ export interface TalkFeedbackPanelProps {
   /** Save the Card Counts (`proposal.updateAudienceFeedback`). */
   /**
    * Save the Card Counts (`proposal.updateAudienceFeedback`); resolves with
-   * the save's stamp, `audienceFeedback.lastUpdatedAt`, when known.
+   * the time the save committed (the talk's `_updatedAt`), when known.
    */
   onSaveCards: (cards: ColourCounts) => Promise<string | null>
   onHide: (responseId: string) => Promise<unknown>
@@ -108,7 +102,7 @@ export function TalkFeedbackPanel({
   // or shows anything newer than what was on screen when they were saved.
   const [saved, setSaved] = useState<SavedCards | null>(null)
   const read = feedback.totals.cards
-  if (saved && caughtUp(saved, read, feedback.cardsSavedAt)) setSaved(null)
+  if (saved && caughtUp(saved, read, feedback.updatedAt)) setSaved(null)
   const totals = saved
     ? feedbackTotals({
         // `scanned` holds the live and folded answers; only cards change.
@@ -140,16 +134,7 @@ export function TalkFeedbackPanel({
       }
       const at = await onSaveCards(cards)
       // Against the server's read, never an earlier save's counts on screen.
-      setSaved({
-        cards,
-        at,
-        // A save on top of another not yet read keeps that one's stamps.
-        stale: [
-          ...(saved ? [...saved.stale, saved.at] : []),
-          feedback.cardsSavedAt,
-        ],
-        over: read,
-      })
+      setSaved({ cards, at, over: read })
       setDraft(null)
       setCardsNote({ ok: true, text: 'Card Counts saved.' })
     } catch (e) {

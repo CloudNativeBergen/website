@@ -120,20 +120,22 @@ describe('TalkFeedbackAdminPanel', () => {
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
 
-  it('hands the panel the Card Counts save’s own stamp, from its reply', async () => {
+  it('hands the panel the time the Card Counts save committed, from its reply', async () => {
+    // The patched talk, as the commit returns it.
     h.cardsReply = {
       _id: 'talk-1',
+      _updatedAt: '2026-10-27T10:00:02Z',
       audienceFeedback: {
         greenCount: 5,
         yellowCount: 1,
         redCount: 0,
-        lastUpdatedAt: '2026-10-27T10:00:02.000Z',
+        lastUpdatedAt: '2026-10-27T10:00:01.000Z',
       },
     }
     panel()
     await expect(
       h.panel!.onSaveCards({ green: 5, yellow: 1, red: 0 }),
-    ).resolves.toBe('2026-10-27T10:00:02.000Z')
+    ).resolves.toBe('2026-10-27T10:00:02Z')
     expect(h.cardsInput).toEqual([
       {
         id: 'talk-1',

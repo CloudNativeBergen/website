@@ -152,7 +152,7 @@ const TALK_DATA = {
   comments: [],
   responses: [],
   window: WINDOW,
-  cardsSavedAt: null,
+  updatedAt: null,
 }
 
 /** The page's own refetch, as an action's refresh would run it. */

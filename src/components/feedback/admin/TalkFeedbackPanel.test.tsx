@@ -22,9 +22,9 @@ import { TalkFeedbackPanel } from './TalkFeedbackPanel'
 
 const feedback = (
   green: number,
-  cardsSavedAt: string | null = null,
+  updatedAt: string | null = null,
 ): AdminTalkFeedback => ({
-  cardsSavedAt,
+  updatedAt,
   totals: feedbackTotals({
     live: { green: 10, yellow: 2, red: 1 },
     cards: { greenCount: green, yellowCount: 1, redCount: 0 },
@@ -170,41 +170,54 @@ describe('TalkFeedbackPanel Card Counts', () => {
     expect(greenCards().value).toBe('9')
   })
 
-  it('shows another organizer’s save even when its stamp is older than ours (stamped first, committed last)', async () => {
-    const T0 = '2026-10-27T10:00:00.000Z'
-    const onSaveCards = vi.fn(async () => '2026-10-27T10:00:02.000Z')
-    const panel = (green: number, at: string | null) => (
-      <TalkFeedbackPanel
-        feedback={feedback(green, at)}
-        onSaveCards={onSaveCards}
-        {...props}
-      />
-    )
-    const { rerender } = render(panel(3, T0))
-    await saveGreen('5')
-    // B stamped T1 before our T2 but committed after us: Sanity holds B's 4.
-    rerender(panel(4, '2026-10-27T10:00:01.000Z'))
-    expect(greenCards().value).toBe('4')
-  })
+  describe('another organizer’s save, in every order against ours (committed at 10:00:02)', () => {
+    const CA = '2026-10-27T10:00:02.000Z'
+    const setup = (green: number, at: string) => {
+      const view = render(
+        <TalkFeedbackPanel
+          feedback={feedback(green, at)}
+          onSaveCards={vi.fn(async () => CA)}
+          {...props}
+        />,
+      )
+      return (g: number, readAt: string) =>
+        view.rerender(
+          <TalkFeedbackPanel
+            feedback={feedback(g, readAt)}
+            onSaveCards={vi.fn()}
+            {...props}
+          />,
+        )
+    }
 
-  it('shows another write that carries the same stamp as ours', async () => {
-    const T2 = '2026-10-27T10:00:02.000Z'
-    const { rerender } = render(
-      <TalkFeedbackPanel
-        feedback={feedback(3, '2026-10-27T10:00:00.000Z')}
-        onSaveCards={vi.fn(async () => T2)}
-        {...props}
-      />,
-    )
-    await saveGreen('5')
-    rerender(
-      <TalkFeedbackPanel
-        feedback={feedback(6, T2)}
-        onSaveCards={vi.fn()}
-        {...props}
-      />,
-    )
-    expect(greenCards().value).toBe('6')
+    it('B landed before our page read: a lagging read of B’s counts keeps ours', async () => {
+      const read = setup(4, '2026-10-27T10:00:00.000Z')
+      await saveGreen('5')
+      read(4, '2026-10-27T10:00:00.000Z')
+      expect(greenCards().value).toBe('5')
+    })
+
+    it('B landed between our read and our commit: a lagging read of B’s counts keeps ours', async () => {
+      const read = setup(3, '2026-10-27T09:59:00.000Z')
+      await saveGreen('5')
+      read(4, '2026-10-27T10:00:01.000Z')
+      expect(greenCards().value).toBe('5')
+      expect(greenTotal()).toBe('15')
+    })
+
+    it('B landed after our commit: its counts show', async () => {
+      const read = setup(3, '2026-10-27T09:59:00.000Z')
+      await saveGreen('5')
+      read(4, '2026-10-27T10:00:03.000Z')
+      expect(greenCards().value).toBe('4')
+    })
+
+    it('a read from the same moment as our commit shows as it is', async () => {
+      const read = setup(3, '2026-10-27T09:59:00.000Z')
+      await saveGreen('5')
+      read(6, CA)
+      expect(greenCards().value).toBe('6')
+    })
   })
 
   it('shows a newer read over the saved counts (another organizer saved since)', async () => {
