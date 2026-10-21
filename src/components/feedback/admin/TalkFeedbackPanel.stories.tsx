@@ -209,7 +209,53 @@ export const Default: Story = {}
 export const DefaultDark: Story = { globals: { theme: 'dark' } }
 
 /** After the window closed: 148 buckets in the sidebar's width. */
-export const WindowClosed: Story = { args: { feedback: CLOSED } }
+export const WindowClosed: Story = {
+  args: { feedback: CLOSED },
+  // A week on: the chart spans the whole window, 24 h 40 min.
+  beforeEach: runningClockFrom(new Date('2026-11-03T12:00:00Z')),
+  play: async ({ canvasElement }) => {
+    const chart = within(canvasElement).getByRole('listbox', {
+      name: 'Responses over time',
+    })
+    expect(within(chart).getAllByRole('option')).toHaveLength(148)
+    // Each bucket wide enough to hit; the chart scrolls sideways instead.
+    const bar = within(chart).getAllByRole('option')[0]
+    expect(bar.getBoundingClientRect().width).toBeGreaterThanOrEqual(6)
+    expect(chart.parentElement!.scrollWidth).toBeGreaterThan(
+      chart.parentElement!.clientWidth,
+    )
+  },
+}
+
+export const WindowClosedDark: Story = {
+  ...WindowClosed,
+  globals: { theme: 'dark' },
+}
+
+/** Three-digit counts on a 320 px phone: the tiles stack, nothing spills. */
+export const NarrowPhone: Story = {
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  args: {
+    feedback: {
+      ...FEEDBACK,
+      totals: feedbackTotals({
+        live: { green: 311, yellow: 128, red: 104 },
+        cards: { greenCount: 212, yellowCount: 103, redCount: 100 },
+      }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const form = canvasElement.querySelector('form')!
+    for (const tile of Array.from(form.children) as HTMLElement[])
+      expect(tile.scrollWidth).toBeLessThanOrEqual(tile.clientWidth)
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320)
+  },
+}
+
+export const NarrowPhoneDark: Story = {
+  ...NarrowPhone,
+  globals: { theme: 'dark' },
+}
 
 export const NoResponsesYet: Story = {
   args: {

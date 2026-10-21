@@ -57,6 +57,12 @@ const spanOf = (buckets: readonly ResponseBucket[], range: BucketRange) => {
   return `${formatFeedbackCommentTime(start)}–${sameDay ? formatConferenceClock(end) : formatFeedbackCommentTime(end)}`
 }
 
+/** A bucket's least width, so a finger or a pointer can hit it. */
+const BAR_PX = 7
+
+/** How far a finger may move and still tap. */
+const TAP_SLOP = 10
+
 /** Bottom to top: green, yellow, red, as a stacked column. */
 const STACK = [...ANSWERS].reverse()
 
@@ -86,6 +92,7 @@ export function ResponsesOverTime({
   const optionId = useId()
   const chart = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
+  const tapStart = useRef<{ x: number; y: number } | null>(null)
   // Bucketing, not display: while the window is open the chart reaches to
   // now, sampled once a minute (a later response stretches it anyway).
   const [now, setNow] = useState(() => Date.now())
@@ -116,6 +123,13 @@ export function ResponsesOverTime({
       : null
   const active = range?.focus ?? 0
   const [removing, setRemoving] = useState<RangeToRemove | null>(null)
+  // The keyboard's bucket stays in view while the chart is scrolled.
+  useEffect(() => {
+    if (!focused) return
+    document
+      .getElementById(`${optionId}-${active}`)
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [focused, active, optionId])
   const [asking, setAsking] = useState(false)
   const [pending, setPending] = useState(false)
   const [outcome, setOutcome] = useState<Note | null>(null)
@@ -151,7 +165,11 @@ export function ResponsesOverTime({
     }
     if (!(e.key in moves)) return
     e.preventDefault()
-    const i = Math.max(0, Math.min(last, moves[e.key]))
+    // Nothing picked yet: an arrow picks the bucket it starts on, not the
+    // one beside it.
+    const target =
+      range || e.key === 'Home' || e.key === 'End' ? moves[e.key] : active
+    const i = Math.max(0, Math.min(last, target))
     select(
       e.shiftKey
         ? { anchor: range?.anchor ?? active, focus: i }
@@ -198,74 +216,108 @@ export function ResponsesOverTime({
             id={helpId}
             className="mt-0.5 text-xs text-gray-600 dark:text-gray-400"
           >
-            10-minute buckets. Drag across the bars, or use Shift with the arrow
-            keys, to pick a range to remove.
+            10-minute buckets. Drag across the bars (on a touch screen, tap the
+            first bar, then the last), or use Shift with the arrow keys, to pick
+            a range to remove.
           </p>
-          <div
-            ref={chart}
-            role="listbox"
-            aria-multiselectable="true"
-            aria-labelledby={headingId}
-            aria-describedby={helpId}
-            aria-activedescendant={
-              focused ? `${optionId}-${active}` : undefined
-            }
-            tabIndex={0}
-            onKeyDown={onKeyDown}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            onPointerDown={(e) => {
-              if (e.button !== 0) return
-              e.preventDefault()
-              chart.current?.focus()
-              chart.current?.setPointerCapture(e.pointerId)
-              dragging.current = true
-              const i = indexAt(e.clientX)
-              select(
-                e.shiftKey && range
-                  ? { anchor: range.anchor, focus: i }
-                  : { anchor: i, focus: i },
-              )
-            }}
-            onPointerMove={(e) => {
-              if (!dragging.current) return
-              const i = indexAt(e.clientX)
-              if (range && i !== range.focus)
-                setRange({ anchor: range.anchor, focus: i })
-            }}
-            onPointerUp={() => (dragging.current = false)}
-            onPointerCancel={() => (dragging.current = false)}
-            className={`mt-2 flex h-24 cursor-crosshair touch-pan-y items-end rounded-md border border-gray-200 px-0.5 pt-1 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:border-gray-700 ${buckets.length <= 48 ? 'gap-px' : ''}`}
-          >
-            {buckets.map((b, i) => (
-              <div
-                key={b.start}
-                id={`${optionId}-${i}`}
-                role="option"
-                aria-selected={selected(i)}
-                aria-label={`${formatFeedbackCommentTime(b.start)}–${formatConferenceClock(b.end)}: ${plural(b.ids.length, 'response', 'responses')}`}
-                className={`flex h-full min-w-0 flex-1 flex-col justify-end ${selected(i) ? 'bg-brand-sky-mist dark:bg-blue-900/50' : range ? 'opacity-35' : ''} ${focused && i === active ? 'outline-1 -outline-offset-1 outline-brand-cloud-blue dark:outline-blue-300' : ''}`}
-              >
-                {b.ids.length > 0 && (
-                  <div
-                    className="flex min-h-0.5 flex-col-reverse overflow-hidden"
-                    style={{ height: `${(b.ids.length / max) * 100}%` }}
-                  >
-                    {STACK.map(({ colour }) =>
-                      b.counts[colour] > 0 ? (
-                        <div
-                          key={colour}
-                          className={FEEDBACK_TONE[colour].bar}
-                          style={{
-                            height: `${(b.counts[colour] / b.ids.length) * 100}%`,
-                          }}
-                        />
-                      ) : null,
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+          <div className="mt-2 overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+            <div
+              ref={chart}
+              role="listbox"
+              aria-multiselectable="true"
+              aria-labelledby={headingId}
+              aria-describedby={helpId}
+              aria-activedescendant={
+                focused ? `${optionId}-${active}` : undefined
+              }
+              tabIndex={0}
+              onKeyDown={onKeyDown}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return
+                // A finger scrolls the chart; a tap picks (see onPointerUp).
+                if (e.pointerType === 'touch') {
+                  tapStart.current = { x: e.clientX, y: e.clientY }
+                  return
+                }
+                e.preventDefault()
+                chart.current?.focus()
+                chart.current?.setPointerCapture(e.pointerId)
+                dragging.current = true
+                const i = indexAt(e.clientX)
+                select(
+                  e.shiftKey && range
+                    ? { anchor: range.anchor, focus: i }
+                    : { anchor: i, focus: i },
+                )
+              }}
+              onPointerMove={(e) => {
+                if (!dragging.current) return
+                const i = indexAt(e.clientX)
+                if (range && i !== range.focus)
+                  setRange({ anchor: range.anchor, focus: i })
+              }}
+              onPointerUp={(e) => {
+                dragging.current = false
+                const start = tapStart.current
+                tapStart.current = null
+                if (
+                  e.pointerType !== 'touch' ||
+                  !start ||
+                  Math.abs(e.clientX - start.x) > TAP_SLOP ||
+                  Math.abs(e.clientY - start.y) > TAP_SLOP
+                )
+                  return
+                // A tap picks one bar; a tap on another bar while one is
+                // picked reaches to it.
+                const i = indexAt(e.clientX)
+                chart.current?.focus({ preventScroll: true })
+                select(
+                  range && range.anchor === range.focus && i !== range.anchor
+                    ? { anchor: range.anchor, focus: i }
+                    : { anchor: i, focus: i },
+                )
+              }}
+              onPointerCancel={() => {
+                dragging.current = false
+                tapStart.current = null
+              }}
+              // Each bucket at least BAR_PX wide: after the window closes
+              // that is 148 of them, scrolled sideways, not squeezed to 2 px.
+              style={{ minWidth: `${buckets.length * BAR_PX}px` }}
+              className={`flex h-24 cursor-crosshair touch-manipulation items-end px-0.5 pt-1 select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-cloud-blue ${buckets.length <= 48 ? 'gap-px' : ''}`}
+            >
+              {buckets.map((b, i) => (
+                <div
+                  key={b.start}
+                  id={`${optionId}-${i}`}
+                  role="option"
+                  aria-selected={selected(i)}
+                  aria-label={`${formatFeedbackCommentTime(b.start)}–${formatConferenceClock(b.end)}: ${plural(b.ids.length, 'response', 'responses')}`}
+                  className={`flex h-full min-w-0 flex-1 flex-col justify-end ${selected(i) ? 'bg-brand-sky-mist dark:bg-blue-900/50' : range ? 'opacity-35' : ''} ${focused && i === active ? 'outline-1 -outline-offset-1 outline-brand-cloud-blue dark:outline-blue-300' : ''}`}
+                >
+                  {b.ids.length > 0 && (
+                    <div
+                      className="flex min-h-0.5 flex-col-reverse overflow-hidden"
+                      style={{ height: `${(b.ids.length / max) * 100}%` }}
+                    >
+                      {STACK.map(({ colour }) =>
+                        b.counts[colour] > 0 ? (
+                          <div
+                            key={colour}
+                            className={FEEDBACK_TONE[colour].bar}
+                            style={{
+                              height: `${(b.counts[colour] / b.ids.length) * 100}%`,
+                            }}
+                          />
+                        ) : null,
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
           <div className="mt-1 flex justify-between gap-2 text-xs text-gray-600 tabular-nums dark:text-gray-400">
             <time dateTime={buckets[0].start}>

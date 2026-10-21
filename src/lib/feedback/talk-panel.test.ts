@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { talkFeedbackView } from './talk-panel'
 
-const view = (status: string, today: string, codesLive = true) =>
+/** Noon in Oslo on `day`. */
+const at = (day: string) => new Date(`${day}T11:00:00Z`)
+const view = (status: string, day: string, codesLive = true) =>
   talkFeedbackView({
     status,
     conferenceStartDate: '2026-10-27',
-    today,
+    now: at(day),
     codesLive,
   })
 
@@ -34,7 +36,29 @@ describe('talkFeedbackView', () => {
       talkFeedbackView({
         status: 'confirmed',
         conferenceStartDate: null,
-        today: '2026-10-27',
+        now: at('2026-10-27'),
+        codesLive: true,
+      }),
+    ).toBe('code')
+  })
+
+  it('judges the day in Oslo, not in UTC', () => {
+    // 00:30 on the first day in Oslo (CET) is still the day before in UTC.
+    const now = new Date('2026-10-26T23:30:00Z')
+    expect(
+      talkFeedbackView({
+        status: 'confirmed',
+        conferenceStartDate: '2026-10-27',
+        now,
+        codesLive: true,
+      }),
+    ).toBe('panel')
+    // And 23:30 the evening before in Oslo is not yet the first day.
+    expect(
+      talkFeedbackView({
+        status: 'confirmed',
+        conferenceStartDate: '2026-10-27',
+        now: new Date('2026-10-26T22:30:00Z'),
         codesLive: true,
       }),
     ).toBe('code')

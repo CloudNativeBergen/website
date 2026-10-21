@@ -530,3 +530,36 @@ export const RotateChangedMeanwhile: Story = {
     )
   },
 }
+
+/**
+ * The rotate request's reply was lost (502), though the rotation landed:
+ * the panel reads the code again and shows the new one.
+ */
+const lostReply = { reads: 0 }
+export const RotateReplyLost: Story = {
+  beforeEach: () => {
+    lostReply.reads = 0
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(READ, () =>
+          trpc(
+            lostReply.reads++ === 0
+              ? withCode
+              : { ...rotated, mayMint: false, mayRotate: true },
+          ),
+        ),
+        http.post(ROTATE, () => failWith('INTERNAL_SERVER_ERROR', 502)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    await confirmWith('Rotate')
+    expect((await canvas.findAllByText(new RegExp(ROTATED)))[0]).toBeVisible()
+  },
+}

@@ -2,7 +2,7 @@ import { Suspense } from 'react'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { CalendarIcon } from '@heroicons/react/20/solid'
 import { notFound } from 'next/navigation'
-import { formatDate, osloTodayDateString } from '@/lib/time'
+import { formatDate } from '@/lib/time'
 import { ClockIcon } from '@heroicons/react/20/solid'
 import { getProposalSanity } from '@/lib/proposal/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -84,7 +84,7 @@ export default async function ProposalDetailPage({
     const feedbackView = talkFeedbackView({
       status: proposal.status,
       conferenceStartDate: conference?.startDate,
-      today: osloTodayDateString(),
+      now: new Date(),
       codesLive: ATTENDEE_PAGE_LIVE,
     })
 

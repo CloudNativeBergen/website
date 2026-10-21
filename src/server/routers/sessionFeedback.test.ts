@@ -1481,7 +1481,7 @@ describe('rotateCode — rotates only the code the organizer saw', () => {
     expect(h.docReads).toEqual([])
   })
 
-  it('expires the index before the sweep runs', async () => {
+  it('expires the index before the sweep runs, and again after it', async () => {
     h.dataset.push(talk('drafts.talk-1', { feedbackCode: 'w9nn3r' }))
     const order: string[] = []
     vi.mocked(revalidateTag).mockImplementation(() => {
@@ -1492,8 +1492,11 @@ describe('rotateCode — rotates only the code the organizer saw', () => {
     vi.mocked(revalidateTag).mockReset()
     // The first read and the write's version lookup come before the commit;
     // the sweep's reads come after the expiry.
-    const expireAt = Number(/after (\d+)/.exec(order[0])![1])
-    expect(h.docReads.length).toBeGreaterThan(expireAt)
-    expect(expireAt).toBeGreaterThan(readsBefore)
+    const [first, second] = order.map((o) => Number(/after (\d+)/.exec(o)![1]))
+    expect(first).toBeGreaterThan(readsBefore)
+    // Expired once the commit lands, and again after the sweep's reads.
+    expect(order).toHaveLength(2)
+    expect(second).toBeGreaterThan(first)
+    expect(second).toBe(h.docReads.length)
   })
 })

@@ -448,6 +448,9 @@ export async function rotateFeedbackCode({
       // The old code stops resolving now, not after the sweep's round trips.
       expireFeedbackCodeIndex(conference._id)
       await sweepTalkVersions(client, read.talk._id)
+      // And again: a refill during the sweep goes through GROQ, which can
+      // lag the commit and cache the old mapping for the index's lifetime.
+      expireFeedbackCodeIndex(conference._id)
       return { status: 'ok', code: out.code, window }
     case 'locked':
       return { status: 'locked' }

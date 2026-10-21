@@ -73,12 +73,11 @@ export function AdminFeedbackCodePanel({
       // says the code changed.
       setAsking(false)
     },
-    // Refused (no longer rotatable) or a release in the way: read again, so
-    // the offer goes if it should, and say why where the button was.
-    onError: (error) => {
+    // Read the code again whatever went wrong: refused, a release in the
+    // way, or a lost reply after which the rotation may well have landed.
+    onError: () => {
       setAsking(false)
-      if (error.data?.code === 'NOT_FOUND' || error.data?.code === 'CONFLICT')
-        void utils.sessionFeedback.adminCode.invalidate({ talkId })
+      void utils.sessionFeedback.adminCode.invalidate({ talkId })
     },
   })
 

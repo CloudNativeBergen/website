@@ -212,4 +212,68 @@ describe('ResponsesOverTime', () => {
       screen.getByText(/^Tue 27 Oct, 23:50–Wed 28 Oct, 00:10 · 2 responses$/),
     ).toBeTruthy()
   })
+
+  const three = [
+    r('a', '2026-10-27T09:01:00Z'),
+    r('b', '2026-10-27T09:11:00Z'),
+    r('c', '2026-10-27T09:21:00Z'),
+  ]
+  const selected = () =>
+    within(chart())
+      .getAllByRole('option')
+      .flatMap((o, i) =>
+        o.getAttribute('aria-selected') === 'true' ? [i] : [],
+      )
+
+  it('picks the first bucket on the first arrow, not the one beside it', () => {
+    render(
+      <ResponsesOverTime
+        responses={three}
+        window={NO_WINDOW}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0, changed: 0 }))}
+      />,
+    )
+    act(() => chart().focus())
+    key('ArrowRight')
+    expect(selected()).toEqual([0])
+    key('ArrowRight')
+    expect(selected()).toEqual([1])
+  })
+
+  it('on a touch screen, a tap picks a bar and a tap on another reaches to it; a swipe picks nothing', () => {
+    render(
+      <ResponsesOverTime
+        responses={three}
+        window={NO_WINDOW}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0, changed: 0 }))}
+      />,
+    )
+    // Three buckets across 300 px.
+    vi.spyOn(chart(), 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      width: 300,
+    } as DOMRect)
+    const touch = (x: number, toX = x) => {
+      fireEvent.pointerDown(chart(), {
+        pointerType: 'touch',
+        button: 0,
+        clientX: x,
+        clientY: 50,
+      })
+      fireEvent.pointerUp(chart(), {
+        pointerType: 'touch',
+        button: 0,
+        clientX: toX,
+        clientY: 50,
+      })
+    }
+    touch(250, 30) // a swipe: scrolls, picks nothing
+    expect(selected()).toEqual([])
+    touch(50)
+    expect(selected()).toEqual([0])
+    touch(250)
+    expect(selected()).toEqual([0, 1, 2])
+    touch(150) // a new pick once a range is made
+    expect(selected()).toEqual([1])
+  })
 })
