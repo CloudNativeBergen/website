@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { TrashIcon } from '@heroicons/react/24/outline'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import {
@@ -49,12 +49,14 @@ export function ResponsesOverTime({
   const optionId = useId()
   const chart = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
-  // Bucketing, not display: the chart reaches to now while the window is open.
-  const buckets = responseBuckets({
-    responses,
-    window,
-    now: new Date(Date.now()),
-  })
+  // Bucketing, not display: while the window is open the chart reaches to
+  // now, sampled once a minute (a later response stretches it anyway).
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  const buckets = responseBuckets({ responses, window, now: new Date(now) })
   const last = buckets.length - 1
   const [stored, setRange] = useState<BucketRange | null>(null)
   const [focused, setFocused] = useState(false)

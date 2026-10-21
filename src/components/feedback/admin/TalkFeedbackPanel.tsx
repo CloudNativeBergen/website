@@ -148,6 +148,7 @@ export function TalkFeedbackPanel({
                   type="text"
                   inputMode="numeric"
                   autoComplete="off"
+                  aria-label={`${label} cards`}
                   value={shown(colour)}
                   aria-invalid={
                     draft ? !COUNT.test(draft[colour].trim()) : false

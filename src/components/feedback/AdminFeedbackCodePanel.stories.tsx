@@ -1,10 +1,12 @@
+import { useEffect, type ReactNode } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { delay, http, HttpResponse } from 'msw'
-import { expect, userEvent, waitFor, within } from 'storybook/test'
-import { AdminFeedbackCodePanel } from './AdminFeedbackCodePanel'
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test'
+import { AdminFeedbackCodePanel, rotateMessage } from './AdminFeedbackCodePanel'
 
 const READ = '/api/trpc/sessionFeedback.adminCode'
 const MINT = '/api/trpc/sessionFeedback.mintCode'
+const ROTATE = '/api/trpc/sessionFeedback.rotateCode'
 
 const trpc = (data: unknown) => HttpResponse.json({ result: { data } })
 const failWith = (code: string, httpStatus: number) =>
@@ -21,8 +23,38 @@ const before = {
   closesAt: '2026-10-27T08:40:00.000Z',
   feedbackVisible: false,
 }
-const noCode = { code: null, url: null, window: before, mayMint: true }
-const withCode = { code: 'k7m2qx', url: URL, window: before, mayMint: false }
+const noCode = {
+  code: null,
+  url: null,
+  window: before,
+  mayMint: true,
+  mayRotate: false,
+}
+const withCode = {
+  code: 'k7m2qx',
+  url: URL,
+  window: before,
+  mayMint: false,
+  mayRotate: true,
+}
+
+/**
+ * The Rotate confirmation is portaled out of the story's root, past the
+ * global theme decorator's `dark` wrapper; put `dark` on the document too.
+ */
+function DocumentTheme({
+  dark,
+  children,
+}: {
+  dark: boolean
+  children: ReactNode
+}) {
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+    return () => document.documentElement.classList.remove('dark')
+  }, [dark])
+  return children
+}
 
 /**
  * Deterministic dates with real timers (AGENTS.md): the clock starts before
@@ -46,7 +78,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A talk’s Feedback Code in the sidebar of `/admin/proposals/[id]` (#1459). Reads `sessionFeedback.adminCode`, which never mints; Mint Feedback Code calls `sessionFeedback.mintCode`. Shows the speaker’s QR panel once the talk has a code, worded for organizers. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'A talk’s Feedback Code in the sidebar of `/admin/proposals/[id]` (#1459). Reads `sessionFeedback.adminCode`, which never mints; Mint Feedback Code calls `sessionFeedback.mintCode`. Shows the speaker’s QR panel once the talk has a code, worded for organizers, and Rotate Feedback Code (`sessionFeedback.rotateCode`, spec §10.4) where `adminCode` says rotation is possible. Dark mode follows the global `theme` toolbar (story-level `globals`), applied to the document as well because the Rotate confirmation is portaled.',
       },
     },
     msw: {
@@ -61,10 +93,12 @@ const meta = {
   // The admin talk page's sidebar is 24rem wide (`lg:w-96`) with p-4; on a
   // phone it is the full width.
   decorators: [
-    (Story) => (
-      <div className="w-full max-w-96 p-4">
-        <Story />
-      </div>
+    (Story, context) => (
+      <DocumentTheme dark={context.globals.theme === 'dark'}>
+        <div className="w-full max-w-96 p-4">
+          <Story />
+        </div>
+      </DocumentTheme>
     ),
   ],
   args: { talkId: 'talk-1', title: 'Kubernetes: the hard parts' },
@@ -322,5 +356,120 @@ export const MintRefused: Story = {
     expect(canvas.queryByRole('button')).toBeNull()
     expect(canvas.queryByRole('alert')).toBeNull()
     expect(canvas.getByRole('heading', { name: 'Feedback Code' })).toHaveFocus()
+  },
+}
+
+const ROTATED = 'p4hw7c'
+const rotated = {
+  code: ROTATED,
+  url: `https://2026.cloudnativedays.no/f/${ROTATED}`,
+  window: before,
+}
+
+/**
+ * Rotate asks first, with the spec’s words (§10.4), then shows the new code.
+ */
+export const RotatesTheCode: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(READ, () => trpc(withCode)),
+        http.post(ROTATE, () => trpc(rotated)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(await canvas.findByText(/k7m2qx/)).toBeVisible()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText('Rotate Feedback Code?'),
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(
+        '/f/k7m2qx stops working now. Printed sheets and slides showing it will reach a dead page. Existing responses are kept.',
+      ),
+    ).toBeInTheDocument()
+    expect(rotateMessage('k7m2qx')).toBe(
+      '/f/k7m2qx stops working now. Printed sheets and slides showing it will reach a dead page. Existing responses are kept.',
+    )
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Rotate' }),
+    )
+    expect(await canvas.findByText(new RegExp(ROTATED))).toBeVisible()
+    expect(canvas.queryByText(/k7m2qx/)).toBeNull()
+    expect(
+      canvas.getByText(`Feedback Code rotated. The new code is ${ROTATED}.`),
+    ).toBeInTheDocument()
+  },
+}
+
+/** The confirmation, open, for a visual check. */
+export const RotateAsks: Story = {
+  parameters: { msw: { handlers: [http.get(READ, () => trpc(withCode))] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    expect(await screen.findByRole('dialog')).toBeVisible()
+  },
+}
+
+export const RotateAsksDark: Story = {
+  ...RotateAsks,
+  globals: { theme: 'dark' },
+}
+
+/** No rotation offered once the window has closed (§10.4). */
+export const NoRotationWindowClosed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(READ, () =>
+          trpc({
+            ...withCode,
+            window: { ...before, state: 'closed', feedbackVisible: true },
+            mayRotate: false,
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(await canvas.findByText(/k7m2qx/)).toBeVisible()
+    expect(
+      canvas.queryByRole('button', { name: 'Rotate Feedback Code' }),
+    ).toBeNull()
+  },
+}
+
+/** Refused meanwhile (the window closed, the talk changed): said, offer gone. */
+export const RotateRefused: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(READ, () => trpc(withCode)),
+        http.post(ROTATE, () => failWith('NOT_FOUND', 404)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Rotate Feedback Code' }),
+    )
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Rotate',
+      }),
+    )
+    expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'can no longer be rotated',
+    )
   },
 }
