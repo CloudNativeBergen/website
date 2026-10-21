@@ -6,7 +6,7 @@
  * second: the saved counts must stay on screen until a read reflects them,
  * never flick back to the old ones beside "Card Counts saved.".
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   act,
   cleanup,
@@ -57,44 +57,29 @@ async function saveGreen(value: string) {
 }
 
 describe('TalkFeedbackPanel Card Counts', () => {
-  it('keeps the saved counts while the read still shows the old ones', async () => {
+  it('keeps the saved counts while the read still shows the old ones, and no longer than its time', async () => {
     const onSaveCards = vi.fn(async () => null)
-    const { rerender } = render(
+    const onCardsExpired = vi.fn()
+    const at = (green: number) => (
       <TalkFeedbackPanel
-        feedback={feedback(3)}
+        feedback={feedback(green)}
         onSaveCards={onSaveCards}
+        onCardsExpired={onCardsExpired}
+        cardsOverlayMs={60}
         {...props}
-      />,
+      />
     )
+    const { rerender } = render(at(3))
     expect(greenTotal()).toBe('13')
     await saveGreen('5')
     expect(onSaveCards).toHaveBeenCalledWith({ green: 5, yellow: 1, red: 0 })
     // The refetch lags the commit: it still says 3.
-    rerender(
-      <TalkFeedbackPanel
-        feedback={feedback(3)}
-        onSaveCards={onSaveCards}
-        {...props}
-      />,
-    )
+    rerender(at(3))
     expect(greenCards().value).toBe('5')
     expect(greenTotal()).toBe('15')
-    // It catches up; later reads are shown as they are.
-    rerender(
-      <TalkFeedbackPanel
-        feedback={feedback(5)}
-        onSaveCards={onSaveCards}
-        {...props}
-      />,
-    )
-    expect(greenCards().value).toBe('5')
-    rerender(
-      <TalkFeedbackPanel
-        feedback={feedback(7)}
-        onSaveCards={onSaveCards}
-        {...props}
-      />,
-    )
+    // Its time is up: the page asks for a read, and shows the next one.
+    await waitFor(() => expect(onCardsExpired).toHaveBeenCalledTimes(1))
+    rerender(at(7))
     expect(greenCards().value).toBe('7')
     expect(greenTotal()).toBe('17')
   })
@@ -181,11 +166,15 @@ describe('TalkFeedbackPanel Card Counts', () => {
 
   describe('another organizer’s save, in every order against ours (committed at 10:00:02)', () => {
     const CA = '2026-10-27T10:00:02.000Z'
+    const expired = vi.fn()
+    beforeEach(() => expired.mockClear())
     const setup = (green: number, at: string) => {
       const view = render(
         <TalkFeedbackPanel
           feedback={feedback(green, at)}
           onSaveCards={vi.fn(async () => ({ updatedAt: CA, rev: 'rA' }))}
+          onCardsExpired={expired}
+          cardsOverlayMs={60}
           {...props}
         />,
       )
@@ -194,6 +183,8 @@ describe('TalkFeedbackPanel Card Counts', () => {
           <TalkFeedbackPanel
             feedback={feedback(g, readAt, rev)}
             onSaveCards={vi.fn()}
+            onCardsExpired={expired}
+            cardsOverlayMs={60}
             {...props}
           />,
         )
@@ -229,6 +220,29 @@ describe('TalkFeedbackPanel Card Counts', () => {
       expect(greenCards().value).toBe('5')
     })
 
+    it('B restored 3 in the same second as our 5: ours stands only until its time is up, then the read shows 3', async () => {
+      const read = setup(3, '2026-10-27T09:59:00.000Z')
+      await saveGreen('5')
+      // The refetch sees B directly: a tie, another revision, B never changes.
+      read(3, CA)
+      expect(greenCards().value).toBe('5')
+      await waitFor(() => expect(expired).toHaveBeenCalledTimes(1))
+      // Until that read arrives, ours stays: a quiet page asked for one.
+      expect(greenCards().value).toBe('5')
+      // The read the expiry asked for, still B's.
+      read(3, CA)
+      expect(greenCards().value).toBe('3')
+    })
+
+    it('a lagging read within the time keeps ours, however often it comes', async () => {
+      const read = setup(3, '2026-10-27T09:59:00.000Z')
+      await saveGreen('5')
+      read(3, '2026-10-27T09:59:00.000Z', 'r0')
+      read(3, '2026-10-27T09:59:00.000Z', 'r0')
+      expect(greenCards().value).toBe('5')
+      expect(expired).not.toHaveBeenCalled()
+    })
+
     it('a read of our own revision clears, whatever its time and counts', async () => {
       const read = setup(3, '2026-10-27T09:59:00.000Z')
       await saveGreen('5')
@@ -236,30 +250,34 @@ describe('TalkFeedbackPanel Card Counts', () => {
       expect(greenCards().value).toBe('3')
     })
 
-    it('a read from the same second as our commit, of another write with other counts, shows as it is', async () => {
+    it('a read from the same second as our commit, of another write with other counts, keeps ours until its time is up', async () => {
       const read = setup(3, '2026-10-27T09:59:00.000Z')
       await saveGreen('5')
+      read(6, CA)
+      expect(greenCards().value).toBe('5')
+      await waitFor(() => expect(expired).toHaveBeenCalled())
       read(6, CA)
       expect(greenCards().value).toBe('6')
     })
   })
 
-  it('shows a newer read over the saved counts (another organizer saved since)', async () => {
-    const { rerender } = render(
+  it('shows another organizer’s counts, when nothing orders them, once the saved counts’ time is up', async () => {
+    const expired = vi.fn()
+    const at = (green: number) => (
       <TalkFeedbackPanel
-        feedback={feedback(3)}
+        feedback={feedback(green)}
         onSaveCards={vi.fn(async () => null)}
+        onCardsExpired={expired}
+        cardsOverlayMs={60}
         {...props}
-      />,
+      />
     )
+    const { rerender } = render(at(3))
     await saveGreen('5')
-    rerender(
-      <TalkFeedbackPanel
-        feedback={feedback(8)}
-        onSaveCards={vi.fn()}
-        {...props}
-      />,
-    )
+    rerender(at(8))
+    expect(greenCards().value).toBe('5')
+    await waitFor(() => expect(expired).toHaveBeenCalled())
+    rerender(at(8))
     expect(greenCards().value).toBe('8')
   })
 

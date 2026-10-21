@@ -157,6 +157,9 @@ export function TalkFeedbackAdminPanel({
         onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
         onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
         headingRef={heading}
+        onCardsExpired={() =>
+          void utils.sessionFeedback.adminTalk.invalidate({ talkId })
+        }
         onRemove={(request) =>
           removeInRequests(request, (chunk) => remove.mutateAsync(chunk))
         }

@@ -199,6 +199,12 @@ describe('TalkFeedbackAdminPanel', () => {
     }
   })
 
+  it('reads the talk again when saved Card Counts’ time is up', () => {
+    panel()
+    h.panel!.onCardsExpired!()
+    expect(h.invalidateTalk).toHaveBeenCalledWith({ talkId: 'talk-1' })
+  })
+
   it('says nothing about refreshing when the read is fine', () => {
     panel()
     expect(screen.queryByText(/Couldn’t refresh/)).toBeNull()

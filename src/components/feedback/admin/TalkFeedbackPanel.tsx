@@ -1,6 +1,13 @@
 'use client'
 
-import { useId, useState, type ReactNode, type Ref } from 'react'
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react'
 import { ChatBubbleLeftRightIcon, CheckIcon } from '@heroicons/react/24/outline'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import type {
@@ -30,10 +37,6 @@ type CardDraft = Record<FeedbackColour, string>
 
 const COUNT = /^\d{1,6}$/
 
-const sameCounts = (a: ColourCounts, b: ColourCounts) =>
-  ANSWERS.every(({ colour }) => a[colour] === b[colour])
-
-/** Counts saved, and the counts the read showed when they were. */
 /** A Card Counts save as its commit returned the talk. */
 export interface CardsSave {
   /** The talk's `_updatedAt`: the commit's time, to the second. */
@@ -45,32 +48,35 @@ export interface CardsSave {
 interface SavedCards {
   cards: ColourCounts
   save: CardsSave | null
-  over: ColourCounts
+  /**
+   * Once the overlay's time is up: the read on screen then. The next read
+   * after it (the one the expiry asks for) is shown as it is.
+   */
+  expiredOn: AdminTalkFeedback | null
 }
 
+/** How long saved counts may stand in for a read that has not caught up. */
+export const CARDS_OVERLAY_MS = 10_000
+
 /**
- * The read includes the save: it shows the save's own revision, or a talk
- * that changed strictly after the save committed (`_updatedAt` is the
- * commit's time, so its order is the order writes landed in; a stamp taken
- * before the commit is not). A read before the commit does not. A tie (the
- * time has whole seconds) and a missing time fall back to the counts: the
- * read shows the saved ones, or anything other than what was on screen
- * when they were saved.
+ * The read certainly includes the save: it shows the save's own revision,
+ * or a talk that changed strictly after the save committed (`_updatedAt`
+ * is the commit's time). Anything else may be a read from before it, or a
+ * write in the same second (`_updatedAt` has whole seconds, and two writes
+ * in one second cannot be ordered): the overlay then stands until its time
+ * is up, never longer.
  */
-function caughtUp(
-  saved: SavedCards,
-  read: ColourCounts,
+function includesSave(
+  save: CardsSave | null,
   readAt: string | null,
   readRev: string | null,
 ): boolean {
-  const { save } = saved
   if (save?.rev && readRev === save.rev) return true
-  if (save?.updatedAt && readAt) {
-    const after = Date.parse(readAt) - Date.parse(save.updatedAt)
-    if (after > 0) return true
-    if (after < 0) return false
-  }
-  return sameCounts(read, saved.cards) || !sameCounts(read, saved.over)
+  return (
+    !!save?.updatedAt &&
+    !!readAt &&
+    Date.parse(readAt) > Date.parse(save.updatedAt)
+  )
 }
 
 export interface TalkFeedbackPanelProps {
@@ -92,6 +98,10 @@ export interface TalkFeedbackPanelProps {
   onRemove: (request: RemoveRequest) => Promise<RemovedCounts>
   /** The heading, for a page that moves focus to it (after a Retry). */
   headingRef?: Ref<HTMLHeadingElement>
+  /** Saved counts' time is up: read the talk again. */
+  onCardsExpired?: () => void
+  /** How long saved counts stand in for a lagging read. */
+  cardsOverlayMs?: number
 }
 
 /**
@@ -110,6 +120,8 @@ export function TalkFeedbackPanel({
   onUnhide,
   onRemove,
   headingRef,
+  onCardsExpired,
+  cardsOverlayMs = CARDS_OVERLAY_MS,
 }: TalkFeedbackPanelProps) {
   const { comments } = feedback
   const formId = useId()
@@ -117,12 +129,31 @@ export function TalkFeedbackPanel({
   const [saving, setSaving] = useState(false)
   const [cardsNote, setCardsNote] = useState<Note | null>(null)
   // The read after a save goes through GROQ, which can lag the commit by
-  // about a second: the saved counts stay on screen until a read shows them,
-  // or shows anything newer than what was on screen when they were saved.
+  // about a second: the saved counts stay on screen until a read surely
+  // includes them, and at most CARDS_OVERLAY_MS (then the next read shows).
   const [saved, setSaved] = useState<SavedCards | null>(null)
-  const read = feedback.totals.cards
-  if (saved && caughtUp(saved, read, feedback.updatedAt, feedback.rev))
+  if (
+    saved &&
+    (includesSave(saved.save, feedback.updatedAt, feedback.rev) ||
+      (saved.expiredOn !== null && saved.expiredOn !== feedback))
+  )
     setSaved(null)
+  // The read on screen, for the expiry below (set after render).
+  const shownRead = useRef(feedback)
+  useEffect(() => {
+    shownRead.current = feedback
+  })
+  useEffect(() => {
+    if (!saved || saved.expiredOn) return
+    const timer = setTimeout(() => {
+      setSaved((now) =>
+        now === saved ? { ...now, expiredOn: shownRead.current } : now,
+      )
+      // A quiet page converges by itself: read once more.
+      onCardsExpired?.()
+    }, cardsOverlayMs)
+    return () => clearTimeout(timer)
+  }, [saved, cardsOverlayMs, onCardsExpired])
   const totals = saved
     ? feedbackTotals({
         // `scanned` holds the live and folded answers; only cards change.
@@ -154,7 +185,7 @@ export function TalkFeedbackPanel({
       }
       const save = await onSaveCards(cards)
       // Against the server's read, never an earlier save's counts on screen.
-      setSaved({ cards, save, over: read })
+      setSaved({ cards, save, expiredOn: null })
       setDraft(null)
       setCardsNote({ ok: true, text: 'Card Counts saved.' })
     } catch (e) {
