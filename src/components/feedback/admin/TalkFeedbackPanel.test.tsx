@@ -18,13 +18,15 @@ import {
 } from '@testing-library/react'
 import type { AdminTalkFeedback } from '@/lib/feedback/admin'
 import { feedbackTotals } from '@/lib/feedback/totals'
-import { TalkFeedbackPanel } from './TalkFeedbackPanel'
+import { TalkFeedbackPanel, type CardsSave } from './TalkFeedbackPanel'
 
 const feedback = (
   green: number,
   updatedAt: string | null = null,
+  rev: string | null = null,
 ): AdminTalkFeedback => ({
   updatedAt,
+  rev,
   totals: feedbackTotals({
     live: { green: 10, yellow: 2, red: 1 },
     cards: { greenCount: green, yellowCount: 1, redCount: 0 },
@@ -103,7 +105,7 @@ describe('TalkFeedbackPanel Card Counts', () => {
       <TalkFeedbackPanel
         feedback={feedback(3)}
         onSaveCards={vi.fn(
-          () => new Promise<string | null>((r) => (finish = () => r(null))),
+          () => new Promise<CardsSave | null>((r) => (finish = () => r(null))),
         )}
         {...props}
       />,
@@ -143,11 +145,18 @@ describe('TalkFeedbackPanel Card Counts', () => {
   it('keeps the last of two quick saves until a read includes it, not just the first', async () => {
     const T1 = '2026-10-27T10:00:01.000Z'
     const T2 = '2026-10-27T10:00:02.000Z'
-    const stamps = [T1, T2]
-    const onSaveCards = vi.fn(async () => stamps.shift() ?? null)
-    const panel = (green: number, at: string | null) => (
+    const saves = [
+      { updatedAt: T1, rev: 'r1' },
+      { updatedAt: T2, rev: 'r2' },
+    ]
+    const onSaveCards = vi.fn(async () => saves.shift() ?? null)
+    const panel = (
+      green: number,
+      at: string | null,
+      rev: string | null = null,
+    ) => (
       <TalkFeedbackPanel
-        feedback={feedback(green, at)}
+        feedback={feedback(green, at, rev)}
         onSaveCards={onSaveCards}
         {...props}
       />
@@ -159,14 +168,14 @@ describe('TalkFeedbackPanel Card Counts', () => {
     await waitFor(() => expect(onSaveCards).toHaveBeenCalledTimes(2))
     await screen.findByText('Card Counts saved.')
     // A read that has caught up with the first save only.
-    rerender(panel(5, T1))
+    rerender(panel(5, T1, 'r1'))
     expect(greenCards().value).toBe('7')
     expect(greenTotal()).toBe('17')
     // Then with the second.
-    rerender(panel(7, T2))
+    rerender(panel(7, T2, 'r2'))
     expect(greenCards().value).toBe('7')
     // Another organizer's later save shows.
-    rerender(panel(9, '2026-10-27T10:05:00.000Z'))
+    rerender(panel(9, '2026-10-27T10:05:00.000Z', 'r3'))
     expect(greenCards().value).toBe('9')
   })
 
@@ -176,14 +185,14 @@ describe('TalkFeedbackPanel Card Counts', () => {
       const view = render(
         <TalkFeedbackPanel
           feedback={feedback(green, at)}
-          onSaveCards={vi.fn(async () => CA)}
+          onSaveCards={vi.fn(async () => ({ updatedAt: CA, rev: 'rA' }))}
           {...props}
         />,
       )
-      return (g: number, readAt: string) =>
+      return (g: number, readAt: string, rev = 'rB') =>
         view.rerender(
           <TalkFeedbackPanel
-            feedback={feedback(g, readAt)}
+            feedback={feedback(g, readAt, rev)}
             onSaveCards={vi.fn()}
             {...props}
           />,
@@ -212,7 +221,22 @@ describe('TalkFeedbackPanel Card Counts', () => {
       expect(greenCards().value).toBe('4')
     })
 
-    it('a read from the same moment as our commit shows as it is', async () => {
+    it('a read from the same second as our commit, of another write, with the counts unchanged keeps ours', async () => {
+      const read = setup(3, '2026-10-27T09:59:00.000Z')
+      await saveGreen('5')
+      // Whole seconds: this may be a write just before ours, read in the lag.
+      read(3, CA)
+      expect(greenCards().value).toBe('5')
+    })
+
+    it('a read of our own revision clears, whatever its time and counts', async () => {
+      const read = setup(3, '2026-10-27T09:59:00.000Z')
+      await saveGreen('5')
+      read(3, CA, 'rA')
+      expect(greenCards().value).toBe('3')
+    })
+
+    it('a read from the same second as our commit, of another write with other counts, shows as it is', async () => {
       const read = setup(3, '2026-10-27T09:59:00.000Z')
       await saveGreen('5')
       read(6, CA)
@@ -243,7 +267,7 @@ describe('TalkFeedbackPanel Card Counts', () => {
     let finish: () => void = () => {}
     const onSaveCards = vi.fn(
       () =>
-        new Promise<string | null>((resolve) => (finish = () => resolve(null))),
+        new Promise<CardsSave | null>((resolve) => (finish = () => resolve(null))),
     )
     render(
       <TalkFeedbackPanel

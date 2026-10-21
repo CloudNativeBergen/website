@@ -168,6 +168,7 @@ describe('TalkFeedbackAdminPanel', () => {
     h.cardsReply = {
       _id: 'talk-1',
       _updatedAt: '2026-10-27T10:00:02Z',
+      _rev: 'rev-saved',
       audienceFeedback: {
         greenCount: 5,
         yellowCount: 1,
@@ -178,7 +179,7 @@ describe('TalkFeedbackAdminPanel', () => {
     panel()
     await expect(
       h.panel!.onSaveCards({ green: 5, yellow: 1, red: 0 }),
-    ).resolves.toBe('2026-10-27T10:00:02Z')
+    ).resolves.toEqual({ updatedAt: '2026-10-27T10:00:02Z', rev: 'rev-saved' })
     expect(h.cardsInput).toEqual([
       {
         id: 'talk-1',
@@ -189,6 +190,6 @@ describe('TalkFeedbackAdminPanel', () => {
     h.cardsReply = { _id: 'talk-1' }
     await expect(
       h.panel!.onSaveCards({ green: 5, yellow: 1, red: 0 }),
-    ).resolves.toBeNull()
+    ).resolves.toEqual({ updatedAt: null, rev: null })
   })
 })

@@ -1010,9 +1010,14 @@ describe('readTalkFeedback — one talk’s panel (§10.2)', () => {
 
   it('gives the time the talk last changed, so a save can tell when a read includes it', async () => {
     h.dataset = h.dataset.map((d) =>
-      d._id === 'talk-a' ? { ...d, _updatedAt: '2026-06-10T12:00:05Z' } : d,
+      d._id === 'talk-a'
+        ? { ...d, _updatedAt: '2026-06-10T12:00:05Z', _rev: 'rev-saved' }
+        : d,
     )
-    expect((await readTalk('talk-a'))!.updatedAt).toBe('2026-06-10T12:00:05Z')
+    expect(await readTalk('talk-a')).toMatchObject({
+      updatedAt: '2026-06-10T12:00:05Z',
+      rev: 'rev-saved',
+    })
     expect((await readTalk('talk-b'))!.updatedAt).toBeNull()
   })
 

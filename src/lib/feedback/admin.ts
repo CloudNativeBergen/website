@@ -196,6 +196,8 @@ export interface AdminTalkFeedback {
    * lags it.
    */
   updatedAt: string | null
+  /** The talk's revision as read: exactly which write the read shows. */
+  rev: string | null
   window: FeedbackWindow
 }
 
@@ -218,13 +220,13 @@ export async function readTalkFeedback({
 }): Promise<AdminTalkFeedback | null> {
   const scope = { conferenceId: conference._id }
   const talk = await scopedFetch<
-    (TalkCounts & { _id: string; updatedAt?: unknown }) | null
+    (TalkCounts & { _id: string; updatedAt?: unknown; rev?: unknown }) | null
   >(
     clientReadUncached,
     scope,
     `*[_type == "talk" && _id == $talkId && ${PUBLISHED_ONLY}][0]{
       _id, audienceFeedback, feedbackFolded,
-      "updatedAt": _updatedAt
+      "updatedAt": _updatedAt, "rev": _rev
     }`,
     { talkId },
     { cache: 'no-store' },
@@ -257,6 +259,7 @@ export async function readTalkFeedback({
       now,
     }),
     updatedAt: typeof talk.updatedAt === 'string' ? talk.updatedAt : null,
+    rev: typeof talk.rev === 'string' ? talk.rev : null,
   }
 }
 

@@ -145,10 +145,14 @@ export function TalkFeedbackAdminPanel({
               redCount: c.red,
             },
           })
-          // When the save committed: the panel keeps the counts on screen
-          // until a read of the talk is at least that recent.
-          const at = (saved as { _updatedAt?: unknown } | null)?._updatedAt
-          return typeof at === 'string' ? at : null
+          // The talk as the commit returned it: when, and which write. The
+          // panel keeps the counts on screen until a read includes it.
+          const talk = saved as { _updatedAt?: unknown; _rev?: unknown } | null
+          return {
+            updatedAt:
+              typeof talk?._updatedAt === 'string' ? talk._updatedAt : null,
+            rev: typeof talk?._rev === 'string' ? talk._rev : null,
+          }
         }}
         onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
         onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}

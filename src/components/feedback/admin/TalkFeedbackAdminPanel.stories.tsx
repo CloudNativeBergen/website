@@ -153,6 +153,7 @@ const TALK_DATA = {
   responses: [],
   window: WINDOW,
   updatedAt: null,
+  rev: null,
 }
 
 /** The page's own refetch, as an action's refresh would run it. */

@@ -34,26 +34,42 @@ const sameCounts = (a: ColourCounts, b: ColourCounts) =>
   ANSWERS.every(({ colour }) => a[colour] === b[colour])
 
 /** Counts saved, and the counts the read showed when they were. */
+/** A Card Counts save as its commit returned the talk. */
+export interface CardsSave {
+  /** The talk's `_updatedAt`: the commit's time, to the second. */
+  updatedAt: string | null
+  /** The talk's `_rev`: exactly this write. */
+  rev: string | null
+}
+
 interface SavedCards {
   cards: ColourCounts
-  /** When the save committed: the talk's `_updatedAt` in its reply. */
-  at: string | null
+  save: CardsSave | null
   over: ColourCounts
 }
 
 /**
- * The read includes the save: the talk it shows changed at or after the
- * save committed (`_updatedAt` is the commit's time, so its order is the
- * order the writes landed in; a stamp taken before the commit is not).
- * Without the commit's time, by the counts: the read shows the saved ones,
- * or anything other than what was on screen when they were saved.
+ * The read includes the save: it shows the save's own revision, or a talk
+ * that changed strictly after the save committed (`_updatedAt` is the
+ * commit's time, so its order is the order writes landed in; a stamp taken
+ * before the commit is not). A read before the commit does not. A tie (the
+ * time has whole seconds) and a missing time fall back to the counts: the
+ * read shows the saved ones, or anything other than what was on screen
+ * when they were saved.
  */
 function caughtUp(
   saved: SavedCards,
   read: ColourCounts,
   readAt: string | null,
+  readRev: string | null,
 ): boolean {
-  if (saved.at && readAt) return Date.parse(readAt) >= Date.parse(saved.at)
+  const { save } = saved
+  if (save?.rev && readRev === save.rev) return true
+  if (save?.updatedAt && readAt) {
+    const after = Date.parse(readAt) - Date.parse(save.updatedAt)
+    if (after > 0) return true
+    if (after < 0) return false
+  }
   return sameCounts(read, saved.cards) || !sameCounts(read, saved.over)
 }
 
@@ -64,9 +80,9 @@ export interface TalkFeedbackPanelProps {
   /** Save the Card Counts (`proposal.updateAudienceFeedback`). */
   /**
    * Save the Card Counts (`proposal.updateAudienceFeedback`); resolves with
-   * the time the save committed (the talk's `_updatedAt`), when known.
+   * the talk's `_updatedAt` and `_rev` from the commit, when known.
    */
-  onSaveCards: (cards: ColourCounts) => Promise<string | null>
+  onSaveCards: (cards: ColourCounts) => Promise<CardsSave | null>
   onHide: (responseId: string) => Promise<unknown>
   onUnhide: (responseId: string) => Promise<unknown>
   /**
@@ -105,7 +121,8 @@ export function TalkFeedbackPanel({
   // or shows anything newer than what was on screen when they were saved.
   const [saved, setSaved] = useState<SavedCards | null>(null)
   const read = feedback.totals.cards
-  if (saved && caughtUp(saved, read, feedback.updatedAt)) setSaved(null)
+  if (saved && caughtUp(saved, read, feedback.updatedAt, feedback.rev))
+    setSaved(null)
   const totals = saved
     ? feedbackTotals({
         // `scanned` holds the live and folded answers; only cards change.
@@ -135,9 +152,9 @@ export function TalkFeedbackPanel({
         yellow: Number(draft.yellow),
         red: Number(draft.red),
       }
-      const at = await onSaveCards(cards)
+      const save = await onSaveCards(cards)
       // Against the server's read, never an earlier save's counts on screen.
-      setSaved({ cards, at, over: read })
+      setSaved({ cards, save, over: read })
       setDraft(null)
       setCardsNote({ ok: true, text: 'Card Counts saved.' })
     } catch (e) {
