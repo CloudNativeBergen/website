@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, fn, userEvent, within } from 'storybook/test'
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import type { ChartResponse } from '@/lib/feedback/buckets'
 import type { RemoveRequest } from '@/lib/feedback/bulk-remove'
 import type { FeedbackColour } from '@/lib/feedback/colour'
@@ -139,3 +139,36 @@ export const WindowClosed: Story = {
 }
 
 export const Empty: Story = { args: { responses: [] } }
+
+/**
+ * A burst the next morning, after the window has closed: the chart opens
+ * scrolled to it, says what is in view and that it goes on.
+ */
+export const LateBurst: Story = {
+  args: {
+    responses: [
+      ...RESPONSES.slice(0, 40),
+      ...Array.from({ length: 30 }, (_, i) => ({
+        id: `feedbackResponse-late-${String(i).padStart(27, '0')}`,
+        colour: 'red' as const,
+        submittedAt: new Date(
+          Date.parse('2026-10-28T06:02:00Z') + i * 15_000,
+        ).toISOString(),
+      })),
+    ],
+  },
+  beforeEach: runningClockFrom(new Date('2026-11-02T12:00:00Z')),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const chart = canvas.getByRole('listbox', { name: 'Responses over time' })
+    await waitFor(() =>
+      expect(chart.parentElement!.scrollLeft).toBeGreaterThan(0),
+    )
+    expect(canvas.getByText(/Scroll sideways for the rest/)).toBeVisible()
+  },
+}
+
+export const LateBurstDark: Story = {
+  ...LateBurst,
+  globals: { theme: 'dark' },
+}
