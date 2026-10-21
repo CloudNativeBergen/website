@@ -1,7 +1,7 @@
 'use client'
 
 import { api } from '@/lib/trpc/client'
-import { MAX_RESPONSES_PER_REQUEST } from '@/lib/feedback/limits'
+import { removeInRequests } from '@/lib/feedback/limits'
 import { AdminFeedbackCodePanel } from '../AdminFeedbackCodePanel'
 import { TalkFeedbackPanel } from './TalkFeedbackPanel'
 
@@ -33,23 +33,6 @@ export function TalkFeedbackAdminPanel({
   const unhide = api.sessionFeedback.adminUnhide.useMutation(refresh)
   const remove = api.sessionFeedback.adminRemove.useMutation(refresh)
   const cards = api.proposal.admin.updateAudienceFeedback.useMutation(refresh)
-
-  /** A range larger than one request allows goes in several, in order. */
-  async function removeAll(ids: string[]) {
-    let removed = 0
-    for (let i = 0; i < ids.length; i += MAX_RESPONSES_PER_REQUEST) {
-      const chunk = ids.slice(i, i + MAX_RESPONSES_PER_REQUEST)
-      try {
-        await remove.mutateAsync({ responseIds: chunk })
-      } catch (error) {
-        if (removed === 0) throw error
-        throw new Error(
-          `Removed ${removed} of ${ids.length} responses. Reload to see what’s left, then remove those.`,
-        )
-      }
-      removed += chunk.length
-    }
-  }
 
   if (feedback.error?.data?.code === 'NOT_FOUND') return null
   if (!feedback.data)
@@ -94,7 +77,11 @@ export function TalkFeedbackAdminPanel({
       }
       onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
       onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
-      onRemove={removeAll}
+      onRemove={(ids) =>
+        removeInRequests(ids, (chunk) =>
+          remove.mutateAsync({ responseIds: chunk }),
+        )
+      }
     />
   )
 }
