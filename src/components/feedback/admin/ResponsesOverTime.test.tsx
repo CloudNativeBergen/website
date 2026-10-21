@@ -83,6 +83,21 @@ describe('ResponsesOverTime', () => {
     expect(onRemove).toHaveBeenCalledWith(['a', 'b'])
   })
 
+  it('offers “Remove this response” for a range of one', () => {
+    render(
+      <ResponsesOverTime
+        responses={[r('a', '2026-10-27T09:01:00Z')]}
+        window={NO_WINDOW}
+        onRemove={vi.fn(async () => ({ removed: 1, gone: 0 }))}
+      />,
+    )
+    act(() => chart().focus())
+    key('Home')
+    expect(
+      screen.getByRole('button', { name: 'Remove this response' }),
+    ).toBeTruthy()
+  })
+
   it('says how many went and how many were already gone', async () => {
     render(
       <ResponsesOverTime
