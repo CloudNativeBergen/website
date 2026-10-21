@@ -88,6 +88,40 @@ describe('TalkFeedbackPanel Card Counts', () => {
     expect(onCardsExpired).toHaveBeenCalledTimes(1)
   })
 
+  it('by default, keeps the saved counts for 10 s exactly', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const onCardsExpired = vi.fn(async () => true)
+      render(
+        <TalkFeedbackPanel
+          feedback={READ3}
+          onSaveCards={vi.fn(async () => null)}
+          onCardsExpired={onCardsExpired}
+          {...props}
+        />,
+      )
+      fireEvent.change(greenCards(), { target: { value: '5' } })
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Save Card Counts' }),
+        )
+      })
+      expect(screen.getByText('Card Counts saved.')).toBeTruthy()
+      await act(async () => {
+        vi.advanceTimersByTime(9_900)
+      })
+      expect(onCardsExpired).not.toHaveBeenCalled()
+      expect(greenCards().value).toBe('5')
+      await act(async () => {
+        vi.advanceTimersByTime(100)
+      })
+      expect(onCardsExpired).toHaveBeenCalledTimes(1)
+      expect(greenCards().value).toBe('3')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps the saved counts when the read it asks for fails, and asks again', async () => {
     const onCardsExpired = vi
       .fn<() => Promise<boolean>>()
