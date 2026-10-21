@@ -39,10 +39,9 @@ const key = (k: string, shiftKey = false) =>
   fireEvent.keyDown(chart(), { key: k, shiftKey })
 
 async function confirmRemove() {
-  const button = within(await screen.findByRole('dialog')).getByRole(
-    'button',
-    { name: 'Remove' },
-  )
+  const button = within(await screen.findByRole('dialog')).getByRole('button', {
+    name: 'Remove',
+  })
   // The confirmation ignores a press for a moment after it opens.
   await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'), {
     timeout: 2000,
