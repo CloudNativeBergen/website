@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { delay, http, HttpResponse } from 'msw'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
+import { api } from '@/lib/trpc/client'
+import { feedbackTotals } from '@/lib/feedback/totals'
 import { TalkFeedbackAdminPanel } from './TalkFeedbackAdminPanel'
 
 const TALK = '/api/trpc/sessionFeedback.adminTalk'
@@ -138,5 +140,88 @@ export const LoadFailed: Story = {
 
 export const LoadFailedDark: Story = {
   ...LoadFailed,
+  globals: { theme: 'dark' },
+}
+
+const talkReadsThenFail = { n: 0 }
+const TALK_DATA = {
+  totals: feedbackTotals({
+    live: { green: 23, yellow: 4, red: 2 },
+    cards: { greenCount: 12, yellowCount: 3, redCount: 0 },
+  }),
+  comments: [],
+  responses: [],
+  window: WINDOW,
+  cardsSavedAt: null,
+}
+
+/** The page's own refetch, as an action's refresh would run it. */
+function WithRefresh(
+  args: React.ComponentProps<typeof TalkFeedbackAdminPanel>,
+) {
+  const utils = api.useUtils()
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => void utils.sessionFeedback.adminTalk.invalidate()}
+        className="rounded-md border px-2 py-1 text-xs dark:text-white"
+      >
+        Refresh (as after an action)
+      </button>
+      <TalkFeedbackAdminPanel {...args} />
+    </div>
+  )
+}
+
+/**
+ * The refresh after an action failed: the numbers stay, said to be earlier
+ * ones, with Retry, rather than passing for current.
+ */
+export const RefreshFailed: Story = {
+  render: (args) => <WithRefresh {...args} />,
+  beforeEach: () => {
+    talkReadsThenFail.n = 0
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(TALK, () =>
+          talkReadsThenFail.n++ === 0
+            ? trpc(TALK_DATA)
+            : HttpResponse.json(
+                {
+                  error: {
+                    message: 'Sanity is down',
+                    code: -32603,
+                    data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+                  },
+                },
+                { status: 500 },
+              ),
+        ),
+        http.get(CODE, code),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole('region', { name: 'Session Feedback' })
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Refresh (as after an action)' }),
+    )
+    expect(
+      await canvas.findByText('Couldn’t refresh, showing earlier numbers.'),
+    ).toBeVisible()
+    // The earlier numbers are still there.
+    expect(
+      canvas.getByRole('region', { name: 'Session Feedback' }),
+    ).toBeVisible()
+    expect(canvas.getByRole('button', { name: 'Retry' })).toBeVisible()
+  },
+}
+
+export const RefreshFailedDark: Story = {
+  ...RefreshFailed,
   globals: { theme: 'dark' },
 }
