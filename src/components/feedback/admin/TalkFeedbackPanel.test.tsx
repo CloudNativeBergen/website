@@ -7,7 +7,7 @@
  * never flick back to the old ones beside "Card Counts saved.".
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { AdminTalkFeedback } from '@/lib/feedback/admin'
 import { feedbackTotals } from '@/lib/feedback/totals'
 import { TalkFeedbackPanel } from './TalkFeedbackPanel'
@@ -103,5 +103,102 @@ describe('TalkFeedbackPanel Card Counts', () => {
       />,
     )
     expect(greenCards().value).toBe('8')
+  })
+
+  it('locks the counts while a save runs, so nothing typed then is lost under “saved”', async () => {
+    let finish: () => void = () => {}
+    const onSaveCards = vi.fn(
+      () => new Promise<void>((resolve) => (finish = resolve)),
+    )
+    render(
+      <TalkFeedbackPanel
+        feedback={feedback(3)}
+        onSaveCards={onSaveCards}
+        {...props}
+      />,
+    )
+    fireEvent.change(greenCards(), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Card Counts' }))
+    const yellow = screen.getByRole<HTMLInputElement>('textbox', {
+      name: 'It was OK cards',
+    })
+    expect(yellow.readOnly).toBe(true)
+    fireEvent.change(yellow, { target: { value: '9' } })
+    expect(yellow.value).toBe('1')
+    await act(async () => finish())
+    expect(await screen.findByText('Card Counts saved.')).toBeTruthy()
+    expect(onSaveCards).toHaveBeenCalledTimes(1)
+    expect(onSaveCards).toHaveBeenCalledWith({ green: 5, yellow: 1, red: 0 })
+    expect(yellow.readOnly).toBe(false)
+  })
+
+  it('links a wrong count to the message that says why, in a live region', () => {
+    render(
+      <TalkFeedbackPanel
+        feedback={feedback(3)}
+        onSaveCards={vi.fn()}
+        {...props}
+      />,
+    )
+    fireEvent.change(greenCards(), { target: { value: '-2' } })
+    const describedBy = greenCards().getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    const message = document.getElementById(describedBy!)
+    expect(message?.textContent).toBe(
+      'Card Counts are whole numbers, 0 or more.',
+    )
+    expect(message?.getAttribute('aria-live')).toBe('polite')
+    // The counts that are fine point at nothing.
+    expect(
+      screen
+        .getByRole('textbox', { name: 'Not for me cards' })
+        .getAttribute('aria-describedby'),
+    ).toBeNull()
+  })
+})
+
+describe('TalkFeedbackPanel comments', () => {
+  const withComment = (comments: AdminTalkFeedback['comments']) => ({
+    ...feedback(3),
+    comments,
+  })
+  const comment = {
+    id: 'feedbackResponse-1',
+    colour: 'red' as const,
+    comment: 'Rude remark',
+    submittedAt: '2026-10-27T09:10:00Z',
+    hidden: false,
+    flagged: false,
+  }
+
+  it('forgets a Hide’s note once a range Remove takes that comment away', async () => {
+    const onHide = vi.fn(async () => {})
+    const { rerender } = render(
+      <TalkFeedbackPanel
+        feedback={withComment([comment])}
+        onSaveCards={vi.fn()}
+        {...props}
+        onHide={onHide}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(
+      await screen.findByText('Comment hidden from speakers.', {
+        selector: 'p:not([role])',
+      }),
+    ).toBeTruthy()
+    rerender(
+      <TalkFeedbackPanel
+        feedback={withComment([])}
+        onSaveCards={vi.fn()}
+        {...props}
+        onHide={onHide}
+      />,
+    )
+    expect(
+      screen.queryByText('Comment hidden from speakers.', {
+        selector: 'p:not([role])',
+      }),
+    ).toBeNull()
   })
 })

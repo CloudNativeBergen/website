@@ -96,9 +96,10 @@ export function TalkFeedbackPanel({
 
   const shown = (colour: FeedbackColour) =>
     draft?.[colour] ?? String(totals.cards[colour])
-  const invalid = draft
-    ? ANSWERS.some(({ colour }) => !COUNT.test(draft[colour].trim()))
-    : false
+  const wrong = (colour: FeedbackColour) =>
+    !!draft && !COUNT.test(draft[colour].trim())
+  const invalid = ANSWERS.some(({ colour }) => wrong(colour))
+  const errorId = useId()
 
   async function saveCards() {
     if (!draft || invalid || saving) return
@@ -128,7 +129,8 @@ export function TalkFeedbackPanel({
       aria-label="Session Feedback"
       className="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800"
     >
-      <div className="space-y-3 p-4">
+      {/* A container: the tiles sit three abreast only where they fit. */}
+      <div className="@container space-y-3 p-4">
         <h3 className="flex items-center text-lg font-semibold text-gray-900 dark:text-white">
           <ChatBubbleLeftRightIcon className="mr-2 size-5" aria-hidden="true" />
           Session Feedback
@@ -148,12 +150,12 @@ export function TalkFeedbackPanel({
             void saveCards()
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Escape' && draft) {
+            if (e.key === 'Escape' && draft && !saving) {
               e.preventDefault()
               setDraft(null)
             }
           }}
-          className="grid grid-cols-3 gap-2"
+          className="grid grid-cols-1 gap-2 @[17rem]:grid-cols-3"
         >
           {ANSWERS.map(({ colour, label }) => (
             <div
@@ -165,10 +167,10 @@ export function TalkFeedbackPanel({
               >
                 {label}
               </p>
-              <p className="text-2xl font-bold text-gray-900 tabular-nums dark:text-white">
+              <p className="text-2xl font-bold wrap-break-word text-gray-900 tabular-nums dark:text-white">
                 {totals.combined[colour]}
               </p>
-              <p className="text-xs whitespace-nowrap text-gray-600 tabular-nums dark:text-gray-400">
+              <p className="text-xs wrap-break-word text-gray-600 tabular-nums dark:text-gray-400">
                 {totals.scanned[colour]} scanned
               </p>
               <label className="mt-1 block text-xs text-gray-600 dark:text-gray-400">
@@ -179,17 +181,20 @@ export function TalkFeedbackPanel({
                   autoComplete="off"
                   aria-label={`${label} cards`}
                   value={shown(colour)}
-                  aria-invalid={
-                    draft ? !COUNT.test(draft[colour].trim()) : false
-                  }
-                  onChange={(e) =>
+                  // Locked while a save runs: an edit made then would be
+                  // dropped when the save lands, under "Card Counts saved."
+                  readOnly={saving}
+                  aria-invalid={wrong(colour)}
+                  aria-describedby={wrong(colour) ? errorId : undefined}
+                  onChange={(e) => {
+                    if (saving) return
                     setDraft({
                       green: shown('green'),
                       yellow: shown('yellow'),
                       red: shown('red'),
                       [colour]: e.target.value,
                     })
-                  }
+                  }}
                   className="mt-0.5 block w-full rounded-md bg-white px-2 py-1 text-base text-gray-900 tabular-nums outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 aria-invalid:outline-red-500 sm:text-sm dark:bg-white/5 dark:text-white dark:outline-white/10 dark:focus:outline-indigo-500"
                 />
               </label>
@@ -215,11 +220,15 @@ export function TalkFeedbackPanel({
             >
               Cancel
             </button>
-            {invalid && (
-              <p className="text-sm text-red-700 dark:text-red-400">
-                Card Counts are whole numbers, 0 or more.
-              </p>
-            )}
+            {/* Mounted with the draft, so the words are announced when
+                they appear; the wrong inputs point at them. */}
+            <p
+              id={errorId}
+              aria-live="polite"
+              className="text-sm text-red-700 dark:text-red-400"
+            >
+              {invalid ? 'Card Counts are whole numbers, 0 or more.' : ''}
+            </p>
           </div>
         )}
         <p
@@ -297,8 +306,10 @@ function TalkComments({
 
   const listed = new Set(comments.map((c) => c.id))
   // A removed comment's outcome, once a refetch took it away, shows above.
+  // Only a Remove's: a Hide's note must not come back when a range Remove
+  // takes that comment away.
   const gone = [...notes]
-    .filter(([id]) => !listed.has(id))
+    .filter(([id, note]) => !listed.has(id) && note.kind === 'remove')
     .map(([, note]) => note)
   const removePending = removing ? pending.has(removing.id) : false
 
