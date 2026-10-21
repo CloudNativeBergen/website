@@ -364,14 +364,19 @@ export function ResponsesOverTime({
           </div>
         </>
       )}
-      {outcome && (
-        <p
-          role={outcome.ok ? 'status' : 'alert'}
-          className={`mt-2 text-sm font-medium ${outcome.ok ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}
-        >
-          {outcome.text}
-        </p>
-      )}
+      {/* Always mounted: a screen reader announces text SET in a live
+          region, often not a region that appears with its text. */}
+      <p
+        role="status"
+        aria-live="polite"
+        className={
+          outcome
+            ? `mt-2 text-sm font-medium ${outcome.ok ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`
+            : 'sr-only'
+        }
+      >
+        {outcome?.text ?? ''}
+      </p>
 
       <ConfirmationModal
         isOpen={asking}

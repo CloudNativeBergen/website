@@ -112,7 +112,8 @@ export function TalkFeedbackPanel({
         red: Number(draft.red),
       }
       await onSaveCards(cards)
-      setSaved({ cards, over: totals.cards })
+      // Against the server's read, never an earlier save's counts on screen.
+      setSaved({ cards, over: read })
       setDraft(null)
       setCardsNote({ ok: true, text: 'Card Counts saved.' })
     } catch (e) {
@@ -220,17 +221,20 @@ export function TalkFeedbackPanel({
             >
               Cancel
             </button>
-            {/* Mounted with the draft, so the words are announced when
-                they appear; the wrong inputs point at them. */}
-            <p
-              id={errorId}
-              aria-live="polite"
-              className="text-sm text-red-700 dark:text-red-400"
-            >
-              {invalid ? 'Card Counts are whole numbers, 0 or more.' : ''}
-            </p>
           </div>
         )}
+        {/* Always mounted, so the words are announced when they appear
+            (not with a region that appears with them); the wrong inputs
+            point at them. */}
+        <p
+          id={errorId}
+          aria-live="polite"
+          className={
+            invalid ? 'text-sm text-red-700 dark:text-red-400' : 'sr-only'
+          }
+        >
+          {invalid ? 'Card Counts are whole numbers, 0 or more.' : ''}
+        </p>
         <p
           role="status"
           aria-live="polite"

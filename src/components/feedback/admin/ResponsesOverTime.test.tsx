@@ -110,6 +110,25 @@ describe('ResponsesOverTime', () => {
     ).toBeTruthy()
   })
 
+  it('says what a Remove did in a live region that was there before it', async () => {
+    render(
+      <ResponsesOverTime
+        responses={[r('a', '2026-10-27T09:01:00Z')]}
+        window={NO_WINDOW}
+        onRemove={vi.fn(async () => ({ removed: 1, gone: 0, changed: 0 }))}
+      />,
+    )
+    const regions = Array.from(document.querySelectorAll('[aria-live]'))
+    act(() => chart().focus())
+    key('Home')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove this response' }),
+    )
+    await confirmRemove()
+    const said = await screen.findByText('1 response removed.')
+    expect(regions).toContain(said)
+  })
+
   it('says how many went, how many were already gone and how many were kept', async () => {
     render(
       <ResponsesOverTime

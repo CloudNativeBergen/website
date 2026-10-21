@@ -93,6 +93,47 @@ describe('TalkFeedbackPanel Card Counts', () => {
     expect(greenTotal()).toBe('17')
   })
 
+  it('keeps the counts being saved when Escape is pressed during the save', async () => {
+    let finish: () => void = () => {}
+    render(
+      <TalkFeedbackPanel
+        feedback={feedback(3)}
+        onSaveCards={vi.fn(() => new Promise<void>((r) => (finish = r)))}
+        {...props}
+      />,
+    )
+    fireEvent.change(greenCards(), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Card Counts' }))
+    fireEvent.keyDown(greenCards(), { key: 'Escape' })
+    expect(greenCards().value).toBe('5')
+    await act(async () => finish())
+  })
+
+  it('keeps the latest of two quick saves while the read still shows the first counts', async () => {
+    const onSaveCards = vi.fn(async () => {})
+    const { rerender } = render(
+      <TalkFeedbackPanel
+        feedback={feedback(3)}
+        onSaveCards={onSaveCards}
+        {...props}
+      />,
+    )
+    await saveGreen('5')
+    fireEvent.change(greenCards(), { target: { value: '7' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Card Counts' }))
+    await waitFor(() => expect(onSaveCards).toHaveBeenCalledTimes(2))
+    // The server read has caught up with neither save yet.
+    rerender(
+      <TalkFeedbackPanel
+        feedback={feedback(3)}
+        onSaveCards={onSaveCards}
+        {...props}
+      />,
+    )
+    expect(greenCards().value).toBe('7')
+    expect(greenTotal()).toBe('17')
+  })
+
   it('shows a newer read over the saved counts (another organizer saved since)', async () => {
     const { rerender } = render(
       <TalkFeedbackPanel
@@ -139,7 +180,7 @@ describe('TalkFeedbackPanel Card Counts', () => {
     expect(yellow.readOnly).toBe(false)
   })
 
-  it('links a wrong count to the message that says why, in a live region', () => {
+  it('links a wrong count to the message that says why, in a live region already there', () => {
     render(
       <TalkFeedbackPanel
         feedback={feedback(3)}
@@ -147,6 +188,7 @@ describe('TalkFeedbackPanel Card Counts', () => {
         {...props}
       />,
     )
+    const regions = Array.from(document.querySelectorAll('[aria-live]'))
     fireEvent.change(greenCards(), { target: { value: '-2' } })
     const describedBy = greenCards().getAttribute('aria-describedby')
     expect(describedBy).toBeTruthy()
@@ -155,6 +197,8 @@ describe('TalkFeedbackPanel Card Counts', () => {
       'Card Counts are whole numbers, 0 or more.',
     )
     expect(message?.getAttribute('aria-live')).toBe('polite')
+    // The region was mounted, empty, before the words were set in it.
+    expect(regions).toContain(message)
     // The counts that are fine point at nothing.
     expect(
       screen
