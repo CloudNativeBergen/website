@@ -155,7 +155,7 @@ export function TalkFeedbackPanel({
               setDraft(null)
             }
           }}
-          className="grid grid-cols-1 gap-2 @[17rem]:grid-cols-3"
+          className="grid grid-cols-1 gap-2 @[16rem]:grid-cols-3"
         >
           {ANSWERS.map(({ colour, label }) => (
             <div
