@@ -200,7 +200,7 @@ export function ResponsesOverTime({
             role="option"
             aria-selected={selected(i)}
             aria-label={`${formatFeedbackCommentTime(b.start)}–${formatConferenceClock(b.end)}: ${plural(b.ids.length, 'response', 'responses')}`}
-            className={`flex h-full min-w-0 flex-1 flex-col justify-end ${selected(i) ? 'bg-brand-sky-mist dark:bg-blue-900/50' : ''} ${focused && i === active ? 'outline-1 -outline-offset-1 outline-brand-cloud-blue dark:outline-blue-300' : ''}`}
+            className={`flex h-full min-w-0 flex-1 flex-col justify-end ${selected(i) ? 'bg-brand-sky-mist dark:bg-blue-900/50' : range ? 'opacity-35' : ''} ${focused && i === active ? 'outline-1 -outline-offset-1 outline-brand-cloud-blue dark:outline-blue-300' : ''}`}
           >
             {b.ids.length > 0 && (
               <div
