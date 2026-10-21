@@ -413,9 +413,12 @@ export const RemoveFailed: Story = {
       canvas.getByRole('button', { name: 'Remove these 40' }),
     )
     await confirmWith('Remove')
-    expect(await canvas.findByRole('alert')).toHaveTextContent(
-      'Not all 2400 responses were removed (at least 2000 were).',
-    )
+    // Said in the chart's live region, there before the words.
+    expect(
+      await canvas.findByText(
+        /^Not all 2400 responses were removed \(at least 2000 were\)\./,
+      ),
+    ).toHaveAttribute('aria-live', 'polite')
   },
 }
 
