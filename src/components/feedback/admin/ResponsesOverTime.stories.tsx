@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, within } from 'storybook/test'
 import type { ChartResponse } from '@/lib/feedback/buckets'
+import type { RangeRemoved, RangeToRemove } from '@/lib/feedback/bulk-remove'
 import type { FeedbackColour } from '@/lib/feedback/colour'
 import { ResponsesOverTime } from './ResponsesOverTime'
 
@@ -79,7 +80,11 @@ const meta = {
   args: {
     responses: RESPONSES,
     window: WINDOW,
-    onRemove: fn(async (ids: string[]) => ({ removed: ids.length, gone: 0 })),
+    onRemove: fn(async (range: RangeToRemove) => ({
+      removed: range.responses.length,
+      gone: 0,
+      changed: 0,
+    })),
   },
   beforeEach: runningClockFrom(new Date('2026-10-27T10:30:00Z')),
 } satisfies Meta<typeof ResponsesOverTime>

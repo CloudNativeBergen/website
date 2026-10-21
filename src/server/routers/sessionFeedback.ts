@@ -54,6 +54,24 @@ const responsesInput = z.object({
 })
 
 /**
+ * A range from the chart (§10.2): its bounds, and each response with the
+ * time the chart showed for it, so an answer given again since is kept.
+ */
+const rangeInput = z.object({
+  from: z.iso.datetime(),
+  to: z.iso.datetime(),
+  responses: z
+    .array(
+      z.object({
+        id: z.string().regex(RESPONSE_ID),
+        submittedAt: z.string().max(40),
+      }),
+    )
+    .min(1)
+    .max(MAX_RESPONSES_PER_REQUEST),
+})
+
+/**
  * One refusal for every id that is not a published response of a talk of
  * this conference: another conference's answers exactly as a missing one.
  */
@@ -303,21 +321,29 @@ export const sessionFeedbackRouter = router({
    * the page's confirmation naming the count. Unlike {@link adminRemove}, an
    * id that is no longer a response of this conference (gone, or foreign) is
    * skipped and counted, not a refusal of the range: a scripted burst must
-   * not survive one attendee deleting their own answer. Nothing foreign is
-   * ever written, checked in the same one read before any write.
+   * not survive one attendee deleting their own answer. Only an answer still
+   * as the chart showed it is deleted, each under its revision guard; one
+   * given again since is kept and counted. Nothing foreign is ever written,
+   * checked in the same one read before any write.
    */
   adminRemoveRange: adminProcedure
-    .input(responsesInput)
+    .input(rangeInput)
     .mutation(async ({ input }) => {
       const result = await removeResponseRange({
         conferenceId: await resolveConferenceId(),
-        responseIds: input.responseIds,
+        responses: input.responses,
+        from: input.from,
+        to: input.to,
       })
       if (result.status === 'failed')
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: `Removed ${result.removed} of ${new Set(input.responseIds).size} responses. Reload to see what’s left, then remove those.`,
+          message: `Removed ${result.removed} of ${new Set(input.responses.map((r) => r.id)).size} responses. Reload to see what’s left, then remove those.`,
         })
-      return { removed: result.removed, gone: result.gone }
+      return {
+        removed: result.removed,
+        gone: result.gone,
+        changed: result.changed,
+      }
     }),
 })

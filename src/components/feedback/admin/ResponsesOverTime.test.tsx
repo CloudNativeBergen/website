@@ -16,6 +16,7 @@ import {
   within,
 } from '@testing-library/react'
 import type { ChartResponse } from '@/lib/feedback/buckets'
+import type { RangeRemoved, RangeToRemove } from '@/lib/feedback/bulk-remove'
 import { ResponsesOverTime } from './ResponsesOverTime'
 
 const r = (id: string, submittedAt: string): ChartResponse => ({
@@ -51,9 +52,10 @@ async function confirmRemove() {
 
 describe('ResponsesOverTime', () => {
   it('removes the ids shown when Remove was pressed, not one that arrived while the dialog was open', async () => {
-    const onRemove = vi.fn(async (ids: string[]) => ({
-      removed: ids.length,
+    const onRemove = vi.fn(async (range: RangeToRemove) => ({
+      removed: range.responses.length,
       gone: 0,
+      changed: 0,
     }))
     const shown = [
       r('a', '2026-10-27T09:01:00Z'),
@@ -80,7 +82,15 @@ describe('ResponsesOverTime', () => {
     )
     await confirmRemove()
     await waitFor(() => expect(onRemove).toHaveBeenCalledTimes(1))
-    expect(onRemove).toHaveBeenCalledWith(['a', 'b'])
+    // The answers seen, each with the time the chart showed, and the bounds.
+    expect(onRemove).toHaveBeenCalledWith({
+      from: '2026-10-27T09:00:00.000Z',
+      to: '2026-10-27T09:10:00.000Z',
+      responses: [
+        { id: 'a', submittedAt: '2026-10-27T09:01:00Z' },
+        { id: 'b', submittedAt: '2026-10-27T09:05:00Z' },
+      ],
+    })
   })
 
   it('offers “Remove this response” for a range of one', () => {
@@ -88,7 +98,7 @@ describe('ResponsesOverTime', () => {
       <ResponsesOverTime
         responses={[r('a', '2026-10-27T09:01:00Z')]}
         window={NO_WINDOW}
-        onRemove={vi.fn(async () => ({ removed: 1, gone: 0 }))}
+        onRemove={vi.fn(async () => ({ removed: 1, gone: 0, changed: 0 }))}
       />,
     )
     act(() => chart().focus())
@@ -98,7 +108,7 @@ describe('ResponsesOverTime', () => {
     ).toBeTruthy()
   })
 
-  it('says how many went and how many were already gone', async () => {
+  it('says how many went, how many were already gone and how many were kept', async () => {
     render(
       <ResponsesOverTime
         responses={[
@@ -106,7 +116,7 @@ describe('ResponsesOverTime', () => {
           r('b', '2026-10-27T09:02:00Z'),
         ]}
         window={NO_WINDOW}
-        onRemove={vi.fn(async () => ({ removed: 1, gone: 1 }))}
+        onRemove={vi.fn(async () => ({ removed: 1, gone: 1, changed: 2 }))}
       />,
     )
     act(() => chart().focus())
@@ -114,7 +124,9 @@ describe('ResponsesOverTime', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove these 2' }))
     await confirmRemove()
     expect(
-      await screen.findByText('1 response removed. 1 was already gone.'),
+      await screen.findByText(
+        '1 response removed. 1 was already gone. 2 had changed since you picked them and were kept.',
+      ),
     ).toBeTruthy()
   })
 
@@ -128,7 +140,7 @@ describe('ResponsesOverTime', () => {
       <ResponsesOverTime
         responses={responses}
         window={NO_WINDOW}
-        onRemove={vi.fn(async () => ({ removed: 0, gone: 0 }))}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0, changed: 0 }))}
       />,
     )
     act(() => chart().focus())
@@ -141,7 +153,7 @@ describe('ResponsesOverTime', () => {
       <ResponsesOverTime
         responses={responses.slice(1)}
         window={NO_WINDOW}
-        onRemove={vi.fn(async () => ({ removed: 0, gone: 0 }))}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0, changed: 0 }))}
       />,
     )
     const selected = within(chart())
@@ -152,10 +164,8 @@ describe('ResponsesOverTime', () => {
   })
 
   it('still says what happened when the range took every response', async () => {
-    let finish: (v: { removed: number; gone: number }) => void = () => {}
-    const onRemove = vi.fn(
-      () => new Promise<{ removed: number; gone: number }>((r) => (finish = r)),
-    )
+    let finish: (v: RangeRemoved) => void = () => {}
+    const onRemove = vi.fn(() => new Promise<RangeRemoved>((r) => (finish = r)))
     const all = [r('a', '2026-10-27T09:01:00Z')]
     const { rerender } = render(
       <ResponsesOverTime
@@ -178,7 +188,7 @@ describe('ResponsesOverTime', () => {
         onRemove={onRemove}
       />,
     )
-    await act(async () => finish({ removed: 1, gone: 0 }))
+    await act(async () => finish({ removed: 1, gone: 0, changed: 0 }))
     expect(await screen.findByText('1 response removed.')).toBeTruthy()
     expect(screen.getByText('No scanned responses yet.')).toBeTruthy()
   })
@@ -191,7 +201,7 @@ describe('ResponsesOverTime', () => {
           r('b', '2026-10-27T23:05:00Z'),
         ]}
         window={NO_WINDOW}
-        onRemove={vi.fn(async () => ({ removed: 0, gone: 0 }))}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0, changed: 0 }))}
       />,
     )
     act(() => chart().focus())

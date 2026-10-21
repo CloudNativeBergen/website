@@ -148,6 +148,7 @@ const response = (
   fields: Record<string, unknown> = {},
 ): Doc => ({
   _id: rid(++n),
+  _rev: `rev-r${n}`,
   _type: 'feedbackResponse',
   talk: ref(talkId),
   conference: ref('conf-A'),
@@ -350,28 +351,43 @@ describe('adminTalk — one talk’s panel (§10.2)', () => {
 })
 
 describe('adminRemoveRange — a range from the chart (§10.2)', () => {
+  const RANGE = {
+    from: '2026-06-10T10:00:00.000Z',
+    to: '2026-06-10T11:00:00.000Z',
+  }
+  const seen = (d: Doc) => ({ id: d._id, submittedAt: String(d.submittedAt) })
+
   it('removes this conference’s responses and counts the rest as gone, never touching a foreign one', async () => {
     await expect(
       organizer().adminRemoveRange({
-        responseIds: [ours._id, foreign._id, rid(4242)],
+        ...RANGE,
+        responses: [
+          seen(ours),
+          seen(foreign),
+          { id: rid(4242), submittedAt: '2026-06-10T10:30:00Z' },
+        ],
       }),
-    ).resolves.toEqual({ removed: 1, gone: 2 })
+    ).resolves.toEqual({ removed: 1, gone: 2, changed: 0 })
     expect(doc(ours._id)).toBeUndefined()
     expect(doc(foreign._id)).toBeDefined()
   })
 
   it('refuses a speaker who is not an organizer, before any read', async () => {
     await expect(
-      caller().adminRemoveRange({ responseIds: [ours._id] }),
+      caller().adminRemoveRange({ ...RANGE, responses: [seen(ours)] }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect(h.queries).toEqual([])
     expect(doc(ours._id)).toBeDefined()
   })
 
-  it('takes response ids and nothing else', async () => {
-    await expect(
-      organizer().adminRemoveRange({ responseIds: [`drafts.${ours._id}`] }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  it('takes response ids and range instants and nothing else', async () => {
+    for (const input of [
+      { ...RANGE, responses: [{ ...seen(ours), id: `drafts.${ours._id}` }] },
+      { ...RANGE, from: 'yesterday', responses: [seen(ours)] },
+    ])
+      await expect(organizer().adminRemoveRange(input)).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      })
     expect(h.queries).toEqual([])
   })
 })

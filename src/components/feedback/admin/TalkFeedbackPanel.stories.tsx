@@ -7,6 +7,7 @@ import type {
   AdminTalkFeedback,
 } from '@/lib/feedback/admin'
 import type { ChartResponse } from '@/lib/feedback/buckets'
+import type { RangeRemoved, RangeToRemove } from '@/lib/feedback/bulk-remove'
 import type { FeedbackColour } from '@/lib/feedback/colour'
 import { feedbackTotals } from '@/lib/feedback/totals'
 import { AdminFeedbackCodePanel } from '../AdminFeedbackCodePanel'
@@ -45,6 +46,12 @@ const RESPONSES: ChartResponse[] = [...TRICKLE, ...BURST].map(
   ([hhmm, colour], i) => ({ id: id(i + 1), colour, submittedAt: at(hhmm) }),
 )
 const BURST_IDS = RESPONSES.slice(TRICKLE.length).map((r) => r.id)
+/** The ids as the chart sends them: each with the time it showed. */
+const seenOf = (ids: string[]) =>
+  ids.map((id) => ({
+    id,
+    submittedAt: RESPONSES.find((r) => r.id === id)!.submittedAt,
+  }))
 
 const comment = (
   n: number,
@@ -185,9 +192,10 @@ const meta = {
     onHide: fn(async () => {}),
     onUnhide: fn(async () => {}),
     onRemove: fn(async () => {}),
-    onRemoveRange: fn(async (ids: string[]) => ({
-      removed: ids.length,
+    onRemoveRange: fn(async (range: RangeToRemove) => ({
+      removed: range.responses.length,
       gone: 0,
+      changed: 0,
     })),
   },
   beforeEach: runningClockFrom(new Date('2026-10-27T10:30:00Z')),
@@ -260,7 +268,11 @@ export const RemovesARangeByKeyboard: Story = {
     expect(within(dialog).getByText('Remove 40 responses?')).toBeInTheDocument()
     await confirmWith('Remove')
     await waitFor(() => expect(args.onRemoveRange).toHaveBeenCalledTimes(1))
-    expect(args.onRemoveRange).toHaveBeenCalledWith(BURST_IDS)
+    expect(args.onRemoveRange).toHaveBeenCalledWith({
+      from: '2026-10-27T09:50:00.000Z',
+      to: '2026-10-27T10:10:00.000Z',
+      responses: seenOf(BURST_IDS),
+    })
     expect(await canvas.findByText('40 responses removed.')).toBeVisible()
   },
 }
@@ -288,7 +300,9 @@ export const RemovesARangeByDragging: Story = {
     await confirmWith('Remove')
     await waitFor(() =>
       expect(args.onRemoveRange).toHaveBeenCalledWith(
-        RESPONSES.slice(3, 12).map((r) => r.id),
+        expect.objectContaining({
+          responses: seenOf(RESPONSES.slice(3, 12).map((r) => r.id)),
+        }),
       ),
     )
   },
@@ -336,13 +350,13 @@ export const RangeSelectedDark: Story = {
 /** A failed Remove says what happened where the organizer is working. */
 export const RemoveFailed: Story = {
   args: {
-    onRemoveRange: fn<
-      (ids: string[]) => Promise<{ removed: number; gone: number }>
-    >(async () => {
-      throw new Error(
-        'Not all 2400 responses were removed (at least 2000 were). Reload to see what’s left, then remove those.',
-      )
-    }),
+    onRemoveRange: fn<(range: RangeToRemove) => Promise<RangeRemoved>>(
+      async () => {
+        throw new Error(
+          'Not all 2400 responses were removed (at least 2000 were). Reload to see what’s left, then remove those.',
+        )
+      },
+    ),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)

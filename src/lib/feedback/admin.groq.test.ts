@@ -23,6 +23,7 @@ const h = vi.hoisted(() => ({
   commits: [] as unknown[][],
   /** Runs once, just before the next commit; may throw to fail it. */
   beforeCommit: [] as (() => void)[],
+  revs: 0,
 }))
 
 vi.mock('server-only', () => ({}))
@@ -61,7 +62,15 @@ vi.mock('@/lib/sanity/client', async () => {
       // transaction back.
       if (!m.patch || i < 0)
         throw Object.assign(new Error(`${id} not found`), { statusCode: 404 })
-      next[i] = new Mutation({ mutations: [m] }).apply(next[i])!
+      // A failed revision guard rolls the whole transaction back with 409.
+      if (m.patch.ifRevisionID && m.patch.ifRevisionID !== next[i]._rev)
+        throw Object.assign(new Error('Revision mismatch'), {
+          statusCode: 409,
+        })
+      next[i] = {
+        ...new Mutation({ mutations: [m] }).apply(next[i])!,
+        _rev: `rev-${++h.revs}`,
+      }
     }
     h.dataset = next
     h.commits.push(mutations)
@@ -120,6 +129,7 @@ const response = (
   fields: Record<string, unknown> = {},
 ): Doc => ({
   _id: rid(++n),
+  _rev: `rev-r${n}`,
   _type: 'feedbackResponse',
   talk: ref(talkId),
   conference: ref('conf-A'),
@@ -157,6 +167,7 @@ beforeEach(() => {
   h.cdnQueries = []
   h.commits = []
   h.beforeCommit = []
+  h.revs = 0
   vi.mocked(revalidateTag).mockClear()
   h.dataset = [
     SCHEDULE,
@@ -467,82 +478,209 @@ describe('every action — refused before any write (§10.3)', () => {
   }
 })
 
-describe('Remove a range (§10.2): what is gone is skipped, never refused', () => {
-  const range = (responseIds: string[]) =>
-    removeResponseRange({ conferenceId: 'conf-A', responseIds })
+describe('Remove a range (§10.2): only the answers the organizer saw', () => {
+  // The burst sits in 10:00–10:30 on 2026-06-10.
+  const FROM = '2026-06-10T10:00:00.000Z'
+  const TO = '2026-06-10T10:30:00.000Z'
+  const seen = (d: Doc) => ({ id: d._id, submittedAt: String(d.submittedAt) })
+  const range = (
+    docs: Doc[],
+    extra: { id: string; submittedAt: string }[] = [],
+  ) =>
+    removeResponseRange({
+      conferenceId: 'conf-A',
+      from: FROM,
+      to: TO,
+      responses: [...docs.map(seen), ...extra],
+    })
+  const burst = (k: number) =>
+    Array.from({ length: k }, () =>
+      response('talk-a', 'red', { submittedAt: '2026-06-10T10:15:00Z' }),
+    )
 
-  it('removes the rest when one response of the range is already gone', async () => {
-    const burst = [1, 2, 3].map(() => response('talk-a', 'red'))
-    h.dataset.push(...burst)
+  it('removes the range, and counts one already gone as gone', async () => {
+    const docs = burst(3)
+    h.dataset.push(...docs)
     // The attendee deleted their own answer after the chart was read.
-    h.dataset = h.dataset.filter((d) => d._id !== burst[1]._id)
-    expect(await range(burst.map((r) => r._id))).toEqual({
+    h.dataset = h.dataset.filter((d) => d._id !== docs[1]._id)
+    expect(await range(docs)).toEqual({
       status: 'ok',
       removed: 2,
       gone: 1,
+      changed: 0,
     })
-    expect(burst.filter((r) => doc(r._id))).toEqual([])
+    expect(docs.filter((r) => doc(r._id))).toEqual([])
   })
 
-  it('never deletes a foreign response: it is skipped exactly like a missing one', async () => {
-    h.dataset.push(talk('talk-foreign', { conference: ref('conf-B') }))
+  it('keeps an answer the attendee changed after the chart was read (same id, new time)', async () => {
+    const docs = burst(2)
+    h.dataset.push(...docs)
+    const [kept] = docs
+    // A resubmit from the same device: same deterministic id, new answer.
+    h.dataset = h.dataset.map((d) =>
+      d._id === kept._id
+        ? {
+            ...d,
+            colour: 'green',
+            submittedAt: '2026-06-10T11:00:00Z',
+            _rev: 'resubmitted',
+          }
+        : d,
+    )
+    expect(await range(docs)).toMatchObject({ removed: 1, changed: 1 })
+    expect(doc(kept._id)).toMatchObject({ colour: 'green' })
+  })
+
+  it('keeps an answer changed between the guard read and the commit (the revision guard)', async () => {
+    const docs = burst(3)
+    h.dataset.push(...docs)
+    const [, changed] = docs
+    h.beforeCommit.push(() => {
+      h.dataset = h.dataset.map((d) =>
+        d._id === changed._id
+          ? {
+              ...d,
+              comment: 'actually great',
+              submittedAt: '2026-06-10T10:29:00Z',
+              _rev: 'edited',
+            }
+          : d,
+      )
+    })
+    expect(await range(docs)).toEqual({
+      status: 'ok',
+      removed: 2,
+      gone: 0,
+      changed: 1,
+    })
+    expect(doc(changed._id)).toMatchObject({ comment: 'actually great' })
+    // Each delete went with its revision guard: Studio’s pseudo-field unset.
+    expect(h.commits.at(-1)).toContainEqual({
+      patch: {
+        id: docs[0]._id,
+        ifRevisionID: docs[0]._rev,
+        unset: ['_revision_lock_pseudo_field_'],
+      },
+    })
+  })
+
+  it('counts an answer deleted between the guard read and the commit as gone, not removed', async () => {
+    const docs = burst(2)
+    h.dataset.push(...docs)
+    h.beforeCommit.push(() => {
+      h.dataset = h.dataset.filter((d) => d._id !== docs[0]._id)
+    })
+    expect(await range(docs)).toEqual({
+      status: 'ok',
+      removed: 1,
+      gone: 1,
+      changed: 0,
+    })
+  })
+
+  it('keeps an answer whose time is outside the range, whatever the client says it saw', async () => {
+    const outside = response('talk-a', 'red', {
+      submittedAt: '2026-06-10T11:00:00Z',
+    })
+    h.dataset.push(outside)
+    expect(await range([outside])).toMatchObject({ removed: 0, changed: 1 })
+    expect(doc(outside._id)).toBeDefined()
+  })
+
+  it('never deletes a foreign, draft or draft-talk response: each is skipped like a missing one', async () => {
+    h.dataset.push(
+      talk('talk-foreign', { conference: ref('conf-B') }),
+      talk('drafts.talk-a'),
+      talk('versions.r1.talk-a'),
+    )
     const foreign = response('talk-foreign', 'red', {
       conference: ref('conf-B'),
     })
     // Claims this conference; its talk is another's.
     const disguised = response('talk-foreign', 'red')
-    const draft = {
-      ...response('talk-a', 'red'),
-      _id: `drafts.${rid(97)}`,
-    }
+    const draft = { ...response('talk-a', 'red'), _id: `drafts.${rid(97)}` }
+    // Points at a draft or a release version of our own talk.
+    const onDraftTalk = response('drafts.talk-a', 'red')
+    const onReleaseTalk = response('versions.r1.talk-a', 'red')
     const ours = response('talk-a', 'red')
-    h.dataset.push(foreign, disguised, draft, ours)
-    const out = await range([
-      foreign._id,
-      disguised._id,
-      draft._id,
-      rid(54321),
-      ours._id,
-    ])
-    expect(out).toEqual({ status: 'ok', removed: 1, gone: 4 })
-    expect(doc(foreign._id)).toBeDefined()
-    expect(doc(disguised._id)).toBeDefined()
-    expect(doc(draft._id)).toBeDefined()
+    h.dataset.push(foreign, disguised, draft, onDraftTalk, onReleaseTalk, ours)
+    const out = await range(
+      [foreign, disguised, draft, onDraftTalk, onReleaseTalk, ours],
+      [{ id: rid(54321), submittedAt: '2026-06-10T10:05:00Z' }],
+    )
+    expect(out).toEqual({ status: 'ok', removed: 1, gone: 6, changed: 0 })
+    for (const d of [foreign, disguised, draft, onDraftTalk, onReleaseTalk])
+      expect(doc(d._id)).toBeDefined()
     expect(doc(ours._id)).toBeUndefined()
     // Only ours was in a transaction, and only its tag expired.
-    expect(h.commits.flat()).toEqual([{ delete: { id: ours._id } }])
+    expect(h.commits.flat().map((m) => JSON.stringify(m))).toEqual([
+      JSON.stringify({
+        patch: {
+          id: ours._id,
+          ifRevisionID: ours._rev,
+          unset: ['_revision_lock_pseudo_field_'],
+        },
+      }),
+      JSON.stringify({ delete: { id: ours._id } }),
+    ])
     expect(vi.mocked(revalidateTag).mock.calls).toEqual([
       [feedbackResponseTag(ours._id), { expire: 0 }],
     ])
   })
 
   it('writes nothing when the whole range is gone', async () => {
-    expect(await range([rid(1), rid(2)])).toEqual({
-      status: 'ok',
-      removed: 0,
-      gone: 2,
-    })
+    expect(
+      await range([], [{ id: rid(1), submittedAt: '2026-06-10T10:05:00Z' }]),
+    ).toEqual({ status: 'ok', removed: 0, gone: 1, changed: 0 })
     expect(h.commits).toEqual([])
   })
 
   it('reports what was removed when a later chunk fails', async () => {
-    const ids: string[] = []
-    for (let i = 0; i < 150; i++) {
-      const r = response('talk-a', 'green')
-      h.dataset.push(r)
-      ids.push(r._id)
-    }
+    const docs = burst(150)
+    h.dataset.push(...docs)
     h.beforeCommit.push(
       () => {},
       () => {
         throw new Error('503')
       },
     )
-    expect(await range([...ids, rid(99999)])).toEqual({
+    expect(await range(docs)).toEqual({
       status: 'failed',
       removed: 100,
-      gone: 1,
+      gone: 0,
+      changed: 0,
     })
+  })
+
+  it('re-plans a chunk without an answer that keeps changing, and removes the rest', async () => {
+    const docs = burst(2)
+    h.dataset.push(...docs)
+    // Someone keeps changing the second answer, each time inside the range.
+    for (let k = 0; k < 10; k++)
+      h.beforeCommit.push(() => {
+        h.dataset = h.dataset.map((d) =>
+          d._id === docs[1]._id ? { ...d, _rev: `typing-${k}` } : d,
+        )
+      })
+    const out = await range(docs)
+    expect(out).toMatchObject({ status: 'ok', removed: 1, changed: 1 })
+    expect(doc(docs[1]._id)).toBeDefined()
+    expect(doc(docs[0]._id)).toBeUndefined()
+  })
+
+  it('gives up, as failed, when a guard keeps failing with nothing to drop', async () => {
+    const docs = burst(2)
+    h.dataset.push(...docs)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    for (let k = 0; k < 10; k++)
+      h.beforeCommit.push(() => {
+        throw Object.assign(new Error('Revision mismatch'), { statusCode: 409 })
+      })
+    expect(await range(docs)).toMatchObject({ status: 'failed', removed: 0 })
+    error.mockRestore()
+    // Bounded: the first try and three re-plans.
+    expect(h.beforeCommit).toHaveLength(6)
+    expect(docs.filter((d) => doc(d._id))).toHaveLength(2)
   })
 })
 

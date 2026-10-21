@@ -16,6 +16,7 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { formats, type Format } from '@/lib/proposal/types'
 import type { ChartResponse } from './buckets'
+import type { SeenResponse } from './bulk-remove'
 import { isFeedbackColour, type FeedbackColour } from './colour'
 import { expireRemovedFeedbackResponse } from './cache'
 import { commentOf } from './comment'
@@ -262,29 +263,8 @@ export type RemoveResult =
   | { status: 'failed'; removed: number }
 
 /**
- * THE GUARD, before any write: of the ids, deduplicated, those that are a
- * published response of the conference whose talk is a published talk of
- * the conference. One scoped read; a missing, draft or foreign id is left
- * out the same way.
- */
-async function ownedResponseIds(
-  conferenceId: string,
-  ids: readonly string[],
-): Promise<Set<string>> {
-  if (ids.length === 0) return new Set()
-  const owned = await scopedFetch<string[] | null>(
-    clientReadUncached,
-    { conferenceId },
-    `*[_type == "feedbackResponse" && _id in $ids && ${PUBLISHED_ONLY} && talk->conference._ref == $conferenceId && !(talk._ref in path("drafts.**")) && !(talk._ref in path("versions.**"))]._id`,
-    { ids },
-    { cache: 'no-store' },
-  )
-  return new Set(owned ?? [])
-}
-
-/**
- * The ids, deduplicated, if EVERY one passes {@link ownedResponseIds};
- * otherwise null.
+ * THE GUARD, before any write: the ids, deduplicated, if EVERY one passes
+ * {@link ownedResponseRows}; otherwise null.
  */
 async function ownedResponses(
   conferenceId: string,
@@ -292,12 +272,16 @@ async function ownedResponses(
 ): Promise<string[] | null> {
   const ids = [...new Set(responseIds)]
   if (ids.length === 0) return null
-  const found = await ownedResponseIds(conferenceId, ids)
+  const found = await ownedResponseRows(conferenceId, ids)
   return ids.every((id) => found.has(id)) ? ids : null
 }
 
 const isNotFound = (error: unknown) =>
   (error as { statusCode?: unknown } | null)?.statusCode === 404
+
+/** A failed revision guard. */
+const isConflict = (error: unknown) =>
+  (error as { statusCode?: unknown } | null)?.statusCode === 409
 
 /**
  * Commit Hide's or Unhide's patches. A response deleted between the guard
@@ -403,33 +387,132 @@ async function deleteInChunks(
 export type RangeRemoveResult = {
   status: 'ok' | 'failed'
   removed: number
-  /** Ids that were not a response of this conference (any more). */
+  /** Not (any more) a published response of this conference. */
   gone: number
+  /** Answered again since the chart was read, or outside the range: kept. */
+  changed: number
+}
+
+/** How often a chunk whose revision guard failed is re-planned. */
+const MAX_REPLANS = 3
+
+/**
+ * THE ONE GUARD READ every action makes before any write: of the ids, each
+ * published response of the conference whose talk is a published talk of
+ * the conference, with the revision and time it has now. A missing, draft,
+ * release-version or foreign id is left out the same way.
+ */
+async function ownedResponseRows(
+  conferenceId: string,
+  ids: readonly string[],
+): Promise<Map<string, { rev: string; submittedAt: unknown }>> {
+  if (ids.length === 0) return new Map()
+  const rows = await scopedFetch<
+    { _id: string; _rev: string; submittedAt?: unknown }[] | null
+  >(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "feedbackResponse" && _id in $ids && ${PUBLISHED_ONLY} && talk->conference._ref == $conferenceId && !(talk._ref in path("drafts.**")) && !(talk._ref in path("versions.**"))]{ _id, _rev, submittedAt }`,
+    { ids },
+    { cache: 'no-store' },
+  )
+  return new Map(
+    (rows ?? []).map((r) => [
+      r._id,
+      { rev: r._rev, submittedAt: r.submittedAt },
+    ]),
+  )
 }
 
 /**
- * Remove a RANGE from the responses-over-time chart (§10.2): like
- * {@link removeResponses}, but an id that is no longer a published response
- * of this conference is skipped, not a refusal of the range. An attendee's
- * own Delete my answer, or a chart read lagging a moment, must not keep a
- * scripted burst on the page (§15). A foreign id is skipped exactly like a
- * missing one, after the same one read and before any write, so nothing
- * leaks and nothing foreign is deleted.
+ * Remove a RANGE from the responses-over-time chart (§10.2): exactly the
+ * answers the organizer saw. A response's id is the same for every answer
+ * from one device (§7.3), so an attendee who answers again while the
+ * confirmation is open keeps the id but not the answer: only a response
+ * whose `submittedAt` is still the one the chart showed, inside the range,
+ * is deleted, and each delete is guarded by the revision this request read
+ * (Studio's own revision lock: a patch unsetting a pseudo-field under
+ * `ifRevisionID`, in the same transaction as the delete). A chunk whose
+ * guard fails is re-read and re-planned without what changed, up to
+ * {@link MAX_REPLANS} times.
+ *
+ * An id that is no longer a published response of this conference is
+ * skipped and counted as gone, not a refusal of the range: an attendee's
+ * own Delete my answer must not keep a scripted burst on the page (§15). A
+ * foreign id is skipped exactly like a missing one, after the same one read
+ * and before any write, so nothing leaks and nothing foreign is deleted.
  */
 export async function removeResponseRange({
   conferenceId,
-  responseIds,
+  responses,
+  from,
+  to,
 }: {
   conferenceId: string
-  responseIds: readonly string[]
+  responses: readonly SeenResponse[]
+  /** The range's start (inclusive) and end (exclusive), ISO instants. */
+  from: string
+  to: string
 }): Promise<RangeRemoveResult> {
-  const ids = [...new Set(responseIds)]
-  const found = await ownedResponseIds(conferenceId, ids)
-  const owned = ids.filter((id) => found.has(id))
-  const { removed, failed } = await deleteInChunks(owned)
-  return {
-    status: failed ? 'failed' : 'ok',
-    removed,
-    gone: ids.length - owned.length,
+  const seen = new Map(responses.map((r) => [r.id, r.submittedAt]))
+  const start = Date.parse(from)
+  const end = Date.parse(to)
+  const found = await ownedResponseRows(conferenceId, [...seen.keys()])
+  const out: RangeRemoveResult = {
+    status: 'ok',
+    removed: 0,
+    gone: 0,
+    changed: 0,
   }
+  const plan: { id: string; rev: string }[] = []
+  for (const [id, saw] of seen) {
+    const now = found.get(id)
+    if (!now) {
+      out.gone++
+      continue
+    }
+    const at =
+      typeof now.submittedAt === 'string' ? Date.parse(now.submittedAt) : NaN
+    if (now.submittedAt !== saw || !(at >= start && at < end)) out.changed++
+    else plan.push({ id, rev: now.rev })
+  }
+
+  for (let i = 0; i < plan.length; i += REMOVE_CHUNK_SIZE) {
+    let chunk = plan.slice(i, i + REMOVE_CHUNK_SIZE)
+    for (let replans = 0; chunk.length > 0; replans++) {
+      const tx = clientWrite.transaction()
+      for (const { id, rev } of chunk) {
+        tx.patch(id, (p) =>
+          p.ifRevisionId(rev).unset(['_revision_lock_pseudo_field_']),
+        )
+        tx.delete(id)
+      }
+      try {
+        await tx.commit()
+        out.removed += chunk.length
+        for (const { id } of chunk) expireRemovedFeedbackResponse(id)
+        break
+      } catch (error) {
+        const lostGuard = isNotFound(error) || isConflict(error)
+        if (!lostGuard || replans >= MAX_REPLANS) {
+          console.error('Could not remove Feedback Responses', error)
+          // A commit whose reply was lost may have applied: expire anyway.
+          for (const { id } of chunk) expireRemovedFeedbackResponse(id)
+          return { ...out, status: 'failed' }
+        }
+      }
+      // Re-read the chunk: drop what went or changed, keep the rest.
+      const now = await ownedResponseRows(
+        conferenceId,
+        chunk.map((c) => c.id),
+      )
+      chunk = chunk.filter(({ id, rev }) => {
+        const current = now.get(id)
+        if (!current) out.gone++
+        else if (current.rev !== rev) out.changed++
+        return current?.rev === rev
+      })
+    }
+  }
+  return out
 }

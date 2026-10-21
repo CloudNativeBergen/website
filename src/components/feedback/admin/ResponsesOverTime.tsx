@@ -11,6 +11,7 @@ import {
   type ChartResponse,
   type ResponseBucket,
 } from '@/lib/feedback/buckets'
+import type { RangeRemoved, RangeToRemove } from '@/lib/feedback/bulk-remove'
 import type { FeedbackWindow } from '@/lib/feedback/window'
 import { plural } from '@/lib/text/display'
 import {
@@ -28,20 +29,22 @@ import {
   type Note,
 } from './FeedbackCommentItem'
 
-/** A removed range in words: what went, and what was already gone. */
-export const rangeRemovedText = ({
-  removed,
-  gone,
-}: {
-  removed: number
-  gone: number
-}) =>
+/**
+ * A removed range in words: what went, what was already gone, and what was
+ * kept because it had been answered again since it was picked.
+ */
+export const rangeRemovedText = ({ removed, gone, changed }: RangeRemoved) =>
   DONE.remove(removed) +
   (gone === 0
     ? ''
     : gone === 1
       ? ' 1 was already gone.'
-      : ` ${gone} were already gone.`)
+      : ` ${gone} were already gone.`) +
+  (changed === 0
+    ? ''
+    : changed === 1
+      ? ' 1 had changed since you picked it and was kept.'
+      : ` ${changed} had changed since you picked them and were kept.`)
 
 /** The range's span in words, e.g. "Wed 10 Jun, 09:00–09:30". */
 const spanOf = (buckets: readonly ResponseBucket[], range: BucketRange) => {
@@ -72,10 +75,11 @@ export function ResponsesOverTime({
   responses: readonly ChartResponse[]
   window: Pick<FeedbackWindow, 'opensAt' | 'closesAt'>
   /**
-   * Remove these responses, skipping any already gone; resolves with the
-   * counts, rejects with the words to show.
+   * Remove the range: exactly the responses seen in it, skipping any gone
+   * or answered again since; resolves with the counts, rejects with the
+   * words to show.
    */
-  onRemove: (ids: string[]) => Promise<{ removed: number; gone: number }>
+  onRemove: (range: RangeToRemove) => Promise<RangeRemoved>
 }) {
   const headingId = useId()
   const helpId = useId()
@@ -111,13 +115,14 @@ export function ResponsesOverTime({
       ? { anchor: at(stored.anchor), focus: at(stored.focus) }
       : null
   const active = range?.focus ?? 0
-  const [removing, setRemoving] = useState<string[] | null>(null)
+  const [removing, setRemoving] = useState<RangeToRemove | null>(null)
   const [asking, setAsking] = useState(false)
   const [pending, setPending] = useState(false)
   const [outcome, setOutcome] = useState<Note | null>(null)
 
   const max = Math.max(1, ...buckets.map((b) => b.ids.length))
   const ids = range ? selectionIds(buckets, range) : []
+  const submittedAtOf = new Map(responses.map((r) => [r.id, r.submittedAt]))
   const [from, to] = range ? rangeBounds(range) : [-1, -1]
   const selected = (i: number) => i >= from && i <= to
 
@@ -158,7 +163,10 @@ export function ResponsesOverTime({
     if (!removing || pending) return
     setPending(true)
     try {
-      setOutcome({ ok: true, text: rangeRemovedText(await onRemove(removing)) })
+      setOutcome({
+        ok: true,
+        text: rangeRemovedText(await onRemove(removing)),
+      })
       setRange(null)
     } catch (e) {
       setOutcome({
@@ -284,11 +292,19 @@ export function ResponsesOverTime({
                   <button
                     type="button"
                     onClick={() => {
-                      // Exactly these: the ids on screen when Remove was pressed.
-                      setRemoving(ids)
+                      // Exactly these: the answers on screen when Remove was
+                      // pressed, each with the time it showed.
+                      setRemoving({
+                        from: buckets[from].start,
+                        to: buckets[to].end,
+                        responses: ids.map((id) => ({
+                          id,
+                          submittedAt: submittedAtOf.get(id) ?? '',
+                        })),
+                      })
                       setAsking(true)
                     }}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-red-600 px-3 text-sm font-semibold text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-red-500 dark:hover:bg-red-400"
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-red-600 px-3 text-sm font-semibold text-white shadow-xs hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-red-600 dark:hover:bg-red-700 dark:focus-visible:outline-red-400"
                   >
                     <TrashIcon className="size-4" aria-hidden="true" />
                     {ids.length === 1
@@ -327,8 +343,8 @@ export function ResponsesOverTime({
         }}
         afterLeave={() => setRemoving(null)}
         onConfirm={remove}
-        title={removeQuestion(removing?.length ?? 0)}
-        message={removeMessage(removing?.length ?? 0)}
+        title={removeQuestion(removing?.responses.length ?? 0)}
+        message={removeMessage(removing?.responses.length ?? 0)}
         confirmButtonText="Remove"
         variant="danger"
         isLoading={pending}

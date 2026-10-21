@@ -7,6 +7,7 @@ import type {
   AdminFeedbackComment,
   AdminTalkFeedback,
 } from '@/lib/feedback/admin'
+import type { RangeRemoved, RangeToRemove } from '@/lib/feedback/bulk-remove'
 import type { FeedbackColour } from '@/lib/feedback/colour'
 import { feedbackTotals, type ColourCounts } from '@/lib/feedback/totals'
 import { plural } from '@/lib/text/display'
@@ -48,10 +49,8 @@ export interface TalkFeedbackPanelProps {
   onUnhide: (responseId: string) => Promise<unknown>
   /** Remove comments (all or nothing). */
   onRemove: (responseIds: string[]) => Promise<unknown>
-  /** Remove a range from the chart, skipping any already gone. */
-  onRemoveRange: (
-    responseIds: string[],
-  ) => Promise<{ removed: number; gone: number }>
+  /** Remove a range from the chart (§10.2): only the answers seen in it. */
+  onRemoveRange: (range: RangeToRemove) => Promise<RangeRemoved>
 }
 
 /**

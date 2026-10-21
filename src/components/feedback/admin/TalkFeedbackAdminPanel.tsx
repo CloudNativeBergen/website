@@ -97,10 +97,8 @@ export function TalkFeedbackAdminPanel({
       onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
       onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
       onRemove={(ids) => remove.mutateAsync({ responseIds: ids })}
-      onRemoveRange={(ids) =>
-        removeInRequests(ids, (chunk) =>
-          removeRange.mutateAsync({ responseIds: chunk }),
-        )
+      onRemoveRange={(range) =>
+        removeInRequests(range, (chunk) => removeRange.mutateAsync(chunk))
       }
     />
   )
