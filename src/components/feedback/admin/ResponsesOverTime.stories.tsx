@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, within } from 'storybook/test'
 import type { ChartResponse } from '@/lib/feedback/buckets'
-import type { RangeRemoved, RangeToRemove } from '@/lib/feedback/bulk-remove'
+import type { RangeToRemove } from '@/lib/feedback/bulk-remove'
 import type { FeedbackColour } from '@/lib/feedback/colour'
 import { ResponsesOverTime } from './ResponsesOverTime'
 
