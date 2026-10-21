@@ -71,6 +71,7 @@ const count = (colour: FeedbackColour) =>
   RESPONSES.filter((r) => r.colour === colour).length
 
 const FEEDBACK: AdminTalkFeedback = {
+  cardsSavedAt: '2026-10-27T15:00:00.000Z',
   totals: feedbackTotals({
     live: { green: count('green'), yellow: count('yellow'), red: count('red') },
     cards: { greenCount: 12, yellowCount: 3, redCount: 0 },
@@ -188,7 +189,7 @@ const meta = {
     code: (
       <AdminFeedbackCodePanel talkId="talk-1" title="Kubernetes" embedded />
     ),
-    onSaveCards: fn(async () => {}),
+    onSaveCards: fn(async () => '2026-10-27T15:05:00.000Z'),
     onHide: fn(async () => {}),
     onUnhide: fn(async () => {}),
     onRemove: fn(async (range: RemoveRequest) => ({
@@ -272,6 +273,7 @@ export const CardCountsOnly: Story = {
   args: {
     code: undefined,
     feedback: {
+      cardsSavedAt: null,
       totals: feedbackTotals({
         live: {},
         cards: { greenCount: 41, yellowCount: 9, redCount: 2 },

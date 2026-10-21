@@ -36,7 +36,24 @@ const sameCounts = (a: ColourCounts, b: ColourCounts) =>
 /** Counts saved, and the counts the read showed when they were. */
 interface SavedCards {
   cards: ColourCounts
+  /** When the save was stamped (`audienceFeedback.lastUpdatedAt`). */
+  at: string | null
   over: ColourCounts
+}
+
+/**
+ * The read has caught up with a save: it carries that save's stamp or a
+ * later one (another organizer's newer counts show too). Without stamps, by
+ * the counts: the read shows the saved ones, or anything newer than what
+ * was on screen when they were saved.
+ */
+function caughtUp(
+  saved: SavedCards,
+  read: ColourCounts,
+  readAt: string | null,
+): boolean {
+  if (saved.at && readAt) return Date.parse(readAt) >= Date.parse(saved.at)
+  return sameCounts(read, saved.cards) || !sameCounts(read, saved.over)
 }
 
 export interface TalkFeedbackPanelProps {
@@ -44,7 +61,11 @@ export interface TalkFeedbackPanelProps {
   /** The Feedback Code section, for a talk that may hold one. */
   code?: ReactNode
   /** Save the Card Counts (`proposal.updateAudienceFeedback`). */
-  onSaveCards: (cards: ColourCounts) => Promise<unknown>
+  /**
+   * Save the Card Counts (`proposal.updateAudienceFeedback`); resolves with
+   * the save's stamp, `audienceFeedback.lastUpdatedAt`, when known.
+   */
+  onSaveCards: (cards: ColourCounts) => Promise<string | null>
   onHide: (responseId: string) => Promise<unknown>
   onUnhide: (responseId: string) => Promise<unknown>
   /**
@@ -80,8 +101,7 @@ export function TalkFeedbackPanel({
   // or shows anything newer than what was on screen when they were saved.
   const [saved, setSaved] = useState<SavedCards | null>(null)
   const read = feedback.totals.cards
-  if (saved && (sameCounts(read, saved.cards) || !sameCounts(read, saved.over)))
-    setSaved(null)
+  if (saved && caughtUp(saved, read, feedback.cardsSavedAt)) setSaved(null)
   const totals = saved
     ? feedbackTotals({
         // `scanned` holds the live and folded answers; only cards change.
@@ -111,9 +131,9 @@ export function TalkFeedbackPanel({
         yellow: Number(draft.yellow),
         red: Number(draft.red),
       }
-      await onSaveCards(cards)
+      const at = await onSaveCards(cards)
       // Against the server's read, never an earlier save's counts on screen.
-      setSaved({ cards, over: read })
+      setSaved({ cards, at, over: read })
       setDraft(null)
       setCardsNote({ ok: true, text: 'Card Counts saved.' })
     } catch (e) {

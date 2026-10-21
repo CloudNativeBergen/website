@@ -190,6 +190,12 @@ export interface AdminTalkFeedback {
   comments: AdminFeedbackComment[]
   /** Every live response with a colour and a time, oldest first. */
   responses: ChartResponse[]
+  /**
+   * When the Card Counts were last saved (`audienceFeedback.lastUpdatedAt`),
+   * so the panel can tell a read that has caught up with a save from one
+   * that lags it.
+   */
+  cardsSavedAt: string | null
   window: FeedbackWindow
 }
 
@@ -211,11 +217,14 @@ export async function readTalkFeedback({
   now: Date
 }): Promise<AdminTalkFeedback | null> {
   const scope = { conferenceId: conference._id }
-  const talk = await scopedFetch<(TalkCounts & { _id: string }) | null>(
+  const talk = await scopedFetch<
+    (TalkCounts & { _id: string; cardsSavedAt?: unknown }) | null
+  >(
     clientReadUncached,
     scope,
     `*[_type == "talk" && _id == $talkId && ${PUBLISHED_ONLY}][0]{
-      _id, audienceFeedback, feedbackFolded
+      _id, audienceFeedback, feedbackFolded,
+      "cardsSavedAt": audienceFeedback.lastUpdatedAt
     }`,
     { talkId },
     { cache: 'no-store' },
@@ -247,6 +256,8 @@ export async function readTalkFeedback({
       conferenceEndDate: conference.endDate,
       now,
     }),
+    cardsSavedAt:
+      typeof talk.cardsSavedAt === 'string' ? talk.cardsSavedAt : null,
   }
 }
 

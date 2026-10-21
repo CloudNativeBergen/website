@@ -967,6 +967,26 @@ describe('readTalkFeedback — one talk’s panel (§10.2)', () => {
     })
   })
 
+  it('gives the time the Card Counts were last saved, so a save can tell when a read has caught up', async () => {
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'talk-a'
+        ? {
+            ...d,
+            audienceFeedback: {
+              greenCount: 3,
+              yellowCount: 1,
+              redCount: 0,
+              lastUpdatedAt: '2026-06-10T12:00:00.000Z',
+            },
+          }
+        : d,
+    )
+    expect((await readTalk('talk-a'))!.cardsSavedAt).toBe(
+      '2026-06-10T12:00:00.000Z',
+    )
+    expect((await readTalk('talk-b'))!.cardsSavedAt).toBeNull()
+  })
+
   it('orders responses by time, not by id', async () => {
     h.dataset.push(
       response('talk-a', 'green', { submittedAt: '2026-06-10T11:00:00Z' }),

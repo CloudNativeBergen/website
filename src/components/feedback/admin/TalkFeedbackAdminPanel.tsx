@@ -83,8 +83,8 @@ export function TalkFeedbackAdminPanel({
           <AdminFeedbackCodePanel talkId={talkId} title={title} embedded />
         ) : undefined
       }
-      onSaveCards={(c) =>
-        cards.mutateAsync({
+      onSaveCards={async (c) => {
+        const saved = await cards.mutateAsync({
           id: talkId,
           feedback: {
             greenCount: c.green,
@@ -92,7 +92,13 @@ export function TalkFeedbackAdminPanel({
             redCount: c.red,
           },
         })
-      }
+        // The save's own stamp: the panel keeps the counts on screen until
+        // a read carries it.
+        const at = (
+          saved as { audienceFeedback?: { lastUpdatedAt?: unknown } } | null
+        )?.audienceFeedback?.lastUpdatedAt
+        return typeof at === 'string' ? at : null
+      }}
       onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
       onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
       onRemove={(request) =>

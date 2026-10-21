@@ -20,7 +20,11 @@ import type { AdminTalkFeedback } from '@/lib/feedback/admin'
 import { feedbackTotals } from '@/lib/feedback/totals'
 import { TalkFeedbackPanel } from './TalkFeedbackPanel'
 
-const feedback = (green: number): AdminTalkFeedback => ({
+const feedback = (
+  green: number,
+  cardsSavedAt: string | null = null,
+): AdminTalkFeedback => ({
+  cardsSavedAt,
   totals: feedbackTotals({
     live: { green: 10, yellow: 2, red: 1 },
     cards: { greenCount: green, yellowCount: 1, redCount: 0 },
@@ -52,7 +56,7 @@ async function saveGreen(value: string) {
 
 describe('TalkFeedbackPanel Card Counts', () => {
   it('keeps the saved counts while the read still shows the old ones', async () => {
-    const onSaveCards = vi.fn(async () => {})
+    const onSaveCards = vi.fn(async () => null)
     const { rerender } = render(
       <TalkFeedbackPanel
         feedback={feedback(3)}
@@ -98,7 +102,9 @@ describe('TalkFeedbackPanel Card Counts', () => {
     render(
       <TalkFeedbackPanel
         feedback={feedback(3)}
-        onSaveCards={vi.fn(() => new Promise<void>((r) => (finish = r)))}
+        onSaveCards={vi.fn(
+          () => new Promise<string | null>((r) => (finish = () => r(null))),
+        )}
         {...props}
       />,
     )
@@ -110,7 +116,7 @@ describe('TalkFeedbackPanel Card Counts', () => {
   })
 
   it('keeps the latest of two quick saves while the read still shows the first counts', async () => {
-    const onSaveCards = vi.fn(async () => {})
+    const onSaveCards = vi.fn(async () => null)
     const { rerender } = render(
       <TalkFeedbackPanel
         feedback={feedback(3)}
@@ -134,11 +140,41 @@ describe('TalkFeedbackPanel Card Counts', () => {
     expect(greenTotal()).toBe('17')
   })
 
+  it('keeps the last of two quick saves until a read carries its stamp, not just the first save’s', async () => {
+    const T1 = '2026-10-27T10:00:01.000Z'
+    const T2 = '2026-10-27T10:00:02.000Z'
+    const stamps = [T1, T2]
+    const onSaveCards = vi.fn(async () => stamps.shift() ?? null)
+    const panel = (green: number, at: string | null) => (
+      <TalkFeedbackPanel
+        feedback={feedback(green, at)}
+        onSaveCards={onSaveCards}
+        {...props}
+      />
+    )
+    const { rerender } = render(panel(3, null))
+    await saveGreen('5')
+    fireEvent.change(greenCards(), { target: { value: '7' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Card Counts' }))
+    await waitFor(() => expect(onSaveCards).toHaveBeenCalledTimes(2))
+    await screen.findByText('Card Counts saved.')
+    // A read that has caught up with the first save only.
+    rerender(panel(5, T1))
+    expect(greenCards().value).toBe('7')
+    expect(greenTotal()).toBe('17')
+    // Then with the second.
+    rerender(panel(7, T2))
+    expect(greenCards().value).toBe('7')
+    // Another organizer's later save shows.
+    rerender(panel(9, '2026-10-27T10:05:00.000Z'))
+    expect(greenCards().value).toBe('9')
+  })
+
   it('shows a newer read over the saved counts (another organizer saved since)', async () => {
     const { rerender } = render(
       <TalkFeedbackPanel
         feedback={feedback(3)}
-        onSaveCards={vi.fn(async () => {})}
+        onSaveCards={vi.fn(async () => null)}
         {...props}
       />,
     )
@@ -156,7 +192,8 @@ describe('TalkFeedbackPanel Card Counts', () => {
   it('locks the counts while a save runs, so nothing typed then is lost under “saved”', async () => {
     let finish: () => void = () => {}
     const onSaveCards = vi.fn(
-      () => new Promise<void>((resolve) => (finish = resolve)),
+      () =>
+        new Promise<string | null>((resolve) => (finish = () => resolve(null))),
     )
     render(
       <TalkFeedbackPanel
@@ -223,7 +260,7 @@ describe('TalkFeedbackPanel comments', () => {
   }
 
   it('forgets a Hide’s note once a range Remove takes that comment away', async () => {
-    const onHide = vi.fn(async () => {})
+    const onHide = vi.fn(async () => null)
     const { rerender } = render(
       <TalkFeedbackPanel
         feedback={withComment([comment])}
