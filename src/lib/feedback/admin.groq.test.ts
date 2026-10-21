@@ -24,6 +24,8 @@ const h = vi.hoisted(() => ({
   /** Runs once, just before the next commit; may throw to fail it. */
   beforeCommit: [] as (() => void)[],
   revs: 0,
+  /** What GROQ sees when it lags the doc endpoint; null means no lag. */
+  groqSnapshot: null as null | (Record<string, unknown> & { _id: string })[],
 }))
 
 vi.mock('server-only', () => ({}))
@@ -38,7 +40,12 @@ vi.mock('@/lib/sanity/client', async () => {
   })
   const fetch = async (query: string, params: Record<string, unknown> = {}) => {
     h.queries.push(query)
-    return (await evaluate(parse(query), { dataset: h.dataset, params })).get()
+    return (
+      await evaluate(parse(query), {
+        dataset: h.groqSnapshot ?? h.dataset,
+        params,
+      })
+    ).get()
   }
   const { Mutation } = createRequire(
     createRequire(import.meta.url).resolve('sanity/package.json'),
@@ -86,6 +93,11 @@ vi.mock('@/lib/sanity/client', async () => {
     },
     clientWrite: {
       fetch,
+      // The doc endpoint: never lags.
+      getDocuments: async (ids: string[]) =>
+        ids.map((id) =>
+          structuredClone(h.dataset.find((d) => d._id === id) ?? null),
+        ),
       transaction: () => {
         const tx = real.transaction()
         tx.commit = (async () =>
@@ -104,7 +116,6 @@ import {
   hideResponses,
   readAdminFeedback,
   readTalkFeedback,
-  removeResponseRange,
   removeResponses,
   unhideResponses,
 } from './admin'
@@ -168,6 +179,7 @@ beforeEach(() => {
   h.commits = []
   h.beforeCommit = []
   h.revs = 0
+  h.groqSnapshot = null
   vi.mocked(revalidateTag).mockClear()
   h.dataset = [
     SCHEDULE,
@@ -300,8 +312,16 @@ const act = {
     hideResponses({ conferenceId: 'conf-A', responseIds, now: NOW }),
   unhide: (responseIds: string[]) =>
     unhideResponses({ conferenceId: 'conf-A', responseIds }),
+  // A comment's Remove: each response as the page showed it.
   remove: (responseIds: string[]) =>
-    removeResponses({ conferenceId: 'conf-A', responseIds }),
+    removeResponses({
+      conferenceId: 'conf-A',
+      responses: responseIds.map((id) => ({
+        id,
+        submittedAt:
+          (h.dataset.find((d) => d._id === id)?.submittedAt as string) ?? null,
+      })),
+    }),
 }
 
 describe('Hide and Unhide (§10.3)', () => {
@@ -360,8 +380,16 @@ describe('Remove (§10.3)', () => {
     }
     const keep = response('talk-a', 'red')
     h.dataset.push(keep)
-    expect(await act.remove(ids)).toEqual({ status: 'ok', removed: 250 })
-    expect(h.commits.map((c) => c.length)).toEqual([100, 100, 50])
+    expect(await act.remove(ids)).toEqual({
+      status: 'ok',
+      removed: 250,
+      gone: 0,
+      changed: 0,
+    })
+    // Each delete goes with its revision guard: two mutations a response.
+    expect(
+      h.commits.map((c) => c.filter((m) => 'delete' in (m as object)).length),
+    ).toEqual([100, 100, 50])
     expect(ids.filter((id) => doc(id))).toEqual([])
     expect(doc(keep._id)).toBeDefined()
     expect(vi.mocked(revalidateTag).mock.calls).toEqual(
@@ -382,7 +410,10 @@ describe('Remove (§10.3)', () => {
         throw new Error('503')
       },
     )
-    expect(await act.remove(ids)).toEqual({ status: 'failed', removed: 100 })
+    expect(await act.remove(ids)).toMatchObject({
+      status: 'failed',
+      removed: 100,
+    })
     expect(ids.filter((id) => doc(id))).toEqual(ids.slice(100))
     // A commit whose reply was lost may have applied: the failed chunk's
     // entries are expired too, which is harmless for a live response.
@@ -397,6 +428,8 @@ describe('Remove (§10.3)', () => {
     expect(await act.remove([r._id, r._id])).toEqual({
       status: 'ok',
       removed: 1,
+      gone: 0,
+      changed: 0,
     })
   })
 })
@@ -446,7 +479,7 @@ describe('every action — refused before any write (§10.3)', () => {
     ],
   ]
 
-  for (const action of ['hide', 'unhide', 'remove'] as const) {
+  for (const action of ['hide', 'unhide'] as const) {
     it.each(cases)(
       `${action} refuses %s, together with an id of ours, writing nothing`,
       async (_, make) => {
@@ -478,6 +511,111 @@ describe('every action — refused before any write (§10.3)', () => {
   }
 })
 
+describe('Remove skips what is not ours, before any write (§10.3)', () => {
+  it.each([
+    [
+      'a response of another conference',
+      () => {
+        h.dataset.push(talk('talk-foreign', { conference: ref('conf-B') }))
+        return response('talk-foreign', 'red', { conference: ref('conf-B') })
+      },
+    ],
+    [
+      'a response whose talk belongs to another conference',
+      () => {
+        h.dataset.push(talk('talk-foreign', { conference: ref('conf-B') }))
+        return response('talk-foreign', 'red')
+      },
+    ],
+    [
+      'a response that points at a draft of one of our talks',
+      () => {
+        h.dataset.push(talk('drafts.talk-a'))
+        return response('drafts.talk-a', 'red')
+      },
+    ],
+    [
+      'a draft response',
+      () => ({
+        ...response('talk-a', 'red'),
+        _id: `drafts.${rid(99)}`,
+      }),
+    ],
+  ])(
+    'never deletes %s, counting it gone like a missing one',
+    async (_, make) => {
+      const ours = response('talk-a', 'green')
+      const bad = make()
+      h.dataset.push(ours, bad)
+      expect(await act.remove([ours._id, bad._id])).toEqual({
+        status: 'ok',
+        removed: 1,
+        gone: 1,
+        changed: 0,
+      })
+      expect(doc(bad._id)).toBeDefined()
+      expect(doc(ours._id)).toBeUndefined()
+      // Alone, it is answered exactly as an id that does not exist.
+      const a = await act.remove([bad._id])
+      expect(a).toEqual(await act.remove([rid(12345)]))
+      expect(doc(bad._id)).toBeDefined()
+    },
+  )
+})
+
+describe('Remove of one comment: only the answer the organizer saw (§10.3)', () => {
+  it('keeps a replacement answer given while the confirmation was open', async () => {
+    const shown = response('talk-a', 'red', { comment: 'awful' })
+    h.dataset.push(shown)
+    const seen = { id: shown._id, submittedAt: String(shown.submittedAt) }
+    // The same device answers again: same id, new answer.
+    h.dataset = h.dataset.map((d) =>
+      d._id === shown._id
+        ? {
+            ...d,
+            colour: 'green',
+            comment: 'great',
+            submittedAt: '2026-06-10T10:50:00Z',
+            _rev: 'again',
+          }
+        : d,
+    )
+    expect(
+      await removeResponses({ conferenceId: 'conf-A', responses: [seen] }),
+    ).toEqual({ status: 'ok', removed: 0, gone: 0, changed: 1 })
+    expect(doc(shown._id)).toMatchObject({ comment: 'great' })
+    expect(h.commits).toEqual([])
+  })
+
+  it('keeps a replacement given between the guard read and the commit', async () => {
+    const shown = response('talk-a', 'red', { comment: 'awful' })
+    h.dataset.push(shown)
+    h.beforeCommit.push(() => {
+      h.dataset = h.dataset.map((d) =>
+        d._id === shown._id ? { ...d, comment: 'great', _rev: 'again' } : d,
+      )
+    })
+    expect(
+      await removeResponses({
+        conferenceId: 'conf-A',
+        responses: [{ id: shown._id, submittedAt: String(shown.submittedAt) }],
+      }),
+    ).toEqual({ status: 'ok', removed: 0, gone: 0, changed: 1 })
+    expect(doc(shown._id)).toMatchObject({ comment: 'great' })
+  })
+
+  it('matches a response the page showed without a time', async () => {
+    const timeless = response('talk-a', 'red', { submittedAt: undefined })
+    h.dataset.push(timeless)
+    expect(
+      await removeResponses({
+        conferenceId: 'conf-A',
+        responses: [{ id: timeless._id, submittedAt: null }],
+      }),
+    ).toMatchObject({ removed: 1 })
+  })
+})
+
 describe('Remove a range (§10.2): only the answers the organizer saw', () => {
   // The burst sits in 10:00–10:30 on 2026-06-10.
   const FROM = '2026-06-10T10:00:00.000Z'
@@ -487,10 +625,9 @@ describe('Remove a range (§10.2): only the answers the organizer saw', () => {
     docs: Doc[],
     extra: { id: string; submittedAt: string }[] = [],
   ) =>
-    removeResponseRange({
+    removeResponses({
       conferenceId: 'conf-A',
-      from: FROM,
-      to: TO,
+      range: { from: FROM, to: TO },
       responses: [...docs.map(seen), ...extra],
     })
   const burst = (k: number) =>
@@ -700,6 +837,99 @@ describe('Remove a range (§10.2): only the answers the organizer saw', () => {
     // Bounded: the first try and three re-plans.
     expect(h.beforeCommit).toHaveLength(6)
     expect(docs.filter((d) => doc(d._id))).toHaveLength(2)
+  })
+})
+
+describe('Remove a range: bounds, lag and lost replies (§10.2)', () => {
+  const FROM = '2026-06-10T10:00:00.000Z'
+  const TO = '2026-06-10T10:30:00.000Z'
+  const seen = (d: Doc) => ({ id: d._id, submittedAt: String(d.submittedAt) })
+  const range = (docs: Doc[]) =>
+    removeResponses({
+      conferenceId: 'conf-A',
+      range: { from: FROM, to: TO },
+      responses: docs.map(seen),
+    })
+  const at = (submittedAt: string) => response('talk-a', 'red', { submittedAt })
+  const burst = (k: number) =>
+    Array.from({ length: k }, () => at('2026-06-10T10:15:00Z'))
+
+  it('keeps an answer just before the start, and one exactly at the end', async () => {
+    const before = at('2026-06-10T09:59:59Z')
+    const first = at('2026-06-10T10:00:00Z')
+    const last = at('2026-06-10T10:29:59Z')
+    const end = at('2026-06-10T10:30:00Z')
+    h.dataset.push(before, first, last, end)
+    expect(await range([before, first, last, end])).toEqual({
+      status: 'ok',
+      removed: 2,
+      gone: 0,
+      changed: 2,
+    })
+    expect(doc(before._id)).toBeDefined()
+    expect(doc(end._id)).toBeDefined()
+    expect(doc(first._id)).toBeUndefined()
+    expect(doc(last._id)).toBeUndefined()
+  })
+
+  it('re-plans by id, not through lagging GROQ, when one answer changes during a 150-response burst', async () => {
+    const docs = burst(150)
+    h.dataset.push(...docs)
+    // GROQ shows the dataset as it was for the whole request.
+    h.groqSnapshot = structuredClone(h.dataset)
+    h.beforeCommit.push(() => {
+      h.dataset = h.dataset.map((d) =>
+        d._id === docs[5]._id
+          ? {
+              ...d,
+              colour: 'green',
+              submittedAt: '2026-06-10T11:00:00Z',
+              _rev: 'retap',
+            }
+          : d,
+      )
+    })
+    expect(await range(docs)).toEqual({
+      status: 'ok',
+      removed: 149,
+      gone: 0,
+      changed: 1,
+    })
+    expect(docs.filter((d) => doc(d._id)).map((d) => d._id)).toEqual([
+      docs[5]._id,
+    ])
+  })
+
+  it('re-plans by id when one answer is deleted during the burst (404), GROQ lagging', async () => {
+    const docs = burst(150)
+    h.dataset.push(...docs)
+    h.groqSnapshot = structuredClone(h.dataset)
+    h.beforeCommit.push(() => {
+      h.dataset = h.dataset.filter((d) => d._id !== docs[5]._id)
+    })
+    expect(await range(docs)).toEqual({
+      status: 'ok',
+      removed: 149,
+      gone: 1,
+      changed: 0,
+    })
+  })
+
+  it('expires a failed chunk’s answers too: a commit whose reply was lost may have applied', async () => {
+    const docs = burst(150)
+    h.dataset.push(...docs)
+    h.beforeCommit.push(
+      () => {},
+      () => {
+        throw new Error('503')
+      },
+    )
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await range(docs)).toMatchObject({ status: 'failed', removed: 100 })
+    error.mockRestore()
+    expect(vi.mocked(revalidateTag).mock.calls).toEqual(
+      docs.map((d) => [feedbackResponseTag(d._id), { expire: 0 }]),
+    )
   })
 })
 

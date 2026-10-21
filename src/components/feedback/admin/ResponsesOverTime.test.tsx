@@ -16,7 +16,7 @@ import {
   within,
 } from '@testing-library/react'
 import type { ChartResponse } from '@/lib/feedback/buckets'
-import type { RangeRemoved, RangeToRemove } from '@/lib/feedback/bulk-remove'
+import type { RemovedCounts, RemoveRequest } from '@/lib/feedback/bulk-remove'
 import { ResponsesOverTime } from './ResponsesOverTime'
 
 const r = (id: string, submittedAt: string): ChartResponse => ({
@@ -52,7 +52,7 @@ async function confirmRemove() {
 
 describe('ResponsesOverTime', () => {
   it('removes the ids shown when Remove was pressed, not one that arrived while the dialog was open', async () => {
-    const onRemove = vi.fn(async (range: RangeToRemove) => ({
+    const onRemove = vi.fn(async (range: RemoveRequest) => ({
       removed: range.responses.length,
       gone: 0,
       changed: 0,
@@ -84,8 +84,10 @@ describe('ResponsesOverTime', () => {
     await waitFor(() => expect(onRemove).toHaveBeenCalledTimes(1))
     // The answers seen, each with the time the chart showed, and the bounds.
     expect(onRemove).toHaveBeenCalledWith({
-      from: '2026-10-27T09:00:00.000Z',
-      to: '2026-10-27T09:10:00.000Z',
+      range: {
+        from: '2026-10-27T09:00:00.000Z',
+        to: '2026-10-27T09:10:00.000Z',
+      },
       responses: [
         { id: 'a', submittedAt: '2026-10-27T09:01:00Z' },
         { id: 'b', submittedAt: '2026-10-27T09:05:00Z' },
@@ -125,7 +127,7 @@ describe('ResponsesOverTime', () => {
     await confirmRemove()
     expect(
       await screen.findByText(
-        '1 response removed. 1 was already gone. 2 had changed since you picked them and were kept.',
+        '1 response removed. 1 was already gone. 2 had changed since you looked and were kept.',
       ),
     ).toBeTruthy()
   })
@@ -164,8 +166,10 @@ describe('ResponsesOverTime', () => {
   })
 
   it('still says what happened when the range took every response', async () => {
-    let finish: (v: RangeRemoved) => void = () => {}
-    const onRemove = vi.fn(() => new Promise<RangeRemoved>((r) => (finish = r)))
+    let finish: (v: RemovedCounts) => void = () => {}
+    const onRemove = vi.fn(
+      () => new Promise<RemovedCounts>((r) => (finish = r)),
+    )
     const all = [r('a', '2026-10-27T09:01:00Z')]
     const { rerender } = render(
       <ResponsesOverTime

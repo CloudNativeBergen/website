@@ -36,7 +36,6 @@ vi.mock('@/lib/trpc/client', () => {
         adminHide: mutation,
         adminUnhide: mutation,
         adminRemove: mutation,
-        adminRemoveRange: mutation,
       },
       proposal: { admin: { updateAudienceFeedback: mutation } },
     },
@@ -52,11 +51,11 @@ describe('TalkFeedbackAdminPanel', () => {
     render(
       <TalkFeedbackAdminPanel talkId="talk-1" title="T" showCode={false} />,
     )
-    // Hide, Unhide, Remove, Remove a range, Card Counts.
-    expect(h.settled).toHaveLength(5)
+    // Hide, Unhide, Remove, Card Counts.
+    expect(h.settled).toHaveLength(4)
     for (const settle of h.settled) await settle()
-    expect(h.invalidateTalk).toHaveBeenCalledTimes(5)
+    expect(h.invalidateTalk).toHaveBeenCalledTimes(4)
     expect(h.invalidateTalk).toHaveBeenCalledWith({ talkId: 'talk-1' })
-    expect(h.invalidateOverview).toHaveBeenCalledTimes(5)
+    expect(h.invalidateOverview).toHaveBeenCalledTimes(4)
   })
 })

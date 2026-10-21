@@ -10,6 +10,7 @@ import type {
 } from '@/lib/feedback/admin'
 import { combineTotals } from '@/lib/feedback/totals'
 import { Format } from '@/lib/proposal/types'
+import type { RemoveRequest, RemovedCounts } from '@/lib/feedback/bulk-remove'
 import { SessionFeedbackAdmin } from './SessionFeedbackAdmin'
 import { SessionFeedbackAdminPage } from './SessionFeedbackAdminPage'
 
@@ -151,7 +152,12 @@ const meta = {
     conferenceTitle: 'Cloud Native Days Norway 2026',
     onHide: fn<(id: string) => Promise<void>>(async () => {}),
     onUnhide: fn(async () => {}),
-    onRemove: fn(async () => {}),
+    // What a Remove of answers still as seen does: they all go.
+    onRemove: fn(async (request: RemoveRequest) => ({
+      removed: request.responses.length,
+      gone: 0,
+      changed: 0,
+    })),
   },
 } satisfies Meta<typeof SessionFeedbackAdmin>
 
@@ -301,16 +307,18 @@ function Removing(args: React.ComponentProps<typeof SessionFeedbackAdmin>) {
     <SessionFeedbackAdmin
       {...args}
       overview={data}
-      onRemove={async (ids) => {
-        await args.onRemove(ids)
+      onRemove={async (request) => {
+        const done = await args.onRemove(request)
+        const ids = new Set(request.responses.map((r) => r.id))
         setData((d) =>
           overview(
             d.sessions.map((s) => ({
               ...s,
-              comments: s.comments.filter((c) => !ids.includes(c.id)),
+              comments: s.comments.filter((c) => !ids.has(c.id)),
             })),
           ),
         )
+        return done
       }}
     />
   )
@@ -402,7 +410,11 @@ const confirmRemove = async () => {
 
 /** While the delete runs, Escape does not close the question. */
 export const RemovePending: Story = {
-  args: { onRemove: fn(() => new Promise<never>(() => {})) },
+  args: {
+    onRemove: fn<(request: RemoveRequest) => Promise<RemovedCounts>>(
+      () => new Promise(() => {}),
+    ),
+  },
   play: async (context) => {
     await askRemove(context)
     await confirmRemove()
@@ -435,9 +447,10 @@ function Refetching(args: React.ComponentProps<typeof SessionFeedbackAdmin>) {
     <SessionFeedbackAdmin
       {...args}
       overview={data}
-      onRemove={async (ids) => {
-        await args.onRemove(ids)
+      onRemove={async (request) => {
+        const done = await args.onRemove(request)
         setData(overview([TEN_AFTER, OTHER]))
+        return done
       }}
     />
   )
@@ -506,11 +519,13 @@ export const RemoveKeepsRowInPlace: Story = {
 /** A failed Remove closes the dialog so its message on the page is seen. */
 export const RemoveFailed: Story = {
   args: {
-    onRemove: fn(async () => {
-      throw new Error(
-        'Removed 0 of 1 responses. Reload to see what’s left, then remove those.',
-      )
-    }),
+    onRemove: fn<(request: RemoveRequest) => Promise<RemovedCounts>>(
+      async () => {
+        throw new Error(
+          'Removed 0 of 1 responses. Reload to see what’s left, then remove those.',
+        )
+      },
+    ),
   },
   play: async (context) => {
     await askRemove(context)

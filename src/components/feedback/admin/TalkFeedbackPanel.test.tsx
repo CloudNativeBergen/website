@@ -26,7 +26,6 @@ const props = {
   onHide: vi.fn(),
   onUnhide: vi.fn(),
   onRemove: vi.fn(),
-  onRemoveRange: vi.fn(),
 }
 
 afterEach(cleanup)

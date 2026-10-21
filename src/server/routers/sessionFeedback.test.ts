@@ -644,7 +644,6 @@ describe('sessionFeedbackRouter surface', () => {
       'adminHide',
       'adminOverview',
       'adminRemove',
-      'adminRemoveRange',
       'adminTalk',
       'adminUnhide',
       'ensureCode',

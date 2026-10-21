@@ -38,7 +38,6 @@ export function TalkFeedbackAdminPanel({
   const hide = api.sessionFeedback.adminHide.useMutation(refresh)
   const unhide = api.sessionFeedback.adminUnhide.useMutation(refresh)
   const remove = api.sessionFeedback.adminRemove.useMutation(refresh)
-  const removeRange = api.sessionFeedback.adminRemoveRange.useMutation(refresh)
   const cards = api.proposal.admin.updateAudienceFeedback.useMutation(refresh)
 
   // The Feedback Code stands on its own while the feedback read is not
@@ -96,9 +95,8 @@ export function TalkFeedbackAdminPanel({
       }
       onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
       onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
-      onRemove={(ids) => remove.mutateAsync({ responseIds: ids })}
-      onRemoveRange={(range) =>
-        removeInRequests(range, (chunk) => removeRange.mutateAsync(chunk))
+      onRemove={(request) =>
+        removeInRequests(request, (chunk) => remove.mutateAsync(chunk))
       }
     />
   )

@@ -8,6 +8,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline'
 import type { AdminFeedbackComment } from '@/lib/feedback/admin'
+import type { RemovedCounts } from '@/lib/feedback/bulk-remove'
 import { plural } from '@/lib/text/display'
 import { formatFeedbackCommentTime } from '@/lib/time'
 import { ANSWERS } from '../answers'
@@ -60,6 +61,53 @@ export const DONE: Record<ActionKind, (count: number) => string> = {
   unhide: () => 'Comment shown to speakers again.',
   remove: (n) => `${plural(n, 'response', 'responses')} removed.`,
 }
+
+/**
+ * What a Remove did, in words (§10.3): what went, what was already gone,
+ * and what was kept because it had been answered again since the organizer
+ * looked.
+ */
+export function removedText({ removed, gone, changed }: RemovedCounts) {
+  const alone = (n: number) => n === 1 && removed + gone + changed === 1
+  const parts: string[] = []
+  if (removed > 0 || gone + changed === 0) parts.push(DONE.remove(removed))
+  if (gone > 0)
+    parts.push(
+      alone(gone)
+        ? 'It was already gone.'
+        : gone === 1
+          ? '1 was already gone.'
+          : `${gone} were already gone.`,
+    )
+  if (changed > 0)
+    parts.push(
+      alone(changed)
+        ? 'It had changed since you looked and was kept.'
+        : changed === 1
+          ? '1 had changed since you looked and was kept.'
+          : `${changed} had changed since you looked and were kept.`,
+    )
+  return parts.join(' ')
+}
+
+/**
+ * What a successful action says: a Remove by what it did (ok only if
+ * something went), Hide and Unhide by their kind.
+ */
+export function doneNote(
+  kind: ActionKind,
+  count: number,
+  result: unknown,
+): Note {
+  if (kind === 'remove' && isRemovedCounts(result))
+    return { ok: result.removed > 0, text: removedText(result) }
+  return { ok: true, text: DONE[kind](count) }
+}
+
+const isRemovedCounts = (value: unknown): value is RemovedCounts =>
+  typeof (value as RemovedCounts | null)?.removed === 'number' &&
+  typeof (value as RemovedCounts).gone === 'number' &&
+  typeof (value as RemovedCounts).changed === 'number'
 
 /** A successful Remove whose comment a refetch has not taken away yet. */
 export const REMOVED_BUT_LISTED =

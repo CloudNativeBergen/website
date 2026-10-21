@@ -7,7 +7,7 @@ import type {
   AdminFeedbackComment,
   AdminTalkFeedback,
 } from '@/lib/feedback/admin'
-import type { RangeRemoved, RangeToRemove } from '@/lib/feedback/bulk-remove'
+import type { RemovedCounts, RemoveRequest } from '@/lib/feedback/bulk-remove'
 import type { FeedbackColour } from '@/lib/feedback/colour'
 import { feedbackTotals, type ColourCounts } from '@/lib/feedback/totals'
 import { plural } from '@/lib/text/display'
@@ -15,7 +15,7 @@ import { ANSWERS } from '../answers'
 import { ColourBar, FEEDBACK_TONE } from '../tone'
 import {
   CommentItem,
-  DONE,
+  doneNote,
   errorText,
   OutcomeNote,
   REMOVED_BUT_LISTED,
@@ -47,10 +47,11 @@ export interface TalkFeedbackPanelProps {
   onSaveCards: (cards: ColourCounts) => Promise<unknown>
   onHide: (responseId: string) => Promise<unknown>
   onUnhide: (responseId: string) => Promise<unknown>
-  /** Remove comments (all or nothing). */
-  onRemove: (responseIds: string[]) => Promise<unknown>
-  /** Remove a range from the chart (§10.2): only the answers seen in it. */
-  onRemoveRange: (range: RangeToRemove) => Promise<RangeRemoved>
+  /**
+   * Remove (`sessionFeedback.adminRemove`), a comment or a chart range:
+   * only answers still as the page showed them.
+   */
+  onRemove: (request: RemoveRequest) => Promise<RemovedCounts>
 }
 
 /**
@@ -68,7 +69,6 @@ export function TalkFeedbackPanel({
   onHide,
   onUnhide,
   onRemove,
-  onRemoveRange,
 }: TalkFeedbackPanelProps) {
   const { comments } = feedback
   const formId = useId()
@@ -250,7 +250,7 @@ export function TalkFeedbackPanel({
         <ResponsesOverTime
           responses={feedback.responses}
           window={feedback.window}
-          onRemove={onRemoveRange}
+          onRemove={onRemove}
         />
       </div>
 
@@ -294,8 +294,7 @@ function TalkComments({
     setPending((p) => new Set([...p, id]))
     let outcome: CommentNote
     try {
-      await action()
-      outcome = { kind, ok: true, text: DONE[kind](1) }
+      outcome = { kind, ...doneNote(kind, 1, await action()) }
     } catch (e) {
       outcome = { kind, ok: false, text: errorText(e) }
     }
@@ -362,7 +361,12 @@ function TalkComments({
         onConfirm={async () => {
           const comment = removing
           if (!comment || removePending) return
-          await run('remove', comment.id, () => onRemove([comment.id]))
+          // The answer as shown: removed only while it is still that one.
+          await run('remove', comment.id, () =>
+            onRemove({
+              responses: [{ id: comment.id, submittedAt: comment.submittedAt }],
+            }),
+          )
           setAsking(false)
         }}
         title={removeQuestion(1)}

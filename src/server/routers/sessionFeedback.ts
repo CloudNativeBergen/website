@@ -22,7 +22,6 @@ import {
   readSpeakerResults,
   rotateFeedbackCode,
   readTalkFeedback,
-  removeResponseRange,
 } from '@/lib/feedback/server'
 
 /**
@@ -54,21 +53,22 @@ const responsesInput = z.object({
 })
 
 /**
- * A range from the chart (§10.2): its bounds, and each response with the
- * time the chart showed for it, so an answer given again since is kept.
+ * Remove's input (§10.2, §10.3), for a comment and a range alike: each
+ * response with the `submittedAt` the page showed for it (null when it
+ * showed none), and, for a range from the chart, its bounds. A response is
+ * removed only while it is still that answer, inside the range.
  */
-const rangeInput = z.object({
-  from: z.iso.datetime(),
-  to: z.iso.datetime(),
+const removeInput = z.object({
   responses: z
     .array(
       z.object({
         id: z.string().regex(RESPONSE_ID),
-        submittedAt: z.string().max(40),
+        submittedAt: z.string().max(40).nullable(),
       }),
     )
     .min(1)
     .max(MAX_RESPONSES_PER_REQUEST),
+  range: z.object({ from: z.iso.datetime(), to: z.iso.datetime() }).optional(),
 })
 
 /**
@@ -243,28 +243,33 @@ export const sessionFeedbackRouter = router({
     }),
 
   /**
-   * Remove (§10.3): deletes the whole responses, colour and comment, after
-   * the page's confirmation naming the count. Guarded like
-   * {@link adminHide}. A chunk that fails after others committed says how
-   * many went.
+   * Remove (§10.2, §10.3), for a comment and a chart range alike: deletes
+   * the whole responses, colour and comment, after the page's confirmation
+   * naming the count. Only answers still as the page showed them are
+   * deleted, each under its revision guard; one given again since is kept
+   * (`changed`). An id that is not a response of this conference (gone, or
+   * another conference's) is skipped (`gone`), never written, and answered
+   * exactly like a missing one. A chunk that fails after others committed
+   * says how many went.
    */
-  adminRemove: adminProcedure
-    .input(responsesInput)
-    .mutation(async ({ input }) => {
-      const result = await removeResponses({
-        conferenceId: await resolveConferenceId(),
-        responseIds: input.responseIds,
+  adminRemove: adminProcedure.input(removeInput).mutation(async ({ input }) => {
+    const result = await removeResponses({
+      conferenceId: await resolveConferenceId(),
+      responses: input.responses,
+      range: input.range,
+    })
+    if (result.status === 'failed')
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        // Not "try again": what went is gone; a reload shows what is left.
+        message: `Removed ${result.removed} of ${new Set(input.responses.map((r) => r.id)).size} responses. Reload to see what’s left, then remove those.`,
       })
-      if (result.status === 'refused') throw responseNotFound()
-      if (result.status === 'failed')
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          // Not "try again": the guard refuses a list holding an id that has
-          // already gone, so a retry of the same list would be refused.
-          message: `Removed ${result.removed} of ${new Set(input.responseIds).size} responses. Reload to see what’s left, then remove those.`,
-        })
-      return { removed: result.removed }
-    }),
+    return {
+      removed: result.removed,
+      gone: result.gone,
+      changed: result.changed,
+    }
+  }),
 
   /**
    * Rotate the talk's Feedback Code (§10.4), after the page's confirmation:
@@ -315,35 +320,4 @@ export const sessionFeedbackRouter = router({
     if (!result) throw notFound()
     return result
   }),
-
-  /**
-   * Remove a range from a talk's responses-over-time chart (§10.2), after
-   * the page's confirmation naming the count. Unlike {@link adminRemove}, an
-   * id that is no longer a response of this conference (gone, or foreign) is
-   * skipped and counted, not a refusal of the range: a scripted burst must
-   * not survive one attendee deleting their own answer. Only an answer still
-   * as the chart showed it is deleted, each under its revision guard; one
-   * given again since is kept and counted. Nothing foreign is ever written,
-   * checked in the same one read before any write.
-   */
-  adminRemoveRange: adminProcedure
-    .input(rangeInput)
-    .mutation(async ({ input }) => {
-      const result = await removeResponseRange({
-        conferenceId: await resolveConferenceId(),
-        responses: input.responses,
-        from: input.from,
-        to: input.to,
-      })
-      if (result.status === 'failed')
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: `Removed ${result.removed} of ${new Set(input.responses.map((r) => r.id)).size} responses. Reload to see what’s left, then remove those.`,
-        })
-      return {
-        removed: result.removed,
-        gone: result.gone,
-        changed: result.changed,
-      }
-    }),
 })

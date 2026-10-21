@@ -42,7 +42,7 @@ export function SessionFeedbackAdminPage({
       conferenceTitle={conferenceTitle}
       onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
       onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
-      onRemove={(ids) => remove.mutateAsync({ responseIds: ids })}
+      onRemove={(request) => remove.mutateAsync(request)}
       refreshFailed={
         overview.isError
           ? {

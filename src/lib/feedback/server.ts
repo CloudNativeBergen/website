@@ -42,7 +42,6 @@ export {
   hideResponses,
   readAdminFeedback,
   readTalkFeedback,
-  removeResponseRange,
   removeResponses,
   unhideResponses,
   REMOVE_CHUNK_SIZE,
@@ -51,6 +50,5 @@ export {
   type AdminFeedbackSession,
   type AdminTalkFeedback,
   type ModerationResult,
-  type RangeRemoveResult,
   type RemoveResult,
 } from './admin'

@@ -11,7 +11,7 @@ import {
   type ChartResponse,
   type ResponseBucket,
 } from '@/lib/feedback/buckets'
-import type { RangeRemoved, RangeToRemove } from '@/lib/feedback/bulk-remove'
+import type { RemovedCounts, RemoveRequest } from '@/lib/feedback/bulk-remove'
 import type { FeedbackWindow } from '@/lib/feedback/window'
 import { plural } from '@/lib/text/display'
 import {
@@ -22,29 +22,12 @@ import {
 import { ANSWERS } from '../answers'
 import { FEEDBACK_TONE } from '../tone'
 import {
-  DONE,
   errorText,
   removeMessage,
   removeQuestion,
+  removedText,
   type Note,
 } from './FeedbackCommentItem'
-
-/**
- * A removed range in words: what went, what was already gone, and what was
- * kept because it had been answered again since it was picked.
- */
-export const rangeRemovedText = ({ removed, gone, changed }: RangeRemoved) =>
-  DONE.remove(removed) +
-  (gone === 0
-    ? ''
-    : gone === 1
-      ? ' 1 was already gone.'
-      : ` ${gone} were already gone.`) +
-  (changed === 0
-    ? ''
-    : changed === 1
-      ? ' 1 had changed since you picked it and was kept.'
-      : ` ${changed} had changed since you picked them and were kept.`)
 
 /** The range's span in words, e.g. "Wed 10 Jun, 09:00–09:30". */
 const spanOf = (buckets: readonly ResponseBucket[], range: BucketRange) => {
@@ -85,7 +68,7 @@ export function ResponsesOverTime({
    * or answered again since; resolves with the counts, rejects with the
    * words to show.
    */
-  onRemove: (range: RangeToRemove) => Promise<RangeRemoved>
+  onRemove: (range: RemoveRequest) => Promise<RemovedCounts>
 }) {
   const headingId = useId()
   const helpId = useId()
@@ -122,7 +105,7 @@ export function ResponsesOverTime({
       ? { anchor: at(stored.anchor), focus: at(stored.focus) }
       : null
   const active = range?.focus ?? 0
-  const [removing, setRemoving] = useState<RangeToRemove | null>(null)
+  const [removing, setRemoving] = useState<RemoveRequest | null>(null)
   // The keyboard's bucket stays in view while the chart is scrolled.
   useEffect(() => {
     if (!focused) return
@@ -183,7 +166,7 @@ export function ResponsesOverTime({
     try {
       setOutcome({
         ok: true,
-        text: rangeRemovedText(await onRemove(removing)),
+        text: removedText(await onRemove(removing)),
       })
       setRange(null)
     } catch (e) {
@@ -347,8 +330,10 @@ export function ResponsesOverTime({
                       // Exactly these: the answers on screen when Remove was
                       // pressed, each with the time it showed.
                       setRemoving({
-                        from: buckets[from].start,
-                        to: buckets[to].end,
+                        range: {
+                          from: buckets[from].start,
+                          to: buckets[to].end,
+                        },
                         responses: ids.map((id) => ({
                           id,
                           submittedAt: submittedAtOf.get(id) ?? '',

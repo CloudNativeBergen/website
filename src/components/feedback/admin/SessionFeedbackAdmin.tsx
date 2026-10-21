@@ -21,13 +21,14 @@ import type {
   AdminFeedbackOverview,
   AdminFeedbackSession,
 } from '@/lib/feedback/admin'
+import type { RemoveRequest, RemovedCounts } from '@/lib/feedback/bulk-remove'
 import { formats } from '@/lib/proposal/types'
 import { formatFeedbackCommentTime } from '@/lib/time'
 import { ANSWERS } from '../answers'
 import { ColourBar, FEEDBACK_TONE } from '../tone'
 import {
   CommentItem,
-  DONE,
+  doneNote,
   errorText,
   OutcomeNote,
   REMOVED_BUT_LISTED,
@@ -53,7 +54,8 @@ export interface SessionFeedbackAdminProps {
   conferenceTitle?: string
   onHide: (responseId: string) => Promise<unknown>
   onUnhide: (responseId: string) => Promise<unknown>
-  onRemove: (responseIds: string[]) => Promise<unknown>
+  /** Remove (`sessionFeedback.adminRemove`): only answers still as seen. */
+  onRemove: (request: RemoveRequest) => Promise<RemovedCounts>
   /**
    * The last refetch failed: the numbers shown are earlier ones. Offers
    * Retry, which is `retrying` while it runs.
@@ -68,6 +70,7 @@ const sameOrder = (a: readonly string[], b: readonly string[]) =>
 interface Removal {
   talkId: string
   ids: string[]
+  request: RemoveRequest
   comment?: string
 }
 
@@ -146,8 +149,7 @@ export function SessionFeedbackAdmin({
     const at = { talkId, responseId: ids[0], kind }
     let outcome: Outcome
     try {
-      await action()
-      outcome = { ...at, ok: true, text: DONE[kind](ids.length) }
+      outcome = { ...at, ...doneNote(kind, ids.length, await action()) }
     } catch (e) {
       outcome = {
         ...at,
@@ -320,6 +322,10 @@ export function SessionFeedbackAdmin({
                     const removal = {
                       talkId: session.talkId,
                       ids: [c.id],
+                      // The answer as shown: removed only while still it.
+                      request: {
+                        responses: [{ id: c.id, submittedAt: c.submittedAt }],
+                      },
                       comment: c.comment,
                     }
                     removingNow.current = removal
@@ -348,7 +354,7 @@ export function SessionFeedbackAdmin({
           const removal = removing
           if (!removal || removePending) return
           await run(removal.talkId, 'remove', removal.ids, () =>
-            onRemove(removal.ids),
+            onRemove(removal.request),
           )
           // Closed either way, the outcome is on the page behind it; but only
           // if this is still the question that asked for this delete.
