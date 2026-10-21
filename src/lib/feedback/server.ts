@@ -41,12 +41,15 @@ export { deviceCookie, type DeviceCookie } from './device'
 export {
   hideResponses,
   readAdminFeedback,
+  readTalkFeedback,
   removeResponses,
   unhideResponses,
   REMOVE_CHUNK_SIZE,
   type AdminFeedbackComment,
   type AdminFeedbackOverview,
   type AdminFeedbackSession,
+  type AdminTalkFeedback,
+  type TimedResponse,
   type ModerationResult,
   type RemoveResult,
 } from './admin'

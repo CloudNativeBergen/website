@@ -15,17 +15,21 @@ import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { formats, type Format } from '@/lib/proposal/types'
-import type { FeedbackColour } from './colour'
+import { isFeedbackColour, type FeedbackColour } from './colour'
 import { expireRemovedFeedbackResponse } from './cache'
 import { commentOf } from './comment'
-import { getConferenceFeedbackSlots, PUBLISHED_ONLY } from './sanity'
+import {
+  getConferenceFeedbackSlots,
+  getFeedbackSlots,
+  PUBLISHED_ONLY,
+} from './sanity'
 import {
   combineTotals,
   talkTotals,
   type FeedbackTotals,
   type TalkCounts,
 } from './totals'
-import { feedbackWindow } from './window'
+import { feedbackWindow, type FeedbackWindow } from './window'
 
 /** A comment as organizers see it: hidden and flagged ones too. */
 export interface AdminFeedbackComment {
@@ -61,7 +65,7 @@ export interface AdminFeedbackOverview {
 
 interface ResponseRow {
   _id: string
-  talk: string | null
+  talk?: string | null
   colour?: unknown
   comment?: unknown
   submittedAt?: unknown
@@ -121,21 +125,8 @@ export async function readAdminFeedback({
   let flagged = 0
   const sessions = talks.map((t): AdminFeedbackSession => {
     const responses = byTalk.get(t._id) ?? []
-    const comments: AdminFeedbackComment[] = []
-    for (const r of responses) {
-      const shown = commentOf(r)
-      if (!shown) continue
-      const hidden = !!r.hiddenAt
-      const isFlagged = !!r.flaggedAt && !hidden
-      if (isFlagged) flagged++
-      comments.push({
-        id: r._id,
-        ...shown,
-        submittedAt: typeof r.submittedAt === 'string' ? r.submittedAt : null,
-        hidden,
-        flagged: isFlagged,
-      })
-    }
+    const comments = adminComments(responses)
+    flagged += comments.filter((c) => c.flagged).length
     return {
       talkId: t._id,
       title: t.title ?? 'Untitled',
@@ -159,6 +150,101 @@ export async function readAdminFeedback({
     comments: sessions.reduce((sum, s) => sum + s.comments.length, 0),
     flagged,
     sessions,
+  }
+}
+
+/**
+ * The rows' comments as organizers see them, in the rows' order: hidden ones
+ * too, and a flag only while the comment is not hidden.
+ */
+function adminComments(rows: readonly ResponseRow[]): AdminFeedbackComment[] {
+  const comments: AdminFeedbackComment[] = []
+  for (const r of rows) {
+    const shown = commentOf(r)
+    if (!shown) continue
+    const hidden = !!r.hiddenAt
+    comments.push({
+      id: r._id,
+      ...shown,
+      submittedAt: typeof r.submittedAt === 'string' ? r.submittedAt : null,
+      hidden,
+      flagged: !!r.flaggedAt && !hidden,
+    })
+  }
+  return comments
+}
+
+/** One response as the responses-over-time chart places it (§10.2). */
+export interface TimedResponse {
+  id: string
+  colour: FeedbackColour
+  submittedAt: string
+}
+
+/** One talk's Session Feedback as its admin panel shows it (§10.2). */
+export interface AdminTalkFeedback {
+  totals: FeedbackTotals
+  /** Every comment, oldest first, hidden ones included. */
+  comments: AdminFeedbackComment[]
+  /** Every live response with a colour and a time, oldest first. */
+  responses: TimedResponse[]
+  window: FeedbackWindow
+}
+
+/**
+ * One talk's Session Feedback for its admin page (§10.2): totals through the
+ * one totals function, every comment, and every response's time for the
+ * chart Remove-by-range works from. Live and published-only like
+ * {@link readAdminFeedback}. `null`, with no response read, unless the talk
+ * is a published talk of the conference: a missing talk and another
+ * conference's answer alike.
+ */
+export async function readTalkFeedback({
+  conference,
+  talkId,
+  now,
+}: {
+  conference: { _id: string; endDate?: string | null }
+  talkId: string
+  now: Date
+}): Promise<AdminTalkFeedback | null> {
+  const scope = { conferenceId: conference._id }
+  const talk = await scopedFetch<(TalkCounts & { _id: string }) | null>(
+    clientReadUncached,
+    scope,
+    `*[_type == "talk" && _id == $talkId && ${PUBLISHED_ONLY}][0]{
+      _id, audienceFeedback, feedbackFolded
+    }`,
+    { talkId },
+    { cache: 'no-store' },
+  )
+  if (!talk) return null
+  const [rows, slots] = await Promise.all([
+    scopedFetch<ResponseRow[] | null>(
+      clientReadUncached,
+      scope,
+      `*[_type == "feedbackResponse" && talk._ref == $talkId && ${PUBLISHED_ONLY}] | order(submittedAt asc, _id asc){
+        _id, colour, comment, submittedAt, hiddenAt, flaggedAt
+      }`,
+      { talkId },
+      { cache: 'no-store' },
+    ),
+    getFeedbackSlots(conference._id, talkId),
+  ])
+  const responses = rows ?? []
+  return {
+    totals: talkTotals(talk, responses),
+    comments: adminComments(responses),
+    responses: responses.flatMap((r) =>
+      isFeedbackColour(r.colour) && typeof r.submittedAt === 'string'
+        ? [{ id: r._id, colour: r.colour, submittedAt: r.submittedAt }]
+        : [],
+    ),
+    window: feedbackWindow({
+      slots,
+      conferenceEndDate: conference.endDate,
+      now,
+    }),
   }
 }
 

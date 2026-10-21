@@ -94,6 +94,7 @@ import { feedbackResponseTag } from '@/lib/cache/tags'
 import {
   hideResponses,
   readAdminFeedback,
+  readTalkFeedback,
   removeResponses,
   unhideResponses,
 } from './admin'
@@ -463,4 +464,95 @@ describe('every action — refused before any write (§10.3)', () => {
       expect(h.commits).toEqual([])
     })
   }
+})
+
+describe('readTalkFeedback — one talk’s panel (§10.2)', () => {
+  const CONF = { _id: 'conf-A', endDate: '2026-06-11' }
+  const readTalk = (talkId: string) =>
+    readTalkFeedback({ conference: CONF, talkId, now: NOW })
+
+  it('gives the talk’s totals from the one totals function, its comments, and every response for the chart', async () => {
+    h.dataset.push(
+      response('talk-a', 'green', { comment: 'Great demo' }),
+      response('talk-a', 'red', { comment: 'Rude', hiddenAt: 'x' }),
+      response('talk-a', 'yellow'),
+      response('talk-b', 'red'),
+    )
+    const out = (await readTalk('talk-a'))!
+    // 1 live green + 1 folded + 3 cards; 1 yellow live + 1 card; 1 red live.
+    expect(out.totals.combined).toEqual({ green: 5, yellow: 2, red: 1 })
+    expect(out.totals.scanned).toEqual({ green: 2, yellow: 1, red: 1 })
+    expect(out.totals.cards).toEqual({ green: 3, yellow: 1, red: 0 })
+    expect(out.comments.map((c) => [c.comment, c.hidden])).toEqual([
+      ['Great demo', false],
+      ['Rude', true],
+    ])
+    expect(out.responses).toEqual([
+      { id: rid(1), colour: 'green', submittedAt: '2026-06-10T10:01:30Z' },
+      { id: rid(2), colour: 'red', submittedAt: '2026-06-10T10:02:30Z' },
+      { id: rid(3), colour: 'yellow', submittedAt: '2026-06-10T10:03:30Z' },
+    ])
+    // 09:00–09:40 Oslo (CEST), open until 24 hours after.
+    expect(out.window).toMatchObject({
+      state: 'open',
+      opensAt: '2026-06-10T07:00:00.000Z',
+      closesAt: '2026-06-11T07:40:00.000Z',
+    })
+  })
+
+  it('orders responses by time, not by id', async () => {
+    h.dataset.push(
+      response('talk-a', 'green', { submittedAt: '2026-06-10T11:00:00Z' }),
+      response('talk-a', 'red', { submittedAt: '2026-06-10T09:30:00Z' }),
+    )
+    const out = (await readTalk('talk-a'))!
+    expect(out.responses.map((r) => r.id)).toEqual([rid(2), rid(1)])
+  })
+
+  it('reads published documents of this conference only (§4.4), never through the CDN', async () => {
+    h.dataset.push(
+      response('talk-a', 'green'),
+      { ...response('talk-a', 'red'), _id: `drafts.${rid(90)}` },
+      { ...response('talk-a', 'red'), _id: `versions.r1.${rid(91)}` },
+      // A response filed under another conference, pointing at this talk.
+      response('talk-a', 'yellow', { conference: ref('conf-B') }),
+      talk('drafts.talk-a', {
+        audienceFeedback: { greenCount: 99, yellowCount: 0, redCount: 0 },
+      }),
+    )
+    const out = (await readTalk('talk-a'))!
+    expect(out.totals.scanned).toEqual({ green: 2, yellow: 0, red: 0 })
+    expect(out.totals.cards.green).toBe(3)
+    expect(out.responses.map((r) => r.id)).toEqual([rid(1)])
+    expect(h.cdnQueries).toEqual([])
+  })
+
+  it('answers another conference’s talk, a draft-only talk and a missing one alike, reading no response', async () => {
+    h.dataset.push(
+      talk('talk-foreign', { conference: ref('conf-B') }),
+      response('talk-foreign', 'green', { conference: ref('conf-B') }),
+      talk('drafts.talk-new'),
+    )
+    for (const talkId of [
+      'talk-foreign',
+      'talk-missing',
+      'drafts.talk-new',
+      'talk-new',
+    ]) {
+      h.queries = []
+      expect(await readTalk(talkId)).toBeNull()
+      expect(h.queries).toHaveLength(1)
+      expect(h.queries[0]).not.toContain('feedbackResponse')
+    }
+  })
+
+  it('leaves a response with an unknown colour or no time out of the chart', async () => {
+    h.dataset.push(
+      response('talk-a', 'purple', { comment: 'Odd' }),
+      response('talk-a', 'green', { submittedAt: null }),
+    )
+    const out = (await readTalk('talk-a'))!
+    expect(out.responses).toEqual([])
+    expect(out.totals.scanned.green).toBe(2)
+  })
 })

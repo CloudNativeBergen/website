@@ -19,6 +19,7 @@ import {
   readFeedbackCode,
   readSpeakerResults,
   rotateFeedbackCode,
+  readTalkFeedback,
 } from '@/lib/feedback/server'
 
 /**
@@ -270,5 +271,22 @@ export const sessionFeedbackRouter = router({
           'A version of this talk waits in a scheduled release. Rotate the code once it is published.',
       })
     return toCodeResponse(conference, result)
+  }),
+
+  /**
+   * One talk's Session Feedback on its admin page (§10.2): totals, every
+   * comment, and every response's time for the chart. Another conference's
+   * talk gets the same NOT_FOUND as a missing one.
+   */
+  adminTalk: adminProcedure.input(talkInput).query(async ({ input }) => {
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) throw notFound()
+    const result = await readTalkFeedback({
+      conference,
+      talkId: input.talkId,
+      now: new Date(),
+    })
+    if (!result) throw notFound()
+    return result
   }),
 })

@@ -313,3 +313,38 @@ describe('refusals', () => {
     expect(h.commits).toEqual([])
   })
 })
+
+describe('adminTalk — one talk’s panel (§10.2)', () => {
+  it('gives an organizer the talk’s totals, comments and responses', async () => {
+    const out = await organizer().adminTalk({ talkId: 'talk-a' })
+    expect(out.totals.scanned).toEqual({ green: 0, yellow: 0, red: 1 })
+    expect(out.comments).toEqual([
+      expect.objectContaining({ id: ours._id, comment: 'comment 1' }),
+    ])
+    expect(out.responses).toEqual([
+      { id: ours._id, colour: 'red', submittedAt: '2026-06-10T10:01:00Z' },
+    ])
+  })
+
+  it('answers another conference’s talk exactly like a missing one', async () => {
+    for (const talkId of ['talk-foreign', 'talk-missing'])
+      await expect(organizer().adminTalk({ talkId })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Talk not found',
+      })
+  })
+
+  it('refuses a speaker who is not an organizer, before any read', async () => {
+    await expect(
+      caller().adminTalk({ talkId: 'talk-a' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.queries).toEqual([])
+  })
+
+  it('takes a talk id and nothing else', async () => {
+    await expect(
+      organizer().adminTalk({ talkId: 'talk-a,talk-foreign' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.queries).toEqual([])
+  })
+})
