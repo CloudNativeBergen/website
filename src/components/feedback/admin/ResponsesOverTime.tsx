@@ -46,6 +46,12 @@ const BAR_PX = 7
 /** How near an edge a drag scrolls the chart on. */
 const EDGE_PX = 12
 
+/** How often a drag held at an edge scrolls on. */
+const HOLD_MS = 60
+
+/** A scroll this small is still the start (the listbox's own padding). */
+const AT_START_PX = 2
+
 /** How far a finger may move and still tap. */
 const TAP_SLOP = 10
 
@@ -79,6 +85,11 @@ export function ResponsesOverTime({
   const chart = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
   const scroller = useRef<HTMLDivElement>(null)
+  /** Where the chart was scrolled to, as last measured. */
+  const lastLeft = useRef(0)
+  /** A drag's latest x, and the timer that scrolls on while it is held. */
+  const dragX = useRef(0)
+  const holding = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   const tapStart = useRef<{ x: number; y: number } | null>(null)
   // Bucketing, not display: while the window is open the chart reaches to
   // now, sampled once a minute (a later response stretches it anyway).
@@ -101,6 +112,7 @@ export function ResponsesOverTime({
     const box = scroller.current
     if (!box || buckets.length === 0) return
     const { scrollLeft, scrollWidth, clientWidth } = box
+    lastLeft.current = scrollLeft
     if (scrollWidth <= clientWidth + 1) {
       setScrolled(null)
       return
@@ -112,7 +124,8 @@ export function ResponsesOverTime({
         buckets.length - 1,
         Math.ceil((scrollLeft + clientWidth) / bar) - 1,
       ),
-      before: scrollLeft > 1,
+      // The listbox's own 2 px padding is still the start.
+      before: scrollLeft > AT_START_PX,
       after: scrollLeft + clientWidth < scrollWidth - 1,
     })
   }
@@ -120,6 +133,9 @@ export function ResponsesOverTime({
     scrolled && scrolled.last <= last
       ? scrolled
       : { first: 0, last: Math.max(0, last), before: false, after: false }
+  // The held-drag timer calls the latest dragTo; stopped when the chart goes.
+  const dragToRef = useRef<(clientX: number) => void>(() => {})
+  useEffect(() => () => clearInterval(holding.current), [])
   // The box changes size with the page (and as fonts land): measure again.
   const measureRef = useRef(measure)
   useEffect(() => {
@@ -166,15 +182,18 @@ export function ResponsesOverTime({
     stored && at(stored.anchor) >= 0 && at(stored.focus) >= 0
       ? { anchor: at(stored.anchor), focus: at(stored.focus) }
       : null
-  const active = range?.focus ?? 0
+  // Nothing picked: the keyboard starts on the first bucket in view, not on
+  // the window's first, which may be far off to the side.
+  const active = range?.focus ?? view.first
+  const picked = range !== null
   const [removing, setRemoving] = useState<RemoveRequest | null>(null)
   // The keyboard's bucket stays in view while the chart is scrolled.
   useEffect(() => {
-    if (!focused) return
+    if (!focused || !picked) return
     document
       .getElementById(`${optionId}-${active}`)
       ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
-  }, [focused, active, optionId])
+  }, [focused, picked, active, optionId])
   const [asking, setAsking] = useState(false)
   const [pending, setPending] = useState(false)
   const [outcome, setOutcome] = useState<Note | null>(null)
@@ -195,6 +214,26 @@ export function ResponsesOverTime({
     const i = Math.floor(((clientX - box.left) / box.width) * buckets.length)
     return Math.max(0, Math.min(last, i))
   }
+
+  /**
+   * One step of a mouse drag at `clientX`: near an edge the chart scrolls
+   * on, and the pick reaches no further than what is in view.
+   */
+  const dragTo = (clientX: number) => {
+    const box = scroller.current
+    const rect = box?.getBoundingClientRect()
+    let x = clientX
+    if (box && rect && rect.width > 0) {
+      if (x > rect.right - EDGE_PX) box.scrollLeft += 2 * BAR_PX
+      else if (x < rect.left + EDGE_PX) box.scrollLeft -= 2 * BAR_PX
+      x = Math.max(rect.left, Math.min(rect.right - 1, x))
+    }
+    const i = indexAt(x)
+    if (range && i !== range.focus) setRange({ anchor: range.anchor, focus: i })
+  }
+  useEffect(() => {
+    dragToRef.current = dragTo
+  })
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     const moves: Record<string, number> = {
@@ -282,7 +321,14 @@ export function ResponsesOverTime({
                 }
                 tabIndex={0}
                 onKeyDown={onKeyDown}
-                onFocus={() => setFocused(true)}
+                onFocus={() => {
+                  // A browser may scroll a wide element to its start when it
+                  // takes focus; keep the chart where the organizer had it.
+                  const box = scroller.current
+                  if (box && Math.abs(box.scrollLeft - lastLeft.current) > 1)
+                    box.scrollLeft = lastLeft.current
+                  setFocused(true)
+                }}
                 onBlur={() => setFocused(false)}
                 onPointerDown={(e) => {
                   if (e.button !== 0) return
@@ -292,9 +338,16 @@ export function ResponsesOverTime({
                     return
                   }
                   e.preventDefault()
-                  chart.current?.focus()
+                  chart.current?.focus({ preventScroll: true })
                   chart.current?.setPointerCapture(e.pointerId)
                   dragging.current = true
+                  dragX.current = e.clientX
+                  // Held at an edge, the drag goes on scrolling.
+                  clearInterval(holding.current)
+                  holding.current = setInterval(
+                    () => dragToRef.current(dragX.current),
+                    HOLD_MS,
+                  )
                   const i = indexAt(e.clientX)
                   select(
                     e.shiftKey && range
@@ -304,23 +357,12 @@ export function ResponsesOverTime({
                 }}
                 onPointerMove={(e) => {
                   if (!dragging.current) return
-                  // Past an edge: scroll on with the drag, and pick no further
-                  // than what is in view.
-                  const view = scroller.current?.getBoundingClientRect()
-                  let x = e.clientX
-                  if (view && view.width > 0) {
-                    if (x > view.right - EDGE_PX)
-                      scroller.current!.scrollLeft += 2 * BAR_PX
-                    else if (x < view.left + EDGE_PX)
-                      scroller.current!.scrollLeft -= 2 * BAR_PX
-                    x = Math.max(view.left, Math.min(view.right - 1, x))
-                  }
-                  const i = indexAt(x)
-                  if (range && i !== range.focus)
-                    setRange({ anchor: range.anchor, focus: i })
+                  dragX.current = e.clientX
+                  dragTo(e.clientX)
                 }}
                 onPointerUp={(e) => {
                   dragging.current = false
+                  clearInterval(holding.current)
                   const start = tapStart.current
                   tapStart.current = null
                   if (
@@ -342,6 +384,7 @@ export function ResponsesOverTime({
                 }}
                 onPointerCancel={() => {
                   dragging.current = false
+                  clearInterval(holding.current)
                   tapStart.current = null
                 }}
                 // Each bucket at least BAR_PX wide: after the window closes
@@ -397,12 +440,13 @@ export function ResponsesOverTime({
           {/* What is in view, not the whole window: the chart may scroll. */}
           <div className="mt-1 flex justify-between gap-2 text-xs text-gray-600 tabular-nums dark:text-gray-400">
             <time dateTime={buckets[view.first].start}>
-              {view.before && <span aria-hidden="true">‹ </span>}
+              {/* No break between an arrow and its time. */}
+              {view.before && <span aria-hidden="true">{'‹\u00a0'}</span>}
               {formatFeedbackCommentTime(buckets[view.first].start)}
             </time>
             <time dateTime={buckets[view.last].end} className="text-right">
               {formatFeedbackCommentTime(buckets[view.last].end)}
-              {view.after && <span aria-hidden="true"> ›</span>}
+              {view.after && <span aria-hidden="true">{'\u00a0›'}</span>}
             </time>
           </div>
           {(view.before || view.after) && (
@@ -455,7 +499,7 @@ export function ResponsesOverTime({
                   type="button"
                   onClick={() => {
                     select(null)
-                    chart.current?.focus()
+                    chart.current?.focus({ preventScroll: true })
                   }}
                   className="min-h-9 rounded-md px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-gray-200 dark:hover:bg-gray-700"
                 >

@@ -326,10 +326,10 @@ describe('ResponsesOverTime', () => {
       right: 100,
       width: 100,
     } as DOMRect)
-    vi.spyOn(chart(), 'getBoundingClientRect').mockReturnValue({
-      left: -left,
-      width: 300,
-    } as DOMRect)
+    // The chart moves as the box scrolls.
+    vi.spyOn(chart(), 'getBoundingClientRect').mockImplementation(
+      () => ({ left: -box.scrollLeft, width: 300 }) as DOMRect,
+    )
     fireEvent.scroll(box)
     return box
   }
@@ -368,8 +368,104 @@ describe('ResponsesOverTime', () => {
     fireEvent.pointerDown(chart(), { ...mouse, clientX: 55 })
     fireEvent.pointerMove(chart(), { ...mouse, clientX: 250 })
     fireEvent.pointerUp(chart(), { ...mouse, clientX: 250 })
-    // From bucket 5 to the last one in view (9), not to bucket 25.
-    expect(selected()).toEqual([5, 6, 7, 8, 9])
-    expect(box.scrollLeft).toBeGreaterThan(0)
+    // The drag scrolled the chart on by two buckets (14 px); the pick
+    // reaches the last bucket now in view (11), not bucket 25.
+    expect(box.scrollLeft).toBe(14)
+    expect(selected()).toEqual([5, 6, 7, 8, 9, 10, 11])
+  })
+
+  const chartOf = (responses = thirty) =>
+    render(
+      <ResponsesOverTime
+        responses={responses}
+        window={NO_WINDOW}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0, changed: 0 }))}
+      />,
+    )
+
+  it('with nothing picked, the keyboard starts on the first bucket in view', () => {
+    chartOf()
+    scrolledBox(100)
+    act(() => chart().focus())
+    expect(chart().getAttribute('aria-activedescendant')).toMatch(/-10$/)
+    key('ArrowRight')
+    expect(selected()).toEqual([10])
+  })
+
+  it('takes a scroll of the listbox’s own padding as the start: no “earlier” arrow', () => {
+    chartOf()
+    scrolledBox(2)
+    expect(screen.queryByText(/‹/)).toBeNull()
+    expect(screen.getByText(/›/)).toBeTruthy()
+  })
+
+  it('keeps the chart where it was when it takes focus', () => {
+    chartOf()
+    const box = scrolledBox(100)
+    // A browser scrolls a wide element to its start as it focuses it.
+    box.scrollLeft = 0
+    act(() => chart().focus())
+    expect(box.scrollLeft).toBe(100)
+  })
+
+  it('a mouse drag held at the edge goes on scrolling and reaching', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      chartOf()
+      const box = scrolledBox(0)
+      chart().setPointerCapture = vi.fn()
+      const mouse = { pointerType: 'mouse', button: 0, clientY: 50 }
+      fireEvent.pointerDown(chart(), { ...mouse, clientX: 55 })
+      fireEvent.pointerMove(chart(), { ...mouse, clientX: 99 })
+      const afterMove = box.scrollLeft
+      // Held still at the edge for a while.
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      expect(box.scrollLeft).toBeGreaterThan(afterMove)
+      const reached = selected()
+      expect(reached.at(-1)).toBeGreaterThan(9)
+      fireEvent.pointerUp(chart(), { ...mouse, clientX: 99 })
+      // Let go: it stops.
+      const stopped = box.scrollLeft
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      expect(box.scrollLeft).toBe(stopped)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('opens scrolled to the busiest bucket when the chart is wider than its box', () => {
+    // Every scroll box here is 100 px wide over a 300 px chart.
+    const proto = HTMLElement.prototype
+    const scrollWidth = Object.getOwnPropertyDescriptor(proto, 'scrollWidth')
+    const clientWidth = Object.getOwnPropertyDescriptor(proto, 'clientWidth')
+    const wide = (el: HTMLElement) => el.className.includes('overflow-x-auto')
+    Object.defineProperty(proto, 'scrollWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return wide(this) ? 300 : 0
+      },
+    })
+    Object.defineProperty(proto, 'clientWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return wide(this) ? 100 : 0
+      },
+    })
+    try {
+      // 30 quiet buckets and a burst of five in bucket 24.
+      const burst = Array.from({ length: 5 }, (_, i) =>
+        r(`b${i}`, '2026-10-27T13:01:00Z'),
+      )
+      chartOf([...thirty, ...burst])
+      // Bucket 24 of 30 at 10 px each, centred in 100 px: 245 - 50.
+      expect(chart().parentElement!.scrollLeft).toBe(195)
+    } finally {
+      if (scrollWidth) Object.defineProperty(proto, 'scrollWidth', scrollWidth)
+      if (clientWidth) Object.defineProperty(proto, 'clientWidth', clientWidth)
+    }
   })
 })
