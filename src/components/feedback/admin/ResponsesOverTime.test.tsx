@@ -299,4 +299,77 @@ describe('ResponsesOverTime', () => {
     touch(150) // a new pick once a range is made
     expect(selected()).toEqual([1])
   })
+
+  // 30 buckets, 09:00–14:00Z: one answer every 10 minutes.
+  const thirty = Array.from({ length: 30 }, (_, i) =>
+    r(
+      `x${i}`,
+      new Date(
+        Date.parse('2026-10-27T09:00:00Z') + i * 600_000 + 60_000,
+      ).toISOString(),
+    ),
+  )
+  /** A box showing 100 px of a 300 px chart, scrolled to `left`. */
+  const scrolledBox = (left: number) => {
+    const box = chart().parentElement!
+    Object.defineProperty(box, 'scrollWidth', {
+      configurable: true,
+      value: 300,
+    })
+    Object.defineProperty(box, 'clientWidth', {
+      configurable: true,
+      value: 100,
+    })
+    box.scrollLeft = left
+    vi.spyOn(box, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      right: 100,
+      width: 100,
+    } as DOMRect)
+    vi.spyOn(chart(), 'getBoundingClientRect').mockReturnValue({
+      left: -left,
+      width: 300,
+    } as DOMRect)
+    fireEvent.scroll(box)
+    return box
+  }
+
+  it('labels what is in view when the chart scrolls, and says there is more', () => {
+    render(
+      <ResponsesOverTime
+        responses={thirty}
+        window={NO_WINDOW}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0, changed: 0 }))}
+      />,
+    )
+    // 100 of 300 px from 100 px in: buckets 10–19, 11:40–13:20 Oslo.
+    scrolledBox(100)
+    expect(screen.getByText(/^Tue 27 Oct, 11:40$/)).toBeTruthy()
+    expect(screen.getByText(/^Tue 27 Oct, 13:20$/)).toBeTruthy()
+    expect(
+      screen.getByText(
+        /Scroll sideways for the rest of the window, Tue 27 Oct, 10:00 to Tue 27 Oct, 15:00\./,
+      ),
+    ).toBeTruthy()
+  })
+
+  it('a mouse drag past the edge scrolls on and picks no further than what is in view', () => {
+    render(
+      <ResponsesOverTime
+        responses={thirty}
+        window={NO_WINDOW}
+        onRemove={vi.fn(async () => ({ removed: 0, gone: 0, changed: 0 }))}
+      />,
+    )
+    const box = scrolledBox(0)
+    // jsdom has no pointer capture; a browser does.
+    chart().setPointerCapture = vi.fn()
+    const mouse = { pointerType: 'mouse', button: 0, clientY: 50 }
+    fireEvent.pointerDown(chart(), { ...mouse, clientX: 55 })
+    fireEvent.pointerMove(chart(), { ...mouse, clientX: 250 })
+    fireEvent.pointerUp(chart(), { ...mouse, clientX: 250 })
+    // From bucket 5 to the last one in view (9), not to bucket 25.
+    expect(selected()).toEqual([5, 6, 7, 8, 9])
+    expect(box.scrollLeft).toBeGreaterThan(0)
+  })
 })

@@ -43,6 +43,9 @@ const spanOf = (buckets: readonly ResponseBucket[], range: BucketRange) => {
 /** A bucket's least width, so a finger or a pointer can hit it. */
 const BAR_PX = 7
 
+/** How near an edge a drag scrolls the chart on. */
+const EDGE_PX = 12
+
 /** How far a finger may move and still tap. */
 const TAP_SLOP = 10
 
@@ -75,6 +78,7 @@ export function ResponsesOverTime({
   const optionId = useId()
   const chart = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
+  const scroller = useRef<HTMLDivElement>(null)
   const tapStart = useRef<{ x: number; y: number } | null>(null)
   // Bucketing, not display: while the window is open the chart reaches to
   // now, sampled once a minute (a later response stretches it anyway).
@@ -85,6 +89,52 @@ export function ResponsesOverTime({
   }, [])
   const buckets = responseBuckets({ responses, window, now: new Date(now) })
   const last = buckets.length - 1
+  // Which buckets are in view, and whether the chart goes on past either
+  // edge (the chart scrolls once a bucket would be under BAR_PX wide).
+  const [scrolled, setScrolled] = useState<{
+    first: number
+    last: number
+    before: boolean
+    after: boolean
+  } | null>(null)
+  const measure = () => {
+    const box = scroller.current
+    if (!box || buckets.length === 0) return
+    const { scrollLeft, scrollWidth, clientWidth } = box
+    if (scrollWidth <= clientWidth + 1) {
+      setScrolled(null)
+      return
+    }
+    const bar = scrollWidth / buckets.length
+    setScrolled({
+      first: Math.max(0, Math.floor(scrollLeft / bar)),
+      last: Math.min(
+        buckets.length - 1,
+        Math.ceil((scrollLeft + clientWidth) / bar) - 1,
+      ),
+      before: scrollLeft > 1,
+      after: scrollLeft + clientWidth < scrollWidth - 1,
+    })
+  }
+  const view =
+    scrolled && scrolled.last <= last
+      ? scrolled
+      : { first: 0, last: Math.max(0, last), before: false, after: false }
+  // Opened on a chart wider than its box: scroll to the busiest bucket, so
+  // a burst is in view rather than somewhere off to the side. Once.
+  const opened = useRef(false)
+  useEffect(() => {
+    const box = scroller.current
+    if (opened.current || !box || buckets.length === 0) return
+    opened.current = true
+    let busiest = 0
+    buckets.forEach((b, i) => {
+      if (b.ids.length > buckets[busiest].ids.length) busiest = i
+    })
+    const bar = box.scrollWidth / buckets.length
+    box.scrollLeft = Math.max(0, (busiest + 0.5) * bar - box.clientWidth / 2)
+    measure()
+  })
   // The range by its buckets' start instants, not their places: a refetch
   // that drops the earliest response moves every bucket, never the range.
   const [stored, setStored] = useState<{
@@ -203,113 +253,153 @@ export function ResponsesOverTime({
             first bar, then the last), or use Shift with the arrow keys, to pick
             a range to remove.
           </p>
-          <div className="mt-2 overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+          <div className="relative mt-2">
             <div
-              ref={chart}
-              role="listbox"
-              aria-multiselectable="true"
-              aria-labelledby={headingId}
-              aria-describedby={helpId}
-              aria-activedescendant={
-                focused ? `${optionId}-${active}` : undefined
-              }
-              tabIndex={0}
-              onKeyDown={onKeyDown}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              onPointerDown={(e) => {
-                if (e.button !== 0) return
-                // A finger scrolls the chart; a tap picks (see onPointerUp).
-                if (e.pointerType === 'touch') {
-                  tapStart.current = { x: e.clientX, y: e.clientY }
-                  return
-                }
-                e.preventDefault()
-                chart.current?.focus()
-                chart.current?.setPointerCapture(e.pointerId)
-                dragging.current = true
-                const i = indexAt(e.clientX)
-                select(
-                  e.shiftKey && range
-                    ? { anchor: range.anchor, focus: i }
-                    : { anchor: i, focus: i },
-                )
-              }}
-              onPointerMove={(e) => {
-                if (!dragging.current) return
-                const i = indexAt(e.clientX)
-                if (range && i !== range.focus)
-                  setRange({ anchor: range.anchor, focus: i })
-              }}
-              onPointerUp={(e) => {
-                dragging.current = false
-                const start = tapStart.current
-                tapStart.current = null
-                if (
-                  e.pointerType !== 'touch' ||
-                  !start ||
-                  Math.abs(e.clientX - start.x) > TAP_SLOP ||
-                  Math.abs(e.clientY - start.y) > TAP_SLOP
-                )
-                  return
-                // A tap picks one bar; a tap on another bar while one is
-                // picked reaches to it.
-                const i = indexAt(e.clientX)
-                chart.current?.focus({ preventScroll: true })
-                select(
-                  range && range.anchor === range.focus && i !== range.anchor
-                    ? { anchor: range.anchor, focus: i }
-                    : { anchor: i, focus: i },
-                )
-              }}
-              onPointerCancel={() => {
-                dragging.current = false
-                tapStart.current = null
-              }}
-              // Each bucket at least BAR_PX wide: after the window closes
-              // that is 148 of them, scrolled sideways, not squeezed to 2 px.
-              style={{ minWidth: `${buckets.length * BAR_PX}px` }}
-              className={`flex h-24 cursor-crosshair touch-manipulation items-end px-0.5 pt-1 select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-cloud-blue ${buckets.length <= 48 ? 'gap-px' : ''}`}
+              ref={scroller}
+              onScroll={measure}
+              className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700"
             >
-              {buckets.map((b, i) => (
-                <div
-                  key={b.start}
-                  id={`${optionId}-${i}`}
-                  role="option"
-                  aria-selected={selected(i)}
-                  aria-label={`${formatFeedbackCommentTime(b.start)}–${formatConferenceClock(b.end)}: ${plural(b.ids.length, 'response', 'responses')}`}
-                  className={`flex h-full min-w-0 flex-1 flex-col justify-end ${selected(i) ? 'bg-brand-sky-mist dark:bg-blue-900/50' : range ? 'opacity-35' : ''} ${focused && i === active ? 'outline-1 -outline-offset-1 outline-brand-cloud-blue dark:outline-blue-300' : ''}`}
-                >
-                  {b.ids.length > 0 && (
-                    <div
-                      className="flex min-h-0.5 flex-col-reverse overflow-hidden"
-                      style={{ height: `${(b.ids.length / max) * 100}%` }}
-                    >
-                      {STACK.map(({ colour }) =>
-                        b.counts[colour] > 0 ? (
-                          <div
-                            key={colour}
-                            className={FEEDBACK_TONE[colour].bar}
-                            style={{
-                              height: `${(b.counts[colour] / b.ids.length) * 100}%`,
-                            }}
-                          />
-                        ) : null,
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+              <div
+                ref={chart}
+                role="listbox"
+                aria-multiselectable="true"
+                aria-labelledby={headingId}
+                aria-describedby={helpId}
+                aria-activedescendant={
+                  focused ? `${optionId}-${active}` : undefined
+                }
+                tabIndex={0}
+                onKeyDown={onKeyDown}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return
+                  // A finger scrolls the chart; a tap picks (see onPointerUp).
+                  if (e.pointerType === 'touch') {
+                    tapStart.current = { x: e.clientX, y: e.clientY }
+                    return
+                  }
+                  e.preventDefault()
+                  chart.current?.focus()
+                  chart.current?.setPointerCapture(e.pointerId)
+                  dragging.current = true
+                  const i = indexAt(e.clientX)
+                  select(
+                    e.shiftKey && range
+                      ? { anchor: range.anchor, focus: i }
+                      : { anchor: i, focus: i },
+                  )
+                }}
+                onPointerMove={(e) => {
+                  if (!dragging.current) return
+                  // Past an edge: scroll on with the drag, and pick no further
+                  // than what is in view.
+                  const view = scroller.current?.getBoundingClientRect()
+                  let x = e.clientX
+                  if (view && view.width > 0) {
+                    if (x > view.right - EDGE_PX)
+                      scroller.current!.scrollLeft += 2 * BAR_PX
+                    else if (x < view.left + EDGE_PX)
+                      scroller.current!.scrollLeft -= 2 * BAR_PX
+                    x = Math.max(view.left, Math.min(view.right - 1, x))
+                  }
+                  const i = indexAt(x)
+                  if (range && i !== range.focus)
+                    setRange({ anchor: range.anchor, focus: i })
+                }}
+                onPointerUp={(e) => {
+                  dragging.current = false
+                  const start = tapStart.current
+                  tapStart.current = null
+                  if (
+                    e.pointerType !== 'touch' ||
+                    !start ||
+                    Math.abs(e.clientX - start.x) > TAP_SLOP ||
+                    Math.abs(e.clientY - start.y) > TAP_SLOP
+                  )
+                    return
+                  // A tap picks one bar; a tap on another bar while one is
+                  // picked reaches to it.
+                  const i = indexAt(e.clientX)
+                  chart.current?.focus({ preventScroll: true })
+                  select(
+                    range && range.anchor === range.focus && i !== range.anchor
+                      ? { anchor: range.anchor, focus: i }
+                      : { anchor: i, focus: i },
+                  )
+                }}
+                onPointerCancel={() => {
+                  dragging.current = false
+                  tapStart.current = null
+                }}
+                // Each bucket at least BAR_PX wide: after the window closes
+                // that is 148 of them, scrolled sideways, not squeezed to 2 px.
+                style={{ minWidth: `${buckets.length * BAR_PX}px` }}
+                className={`flex h-24 cursor-crosshair touch-manipulation items-end px-0.5 pt-1 select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-cloud-blue ${buckets.length <= 48 ? 'gap-px' : ''}`}
+              >
+                {buckets.map((b, i) => (
+                  <div
+                    key={b.start}
+                    id={`${optionId}-${i}`}
+                    role="option"
+                    aria-selected={selected(i)}
+                    aria-label={`${formatFeedbackCommentTime(b.start)}–${formatConferenceClock(b.end)}: ${plural(b.ids.length, 'response', 'responses')}`}
+                    className={`flex h-full min-w-0 flex-1 flex-col justify-end ${selected(i) ? 'bg-brand-sky-mist dark:bg-blue-900/50' : range ? 'opacity-35' : ''} ${focused && i === active ? 'outline-1 -outline-offset-1 outline-brand-cloud-blue dark:outline-blue-300' : ''}`}
+                  >
+                    {b.ids.length > 0 && (
+                      <div
+                        className="flex min-h-0.5 flex-col-reverse overflow-hidden"
+                        style={{ height: `${(b.ids.length / max) * 100}%` }}
+                      >
+                        {STACK.map(({ colour }) =>
+                          b.counts[colour] > 0 ? (
+                            <div
+                              key={colour}
+                              className={FEEDBACK_TONE[colour].bar}
+                              style={{
+                                height: `${(b.counts[colour] / b.ids.length) * 100}%`,
+                              }}
+                            />
+                          ) : null,
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
+            {/* The chart goes on past an edge: say so where it is cut. */}
+            {view.before && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-px left-px w-8 rounded-l-md bg-linear-to-r from-white to-transparent dark:from-gray-800"
+              />
+            )}
+            {view.after && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-px right-px w-8 rounded-r-md bg-linear-to-l from-white to-transparent dark:from-gray-800"
+              />
+            )}
           </div>
+          {/* What is in view, not the whole window: the chart may scroll. */}
           <div className="mt-1 flex justify-between gap-2 text-xs text-gray-600 tabular-nums dark:text-gray-400">
-            <time dateTime={buckets[0].start}>
-              {formatFeedbackCommentTime(buckets[0].start)}
+            <time dateTime={buckets[view.first].start}>
+              {view.before && <span aria-hidden="true">‹ </span>}
+              {formatFeedbackCommentTime(buckets[view.first].start)}
             </time>
-            <time dateTime={buckets[last].end} className="text-right">
-              {formatFeedbackCommentTime(buckets[last].end)}
+            <time dateTime={buckets[view.last].end} className="text-right">
+              {formatFeedbackCommentTime(buckets[view.last].end)}
+              {view.after && <span aria-hidden="true"> ›</span>}
             </time>
           </div>
+          {(view.before || view.after) && (
+            <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+              Scroll sideways for the rest of the window,{' '}
+              {formatFeedbackCommentTime(buckets[0].start)} to{' '}
+              {formatFeedbackCommentTime(buckets[last].end)}.
+            </p>
+          )}
 
           <div className="mt-3 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-2">
             <p
