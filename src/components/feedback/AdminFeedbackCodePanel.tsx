@@ -43,12 +43,15 @@ export function AdminFeedbackCodePanel({
   const mint = api.sessionFeedback.mintCode.useMutation({
     // No code back: the window closed meanwhile, or a release locks the
     // talk. Read again; a still-open window then means the release.
-    onSuccess: (minted) => {
+    onSuccess: async (minted) => {
       void utils.sessionFeedback.mintPreview.invalidate()
       if (!minted.code) {
         void utils.sessionFeedback.adminCode.invalidate({ talkId })
         return
       }
+      // A read started before the write could land after it with no code:
+      // stop it before putting the minted code in its place.
+      await utils.sessionFeedback.adminCode.cancel({ talkId })
       utils.sessionFeedback.adminCode.setData(
         { talkId },
         // A code was minted, so §5 would mint now: it may be rotated.
@@ -65,7 +68,10 @@ export function AdminFeedbackCodePanel({
 
   const [asking, setAsking] = useState(false)
   const rotate = api.sessionFeedback.rotateCode.useMutation({
-    onSuccess: (rotated) => {
+    onSuccess: async (rotated) => {
+      // A read started before the rotation could land after it with the
+      // old code, a dead QR: stop it before putting the new code in place.
+      await utils.sessionFeedback.adminCode.cancel({ talkId })
       utils.sessionFeedback.adminCode.setData(
         { talkId },
         { ...rotated, mayMint: false, mayRotate: true },
