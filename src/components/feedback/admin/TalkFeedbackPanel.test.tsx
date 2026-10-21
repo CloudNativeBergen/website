@@ -7,7 +7,15 @@
  * never flick back to the old ones beside "Card Counts saved.".
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import type { AdminTalkFeedback } from '@/lib/feedback/admin'
 import { feedbackTotals } from '@/lib/feedback/totals'
 import { TalkFeedbackPanel } from './TalkFeedbackPanel'
@@ -199,5 +207,38 @@ describe('TalkFeedbackPanel comments', () => {
         selector: 'p:not([role])',
       }),
     ).toBeNull()
+  })
+
+  it('removes a comment only as it was shown, and says when it had changed', async () => {
+    const onRemove = vi.fn(async () => ({ removed: 0, gone: 0, changed: 1 }))
+    render(
+      <TalkFeedbackPanel
+        feedback={withComment([comment])}
+        onSaveCards={vi.fn()}
+        {...props}
+        onRemove={onRemove}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    const confirm = within(await screen.findByRole('dialog')).getByRole(
+      'button',
+      { name: 'Remove' },
+    )
+    await waitFor(() => expect(confirm).not.toHaveAttribute('aria-disabled'), {
+      timeout: 2000,
+    })
+    fireEvent.click(confirm)
+    await waitFor(() =>
+      expect(onRemove).toHaveBeenCalledWith({
+        responses: [
+          { id: 'feedbackResponse-1', submittedAt: '2026-10-27T09:10:00Z' },
+        ],
+      }),
+    )
+    expect(
+      await screen.findByText('It had changed since you looked and was kept.', {
+        selector: 'p:not([role])',
+      }),
+    ).toBeTruthy()
   })
 })

@@ -376,9 +376,15 @@ export const RemoveConfirmed: Story = {
         name: 'Remove',
       }),
     )
-    await expect(context.args.onRemove).toHaveBeenCalledWith([
-      SESSIONS[0].comments[3].id,
-    ])
+    // The answer as shown: removed only while it is still that one.
+    await expect(context.args.onRemove).toHaveBeenCalledWith({
+      responses: [
+        {
+          id: SESSIONS[0].comments[3].id,
+          submittedAt: SESSIONS[0].comments[3].submittedAt,
+        },
+      ],
+    })
     // The data here never refreshes, so the comment is still listed: the
     // note says the removal worked and the list is behind, by the comment.
     const item = commentItem(context.canvasElement, /^Good content/)
@@ -513,6 +519,28 @@ export const RemoveKeepsRowInPlace: Story = {
       'Exactly ten answers',
     ])
     await expect(canvas.queryByText(/Order kept while you work/)).toBeNull()
+  },
+}
+
+/**
+ * The attendee answered again while the question was open: nothing is
+ * removed, and the comment says it was kept.
+ */
+export const RemoveChangedMeanwhile: Story = {
+  args: {
+    onRemove: fn<(request: RemoveRequest) => Promise<RemovedCounts>>(
+      async () => ({ removed: 0, gone: 0, changed: 1 }),
+    ),
+  },
+  play: async (context) => {
+    await askRemove(context)
+    await confirmRemove()
+    const item = commentItem(context.canvasElement, /^Good content/)
+    await waitFor(() =>
+      expect(
+        within(item).getByText('It had changed since you looked and was kept.'),
+      ).toBeVisible(),
+    )
   },
 }
 
