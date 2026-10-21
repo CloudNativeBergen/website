@@ -7,7 +7,6 @@ export { ConfirmationModal } from './ConfirmationModal'
 
 export { ProposalDetail } from './ProposalDetail'
 export { ProposalPublishedContent } from './ProposalPublishedContent'
-export { AudienceFeedbackPanel } from './AudienceFeedbackPanel'
 export { FilterAction, FilterDropdown, FilterOption } from './FilterDropdown'
 export { DiscountCodeForm, type DiscountCodeDraft } from './DiscountCodeForm'
 

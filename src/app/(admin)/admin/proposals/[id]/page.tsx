@@ -12,11 +12,10 @@ import {
   ProposalReviewPanel,
   AdminActionBar,
   ProposalPublishedContent,
-  AudienceFeedbackPanel,
 } from '@/components/admin'
 import { BackLink } from '@/components/BackButton'
 import { ProposalMessagesRedirect } from '@/components/messaging'
-import { AdminFeedbackCodePanel } from '@/components/feedback'
+import { TalkFeedbackAdminPanel } from '@/components/feedback/admin'
 import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
 import { getAuthSession } from '@/lib/auth'
 import { getProposalVideoUrl } from '@/lib/proposal/video'
@@ -150,18 +149,19 @@ export default async function ProposalDetailPage({
               status={proposal.status}
               conferenceEndDate={conference.endDate}
             />
-            {ATTENDEE_PAGE_LIVE && proposal.status === 'confirmed' && (
-              <AdminFeedbackCodePanel
+            {/* Session Feedback (§10.2): a confirmed talk's code and
+                feedback; an accepted one's Card Counts once the
+                conference has started, as before. */}
+            {(proposal.status === 'confirmed' ||
+              (proposal.status === 'accepted' &&
+                !!conference.startDate &&
+                new Date(conference.startDate) <= new Date())) && (
+              <TalkFeedbackAdminPanel
                 talkId={proposal._id}
                 title={proposal.title}
+                showCode={ATTENDEE_PAGE_LIVE && proposal.status === 'confirmed'}
               />
             )}
-            <AudienceFeedbackPanel
-              proposalId={proposal._id}
-              currentFeedback={proposal.audienceFeedback}
-              status={proposal.status}
-              conferenceStartDate={conference.startDate}
-            />
           </div>
         </div>
       </div>

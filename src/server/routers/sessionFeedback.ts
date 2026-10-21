@@ -8,6 +8,7 @@ import {
 } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { feedbackCodeUrl, type FeedbackWindow } from '@/lib/feedback'
+import { MAX_RESPONSES_PER_REQUEST } from '@/lib/feedback/limits'
 import {
   countTalksWithoutCode,
   ensureFeedbackCode,
@@ -37,13 +38,6 @@ const talkInput = z.object({ talkId: z.string().max(200).regex(TALK_ID) })
  * (`src/lib/feedback/device.ts`), and nothing else: no draft, no comma list.
  */
 const RESPONSE_ID = /^feedbackResponse-[a-f0-9]{32}$/
-
-/**
- * Up to this many responses per request. Remove deletes them in chunks of
- * 100 (§10.3); a scripted flood the talk panel removes by time range (F6)
- * fits.
- */
-const MAX_RESPONSES_PER_REQUEST = 2000
 
 const responsesInput = z.object({
   responseIds: z
