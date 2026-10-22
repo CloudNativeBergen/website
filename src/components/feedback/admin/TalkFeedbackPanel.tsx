@@ -28,6 +28,7 @@ import {
   excerpt,
   failureNote,
   focusRequestFor,
+  KEEP_REFUSED,
   OutcomeNote,
   type FocusRequest,
   REMOVED_BUT_LISTED,
@@ -365,6 +366,11 @@ const overtaken = (note: CommentNote, now: AdminFeedbackComment) =>
   now.rev !== note.seenRev &&
   now.flagged
 
+/** Whether a note still holds once its comment has left the list. */
+const saysGone = (note: CommentNote) =>
+  note.kind === 'remove' ||
+  (note.kind === 'keep' && (!note.ok || note.text === KEEP_REFUSED.gone.text))
+
 /** The talk's comments with Keep, Hide, Unhide and Remove (§10.3). */
 function TalkComments({
   comments,
@@ -415,14 +421,12 @@ function TalkComments({
   }
 
   const listed = new Set(comments.map((c) => c.id))
-  // A removed comment's outcome, once a refetch took it away, shows above,
-  // and a Keep's that found it gone. Not a Hide's: its note must not come
-  // back when a range Remove takes that comment away.
+  // Above the list, once a refetch took the comment away: a Remove's
+  // outcome, and a Keep's that is about it having gone (it found it gone, or
+  // failed). Not a Hide's, nor a Keep that worked: "speakers still see the
+  // comment" must not come back when a range Remove deletes it.
   const gone = [...notes]
-    .filter(
-      ([id, note]) =>
-        !listed.has(id) && (note.kind === 'remove' || note.kind === 'keep'),
-    )
+    .filter(([id, note]) => !listed.has(id) && saysGone(note))
     .map(([, note]) => note)
   const removePending = removing ? pending.has(removing.id) : false
 

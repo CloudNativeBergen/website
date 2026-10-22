@@ -553,6 +553,63 @@ describe('TalkFeedbackPanel comments', () => {
     ).toBeTruthy()
   })
 
+  it('a Kept note does not come back at the top when a range Remove takes its comment away', async () => {
+    const flagged = { ...comment, flagged: true }
+    const onKeep = vi.fn(async () => ({ kept: true as const }))
+    const { rerender } = render(
+      <TalkFeedbackPanel
+        feedback={withComment([flagged])}
+        onSaveCards={vi.fn()}
+        {...props}
+        onKeep={onKeep}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Keep' }))
+    const kept = 'Kept: the flag is cleared, speakers still see the comment.'
+    expect(
+      await screen.findByText(kept, { selector: 'p:not([role])' }),
+    ).toBeTruthy()
+    // A range Remove (the chart's, not this list's) deletes the comment.
+    rerender(
+      <TalkFeedbackPanel
+        feedback={withComment([])}
+        onSaveCards={vi.fn()}
+        {...props}
+        onKeep={onKeep}
+      />,
+    )
+    expect(screen.queryByText(kept)).toBeNull()
+  })
+
+  it('a Keep that found the comment gone says so at the top once it has left the list', async () => {
+    const flagged = { ...comment, flagged: true }
+    const onKeep = vi.fn(async () => ({
+      kept: false as const,
+      now: 'gone' as const,
+    }))
+    const { rerender } = render(
+      <TalkFeedbackPanel
+        feedback={withComment([flagged])}
+        onSaveCards={vi.fn()}
+        {...props}
+        onKeep={onKeep}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Keep' }))
+    const gone =
+      'Already gone: removed by an organizer, or its comment was deleted.'
+    await screen.findByText(gone, { selector: 'p:not([role])' })
+    rerender(
+      <TalkFeedbackPanel
+        feedback={withComment([])}
+        onSaveCards={vi.fn()}
+        {...props}
+        onKeep={onKeep}
+      />,
+    )
+    expect(screen.getByText(gone, { selector: 'p:not([role])' })).toBeTruthy()
+  })
+
   it('no Keep on a comment that is not flagged', () => {
     render(
       <TalkFeedbackPanel

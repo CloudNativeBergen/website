@@ -52,13 +52,6 @@ export interface Note {
   about?: string
 }
 
-/** What a Hide, Unhide, Keep or Remove did, kept per response it acted on. */
-export interface Outcome extends Note {
-  talkId: string
-  responseId: string
-  kind: ActionKind
-}
-
 /** What a failed action says: the server's words, or a plain fallback. */
 export const errorText = (
   error: unknown,
