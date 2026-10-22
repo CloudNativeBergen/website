@@ -309,10 +309,7 @@ whose document is gone):
   were; the comments are gone.
 
 A talk with another live speaker keeps its code and its feedback. If a comment
-on it names the person, an organizer removes it by hand (`/admin/feedback`). A
-draft or release copy of it that drops that speaker loses the code; in a
-release that is not active it holds the talk: publish or archive the release,
-then re-run.
+on it names the person, an organizer removes it by hand (`/admin/feedback`).
 
 Read the `Session Feedback:` lines:
 

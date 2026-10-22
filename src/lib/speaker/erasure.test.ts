@@ -1427,7 +1427,7 @@ describe('buildErasurePlan — Session Feedback (speaker feedback spec §12.3)',
     versions: [talkDoc('drafts.talk-1', { _rev: 'rev-draft' })],
     locked: [],
     releasesListed: true,
-    liveSpeakerIds: [],
+    otherLiveSpeakers: 0,
     responses: 3,
     responsesAnyConference: overrides.responses ?? 3,
     ...overrides,
@@ -1449,66 +1449,14 @@ describe('buildErasurePlan — Session Feedback (speaker feedback spec §12.3)',
     expect(plan.feedbackHeld).toEqual([])
   })
 
-  const duo = { speakers: [{ _ref: SPEAKER }, { _ref: 'co-live' }] }
-
   it('leaves a talk with another live speaker alone', () => {
     const plan = buildErasurePlan(
       inputs({
-        feedback: {
-          talks: [
-            feedbackTalk({
-              talk: talkDoc('talk-1', duo),
-              versions: [
-                talkDoc('drafts.talk-1', { ...duo, _rev: 'rev-draft' }),
-              ],
-              liveSpeakerIds: ['co-live'],
-            }),
-          ],
-        },
+        feedback: { talks: [feedbackTalk({ otherLiveSpeakers: 1 })] },
       }),
     )
     expect(unsetsOf(plan)).toEqual([])
     expect(plan.feedbackFoldTalkIds).toEqual([])
-    expect(plan.feedbackHeld).toEqual([])
-  })
-
-  it('a version that drops the live co-speaker loses its code; the talk keeps its own code and its feedback', () => {
-    const plan = buildErasurePlan(
-      inputs({
-        feedback: {
-          talks: [
-            feedbackTalk({
-              talk: talkDoc('talk-1', duo),
-              versions: [talkDoc('drafts.talk-1', { _rev: 'rev-draft' })],
-              liveSpeakerIds: ['co-live'],
-            }),
-          ],
-        },
-      }),
-    )
-    expect(unsetsOf(plan)).toEqual([['drafts.talk-1', 'rev-draft']])
-    expect(plan.feedbackFoldTalkIds).toEqual([])
-    expect(plan.feedbackHeld).toEqual([])
-  })
-
-  it('a locked version that drops the live co-speaker, still coded, holds the talk', () => {
-    const plan = buildErasurePlan(
-      inputs({
-        feedback: {
-          talks: [
-            feedbackTalk({
-              talk: talkDoc('talk-1', duo),
-              versions: [],
-              locked: [talkDoc('versions.rel-s.talk-1')],
-              liveSpeakerIds: ['co-live'],
-            }),
-          ],
-        },
-      }),
-    )
-    expect(unsetsOf(plan)).toEqual([])
-    expect(plan.feedbackFoldTalkIds).toEqual([])
-    expect(plan.feedbackHeld.map((x) => x.talkId)).toEqual(['talk-1'])
   })
 
   it('never patches a locked release version: the talk is held, and the reachable versions still lose the code', () => {

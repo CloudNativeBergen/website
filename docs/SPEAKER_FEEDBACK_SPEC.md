@@ -459,7 +459,13 @@ last-write-wins.
 it is still confirmed, and it belongs to the current conference. _Refinement
 (spec):_ the cached index can be up to one `cacheLife` stale (§5.1); this one
 read per write makes a rotated, withdrawn, folded or erased talk refuse taps at
-once.
+once. _Refinement (F9):_ it then reads the talk's speakers by id and refuses
+(`unknown`) unless one exists and is not erased (minting's rule, §5), inside
+the same commit budget. An erasure unsets the code of a talk it leaves with no
+live speaker (§12.3), but versions mirror the published code, so a draft or
+release copy that dropped a live co-speaker keeps it, and publishing that copy
+brings back a coded talk whose feedback would belong to nobody. Such a talk
+takes no answers.
 
 **Reading this device's own response** (for the Answered state) happens only
 for a talk in the cookie's list, by id, through
@@ -823,12 +829,6 @@ pure plan step in `buildErasurePlan`):
 - **Co-spoken** talks with another non-erased speaker keep their feedback (the
   module's rule: never destroy data belonging to someone who requested
   nothing). An organizer removes any comment naming the erased person by hand.
-  _Refinement (F9):_ the code is judged per document, though: a draft or
-  release version whose own speakers leave the erased speaker alone loses its
-  code even when the published talk is co-spoken (publishing it would bring
-  back a coded talk no live speaker is on), a locked one holds the talk, and
-  releases that cannot be listed hold every talk of theirs. Its feedback is
-  not folded: the published talk's speakers decide that.
 - Fixed point: once the code is unset nothing new arrives, and the chunked fold
   converges, so a second run plans nothing.
 - _Refinement (F9):_ a co-speaker whose speaker document is gone counts as
@@ -984,7 +984,10 @@ Per `AGENTS.md` ("Agent discipline"):
 - **A co-speaker only on a draft or release version** (_Refinement (F9)_):
   the erasure counts the PUBLISHED talk's speakers, so a co-speaker added in an
   unpublished draft does not stop it folding feedback that would be theirs
-  once published.
+  once published. The other way round, a copy that drops the live co-speaker
+  keeps the published code (every sweep mirrors it), and publishing it leaves
+  a coded talk with no live speaker: Submit refuses it (§7.4), and a re-run of
+  the erasure would unset the code and fold, but nothing triggers that re-run.
 - **A failed sweep after the last chunk** (_Refinement (F9)_): the sweep is
   capped and never throws; if it fails, a draft created during that chunk's
   commit keeps the old code and totals, and the talk, with no responses left,

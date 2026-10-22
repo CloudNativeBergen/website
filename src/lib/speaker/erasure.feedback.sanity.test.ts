@@ -346,15 +346,9 @@ describe('speaker erasure folds the feedback of talks no live speaker is left on
   })
 
   it.each([
-    // Unlisted releases hold every talk of the subject's: any may have a
-    // release copy, and a co-spoken talk's copy may drop the co-speaker.
+    // Unlisted releases hold every such talk: any may have a release copy.
     ['a version waits in a scheduled release', false, ['talk-solo'], 6],
-    [
-      'the releases cannot be listed',
-      true,
-      ['talk-duo', 'talk-solo', 'talk-was-duo'],
-      8,
-    ],
+    ['the releases cannot be listed', true, ['talk-solo', 'talk-was-duo'], 8],
   ] as const)(
     'when %s, the erasure still commits, the reachable versions lose the code, and the fold is held and reported',
     async (_, releasesFail, held, unfolded) => {
@@ -1514,51 +1508,6 @@ describe('speaker erasure folds the feedback of talks no live speaker is left on
     })
     expect(live('talk-solo')).toHaveLength(2)
     expect(result.verification?.clean).toBe(false)
-  })
-
-  describe('a version whose own speakers leave the subject alone', () => {
-    const duo = () => [
-      { _id: 'conf-1', _type: 'conference', title: 'Conf' },
-      speaker(ADA),
-      speaker(BOB),
-      talk('talk-duo', [ADA, BOB]),
-      ...responses('talk-duo', 2),
-    ]
-
-    it('loses its code; the published talk keeps its code and its feedback, and the erasure is CLEAN', async () => {
-      store().reset([
-        ...duo(),
-        { ...talk('drafts.talk-duo', [ADA]), _rev: 'rev-draft-duo' },
-      ])
-
-      const result = await erase()
-
-      expect(result.err).toBeNull()
-      expect(store().doc('drafts.talk-duo')?.feedbackCode).toBeUndefined()
-      expect(store().doc('talk-duo')?.feedbackCode).toBe('CODEuo')
-      expect(live('talk-duo')).toHaveLength(2)
-      expect(result.verification?.residual.feedbackCodes).toBe(0)
-      expect(result.verification?.clean).toBe(true)
-    })
-
-    it('in a locked release, still coded: held, and never CLEAN', async () => {
-      h.releases = [{ name: 'rel-s', state: 'scheduled' }]
-      store().reset([
-        ...duo(),
-        { ...talk('versions.rel-s.talk-duo', [ADA]), _rev: 'rev-locked' },
-      ])
-
-      const result = await erase()
-
-      expect(result.err).toBeNull()
-      expect(store().doc('versions.rel-s.talk-duo')?._rev).toBe('rev-locked')
-      expect(result.plan?.feedbackHeld.map((x) => x.talkId)).toEqual([
-        'talk-duo',
-      ])
-      expect(live('talk-duo')).toHaveLength(2)
-      expect(result.verification?.residual.feedbackCodes).toBe(1)
-      expect(result.verification?.clean).toBe(false)
-    })
   })
 
   it('a dry run writes nothing and lists the talks it would fold', async () => {

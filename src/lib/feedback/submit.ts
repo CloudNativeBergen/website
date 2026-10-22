@@ -13,7 +13,10 @@
  * Refusals 1 and 2 answer with the page state the attendee would see on a
  * reload. Then the talk is read again by id through the doc endpoint, since
  * the index can be one `cacheLife` stale: a rotated, withdrawn, folded or
- * erased talk refuses at once.
+ * erased talk refuses at once. So does a talk none of whose speakers exists
+ * and is not erased: its feedback would belong to nobody (§12.3). An erasure
+ * unsets such a talk's code, but a draft or release copy that dropped a live
+ * co-speaker, published later, can bring one back.
  *
  * THE WRITE is one transaction: `createIfNotExists` on the deterministic id,
  * then a patch that `set`s only the colour, the comment and the time (an
@@ -66,6 +69,7 @@ interface TalkDoc {
   status?: string
   feedbackCode?: unknown
   conference?: { _ref?: string }
+  speakers?: ({ _ref?: unknown } | null)[] | null
 }
 
 /**
@@ -123,6 +127,14 @@ export async function submitFeedback({
   ) {
     return { outcome: { state: 'unknown' } }
   }
+  let live: boolean
+  try {
+    live = await hasLiveSpeaker(talk)
+  } catch (error) {
+    console.error('Could not read the speakers of a Feedback Code', error)
+    return { outcome: { state: 'unavailable' } }
+  }
+  if (!live) return { outcome: { state: 'unknown' } }
   // The code checked above may be gone by now: too late, write nothing.
   if (Date.now() - readStartedAt > SUBMIT_COMMIT_BUDGET_MS) {
     console.error('A Feedback Response came too late after its check')
@@ -188,6 +200,19 @@ export async function submitFeedback({
 interface ResponseDoc {
   _id: string
   comment?: unknown
+}
+
+/** A speaker of the talk exists and is not erased (minting's rule, §5). */
+async function hasLiveSpeaker(talk: TalkDoc): Promise<boolean> {
+  const ids = (talk.speakers ?? []).flatMap((s) =>
+    typeof s?._ref === 'string' ? [s._ref] : [],
+  )
+  if (ids.length === 0) return false
+  const speakers = await clientWrite.getDocuments<{
+    _type?: string
+    erasedAt?: unknown
+  }>(ids, requestCap(SUBMIT_REQUEST_TIMEOUT_MS))
+  return speakers.some((s) => s?._type === 'speaker' && !s.erasedAt)
 }
 
 /**

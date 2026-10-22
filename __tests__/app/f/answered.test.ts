@@ -82,6 +82,7 @@ const talk = (id: string, conference: string, code: string) => ({
   status: 'confirmed',
   title: `Title of ${id}`,
   feedbackCode: code,
+  speakers: [{ ...ref('sp-live'), _key: 'k1' }],
 })
 
 const day = (
@@ -148,6 +149,7 @@ beforeEach(() => {
   h.resolution = { conference: CONF, status: 'resolved' }
   h.updateTag.mockReset()
   store().reset([
+    { _id: 'sp-live', _type: 'speaker', _rev: 'rev-sp', name: 'Live' },
     talk('talk-open', 'conf-A', 'k7m2qx'),
     talk('talk-later', 'conf-A', 'abc234'),
     talk('talk-foreign', 'conf-B', 'zzz234'),
@@ -175,7 +177,7 @@ describe('a reload after a tap', () => {
       state: 'answered',
       colour: 'yellow',
       comment: 'Loved the demo',
-      talk: { title: 'Title of talk-open', speakers: [] },
+      talk: { title: 'Title of talk-open', speakers: ['Live'] },
     })
     expect(store().docReads).toEqual([_id])
     // By id through the doc endpoint only: no GROQ for the response.
@@ -234,7 +236,7 @@ describe('a reload after a tap', () => {
     store().reset(store().all())
     expect(await pageState()).toEqual({
       state: 'closed',
-      talk: { title: 'Title of talk-open', speakers: [] },
+      talk: { title: 'Title of talk-open', speakers: ['Live'] },
       canDelete: true,
     })
     expect(store().docReads).toEqual([])
@@ -276,7 +278,7 @@ describe('Delete my answer', () => {
       deleted: true,
       page: {
         state: 'open',
-        talk: { title: 'Title of talk-open', speakers: [] },
+        talk: { title: 'Title of talk-open', speakers: ['Live'] },
         closesAt: '2026-10-27T09:40:00.000Z',
       },
     })
@@ -356,7 +358,7 @@ describe('Delete my answer', () => {
       deleted: true,
       page: {
         state: 'closed',
-        talk: { title: 'Title of talk-open', speakers: [] },
+        talk: { title: 'Title of talk-open', speakers: ['Live'] },
         canDelete: false,
       },
     })
@@ -448,7 +450,7 @@ describe('Delete my answer refuses, before any write or talk-specific read', () 
         deleted: false,
         page: {
           state: 'open',
-          talk: { title: 'Title of talk-open', speakers: [] },
+          talk: { title: 'Title of talk-open', speakers: ['Live'] },
           closesAt: '2026-10-27T09:40:00.000Z',
         },
       })
@@ -459,7 +461,7 @@ describe('Delete my answer refuses, before any write or talk-specific read', () 
       deleted: false,
       page: {
         state: 'open',
-        talk: { title: 'Title of talk-later', speakers: [] },
+        talk: { title: 'Title of talk-later', speakers: ['Live'] },
         closesAt: '2026-10-27T15:40:00.000Z',
       },
     })
@@ -504,7 +506,7 @@ describe('a tap after the window closed', () => {
     request(cookie)
     expect(await submitFeedbackAnswer('k7m2qx', 'red')).toEqual({
       state: 'closed',
-      talk: { title: 'Title of talk-open', speakers: [] },
+      talk: { title: 'Title of talk-open', speakers: ['Live'] },
       canDelete: true,
     })
     request()
