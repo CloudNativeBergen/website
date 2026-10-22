@@ -2,7 +2,7 @@
  * EVERY VERSION OF A TALK (speaker feedback spec §4.2).
  *
  * A server write to one of the talk fields this feature owns
- * (`feedbackCode`, `feedbackSummarySentAt`, and later `feedbackFolded`) also
+ * (`feedbackCode`, `feedbackSummarySentAt`, `feedbackFolded`) also
  * patches `drafts.<id>` and every `versions.<release>.<id>`, each guarded by
  * its own `ifRevisionId`, in the same transaction as the published talk; then
  * the post-commit sweep below re-patches any version that still differs. A
@@ -13,8 +13,10 @@
  * the API version whose `raw` perspective returns `versions.**`.
  */
 import 'server-only'
+import type { Patch } from '@sanity/client'
 import { versionsClient } from './sanity'
 import { sanityStatus } from './sanity-error'
+import type { StoredCounts } from './totals'
 
 /** The talk as these writes read it, through the doc endpoint. */
 export interface TalkDoc {
@@ -27,12 +29,30 @@ export interface TalkDoc {
   speakers?: { _ref?: string }[]
   feedbackCode?: string
   feedbackSummarySentAt?: string
+  feedbackFolded?: FoldedCounts
 }
+
+/** `talk.feedbackFolded` (§4.2): the totals a fold kept, and when. */
+export type FoldedCounts = StoredCounts & { foldedAt?: string }
 
 /** A talk field a server write keeps equal on every version of the talk. */
 export type VersionedTalkField = 'feedbackCode' | 'feedbackSummarySentAt'
 
 export type VersionsClient = ReturnType<typeof versionsClient>
+
+/**
+ * A patch that only checks a document's revision. Sanity's docs do not say
+ * that a patch with no operation is accepted, nor that its `ifRevisionID` is
+ * then checked; Sanity Studio's own publish pairs `ifRevisionID` with an
+ * unset of this field, which no document has ("Hack until other mutations
+ * support revision locking", in `sanity`'s datastores). Every guard-only
+ * patch here does the same, so it is a real, if empty, mutation.
+ */
+export const REVISION_LOCK_FIELD = '_revision_lock_pseudo_field_'
+
+/** `p` guarded by `rev`, changing nothing: see {@link REVISION_LOCK_FIELD}. */
+export const lockRevision = (p: Patch, rev: string): Patch =>
+  p.ifRevisionId(rev).unset([REVISION_LOCK_FIELD])
 
 /** How often a write that lost a revision guard re-reads and tries again. */
 export const MAX_RETRIES = 3
@@ -46,6 +66,9 @@ export const MAX_RETRIES = 3
  */
 export const requestCap = (ms: number | undefined) =>
   ms === undefined ? {} : { signal: AbortSignal.timeout(ms) }
+
+/** Each request of a sweep whose caller gave no cap ends after this long. */
+export const SWEEP_REQUEST_TIMEOUT_MS = 10_000
 
 /** How often the post-commit sweep may re-patch a stale version. */
 const MAX_SWEEP_PATCHES = 3
@@ -81,22 +104,99 @@ export async function sweepTalkVersions(
   field: VersionedTalkField = 'feedbackCode',
   { requestTimeoutMs }: { requestTimeoutMs?: number } = {},
 ): Promise<void> {
+  await sweep(client, talkId, field, { requestTimeoutMs }, (published) => {
+    const value = published?.[field]
+    if (!value) return null
+    return {
+      stale: (d) => d[field] !== value,
+      patch: (p) => p.set({ [field]: value }),
+    }
+  })
+}
+
+/**
+ * The sweep after a fold (§12.2) or an erasure's code unset (§12.3): every
+ * version must end without a `feedbackCode` the published talk no longer
+ * has, and with the PUBLISHED talk's `feedbackFolded` totals when it has
+ * any. Not {@link sweepTalkVersions}: its `!==` cannot compare an object,
+ * and it stops when the published value is absent, which is exactly the case
+ * for a code that was unset. Compared field by field; a version still holding
+ * a code the published talk does not is re-patched, so publishing it cannot
+ * bring the code back. Never throws.
+ */
+export async function sweepFoldedTalkVersions(
+  client: VersionsClient,
+  talkId: string,
+  { requestTimeoutMs }: { requestTimeoutMs?: number } = {},
+): Promise<void> {
+  await sweep(
+    client,
+    talkId,
+    'feedbackFolded',
+    { requestTimeoutMs },
+    (published) => {
+      if (!published) return null
+      const totals = published.feedbackFolded
+      const code = published.feedbackCode
+      return {
+        stale: (d) =>
+          d.feedbackCode !== code ||
+          (!!totals && !sameFolded(d.feedbackFolded, totals)),
+        patch: (p) => {
+          const withTotals = totals ? p.set({ feedbackFolded: totals }) : p
+          return code === undefined
+            ? withTotals.unset(['feedbackCode'])
+            : withTotals.set({ feedbackCode: code })
+        },
+      }
+    },
+  )
+}
+
+const FOLDED_FIELDS = [
+  'greenCount',
+  'yellowCount',
+  'redCount',
+  'foldedAt',
+] as const satisfies readonly (keyof FoldedCounts)[]
+
+const sameFolded = (a: FoldedCounts | null | undefined, b: FoldedCounts) =>
+  !!a && FOLDED_FIELDS.every((k) => a[k] === b[k])
+
+/** What a sweep mirrors: which versions are stale, and the patch that fixes one. */
+interface Mirror {
+  stale: (version: TalkDoc) => boolean
+  patch: (p: Patch) => Patch
+}
+
+async function sweep(
+  client: VersionsClient,
+  talkId: string,
+  /** For the log lines. */
+  field: string,
+  { requestTimeoutMs }: { requestTimeoutMs?: number },
+  /** Null: the published talk has nothing to mirror, and the sweep stops. */
+  mirrorOf: (published: TalkDoc | null) => Mirror | null,
+): Promise<void> {
+  // Every request of a sweep ends: one that stalled must not land long
+  // after the write it follows, past a speaker erasure's settle wait (§12.3).
+  const cap = requestTimeoutMs ?? SWEEP_REQUEST_TIMEOUT_MS
   try {
     for (let patches = 0; ; patches++) {
       const { published, versions, locked } = await readTalkVersions(
         client,
         talkId,
-        { requestTimeoutMs },
+        { requestTimeoutMs: cap },
       )
-      const value = published?.[field]
-      if (!value) return
-      if (patches === 0 && locked.some((d) => d[field] !== value)) {
+      const mirror = mirrorOf(published)
+      if (!mirror || !published) return
+      if (patches === 0 && locked.some(mirror.stale)) {
         // Locked while this write ran; publishing it would undo the write.
         console.error(
           `[feedback] a locked release holds a stale version of ${talkId} (${field})`,
         )
       }
-      const stale = versions.filter((d) => d[field] !== value)
+      const stale = versions.filter(mirror.stale)
       if (stale.length === 0) return
       if (patches >= MAX_SWEEP_PATCHES) {
         console.error(
@@ -104,12 +204,18 @@ export async function sweepTalkVersions(
         )
         return
       }
-      const tx = client.transaction()
+      // Guarded on the PUBLISHED talk too, at the revision this copy was read
+      // from: if it changed since (an erasure unset its code), the copy fails
+      // and the next read decides afresh, instead of writing the old value
+      // onto a version the change did not touch.
+      const tx = client
+        .transaction()
+        .patch(published._id, (p) => lockRevision(p, published._rev))
       for (const d of stale) {
-        tx.patch(d._id, (p) => p.ifRevisionId(d._rev).set({ [field]: value }))
+        tx.patch(d._id, (p) => mirror.patch(p.ifRevisionId(d._rev)))
       }
       try {
-        await tx.commit(requestCap(requestTimeoutMs))
+        await tx.commit(requestCap(cap))
       } catch (error) {
         if (!isRetryable(error)) throw error
       }

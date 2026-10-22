@@ -41,6 +41,7 @@ import { displayName, plural } from '@/lib/text/display'
 import { FEEDBACK_COLOURS, FEEDBACK_COLOUR_LABELS } from './colour'
 import { isVisibleComment } from './results'
 import {
+  LIVE_RESPONSES,
   PUBLISHED_ONLY,
   getConferenceFeedbackSlots,
   getFeedbackSlots,
@@ -122,9 +123,6 @@ export interface SummaryReport {
    */
   senderDown: number
 }
-
-// groq-global-scoped: correlated to the talk being tested, and to its own conference, by `^._id` and `^.conference._ref`
-const LIVE_RESPONSES = `*[_type == "feedbackResponse" && talk._ref == ^._id && conference._ref == ^.conference._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]`
 
 // groq-global: platform CRON SWEEP. The summary is owed per talk across every tenant; each talk is then handled in its OWN conference's scope (its schedule, its responses, its domain).
 export const DUE_TALKS = `*[_type == "talk" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "confirmed" && !defined(feedbackSummarySentAt) && count(${LIVE_RESPONSES}) > 0]{ _id, "conferenceId": conference._ref }`

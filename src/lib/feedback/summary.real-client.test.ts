@@ -28,7 +28,11 @@ vi.mock('@/lib/email/config', async (original) => ({
 }))
 
 import { claimSummary } from './summary'
-import { readTalkVersions, sweepTalkVersions } from './talk-versions'
+import {
+  SWEEP_REQUEST_TIMEOUT_MS,
+  readTalkVersions,
+  sweepTalkVersions,
+} from './talk-versions'
 
 const CAP = 300
 /** Room for the event loop and the local socket, nothing like a retry. */
@@ -196,6 +200,33 @@ describe('the claim path on the real client, against a server that never answers
     expect(ms).toBeLessThan(CAP + SLACK)
     expect(h.requests).toEqual(['query', 'query'])
   })
+
+  it('a sweep given no cap still bounds every request, by its default', async () => {
+    h.answerQueries = true
+    h.answerDocs = 1
+    h.docs = [
+      { ...TALK, feedbackSummarySentAt: '2026-06-12T08:00:00.000Z' },
+      { ...TALK, _id: 'drafts.talk-1', _rev: 'rev-d' },
+    ]
+    const timeout = AbortSignal.timeout.bind(AbortSignal)
+    const asked: number[] = []
+    const spy = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
+      asked.push(ms)
+      return timeout(CAP)
+    })
+    try {
+      const { outcome, ms } = await timed(() =>
+        sweepTalkVersions(client, 'talk-1', 'feedbackSummarySentAt'),
+      )
+      expect(outcome).toBe('resolved')
+      expect(ms).toBeLessThan(CAP + SLACK)
+      expect(count('mutate')).toBe(1)
+      expect(asked.length).toBeGreaterThan(0)
+      expect(new Set(asked)).toEqual(new Set([SWEEP_REQUEST_TIMEOUT_MS]))
+    } finally {
+      spy.mockRestore()
+    }
+  }, 15_000)
 
   it('the sweep’s commit gives up within its cap, one request', async () => {
     h.answerQueries = true

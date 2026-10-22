@@ -38,6 +38,8 @@ import {
 } from './device'
 import { MAX_COMMENT_LENGTH } from './comment'
 import { attendeeState, type AttendeeFeedbackState } from './page'
+import { requestCap } from './talk-versions'
+import { SUBMIT_COMMIT_BUDGET_MS, SUBMIT_REQUEST_TIMEOUT_MS } from './bounds'
 
 const INVALID_COMMENT = Symbol('invalid comment')
 
@@ -98,9 +100,15 @@ export async function submitFeedback({
   const comment = normalizeComment(rawComment)
   if (comment === INVALID_COMMENT) return { outcome: page }
 
+  // Bounded on its own, not by the platform: a speaker erasure waits out
+  // SUBMIT_WRITE_BOUND_MS before folding a talk whose code it unset (§12.3).
+  const readStartedAt = Date.now()
   let talk: TalkDoc | undefined
   try {
-    talk = await clientWrite.getDocument<TalkDoc>(target.talkId)
+    talk = await clientWrite.getDocument<TalkDoc>(
+      target.talkId,
+      requestCap(SUBMIT_REQUEST_TIMEOUT_MS),
+    )
   } catch (error) {
     console.error('Could not read the talk of a Feedback Code', error)
     return { outcome: { state: 'unavailable' } }
@@ -114,6 +122,11 @@ export async function submitFeedback({
     ) !== target.code
   ) {
     return { outcome: { state: 'unknown' } }
+  }
+  // The code checked above may be gone by now: too late, write nothing.
+  if (Date.now() - readStartedAt > SUBMIT_COMMIT_BUDGET_MS) {
+    console.error('A Feedback Response came too late after its check')
+    return { outcome: { state: 'unavailable' } }
   }
 
   // The cookie is set whatever the write's outcome: a commit that was applied
@@ -146,7 +159,10 @@ export async function submitFeedback({
         })
         return comment === null ? set.unset(['comment']) : set
       })
-      .commit({ returnDocuments: true })
+      .commit({
+        returnDocuments: true,
+        ...requestCap(SUBMIT_REQUEST_TIMEOUT_MS),
+      })
     stored = (docs as (ResponseDoc | undefined)[])
       .filter((doc) => doc?._id === id)
       .at(-1)

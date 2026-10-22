@@ -35,15 +35,15 @@ export interface FeedbackTotals {
 }
 
 /** A hand-typed or missing count, as a whole number of answers. */
-const count = (value: unknown): number =>
+export const storedCount = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : 0
 
 const fromStored = (stored: StoredCounts | null | undefined): ColourCounts => ({
-  green: count(stored?.greenCount),
-  yellow: count(stored?.yellowCount),
-  red: count(stored?.redCount),
+  green: storedCount(stored?.greenCount),
+  yellow: storedCount(stored?.yellowCount),
+  red: storedCount(stored?.redCount),
 })
 
 const sum = (c: ColourCounts) => c.green + c.yellow + c.red
@@ -73,7 +73,7 @@ export function feedbackTotals({
   const scanned = {} as ColourCounts
   const combined = {} as ColourCounts
   for (const colour of FEEDBACK_COLOURS) {
-    scanned[colour] = count(live?.[colour]) + fold[colour]
+    scanned[colour] = storedCount(live?.[colour]) + fold[colour]
     combined[colour] = scanned[colour] + cardCounts[colour]
   }
   const total = sum(combined)

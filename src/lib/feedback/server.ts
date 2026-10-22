@@ -1,4 +1,5 @@
 export {
+  MintTooSlowError,
   ensureFeedbackCode,
   type EnsureFeedbackCodeResult,
   readFeedbackCode,
@@ -38,6 +39,14 @@ export {
 export { deleteFeedback } from './delete'
 export { flagResponse, type FlagResult } from './flag'
 export { deliverFeedbackSummaries, type SummaryReport } from './summary'
+export {
+  FoldError,
+  foldExpiredFeedback,
+  foldTalkFeedback,
+  sweepUnsetFeedbackCode,
+  type FoldOutcome,
+  type FoldReport,
+} from './fold'
 export { deviceCookie, type DeviceCookie } from './device'
 export {
   countFlaggedComments,

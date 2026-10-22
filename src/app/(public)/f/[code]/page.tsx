@@ -16,6 +16,15 @@ import { deleteFeedbackAnswer, submitFeedbackAnswer } from './actions'
  * The code is the whole URL (speaker feedback spec §7.1): never indexed, and
  * never sent on as a referrer, to our own analytics endpoints or onwards.
  */
+/**
+ * Bounds Submit and Delete my answer (Server Actions take the page's limit):
+ * a speaker erasure waits this long, and more, before folding a talk whose
+ * code it just unset, so a Submit that re-read the code before the erasure
+ * has landed by then (`SUBMIT_MAX_DURATION_S`, speaker feedback spec §12.3).
+ * A literal: Next reads it statically.
+ */
+export const maxDuration = 30
+
 export const metadata: Metadata = {
   title: 'Session feedback',
   robots: { index: false, follow: false },

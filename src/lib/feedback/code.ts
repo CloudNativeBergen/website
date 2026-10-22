@@ -25,11 +25,13 @@ import {
   MAX_RETRIES,
   isRetryable,
   readTalkVersions,
+  requestCap,
   sweepTalkVersions,
   type TalkDoc,
   type VersionsClient,
 } from './talk-versions'
 import { feedbackWindow, mayMint, type FeedbackWindow } from './window'
+import { MINT_COMMIT_BUDGET_MS, MINT_REQUEST_TIMEOUT_MS } from './bounds'
 
 export { mayMint }
 
@@ -102,6 +104,17 @@ const isPublishedId = (id: string) =>
  * Who asks for the code: one of the talk's speakers, or an organizer of the
  * conference serving the request, whom the caller has already checked.
  */
+/**
+ * A mint whose reads ran past its commit budget (§12.3) and wrote nothing.
+ * Transient: asking again is fine; not a refusal of the talk.
+ */
+export class MintTooSlowError extends Error {
+  constructor(readonly talkId: string) {
+    super(`minting a code for ${talkId} took too long; try again`)
+    this.name = 'MintTooSlowError'
+  }
+}
+
 export type FeedbackCodeActor = { speakerId: string } | { organizer: true }
 
 /**
@@ -126,8 +139,7 @@ function mayHoldCode(
 /**
  * At least one of the talk's speakers exists and is not erased. Erasure
  * unsets the code of a talk it leaves without one (spec §12.3), and an
- * organizer must not bring it back (§10.4's rule for rotation); a speaker's
- * own mint needs no check, since an erased speaker cannot sign in.
+ * organizer must not bring it back (§10.4's rule for rotation).
  */
 async function hasLiveSpeaker(
   client: VersionsClient,
@@ -137,8 +149,32 @@ async function hasLiveSpeaker(
     .map((s) => s._ref)
     .filter((id): id is string => typeof id === 'string')
   if (ids.length === 0) return false
-  const speakers = await client.getDocuments<{ erasedAt?: string }>(ids)
+  const speakers = await client.getDocuments<{ erasedAt?: string }>(
+    ids,
+    requestCap(MINT_REQUEST_TIMEOUT_MS),
+  )
   return speakers.some((s) => s && !s.erasedAt)
+}
+
+/**
+ * An organizer needs a live speaker on the talk (above). A speaker must not
+ * be erased themselves: a signed-in session outlives the erasure (a JWT,
+ * never re-checked), and its dashboard would mint the code the erasure
+ * unset (§12.3). A mint that checked before an erasure and commits after it
+ * is caught by the erasure instead: it waits out `MINT_WRITE_BOUND_MS`, then
+ * unsets any code back on the talk.
+ */
+async function actorStillLive(
+  client: VersionsClient,
+  talk: TalkDoc,
+  actor: FeedbackCodeActor,
+): Promise<boolean> {
+  if ('organizer' in actor) return hasLiveSpeaker(client, talk)
+  const self = await client.getDocument<{ _type?: string; erasedAt?: string }>(
+    actor.speakerId,
+    requestCap(MINT_REQUEST_TIMEOUT_MS),
+  )
+  return self?._type === 'speaker' && !self.erasedAt
 }
 
 /**
@@ -158,16 +194,17 @@ async function readTalkForCode(
   existing: string | null
 } | null> {
   if (!isPublishedId(talkId)) return null
-  const talk = await client.getDocument<TalkDoc>(talkId)
+  const talk = await client.getDocument<TalkDoc>(
+    talkId,
+    requestCap(MINT_REQUEST_TIMEOUT_MS),
+  )
   // The doc endpoint answers a comma list of ids with the first match, so
   // the document read must BE the id asked for. The router's id check stops
   // such ids first; this keeps the module safe on its own.
   if (talk?._id !== talkId || !mayHoldCode(talk, conference._id, actor)) {
     return null
   }
-  if ('organizer' in actor && !(await hasLiveSpeaker(client, talk))) {
-    return null
-  }
+  if (!(await actorStillLive(client, talk, actor))) return null
   const window = feedbackWindow({
     slots: await getFeedbackSlots(conference._id, talk._id),
     conferenceEndDate: conference.endDate,
@@ -221,6 +258,7 @@ export async function ensureFeedbackCode({
   batch?: MintBatch
 }): Promise<EnsureFeedbackCodeResult> {
   const client = versionsClient()
+  const checkedAt = Date.now()
   const read = await readTalkForCode(client, talkId, actor, conference, now)
   if (!read) return { status: 'refused' }
   const { talk, window, existing } = read
@@ -232,13 +270,22 @@ export async function ensureFeedbackCode({
   if (!mayMint(window))
     return { status: 'ok', code: null, window, minted: false }
 
-  const outcome = await mint(client, talk, conference._id, actor, batch)
+  const outcome = await mint(
+    client,
+    talk,
+    conference._id,
+    actor,
+    batch,
+    checkedAt,
+  )
   if (!outcome) return { status: 'refused' }
   if (outcome.code === null)
     return { status: 'ok', code: null, window, minted: false }
   batch?.codes.add(outcome.code)
   if (outcome.minted) {
-    await sweepTalkVersions(client, talk._id)
+    await sweepTalkVersions(client, talk._id, 'feedbackCode', {
+      requestTimeoutMs: MINT_REQUEST_TIMEOUT_MS,
+    })
     if (!batch) expireFeedbackCodeIndex(conference._id)
   }
   return { status: 'ok', code: outcome.code, window, minted: outcome.minted }
@@ -263,6 +310,8 @@ async function mint(
   conferenceId: string,
   actor: FeedbackCodeActor,
   batch: MintBatch | undefined,
+  /** When the liveness check began: the commit's budget runs from it. */
+  checkedSince: number,
 ): Promise<{ code: string | null; minted: boolean } | null> {
   const out = await writeNewCode(client, talk, conferenceId, actor, {
     what: 'minting a code for',
@@ -270,6 +319,7 @@ async function mint(
     avoid: batch?.codes,
     // A code another request minted meanwhile wins.
     settled: (held) => held !== null,
+    checkedSince,
   })
   switch (out.status) {
     case 'written':
@@ -314,6 +364,7 @@ async function writeNewCode(
     versionPatch,
     avoid,
     settled,
+    checkedSince,
   }: {
     /** For the log, e.g. "minting a code for". */
     what: string
@@ -321,13 +372,17 @@ async function writeNewCode(
     /** Codes to avoid besides the conference's; each draw joins them. */
     avoid?: Set<string>
     settled: (held: string | null) => boolean
+    /** When the liveness check began: the commit's budget runs from it. */
+    checkedSince: number
   },
 ): Promise<WriteOutcome> {
   let current = talk
+  let checkedAt = checkedSince
   for (let attempt = 0; ; attempt++) {
     const { versions, locked, releasesListed } = await readTalkVersions(
       client,
       current._id,
+      { requestTimeoutMs: MINT_REQUEST_TIMEOUT_MS },
     )
     if (!releasesListed) {
       throw new Error(
@@ -351,14 +406,22 @@ async function writeNewCode(
       )
     }
     try {
-      await tx.commit()
+      // Too late: the speaker may have been erased since the check (§12.3).
+      if (Date.now() - checkedAt > MINT_COMMIT_BUDGET_MS) {
+        throw new MintTooSlowError(current._id)
+      }
+      await tx.commit(requestCap(MINT_REQUEST_TIMEOUT_MS))
       return { status: 'written', code }
     } catch (error) {
       if (!isRetryable(error) || attempt >= MAX_RETRIES) throw error
     }
-    const reread = await client.getDocument<TalkDoc>(current._id)
+    const reread = await client.getDocument<TalkDoc>(
+      current._id,
+      requestCap(MINT_REQUEST_TIMEOUT_MS),
+    )
     if (!mayHoldCode(reread, conferenceId, actor)) return { status: 'refused' }
-    if ('organizer' in actor && !(await hasLiveSpeaker(client, reread))) {
+    checkedAt = Date.now()
+    if (!(await actorStillLive(client, reread, actor))) {
       return { status: 'refused' }
     }
     const held = normalizeShortCode(reread.feedbackCode)
@@ -420,6 +483,7 @@ export async function rotateFeedbackCode({
 }): Promise<RotateFeedbackCodeResult> {
   const client = versionsClient()
   const actor: FeedbackCodeActor = { organizer: true }
+  const checkedSince = Date.now()
   const read = await readTalkForCode(client, talkId, actor, conference, now)
   if (!read?.existing || !mayMint(read.window)) return { status: 'refused' }
   const { window, existing } = read
@@ -434,6 +498,7 @@ export async function rotateFeedbackCode({
       // Another rotation of the same code won: the code this organizer saw
       // is already gone. Erasure unsetting it ends the write too.
       settled: (held) => held !== existing,
+      checkedSince,
     })
   } catch (error) {
     // A commit whose reply was lost may have applied: the old code must not
@@ -447,7 +512,9 @@ export async function rotateFeedbackCode({
     case 'written':
       // The old code stops resolving now, not after the sweep's round trips.
       expireFeedbackCodeIndex(conference._id)
-      await sweepTalkVersions(client, read.talk._id)
+      await sweepTalkVersions(client, read.talk._id, 'feedbackCode', {
+        requestTimeoutMs: MINT_REQUEST_TIMEOUT_MS,
+      })
       // And again: a refill during the sweep goes through GROQ, which can
       // lag the commit and cache the old mapping for the index's lifetime.
       expireFeedbackCodeIndex(conference._id)

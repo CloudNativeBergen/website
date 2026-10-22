@@ -285,6 +285,81 @@ name is a stranger.
   then and the records are gone), like the email-keyed counts. File the
   verification the commit printed.
 
+### 3d. Session Feedback on their talks (#1438)
+
+Speaker feedback spec §12.3. For every talk whose **only non-erased speaker**
+is the person (a co-speaker already erased counts as erased, and so does one
+whose document is gone):
+
+- the talk's `feedbackCode` is unset on the published talk, its draft and every
+  version in an `active` release, **in the erasure transaction**, so the QR
+  code stops taking answers at once;
+- the run then **pauses a minute** (it says so), every run, a re-run of an
+  old erasure too:
+  an answer or a code mint started just before may still be on its way. After
+  the pause it looks at the talks again, unsets any code that came back, and
+  folds what is there, even on a talk that had no answers before. If that
+  look changed anything it pauses and looks again, until a look finds nothing
+  (at most 4 looks, so allow a few minutes); if it is still changing then,
+  it says the talks are `failed` and the verification is not `CLEAN`: re-run;
+- its Feedback Responses (colours and comments) are then **folded** into totals
+  on the talk (`feedbackFolded`) and deleted, in chunks of 100, **after** the
+  transaction, so a large talk cannot fail the erasure. Totals stay as they
+  were; the comments are gone.
+
+A talk with another live speaker keeps its code and its feedback. If a comment
+on it names the person, an organizer removes it by hand (`/admin/feedback`).
+
+Read the `Session Feedback:` lines:
+
+- the dry run lists the talks it will fold;
+- `HELD` names a talk with a version waiting in a release that is not `active`
+  (Sanity locks it: patching it would fail the whole erasure, so it is never
+  patched), or a run that could not list releases, whether the dry run saw it
+  or the run found it only after its pause. The reachable versions
+  still lose the code, but the locked copy keeps it and **the fold waits**.
+  Re-run `--commit` once the release is published or archived; publishing it
+  first brings the code back, and the re-run unsets it again;
+- `NOT finished` after the commit names a talk whose fold stopped part-way (a
+  lost connection, an edit racing a chunk). The chunks before it stay folded;
+  re-run `--commit` and it folds the rest, counting nothing twice.
+
+Verify only after a full run: the verification a `--commit` prints at its
+end, or a standalone `--verify` started after that run finished. One started
+while a run is still pausing, or within a minute of a crashed one, can read
+`CLEAN` before a late answer has landed. Even after a full run, a write
+Sanity received just before the erasure but applied more than a minute later
+(rare: Sanity applies in milliseconds) can still land; a later `--verify`
+shows it, and a re-run folds or unsets it (spec §15).
+
+The verification counts three things: `feedbackCodes` (a code still on such a
+talk or any of its versions, a locked one included), `feedbackResponses`
+(responses not folded yet) and `feedbackHeld` (talks the run could not finish:
+a locked release version, or releases it could not list, where a release copy
+may hold the code unseen). It is not `CLEAN` until all three are 0. `feedbackResponses` counts every
+response of such a talk, also one written while the talk belonged to another
+conference: the fold leaves those (spec §15), and no admin page lists them
+(each is scoped to the talk's current conference), so they are removed with
+the CLI. Run `npx sanity login` first: a query without a login answers `[]`,
+which reads as "nothing to delete". Then list them (read-only), for each talk
+the verification names:
+
+```sh
+npx sanity documents query '*[_type == "feedbackResponse" && talk._ref == "<talkId>" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && conference._ref != *[_id == "<talkId>"][0].conference._ref]{_id, "conference": conference._ref, colour, submittedAt}'
+```
+
+then delete exactly the ids it printed, and `--verify` again:
+
+```sh
+npx sanity documents delete <responseId> [<responseId> …]
+```
+
+`feedbackResponses` is counted through GROQ, which can still list a response
+for about a second after the fold deleted it. A commit's own verification can
+therefore report a few `feedbackResponses` that are already gone. Run
+`--verify` a minute later: if they are 0 there, the fold finished; if not,
+re-run `--commit`.
+
 ### 4. Invalidate caches
 
 `revalidateTag` needs a Next.js request scope, which the script has none of, so
@@ -581,12 +656,15 @@ belongs in the reply.
 Owner decision, 2026-08-14: free text is **left to the retention clocks**, with
 no erasure-time scan.
 
-| Content                                            | What happens                                                                                                                           |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Talk abstracts and outlines                        | **Retained indefinitely** as part of the conference record. A published abstract may name the person.                                  |
-| Review comments about the person                   | Deleted by the **12-month** review retention clock, not by this operation.                                                             |
-| Message bodies (speaker↔organizer)                 | Purged **24 months** after the conference (`src/lib/messaging/retention.ts`).                                                          |
-| Notification titles naming the person as the actor | Hard-deleted at **90 days** by the notification purge. The reference now resolves to "Deleted speaker"; the free text does not change. |
+| Content                                                                     | What happens                                                                                                                                                                                       |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Talk abstracts and outlines                                                 | **Retained indefinitely** as part of the conference record. A published abstract may name the person.                                                                                              |
+| Review comments about the person                                            | Deleted by the **12-month** review retention clock, not by this operation.                                                                                                                         |
+| Message bodies (speaker↔organizer)                                          | Purged **24 months** after the conference (`src/lib/messaging/retention.ts`).                                                                                                                      |
+| Notification titles naming the person as the actor                          | Hard-deleted at **90 days** by the notification purge. The reference now resolves to "Deleted speaker"; the free text does not change.                                                             |
+| Session Feedback comments on a talk they gave **with another live speaker** | Kept: the talk is theirs too. Folded into totals and deleted **24 months** after the conference, or earlier by an organizer's Remove. A comment may name the person.                               |
+| Session Feedback a talk got **under an earlier conference** (it was moved)  | Not folded or deleted by the erasure (nor by the 24-month fold), and not shown in any `/admin/feedback`; verification counts them, so it is not `CLEAN`. Delete them with the commands in step 3d. |
+| Session Feedback on a talk the run reported **HELD** (step 3d)              | A code on a release copy that is locked, or that the run could not list, and the talk's responses stay until a re-run after the release is published or archived, or the releases list again.      |
 
 So: **a mention can survive up to two years, and indefinitely in an abstract.**
 Say so.
@@ -681,7 +759,9 @@ sponsor send record naming them as a recipient has that entry's name and
 address replaced, the email itself left standing (see
 [sent communications](#sent-communications-sponsoractivity)); and every
 post variant loses its records of them, and an unposted one their tag and
-name (see step 3c).
+name (see step 3c); and a talk no other live speaker is left on loses its
+Feedback Code, and its Session Feedback responses (colours and comments) are
+folded into totals and deleted (see step 3d).
 
 ### A property worth understanding before you answer questions about it
 

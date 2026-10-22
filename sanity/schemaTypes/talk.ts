@@ -257,6 +257,24 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'feedbackFolded',
+      title: 'Feedback Folded',
+      type: 'object',
+      description:
+        'Session Feedback totals kept after the responses were deleted: 24 months after the conference, or when the talk’s last speaker was erased. Written by the app; never edit it here.',
+      readOnly: true,
+      fields: [
+        defineField({ name: 'greenCount', title: 'Loved it', type: 'number' }),
+        defineField({
+          name: 'yellowCount',
+          title: 'It was OK',
+          type: 'number',
+        }),
+        defineField({ name: 'redCount', title: 'Not for me', type: 'number' }),
+        defineField({ name: 'foldedAt', title: 'Folded At', type: 'datetime' }),
+      ],
+    }),
+    defineField({
       name: 'audienceFeedback',
       title: 'Audience Feedback',
       type: 'object',

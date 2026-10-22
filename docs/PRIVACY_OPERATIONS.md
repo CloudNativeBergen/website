@@ -133,6 +133,7 @@ Adjust as needed; document exceptions.
 - Speaker program archive (talk title, abstract, speaker name/bio): indefinitely (archival/public interest)
 - Raw video/photo assets: 12–24 months, then keep only mastered/publication versions needed for archive
 - Safety/incident logs: 3 years unless legal need requires longer
+- Session Feedback (anonymous colour and optional comment per session): 24 months after the conference ends, then folded into per-session totals and deleted (daily `/api/cron/feedback-fold`); earlier when every speaker of the session is erased (speaker erasure, [runbook](./SPEAKER_ERASURE_RUNBOOK.md) step 3d). A session held by a scheduled Content Release keeps its responses until the release is published or archived; answers a session got before it was moved to another conference are deleted only on request (runbook step 3d has the commands).
 
 ---
 

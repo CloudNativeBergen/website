@@ -144,7 +144,11 @@ life, or folded totals would be lost after their documents were deleted.
   case the sweep exists for). It re-patches any that still carry a stale value,
   at most **3** times, and logs when the cap is hit. A revision guard can't
   catch a version created between the read and the commit, because it isn't in
-  the transaction.
+  the transaction. _Refinement (F9):_ each sweep commit is also guarded on
+  the published talk at the revision it copied from (a revision-lock patch),
+  so a sweep that stalled while a speaker erasure unset the code fails
+  instead of writing the erased code onto a version; and every sweep request
+  ends after its caller's cap, 10 s by default.
 - **A failed version guard is retried, not surfaced.** When someone edits a draft
   during a write, the write re-reads and retries up to 3 times. For a mint, it
   first re-reads the published talk and, if another request's code already
@@ -779,6 +783,26 @@ organizers remove a quoted comment with **Remove** (§10.3).
   fold (§5.1).
 - After the fold, every surface reads `feedbackFolded` through the totals
   function (§4.3).
+- _Refinement (F9):_ the cron is its own route, `/api/cron/feedback-fold` at
+  04:40 UTC (`src/lib/feedback/fold.ts`), for the reason F8's is: a fold that
+  fails must not stop the purges in `cleanup-notifications`, and a backlog
+  needs its own time budget. "Ended more than 24 months ago" is
+  `conference.endDate` before `now` less 24 calendar months (UTC). The fold
+  takes the responses the totals count: published, of the talk's own
+  conference, hidden ones included. _Provisional, pending the user's
+  decision (§15, "A response whose talk moved conference"):_ responses of
+  another conference are not folded or deleted. A talk with a version in a release that is
+  not `active`, or whose releases cannot be listed, is held and tried again the
+  next day (F8's rule). A chunk that loses a guard is re-planned at most 3
+  times; then that talk's run stops and the next run goes on. The response ids
+  come from GROQ, every revision from the doc endpoint, and ids already folded
+  in the run are excluded, since GROQ can list a deleted response for about a
+  second. The post-commit sweep mirrors the published `feedbackFolded` object
+  and the absence of `feedbackCode` onto every version. Before every chunk the
+  fold asks again whether the talk still qualifies, on the talk read whose
+  revision guards that chunk: for the cron, its conference read by id ended
+  before the cutoff (so a moved talk or a corrected end date deletes nothing);
+  for an erasure, the subject is still on it and no other live speaker is.
 
 ### 12.3 Speaker erasure
 
@@ -799,6 +823,39 @@ pure plan step in `buildErasurePlan`):
   nothing). An organizer removes any comment naming the erased person by hand.
 - Fixed point: once the code is unset nothing new arrives, and the chunked fold
   converges, so a second run plans nothing.
+- _Refinement (F9):_ a co-speaker whose speaker document is gone counts as
+  erased, as for minting (§5). A version locked in a release that is not
+  `active` is never patched, since it would fail the whole erasure on every
+  run: the reachable versions still lose the code, the talk is reported as
+  held and its fold waits, and the operator re-runs once the release is
+  published or archived (`docs/SPEAKER_ERASURE_RUNBOOK.md`, step 3d). The
+  erasure's verification counts a code left on such a talk, responses not
+  folded yet (of any conference) and held talks, so it is not `CLEAN` until
+  all three are gone. Submit and a code mint (§5) bound themselves, not
+  through the platform: each request ends after 10 s, and neither writes once
+  10 s have passed since its check began (the talk's code for Submit, the
+  speaker's liveness for a mint), so whatever either admitted before an
+  erasure has landed within 20 s (`SUBMIT_WRITE_BOUND_MS`,
+  `MINT_WRITE_BOUND_MS`, `src/lib/feedback/bounds.ts`; the `/f/[code]` page
+  also has a `maxDuration` of 30 s). A speaker whose own document is erased
+  cannot mint at all (a signed-in session outlives the erasure), and a mint
+  past its budget is a transient error to retry, not a refusal. Every
+  erasure run over a subject who has talks no other live speaker is on waits
+  one full `FEEDBACK_SETTLE_MS` (60 s, above all three bounds) from now,
+  after its own transaction, before its first look: when an earlier, crashed
+  run closed admission (its commit, or a look that unset a late mint's code)
+  is not stored, so every run waits as if it were now, and a re-run of an old
+  erasure pays a minute. Then it looks again: it unsets any code back on such
+  a talk or any of its versions (a late mint, or a draft made during the
+  commit), each guarded, sweeps it, and folds every such talk that has
+  responses now, including one that had none when the run began. A look that
+  unset (or sent an unset whose reply was lost) or folded anything may have
+  let something in behind it (an answer
+  admitted through a late mint's code), so it waits the period again and
+  looks again, until a look changes nothing, at most 4 looks; still changing
+  then, it reports the talks as failed and the verification is not `CLEAN`,
+  so the operator re-runs. An answer or a mint admitted before the erasure
+  is therefore folded or unset once.
 
 ## 13. Slices
 
@@ -906,6 +963,43 @@ Per `AGENTS.md` ("Agent discipline"):
   limit (Sanity's pages disagree; 7,161 used on 2026-10-17). The 24-month fold
   bounds it.
 - **A domain change mid-edition** breaks printed codes; a reprint fixes it.
+- **A response whose talk moved conference** (_Refinement (F9)_): the fold
+  takes the responses the totals count, those of the talk's own conference, so
+  a response written before an organizer moved the talk to another conference
+  is never folded or deleted, although `/privacy` promises deletion after 24
+  months. Talks are not moved between editions in practice; folding (or
+  deleting uncounted) such responses is a decision left open.
+- **Moved talks and erasure** (_Refinement (F9)_): the erasure's fold has the
+  same conference rule, so a sole-speaker talk's responses from an earlier
+  conference survive the erasure too; its verification counts them and is not
+  `CLEAN`, and the runbook has them removed by hand.
+- **A co-speaker only on a draft or release version** (_Refinement (F9)_):
+  the erasure counts the PUBLISHED talk's speakers, so a co-speaker added in an
+  unpublished draft does not stop it folding feedback that would be theirs
+  once published.
+- **A failed sweep after the last chunk** (_Refinement (F9)_): the sweep is
+  capped and never throws; if it fails, a draft created during that chunk's
+  commit keeps the old code and totals, and the talk, with no responses left,
+  is never selected again. Publishing that draft brings them back.
+- **A write Sanity applies after its client gave up** (_Refinement (F9)_):
+  Submit's and a mint's bounds end the client's request, but an abort signal
+  does not stop Sanity from applying a transaction it already received. One
+  applied more than the erasure's 60 s settle period after the client gave up
+  could land after the erasure reported `CLEAN`: Submit has no guard on the
+  talk (§15, "A withdrawal racing a tap"), and a mint's talk guard is not
+  invalidated by an erasure that leaves a code-free talk untouched. Narrow:
+  Sanity applies a received mutation in milliseconds, and a request aborted
+  before Sanity received it never applies. A late answer is caught by a later
+  erasure re-run or, at 24 months, the fold cron; a late code by a re-run
+  (the verification counts it). Closing it fully takes a guard Sanity
+  enforces and the erasure invalidates: a speaker-document lock on the mint
+  (with `mintAll` serialised per speaker, to avoid contention) and/or a
+  talk-revision guard on Submit. Left as a decision.
+- **A held talk keeps its responses past 24 months** (_Refinement (F9)_): a
+  talk with a version in a release that is not `active`, or whose releases
+  cannot be listed, is not folded, for as long as that lasts. The cron logs
+  it as overdue every day it holds, so an operator can publish or archive the
+  release.
 - **A withdrawal racing a tap** (_Refinement (F1c)_): Submit re-reads the talk
   and then commits the response, so a withdrawal, rotation or erasure that
   lands between the two still records that one answer. Guarding the commit on

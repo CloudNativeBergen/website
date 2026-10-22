@@ -87,7 +87,18 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     transaction: () => transactionMock(),
     // The erasure transaction is sent at the release-aware API version (#1162).
-    withConfig: () => ({ transaction: () => transactionMock() }),
+    withConfig: () => ({
+      transaction: () => transactionMock(),
+      // The Session Feedback branch reads the subject's talks by id here
+      // (#1438): a dataset with no release lists none; `routeFetch` answers
+      // the rest with null (no versions, no responses).
+      fetch: (query: string, ...rest: unknown[]) =>
+        query.includes('releases::all()')
+          ? Promise.resolve([])
+          : fetchMock(query, ...rest),
+      getDocuments: async (ids: string[]) =>
+        ids.map((id) => world.referencing.find((d) => d._id === id) ?? null),
+    }),
     delete: (...args: unknown[]) => clientDeleteMock(...args),
   },
 }))
@@ -522,17 +533,22 @@ describe('cache revalidation is reported honestly', () => {
     const result = await eraseSpeakerInPlace({
       speakerId: SPEAKER,
       actor: 'op',
+      // A sole-speaker talk: the Session Feedback settle wait (#1438).
+      waitForInFlightSubmits: async () => {},
       revalidate: (tag, profile) => {
         seen.push([tag, profile])
       },
     })
 
-    expect(seen).toEqual([
+    const tags = [
       ['content:speakers', 'default'],
       ['content:speaker-detail', 'default'],
       ['sanity:conference-conf-of-the-talk', 'default'],
       ['sanity:feedback-code-index-conf-of-the-talk', { expire: 0 }],
-    ])
+    ]
+    // Ada is alone on the talk: once before the Session Feedback settle wait
+    // and once after it (#1438).
+    expect(seen).toEqual([...tags, ...tags])
     expect(result.cache.tags).toContain(
       'sanity:feedback-code-index-conf-of-the-talk',
     )
@@ -554,6 +570,8 @@ describe('cache revalidation is reported honestly', () => {
     const result = await eraseSpeakerInPlace({
       speakerId: SPEAKER,
       actor: 'op',
+      // A sole-speaker talk: the Session Feedback settle wait (#1438).
+      waitForInFlightSubmits: async () => {},
     })
     expect(result.cache.revalidated).toBe(false)
     expect(result.cache.error).toContain('runbook')

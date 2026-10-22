@@ -85,6 +85,18 @@ function printPlan(plan: ErasurePlan): void {
       )
   }
 
+  console.log(
+    `\nSession Feedback folded after the commit (${plan.feedbackFoldTalkIds.length} talk(s) with no other live speaker):`,
+  )
+  for (const id of plan.feedbackFoldTalkIds) console.log(`  talk ${id}`)
+  if (plan.feedbackHeld.length > 0) {
+    console.log(
+      `\nSession Feedback HELD (${plan.feedbackHeld.length}) — re-run later (runbook, step 3d):`,
+    )
+    for (const held of plan.feedbackHeld)
+      console.log(`  talk ${held.talkId}  ${held.reason}`)
+  }
+
   if (plan.refusals.length > 0) {
     console.log('\nREFUSED:')
     for (const refusal of plan.refusals) console.log(`  - ${refusal}`)
@@ -162,7 +174,9 @@ async function main(): Promise<number> {
   console.log(
     `\nCommitted: ${result.committed}` +
       (result.plan?.noop && result.repairedPostVariants === 0
-        ? ' (already erased — nothing to write)'
+        ? result.plan.feedbackHeld.length > 0
+          ? ' (nothing to write now; Session Feedback still HELD, see above)'
+          : ' (already erased — nothing to write)'
         : '') +
       (result.repairedPostVariants > 0
         ? ` (+${result.repairedPostVariants} post variant(s) saved during the run, repaired)`
@@ -188,6 +202,26 @@ async function main(): Promise<number> {
         : ''),
   )
   for (const file of kept) console.log(`  ${file.id}  ${file.error}`)
+  const unfinished = result.feedbackFolds.filter(
+    (f) => f.status === 'failed' || f.status === 'late',
+  )
+  const heldFolds = result.feedbackFolds.filter((f) => f.status === 'held')
+  console.log(
+    `Session Feedback: ${result.feedbackFolds.reduce((n, f) => n + f.responses, 0)} response(s) folded` +
+      (unfinished.length > 0
+        ? `, ${unfinished.length} talk(s) NOT finished — re-run with --commit (see the runbook, step 3d)`
+        : '') +
+      (heldFolds.length > 0
+        ? `, ${heldFolds.length} talk(s) HELD (a version in a release that is not active, or releases that could not be listed) — re-run once the release is published or archived, or the releases list again (step 3d)`
+        : ''),
+  )
+  const gained = result.feedbackFolds.filter((f) => f.status === 'ineligible')
+  if (gained.length > 0)
+    console.log(
+      `  ${gained.length} talk(s) NOT folded: another live speaker was added during the run, so the feedback is theirs too`,
+    )
+  for (const fold of [...unfinished, ...heldFolds, ...gained])
+    console.log(`  talk ${fold.talkId}  ${fold.status}  ${fold.error ?? ''}`)
   const accepted = acceptedSharedHandleLines(result.acceptedSharedHandles)
   if (accepted.length > 0) console.log(`\n${accepted.join('\n')}`)
 

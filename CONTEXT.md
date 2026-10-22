@@ -122,6 +122,14 @@ _Avoid_: audience feedback, paper votes
 The short code for one session, unique within its conference, that opens the Feedback Response form on the conference's own domain. Its speakers get it as a QR code in the speaker dashboard; only organizers can rotate it, which retires the old code.
 _Avoid_: feedback link, session QR, short link (a marketing redirect)
 
+**Fold**:
+Turning a session's Feedback Responses into Folded Totals and deleting them: 24 months after its conference ends, or as soon as no speaker of the session is left who has not been erased. A folded session keeps its counts but no comments, and its Feedback Code stops working.
+_Avoid_: archive, purge (a fold keeps the counts)
+
+**Folded Totals**:
+The green, yellow and red counts a Fold kept on the session (`feedbackFolded`). They count as scanned answers, so a session's totals are the same before and after its Fold.
+_Avoid_: archived counts, historical feedback
+
 **Feedback Window**:
 The time a session accepts Feedback Responses: from the start of its earliest scheduled slot until 24 hours after its latest slot ends. A session with no slot has no window.
 _Avoid_: feedback period, voting window

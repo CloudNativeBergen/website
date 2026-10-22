@@ -14,6 +14,7 @@ import { SHORT_CODE_SHAPE } from '@/lib/marketing/short-code'
 import {
   countFlaggedComments,
   countTalksWithoutCode,
+  MintTooSlowError,
   ensureFeedbackCode,
   flagResponse,
   hideResponses,
@@ -34,6 +35,18 @@ import {
  * with `,`, `/`, `?` or whitespace would read other documents (an existence
  * oracle across tenants) or another endpoint entirely.
  */
+/**
+ * A mint that ran past its time budget wrote nothing (speaker feedback spec
+ * §12.3): a transient TIMEOUT the caller can retry, not the uniform
+ * NOT_FOUND of a refused talk.
+ */
+const tryAgainIfSlow = (error: unknown): never => {
+  if (error instanceof MintTooSlowError) {
+    throw new TRPCError({ code: 'TIMEOUT', message: 'Please try again' })
+  }
+  throw error
+}
+
 const TALK_ID = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/
 
 const talkInput = z.object({ talkId: z.string().max(200).regex(TALK_ID) })
@@ -127,7 +140,7 @@ export const sessionFeedbackRouter = router({
         actor: { speakerId: ctx.speaker._id },
         conference,
         now: new Date(),
-      })
+      }).catch(tryAgainIfSlow)
       if (result.status === 'refused') throw notFound()
       return toCodeResponse(conference, result)
     }),
@@ -170,7 +183,7 @@ export const sessionFeedbackRouter = router({
       actor: { organizer: true },
       conference,
       now: new Date(),
-    })
+    }).catch(tryAgainIfSlow)
     if (result.status === 'refused') throw notFound()
     return toCodeResponse(conference, result)
   }),
@@ -297,7 +310,7 @@ export const sessionFeedbackRouter = router({
       expected: input.code,
       conference,
       now: new Date(),
-    })
+    }).catch(tryAgainIfSlow)
     if (result.status === 'refused') throw notFound()
     // Its own code, apart from CONFLICT: the code is certainly unchanged, so
     // the page may go on offering it.

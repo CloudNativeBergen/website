@@ -43,6 +43,7 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 import { submitFeedbackAnswer } from '@/app/(public)/f/[code]/actions'
 import { feedbackResponseTag } from '@/lib/cache/tags'
+import { SUBMIT_COMMIT_BUDGET_MS } from '@/lib/feedback/bounds'
 
 const store = () => h.store!
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
@@ -131,6 +132,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  // A spy on the shared client must not outlive its test (#1438).
+  vi.restoreAllMocks()
 })
 
 describe('the first tap', () => {
@@ -638,8 +641,68 @@ describe('a failed write', () => {
     expect(await submitFeedbackAnswer('k7m2qx', 'green')).toEqual({
       state: 'unavailable',
     })
-    expect(spy).toHaveBeenCalledWith('talk-open')
+    // Capped since #1438 (an abort signal); the read itself is unchanged.
+    expect(spy).toHaveBeenCalledWith('talk-open', expect.anything())
     expect(store().commits).toHaveLength(0)
     expect(writtenCookies()).toEqual([])
+  })
+})
+
+describe('Submit is bounded on its own (speaker feedback spec §12.3)', () => {
+  // A spy left on the shared client by an earlier test would wrap itself
+  // here, and its failure would read as the refusal under test.
+  beforeEach(() => vi.restoreAllMocks())
+  afterEach(() => vi.restoreAllMocks())
+
+  const writer = () =>
+    store().clients.clientWrite as {
+      getDocument: (id: string, options?: unknown) => Promise<unknown>
+      transaction: () => { commit: (options?: unknown) => Promise<unknown> }
+    }
+
+  it('caps its talk re-read and its commit with an abort signal each', async () => {
+    const w = writer()
+    const read = vi.spyOn(w, 'getDocument')
+    const transaction = w.transaction.bind(w)
+    const commitOptions: unknown[] = []
+    vi.spyOn(w, 'transaction').mockImplementation(() => {
+      const tx = transaction()
+      const commit = tx.commit.bind(tx)
+      tx.commit = (options?: unknown) => {
+        commitOptions.push(options)
+        return commit(options)
+      }
+      return tx
+    })
+
+    await submitFeedbackAnswer('k7m2qx', 'green')
+
+    expect(read).toHaveBeenCalledWith(
+      'talk-open',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(commitOptions).toEqual([
+      expect.objectContaining({
+        returnDocuments: true,
+        signal: expect.any(AbortSignal),
+      }),
+    ])
+  })
+
+  it('writes nothing when its re-read of the talk took longer than the budget', async () => {
+    const w = writer()
+    const getDocument = w.getDocument.bind(w)
+    expect(vi.isMockFunction(w.getDocument)).toBe(false)
+    vi.spyOn(w, 'getDocument').mockImplementation(async (id, options) => {
+      // The re-read stalls past the budget before it answers.
+      vi.setSystemTime(DURING.getTime() + SUBMIT_COMMIT_BUDGET_MS + 1)
+      return getDocument(id, options)
+    })
+
+    const outcome = await submitFeedbackAnswer('k7m2qx', 'green')
+
+    expect(outcome).toEqual({ state: 'unavailable' })
+    expect(responses()).toEqual([])
+    expect(store().commits).toEqual([])
   })
 })
