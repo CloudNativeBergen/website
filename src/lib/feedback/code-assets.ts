@@ -6,7 +6,9 @@
  *
  * Every rendering is dark on light with a quiet zone, whatever the page's
  * theme: a QR drawn for dark mode does not scan from a white slide, and one
- * without a quiet zone does not scan at all when it sits on a busy one.
+ * without a quiet zone does not scan at all when it sits on a busy one. The
+ * one exception is asked for by name: a transparent PNG, for a speaker whose
+ * slide is light already and who wants no white square on it.
  */
 
 /** The question on the attendee page, repeated on the sheet and the screen. */
@@ -65,18 +67,24 @@ function slugOf(title: string): string {
 }
 
 /**
- * `feedback-code-<code>-<title slug>.<ext>`: both are on the speaker's own
- * page already, so the name leaks nothing, and a speaker with several talks
- * can tell the files apart.
+ * `feedback-code-<code>-<title slug>[-transparent].<ext>`: both are on the
+ * speaker's own page already, so the name leaks nothing, a speaker with
+ * several talks can tell the files apart, and the two PNGs don't overwrite
+ * each other.
  */
 export function feedbackCodeFileName(
   url: string,
   title: string,
   ext: 'png' | 'svg',
+  { transparent = false }: { transparent?: boolean } = {},
 ): string {
   const code = url.match(/\/f\/([^/?#]+)/)?.[1]?.toLowerCase()
   const slug = slugOf(title)
-  return ['feedback-code', code, slug].filter(Boolean).join('-') + `.${ext}`
+  return (
+    ['feedback-code', code, slug, transparent && 'transparent']
+      .filter(Boolean)
+      .join('-') + `.${ext}`
+  )
 }
 
 /** Keynote and PowerPoint import an SVG with no size at about 37 pt. */
@@ -91,11 +99,22 @@ export async function renderFeedbackQrSvg(url: string): Promise<string> {
   return QRCode.toString(url, { ...QR_OPTIONS, type: 'svg', width: SVG_SIZE })
 }
 
-/** The symbol as a PNG data URL, `width` pixels square: a slide's by default. */
+/**
+ * The symbol as a PNG data URL, `width` pixels square: a slide's by default.
+ * `transparent` leaves the ground, quiet zone included, fully transparent
+ * (alpha 0); the modules stay black, so it scans on a light slide only.
+ */
 export async function renderFeedbackQrPng(
   url: string,
   width = SLIDE_PNG_WIDTH,
+  { transparent = false }: { transparent?: boolean } = {},
 ): Promise<string> {
   const { default: QRCode } = await import('qrcode')
-  return QRCode.toDataURL(url, { ...QR_OPTIONS, width })
+  return QRCode.toDataURL(url, {
+    ...QR_OPTIONS,
+    width,
+    ...(transparent && {
+      color: { ...QR_OPTIONS.color, light: '#ffffff00' },
+    }),
+  })
 }

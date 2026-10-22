@@ -1,3 +1,4 @@
+import { inflateSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import {
   QR_QUIET_ZONE,
@@ -64,6 +65,9 @@ describe('feedbackCodeFileName — says which talk and code a download is', () =
     expect(feedbackCodeFileName(URL, '!!!', 'svg')).toBe(
       'feedback-code-k7m2qx.svg',
     )
+    expect(
+      feedbackCodeFileName(URL, 'Talk', 'png', { transparent: true }),
+    ).toBe('feedback-code-k7m2qx-talk-transparent.png')
     expect(feedbackCodeFileName('https://a.dev/', 'Talk', 'svg')).toBe(
       'feedback-code-talk.svg',
     )
@@ -115,5 +119,76 @@ describe('renderFeedbackQrPng — a slide-sized PNG', () => {
     expect(SLIDE_PNG_WIDTH).toBeGreaterThanOrEqual(1024)
     expect(bytes.readUInt32BE(16)).toBe(SLIDE_PNG_WIDTH)
     expect(bytes.readUInt32BE(20)).toBe(SLIDE_PNG_WIDTH)
+  })
+})
+
+/**
+ * The RGBA pixel at (x, y) of an 8-bit RGBA PNG data URL, decoded for real:
+ * IDAT inflated and each row's filter undone (PNG spec §9).
+ */
+function pngPixel(dataUrl: string, x: number, y: number): number[] {
+  const png = Buffer.from(dataUrl.split(',')[1], 'base64')
+  const width = png.readUInt32BE(16)
+  expect([png[24], png[25]]).toEqual([8, 6]) // bit depth 8, RGBA
+  const idat: Buffer[] = []
+  for (let o = 8; o < png.length;) {
+    const len = png.readUInt32BE(o)
+    if (png.toString('ascii', o + 4, o + 8) === 'IDAT')
+      idat.push(png.subarray(o + 8, o + 8 + len))
+    o += 12 + len
+  }
+  const raw = inflateSync(Buffer.concat(idat))
+  const stride = width * 4
+  let prev = new Uint8Array(stride)
+  for (let row = 0; row <= y; row++) {
+    const filter = raw[row * (stride + 1)]
+    const line = raw.subarray(row * (stride + 1) + 1, (row + 1) * (stride + 1))
+    const cur = new Uint8Array(stride)
+    for (let i = 0; i < stride; i++) {
+      const a = i >= 4 ? cur[i - 4] : 0
+      const b = prev[i]
+      const c = i >= 4 ? prev[i - 4] : 0
+      const p = a + b - c
+      const paeth =
+        Math.abs(p - a) <= Math.abs(p - b) && Math.abs(p - a) <= Math.abs(p - c)
+          ? a
+          : Math.abs(p - b) <= Math.abs(p - c)
+            ? b
+            : c
+      const predictor = [0, a, b, (a + b) >> 1, paeth][filter]
+      cur[i] = (line[i] + predictor) & 0xff
+    }
+    prev = cur
+  }
+  return [...prev.subarray(x * 4, x * 4 + 4)]
+}
+
+describe('renderFeedbackQrPng — transparent, for a light slide', () => {
+  // 37 modules a side at 370 px: 10 px a module. The quiet zone ends at
+  // 40 px; the finder pattern's dark ring starts there.
+  const side = MODULES + 2 * QR_QUIET_ZONE
+  const width = side * 10
+
+  it('leaves the ground, quiet zone included, fully transparent, and draws the modules opaque black', async () => {
+    const png = await renderFeedbackQrPng(URL, width, { transparent: true })
+    expect(pngPixel(png, 0, 0)).toEqual([255, 255, 255, 0])
+    expect(pngPixel(png, 39, 39)[3]).toBe(0)
+    // Inside the finder pattern's light ring (module 5, 5).
+    expect(pngPixel(png, 55, 55)[3]).toBe(0)
+    // Its dark ring (module 4, 4) and centre (module 7, 7).
+    expect(pngPixel(png, 45, 45)).toEqual([0, 0, 0, 255])
+    expect(pngPixel(png, 75, 75)).toEqual([0, 0, 0, 255])
+  })
+
+  it('is the same symbol as the white PNG, only the ground differs', async () => {
+    const white = await renderFeedbackQrPng(URL, width)
+    const clear = await renderFeedbackQrPng(URL, width, { transparent: true })
+    expect(pngPixel(white, 0, 0)).toEqual([255, 255, 255, 255])
+    for (let m = 0; m < side; m++) {
+      const at = m * 10 + 5
+      const w = pngPixel(white, at, at)
+      const c = pngPixel(clear, at, at)
+      expect(c[3]).toBe(w[0] === 0 ? 255 : 0)
+    }
   })
 })

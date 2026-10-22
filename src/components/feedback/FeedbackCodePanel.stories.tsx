@@ -12,7 +12,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The Feedback Code tab of the speaker’s Session Feedback section: the QR code for the attendee URL, the code’s state from the Feedback Window, PNG for slides, SVG, Print sheet, Present and Copy link. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The Feedback Code tab of the speaker’s Session Feedback section: the QR code for the attendee URL, the code’s state from the Feedback Window, PNG for slides, Transparent PNG (light slides only), SVG, Print sheet, Present and Copy link. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
@@ -140,6 +140,43 @@ export const DownloadPng: Story = {
       'feedback-code-k7m2qx-kubernetes-the-hard-parts.png',
     )
     expect(saved[0].href.startsWith('data:image/png;base64,')).toBe(true)
+  },
+}
+
+/**
+ * Transparent PNG: the same symbol on a fully transparent ground, quiet
+ * zone included, named apart from the white one; the hint under the
+ * buttons says it is for light slides only.
+ */
+export const DownloadTransparentPng: Story = {
+  args: { window: before },
+  beforeEach: stubDownloads,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const button = canvas.getByRole('button', { name: 'Transparent PNG' })
+    expect(button).toHaveAccessibleDescription(
+      'Use the transparent PNG on a light slide only: phones can’t read it on a dark one.',
+    )
+    await userEvent.click(button)
+    await waitFor(() => expect(saved).toHaveLength(1))
+    expect(saved[0].name).toBe(
+      'feedback-code-k7m2qx-kubernetes-the-hard-parts-transparent.png',
+    )
+    const img = new Image()
+    img.src = saved[0].href
+    await img.decode()
+    const c = document.createElement('canvas')
+    c.width = img.width
+    c.height = img.height
+    const ctx = c.getContext('2d')!
+    ctx.drawImage(img, 0, 0)
+    const alpha = (x: number, y: number) => ctx.getImageData(x, y, 1, 1).data[3]
+    // 37 modules a side: the corner is quiet zone, module 4 the finder's
+    // dark ring, module 5 its light ring.
+    const mod = img.width / 37
+    expect(alpha(0, 0)).toBe(0)
+    expect(alpha(4.5 * mod, 4.5 * mod)).toBe(255)
+    expect(alpha(5.5 * mod, 5.5 * mod)).toBe(0)
   },
 }
 
