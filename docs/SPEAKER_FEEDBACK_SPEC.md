@@ -582,9 +582,9 @@ stale revision that fails every retry. Then:
   (A4: large QR, talk title, the short URL without scheme, "How was this
   session?"), **Copy link**. _Refinement (#1471):_ the transparent PNG is the
   same symbol with a fully transparent ground, quiet zone included, for a
-  speaker who wants no white square on a light slide; under the buttons, "Use
-  the transparent PNG on a light slide only: phones can't read it on a dark
-  one." Every other rendering keeps its white ground.
+  speaker who wants no white square on a light slide; under the buttons,
+  "Transparent PNG: plain, light slides only. Without its white border it
+  won't scan on a dark or busy background." Every other rendering keeps its white ground.
 - **Present:** the QR full screen with the short URL and "How was this
   session?", ready for a projector.
 

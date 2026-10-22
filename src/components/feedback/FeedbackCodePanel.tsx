@@ -248,8 +248,8 @@ function CodeActions({ url, title }: { url: string; title: string }) {
         <CopyLinkButton url={url} />
       </div>
       <p id={hintId} className="text-xs text-gray-500 dark:text-gray-400">
-        Use the transparent PNG on a light slide only: phones can’t read it on a
-        dark one.
+        Transparent PNG: plain, light slides only. Without its white border it
+        won’t scan on a dark or busy background.
       </p>
       {failed && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">

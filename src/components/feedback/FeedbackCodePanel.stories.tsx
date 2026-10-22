@@ -146,7 +146,7 @@ export const DownloadPng: Story = {
 /**
  * Transparent PNG: the same symbol on a fully transparent ground, quiet
  * zone included, named apart from the white one; the hint under the
- * buttons says it is for light slides only.
+ * buttons says it is for plain, light slides only.
  */
 export const DownloadTransparentPng: Story = {
   args: { window: before },
@@ -155,7 +155,7 @@ export const DownloadTransparentPng: Story = {
     const canvas = within(canvasElement)
     const button = canvas.getByRole('button', { name: 'Transparent PNG' })
     expect(button).toHaveAccessibleDescription(
-      'Use the transparent PNG on a light slide only: phones can’t read it on a dark one.',
+      'Transparent PNG: plain, light slides only. Without its white border it won’t scan on a dark or busy background.',
     )
     await userEvent.click(button)
     await waitFor(() => expect(saved).toHaveLength(1))
