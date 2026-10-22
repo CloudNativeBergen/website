@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useId, useState } from 'react'
 import {
   ArrowDownTrayIcon,
   CheckIcon,
@@ -158,7 +158,8 @@ function saveFile(name: string, href: string) {
 }
 
 /**
- * PNG for slides, SVG, Print sheet and Present (speaker feedback spec §9.2).
+ * PNG for slides, Transparent PNG, SVG, Print sheet and Present (speaker
+ * feedback spec §9.2).
  * The files are drawn on the spot from the URL; nothing is fetched. A URL
  * no QR can hold fails every one of them the same way, and says so.
  */
@@ -172,14 +173,19 @@ function CodeActions({ url, title }: { url: string; title: string }) {
   }, [])
   const stopPresenting = useCallback(() => setPresenting(false), [])
   const stopPrinting = useCallback(() => setPrinting(false), [])
+  const hintId = useId()
 
-  const save = (ext: 'png' | 'svg', href: string) => {
+  const save = (
+    ext: 'png' | 'svg',
+    href: string,
+    options?: { transparent?: boolean },
+  ) => {
     setFailed(false)
-    saveFile(feedbackCodeFileName(url, title, ext), href)
+    saveFile(feedbackCodeFileName(url, title, ext, options), href)
   }
-  const downloadPng = () =>
-    renderFeedbackQrPng(url)
-      .then((dataUrl) => save('png', dataUrl))
+  const downloadPng = (transparent: boolean) =>
+    renderFeedbackQrPng(url, undefined, { transparent })
+      .then((dataUrl) => save('png', dataUrl, { transparent }))
       .catch(fail)
   const downloadSvg = () =>
     renderFeedbackQrSvg(url)
@@ -196,9 +202,22 @@ function CodeActions({ url, title }: { url: string; title: string }) {
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={BUTTON} onClick={downloadPng}>
+        <button
+          type="button"
+          className={BUTTON}
+          onClick={() => downloadPng(false)}
+        >
           <PhotoIcon className="size-4" aria-hidden="true" />
           PNG for slides
+        </button>
+        <button
+          type="button"
+          className={BUTTON}
+          onClick={() => downloadPng(true)}
+          aria-describedby={hintId}
+        >
+          <PhotoIcon className="size-4" aria-hidden="true" />
+          Transparent PNG
         </button>
         <button type="button" className={BUTTON} onClick={downloadSvg}>
           <ArrowDownTrayIcon className="size-4" aria-hidden="true" />
@@ -228,6 +247,10 @@ function CodeActions({ url, title }: { url: string; title: string }) {
         </button>
         <CopyLinkButton url={url} />
       </div>
+      <p id={hintId} className="text-xs text-gray-500 dark:text-gray-400">
+        Transparent PNG: plain, light slides only. Without its white border it
+        won’t scan on a dark or busy background.
+      </p>
       {failed && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">
           The QR code could not be drawn. Share the link instead.
