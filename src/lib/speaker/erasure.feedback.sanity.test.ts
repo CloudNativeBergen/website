@@ -1369,6 +1369,45 @@ describe('speaker erasure folds the feedback of talks no live speaker is left on
     )
   })
 
+  it('a look after the wait whose re-read fails reports every talk once, those with only a code too', async () => {
+    store().reset([
+      { _id: 'conf-1', _type: 'conference', title: 'Conf' },
+      speaker(ADA),
+      talk('talk-solo', [ADA]),
+      talk('talk-quiet', [ADA]),
+      ...responses('talk-solo', 3),
+    ])
+    // The second look's re-read of the responses fails, once.
+    let failNext = false
+    store().failReadsThat((read) => {
+      if (!failNext || !read.query.includes('talk._ref in $talkIds')) {
+        return false
+      }
+      failNext = false
+      return true
+    })
+    let waits = 0
+    const result = await eraseSpeakerInPlace({
+      speakerId: ADA,
+      actor: 'op',
+      waitForInFlightSubmits: async () => {
+        if (++waits === 2) failNext = true
+      },
+    })
+
+    expect(result.err).toBeNull()
+    const byTalk = Object.fromEntries(
+      result.feedbackFolds.map((f) => [f.talkId, f]),
+    )
+    expect(result.feedbackFolds).toHaveLength(2)
+    expect(byTalk['talk-solo']).toMatchObject({
+      status: 'failed',
+      responses: 3,
+    })
+    expect(byTalk['talk-quiet']).toMatchObject({ status: 'failed' })
+    expect(result.verification?.clean).toBe(false)
+  })
+
   it('a dry run writes nothing and lists the talks it would fold', async () => {
     world()
     const result = await eraseSpeakerInPlace({

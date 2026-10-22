@@ -447,11 +447,23 @@ export async function foldExpiredFeedback({
       report.notReached++
       continue
     }
+    // The conference(s) the fold was checked, and so ran, under: the talk
+    // may have moved since the selection, and that index holds its code.
+    const foldedUnder = new Set<string>()
+    const expireCodeIndexes = () => {
+      for (const id of new Set([...foldedUnder, row.conferenceId ?? []].flat()))
+        expireFeedbackCodeIndex(id)
+    }
     try {
       const outcome = await foldTalkFeedback(row._id, {
         now,
         deadline,
-        eligible: (talk) => pastRetention(talk, cutoff),
+        eligible: async (talk) => {
+          const verdict = await pastRetention(talk, cutoff)
+          const conferenceId = talk.conference?._ref
+          if (verdict && conferenceId) foldedUnder.add(conferenceId)
+          return verdict
+        },
       })
       report.responses += outcome.responses
       if (outcome.status === 'folded') report.folded++
@@ -464,15 +476,13 @@ export async function foldExpiredFeedback({
       }
       if (outcome.status === 'late') report.notReached++
       if (outcome.status === 'ineligible') report.ineligible++
-      if (outcome.responses > 0 && row.conferenceId) {
-        expireFeedbackCodeIndex(row.conferenceId)
-      }
+      if (outcome.responses > 0) expireCodeIndexes()
     } catch (error) {
       report.failed++
       if (error instanceof FoldError) report.responses += error.responses
       console.error(`[feedback] fold of ${row._id} failed`, error)
       // Its chunks before the failure committed, and unset the code.
-      if (row.conferenceId) expireFeedbackCodeIndex(row.conferenceId)
+      expireCodeIndexes()
     }
   }
   return report

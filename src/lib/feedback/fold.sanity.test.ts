@@ -827,6 +827,31 @@ describe('foldExpiredFeedback (the daily cron)', () => {
     expect(store().doc('r-1')).toBeDefined()
   })
 
+  it('expires the code index of the conference the talk is folded under, when it moved to another past one', async () => {
+    store().reset([
+      conference('conf-old', '2024-09-21'),
+      conference('conf-older', '2024-03-01'),
+      talk('talk-1', 'conf-old'),
+      response('r-1', 'green', 'talk-1', 'conf-old'),
+    ])
+    // Selected under conf-old; right after the selection the talk (and its
+    // response) move to conf-older, also past the retention.
+    let reads = 0
+    store().beforeEachRead(() => {
+      if (++reads !== 2) return
+      store().put({ ...talk('talk-1', 'conf-older'), _rev: 'rev-moved' })
+      store().put(response('r-1', 'green', 'talk-1', 'conf-older'))
+    })
+
+    const report = await foldExpiredFeedback({ now: NOW })
+
+    expect(report).toMatchObject({ folded: 1, responses: 1 })
+    expect(h.revalidateTag).toHaveBeenCalledWith(
+      'sanity:feedback-code-index-conf-older',
+      { expire: 0 },
+    )
+  })
+
   it('counts the responses a failed talk folded before it failed', async () => {
     store().reset([
       conference('conf-old', '2024-09-21'),

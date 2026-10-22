@@ -2020,14 +2020,17 @@ async function settleAndFoldFeedback(
         ),
       )
     } catch (error) {
+      // Every talk the subject was alone on, one outcome each: a talk an
+      // earlier look folded is still reported once, a talk that only had a
+      // code unset too.
       folds.push(
         ...failedAll(
-          plan.feedbackFoldTalkIds,
+          soleTalkIds(plan.speakerId, inputs.feedback),
           'could not list the talks to fold',
           error,
         ),
       )
-      return { folds, settled: false }
+      return { folds: oneOutcomePerTalk([...folds, ...held]), settled: false }
     }
     // Talks this look could not finish (a release turned non-active, or
     // stopped listing, during the wait): reported as of the last look.
