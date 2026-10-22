@@ -33,10 +33,15 @@ export function SessionFeedbackPrivacy() {
         <li>
           <strong>Who sees it:</strong> the session&apos;s speakers see the
           totals and the comments, each with the time it was given, to the
-          minute; organizers see everything and can hide or remove comments.
-          When a session&apos;s feedback closes, each of its speakers gets one
-          summary by email and in the app, with the counts only, never the
-          comments.
+          minute; organizers see everything and can hide or remove comments. A
+          speaker can flag a comment for the organizers: we record when it was
+          flagged (not by whom) on the answer, every speaker of the session sees
+          that it is flagged, and the organizers get a notification in the app
+          naming the session and the speaker who flagged it (and, for those who
+          turned them on, a push notification naming only the session), never
+          the comment; the one in the app is deleted after 90 days. When a
+          session&apos;s feedback closes, each of its speakers gets one summary
+          by email and in the app, with the counts only, never the comments.
         </li>
         <li>
           <strong>Purpose and legal basis:</strong> helping speakers and

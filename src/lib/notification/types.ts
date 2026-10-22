@@ -64,6 +64,12 @@ export type NotificationType =
   // links to the Session Feedback section of `/cfp/proposal/<id>`. Counts
   // only, never comment text. Bell only. Rendered generically by the hub.
   | 'session_feedback_summary'
+  // A speaker flagged a comment on their talk for organizers (speaker
+  // feedback spec §11.2): to the conference's organizers but the flagger,
+  // emitted inline by `sessionFeedback.flag` (`src/lib/feedback/flag.ts`)
+  // only when `flaggedAt` goes from unset to set. Links to `/admin/feedback`.
+  // The talk's title, never the comment text. Rendered generically by the hub.
+  | 'session_feedback_flagged'
   | 'system'
 
 /**

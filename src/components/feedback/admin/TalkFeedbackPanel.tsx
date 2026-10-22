@@ -13,6 +13,7 @@ import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import type {
   AdminFeedbackComment,
   AdminTalkFeedback,
+  KeepAnswer,
 } from '@/lib/feedback/admin'
 import type { RemovedCounts, RemoveRequest } from '@/lib/feedback/bulk-remove'
 import type { FeedbackColour } from '@/lib/feedback/colour'
@@ -24,7 +25,12 @@ import {
   CommentItem,
   doneNote,
   errorText,
+  excerpt,
+  failureNote,
+  focusRequestFor,
+  KEEP_REFUSED,
   OutcomeNote,
+  type FocusRequest,
   REMOVED_BUT_LISTED,
   removeMessage,
   removeQuestion,
@@ -91,6 +97,11 @@ export interface TalkFeedbackPanelProps {
    * only answers still as the page showed them.
    */
   onRemove: (request: RemoveRequest) => Promise<RemovedCounts>
+  /**
+   * Keep a flagged comment (`sessionFeedback.adminKeep`) on the revision
+   * the panel showed; a refused Keep says where the comment stands now.
+   */
+  onKeep: (comment: AdminFeedbackComment) => Promise<KeepAnswer>
   /** The heading, for a page that moves focus to it (after a Retry). */
   headingRef?: Ref<HTMLHeadingElement>
   /**
@@ -117,6 +128,7 @@ export function TalkFeedbackPanel({
   onHide,
   onUnhide,
   onRemove,
+  onKeep,
   headingRef,
   onCardsExpired,
   cardsOverlayMs = CARDS_OVERLAY_MS,
@@ -333,22 +345,43 @@ export function TalkFeedbackPanel({
         comments={comments}
         onHide={onHide}
         onUnhide={onUnhide}
+        onKeep={onKeep}
         onRemove={onRemove}
       />
     </section>
   )
 }
 
-/** What the last action on a comment did. */
-type CommentNote = Note & { kind: ActionKind }
+/** What the last action on a comment did, and on which revision. */
+type CommentNote = Note & { kind: ActionKind; seenRev?: string }
 
-/** The talk's comments with Hide, Unhide and Remove (§10.3). */
+/**
+ * A Kept note the comment has since moved past: flagged again at a newer
+ * revision. It would describe the past beside a live flag.
+ */
+const overtaken = (note: CommentNote, now: AdminFeedbackComment) =>
+  note.kind === 'keep' &&
+  note.ok &&
+  !!note.seenRev &&
+  now.rev !== note.seenRev &&
+  now.flagged
+
+/** Whether a note still holds once its comment has left the list. */
+const saysGone = (note: CommentNote) =>
+  note.kind === 'remove' ||
+  (note.kind === 'keep' && (!note.ok || note.text === KEEP_REFUSED.gone.text))
+
+/** The talk's comments with Keep, Hide, Unhide and Remove (§10.3). */
 function TalkComments({
   comments,
   onHide,
   onUnhide,
+  onKeep,
   onRemove,
-}: Pick<TalkFeedbackPanelProps, 'onHide' | 'onUnhide' | 'onRemove'> & {
+}: Pick<
+  TalkFeedbackPanelProps,
+  'onHide' | 'onUnhide' | 'onKeep' | 'onRemove'
+> & {
   comments: AdminFeedbackComment[]
 }) {
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
@@ -357,6 +390,8 @@ function TalkComments({
     new Map(),
   )
   const [announcement, setAnnouncement] = useState('')
+  /** The latest finished action, which focus may follow (Keep, Hide). */
+  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null)
   const [removing, setRemoving] = useState<AdminFeedbackComment | null>(null)
   const [asking, setAsking] = useState(false)
 
@@ -367,23 +402,31 @@ function TalkComments({
   ) {
     setAnnouncement('')
     setPending((p) => new Set([...p, id]))
+    const seen = comments.find((c) => c.id === id)
+    const at = {
+      kind,
+      seenRev: seen?.rev,
+      about: seen ? `“${excerpt(seen.comment)}”` : undefined,
+    }
     let outcome: CommentNote
     try {
-      outcome = { kind, ...doneNote(kind, 1, await action()) }
+      outcome = { ...at, ...doneNote(kind, 1, await action()) }
     } catch (e) {
-      outcome = { kind, ok: false, text: errorText(e) }
+      outcome = { ...at, ...failureNote(e, !!seen) }
     }
     setNotes((all) => new Map(all).set(id, outcome))
-    setAnnouncement(outcome.text)
+    setAnnouncement([outcome.text, outcome.about].filter(Boolean).join(' '))
+    setFocusRequest(focusRequestFor(id, 'session'))
     setPending((p) => new Set([...p].filter((x) => x !== id)))
   }
 
   const listed = new Set(comments.map((c) => c.id))
-  // A removed comment's outcome, once a refetch took it away, shows above.
-  // Only a Remove's: a Hide's note must not come back when a range Remove
-  // takes that comment away.
+  // Above the list, once a refetch took the comment away: a Remove's
+  // outcome, and a Keep's that is about it having gone (it found it gone, or
+  // failed). Not a Hide's, nor a Keep that worked: "speakers still see the
+  // comment" must not come back when a range Remove deletes it.
   const gone = [...notes]
-    .filter(([id, note]) => !listed.has(id) && note.kind === 'remove')
+    .filter(([id, note]) => !listed.has(id) && saysGone(note))
     .map(([, note]) => note)
   const removePending = removing ? pending.has(removing.id) : false
 
@@ -396,7 +439,7 @@ function TalkComments({
         {announcement}
       </p>
       {gone.length > 0 && (
-        <OutcomeNote outcome={gone[gone.length - 1]} className="mt-2" />
+        <OutcomeNote outcome={gone[gone.length - 1]} className="mt-2" named />
       )}
       {comments.length === 0 ? (
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
@@ -405,19 +448,25 @@ function TalkComments({
       ) : (
         <ul className="divide-y divide-gray-200 dark:divide-gray-700">
           {comments.map((c) => {
-            const note = notes.get(c.id)
+            const stored = notes.get(c.id)
+            const note = stored && !overtaken(stored, c) ? stored : null
             return (
               <CommentItem
                 key={c.id}
                 comment={c}
+                place="session"
+                // The panel lives in the page's narrow sidebar.
+                stacked
                 pending={pending.has(c.id)}
+                focusRequest={focusRequest}
                 note={
                   note?.ok && note.kind === 'remove'
                     ? { ...note, text: REMOVED_BUT_LISTED }
-                    : (note ?? null)
+                    : note
                 }
                 onHide={() => run('hide', c.id, () => onHide(c.id))}
                 onUnhide={() => run('unhide', c.id, () => onUnhide(c.id))}
+                onKeep={() => run('keep', c.id, () => onKeep(c))}
                 onRemove={() => {
                   setRemoving(c)
                   setAsking(true)

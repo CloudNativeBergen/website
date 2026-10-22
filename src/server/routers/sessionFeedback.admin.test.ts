@@ -365,6 +365,26 @@ describe('refusals', () => {
     expect(doc(ours._id)).toEqual(ours)
   })
 
+  it('flaggedCount counts this conference’s flagged comments for an organizer', async () => {
+    h.dataset.push(
+      response('talk-foreign', 'red', {
+        conference: ref('conf-B'),
+        flaggedAt: '2026-06-10T11:00:00Z',
+      }),
+    )
+    await expect(organizer().flaggedCount()).resolves.toBe(1)
+    await organizer().adminHide({ responseIds: [ours._id] })
+    await expect(organizer().flaggedCount()).resolves.toBe(0)
+  })
+
+  it('flaggedCount refuses a speaker who is not an organizer, before any read', async () => {
+    for (const as of [caller(), caller(['org-B'])])
+      await expect(as.flaggedCount()).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      })
+    expect(h.queries).toEqual([])
+  })
+
   it('adminOverview refuses a speaker who is not an organizer, before any read', async () => {
     await expect(caller().adminOverview()).rejects.toMatchObject({
       code: 'FORBIDDEN',

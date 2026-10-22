@@ -16,12 +16,18 @@ import { getFeedbackSlots, PUBLISHED_ONLY } from './sanity'
 import { talkTotals, type FeedbackTotals, type TalkCounts } from './totals'
 import { feedbackWindow, type FeedbackWindow } from './window'
 
-/** A comment as the talk's speakers see it: never whether it was flagged. */
+/**
+ * A comment as the talk's speakers see it. `id` is the response's document
+ * id, the handle `sessionFeedback.flag` takes (see `./flag`). `flagged`: a
+ * speaker of the talk flagged it and no organizer has acted on it yet; every
+ * speaker of the talk sees that (§10.3).
+ */
 export interface SpeakerComment {
   id: string
   colour: FeedbackColour
   comment: string
   submittedAt: string | null
+  flagged: boolean
 }
 
 export type SpeakerResults =
@@ -53,6 +59,7 @@ interface ResponseRow {
   comment?: unknown
   submittedAt?: unknown
   hiddenAt?: unknown
+  flaggedAt?: unknown
 }
 
 /**
@@ -63,6 +70,36 @@ export function isVisibleComment(
   r: Pick<ResponseRow, 'colour' | 'comment' | 'hiddenAt'>,
 ): r is { colour: FeedbackColour; comment: string; hiddenAt?: unknown } {
   return !r.hiddenAt && commentOf(r) !== null
+}
+
+/** The talk as {@link readSpeakerTalk} answers it. */
+export type SpeakerTalk = TalkCounts & { _id: string; title: string | null }
+
+/**
+ * THE ONE SCOPED QUERY the results and the flag start with (§9.1): the talk,
+ * only if it is a published, confirmed talk of the conference serving the
+ * request with `speakerId` among its speakers; otherwise null, one answer
+ * for every reason.
+ */
+export async function readSpeakerTalk({
+  talkId,
+  speakerId,
+  conferenceId,
+}: {
+  talkId: string
+  speakerId: string
+  conferenceId: string
+}): Promise<SpeakerTalk | null> {
+  const talk = await scopedFetch<SpeakerTalk | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "talk" && _id == $talkId && ${PUBLISHED_ONLY} && status == "confirmed" && $speakerId in speakers[]._ref][0]{
+      _id, title, audienceFeedback, feedbackFolded
+    }`,
+    { talkId, speakerId },
+    { cache: 'no-store' },
+  )
+  return talk?._id ? talk : null
 }
 
 export async function readSpeakerResults({
@@ -77,16 +114,12 @@ export async function readSpeakerResults({
   now: Date
 }): Promise<SpeakerResults> {
   const scope = { conferenceId: conference._id }
-  const talk = await scopedFetch<(TalkCounts & { _id: string }) | null>(
-    clientReadUncached,
-    scope,
-    `*[_type == "talk" && _id == $talkId && ${PUBLISHED_ONLY} && status == "confirmed" && $speakerId in speakers[]._ref][0]{
-      _id, audienceFeedback, feedbackFolded
-    }`,
-    { talkId, speakerId },
-    { cache: 'no-store' },
-  )
-  if (!talk?._id) return { status: 'refused' }
+  const talk = await readSpeakerTalk({
+    talkId,
+    speakerId,
+    conferenceId: conference._id,
+  })
+  if (!talk) return { status: 'refused' }
 
   const window = feedbackWindow({
     slots: await getFeedbackSlots(conference._id, talk._id),
@@ -99,7 +132,7 @@ export async function readSpeakerResults({
     clientReadUncached,
     scope,
     `*[_type == "feedbackResponse" && talk._ref == $talkId && ${PUBLISHED_ONLY}] | order(submittedAt asc, _id asc){
-      _id, colour, comment, submittedAt, hiddenAt
+      _id, colour, comment, submittedAt, hiddenAt, flaggedAt
     }`,
     { talkId: talk._id },
     { cache: 'no-store' },
@@ -113,6 +146,7 @@ export async function readSpeakerResults({
       colour: r.colour,
       comment: r.comment,
       submittedAt: toMinute(r.submittedAt),
+      flagged: !!r.flaggedAt,
     })
   }
   return {

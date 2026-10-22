@@ -56,6 +56,7 @@ describe('saved Card Counts through a real React Query client', () => {
           cardsOverlayMs={60}
           onHide={vi.fn()}
           onUnhide={vi.fn()}
+          onKeep={vi.fn()}
           onRemove={vi.fn()}
         />
       )

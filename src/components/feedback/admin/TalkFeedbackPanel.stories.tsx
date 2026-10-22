@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test'
 import type {
+  KeepAnswer,
   AdminFeedbackComment,
   AdminTalkFeedback,
 } from '@/lib/feedback/admin'
@@ -64,6 +65,7 @@ const comment = (
   submittedAt: RESPONSES[n - 1].submittedAt,
   hidden: false,
   flagged: false,
+  rev: `rev-${n}`,
   ...fields,
 })
 
@@ -161,7 +163,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A talk’s Session Feedback in the sidebar of `/admin/proposals/[id]` (speaker feedback spec §10.2), replacing the old Card Counts panel: totals split into scanned and Card Counts (editable in place, saved through `proposal.updateAudienceFeedback`), the Feedback Code with Mint and Rotate (§10.4), responses over time in 10-minute buckets with Remove by range, and the comments with Hide, Unhide and Remove (§10.3). Dark mode follows the global `theme` toolbar (story-level `globals`), applied to the document as well because the confirmations are portaled.',
+          'A talk’s Session Feedback in the sidebar of `/admin/proposals/[id]` (speaker feedback spec §10.2), replacing the old Card Counts panel: totals split into scanned and Card Counts (editable in place, saved through `proposal.updateAudienceFeedback`), the Feedback Code with Mint and Rotate (§10.4), responses over time in 10-minute buckets with Remove by range, and the comments with Keep (on a flagged comment, F7), Hide, Unhide and Remove (§10.3). Dark mode follows the global `theme` toolbar (story-level `globals`), applied to the document as well because the confirmations are portaled.',
       },
     },
     msw: {
@@ -196,6 +198,7 @@ const meta = {
     })),
     onHide: fn(async () => {}),
     onUnhide: fn(async () => {}),
+    onKeep: fn(async (): Promise<KeepAnswer> => ({ kept: true })),
     onRemove: fn(async (range: RemoveRequest) => ({
       removed: range.responses.length,
       gone: 0,

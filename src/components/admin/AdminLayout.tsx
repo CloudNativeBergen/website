@@ -5,8 +5,9 @@ import {
   DashboardLayout,
   type NavigationSection,
 } from '@/components/common/DashboardLayout'
-import { visibleNavSections } from '@/lib/admin/registry'
+import { visibleNavSections, withNavBadges } from '@/lib/admin/registry'
 import type { FeatureId } from '@/lib/features/registry'
+import { api } from '@/lib/trpc/client'
 import { CommandPalette } from './CommandPalette'
 import { NotificationProvider } from './NotificationProvider'
 import { UnlistedBanner } from './UnlistedBanner'
@@ -53,9 +54,21 @@ export function AdminLayout({
   enabledFeatures = NO_FEATURES,
 }: AdminLayoutProps) {
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // The Session Feedback badge (speaker feedback spec §10.1): one live count
+  // read when the shell mounts (it stays mounted across admin navigations),
+  // read again when /admin/feedback acts on a flag, and on returning to the
+  // tab once a minute old. Not polled: a flag that lands meanwhile rings the
+  // bell.
+  const flagged = api.sessionFeedback.flaggedCount.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: true,
+  })
   const navigation: NavigationSection[] = useMemo(
-    () => visibleNavSections(enabledFeatures),
-    [enabledFeatures],
+    () =>
+      withNavBadges(visibleNavSections(enabledFeatures), {
+        flaggedFeedback: flagged.data,
+      }),
+    [enabledFeatures, flagged.data],
   )
 
   return (

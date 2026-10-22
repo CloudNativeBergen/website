@@ -8,12 +8,16 @@ import {
 } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { feedbackCodeUrl, type FeedbackWindow } from '@/lib/feedback'
+import type { KeepAnswer } from '@/lib/feedback/admin'
 import { MAX_RESPONSES_PER_REQUEST } from '@/lib/feedback/bulk-remove'
 import { SHORT_CODE_SHAPE } from '@/lib/marketing/short-code'
 import {
+  countFlaggedComments,
   countTalksWithoutCode,
   ensureFeedbackCode,
+  flagResponse,
   hideResponses,
+  keepResponse,
   readAdminFeedback,
   removeResponses,
   unhideResponses,
@@ -77,6 +81,11 @@ const removeInput = z.object({
  */
 const responseNotFound = () =>
   new TRPCError({ code: 'NOT_FOUND', message: 'Feedback Response not found' })
+
+/** A speaker's flag: the talk and the response, one id each. */
+const flagInput = talkInput.extend({
+  responseId: z.string().regex(RESPONSE_ID),
+})
 
 const notFound = () =>
   new TRPCError({ code: 'NOT_FOUND', message: 'Talk not found' })
@@ -322,4 +331,74 @@ export const sessionFeedbackRouter = router({
     if (!result) throw notFound()
     return result
   }),
+
+  /**
+   * A speaker flags a comment on their talk for organizers (§9.3, §10.3).
+   * One-way: no procedure unflags for a speaker. The talk is checked by the
+   * same one scoped query as {@link results}, and feedback must be visible,
+   * before the response is read; every refusal, of the talk or of the
+   * response (missing, another talk's or conference's, hidden, without a
+   * comment), is the same NOT_FOUND. Only a flag that sets `flaggedAt`
+   * notifies the organizers (§11.2); an already flagged comment answers the
+   * same success.
+   */
+  flag: protectedProcedure.input(flagInput).mutation(async ({ ctx, input }) => {
+    // An organizer impersonating a speaker (development only) must not
+    // flag as them, like {@link ensureCode}.
+    if (ctx.session?.isImpersonating) throw responseNotFound()
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) throw responseNotFound()
+    const result = await flagResponse({
+      talkId: input.talkId,
+      responseId: input.responseId,
+      speakerId: ctx.speaker._id,
+      conference,
+      now: new Date(),
+    })
+    if (result.status === 'refused') throw responseNotFound()
+    if (result.status === 'conflict')
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'The comment changed while you flagged it. Try again.',
+      })
+    return { flagged: true as const }
+  }),
+
+  /**
+   * Keep (§10.3): clears `flaggedAt`, the comment stays visible to speakers.
+   * Guarded like {@link adminHide}, and on the response's revision as the
+   * page showed it: after a new flag, a reworded comment or any other change
+   * since, nothing is written and the answer says where the comment stands
+   * now (read through the doc endpoint), never a flag cleared on something
+   * nobody looked at.
+   */
+  adminKeep: adminProcedure
+    .input(
+      z.object({
+        responseId: z.string().regex(RESPONSE_ID),
+        rev: z.string().min(1).max(64),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const result = await keepResponse({
+        conferenceId: await resolveConferenceId(),
+        responseId: input.responseId,
+        seenRev: input.rev,
+      })
+      if (result.status === 'refused') throw responseNotFound()
+      const answer: KeepAnswer =
+        result.status === 'kept'
+          ? { kept: true }
+          : { kept: false, now: result.now }
+      return answer
+    }),
+
+  /**
+   * The flagged count on the admin nav's Session Feedback entry (§10.1).
+   * Read once when the admin shell mounts and again after the actions that
+   * change it; one live count query.
+   */
+  flaggedCount: adminProcedure.query(async () =>
+    countFlaggedComments(await resolveConferenceId()),
+  ),
 })

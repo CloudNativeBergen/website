@@ -79,8 +79,21 @@ export interface AdminDestination extends AdminDestinationFeature {
   icon?: AdminDestinationIcon
 }
 
+/**
+ * A count an admin nav entry can show, fetched by the admin shell
+ * (`AdminLayout`) and placed by {@link withNavBadges}.
+ */
+export type AdminNavCount = 'flaggedFeedback'
+
+/** What each count counts, for a screen reader and the rail's tooltip. */
+const NAV_COUNT_LABELS: Record<AdminNavCount, string> = {
+  flaggedFeedback: 'flagged',
+}
+
 interface AdminNavEntry extends NavigationItem, AdminDestinationFeature {
   keywords: string[]
+  /** The count shown on this entry, when it has one. */
+  count?: AdminNavCount
 }
 
 export interface AdminNavSection {
@@ -106,11 +119,12 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         keywords: ['cfp', 'submissions', 'talks', 'review'],
       },
       {
-        // Next to Proposals and Speakers (speaker feedback spec §10.1). The
-        // flagged-count badge comes with flags (F7).
+        // Next to Proposals and Speakers (speaker feedback spec §10.1), with
+        // the count of comments speakers flagged that wait for an organizer.
         name: 'Session Feedback',
         href: '/admin/feedback',
         icon: ChatBubbleLeftRightIcon,
+        count: 'flaggedFeedback',
         keywords: ['feedback', 'responses', 'comments', 'qr', 'loved it'],
       },
       {
@@ -747,6 +761,27 @@ export function visibleNavSections(
       ),
     }))
     .filter((section) => section.items.length > 0)
+}
+
+/**
+ * The sections with each entry's count as its badge: copies, the registry is
+ * shared. A count of 0, or one not given (not loaded, or failed), shows no
+ * badge.
+ */
+export function withNavBadges(
+  sections: readonly AdminNavSection[],
+  counts: Partial<Record<AdminNavCount, number>>,
+): AdminNavSection[] {
+  return sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => {
+      if (!item.count) return item
+      const count = counts[item.count] ?? 0
+      return count > 0
+        ? { ...item, badge: { count, label: NAV_COUNT_LABELS[item.count] } }
+        : item
+    }),
+  }))
 }
 
 /** The ⌘K destinations an org with `enabledFeatures` may see. */

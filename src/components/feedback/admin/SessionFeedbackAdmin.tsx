@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   ChatBubbleLeftRightIcon,
   ChevronRightIcon,
@@ -20,6 +20,7 @@ import type {
   AdminFeedbackComment,
   AdminFeedbackOverview,
   AdminFeedbackSession,
+  KeepAnswer,
 } from '@/lib/feedback/admin'
 import type { RemoveRequest, RemovedCounts } from '@/lib/feedback/bulk-remove'
 import { formats } from '@/lib/proposal/types'
@@ -29,13 +30,18 @@ import { ColourBar, FEEDBACK_TONE } from '../tone'
 import {
   CommentItem,
   doneNote,
-  errorText,
+  excerpt,
+  failureNote,
+  focusLost,
+  focusRequestFor,
+  focusWanted,
   OutcomeNote,
   REMOVED_BUT_LISTED,
   removeMessage,
   removeQuestion,
   type ActionKind,
-  type Outcome,
+  type FocusRequest,
+  type Place,
 } from './FeedbackCommentItem'
 
 /** The session list's columns at `sm` and up; a phone stacks each row. */
@@ -54,6 +60,12 @@ export interface SessionFeedbackAdminProps {
   conferenceTitle?: string
   onHide: (responseId: string) => Promise<unknown>
   onUnhide: (responseId: string) => Promise<unknown>
+  /**
+   * Keep a flagged comment: clears the flag the page showed (its
+   * revision), the comment stays (§10.3). Resolves with the server's
+   * {@link KeepAnswer}: a refused Keep says where the comment stands now.
+   */
+  onKeep: (comment: AdminFeedbackComment) => Promise<KeepAnswer | void>
   /** Remove (`sessionFeedback.adminRemove`): only answers still as seen. */
   onRemove: (request: RemoveRequest) => Promise<RemovedCounts>
   /**
@@ -63,29 +75,90 @@ export interface SessionFeedbackAdminProps {
   refreshFailed?: { onRetry: () => void; retrying?: boolean }
 }
 
+/** The session an action is about, and where on the page it was taken. */
+interface Where {
+  talkId: string
+  place: Place
+}
+
+/** What a Hide, Unhide, Keep or Remove did, kept per response it acted on. */
+interface Outcome extends Where {
+  responseId: string
+  /** The comment's revision when the action was taken. */
+  seenRev?: string
+  /**
+   * Which comment, in words (session and the comment's start), for a note
+   * said where the comment is no longer listed.
+   */
+  about?: string
+  kind: ActionKind
+  ok: boolean
+  text: string
+}
+
 const sameOrder = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id, i) => id === b[i])
 
 /** A removal the dialog asks about, and the comment it quotes. */
-interface Removal {
-  talkId: string
+interface Removal extends Where {
   ids: string[]
-  request: RemoveRequest
   comment?: string
+  /** The answer as shown: removed only while it is still that one. */
+  request: RemoveRequest
+}
+
+/**
+ * Where each outcome is said: beside its comment while that comment is
+ * listed (a Hide, a Keep, a failure, or a Remove a refetch has not caught up
+ * with), else once at the top, the latest only (outcomes are kept in the
+ * order they happened).
+ */
+/**
+ * A success the comment has since moved past: it changed after the action
+ * (another revision) into the state the action ended, e.g. flagged again
+ * after a Keep. Its note would describe the past beside a live problem.
+ */
+function overtaken(o: Outcome, now: AdminFeedbackComment): boolean {
+  if (!o.ok || !o.seenRev || now.rev === o.seenRev) return false
+  if (o.kind === 'keep') return now.flagged
+  if (o.kind === 'hide') return !now.hidden
+  if (o.kind === 'unhide') return now.hidden
+  return false
+}
+
+function placeOutcomes(
+  outcomes: readonly Outcome[],
+  comments: readonly AdminFeedbackComment[],
+): { byComment: Map<string, Outcome>; atTop: Outcome | null } {
+  const listed = new Map(comments.map((c) => [c.id, c]))
+  const byComment = new Map<string, Outcome>()
+  let atTop: Outcome | null = null
+  for (const o of outcomes) {
+    const now = listed.get(o.responseId)
+    if (!now) atTop = o
+    else if (overtaken(o, now)) continue
+    else if (o.ok && o.kind === 'remove')
+      byComment.set(o.responseId, { ...o, text: REMOVED_BUT_LISTED })
+    else byComment.set(o.responseId, o)
+  }
+  return { byComment, atTop }
 }
 
 /**
  * The organizers' Session Feedback page (speaker feedback spec §10.1,
  * §10.3): the stat cards, every session ranked by "Loved it" (fewer than 10
  * responses: "too few", after the rest), and rows that open to the
- * session's comments with Hide, Unhide and Remove. Presentational; the data
- * and the actions come from `sessionFeedback.admin*`.
+ * session's comments with Hide, Unhide, Keep and Remove. Above them, while a
+ * speaker's flag waits for an organizer, the red flagged-by-speakers box with
+ * Keep, Hide and Remove. Presentational; the data and the actions come from
+ * `sessionFeedback.admin*`.
  */
 export function SessionFeedbackAdmin({
   overview,
   conferenceTitle,
   onHide,
   onUnhide,
+  onKeep,
   onRemove,
   refreshFailed,
 }: SessionFeedbackAdminProps) {
@@ -100,8 +173,10 @@ export function SessionFeedbackAdmin({
   const [outcomes, setOutcomes] = useState<ReadonlyMap<string, Outcome>>(
     new Map(),
   )
-  /** The latest outcome's words, for the live region. */
-  const [announcement, setAnnouncement] = useState('')
+  /** Whose outcome the live region says (its response id). */
+  const [announced, setAnnounced] = useState<string | null>(null)
+  /** The organizer's latest finished action, which focus may follow. */
+  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null)
   const [retried, setRetried] = useState(false)
   const [removing, setRemoving] = useState<Removal | null>(null)
   // Open apart from `removing`, which stays until the dialog has left, so
@@ -119,8 +194,32 @@ export function SessionFeedbackAdmin({
   // A retry's own outcome lasts only while the refetch keeps failing.
   if (!refreshFailed && retried) setRetried(false)
   const { totals } = overview
+  // The flagged-by-speakers box: every flagged comment, with its session.
+  // Gone with its last comment, unless it still has something to say.
+  const flaggedComments = overview.sessions.flatMap((s) =>
+    s.comments
+      .filter((c) => c.flagged)
+      .map((comment) => ({ session: s, comment })),
+  )
+  const shownOutcomes = [...outcomes.values()]
+  const announcedOutcome =
+    announced && shownOutcomes.find((o) => o.responseId === announced)
+  // Named, as the note at the top of the box is: the region speaks wherever
+  // the organizer is on the page.
+  const announcement = announcedOutcome
+    ? [announcedOutcome.text, announcedOutcome.about].filter(Boolean).join(' ')
+    : ''
+  const boxOutcomes = shownOutcomes.filter((o) => o.place === 'flagged')
+  // Once shown it stays for this visit ("Nothing else is flagged."), so the
+  // list below does not jump up when the last flag is resolved.
+  const [boxShown, setBoxShown] = useState(false)
+  const showBox =
+    boxShown || flaggedComments.length > 0 || boxOutcomes.length > 0
+  if (showBox && !boxShown) setBoxShown(true)
 
   const sortButtons = useRef(new Map<FeedbackSort, HTMLButtonElement>())
+  const boxHeading = useRef<HTMLHeadingElement>(null)
+  const rowToggles = useRef(new Map<string, HTMLButtonElement>())
 
   function sortBy(key: FeedbackSort) {
     setSort(key)
@@ -136,7 +235,7 @@ export function SessionFeedbackAdmin({
     })
 
   async function run(
-    talkId: string,
+    { talkId, place }: Where,
     kind: ActionKind,
     ids: string[],
     action: () => Promise<unknown>,
@@ -144,25 +243,54 @@ export function SessionFeedbackAdmin({
     record(ids, null)
     // Emptied in this render and refilled in a later one, so the same words
     // twice in a row still change the region and are announced again.
-    setAnnouncement('')
+    setAnnounced(null)
     setPending((p) => new Set([...p, ...ids]))
-    const at = { talkId, responseId: ids[0], kind }
+    const session = overview.sessions.find((s) => s.talkId === talkId)
+    const seen = session?.comments.find((c) => c.id === ids[0])
+    const at = {
+      talkId,
+      place,
+      responseId: ids[0],
+      seenRev: seen?.rev,
+      about:
+        session && seen
+          ? `${session.title}: “${excerpt(seen.comment)}”`
+          : undefined,
+      kind,
+    }
     let outcome: Outcome
     try {
       outcome = { ...at, ...doneNote(kind, ids.length, await action()) }
     } catch (e) {
-      outcome = {
-        ...at,
-        ok: false,
-        text: errorText(e),
-      }
+      outcome = { ...at, ...failureNote(e, !!seen) }
     }
     record(ids, outcome)
-    setAnnouncement(outcome.text)
+    setAnnounced(outcome.responseId)
+    // Focus may follow this action, for a moment: never a later background
+    // read (a refetch on returning to the tab) moving it.
+    setFocusRequest(focusRequestFor(outcome.responseId, place))
     setPending((p) => new Set([...p].filter((id) => !ids.includes(id))))
   }
 
   const removePending = removing?.ids.some((id) => pending.has(id)) ?? false
+
+  const inRow = (s: AdminFeedbackSession): Where => ({
+    talkId: s.talkId,
+    place: 'session',
+  })
+  const inBox = (talkId: string): Where => ({ talkId, place: 'flagged' })
+
+  function askToRemove(where: Where, c: AdminFeedbackComment) {
+    const removal: Removal = {
+      ...where,
+      ids: [c.id],
+      comment: c.comment,
+      request: { responses: [{ id: c.id, submittedAt: c.submittedAt }] },
+    }
+    removingNow.current = removal
+    setRemoving(removal)
+    setAsking(true)
+  }
 
   function toggle(talkId: string) {
     const closing = open.has(talkId)
@@ -175,7 +303,12 @@ export function SessionFeedbackAdmin({
     if (closing)
       setOutcomes(
         (all) =>
-          new Map([...all].filter(([, o]) => !(o.talkId === talkId && o.ok))),
+          new Map(
+            [...all].filter(
+              ([, o]) =>
+                !(o.talkId === talkId && o.place === 'session' && o.ok),
+            ),
+          ),
       )
   }
 
@@ -247,6 +380,23 @@ export function SessionFeedbackAdmin({
         )}
       </div>
 
+      {showBox && (
+        <FlaggedBox
+          headingRef={boxHeading}
+          flagged={flaggedComments}
+          outcomes={boxOutcomes}
+          pending={pending}
+          focusRequest={focusRequest}
+          onKeep={(talkId, c) =>
+            run(inBox(talkId), 'keep', [c.id], () => onKeep(c))
+          }
+          onHide={(talkId, id) =>
+            run(inBox(talkId), 'hide', [id], () => onHide(id))
+          }
+          onRemove={(talkId, c) => askToRemove(inBox(talkId), c)}
+        />
+      )}
+
       <div>
         <section
           aria-label="Sessions"
@@ -304,34 +454,29 @@ export function SessionFeedbackAdmin({
             <ul className="divide-y divide-gray-200 dark:divide-gray-700">
               {sessions.map((session) => (
                 <SessionRow
+                  toggleRef={(el) => {
+                    if (el) rowToggles.current.set(session.talkId, el)
+                    else rowToggles.current.delete(session.talkId)
+                  }}
                   key={session.talkId}
                   session={session}
                   open={open.has(session.talkId)}
                   onToggle={() => toggle(session.talkId)}
                   pending={pending}
-                  outcomes={[...outcomes.values()].filter(
-                    (o) => o.talkId === session.talkId,
+                  focusRequest={focusRequest}
+                  outcomes={shownOutcomes.filter(
+                    (o) => o.talkId === session.talkId && o.place === 'session',
                   )}
                   onHide={(id) =>
-                    run(session.talkId, 'hide', [id], () => onHide(id))
+                    run(inRow(session), 'hide', [id], () => onHide(id))
                   }
                   onUnhide={(id) =>
-                    run(session.talkId, 'unhide', [id], () => onUnhide(id))
+                    run(inRow(session), 'unhide', [id], () => onUnhide(id))
                   }
-                  onRemove={(c) => {
-                    const removal = {
-                      talkId: session.talkId,
-                      ids: [c.id],
-                      // The answer as shown: removed only while still it.
-                      request: {
-                        responses: [{ id: c.id, submittedAt: c.submittedAt }],
-                      },
-                      comment: c.comment,
-                    }
-                    removingNow.current = removal
-                    setRemoving(removal)
-                    setAsking(true)
-                  }}
+                  onKeep={(c) =>
+                    run(inRow(session), 'keep', [c.id], () => onKeep(c))
+                  }
+                  onRemove={(c) => askToRemove(inRow(session), c)}
                 />
               ))}
             </ul>
@@ -349,11 +494,27 @@ export function SessionFeedbackAdmin({
         onClose={() => {
           if (!removePending) setAsking(false)
         }}
-        afterLeave={() => setRemoving(null)}
+        afterLeave={() => {
+          const removal = removing
+          setRemoving(null)
+          // A Remove that worked took its button away while the dialog held
+          // focus, so there is no trigger to return to: focus goes to where
+          // the comment was, the box's heading or the session's row.
+          // Checked once the dialog itself has gone (it holds focus until
+          // it unmounts, just after this).
+          if (removal)
+            setTimeout(() => {
+              if (!focusLost()) return
+              ;(removal.place === 'flagged'
+                ? boxHeading.current
+                : rowToggles.current.get(removal.talkId)
+              )?.focus()
+            })
+        }}
         onConfirm={async () => {
           const removal = removing
           if (!removal || removePending) return
-          await run(removal.talkId, 'remove', removal.ids, () =>
+          await run(removal, 'remove', removal.ids, () =>
             onRemove(removal.request),
           )
           // Closed either way, the outcome is on the page behind it; but only
@@ -379,41 +540,36 @@ export function SessionFeedbackAdmin({
 
 function SessionRow({
   session,
+  toggleRef,
   open,
   onToggle,
   pending,
+  focusRequest,
   outcomes,
   onHide,
   onUnhide,
+  onKeep,
   onRemove,
 }: {
   session: AdminFeedbackSession
+  /** The row's toggle, for focus to return to after a Remove. */
+  toggleRef: (el: HTMLButtonElement | null) => void
   open: boolean
   onToggle: () => void
   pending: ReadonlySet<string>
-  /** The outcomes of actions in this session. */
+  focusRequest: FocusRequest | null
+  /** The outcomes of actions in this session's row. */
   outcomes: readonly Outcome[]
   onHide: (id: string) => void
   onUnhide: (id: string) => void
+  onKeep: (comment: AdminFeedbackComment) => void
   onRemove: (comment: AdminFeedbackComment) => void
 }) {
   const panelId = useId()
   const { totals, comments } = session
   const tooFew = hasTooFew(totals)
   const flagged = comments.some((c) => c.flagged)
-  // An outcome shows beside its comment while that comment is listed (a
-  // Hide, an Unhide, a failure, or a Remove a refetch has not caught up
-  // with). A comment that went (a Remove) is said once at the top of the
-  // row: the latest only, outcomes being kept in the order they happened.
-  const listed = new Set(comments.map((c) => c.id))
-  const byComment = new Map<string, Outcome>()
-  let atTop: Outcome | null = null
-  for (const o of outcomes) {
-    if (!listed.has(o.responseId)) atTop = o
-    else if (o.ok && o.kind === 'remove')
-      byComment.set(o.responseId, { ...o, text: REMOVED_BUT_LISTED })
-    else byComment.set(o.responseId, o)
-  }
+  const { byComment, atTop } = placeOutcomes(outcomes, comments)
   const meta = [
     session.speakers.join(', '),
     session.format ? formats.get(session.format) : null,
@@ -426,6 +582,7 @@ function SessionRow({
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
+        ref={toggleRef}
         onClick={onToggle}
         className={`flex w-full flex-col gap-2 px-4 py-3 text-left hover:bg-gray-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-cloud-blue dark:hover:bg-gray-700/40 ${COLUMNS}`}
       >
@@ -497,7 +654,7 @@ function SessionRow({
       >
         {open && (
           <>
-            {atTop && <OutcomeNote outcome={atTop} className="mb-2" />}
+            {atTop && <OutcomeNote outcome={atTop} className="mb-2" named />}
             <Breakdown totals={totals} />
             {comments.length === 0 ? (
               <p className="py-2 text-sm text-gray-600 dark:text-gray-400">
@@ -509,10 +666,13 @@ function SessionRow({
                   <CommentItem
                     key={c.id}
                     comment={c}
+                    place="session"
                     pending={pending.has(c.id)}
+                    focusRequest={focusRequest}
                     note={byComment.get(c.id) ?? null}
                     onHide={() => onHide(c.id)}
                     onUnhide={() => onUnhide(c.id)}
+                    onKeep={() => onKeep(c)}
                     onRemove={() => onRemove(c)}
                   />
                 ))}
@@ -522,6 +682,97 @@ function SessionRow({
         )}
       </div>
     </li>
+  )
+}
+
+/**
+ * The red flagged-by-speakers box (§10.1): every comment a speaker flagged
+ * that no organizer has acted on, with its session's title, and Keep, Hide
+ * and Remove. Outcomes are said here, beside the comment while it is still
+ * listed, then once at the top when it has gone (Keep, Hide and Remove all
+ * take it out of the box).
+ */
+function FlaggedBox({
+  flagged,
+  headingRef: heading,
+  outcomes,
+  pending,
+  focusRequest,
+  onKeep,
+  onHide,
+  onRemove,
+}: {
+  flagged: { session: AdminFeedbackSession; comment: AdminFeedbackComment }[]
+  /** The heading, which focus may go to; the page holds it. */
+  headingRef: React.RefObject<HTMLHeadingElement | null>
+  outcomes: readonly Outcome[]
+  pending: ReadonlySet<string>
+  focusRequest: FocusRequest | null
+  onKeep: (talkId: string, comment: AdminFeedbackComment) => void
+  onHide: (talkId: string, id: string) => void
+  onRemove: (talkId: string, comment: AdminFeedbackComment) => void
+}) {
+  const headingId = useId()
+  const { byComment, atTop } = placeOutcomes(
+    outcomes,
+    flagged.map(({ comment }) => comment),
+  )
+  // Keep, Hide and Remove all take the comment out of the box, and the
+  // button that had focus with it: focus goes to the box's heading. Not to
+  // the outcome's note, which the page's live region already says; and only
+  // after the organizer's own action, never a background re-read.
+  const topKey = atTop && `${atTop.responseId}:${atTop.kind}:${atTop.text}`
+  useEffect(() => {
+    if (topKey && focusWanted(focusRequest, 'flagged') && focusLost())
+      heading.current?.focus()
+  }, [topKey, focusRequest, heading])
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-950/40"
+    >
+      <h2
+        id={headingId}
+        ref={heading}
+        tabIndex={-1}
+        className="flex items-center gap-2 text-base font-semibold text-red-800 dark:text-red-200"
+      >
+        <FlagIcon className="size-5 shrink-0" aria-hidden="true" />
+        Flagged by speakers
+        {flagged.length > 0 && (
+          <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white tabular-nums">
+            {flagged.length}
+          </span>
+        )}
+      </h2>
+      <p className="mt-1 text-sm text-red-800 dark:text-red-200">
+        Keep clears the flag, Hide takes the comment off the speakers&rsquo;
+        view, Remove deletes the response. Speakers aren&rsquo;t notified.
+      </p>
+      {atTop && <OutcomeNote outcome={atTop} className="mt-2" named />}
+      {flagged.length === 0 ? (
+        <p className="mt-2 text-sm text-red-800 dark:text-red-200">
+          Nothing else is flagged.
+        </p>
+      ) : (
+        <ul className="mt-1 divide-y divide-red-200 dark:divide-red-900">
+          {flagged.map(({ session, comment }) => (
+            <CommentItem
+              key={comment.id}
+              comment={comment}
+              place="flagged"
+              sessionTitle={session.title}
+              pending={pending.has(comment.id)}
+              focusRequest={focusRequest}
+              note={byComment.get(comment.id) ?? null}
+              onKeep={() => onKeep(session.talkId, comment)}
+              onHide={() => onHide(session.talkId, comment.id)}
+              onRemove={() => onRemove(session.talkId, comment)}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 

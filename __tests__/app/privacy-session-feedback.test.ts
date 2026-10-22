@@ -57,6 +57,22 @@ describe('Session Feedback on /privacy', () => {
     }
   })
 
+  it('says what a speaker’s flag records and who learns of it (F7, §11.2)', () => {
+    const copy = text(SessionFeedbackPrivacy)
+    expect(copy).toMatch(/flag a comment for the organizers/)
+    expect(copy).toMatch(/record when it was flagged \(not by whom\)/)
+    expect(copy).toMatch(
+      /never the\s+comment; the one in the app is deleted after 90 days/,
+    )
+    // Push is sent too (whether it should be is open on #1469), and its
+    // payload is the title and message only: the session, never the
+    // flagging speaker, who is named in the app alone.
+    expect(copy).toMatch(
+      /in the app naming the session and the speaker who flagged it/,
+    )
+    expect(copy).toMatch(/push notification naming only the session/)
+  })
+
   it('states your rights: self-service delete, both exceptions, then the organizers (§8, R1)', () => {
     const rights = text(SessionFeedbackPrivacy)
     expect(rights).toContain('Your rights:')

@@ -629,7 +629,12 @@ Decided on [#1422](https://github.com/CloudNativeBergen/website/issues/1422).
   `ADMIN_NAV_SECTIONS` (`src/lib/admin/registry.ts`), with a badge for the
   flagged count. _Refinement (spec):_ nav entries have no badge support today
   (`NavigationItem` is `{name, href, icon}`); the badge needs an optional count
-  on the entry, fed by one count query.
+  on the entry, fed by one count query. _Refinement (F7):_ the admin shell
+  reads it live (`sessionFeedback.flaggedCount`) when it mounts, again after
+  an action on `/admin/feedback`, and on returning to the tab once the count
+  is a minute old; not polled, and no server cache (`'use cache'` did not
+  persist on Vercel when measured in August 2026). A flag that lands
+  meanwhile reaches organizers through the bell (§11.2).
 - No dashboard widget.
 
 ### 10.2 The talk's admin panel
@@ -660,6 +665,19 @@ On `/admin/proposals/[id]`, in place of `AudienceFeedbackPanel`:
 
 All admin actions are `adminProcedure`s that check, before any write, that every
 response id belongs to a talk of the current conference.
+
+_Refinement (F7):_ the flag takes the response's document id, which the
+results already give speakers: a hash of the device's secret token and the
+talk (§7.3), so it reveals nothing about the attendee and links nothing across
+talks, and the only thing it unlocks is the flag, which re-checks it. The flag
+is refused, like the results, until feedback is visible (§6), and reads the
+response through the doc endpoint (GROQ lags a write by about a second, so a
+flag right after a Keep would see the old flag and be lost). Keep is offered
+on flagged comments only and clears the flag only on the response exactly as
+the organizer saw it (the page sends back its revision; a new flag, reworded
+comment or any other change since is a conflict and the page reads again); the
+flagged-by-speakers box comes from the page's one overview read, with no read
+of its own.
 
 ### 10.4 Rotating the code
 
@@ -908,6 +926,13 @@ Per `AGENTS.md` ("Agent discipline"):
   buttons in every tab.
 - **No IP limit:** a scripted flood is only remedied after the fact (Remove,
   bulk by time range). Revisit with proof of attendance if abuse appears.
+- **A scripted flag flood** (_Refinement (F7), decision open on #1469_): every
+  flag notifies every organizer, one bell item (kept 90 days, not removed by
+  Remove) and, for those who turned it on, one push per flag, as §11.2 says.
+  A speaker who scripts comments and flags each one fills every organizer's
+  bell. Coalescing to one unread item per talk was tried and dropped: an item
+  left unread after a Keep on the page silenced every later flag on that talk
+  for up to 90 days.
 - **Exact comment times** in a small room, with live polling, can hint at who
   wrote a comment. Times are shown as decided
   ([#1421](https://github.com/CloudNativeBergen/website/issues/1421)).
