@@ -13,6 +13,15 @@ export function feedbackCodeUrl(
 }
 
 /**
+ * Where every refusal of the programme link lands (`/program/<talkId>/feedback`,
+ * #1472): the attendee page's generic Unknown state. Not a code (seven
+ * characters, and `o` is outside the alphabet), so the page answers it
+ * without a lookup, exactly as it answers a mistyped code. Not exported from
+ * the `route.ts`: a route file may export only route fields.
+ */
+export const UNKNOWN_FEEDBACK_PATH = '/f/unknown'
+
+/**
  * Whether speakers are shown their Feedback Code. Off until the attendee page
  * could take an answer (F1c, #1430, spec §16 R3), so no printed QR led to a
  * form that could not be answered.

@@ -33,7 +33,8 @@ The physical green/yellow/red cards stay. Their counts (Card Counts, today's
 
 ### Out of scope
 
-- Showing Session Feedback publicly (programme, speaker pages).
+- Showing Session Feedback publicly (programme, speaker pages). _The
+  programme does LINK to the attendee page (§7.5, #1472); it shows no results._
 - Restricting feedback to verified ticket holders. Revisit only if abuse
   appears.
 - Multi-question surveys or several scored dimensions.
@@ -260,8 +261,10 @@ the same (one read per cache refresh), and expiries take effect.
 - A code resolves against a **per-conference index**: code → talk id, for
   **confirmed, published talks only**. It is read with `clientReadUncached`
   inside `'use cache: remote'` (plain `'use cache'` is per-instance memory) and
-  tagged `feedbackCodeIndexTag(conferenceId)` (`src/lib/cache/tags.ts`; not
-  `conferenceTag`, which would flush the whole site on every mint). A flood of
+  tagged `feedbackCodeIndexTag(conferenceId)` (`src/lib/cache/tags.ts`), its
+  own tag so that rotation and status changes need not flush the whole site
+  (schedule edits refresh `conferenceTag` on their own path). _Refinement (#1472):_ a mint, bulk mint and fold ALSO expire
+  `conferenceTag`, for the programme link (§7.5). A flood of
   random codes costs no Sanity reads. The index is server-only and never passed
   to a Client Component.
 - The talk's title, speakers and slots for the page come from a second cached
@@ -511,6 +514,32 @@ responses.
 A Submit or Delete costs one write, the by-id talk read (Submit only), and one
 refill read of the response on the next page load. Repeated page loads cost no
 live reads.
+
+### 7.5 The programme link
+
+_Added by [#1472](https://github.com/CloudNativeBergen/website/issues/1472)._
+A second way into `/f/<code>` for attendees who miss or skip the room's QR.
+
+- **Where:** a "Give feedback" link on `TalkCard`, so every `/program` view
+  (list, schedule, grid, agenda); icon-only with an accessible name on compact
+  cards. Not on the front page. A plain `<a>` in the same tab (§7.1 analytics).
+- **When:** on every confirmed talk that holds a Feedback Code, at all times;
+  the attendee page explains Not yet open and Closed. No link, and no
+  placeholder, for a talk without a code: organizers bulk-mint (§5) before the
+  event.
+- **How:** the card links to `/program/<talkId>/feedback`, which 302s to the
+  talk's CURRENT `/f/<code>` (`feedbackCodeForTalk`, from the code index, no
+  read of its own), so a rotation (§10.4) never strands anyone and the
+  programme read carries only `hasFeedbackCode`, never the code. A talk that
+  is not confirmed, not public (§7.2), not this conference's, or holds no code
+  lands on the generic Unknown page (`/f/unknown`, not a code shape), the same
+  for every refusal. A failed read is a 503, never Unknown.
+- **What this changes:** a Feedback Code is no longer for speakers only. Anyone
+  can reach a public talk's code from the programme, from anywhere. The guards
+  are the ones §7.4 already names (one answer per device, the window, organizer
+  removal); the room-only property was already weak, since the QR on a slide
+  leaks the code to anyone who photographs it. Whole-talk list reads still
+  never carry the code (`public-exposure.sanity.test.ts`).
 
 ## 8. Privacy copy
 
@@ -1046,6 +1075,26 @@ Per `AGENTS.md` ("Agent discipline"):
 - **Exact comment times** in a small room, with live polling, can hint at who
   wrote a comment. Times are shown as decided
   ([#1421](https://github.com/CloudNativeBergen/website/issues/1421)).
+- **Answering without attending.** The programme link (§7.5) lets anyone answer
+  for any public talk while its window is open, without being in the room.
+  Accepted ([#1472](https://github.com/CloudNativeBergen/website/issues/1472));
+  revisit with §1's ticket-holder restriction if abuse appears.
+- **A programme link that lands on Unknown, or is missing.** The card's
+  `hasFeedbackCode` comes from the cached conference read; the redirect reads
+  the code index. A mint, bulk mint and fold expire both
+  (`expireProgrammeFeedbackLinks`, `{ expire: 0 }`: stale-while-revalidate
+  would re-save `/program`'s own cached render around the stale read for up to
+  an hour), so the change shows on the next request, give or take the Sanity
+  CDN's own lag. They
+  can still disagree: a code two talks share (the index drops it), a stored
+  value that is not a code shape, a talk referenced only from a non-official
+  day, a code set or unset outside the app (Vision, the API, a migration; Studio's
+  field is read-only), which expires nothing, and a code unset
+  by speaker erasure (which reaches `conferenceTag` only through the
+  operator's provisioning invalidation, stale-while-revalidate), until the
+  conference read's own 6-hour refresh plus `/program`'s hour around it
+  (about 7 hours). A link then lands on Unknown,
+  or a code shows no link yet; neither reveals a code. Accepted (#1472).
 
 ## 16. Decided in review
 

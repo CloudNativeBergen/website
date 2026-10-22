@@ -15,7 +15,7 @@ import {
   createShortCodeMinter,
   normalizeShortCode,
 } from '@/lib/marketing/short-code'
-import { expireFeedbackCodeIndex } from './cache'
+import { expireFeedbackCodeIndex, expireProgrammeFeedbackLinks } from './cache'
 import {
   conferenceFeedbackCodes,
   getFeedbackSlots,
@@ -286,7 +286,10 @@ export async function ensureFeedbackCode({
     await sweepTalkVersions(client, talk._id, 'feedbackCode', {
       requestTimeoutMs: MINT_REQUEST_TIMEOUT_MS,
     })
-    if (!batch) expireFeedbackCodeIndex(conference._id)
+    if (!batch) {
+      expireFeedbackCodeIndex(conference._id)
+      expireProgrammeFeedbackLinks(conference._id)
+    }
   }
   return { status: 'ok', code: outcome.code, window, minted: outcome.minted }
 }

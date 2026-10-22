@@ -8,6 +8,7 @@
  * API-version rule for `versions.**`. `releases::all()` is answered here, as
  * production answers it.
  */
+import { conferenceTag } from '@/lib/cache/tags'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
 
@@ -722,6 +723,14 @@ describe('foldExpiredFeedback (the daily cron)', () => {
     )
     expect(h.revalidateTag).not.toHaveBeenCalledWith(
       'sanity:feedback-code-index-conf-recent',
+      expect.anything(),
+    )
+    // The fold unsets the code: the programme stops linking it (#1472).
+    expect(h.revalidateTag).toHaveBeenCalledWith(conferenceTag('conf-old'), {
+      expire: 0,
+    })
+    expect(h.revalidateTag).not.toHaveBeenCalledWith(
+      conferenceTag('conf-recent'),
       expect.anything(),
     )
     expect(store().doc('c-1')).toBeDefined()

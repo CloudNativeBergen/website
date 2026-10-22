@@ -179,6 +179,9 @@ const EXPANDED_SCHEDULES = `schedules[]-> {
           format,
           level,
           status,
+          // Whether, never which: the programme's "Give feedback" link looks
+          // the code up when followed (#1472), so it never rides this read.
+          "hasFeedbackCode": defined(feedbackCode),
           audiences,
           topics[]-> {
             _id,

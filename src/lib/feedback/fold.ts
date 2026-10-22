@@ -29,7 +29,7 @@
 import 'server-only'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { clientReadUncached } from '@/lib/sanity/client'
-import { expireFeedbackCodeIndex } from './cache'
+import { expireFeedbackCodeIndex, expireProgrammeFeedbackLinks } from './cache'
 import type { FeedbackColour } from './colour'
 import { LIVE_RESPONSES, PUBLISHED_ONLY, versionsClient } from './sanity'
 import {
@@ -414,8 +414,9 @@ export interface FoldReport {
 /**
  * Fold every talk past the retention (§12.2), talk by talk. Never throws for
  * one talk: it is logged, and the next goes on. After a talk folded anything
- * its conference's Feedback Code index is expired at once (§5.1): the fold
- * unset its code.
+ * its conference's Feedback Code index is expired at once (§5.1), and so is
+ * its conference read, which the programme's "Give feedback" link rides
+ * (§7.5): the fold unset its code.
  */
 export async function foldExpiredFeedback({
   now,
@@ -451,8 +452,12 @@ export async function foldExpiredFeedback({
     // may have moved since the selection, and that index holds its code.
     const foldedUnder = new Set<string>()
     const expireCodeIndexes = () => {
-      for (const id of new Set([...foldedUnder, row.conferenceId ?? []].flat()))
+      for (const id of new Set(
+        [...foldedUnder, row.conferenceId ?? []].flat(),
+      )) {
         expireFeedbackCodeIndex(id)
+        expireProgrammeFeedbackLinks(id)
+      }
     }
     try {
       const outcome = await foldTalkFeedback(row._id, {
