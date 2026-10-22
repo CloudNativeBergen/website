@@ -181,6 +181,11 @@ export interface ProposalExisting extends Proposal {
   _organizationId?: string | null
   reviews?: Review[]
   coSpeakerInvitations?: CoSpeakerInvitationMinimal[]
+  /**
+   * Whether the talk holds a Feedback Code, projected by the programme read
+   * (`EXPANDED_SCHEDULES`) in place of the code itself (#1472).
+   */
+  hasFeedbackCode?: boolean
 }
 
 export interface FormError {
