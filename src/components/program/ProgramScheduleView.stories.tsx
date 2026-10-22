@@ -59,6 +59,8 @@ const createTalk = (
   level: Level.intermediate,
   audiences: [Audience.developer] as Audience[],
   status: Status.confirmed,
+  // Every talk holds a Feedback Code, as on the day (#1472).
+  hasFeedbackCode: true,
   outline: '',
   topics: mockTopics,
   tos: true,

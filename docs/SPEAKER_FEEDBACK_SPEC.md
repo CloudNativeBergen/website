@@ -1080,8 +1080,10 @@ Per `AGENTS.md` ("Agent discipline"):
 - **A programme link that lands on Unknown, or is missing.** The card's
   `hasFeedbackCode` comes from the cached conference read; the redirect reads
   the code index. A mint, bulk mint and fold expire both
-  (`expireProgrammeFeedbackLinks`, stale-while-revalidate, so the change shows
-  from the next request after the refill, plus the Sanity CDN's own lag). They
+  (`expireProgrammeFeedbackLinks`, `{ expire: 0 }`: stale-while-revalidate
+  would re-save `/program`'s own cached render around the stale read for up to
+  an hour), so the change shows on the next request, give or take the Sanity
+  CDN's own lag. They
   can still disagree: a code two talks share (the index drops it), a stored
   value that is not a code shape, a talk referenced only from a non-official
   day, and a code set or unset in Studio (which expires nothing) until the

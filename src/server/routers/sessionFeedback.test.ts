@@ -309,10 +309,26 @@ describe('ensureCode — minting', () => {
       expire: 0,
     })
     // The programme's "Give feedback" link (#1472) rides the conference read.
-    expect(revalidateTag).toHaveBeenCalledWith(
-      conferenceTag('conf-A'),
-      'default',
-    )
+    expect(revalidateTag).toHaveBeenCalledWith(conferenceTag('conf-A'), {
+      expire: 0,
+    })
+  })
+
+  it('never fails a committed mint when the cache cannot be expired', async () => {
+    // `revalidateTag` throws outside a request scope or inside a render.
+    vi.mocked(revalidateTag).mockImplementation(() => {
+      throw new Error('no work store')
+    })
+    try {
+      const out = await caller().ensureCode({ talkId: 'talk-1' })
+      expect(out.code).toMatch(CODE)
+      expect(doc('talk-1')?.feedbackCode).toBe(out.code)
+      expect(revalidateTag).toHaveBeenCalledWith(conferenceTag('conf-A'), {
+        expire: 0,
+      })
+    } finally {
+      vi.mocked(revalidateTag).mockReset()
+    }
   })
 
   it('returns the same code again without a write or a cache flush', async () => {
@@ -790,10 +806,9 @@ describe('mintAll — every confirmed talk without a code', () => {
     expect(revalidateTag).toHaveBeenCalledWith(feedbackCodeIndexTag('conf-A'), {
       expire: 0,
     })
-    expect(revalidateTag).toHaveBeenCalledWith(
-      conferenceTag('conf-A'),
-      'default',
-    )
+    expect(revalidateTag).toHaveBeenCalledWith(conferenceTag('conf-A'), {
+      expire: 0,
+    })
   })
 
   it('never repeats a code it minted, though GROQ lags the batch’s writes', async () => {

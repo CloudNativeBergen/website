@@ -27,17 +27,19 @@ export function expireFeedbackCodeIndex(conferenceId: string): void {
 /**
  * Refresh the programme's "Give feedback" links (#1472, spec §7.5) after a
  * code was minted or unset: the card's `hasFeedbackCode` rides the cached
- * conference read (`conferenceTag`), which the index's expiry never reaches,
- * so a morning-of bulk mint would otherwise show no link for hours.
- * Stale-while-revalidate (`'default'`), not `expire: 0`: the conference read
- * backs every public page, and a link appearing one request later is fine.
+ * conference read (`conferenceTag`), which the index's expiry never reaches.
+ * `{ expire: 0 }`, not stale-while-revalidate: `/program` caches its own
+ * render around that read, and a stale outer entry refilling in the
+ * background re-reads the inner one stale too, so a link would wait for the
+ * page's next natural refresh (up to an hour). Expiring both makes the next
+ * request of each conference-tagged page wait for one fresh (CDN) read.
  * Rotation needs none: the link resolves the current code when followed.
  * Never fails the mutation it rides on.
  */
 export function expireProgrammeFeedbackLinks(conferenceId: string): void {
   const tag = conferenceTag(conferenceId)
   try {
-    revalidateTag(tag, 'default')
+    revalidateTag(tag, { expire: 0 })
   } catch (error) {
     console.error(`Could not expire the conference cache tag ${tag}`, error)
   }

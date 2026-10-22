@@ -41,18 +41,22 @@ interface PortableTextChild {
  */
 function FeedbackLink({
   talkId,
+  title,
   compact,
 }: {
   talkId: string
+  title: string
   compact: boolean
 }) {
   return (
     <a
       href={`/program/${encodeURIComponent(talkId)}/feedback`}
-      aria-label={compact ? 'Give feedback' : undefined}
+      // Named after its talk: a screen reader's link list holds one per card.
+      // It starts with the visible text, so voice control still finds it.
+      aria-label={`Give feedback on ${title}`}
       title={compact ? 'Give feedback' : undefined}
       className={clsx(
-        'ml-auto inline-flex shrink-0 items-center gap-1 rounded text-sm font-medium whitespace-nowrap text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-blue-400 dark:hover:text-blue-300 dark:focus-visible:outline-blue-400 print:hidden',
+        'ml-auto inline-flex shrink-0 items-center gap-1 rounded text-sm font-medium whitespace-nowrap text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue-hover hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-blue-400 dark:hover:text-blue-300 dark:focus-visible:outline-blue-400 print:hidden',
         // A 32px target, level with the meta's first (24px) line.
         compact && '-mx-2 -mt-1 -mb-2 p-2',
       )}
@@ -241,7 +245,9 @@ export function TalkCard({
   const feedbackTalkId =
     isConfirmed && talkData.hasFeedbackCode ? talkData._id : undefined
   // A past talk is when feedback is wanted most, so its link is never dimmed:
-  // the card's content is, instead of the whole card.
+  // the card's content is, instead of the whole card. `status` comes from the
+  // client's clock, so each dimmed block suppresses the hydration warning the
+  // root already does.
   const dimContent = isPast && feedbackTalkId ? 'opacity-60' : undefined
 
   return (
@@ -274,7 +280,7 @@ export function TalkCard({
           compact ? 'space-y-2' : 'space-y-4',
         )}
       >
-        <div className={dimContent}>
+        <div className={dimContent} suppressHydrationWarning>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <h3
@@ -431,7 +437,10 @@ export function TalkCard({
           isConfirmed &&
           talkData.description &&
           Array.isArray(talkData.description) && (
-            <div className={clsx('flex-1', dimContent)}>
+            <div
+              className={clsx('flex-1', dimContent)}
+              suppressHydrationWarning
+            >
               <div
                 className={clsx(
                   'text-sm text-gray-600 transition-all duration-200 dark:text-gray-300',
@@ -493,6 +502,7 @@ export function TalkCard({
                 'rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800/50 dark:bg-blue-900/20',
                 dimContent,
               )}
+              suppressHydrationWarning
             >
               <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
                 Prerequisites
@@ -546,6 +556,7 @@ export function TalkCard({
                 compact ? 'min-w-0 flex-1 text-xs' : 'text-sm',
                 dimContent,
               )}
+              suppressHydrationWarning
             >
               <div className="flex items-center gap-1">
                 <ClockIcon className="h-3 w-3" />
@@ -576,12 +587,19 @@ export function TalkCard({
               </span>
             </div>
             {feedbackTalkId && (
-              <FeedbackLink talkId={feedbackTalkId} compact={compact} />
+              <FeedbackLink
+                talkId={feedbackTalkId}
+                title={talkData.title}
+                compact={compact}
+              />
             )}
           </div>
 
           {!compact && isConfirmed && (
-            <div className={clsx('flex flex-wrap gap-2', dimContent)}>
+            <div
+              className={clsx('flex flex-wrap gap-2', dimContent)}
+              suppressHydrationWarning
+            >
               {talkData.format && (
                 <FormatBadge format={talkData.format} variant="compact" />
               )}

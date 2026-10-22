@@ -174,10 +174,15 @@ export const WithFeedbackLink: Story = {
   },
   play: async ({ canvasElement }) => {
     const link = within(canvasElement).getByRole('link', {
-      name: 'Give feedback',
+      name: /^Give feedback/,
     })
     await expect(link).toHaveAttribute('href', '/program/talk-1/feedback')
     await expect(link).toHaveTextContent('Give feedback')
+    // Each card's link names its talk, so a screen reader's link list can
+    // tell 30 of them apart.
+    await expect(link).toHaveAccessibleName(
+      'Give feedback on Building Scalable Cloud Native Applications with Kubernetes',
+    )
   },
 }
 
@@ -191,11 +196,15 @@ export const WithFeedbackLinkCompact: Story = {
   parameters: { viewport: { defaultViewport: 'phone' } },
   play: async ({ canvasElement }) => {
     const link = within(canvasElement).getByRole('link', {
-      name: 'Give feedback',
+      name: /^Give feedback/,
     })
     await expect(link).toHaveAttribute('href', '/program/talk-1/feedback')
     // Icon only: the name comes from the label, not from visible text.
     await expect(link).toHaveTextContent('')
+    await expect(link).toHaveAccessibleName(
+      'Give feedback on Building Scalable Cloud Native Applications with Kubernetes',
+    )
+    await expect(link.querySelector('svg')).not.toBeNull()
   },
 }
 
@@ -231,7 +240,7 @@ export const PastWithFeedbackLink: Story = {
     // Positive control: the past state still dims the card's content.
     await expect(renderedOpacity(title)).toBeCloseTo(0.6)
     await expect(
-      renderedOpacity(canvas.getByRole('link', { name: 'Give feedback' })),
+      renderedOpacity(canvas.getByRole('link', { name: /^Give feedback/ })),
     ).toBe(1)
   },
 }
@@ -241,7 +250,7 @@ export const HappeningNowWithFeedbackLink: Story = {
   parameters: { viewport: { defaultViewport: 'phone' } },
   play: async ({ canvasElement }) => {
     await expect(
-      within(canvasElement).getByRole('link', { name: 'Give feedback' }),
+      within(canvasElement).getByRole('link', { name: /^Give feedback/ }),
     ).toHaveAttribute('href', '/program/talk-1/feedback')
   },
 }
@@ -259,7 +268,7 @@ const notConfirmedStory = (status: Status, shown: string): Story => ({
     // Positive control: the card rendered in its own state.
     await expect(canvas.getAllByText(shown).length).toBeGreaterThan(0)
     await expect(
-      canvas.queryByRole('link', { name: 'Give feedback' }),
+      canvas.queryByRole('link', { name: /^Give feedback/ }),
     ).toBeNull()
   },
 })
@@ -290,7 +299,7 @@ export const WithoutFeedbackCode: Story = {
       ),
     ).toBeInTheDocument()
     await expect(
-      canvas.queryByRole('link', { name: 'Give feedback' }),
+      canvas.queryByRole('link', { name: /^Give feedback/ }),
     ).toBeNull()
   },
 }

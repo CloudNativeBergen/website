@@ -726,10 +726,9 @@ describe('foldExpiredFeedback (the daily cron)', () => {
       expect.anything(),
     )
     // The fold unsets the code: the programme stops linking it (#1472).
-    expect(h.revalidateTag).toHaveBeenCalledWith(
-      conferenceTag('conf-old'),
-      'default',
-    )
+    expect(h.revalidateTag).toHaveBeenCalledWith(conferenceTag('conf-old'), {
+      expire: 0,
+    })
     expect(h.revalidateTag).not.toHaveBeenCalledWith(
       conferenceTag('conf-recent'),
       expect.anything(),

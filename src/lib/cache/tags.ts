@@ -35,8 +35,11 @@
  *   proposal delete, `schedule.save` and `schedule.action`, and through a
  *   `conference` target of the provisioning invalidation endpoint (which
  *   speaker erasure's printed tags send the operator to). Rotation (F6) and
- *   the fold (F9) add theirs. Not `conferenceTag`, which would flush the whole
- *   site on every mint.
+ *   the fold (F9) add theirs. Not `conferenceTag` for everything the index
+ *   serves: rotation, status changes and schedule edits leave the programme
+ *   link alone. A mint, bulk mint and fold ALSO expire `conferenceTag`
+ *   (`expireProgrammeFeedbackLinks`), because the programme's "Give feedback"
+ *   link shows only where the conference read says a code exists (#1472).
  * - `feedbackResponseTag(responseId)` — the per-RESPONSE tag on a device's own
  *   Feedback Response as the attendee page reads it (speaker feedback spec
  *   §7.4). Submit and Delete my answer expire it with `updateTag` (Server
