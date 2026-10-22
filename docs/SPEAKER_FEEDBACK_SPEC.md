@@ -802,7 +802,9 @@ organizers remove a quoted comment with **Remove** (§10.3).
   fold asks again whether the talk still qualifies, on the talk read whose
   revision guards that chunk: for the cron, its conference read by id ended
   before the cutoff (so a moved talk or a corrected end date deletes nothing);
-  for an erasure, the subject is still on it and no other live speaker is.
+  for an erasure, the subject is still on it and no other live speaker is,
+  and each erased co-speaker's revision guards the chunk too (one whose
+  document is gone has no revision: restoring it in that moment is not caught).
 
 ### 12.3 Speaker erasure
 
@@ -821,6 +823,12 @@ pure plan step in `buildErasurePlan`):
 - **Co-spoken** talks with another non-erased speaker keep their feedback (the
   module's rule: never destroy data belonging to someone who requested
   nothing). An organizer removes any comment naming the erased person by hand.
+  _Refinement (F9):_ the code is judged per document, though: a draft or
+  release version whose own speakers leave the erased speaker alone loses its
+  code even when the published talk is co-spoken (publishing it would bring
+  back a coded talk no live speaker is on), a locked one holds the talk, and
+  releases that cannot be listed hold every talk of theirs. Its feedback is
+  not folded: the published talk's speakers decide that.
 - Fixed point: once the code is unset nothing new arrives, and the chunked fold
   converges, so a second run plans nothing.
 - _Refinement (F9):_ a co-speaker whose speaker document is gone counts as

@@ -301,14 +301,18 @@ whose document is gone):
   folds what is there, even on a talk that had no answers before. If that
   look changed anything it pauses and looks again, until a look finds nothing
   (at most 4 looks, so allow a few minutes); if it is still changing then,
-  it says the talks are `failed` and the verification is not `CLEAN`: re-run;
+  it says the talks are `failed` (or `held`, with the reason, for one a
+  release holds) and the verification is not `CLEAN`: re-run;
 - its Feedback Responses (colours and comments) are then **folded** into totals
   on the talk (`feedbackFolded`) and deleted, in chunks of 100, **after** the
   transaction, so a large talk cannot fail the erasure. Totals stay as they
   were; the comments are gone.
 
 A talk with another live speaker keeps its code and its feedback. If a comment
-on it names the person, an organizer removes it by hand (`/admin/feedback`).
+on it names the person, an organizer removes it by hand (`/admin/feedback`). A
+draft or release copy of it that drops that speaker loses the code; in a
+release that is not active it holds the talk: publish or archive the release,
+then re-run.
 
 Read the `Session Feedback:` lines:
 
