@@ -1,14 +1,16 @@
 'use client'
 
+import { useEffect } from 'react'
 import { AdminTablePageLoading } from '@/components/admin/PageLoadingSkeleton'
 import { api } from '@/lib/trpc/client'
 import { SessionFeedbackAdmin } from './SessionFeedbackAdmin'
 
 /**
  * `/admin/feedback` (speaker feedback spec §10.1): reads
- * `sessionFeedback.adminOverview` and wires Hide, Unhide and Remove to their
- * procedures. Each action resolves once the overview has been read again,
- * so the page never shows a removed response as still there.
+ * `sessionFeedback.adminOverview` and wires Hide, Unhide, Keep and Remove to
+ * their procedures. Each action resolves once the overview has been read
+ * again, so the page never shows a removed response as still there, and
+ * reads the nav's flagged count again (`AdminLayout`).
  */
 export function SessionFeedbackAdminPage({
   conferenceTitle,
@@ -16,12 +18,31 @@ export function SessionFeedbackAdminPage({
   conferenceTitle?: string
 }) {
   const utils = api.useUtils()
-  const overview = api.sessionFeedback.adminOverview.useQuery()
+  // Read again on returning to the tab, as the nav badge is (AdminLayout),
+  // so the box and the badge never disagree; and on every arrival, however
+  // the organizer came (the bell, /notifications, a push): a flag's
+  // notification links here, and a cached overview younger than the shared
+  // staleTime would not show it.
+  const overview = api.sessionFeedback.adminOverview.useQuery(undefined, {
+    refetchOnWindowFocus: true,
+    refetchOnMount: 'always',
+  })
+  // The badge lives in the admin shell, which stays mounted across
+  // navigations: read it again on arrival too.
+  // (`useUtils` is stable; a property read off it is a fresh proxy.)
+  useEffect(() => {
+    void utils.sessionFeedback.flaggedCount.invalidate()
+  }, [utils])
   const refresh = {
-    onSettled: () => utils.sessionFeedback.adminOverview.invalidate(),
+    onSettled: () =>
+      Promise.all([
+        utils.sessionFeedback.adminOverview.invalidate(),
+        utils.sessionFeedback.flaggedCount.invalidate(),
+      ]),
   }
   const hide = api.sessionFeedback.adminHide.useMutation(refresh)
   const unhide = api.sessionFeedback.adminUnhide.useMutation(refresh)
+  const keep = api.sessionFeedback.adminKeep.useMutation(refresh)
   const remove = api.sessionFeedback.adminRemove.useMutation(refresh)
 
   if (overview.isPending) return <AdminTablePageLoading />
@@ -42,6 +63,7 @@ export function SessionFeedbackAdminPage({
       conferenceTitle={conferenceTitle}
       onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
       onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
+      onKeep={(c) => keep.mutateAsync({ responseId: c.id, rev: c.rev })}
       onRemove={(request) => remove.mutateAsync(request)}
       refreshFailed={
         overview.isError

@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   settled: [] as (() => Promise<unknown>)[],
   invalidateTalk: vi.fn(async () => {}),
   invalidateOverview: vi.fn(async () => {}),
+  invalidateFlaggedCount: vi.fn(async () => {}),
   query: {} as Record<string, unknown>,
   refetch: vi.fn(),
   panel: null as null | TalkFeedbackPanelProps,
@@ -36,6 +37,7 @@ vi.mock('@/lib/trpc/client', () => {
         sessionFeedback: {
           adminTalk: { invalidate: h.invalidateTalk },
           adminOverview: { invalidate: h.invalidateOverview },
+          flaggedCount: { invalidate: h.invalidateFlaggedCount },
         },
       }),
       sessionFeedback: {
@@ -45,6 +47,7 @@ vi.mock('@/lib/trpc/client', () => {
         adminHide: mutation,
         adminUnhide: mutation,
         adminRemove: mutation,
+        adminKeep: mutation,
       },
       proposal: {
         admin: {
@@ -99,14 +102,16 @@ const panel = () =>
   render(<TalkFeedbackAdminPanel talkId="talk-1" title="T" showCode={false} />)
 
 describe('TalkFeedbackAdminPanel', () => {
-  it('refreshes this talk and the Session Feedback overview after every action', async () => {
+  it('refreshes this talk, the Session Feedback overview and the nav badge after every action', async () => {
     panel()
-    // Hide, Unhide, Remove, Card Counts.
-    expect(h.settled).toHaveLength(4)
+    // Hide, Unhide, Remove, Keep, Card Counts.
+    expect(h.settled).toHaveLength(5)
     for (const settle of h.settled) await settle()
-    expect(h.invalidateTalk).toHaveBeenCalledTimes(4)
+    expect(h.invalidateTalk).toHaveBeenCalledTimes(5)
     expect(h.invalidateTalk).toHaveBeenCalledWith({ talkId: 'talk-1' })
-    expect(h.invalidateOverview).toHaveBeenCalledTimes(4)
+    expect(h.invalidateOverview).toHaveBeenCalledTimes(5)
+    // A Keep, Hide or Remove here can clear a flag the badge counts.
+    expect(h.invalidateFlaggedCount).toHaveBeenCalledTimes(5)
   })
 
   it('says the numbers are earlier ones when a refresh fails over data on screen, and retries', () => {

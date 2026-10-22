@@ -26,6 +26,7 @@ const comment = (
   submittedAt: `2026-10-27T09:${String(10 + n).padStart(2, '0')}:00.000Z`,
   hidden: false,
   flagged: false,
+  rev: `rev-${n}`,
   ...fields,
 })
 
@@ -152,6 +153,9 @@ const meta = {
     conferenceTitle: 'Cloud Native Days Norway 2026',
     onHide: fn<(id: string) => Promise<void>>(async () => {}),
     onUnhide: fn(async () => {}),
+    onKeep: fn<(comment: AdminFeedbackComment) => Promise<void>>(
+      async () => {},
+    ),
     // What a Remove of answers still as seen does: they all go.
     onRemove: fn(async (request: RemoveRequest) => ({
       removed: request.responses.length,
@@ -219,9 +223,19 @@ const openFirst: Story['play'] = async ({ canvasElement }) => {
 const announced = (canvasElement: HTMLElement) =>
   within(canvasElement).getAllByRole('status')[0]
 
-/** The list item of the comment whose text starts with `text`. */
+/** The sessions list, below the flagged-by-speakers box. */
+const sessionsList = (canvasElement: HTMLElement) =>
+  within(canvasElement).getByRole('region', { name: 'Sessions' })
+
+/** The list item, in the sessions list, of the comment starting with `text`. */
 const commentItem = (canvasElement: HTMLElement, text: RegExp) =>
-  within(canvasElement).getByText(text).closest('li') as HTMLElement
+  within(sessionsList(canvasElement))
+    .getByText(text)
+    .closest('li') as HTMLElement
+
+/** The flagged-by-speakers box. */
+const flaggedBox = (canvasElement: HTMLElement) =>
+  within(canvasElement).getByRole('region', { name: /Flagged by speakers/ })
 
 /** The open panel of the row titled `title`. */
 const panelOf = (canvasElement: HTMLElement, title: RegExp) => {
@@ -237,7 +251,10 @@ export const Expanded: Story = {
     const canvas = within(context.canvasElement)
     await expect(canvas.getByText('Hidden from speakers')).toBeVisible()
     await expect(canvas.getByText('Flagged by a speaker')).toBeVisible()
-    await userEvent.click(canvas.getAllByRole('button', { name: 'Hide' })[0])
+    const panel = panelOf(context.canvasElement, /Kubernetes the hard parts/)
+    await userEvent.click(
+      within(panel).getAllByRole('button', { name: 'Hide' })[0],
+    )
     await expect(context.args.onHide).toHaveBeenCalledWith(
       SESSIONS[0].comments[0].id,
     )
@@ -291,12 +308,10 @@ export const SameOutcomeTwice: Story = {
       )
     }
     observer.disconnect()
-    await expect(
-      seen.filter((t) => t === 'Comment hidden from speakers.').length,
-    ).toBeGreaterThanOrEqual(2)
-    await expect(seen.indexOf('')).toBeGreaterThan(
-      seen.indexOf('Comment hidden from speakers.'),
-    )
+    // Each announcement names its comment after the words (F7).
+    const hidden = (t: string) => t.startsWith('Comment hidden from speakers.')
+    await expect(seen.filter(hidden).length).toBeGreaterThanOrEqual(2)
+    await expect(seen.indexOf('')).toBeGreaterThan(seen.findIndex(hidden))
   },
 }
 
@@ -345,6 +360,344 @@ export const TwoRemovals: Story = {
   },
 }
 
+/**
+ * The red flagged-by-speakers box (§10.1): each flagged comment with its
+ * session's title, and Keep, Hide and Remove.
+ */
+export const Flagged: Story = {
+  play: async ({ canvasElement, args }) => {
+    const box = flaggedBox(canvasElement)
+    const items = within(box).getAllByRole('listitem')
+    await expect(items).toHaveLength(1)
+    await expect(
+      within(items[0]).getByText('Kubernetes the hard parts, the easy way'),
+    ).toBeVisible()
+    await expect(
+      within(items[0]).getByText(/^Good content, a bit too fast/),
+    ).toBeVisible()
+    await userEvent.click(
+      within(items[0]).getByRole('button', { name: 'Keep' }),
+    )
+    // With the flag the page showed, so a newer one is not cleared unseen.
+    await expect(args.onKeep).toHaveBeenCalledWith(SESSIONS[0].comments[3])
+    await waitFor(() =>
+      expect(announced(canvasElement)).toHaveTextContent(
+        'Kept: the flag is cleared, speakers still see the comment.',
+      ),
+    )
+    // Said in the box, beside the comment, not in the session's row.
+    await expect(
+      within(items[0]).getByText(/^Kept: the flag is cleared/),
+    ).toBeVisible()
+  },
+}
+
+export const FlaggedDark: Story = {
+  play: async ({ canvasElement }) =>
+    expect(flaggedBox(canvasElement)).toBeVisible(),
+  globals: { theme: 'dark' },
+}
+
+export const FlaggedPhone: Story = {
+  ...FlaggedDark,
+  globals: { theme: 'light' },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+
+export const FlaggedPhoneDark: Story = {
+  ...FlaggedPhone,
+  globals: { theme: 'dark' },
+}
+
+/** Data that acts on the flag as a refetch would. */
+function Moderating(args: React.ComponentProps<typeof SessionFeedbackAdmin>) {
+  const [data, setData] = useState(overview(SESSIONS))
+  const update = (id: string, change: Partial<AdminFeedbackComment>) =>
+    setData((d) =>
+      overview(
+        d.sessions.map((s) => ({
+          ...s,
+          // Each write is a new revision, as in Sanity.
+          comments: s.comments.map((c) =>
+            c.id === id ? { ...c, ...change, rev: `${c.rev}+` } : c,
+          ),
+        })),
+      ),
+    )
+  return (
+    <SessionFeedbackAdmin
+      {...args}
+      overview={data}
+      onKeep={async (c) => {
+        await args.onKeep(c)
+        update(c.id, { flagged: false })
+      }}
+      onHide={async (id) => {
+        await args.onHide(id)
+        update(id, { flagged: false, hidden: true })
+      }}
+    />
+  )
+}
+
+/**
+ * Hide from the box: the comment leaves it, the box says what happened and
+ * that nothing else is flagged; the session's row shows it hidden, no
+ * longer flagged.
+ */
+export const FlaggedHidden: Story = {
+  render: (args) => <Moderating {...args} />,
+  play: async (context) => {
+    const { canvasElement, args } = context
+    const box = flaggedBox(canvasElement)
+    await userEvent.click(within(box).getByRole('button', { name: 'Hide' }))
+    await expect(args.onHide).toHaveBeenCalledWith(SESSIONS[0].comments[3].id)
+    await waitFor(() =>
+      expect(within(box).getByText('Nothing else is flagged.')).toBeVisible(),
+    )
+    const note = within(box).getByText('Comment hidden from speakers.')
+    await expect(note).toBeVisible()
+    // Hide went with its comment; focus is on the box, not lost, and not on
+    // the note the live region already says.
+    await waitFor(() =>
+      expect(
+        within(box).getByRole('heading', { name: /Flagged by speakers/ }),
+      ).toHaveFocus(),
+    )
+    await expect(within(box).queryByRole('listitem')).toBeNull()
+    await openFirst(context)
+    const item = commentItem(canvasElement, /^Good content/)
+    await expect(within(item).getByText('Hidden from speakers')).toBeVisible()
+    await expect(within(item).queryByText('Flagged by a speaker')).toBeNull()
+    await expect(
+      within(canvasElement).queryByRole('button', {
+        name: /a comment is flagged/,
+      }),
+    ).toBeNull()
+  },
+}
+
+/** Keep in the session's row, on the flagged comment only. */
+export const ExpandedKeep: Story = {
+  render: (args) => <Moderating {...args} />,
+  play: async (context) => {
+    await openFirst(context)
+    const panel = panelOf(context.canvasElement, /Kubernetes the hard parts/)
+    const keeps = within(panel).getAllByRole('button', { name: 'Keep' })
+    await expect(keeps).toHaveLength(1)
+    await userEvent.click(keeps[0])
+    await expect(context.args.onKeep).toHaveBeenCalledWith(
+      SESSIONS[0].comments[3],
+    )
+    const item = commentItem(context.canvasElement, /^Good content/)
+    await waitFor(() =>
+      expect(within(item).queryByText('Flagged by a speaker')).toBeNull(),
+    )
+    await expect(within(item).getByText(/^Kept: the flag/)).toBeVisible()
+    // Keep's button went with the flag: focus is on the comment it was
+    // about (the live region says what happened).
+    await waitFor(() =>
+      expect(within(item).getByText(/^Good content/)).toHaveFocus(),
+    )
+    // The box stays, empty, so the open row below does not jump up; the
+    // Keep was not done there, so it says nothing about it.
+    const box = flaggedBox(context.canvasElement)
+    await expect(
+      within(box).getByText('Nothing else is flagged.'),
+    ).toBeVisible()
+    await expect(within(box).queryByText(/^Kept/)).toBeNull()
+  },
+}
+
+/** Moderating, plus a speaker who flags the kept comment again. */
+function FlaggedAgain(args: React.ComponentProps<typeof SessionFeedbackAdmin>) {
+  const [data, setData] = useState(overview(SESSIONS))
+  const flaggedId = SESSIONS[0].comments[3].id
+  const set = (flagged: boolean) =>
+    setData((d) =>
+      overview(
+        d.sessions.map((s) => ({
+          ...s,
+          comments: s.comments.map((c) =>
+            c.id === flaggedId ? { ...c, flagged, rev: `${c.rev}+` } : c,
+          ),
+        })),
+      ),
+    )
+  return (
+    <>
+      <SessionFeedbackAdmin
+        {...args}
+        overview={data}
+        onKeep={async (c) => {
+          await args.onKeep(c)
+          set(false)
+        }}
+      />
+      <button type="button" onClick={() => set(true)}>
+        A speaker flags it again
+      </button>
+    </>
+  )
+}
+
+/**
+ * Keep, then a speaker flags the same comment again: it is back in the box
+ * WITHOUT the old "Kept" note beside its live Keep.
+ */
+export const KeptThenFlaggedAgain: Story = {
+  render: (args) => <FlaggedAgain {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const box = flaggedBox(canvasElement)
+    await userEvent.click(within(box).getByRole('button', { name: 'Keep' }))
+    await waitFor(() =>
+      expect(within(box).getByText(/^Kept: the flag/)).toBeVisible(),
+    )
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'A speaker flags it again' }),
+    )
+    const item = await within(box).findByRole('listitem')
+    await expect(within(item).getByText(/^Good content/)).toBeVisible()
+    await expect(
+      within(item).getByRole('button', { name: 'Keep' }),
+    ).toBeVisible()
+    await expect(within(box).queryByText(/^Kept: the flag/)).toBeNull()
+  },
+}
+
+/**
+ * Keep refused because another organizer already kept the comment: said as
+ * the server found it, naming the comment, not as an error.
+ */
+export const KeepAlreadyHandled: Story = {
+  render: function Render(args) {
+    const [data, setData] = useState(overview(SESSIONS))
+    return (
+      <SessionFeedbackAdmin
+        {...args}
+        overview={data}
+        onKeep={async () => {
+          setData(
+            overview(
+              SESSIONS.map((s) => ({
+                ...s,
+                comments: s.comments.map((c) => ({
+                  ...c,
+                  flagged: false,
+                  rev: `${c.rev}+`,
+                })),
+              })),
+            ),
+          )
+          return { kept: false, now: 'unflagged' }
+        }}
+      />
+    )
+  },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    const box = flaggedBox(canvasElement)
+    await userEvent.click(within(box).getByRole('button', { name: 'Keep' }))
+    await waitFor(() =>
+      expect(
+        within(box).getByText(
+          'Already handled by another organizer: no longer flagged.',
+        ),
+      ).toBeVisible(),
+    )
+    await expect(
+      within(box).getByText(
+        /^Kubernetes the hard parts, the easy way: “Good content/,
+      ),
+    ).toBeVisible()
+  },
+}
+
+export const KeepAlreadyHandledDark: Story = {
+  ...KeepAlreadyHandled,
+  globals: { theme: 'dark' },
+}
+
+/** As the page runs a Remove: the re-read lands before it resolves. */
+function RemovingAsThePage(
+  args: React.ComponentProps<typeof SessionFeedbackAdmin>,
+) {
+  const [data, setData] = useState(overview(SESSIONS))
+  return (
+    <SessionFeedbackAdmin
+      {...args}
+      overview={data}
+      onRemove={async (request) => {
+        const ids = new Set(request.responses.map((r) => r.id))
+        setData((d) =>
+          overview(
+            d.sessions.map((s) => ({
+              ...s,
+              comments: s.comments.filter((c) => !ids.has(c.id)),
+            })),
+          ),
+        )
+        await new Promise((r) => setTimeout(r, 50))
+        return args.onRemove(request)
+      }}
+    />
+  )
+}
+
+/**
+ * Remove from the box: its button goes while the dialog holds focus, so
+ * focus lands on the box's heading once the dialog has gone.
+ */
+export const FlaggedRemoved: Story = {
+  render: (args) => <RemovingAsThePage {...args} />,
+  play: async ({ canvasElement }) => {
+    const box = flaggedBox(canvasElement)
+    await userEvent.click(within(box).getByRole('button', { name: 'Remove' }))
+    await confirmRemove()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() =>
+      expect(
+        within(box).getByRole('heading', { name: /Flagged by speakers/ }),
+      ).toHaveFocus(),
+    )
+  },
+}
+
+/** Remove from the box asks first, like everywhere else. */
+export const FlaggedRemoveAsks: Story = {
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(flaggedBox(canvasElement)).getByRole('button', {
+        name: 'Remove',
+      }),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Remove 1 response?' }),
+      ).toBeVisible(),
+    )
+  },
+}
+
+/** No flag waiting: no box. */
+export const NothingFlagged: Story = {
+  args: {
+    overview: overview(
+      SESSIONS.map((s) => ({
+        ...s,
+        comments: s.comments.map((c) => ({ ...c, flagged: false })),
+      })),
+    ),
+  },
+  play: async ({ canvasElement }) =>
+    expect(
+      within(canvasElement).queryByRole('region', {
+        name: /Flagged by speakers/,
+      }),
+    ).toBeNull(),
+}
+
 export const ExpandedDark: Story = {
   play: openFirst,
   globals: { theme: 'dark' },
@@ -353,7 +706,11 @@ export const ExpandedDark: Story = {
 const askRemove: Story['play'] = async (context) => {
   await openFirst(context)
   const canvas = within(context.canvasElement)
-  await userEvent.click(canvas.getAllByRole('button', { name: 'Remove' })[3])
+  const panel = panelOf(context.canvasElement, /Kubernetes the hard parts/)
+  await expect(canvas.getByText(/Best talk/)).toBeVisible()
+  await userEvent.click(
+    within(panel).getAllByRole('button', { name: 'Remove' })[3],
+  )
   await waitFor(() =>
     expect(
       screen.getByRole('heading', { name: 'Remove 1 response?' }),
@@ -800,6 +1157,8 @@ export const PhoneDark: Story = {
 
 const TRPC_OVERVIEW = '/api/trpc/sessionFeedback.adminOverview'
 const TRPC_HIDE = '/api/trpc/sessionFeedback.adminHide'
+const TRPC_KEEP = '/api/trpc/sessionFeedback.adminKeep'
+const keepRequests: unknown[] = []
 const trpc = (data: unknown) => HttpResponse.json({ result: { data } })
 const hideRequests: unknown[] = []
 
@@ -816,6 +1175,10 @@ export const Page: StoryObj<typeof SessionFeedbackAdminPage> = {
           hideRequests.push(await request.json())
           return trpc({ count: 1 })
         }),
+        http.post(TRPC_KEEP, async ({ request }) => {
+          keepRequests.push(await request.json())
+          return trpc({ kept: true })
+        }),
       ],
     },
   },
@@ -830,7 +1193,12 @@ export const Page: StoryObj<typeof SessionFeedbackAdminPage> = {
     await userEvent.click(
       canvas.getByRole('button', { name: /Kubernetes the hard parts/ }),
     )
-    await userEvent.click(canvas.getAllByRole('button', { name: 'Hide' })[0])
+    await userEvent.click(
+      within(panelOf(canvasElement, /Kubernetes the hard parts/)).getAllByRole(
+        'button',
+        { name: 'Hide' },
+      )[0],
+    )
     // Hide goes to its procedure with the response's id, and nothing else.
     await waitFor(() =>
       expect(JSON.stringify(hideRequests)).toContain(
@@ -838,5 +1206,18 @@ export const Page: StoryObj<typeof SessionFeedbackAdminPage> = {
       ),
     )
     await expect(JSON.stringify(hideRequests)).not.toContain('conference')
+    // Keep sends the revision the page showed, so nothing newer is cleared.
+    keepRequests.length = 0
+    await userEvent.click(
+      within(flaggedBox(canvasElement)).getByRole('button', { name: 'Keep' }),
+    )
+    await waitFor(() =>
+      expect(keepRequests).toEqual([
+        {
+          responseId: SESSIONS[0].comments[3].id,
+          rev: SESSIONS[0].comments[3].rev,
+        },
+      ]),
+    )
   },
 }

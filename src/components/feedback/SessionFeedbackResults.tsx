@@ -58,6 +58,11 @@ export function SessionFeedbackResults({
       if (isStale) void refetch({ cancelRefetch: false })
     },
   })
+  // A flag is one-way and every speaker of the talk sees it: read the
+  // results again so the marker comes from the server, not from this click.
+  const flag = api.sessionFeedback.flag.useMutation({
+    onSuccess: () => void refetch({ cancelRefetch: false }),
+  })
   const { data, dataUpdatedAt, error, refetch, isFetching, isStale } =
     api.sessionFeedback.results.useQuery(
       { talkId },
@@ -126,6 +131,8 @@ export function SessionFeedbackResults({
           totals={data.totals}
           comments={data.comments}
           live={live}
+          onFlag={(responseId) => flag.mutateAsync({ talkId, responseId })}
+          updatedAt={dataUpdatedAt}
         />
       </div>
     )

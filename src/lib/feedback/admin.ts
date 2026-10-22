@@ -17,7 +17,11 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { formats, type Format } from '@/lib/proposal/types'
 import type { ChartResponse } from './buckets'
 import type { SeenResponse } from './bulk-remove'
-import { isFeedbackColour, type FeedbackColour } from './colour'
+import {
+  FEEDBACK_COLOURS,
+  isFeedbackColour,
+  type FeedbackColour,
+} from './colour'
 import { expireRemovedFeedbackResponse } from './cache'
 import { commentOf } from './comment'
 import {
@@ -25,6 +29,7 @@ import {
   getFeedbackSlots,
   PUBLISHED_ONLY,
 } from './sanity'
+import { sanityStatus } from './sanity-error'
 import {
   combineTotals,
   talkTotals,
@@ -41,6 +46,11 @@ export interface AdminFeedbackComment {
   submittedAt: string | null
   hidden: boolean
   flagged: boolean
+  /**
+   * The response's revision as read: what Keep sends back, so a Keep clears
+   * a flag only on the comment exactly as the organizer saw it (§10.3).
+   */
+  rev: string
 }
 
 export interface AdminFeedbackSession {
@@ -68,6 +78,7 @@ export interface AdminFeedbackOverview {
 /** A response as one talk's reads project it. */
 interface TalkResponseRow {
   _id: string
+  _rev?: string
   colour?: unknown
   comment?: unknown
   submittedAt?: unknown
@@ -100,7 +111,7 @@ export async function readAdminFeedback({
       clientReadUncached,
       scope,
       `*[_type == "feedbackResponse" && ${PUBLISHED_ONLY}] | order(submittedAt asc, _id asc){
-        _id, "talk": talk._ref, colour, comment, submittedAt, hiddenAt, flaggedAt
+        _id, _rev, "talk": talk._ref, colour, comment, submittedAt, hiddenAt, flaggedAt
       }`,
       {},
       { cache: 'no-store' },
@@ -178,6 +189,7 @@ function adminComments(
       submittedAt: typeof r.submittedAt === 'string' ? r.submittedAt : null,
       hidden,
       flagged: !!r.flaggedAt && !hidden,
+      rev: r._rev ?? '',
     })
   }
   return comments
@@ -237,7 +249,7 @@ export async function readTalkFeedback({
       clientReadUncached,
       scope,
       `*[_type == "feedbackResponse" && talk._ref == $talkId && ${PUBLISHED_ONLY}] | order(submittedAt asc, _id asc){
-        _id, colour, comment, submittedAt, hiddenAt, flaggedAt
+        _id, _rev, colour, comment, submittedAt, hiddenAt, flaggedAt
       }`,
       { talkId },
       { cache: 'no-store' },
@@ -263,6 +275,29 @@ export async function readTalkFeedback({
   }
 }
 
+/**
+ * How many comments speakers flagged that no organizer has acted on: the
+ * admin nav's badge (§10.1). The same rule as {@link readAdminFeedback}'s
+ * `flagged`: a comment of a known colour, flagged and not hidden. Submit
+ * stores a comment trimmed and a blank one as absent (§4.1), so "not empty"
+ * here is `commentOf`'s "not blank" for every comment the server wrote (a
+ * blank one typed in Studio would count here and not on the page). The
+ * talk must be the conference's too, as Keep's guard requires.
+ * One live read: the badge must drop as soon as Keep, Hide or Remove lands.
+ */
+export async function countFlaggedComments(
+  conferenceId: string,
+): Promise<number> {
+  const count = await scopedFetch<number | null>(
+    clientReadUncached,
+    { conferenceId },
+    `count(*[_type == "feedbackResponse" && ${PUBLISHED_ONLY} && talk->conference._ref == $conferenceId && defined(flaggedAt) && !defined(hiddenAt) && colour in $colours && defined(comment) && comment != ""])`,
+    { colours: [...FEEDBACK_COLOURS] },
+    { cache: 'no-store' },
+  )
+  return count ?? 0
+}
+
 /** At most this many responses per Remove transaction (§10.3). */
 export const REMOVE_CHUNK_SIZE = 100
 
@@ -283,12 +318,10 @@ async function ownedResponses(
   return ids.every((id) => found.has(id)) ? ids : null
 }
 
-const isNotFound = (error: unknown) =>
-  (error as { statusCode?: unknown } | null)?.statusCode === 404
+const isNotFound = (error: unknown) => sanityStatus(error) === 404
 
 /** A failed revision guard. */
-const isConflict = (error: unknown) =>
-  (error as { statusCode?: unknown } | null)?.statusCode === 409
+const isConflict = (error: unknown) => sanityStatus(error) === 409
 
 /**
  * Commit Hide's or Unhide's patches. A response deleted between the guard
@@ -327,6 +360,87 @@ export async function hideResponses({
       p.set({ hiddenAt: now.toISOString() }).unset(['flaggedAt']),
     )
   return commitPatches(tx, ids.length)
+}
+
+/**
+ * Where a response stands NOW, read through the doc endpoint after a Keep
+ * was refused: still flagged (changed: a new flag, new wording), no longer
+ * flagged (another organizer kept it), hidden, or gone (removed, deleted by
+ * its device, or its comment emptied).
+ */
+export type KeepNow = 'flagged' | 'unflagged' | 'hidden' | 'gone'
+
+export type KeepResult =
+  | { status: 'refused' }
+  | { status: 'kept' }
+  /**
+   * The response changed since the organizer's page read it. Nothing was
+   * written; `now` is where it stands, read past GROQ's lag, so the page can
+   * say so truthfully.
+   */
+  | { status: 'changed'; now: KeepNow }
+
+/** What the organizers' page learns from a Keep (`sessionFeedback.adminKeep`). */
+export type KeepAnswer = { kept: true } | { kept: false; now: KeepNow }
+
+/** A response's state through the doc endpoint (no GROQ lag), as {@link KeepNow}. */
+async function keepNow(responseId: string): Promise<KeepNow> {
+  let stored: (ResponseRow & { _type?: string }) | undefined
+  try {
+    stored = await clientReadUncached.getDocument<
+      ResponseRow & { _type?: string }
+    >(responseId)
+  } catch (error) {
+    // Nothing was written; say the cautious thing ("changed, look again")
+    // rather than a raw network error.
+    console.error('Could not read a refused Keep’s response', error)
+    return 'flagged'
+  }
+  if (
+    !stored ||
+    stored._id !== responseId ||
+    stored._type !== 'feedbackResponse' ||
+    !commentOf(stored)
+  )
+    return 'gone'
+  if (stored.hiddenAt) return 'hidden'
+  return stored.flaggedAt ? 'flagged' : 'unflagged'
+}
+
+/**
+ * Keep (§10.3): clears `flaggedAt`; the comment stays as it is. GUARDED ON
+ * THE REVISION THE ORGANIZER SAW, with no re-read: the comment can be
+ * reworded by its attendee after a flag (Submit never touches `flaggedAt`),
+ * and a new flag can carry the old one's timestamp, so nothing short of the
+ * exact revision says the organizer saw what they are keeping. Any change
+ * since (409), or a deletion (404, after the ownership guard passed, so no
+ * oracle), is `changed` with where the response stands now. The ownership
+ * guard (one scoped read, as Hide's) runs first and is the only refusal.
+ */
+export async function keepResponse({
+  conferenceId,
+  responseId,
+  seenRev,
+}: {
+  conferenceId: string
+  responseId: string
+  seenRev: string
+}): Promise<KeepResult> {
+  if (!(await ownedResponses(conferenceId, [responseId])))
+    return { status: 'refused' }
+  try {
+    await clientWrite
+      .patch(responseId)
+      .ifRevisionId(seenRev)
+      .unset(['flaggedAt'])
+      .commit()
+    return { status: 'kept' }
+  } catch (error) {
+    const status = sanityStatus(error)
+    if (status === 409 || status === 404)
+      return { status: 'changed', now: await keepNow(responseId) }
+    throw error
+  }
 }
 
 /** Unhide (§10.3): clears `hiddenAt`. */

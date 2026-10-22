@@ -36,10 +36,13 @@ export {
   type SpeakerResults,
 } from './results'
 export { deleteFeedback } from './delete'
+export { flagResponse, type FlagResult } from './flag'
 export { deliverFeedbackSummaries, type SummaryReport } from './summary'
 export { deviceCookie, type DeviceCookie } from './device'
 export {
+  countFlaggedComments,
   hideResponses,
+  keepResponse,
   readAdminFeedback,
   readTalkFeedback,
   removeResponses,

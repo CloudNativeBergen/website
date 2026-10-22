@@ -40,6 +40,7 @@ const OVERVIEW: AdminFeedbackOverview = {
           submittedAt: '2026-10-27T09:10:00Z',
           hidden: false,
           flagged: false,
+          rev: 'rev-1',
         },
       ],
     },
@@ -56,6 +57,7 @@ describe('SessionFeedbackAdmin Remove', () => {
         overview={OVERVIEW}
         onHide={vi.fn()}
         onUnhide={vi.fn()}
+        onKeep={vi.fn()}
         onRemove={onRemove}
       />,
     )

@@ -121,6 +121,7 @@ vi.mock('@/lib/sanity/client', async () => {
 import { revalidateTag } from 'next/cache'
 import { feedbackResponseTag } from '@/lib/cache/tags'
 import {
+  countFlaggedComments,
   hideResponses,
   readAdminFeedback,
   readTalkFeedback,
@@ -293,6 +294,8 @@ describe('readAdminFeedback — what is read', () => {
         submittedAt: '2026-06-10T10:01:30Z',
         hidden: false,
         flagged: false,
+        // What Keep sends back (§10.3).
+        rev: 'rev-r1',
       },
       expect.objectContaining({ id: rid(2), hidden: true, flagged: false }),
       expect.objectContaining({ id: rid(4), hidden: false, flagged: true }),
@@ -333,6 +336,67 @@ const act = {
       })),
     }),
 }
+
+describe('countFlaggedComments (§10.1, the nav badge)', () => {
+  const count = () => countFlaggedComments('conf-A')
+
+  it('counts what the page counts as flagged: a shown comment, flagged, not hidden', async () => {
+    h.dataset.push(
+      talk('talk-foreign', { conference: ref('conf-B') }),
+      response('talk-a', 'red', { comment: 'flagged', flaggedAt: 'x' }),
+      response('talk-b', 'green', { comment: 'flagged too', flaggedAt: 'x' }),
+      response('talk-a', 'red', { comment: 'not flagged' }),
+      // Hidden: Hide clears the flag, but a stored pair must not count.
+      response('talk-a', 'red', {
+        comment: 'hidden',
+        flaggedAt: 'x',
+        hiddenAt: 'y',
+      }),
+      // The attendee emptied the comment after the flag: nothing to act on.
+      response('talk-a', 'red', { flaggedAt: 'x' }),
+      response('talk-a', 'red', { comment: '', flaggedAt: 'x' }),
+      response('talk-a', 'blue', { comment: 'no colour', flaggedAt: 'x' }),
+      // Claims this conference, but its talk is another's: Keep refuses
+      // it, so it must not hold the badge up.
+      response('talk-foreign', 'red', { comment: 'odd', flaggedAt: 'x' }),
+      // Says another conference, though its talk is ours: the tenant scope
+      // (the response's own `conference`) leaves it out.
+      response('talk-a', 'red', {
+        comment: 'other tenant',
+        flaggedAt: 'x',
+        conference: ref('conf-B'),
+      }),
+      // Not ours, not published.
+      response('talk-foreign', 'red', {
+        comment: 'foreign',
+        flaggedAt: 'x',
+        conference: ref('conf-B'),
+      }),
+      {
+        ...response('talk-a', 'red', { comment: 'draft', flaggedAt: 'x' }),
+        _id: `drafts.${rid(97)}`,
+      },
+      {
+        ...response('talk-a', 'red', { comment: 'release', flaggedAt: 'x' }),
+        _id: `versions.r1.${rid(98)}`,
+      },
+    )
+    expect(await count()).toBe(2)
+    // The one definition: the page's Flagged card says the same.
+    expect((await read()).flagged).toBe(2)
+  })
+
+  it('is 0 when nothing is flagged, as a number', async () => {
+    h.dataset.push(response('talk-a', 'red', { comment: 'x' }))
+    expect(await count()).toBe(0)
+  })
+
+  it('is one live read, never the CDN', async () => {
+    await count()
+    expect(h.queries).toHaveLength(1)
+    expect(h.cdnQueries).toEqual([])
+  })
+})
 
 describe('Hide and Unhide (§10.3)', () => {
   it('Hide sets hiddenAt and clears flaggedAt; the colour stays', async () => {

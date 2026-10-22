@@ -7,6 +7,7 @@ import {
   searchDestinations,
   visibleDestinations,
   visibleNavSections,
+  withNavBadges,
 } from './registry'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
 import { APPEARANCE_SECTIONS } from '@/lib/settings/appearance'
@@ -286,5 +287,39 @@ describe('Session Feedback nav entry (speaker feedback spec §10.1)', () => {
     expect(searchDestinations('session feedback')[0]?.items[0]?.href).toBe(
       '/admin/feedback',
     )
+  })
+})
+
+describe('nav badges (speaker feedback spec §10.1)', () => {
+  const feedbackEntry = (sections: ReturnType<typeof withNavBadges>) =>
+    sections
+      .flatMap((s) => s.items)
+      .find((item) => item.href === '/admin/feedback')
+
+  it('puts the flagged count on Session Feedback, labelled for a screen reader', () => {
+    const sections = withNavBadges(visibleNavSections([]), {
+      flaggedFeedback: 3,
+    })
+    expect(feedbackEntry(sections)?.badge).toEqual({
+      count: 3,
+      label: 'flagged',
+    })
+    // On that entry only.
+    expect(
+      sections.flatMap((s) => s.items).filter((item) => item.badge),
+    ).toHaveLength(1)
+  })
+
+  it('shows no badge for 0 or an unknown count', () => {
+    for (const counts of [{ flaggedFeedback: 0 }, {}]) {
+      expect(
+        feedbackEntry(withNavBadges(visibleNavSections([]), counts))?.badge,
+      ).toBeUndefined()
+    }
+  })
+
+  it('leaves the registry itself untouched', () => {
+    withNavBadges(ADMIN_NAV_SECTIONS, { flaggedFeedback: 3 })
+    expect(feedbackEntry(ADMIN_NAV_SECTIONS)?.badge).toBeUndefined()
   })
 })

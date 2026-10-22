@@ -258,6 +258,7 @@ describe('results — what they hold (§4.3, §9.3)', () => {
     const newer = response('talk-1', 'red', {
       comment: 'Too fast',
       submittedAt: '2026-06-10T08:50:00.000Z',
+      flaggedAt: '2026-06-10T08:58:00.000Z',
     })
     const older = response('talk-1', 'green', {
       comment: 'Great demo',
@@ -283,12 +284,15 @@ describe('results — what they hold (§4.3, §9.3)', () => {
         colour: 'green',
         comment: 'Great demo',
         submittedAt: '2026-06-10T08:41:00.000Z',
+        flagged: false,
       },
       {
         id: newer._id,
         colour: 'red',
         comment: 'Too fast',
         submittedAt: '2026-06-10T08:50:00.000Z',
+        // A speaker flagged it: every speaker of the talk sees that (§10.3).
+        flagged: true,
       },
     ])
     // The hidden comment's colour still counts.

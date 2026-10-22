@@ -94,6 +94,12 @@ export default defineType({
             title: 'Session Feedback Summary',
             value: 'session_feedback_summary',
           },
+          // A speaker flagged a comment for organizers (speaker feedback
+          // spec §11.2); once per unset-to-set flag, to the organizers.
+          {
+            title: 'Session Feedback Flagged',
+            value: 'session_feedback_flagged',
+          },
           { title: 'System', value: 'system' },
         ],
         layout: 'dropdown',

@@ -42,6 +42,7 @@ const READ3 = feedback(3)
 const props = {
   onHide: vi.fn(),
   onUnhide: vi.fn(),
+  onKeep: vi.fn(),
   onRemove: vi.fn(),
 }
 
@@ -440,6 +441,7 @@ describe('TalkFeedbackPanel comments', () => {
     submittedAt: '2026-10-27T09:10:00Z',
     hidden: false,
     flagged: false,
+    rev: 'rev-1',
   }
 
   it('forgets a Hide’s note once a range Remove takes that comment away', async () => {
@@ -504,5 +506,62 @@ describe('TalkFeedbackPanel comments', () => {
         selector: 'p:not([role])',
       }),
     ).toBeTruthy()
+  })
+
+  it('shows the flag and Keep on a flagged comment; Keep sends the revision shown', async () => {
+    const onKeep = vi.fn(async () => ({ kept: true as const }))
+    render(
+      <TalkFeedbackPanel
+        feedback={withComment([{ ...comment, flagged: true }])}
+        onSaveCards={vi.fn()}
+        {...props}
+        onKeep={onKeep}
+      />,
+    )
+    expect(screen.getByText('Flagged by a speaker')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Keep' }))
+    await waitFor(() =>
+      expect(onKeep).toHaveBeenCalledWith({ ...comment, flagged: true }),
+    )
+    expect(
+      await screen.findByText(
+        'Kept: the flag is cleared, speakers still see the comment.',
+        { selector: 'p:not([role])' },
+      ),
+    ).toBeTruthy()
+  })
+
+  it('a refused Keep says where the comment stands, as the server read it', async () => {
+    const onKeep = vi.fn(async () => ({
+      kept: false as const,
+      now: 'unflagged' as const,
+    }))
+    render(
+      <TalkFeedbackPanel
+        feedback={withComment([{ ...comment, flagged: true }])}
+        onSaveCards={vi.fn()}
+        {...props}
+        onKeep={onKeep}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Keep' }))
+    expect(
+      await screen.findByText(
+        'Already handled by another organizer: no longer flagged.',
+        { selector: 'p:not([role])' },
+      ),
+    ).toBeTruthy()
+  })
+
+  it('no Keep on a comment that is not flagged', () => {
+    render(
+      <TalkFeedbackPanel
+        feedback={withComment([comment])}
+        onSaveCards={vi.fn()}
+        {...props}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Keep' })).toBeNull()
+    expect(screen.queryByText('Flagged by a speaker')).toBeNull()
   })
 })

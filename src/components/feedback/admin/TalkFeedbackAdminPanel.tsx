@@ -37,11 +37,14 @@ export function TalkFeedbackAdminPanel({
       Promise.all([
         utils.sessionFeedback.adminTalk.invalidate({ talkId }),
         utils.sessionFeedback.adminOverview.invalidate(),
+        // The nav badge: a Keep, Hide or Remove here can clear a flag.
+        utils.sessionFeedback.flaggedCount.invalidate(),
       ]),
   }
   const hide = api.sessionFeedback.adminHide.useMutation(refresh)
   const unhide = api.sessionFeedback.adminUnhide.useMutation(refresh)
   const remove = api.sessionFeedback.adminRemove.useMutation(refresh)
+  const keep = api.sessionFeedback.adminKeep.useMutation(refresh)
   const cards = api.proposal.admin.updateAudienceFeedback.useMutation(refresh)
   // Saved Card Counts' time is up: read the talk again. Stable, so the
   // panel's timer is never restarted by this component's re-renders.
@@ -163,6 +166,7 @@ export function TalkFeedbackAdminPanel({
         }}
         onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
         onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
+        onKeep={(c) => keep.mutateAsync({ responseId: c.id, rev: c.rev })}
         headingRef={heading}
         onCardsExpired={readAgain}
         onRemove={(request) =>

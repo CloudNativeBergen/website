@@ -14,6 +14,7 @@
  */
 import 'server-only'
 import { versionsClient } from './sanity'
+import { sanityStatus } from './sanity-error'
 
 /** The talk as these writes read it, through the doc endpoint. */
 export interface TalkDoc {
@@ -56,7 +57,7 @@ const MAX_SWEEP_PATCHES = 3
  * transaction back).
  */
 export function isRetryable(error: unknown): boolean {
-  const status = (error as { statusCode?: unknown } | null)?.statusCode
+  const status = sanityStatus(error)
   if (status === 409 || status === 404) return true
   const message = error instanceof Error ? error.message.toLowerCase() : ''
   return message.includes('revision')

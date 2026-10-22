@@ -158,6 +158,19 @@ organizer)` under `notification.workshop-capacity.<hash>.<organizerId>`, so
   (`feedbackSummarySentAt`), alongside one email. Once-only like the notices
   above, under `notification.feedback-summary.<talkId>.<speakerId>`, and bell
   only.
+- **`session_feedback_flagged`** — tells a conference's organizers, except
+  the speaker who flagged, that a speaker flagged a comment on their talk
+  (`docs/SPEAKER_FEEDBACK_SPEC.md` §11.2), linking to `/admin/feedback`.
+  Written inline by `sessionFeedback.flag` (`src/lib/feedback/flag.ts`)
+  through `createNotifications`, only when `flaggedAt` goes from unset to set
+  under a revision guard, so a Keep followed by a new flag notifies again and
+  a second click does not. Recipients are the conference's `organizers[]`.
+  It carries the talk's title and **never the comment text** (it would
+  outlive Remove, the fold and erasure). Random ids. It goes through
+  `createNotifications`, so today web push follows the recipient's
+  `otherUpdates` preference; whether it should be bell only, as the spec's
+  wording suggests, is an open question on PR #1469. A failed write is logged
+  and never fails the flag.
 
 ### Deterministic-id schemes
 
