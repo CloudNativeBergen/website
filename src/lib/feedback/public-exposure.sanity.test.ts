@@ -111,7 +111,10 @@ describe('the Feedback Code stays out of whole-talk list reads', () => {
 
 describe('the programme read says whether a talk holds a code, never which (#1472)', () => {
   it('carries hasFeedbackCode on each scheduled talk and no code anywhere', async () => {
-    const conference = await h.store!.clients.clientReadCached.fetch<{
+    const conference = (await h.store!.clients.clientReadCached.fetch(
+      CONFERENCE_QUERY_FULL,
+      { domain: 'conf-a.example', wildcardSubdomain: 'conf-a.example' },
+    )) as {
       __expanded: {
         schedules: {
           tracks: {
@@ -119,10 +122,7 @@ describe('the programme read says whether a talk holds a code, never which (#147
           }[]
         }[]
       }
-    }>(CONFERENCE_QUERY_FULL, {
-      domain: 'conf-a.example',
-      wildcardSubdomain: 'conf-a.example',
-    })
+    }
 
     const talks = conference.__expanded.schedules[0].tracks[0].talks
     expect(
