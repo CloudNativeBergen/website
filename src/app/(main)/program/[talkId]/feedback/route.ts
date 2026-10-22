@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { feedbackCodeForTalk } from '@/lib/feedback/attendee'
+import { feedbackCodeForTalk } from '@/lib/feedback/server'
 
 /**
  * Where every refusal lands: the attendee page's generic Unknown state. Not
@@ -25,11 +26,13 @@ export async function GET(
 ): Promise<NextResponse> {
   const { talkId } = await segmentData.params
 
-  const { conference, status } = await getConferenceForCurrentDomain()
-  if (status === 'not-found' || (status === 'resolved' && !conference?._id)) {
+  // A failed read is not "no conference here" (`guard.ts`): check it first.
+  const resolution = await getConferenceForCurrentDomain()
+  if (isConferenceUnavailable(resolution)) return unavailable()
+  if (isUnknownHost(resolution)) {
     return feedbackLinkResponse(NextResponse.json(null, { status: 404 }))
   }
-  if (status !== 'resolved') return unavailable()
+  const { conference } = resolution
 
   let code: string | null
   try {

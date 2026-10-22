@@ -58,7 +58,7 @@ function FeedbackLink({
     >
       <ChatBubbleLeftEllipsisIcon
         aria-hidden="true"
-        className={compact ? 'h-4 w-4' : 'h-3.5 w-3.5'}
+        className={compact ? 'size-4' : 'size-3.5'}
       />
       {!compact && <span>Give feedback</span>}
     </a>

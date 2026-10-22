@@ -483,7 +483,16 @@ describe('feedbackCodeForTalk — the programme link (#1472)', () => {
   })
 
   it('refuses a malformed talk id without a read', async () => {
-    for (const raw of [undefined, 42, '', '../x', 'a b', 'x'.repeat(129)]) {
+    for (const raw of [
+      undefined,
+      42,
+      '',
+      '../x',
+      'a b',
+      'x'.repeat(129),
+      'drafts.talk-open',
+      'versions.rel1.talk-open',
+    ]) {
       expect(await feedbackCodeForTalk(CONF, raw, DURING)).toBeNull()
     }
     expect(h.reads).toHaveLength(0)
@@ -554,7 +563,10 @@ describe('feedbackCodeForTalk — the programme link (#1472)', () => {
     expect(await feedbackCodeForTalk(CONF, 'talk-accepted', DURING)).toBeNull()
   })
 
-  it('never answers for a draft or release version, by either id', async () => {
+  it('never answers from a draft or release version of a talk', async () => {
+    // Only the drafts and the release hold a code: the published talk, which
+    // is on the official schedule, does not. Dotted ids never reach the read
+    // (the malformed-id test); this one goes through it.
     h.dataset.push(
       talk('talk-new', 'conf-A', {}),
       talk('drafts.talk-new', 'conf-A', { feedbackCode: 'drft23' }),
@@ -563,16 +575,8 @@ describe('feedbackCodeForTalk — the programme link (#1472)', () => {
         slot('talk-new', '09:00', '09:40'),
       ]),
     )
-    for (const id of [
-      'talk-new',
-      'drafts.talk-new',
-      'versions.rel1.talk-new',
-    ]) {
-      expect(await feedbackCodeForTalk(CONF, id, DURING)).toBeNull()
-    }
-    expect(
-      await feedbackCodeForTalk(CONF, 'drafts.talk-open', DURING),
-    ).toBeNull()
+    expect(await feedbackCodeForTalk(CONF, 'talk-new', DURING)).toBeNull()
+    expect(h.reads.length).toBeGreaterThan(0)
   })
 
   it('refuses a code two published talks hold, for both of them', async () => {

@@ -188,6 +188,7 @@ export const WithFeedbackLinkDark: Story = {
 
 export const WithFeedbackLinkCompact: Story = {
   args: { talk: withFeedbackCode(), compact: true },
+  parameters: { viewport: { defaultViewport: 'phone' } },
   play: async ({ canvasElement }) => {
     const link = within(canvasElement).getByRole('link', {
       name: 'Give feedback',
@@ -196,6 +197,11 @@ export const WithFeedbackLinkCompact: Story = {
     // Icon only: the name comes from the label, not from visible text.
     await expect(link).toHaveTextContent('')
   },
+}
+
+export const WithFeedbackLinkCompactDark: Story = {
+  ...WithFeedbackLinkCompact,
+  globals: { theme: 'dark' },
 }
 
 export const WithoutFeedbackCode: Story = {

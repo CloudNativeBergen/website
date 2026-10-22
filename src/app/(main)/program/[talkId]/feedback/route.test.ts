@@ -14,7 +14,7 @@ vi.mock('@/lib/conference/sanity', () => ({
 }))
 
 const feedbackCodeForTalk = vi.fn()
-vi.mock('@/lib/feedback/attendee', () => ({
+vi.mock('@/lib/feedback/server', () => ({
   feedbackCodeForTalk: (...args: unknown[]) => feedbackCodeForTalk(...args),
 }))
 

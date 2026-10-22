@@ -1077,6 +1077,13 @@ Per `AGENTS.md` ("Agent discipline"):
   for any public talk while its window is open, without being in the room.
   Accepted ([#1472](https://github.com/CloudNativeBergen/website/issues/1472));
   revisit with §1's ticket-holder restriction if abuse appears.
+- **A programme link that lands on Unknown.** The card's `hasFeedbackCode`
+  comes from the cached conference read; the redirect reads the code index. They
+  can disagree for a while: a code two talks share (the index drops it), a
+  stored value that is not a code shape, a talk referenced only from a
+  non-official day, and a code unset by a fold or erasure (which expires the
+  index, not the conference read) until the conference cache refills. The link
+  then lands on Unknown; it never reveals a code. Accepted (#1472).
 
 ## 16. Decided in review
 

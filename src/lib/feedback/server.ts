@@ -16,6 +16,7 @@ export {
   type MintAllReport,
 } from './mint-all'
 export {
+  feedbackCodeForTalk,
   type FeedbackConference,
   type FeedbackPage,
   type PublicFeedbackTalk,

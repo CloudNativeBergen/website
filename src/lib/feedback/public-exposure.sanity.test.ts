@@ -1,13 +1,12 @@
 /**
  * @vitest-environment node
  *
- * A talk's Feedback Code is for its speakers (speaker feedback spec §9.2),
- * never for an anonymous visitor. `getProposals` spreads the whole talk
- * (`...`) and feeds the PUBLIC `workshop.list`, so it must not carry the
- * code. The programme read (#1472) says only WHETHER a talk holds one: its
- * "Give feedback" link goes through `/program/<talkId>/feedback`, which looks
- * the code up when it is followed. Executed against stored documents (`versionedSanityStore`: the real
- * client's reads through groq-js).
+ * A talk's Feedback Code is reachable publicly only through the programme
+ * link (speaker feedback spec §7.5), which looks the code up when followed.
+ * No list read carries the code itself: `getProposals` spreads the whole talk
+ * (`...`) and feeds the PUBLIC `workshop.list`, and the programme read (#1472)
+ * says only WHETHER a talk holds one. Executed against stored documents
+ * (`versionedSanityStore`: the real client's reads through groq-js).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
