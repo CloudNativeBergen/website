@@ -36,8 +36,8 @@
  *   `conference` target of the provisioning invalidation endpoint (which
  *   speaker erasure's printed tags send the operator to). Rotation (F6) and
  *   the fold (F9) add theirs. Not `conferenceTag` for everything the index
- *   serves: rotation, status changes and schedule edits leave the programme
- *   link alone. A mint, bulk mint and fold ALSO expire `conferenceTag`
+ *   serves: rotation and status changes leave the programme link alone, and
+ *   schedule edits refresh `conferenceTag` on their own path. A mint, bulk mint and fold ALSO expire `conferenceTag`
  *   (`expireProgrammeFeedbackLinks`), because the programme's "Give feedback"
  *   link shows only where the conference read says a code exists (#1472).
  * - `feedbackResponseTag(responseId)` — the per-RESPONSE tag on a device's own
