@@ -5,6 +5,7 @@ import { Format, Language, Level, Audience, Status } from '@/lib/proposal/types'
 import { Flags, Speaker } from '@/lib/speaker/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import type { TrackTalk } from '@/lib/conference/types'
+import { expect, within } from 'storybook/test'
 
 const mockSpeakers: Speaker[] = [
   {
@@ -151,6 +152,73 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   args: {
     talk: createMockTalk(),
+  },
+}
+
+/** A confirmed talk that holds a Feedback Code (`hasFeedbackCode`, #1472). */
+const withFeedbackCode = (overrides: Partial<TalkCardTalk> = {}) => {
+  const base = createMockTalk(overrides)
+  return { ...base, talk: { ...base.talk!, hasFeedbackCode: true } }
+}
+
+export const WithFeedbackLink: Story = {
+  args: { talk: withFeedbackCode(), showDate: true, showTrack: true },
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    docs: {
+      description: {
+        story:
+          'A talk with a Feedback Code links to `/program/<talkId>/feedback`, which redirects to its current attendee page. Shown on every scheduled talk with a code, at all times.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const link = within(canvasElement).getByRole('link', {
+      name: 'Give feedback',
+    })
+    await expect(link).toHaveAttribute('href', '/program/talk-1/feedback')
+    await expect(link).toHaveTextContent('Give feedback')
+  },
+}
+
+export const WithFeedbackLinkDark: Story = {
+  ...WithFeedbackLink,
+  globals: { theme: 'dark' },
+}
+
+export const WithFeedbackLinkCompact: Story = {
+  args: { talk: withFeedbackCode(), compact: true },
+  play: async ({ canvasElement }) => {
+    const link = within(canvasElement).getByRole('link', {
+      name: 'Give feedback',
+    })
+    await expect(link).toHaveAttribute('href', '/program/talk-1/feedback')
+    // Icon only: the name comes from the label, not from visible text.
+    await expect(link).toHaveTextContent('')
+  },
+}
+
+export const WithoutFeedbackCode: Story = {
+  args: { talk: createMockTalk() },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'No Feedback Code minted yet: no link and no placeholder. Compare `WithFeedbackLink`, whose only difference is the code.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // The card rendered (positive control), and it has no feedback link.
+    await expect(
+      canvas.getByText(
+        'Building Scalable Cloud Native Applications with Kubernetes',
+      ),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('link', { name: 'Give feedback' }),
+    ).toBeNull()
   },
 }
 

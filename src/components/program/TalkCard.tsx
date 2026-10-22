@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   XMarkIcon,
+  ChatBubbleLeftEllipsisIcon,
 } from '@heroicons/react/24/outline'
 import { TrackTalk } from '@/lib/conference/types'
 import { isWorkshopFormat, Status } from '@/lib/proposal/types'
@@ -29,6 +30,39 @@ import clsx from 'clsx'
 interface PortableTextChild {
   _type: string
   text?: string
+}
+
+/**
+ * The programme's way into Session Feedback (#1472), for attendees who miss
+ * the room's QR. It goes through `/program/<talkId>/feedback`, which redirects
+ * to the talk's CURRENT code, so the programme never carries one. A plain
+ * `<a>`, never `next/link`: no prefetch of every card's redirect, and a full
+ * page load into `/f` (its analytics exclusions depend on it).
+ */
+function FeedbackLink({
+  talkId,
+  compact,
+}: {
+  talkId: string
+  compact: boolean
+}) {
+  return (
+    <a
+      href={`/program/${encodeURIComponent(talkId)}/feedback`}
+      aria-label={compact ? 'Give feedback' : undefined}
+      title={compact ? 'Give feedback' : undefined}
+      className={clsx(
+        'ml-auto inline-flex items-center gap-1 rounded font-medium text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-blue-400 dark:hover:text-blue-300 print:hidden',
+        compact && '-m-1 p-1',
+      )}
+    >
+      <ChatBubbleLeftEllipsisIcon
+        aria-hidden="true"
+        className={compact ? 'h-4 w-4' : 'h-3.5 w-3.5'}
+      />
+      {!compact && <span>Give feedback</span>}
+    </a>
+  )
 }
 
 function StatusIndicator({ status }: { status?: TalkStatus }) {
@@ -518,6 +552,9 @@ export function TalkCard({
               <span className="hidden sm:inline">{durationMinutes} min</span>
               <span className="sm:hidden">{durationMinutes}m</span>
             </span>
+            {isConfirmed && talkData.hasFeedbackCode && talkData._id && (
+              <FeedbackLink talkId={talkData._id} compact={compact} />
+            )}
           </div>
 
           {!compact && isConfirmed && (
