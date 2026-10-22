@@ -462,6 +462,32 @@ describe('foldTalkFeedback: chunks and guards', () => {
     expect(counts('drafts.talk-1')).toEqual(counts('talk-1'))
   })
 
+  it('a retry after a lost guard starts only with a whole chunk budget left: late, nothing deleted', async () => {
+    store().reset([
+      conference('conf-old', '2024-09-01'),
+      talk('talk-1'),
+      ...responses(3),
+    ])
+    const start = Date.now()
+    let clock = start
+    vi.spyOn(Date, 'now').mockImplementation(() => clock)
+    // Admitted with exactly the budget left; while it commits, a response
+    // is edited (the guard fails) and the clock moves on.
+    store().beforeNextCommit(() => {
+      store().put({ ...response('r-0000', 'green'), _rev: 'rev-edited' })
+      clock = start + 1
+    })
+
+    const outcome = await foldTalkFeedback('talk-1', {
+      now: NOW,
+      deadline: new Date(start + CHUNK_BUDGET_MS),
+    })
+
+    expect(outcome).toEqual({ status: 'late', responses: 0 })
+    expect(store().commits).toEqual([])
+    expect(liveResponses()).toHaveLength(3)
+  })
+
   it('a fold that throws after a committed chunk still sweeps', async () => {
     store().reset([
       conference('conf-old', '2024-09-01'),

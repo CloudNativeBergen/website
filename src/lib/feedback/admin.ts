@@ -120,12 +120,13 @@ export async function readAdminFeedback({
     ...new Set(rows.map((r) => r.talk).filter((t): t is string => !!t)),
   ]
   // Confirmed talks, and any other talk of the conference that still holds
-  // responses (a withdrawn one), so its comments can still be moderated.
+  // responses (a withdrawn one), so its comments can still be moderated, or
+  // whose responses were folded, so its totals still count.
   const talks =
     (await scopedFetch<TalkRow[] | null>(
       clientReadUncached,
       scope,
-      `*[_type == "talk" && ${PUBLISHED_ONLY} && (status == "confirmed" || _id in $responded)] | order(title asc){
+      `*[_type == "talk" && ${PUBLISHED_ONLY} && (status == "confirmed" || _id in $responded || defined(feedbackFolded))] | order(title asc){
         _id, title, format, audienceFeedback, feedbackFolded,
         "speakers": speakers[]->name
       }`,

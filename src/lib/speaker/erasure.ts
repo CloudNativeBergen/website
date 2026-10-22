@@ -1810,11 +1810,24 @@ export async function eraseSpeakerInPlace(
     if (revalidate && soleTalkIds(plan.speakerId, inputs.feedback).length > 0) {
       await revalidateErasureTags(plan, revalidate)
     }
-    const { folds: feedbackFolds, settled: feedbackSettled } =
-      await settleAndFoldFeedback(plan, inputs, { waitForInFlightSubmits })
+    const {
+      folds: feedbackFolds,
+      settled: feedbackSettled,
+      conferenceIds: feedbackConferenceIds,
+    } = await settleAndFoldFeedback(plan, inputs, { waitForInFlightSubmits })
 
     // --- phase 4: caches ----------------------------------------------------
-    const cache = await revalidateErasureTags(plan, revalidate)
+    // Also the conferences the looks after the wait unset or folded under: a
+    // talk may have moved since the plan, and that index holds its code.
+    const cache = await revalidateErasureTags(
+      {
+        ...plan,
+        affectedConferenceIds: [
+          ...new Set([...plan.affectedConferenceIds, ...feedbackConferenceIds]),
+        ],
+      },
+      revalidate,
+    )
 
     // --- phase 5: verification ---------------------------------------------
     // The PRE-erasure match set is threaded through: phase 2 has just destroyed
@@ -1977,7 +1990,8 @@ export const MAX_SETTLE_LOOKS = 4
  *    behind it (an answer admitted through a late mint's code): wait the
  *    period again and look again, until a look changes nothing, at most
  *    {@link MAX_SETTLE_LOOKS} looks. Still changing then: reported as
- *    `failed`, and the verification is not CLEAN, so the operator re-runs.
+ *    `failed` (`held`, with its reason, for a talk the last look held), and
+ *    the verification is not CLEAN, so the operator re-runs.
  *
  * Never throws.
  */
@@ -1987,12 +2001,24 @@ async function settleAndFoldFeedback(
   {
     waitForInFlightSubmits,
   }: { waitForInFlightSubmits: (ms: number) => Promise<void> },
-): Promise<{ folds: FeedbackFoldResult[]; settled: boolean }> {
+): Promise<{
+  folds: FeedbackFoldResult[]
+  settled: boolean
+  /** Conferences of the talks a look unset a code on or folded. */
+  conferenceIds: string[]
+}> {
   if (soleTalkIds(plan.speakerId, inputs.feedback).length === 0) {
-    return { folds: [], settled: true }
+    return { folds: [], settled: true, conferenceIds: [] }
   }
   let closedAt = Date.now()
   let held: FeedbackFoldResult[] = []
+  const conferences = new Set<string>()
+  const done = (folds: FeedbackFoldResult[], settled: boolean) => ({
+    folds: oneOutcomePerTalk(folds),
+    settled,
+    conferenceIds: [...conferences],
+  })
+  const eligible = stillSubjectsAlone(plan.speakerId)
 
   const failedAll = (talkIds: string[], what: string, error: unknown) =>
     talkIds.map((talkId) => ({
@@ -2012,13 +2038,16 @@ async function settleAndFoldFeedback(
     }
     let fresh: ReturnType<typeof planSpeakerFeedbackErasure>
     try {
-      fresh = planSpeakerFeedbackErasure(
+      const freshInputs = await fetchSpeakerFeedbackInputs(
         plan.speakerId,
-        await fetchSpeakerFeedbackInputs(
-          plan.speakerId,
-          inputs.referencingDocs,
-        ),
+        inputs.referencingDocs,
       )
+      fresh = planSpeakerFeedbackErasure(plan.speakerId, freshInputs)
+      const acted = new Set([...fresh.codeTalkIds, ...fresh.foldTalkIds])
+      for (const t of freshInputs.talks) {
+        const id = t.talk.conference?._ref
+        if (acted.has(t.talk._id) && id) conferences.add(id)
+      }
     } catch (error) {
       // Every talk the subject was alone on, one outcome each: a talk an
       // earlier look folded is still reported once, a talk that only had a
@@ -2030,7 +2059,7 @@ async function settleAndFoldFeedback(
           error,
         ),
       )
-      return { folds: oneOutcomePerTalk([...folds, ...held]), settled: false }
+      return done([...folds, ...held], false)
     }
     // Talks this look could not finish (a release turned non-active, or
     // stopped listing, during the wait): reported as of the last look.
@@ -2069,24 +2098,33 @@ async function settleAndFoldFeedback(
     const folded = await foldFeedback(
       fresh.foldTalkIds,
       new Date(inputs.now),
-      stillSubjectsAlone(plan.speakerId),
+      async (talk) => {
+        // The conference the fold is checked, and so runs, under.
+        const verdict = await eligible(talk)
+        const id = talk.conference?._ref
+        if (verdict && id) conferences.add(id)
+        return verdict
+      },
     )
     folds.push(...folded)
     if (folded.some((f) => f.responses > 0)) changed = true
-    if (!changed) {
-      return { folds: oneOutcomePerTalk([...folds, ...held]), settled: true }
-    }
+    if (!changed) return done([...folds, ...held], true)
     closedAt = Date.now()
   }
-  folds.push(
-    ...held,
-    ...failedAll(
-      soleTalkIds(plan.speakerId, inputs.feedback),
-      `still changing after ${MAX_SETTLE_LOOKS} looks`,
-      new Error('re-run the erasure'),
-    ),
+  // Held last, so a talk held at the last look keeps that reason and its
+  // remedy rather than a bare `failed`.
+  return done(
+    [
+      ...folds,
+      ...failedAll(
+        soleTalkIds(plan.speakerId, inputs.feedback),
+        `still changing after ${MAX_SETTLE_LOOKS} looks`,
+        new Error('re-run the erasure'),
+      ),
+      ...held,
+    ],
+    false,
   )
-  return { folds: oneOutcomePerTalk(folds), settled: false }
 }
 
 /**

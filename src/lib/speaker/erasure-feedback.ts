@@ -12,7 +12,10 @@
  *
  * A talk with another live speaker keeps its code and its feedback: never
  * destroy data belonging to somebody who requested nothing. An organizer
- * removes a comment naming the erased person by hand.
+ * removes a comment naming the erased person by hand. Liveness is judged per
+ * document, though: a draft or release version whose own speakers leave the
+ * subject alone loses its code (or holds the talk, when locked), since
+ * publishing it would bring back a coded talk no live speaker is on.
  *
  * LOCKED VERSIONS. Sanity locks the versions of a release that is not
  * `active`, and a patch of one would fail the WHOLE erasure transaction on
@@ -51,8 +54,11 @@ export interface FeedbackTalkInput {
   locked: TalkDoc[]
   /** False when the releases could not be listed. */
   releasesListed: boolean
-  /** Speakers of the talk OTHER than the subject who exist and are not erased. */
-  otherLiveSpeakers: number
+  /**
+   * Speakers OTHER than the subject, on the talk or any of its versions, who
+   * exist and are not erased.
+   */
+  liveSpeakerIds: string[]
   /** The talk's published responses, as the totals count them (§4.3). */
   responses: number
   /**
@@ -107,17 +113,20 @@ export async function fetchSpeakerFeedbackInputs(
       readTalkVersions(client, id, { requestTimeoutMs: REQUEST_TIMEOUT_MS }),
     ),
   )
+  // On the published talk, or only on a version of it.
   const subjectTalks = talkVersions.filter(
     (r): r is typeof r & { published: TalkDoc } =>
       r.published?._type === 'talk' &&
-      speakerRefs(r.published).includes(speakerId),
+      allDocs(r).some((doc) => speakerRefs(doc).includes(speakerId)),
   )
   if (subjectTalks.length === 0) return { talks: [] }
 
   const others = [
     ...new Set(
       subjectTalks.flatMap((r) =>
-        speakerRefs(r.published).filter((id) => id !== speakerId),
+        allDocs(r).flatMap((doc) =>
+          speakerRefs(doc).filter((id) => id !== speakerId),
+        ),
       ),
     ),
   ]
@@ -153,9 +162,11 @@ export async function fetchSpeakerFeedbackInputs(
       versions: r.versions,
       locked: r.locked,
       releasesListed: r.releasesListed,
-      otherLiveSpeakers: speakerRefs(r.published).filter(
-        (id) => id !== speakerId && liveIds.has(id),
-      ).length,
+      liveSpeakerIds: others.filter(
+        (id) =>
+          liveIds.has(id) &&
+          allDocs(r).some((doc) => speakerRefs(doc).includes(id)),
+      ),
       responses: rows.filter(
         (row) =>
           row.talk === r.published._id &&
@@ -172,20 +183,34 @@ export async function fetchSpeakerFeedbackInputs(
  * the talk, as it reads now, still has no live speaker other than the
  * subject. Asked before every chunk, on the read whose revision guards the
  * commit, so a co-speaker added after the erasure read the talk stops the
- * fold instead of deleting feedback that is now theirs too.
+ * fold instead of deleting feedback that is now theirs too. Each erased
+ * co-speaker's revision guards the commit as well, so one whose `erasedAt`
+ * is taken away (by hand, in Studio) in between fails the chunk. A
+ * co-speaker whose document is gone has no revision to guard: one restored
+ * in that moment is not caught.
  */
 export const stillSubjectsAlone =
   (speakerId: string) =>
-  async (talk: TalkDoc): Promise<boolean> => {
+  async (
+    talk: TalkDoc,
+  ): Promise<boolean | { guards: { id: string; rev: string }[] }> => {
     // Taken off the talk since (it is being reassigned): not theirs to fold.
     if (!speakerRefs(talk).includes(speakerId)) return false
     const others = speakerRefs(talk).filter((id) => id !== speakerId)
     if (others.length === 0) return true
     const speakers = await versionsClient().getDocuments<{
       _type?: string
+      _rev?: string
       erasedAt?: string
     }>(others, requestCap(REQUEST_TIMEOUT_MS))
-    return !speakers.some((s) => s?._type === 'speaker' && !s.erasedAt)
+    if (speakers.some((s) => s?._type === 'speaker' && !s.erasedAt)) {
+      return false
+    }
+    return {
+      guards: speakers.flatMap((s) =>
+        s && typeof s._rev === 'string' ? [{ id: s._id, rev: s._rev }] : [],
+      ),
+    }
   }
 
 /**
@@ -202,10 +227,10 @@ export function planSpeakerFeedbackErasure(
     foldTalkIds: [],
     held: [],
   }
-  // Co-spoken with somebody live: theirs too, so untouched.
-  for (const t of inputs.talks.filter(isSubjectsAlone(speakerId))) {
+  for (const t of inputs.talks) {
+    const unsets = unsetsCode(speakerId, t)
     const holders = [t.talk, ...t.versions].filter(
-      (doc) => doc.feedbackCode !== undefined,
+      (doc) => doc.feedbackCode !== undefined && unsets(doc),
     )
     if (holders.length > 0) plan.codeTalkIds.push(t.talk._id)
     for (const doc of holders) {
@@ -217,7 +242,22 @@ export function planSpeakerFeedbackErasure(
         reason: 'Feedback Code of a talk with no other live speaker',
       })
     }
-    const lockedCode = t.locked.some((d) => d.feedbackCode !== undefined)
+    const lockedCode = t.locked.some(
+      (d) => d.feedbackCode !== undefined && unsets(d),
+    )
+    // Co-spoken with somebody live: theirs too, so its feedback is untouched.
+    const sole = isSubjectsAlone(speakerId)(t)
+    if (!sole) {
+      if (!t.releasesListed || lockedCode) {
+        plan.held.push({
+          talkId: t.talk._id,
+          reason: t.releasesListed
+            ? 'a version that leaves no other live speaker waits in a release that is not active (Sanity locks it): it keeps the code; re-run once the release is published or archived'
+            : 'the releases could not be listed: a release version that leaves no other live speaker may still hold the code; re-run',
+        })
+      }
+      continue
+    }
     const foldable = t.releasesListed && t.locked.length === 0
     if (!t.releasesListed) {
       plan.held.push({
@@ -238,14 +278,36 @@ export function planSpeakerFeedbackErasure(
 }
 
 /**
- * A talk the subject speaks on with no OTHER live speaker: the talks this
- * branch acts on. A co-speaker who is erased, or whose document is gone,
- * does not count.
+ * A talk the subject speaks on with no OTHER live speaker: the talks whose
+ * feedback this branch folds. A co-speaker who is erased, or whose document
+ * is gone, does not count.
  */
 const isSubjectsAlone =
   (speakerId: string) =>
   (t: FeedbackTalkInput): boolean =>
-    speakerRefs(t.talk).includes(speakerId) && t.otherLiveSpeakers === 0
+    leavesSubjectAlone(speakerId, t)(t.talk)
+
+/** `doc` lists the subject and no live speaker besides. */
+const leavesSubjectAlone =
+  (speakerId: string, t: FeedbackTalkInput) =>
+  (doc: TalkDoc): boolean =>
+    speakerRefs(doc).includes(speakerId) &&
+    !speakerRefs(doc).some(
+      (id) => id !== speakerId && t.liveSpeakerIds.includes(id),
+    )
+
+/**
+ * Which documents of `t` lose the code: all of them on a talk the subject is
+ * alone on, else each version whose own speakers leave the subject alone.
+ */
+const unsetsCode = (speakerId: string, t: FeedbackTalkInput) =>
+  isSubjectsAlone(speakerId)(t) ? () => true : leavesSubjectAlone(speakerId, t)
+
+const allDocs = (r: {
+  published: TalkDoc | null
+  versions: TalkDoc[]
+  locked: TalkDoc[]
+}) => [r.published, ...r.versions, ...r.locked].filter((d): d is TalkDoc => !!d)
 
 const speakerRefs = (talk: TalkDoc): string[] =>
   (talk.speakers ?? [])
@@ -275,8 +337,11 @@ export function residualSpeakerFeedback(
   return {
     codes:
       plan.patches.length +
-      sole.flatMap((t) => t.locked).filter((d) => d.feedbackCode !== undefined)
-        .length,
+      inputs.talks.flatMap((t) =>
+        t.locked.filter(
+          (d) => d.feedbackCode !== undefined && unsetsCode(speakerId, t)(d),
+        ),
+      ).length,
     responses: sole.reduce((n, t) => n + t.responsesAnyConference, 0),
     held: plan.held.length,
   }

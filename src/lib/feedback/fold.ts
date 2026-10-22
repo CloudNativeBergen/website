@@ -76,14 +76,14 @@ export const CHUNK_BUDGET_MS = 21 * REQUEST_TIMEOUT_MS
 
 /**
  * A caller's check that a talk, read now, may still be folded: `false`
- * refuses; `{ guard }` names another document the check read, whose
- * revision then guards the chunk's commit too (a no-op patch, see
- * `lockRevision`), so a change to it between the check and the commit fails
- * the chunk and the check is asked again.
+ * refuses; `{ guards }` names other documents the check read, whose
+ * revisions then guard the chunk's commit too (a no-op patch each, see
+ * `lockRevision`), so a change to one between the check and the commit
+ * fails the chunk and the check is asked again.
  */
 export type Eligibility = (
   talk: TalkDoc,
-) => Promise<boolean | { guard: { id: string; rev: string } }>
+) => Promise<boolean | { guards: { id: string; rev: string }[] }>
 
 export interface FoldOutcome {
   /**
@@ -264,7 +264,7 @@ async function planChunk(
   }
   const verdict = eligible ? await eligible(published) : true
   if (!verdict) return { status: 'ineligible' }
-  const guard = typeof verdict === 'object' ? verdict.guard : undefined
+  const guards = typeof verdict === 'object' ? verdict.guards : []
   for (let round = 0; ; round++) {
     if (round > MAX_LAG_ROUNDS) return { status: 'late' }
     const ids =
@@ -321,7 +321,7 @@ async function planChunk(
               .unset(['feedbackCode']),
           )
         }
-        if (guard) tx.patch(guard.id, (p) => lockRevision(p, guard.rev))
+        for (const g of guards) tx.patch(g.id, (p) => lockRevision(p, g.rev))
         for (const r of chunk) {
           tx.patch(r._id, (p) => lockRevision(p, r._rev))
           tx.delete(r._id)
@@ -376,7 +376,7 @@ export const FOLD_CANDIDATES = `*[_type == "talk" && ${PUBLISHED_ONLY} && confer
 async function pastRetention(
   talk: TalkDoc,
   cutoff: string,
-): Promise<false | { guard: { id: string; rev: string } }> {
+): Promise<false | { guards: { id: string; rev: string }[] }> {
   const conferenceId = talk.conference?._ref
   if (!conferenceId) return false
   const conference = await versionsClient().getDocument<{
@@ -390,7 +390,7 @@ async function pastRetention(
     typeof conference._rev === 'string' &&
     typeof conference.endDate === 'string' &&
     conference.endDate < cutoff
-    ? { guard: { id: conference._id, rev: conference._rev } }
+    ? { guards: [{ id: conference._id, rev: conference._rev }] }
     : false
 }
 

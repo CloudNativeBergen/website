@@ -346,9 +346,15 @@ describe('speaker erasure folds the feedback of talks no live speaker is left on
   })
 
   it.each([
-    // Unlisted releases hold every such talk: any may have a release copy.
+    // Unlisted releases hold every talk of the subject's: any may have a
+    // release copy, and a co-spoken talk's copy may drop the co-speaker.
     ['a version waits in a scheduled release', false, ['talk-solo'], 6],
-    ['the releases cannot be listed', true, ['talk-solo', 'talk-was-duo'], 8],
+    [
+      'the releases cannot be listed',
+      true,
+      ['talk-duo', 'talk-solo', 'talk-was-duo'],
+      8,
+    ],
   ] as const)(
     'when %s, the erasure still commits, the reachable versions lose the code, and the fold is held and reported',
     async (_, releasesFail, held, unfolded) => {
@@ -1406,6 +1412,153 @@ describe('speaker erasure folds the feedback of talks no live speaker is left on
     })
     expect(byTalk['talk-quiet']).toMatchObject({ status: 'failed' })
     expect(result.verification?.clean).toBe(false)
+  })
+
+  it('folds nothing of a talk whose erased co-speaker is restored between the fold’s check and its commit', async () => {
+    store().reset([
+      { _id: 'conf-1', _type: 'conference', title: 'Conf' },
+      speaker(ADA),
+      speaker(CAT, { erasedAt: '2026-01-01T00:00:00.000Z' }),
+      talk('talk-was-duo', [CAT, ADA]),
+      ...responses('talk-was-duo', 2),
+    ])
+    store().beforeNextCommit(() => {}) // the erasure transaction
+    // Cat's `erasedAt` is taken away by hand while the first chunk commits.
+    store().beforeNextCommit(() =>
+      store().put({ ...speaker(CAT), _rev: 'rev-restored' }),
+    )
+
+    const result = await erase()
+
+    expect(result.err).toBeNull()
+    expect(live('talk-was-duo')).toHaveLength(2)
+    expect(result.feedbackFolds).toContainEqual(
+      expect.objectContaining({ talkId: 'talk-was-duo', status: 'ineligible' }),
+    )
+  })
+
+  it('expires the code index of the conference a talk moved to during the wait, where a stale code was unset', async () => {
+    store().reset([
+      { _id: 'conf-1', _type: 'conference', title: 'Conf' },
+      { _id: 'conf-2', _type: 'conference', title: 'Conf 2' },
+      speaker(ADA),
+      talk('talk-solo', [ADA]),
+    ])
+    const tags: string[] = []
+    let waits = 0
+    const result = await eraseSpeakerInPlace({
+      speakerId: ADA,
+      actor: 'op',
+      revalidate: (tag) => void tags.push(tag),
+      waitForInFlightSubmits: async () => {
+        // Moved to conf-2, and an old version restores its code.
+        if (++waits === 1) {
+          store().put({
+            ...talk('talk-solo', [ADA], { conference: ref('conf-2') }),
+            feedbackCode: 'STALE2',
+            _rev: 'rev-moved',
+          })
+        }
+      },
+    })
+
+    expect(result.err).toBeNull()
+    expect(store().doc('talk-solo')?.feedbackCode).toBeUndefined()
+    expect(result.cache.tags).toContain('sanity:feedback-code-index-conf-2')
+    expect(
+      tags.lastIndexOf('sanity:feedback-code-index-conf-2'),
+    ).toBeGreaterThan(-1)
+  })
+
+  it('a talk held at the last look is reported as held, not failed, when another talk keeps changing', async () => {
+    store().reset([
+      { _id: 'conf-1', _type: 'conference', title: 'Conf' },
+      speaker(ADA),
+      talk('talk-busy', [ADA]),
+      talk('talk-solo', [ADA]),
+      ...responses('talk-solo', 2),
+    ])
+    let n = 0
+    const { clientWrite } = await import('@/lib/sanity/client')
+    const result = await eraseSpeakerInPlace({
+      speakerId: ADA,
+      actor: 'op',
+      waitForInFlightSubmits: async () => {
+        // talk-solo's copy goes into a release that is then scheduled.
+        if (n === 0) {
+          h.releases = [{ name: 'rel-s', state: 'scheduled' }]
+          store().put({
+            ...talk('versions.rel-s.talk-solo', [ADA]),
+            _rev: 'rev-locked',
+          })
+        }
+        // A new answer to talk-busy lands in every wait.
+        await clientWrite
+          .transaction()
+          .create({ ...responses('talk-busy', 1)[0], _id: `busy-${++n}` })
+          .commit()
+      },
+    })
+
+    expect(n).toBe(MAX_SETTLE_LOOKS)
+    const byTalk = Object.fromEntries(
+      result.feedbackFolds.map((f) => [f.talkId, f]),
+    )
+    expect(byTalk['talk-busy']).toMatchObject({
+      status: 'failed',
+      error: expect.stringContaining('still changing'),
+    })
+    expect(byTalk['talk-solo']).toMatchObject({
+      status: 'held',
+      error: expect.stringContaining('published or archived'),
+    })
+    expect(live('talk-solo')).toHaveLength(2)
+    expect(result.verification?.clean).toBe(false)
+  })
+
+  describe('a version whose own speakers leave the subject alone', () => {
+    const duo = () => [
+      { _id: 'conf-1', _type: 'conference', title: 'Conf' },
+      speaker(ADA),
+      speaker(BOB),
+      talk('talk-duo', [ADA, BOB]),
+      ...responses('talk-duo', 2),
+    ]
+
+    it('loses its code; the published talk keeps its code and its feedback, and the erasure is CLEAN', async () => {
+      store().reset([
+        ...duo(),
+        { ...talk('drafts.talk-duo', [ADA]), _rev: 'rev-draft-duo' },
+      ])
+
+      const result = await erase()
+
+      expect(result.err).toBeNull()
+      expect(store().doc('drafts.talk-duo')?.feedbackCode).toBeUndefined()
+      expect(store().doc('talk-duo')?.feedbackCode).toBe('CODEuo')
+      expect(live('talk-duo')).toHaveLength(2)
+      expect(result.verification?.residual.feedbackCodes).toBe(0)
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('in a locked release, still coded: held, and never CLEAN', async () => {
+      h.releases = [{ name: 'rel-s', state: 'scheduled' }]
+      store().reset([
+        ...duo(),
+        { ...talk('versions.rel-s.talk-duo', [ADA]), _rev: 'rev-locked' },
+      ])
+
+      const result = await erase()
+
+      expect(result.err).toBeNull()
+      expect(store().doc('versions.rel-s.talk-duo')?._rev).toBe('rev-locked')
+      expect(result.plan?.feedbackHeld.map((x) => x.talkId)).toEqual([
+        'talk-duo',
+      ])
+      expect(live('talk-duo')).toHaveLength(2)
+      expect(result.verification?.residual.feedbackCodes).toBe(1)
+      expect(result.verification?.clean).toBe(false)
+    })
   })
 
   it('a dry run writes nothing and lists the talks it would fold', async () => {
