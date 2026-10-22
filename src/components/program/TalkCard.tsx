@@ -52,7 +52,7 @@ function FeedbackLink({
       aria-label={compact ? 'Give feedback' : undefined}
       title={compact ? 'Give feedback' : undefined}
       className={clsx(
-        'ml-auto inline-flex items-center gap-1 rounded font-medium text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-blue-400 dark:hover:text-blue-300 print:hidden',
+        'ml-auto inline-flex shrink-0 items-center gap-1 rounded text-sm font-medium whitespace-nowrap text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-blue-400 dark:hover:text-blue-300 print:hidden',
         compact && '-m-1 p-1',
       )}
     >
@@ -237,6 +237,8 @@ export function TalkCard({
   }
 
   const isBookmarkedTalk = isLoaded && isBookmarked(bookmarkData.talkId)
+  const feedbackTalkId =
+    isConfirmed && talkData.hasFeedbackCode ? talkData._id : undefined
 
   return (
     <div
@@ -519,41 +521,49 @@ export function TalkCard({
         )}
 
         <div className={clsx(compact ? 'space-y-2' : 'space-y-3')}>
-          <div
-            className={clsx(
-              'flex flex-wrap items-center gap-2 text-gray-600 dark:text-gray-400',
-              compact ? 'text-xs' : 'text-sm',
-            )}
-          >
-            <div className="flex items-center gap-1">
-              <ClockIcon className="h-3 w-3" />
-              <span className="font-mono">
-                {talk.startTime} - {talk.endTime}
-              </span>
-            </div>
-            {showDate && (
-              <div className="flex items-center gap-1">
-                <CalendarIcon className="h-3 w-3" />
-                <span>{formatConferenceDateShort(talk.scheduleDate)}</span>
-              </div>
-            )}
-            {showTrack && (
-              <div className="flex items-center gap-1">
-                <MapIcon className="h-3 w-3" />
-                <span>{talk.trackTitle}</span>
-              </div>
-            )}
-            <span
+          {/* Compact: the icon sits BESIDE the wrapping meta, so it is never
+              left alone on a line. Full: the text link wraps with the meta and
+              keeps to the right. */}
+          <div className="flex items-center gap-2">
+            <div
               className={clsx(
-                'rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300',
-                compact ? 'text-xs' : 'text-xs',
+                'flex min-w-0 flex-1 flex-wrap items-center gap-2 text-gray-600 dark:text-gray-400',
+                compact ? 'text-xs' : 'text-sm',
               )}
             >
-              <span className="hidden sm:inline">{durationMinutes} min</span>
-              <span className="sm:hidden">{durationMinutes}m</span>
-            </span>
-            {isConfirmed && talkData.hasFeedbackCode && talkData._id && (
-              <FeedbackLink talkId={talkData._id} compact={compact} />
+              <div className="flex items-center gap-1">
+                <ClockIcon className="h-3 w-3" />
+                <span className="font-mono">
+                  {talk.startTime} - {talk.endTime}
+                </span>
+              </div>
+              {showDate && (
+                <div className="flex items-center gap-1">
+                  <CalendarIcon className="h-3 w-3" />
+                  <span>{formatConferenceDateShort(talk.scheduleDate)}</span>
+                </div>
+              )}
+              {showTrack && (
+                <div className="flex items-center gap-1">
+                  <MapIcon className="h-3 w-3" />
+                  <span>{talk.trackTitle}</span>
+                </div>
+              )}
+              <span
+                className={clsx(
+                  'rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300',
+                  compact ? 'text-xs' : 'text-xs',
+                )}
+              >
+                <span className="hidden sm:inline">{durationMinutes} min</span>
+                <span className="sm:hidden">{durationMinutes}m</span>
+              </span>
+              {feedbackTalkId && !compact && (
+                <FeedbackLink talkId={feedbackTalkId} compact={false} />
+              )}
+            </div>
+            {feedbackTalkId && compact && (
+              <FeedbackLink talkId={feedbackTalkId} compact />
             )}
           </div>
 
