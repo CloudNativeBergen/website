@@ -247,3 +247,28 @@ export async function resolveFeedbackTarget(
       }
   }
 }
+
+/** A Sanity document id; a dotted (draft or version) id is never public. */
+const TALK_ID_SHAPE = /^[A-Za-z0-9_-]{1,128}$/
+
+/**
+ * The CURRENT Feedback Code of a talk, for the programme's "Give feedback"
+ * link (#1472): `/program/<talkId>/feedback` redirects here, so a rotated
+ * code never strands an attendee and the programme never carries the code.
+ *
+ * Only for a confirmed, public talk (§7.2) of THIS conference that holds a
+ * code; null for anything else, without saying which. Read from the cached
+ * index, so it costs no read of its own.
+ */
+export async function feedbackCodeForTalk(
+  conference: FeedbackConference,
+  talkId: unknown,
+  now: Date,
+): Promise<string | null> {
+  if (typeof talkId !== 'string' || !TALK_ID_SHAPE.test(talkId)) return null
+  if (!isProgramPublished(conference, now)) return null
+  for (const [code, talk] of await feedbackCodeIndex(conference._id)) {
+    if (talk.talkId === talkId) return talk.slots.length > 0 ? code : null
+  }
+  return null
+}

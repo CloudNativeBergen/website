@@ -40,6 +40,7 @@ vi.mock('@/lib/sanity/client', () => ({
 
 import {
   FEEDBACK_CODE_INDEX_LIFE,
+  feedbackCodeForTalk,
   feedbackCodeIndex,
   resolveFeedbackTarget,
 } from './attendee'
@@ -467,5 +468,116 @@ describe('feedbackCodeIndex — the one cached read', () => {
     expect(body.slice(body.indexOf('{\n') + 2).trimStart()).toMatch(
       /^'use cache: remote'\n/,
     )
+  })
+})
+
+describe('feedbackCodeForTalk — the programme link (#1472)', () => {
+  it('gives the current code of a confirmed, public talk', async () => {
+    expect(await feedbackCodeForTalk(CONF, 'talk-open', DURING)).toBe('k7m2qx')
+  })
+
+  it('follows a rotation: the link always resolves to the code held NOW', async () => {
+    const held = h.dataset.find((d) => d._id === 'talk-open')!
+    held.feedbackCode = 'rpt234'
+    expect(await feedbackCodeForTalk(CONF, 'talk-open', DURING)).toBe('rpt234')
+  })
+
+  it('refuses a malformed talk id without a read', async () => {
+    for (const raw of [undefined, 42, '', '../x', 'a b', 'x'.repeat(129)]) {
+      expect(await feedbackCodeForTalk(CONF, raw, DURING)).toBeNull()
+    }
+    expect(h.reads).toHaveLength(0)
+  })
+
+  it('refuses a talk of another tenant, reading only this conference', async () => {
+    h.dataset.push(
+      talk('talk-foreign', 'conf-B', { feedbackCode: 'zzz234' }),
+      day('day-B', 'conf-B', '2026-10-26', 'official', [
+        slot('talk-foreign', '10:00', '10:40'),
+      ]),
+    )
+    expect(await feedbackCodeForTalk(CONF, 'talk-foreign', DURING)).toBeNull()
+    for (const read of h.reads) expect(read.params.conferenceId).toBe('conf-A')
+    // The fixture is live: on its own conference it resolves.
+    expect(
+      await feedbackCodeForTalk(
+        { ...CONF, _id: 'conf-B' },
+        'talk-foreign',
+        DURING,
+      ),
+    ).toBe('zzz234')
+  })
+
+  it('refuses a talk before the program is published, or with no program date', async () => {
+    const unpublished = { ...CONF, programDate: '2026-11-01' }
+    expect(
+      await feedbackCodeForTalk(unpublished, 'talk-open', DURING),
+    ).toBeNull()
+    expect(
+      await feedbackCodeForTalk(
+        { ...CONF, programDate: null },
+        'talk-open',
+        DURING,
+      ),
+    ).toBeNull()
+  })
+
+  it('refuses a talk only on a DRAFT schedule (not public)', async () => {
+    h.dataset.push(
+      talk('talk-drafted', 'conf-A', { feedbackCode: 'dft234' }),
+      day('day-draft', 'conf-A', '2026-10-26', 'draft', [
+        slot('talk-drafted', '11:00', '11:40'),
+      ]),
+    )
+    expect(await feedbackCodeForTalk(CONF, 'talk-drafted', DURING)).toBeNull()
+    // The same talk on an official day is public: the draft day is the reason.
+    h.dataset.push(
+      day('day-2', 'conf-A', '2026-10-27', 'official', [
+        slot('talk-drafted', '09:00', '09:40'),
+      ]),
+    )
+    expect(await feedbackCodeForTalk(CONF, 'talk-drafted', DURING)).toBe(
+      'dft234',
+    )
+  })
+
+  it('refuses a talk that is not confirmed, even on the schedule', async () => {
+    h.dataset.push(
+      talk('talk-accepted', 'conf-A', {
+        status: 'accepted',
+        feedbackCode: 'abc234',
+      }),
+      day('day-2', 'conf-A', '2026-10-27', 'official', [
+        slot('talk-accepted', '09:00', '09:40'),
+      ]),
+    )
+    expect(await feedbackCodeForTalk(CONF, 'talk-accepted', DURING)).toBeNull()
+  })
+
+  it('never answers for a draft or release version, by either id', async () => {
+    h.dataset.push(
+      talk('talk-new', 'conf-A', {}),
+      talk('drafts.talk-new', 'conf-A', { feedbackCode: 'drft23' }),
+      talk('versions.rel1.talk-new', 'conf-A', { feedbackCode: 'vers23' }),
+      day('day-2', 'conf-A', '2026-10-27', 'official', [
+        slot('talk-new', '09:00', '09:40'),
+      ]),
+    )
+    for (const id of [
+      'talk-new',
+      'drafts.talk-new',
+      'versions.rel1.talk-new',
+    ]) {
+      expect(await feedbackCodeForTalk(CONF, id, DURING)).toBeNull()
+    }
+    expect(
+      await feedbackCodeForTalk(CONF, 'drafts.talk-open', DURING),
+    ).toBeNull()
+  })
+
+  it('refuses a code two published talks hold, for both of them', async () => {
+    h.dataset.push(talk('talk-dup', 'conf-A', { feedbackCode: 'k7m2qx' }))
+    expect(await feedbackCodeForTalk(CONF, 'talk-open', DURING)).toBeNull()
+    expect(await feedbackCodeForTalk(CONF, 'talk-dup', DURING)).toBeNull()
   })
 })
