@@ -18,7 +18,8 @@ vi.mock('@/lib/feedback/server', () => ({
   feedbackCodeForTalk: (...args: unknown[]) => feedbackCodeForTalk(...args),
 }))
 
-import { GET, UNKNOWN_FEEDBACK_PATH } from './route'
+import { UNKNOWN_FEEDBACK_PATH } from '@/lib/feedback/url'
+import { GET } from './route'
 
 const HOST = 'https://cloudnativebergen.dev'
 const CONFERENCE = {

@@ -6,7 +6,7 @@
  */
 import 'server-only'
 import { normalizeShortCode } from '@/lib/marketing/short-code'
-import { expireFeedbackCodeIndex } from './cache'
+import { expireFeedbackCodeIndex, expireProgrammeFeedbackLinks } from './cache'
 import {
   ensureFeedbackCode,
   mayMint,
@@ -167,6 +167,7 @@ export async function mintConferenceFeedbackCodes({
   // already held.
   if (report.minted.length > 0 || report.alreadyHad > 0) {
     expireFeedbackCodeIndex(conference._id)
+    expireProgrammeFeedbackLinks(conference._id)
   }
   const byTitle = (a: TalkRef, b: TalkRef) =>
     a.title.localeCompare(b.title) || a.talkId.localeCompare(b.talkId)

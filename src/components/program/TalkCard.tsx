@@ -52,8 +52,9 @@ function FeedbackLink({
       aria-label={compact ? 'Give feedback' : undefined}
       title={compact ? 'Give feedback' : undefined}
       className={clsx(
-        'ml-auto inline-flex shrink-0 items-center gap-1 rounded text-sm font-medium whitespace-nowrap text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-blue-400 dark:hover:text-blue-300 print:hidden',
-        compact && '-m-1 p-1',
+        'ml-auto inline-flex shrink-0 items-center gap-1 rounded text-sm font-medium whitespace-nowrap text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-blue-400 dark:hover:text-blue-300 dark:focus-visible:outline-blue-400 print:hidden',
+        // A 32px target, level with the meta's first (24px) line.
+        compact && '-mx-2 -mt-1 -mb-2 p-2',
       )}
     >
       <ChatBubbleLeftEllipsisIcon
@@ -239,6 +240,9 @@ export function TalkCard({
   const isBookmarkedTalk = isLoaded && isBookmarked(bookmarkData.talkId)
   const feedbackTalkId =
     isConfirmed && talkData.hasFeedbackCode ? talkData._id : undefined
+  // A past talk is when feedback is wanted most, so its link is never dimmed:
+  // the card's content is, instead of the whole card.
+  const dimContent = isPast && feedbackTalkId ? 'opacity-60' : undefined
 
   return (
     <div
@@ -247,7 +251,7 @@ export function TalkCard({
         'relative rounded-lg border transition-all duration-200 hover:shadow-md',
         !isConfirmed && !isWithdrawnOrRejected && 'opacity-75',
         isWithdrawnOrRejected && 'opacity-60',
-        isPast && !isWithdrawnOrRejected && 'opacity-60',
+        isPast && !isWithdrawnOrRejected && !feedbackTalkId && 'opacity-60',
         isHappeningNow &&
           'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
         isHappeningSoon && 'border-2 border-yellow-500',
@@ -270,7 +274,7 @@ export function TalkCard({
           compact ? 'space-y-2' : 'space-y-4',
         )}
       >
-        <div>
+        <div className={dimContent}>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <h3
@@ -427,7 +431,7 @@ export function TalkCard({
           isConfirmed &&
           talkData.description &&
           Array.isArray(talkData.description) && (
-            <div className="flex-1">
+            <div className={clsx('flex-1', dimContent)}>
               <div
                 className={clsx(
                   'text-sm text-gray-600 transition-all duration-200 dark:text-gray-300',
@@ -484,7 +488,12 @@ export function TalkCard({
           talkData.format &&
           isWorkshopFormat(talkData.format) &&
           talkData.prerequisites && (
-            <div className="rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800/50 dark:bg-blue-900/20">
+            <div
+              className={clsx(
+                'rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800/50 dark:bg-blue-900/20',
+                dimContent,
+              )}
+            >
               <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
                 Prerequisites
               </h4>
@@ -521,14 +530,21 @@ export function TalkCard({
         )}
 
         <div className={clsx(compact ? 'space-y-2' : 'space-y-3')}>
-          {/* Compact: the icon sits BESIDE the wrapping meta, so it is never
-              left alone on a line. Full: the text link wraps with the meta and
-              keeps to the right. */}
-          <div className="flex items-center gap-2">
+          {/* Compact: the icon sits BESIDE the wrapping meta, level with its
+              first line, so it is never left alone on a line. Full: the text
+              link follows the meta and drops, right-aligned, when it cannot
+              fit. */}
+          <div
+            className={clsx(
+              'flex gap-2',
+              compact ? 'items-start' : 'flex-wrap items-center',
+            )}
+          >
             <div
               className={clsx(
-                'flex min-w-0 flex-1 flex-wrap items-center gap-2 text-gray-600 dark:text-gray-400',
-                compact ? 'text-xs' : 'text-sm',
+                'flex flex-wrap items-center gap-2 text-gray-600 dark:text-gray-400',
+                compact ? 'min-w-0 flex-1 text-xs' : 'text-sm',
+                dimContent,
               )}
             >
               <div className="flex items-center gap-1">
@@ -558,17 +574,14 @@ export function TalkCard({
                 <span className="hidden sm:inline">{durationMinutes} min</span>
                 <span className="sm:hidden">{durationMinutes}m</span>
               </span>
-              {feedbackTalkId && !compact && (
-                <FeedbackLink talkId={feedbackTalkId} compact={false} />
-              )}
             </div>
-            {feedbackTalkId && compact && (
-              <FeedbackLink talkId={feedbackTalkId} compact />
+            {feedbackTalkId && (
+              <FeedbackLink talkId={feedbackTalkId} compact={compact} />
             )}
           </div>
 
           {!compact && isConfirmed && (
-            <div className="flex flex-wrap gap-2">
+            <div className={clsx('flex flex-wrap gap-2', dimContent)}>
               {talkData.format && (
                 <FormatBadge format={talkData.format} variant="compact" />
               )}

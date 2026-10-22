@@ -200,7 +200,7 @@ vi.mock('@/lib/sanity/client', async () => {
 import { initTRPC, TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import type { Context } from '@/server/trpc'
-import { feedbackCodeIndexTag } from '@/lib/cache/tags'
+import { conferenceTag, feedbackCodeIndexTag } from '@/lib/cache/tags'
 import { MINT_COMMIT_BUDGET_MS } from '@/lib/feedback/bounds'
 import { sessionFeedbackRouter } from './sessionFeedback'
 
@@ -304,10 +304,15 @@ describe('ensureCode — minting', () => {
       opensAt: '2026-06-10T08:00:00.000Z',
     })
     expect(doc('talk-1')?.feedbackCode).toBe(out.code)
-    expect(revalidateTag).toHaveBeenCalledTimes(1)
+    expect(revalidateTag).toHaveBeenCalledTimes(2)
     expect(revalidateTag).toHaveBeenCalledWith(feedbackCodeIndexTag('conf-A'), {
       expire: 0,
     })
+    // The programme's "Give feedback" link (#1472) rides the conference read.
+    expect(revalidateTag).toHaveBeenCalledWith(
+      conferenceTag('conf-A'),
+      'default',
+    )
   })
 
   it('returns the same code again without a write or a cache flush', async () => {
@@ -781,10 +786,14 @@ describe('mintAll — every confirmed talk without a code', () => {
     for (const id of ['talk-foreign', 'talk-accepted', 'drafts.talk-4'])
       expect(doc(id)?.feedbackCode).toBeUndefined()
     expect(doc('talk-3')?.feedbackCode).toBe('k7m2qx')
-    expect(revalidateTag).toHaveBeenCalledTimes(1)
+    expect(revalidateTag).toHaveBeenCalledTimes(2)
     expect(revalidateTag).toHaveBeenCalledWith(feedbackCodeIndexTag('conf-A'), {
       expire: 0,
     })
+    expect(revalidateTag).toHaveBeenCalledWith(
+      conferenceTag('conf-A'),
+      'default',
+    )
   })
 
   it('never repeats a code it minted, though GROQ lags the batch’s writes', async () => {
@@ -902,7 +911,7 @@ describe('mintAll — every confirmed talk without a code', () => {
     expect(again.alreadyHad).toBe(4)
     expect(h.commits).toBe(commits)
     // A run cut off before its own expiry is recovered by the next run.
-    expect(revalidateTag).toHaveBeenCalledTimes(1)
+    expect(revalidateTag).toHaveBeenCalledTimes(2)
   })
 
   it('skips a talk whose window closed and one waiting on a scheduled release', async () => {

@@ -2,13 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { feedbackCodeForTalk } from '@/lib/feedback/server'
-
-/**
- * Where every refusal lands: the attendee page's generic Unknown state. Not
- * a code (seven characters, and `o` is outside the alphabet), so the page
- * answers it without a lookup, exactly as it answers a mistyped code.
- */
-export const UNKNOWN_FEEDBACK_PATH = '/f/unknown'
+import { UNKNOWN_FEEDBACK_PATH } from '@/lib/feedback/url'
 
 /**
  * GET /program/<talkId>/feedback — the programme's "Give feedback" link

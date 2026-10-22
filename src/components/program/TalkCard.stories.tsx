@@ -204,6 +204,73 @@ export const WithFeedbackLinkCompactDark: Story = {
   globals: { theme: 'dark' },
 }
 
+/** The product of every ancestor's opacity: what the eye actually gets. */
+const renderedOpacity = (element: Element | null) => {
+  let opacity = 1
+  for (let el = element; el; el = el.parentElement)
+    opacity *= Number(getComputedStyle(el).opacity)
+  return opacity
+}
+
+export const PastWithFeedbackLink: Story = {
+  args: { talk: withFeedbackCode(), status: 'past' },
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    docs: {
+      description: {
+        story:
+          'After the session, when feedback is wanted most: the content is dimmed, the link is not.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const title = canvas.getByText(
+      'Building Scalable Cloud Native Applications with Kubernetes',
+    )
+    // Positive control: the past state still dims the card's content.
+    await expect(renderedOpacity(title)).toBeCloseTo(0.6)
+    await expect(
+      renderedOpacity(canvas.getByRole('link', { name: 'Give feedback' })),
+    ).toBe(1)
+  },
+}
+
+export const HappeningNowWithFeedbackLink: Story = {
+  args: { talk: withFeedbackCode(), status: 'happening-now' },
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole('link', { name: 'Give feedback' }),
+    ).toHaveAttribute('href', '/program/talk-1/feedback')
+  },
+}
+
+/** A code on a talk that is not confirmed never shows: the route would refuse. */
+const notConfirmedStory = (status: Status, shown: string): Story => ({
+  args: {
+    talk: (() => {
+      const base = withFeedbackCode()
+      return { ...base, talk: { ...base.talk, status } }
+    })(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // Positive control: the card rendered in its own state.
+    await expect(canvas.getAllByText(shown).length).toBeGreaterThan(0)
+    await expect(
+      canvas.queryByRole('link', { name: 'Give feedback' }),
+    ).toBeNull()
+  },
+})
+
+export const CancelledWithFeedbackCode = notConfirmedStory(
+  Status.withdrawn,
+  'This session has been cancelled',
+)
+
+export const TBAWithFeedbackCode = notConfirmedStory(Status.accepted, 'TBA')
+
 export const WithoutFeedbackCode: Story = {
   args: { talk: createMockTalk() },
   parameters: {

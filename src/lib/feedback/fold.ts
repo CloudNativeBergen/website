@@ -29,7 +29,7 @@
 import 'server-only'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { clientReadUncached } from '@/lib/sanity/client'
-import { expireFeedbackCodeIndex } from './cache'
+import { expireFeedbackCodeIndex, expireProgrammeFeedbackLinks } from './cache'
 import type { FeedbackColour } from './colour'
 import { LIVE_RESPONSES, PUBLISHED_ONLY, versionsClient } from './sanity'
 import {
@@ -451,8 +451,12 @@ export async function foldExpiredFeedback({
     // may have moved since the selection, and that index holds its code.
     const foldedUnder = new Set<string>()
     const expireCodeIndexes = () => {
-      for (const id of new Set([...foldedUnder, row.conferenceId ?? []].flat()))
+      for (const id of new Set(
+        [...foldedUnder, row.conferenceId ?? []].flat(),
+      )) {
         expireFeedbackCodeIndex(id)
+        expireProgrammeFeedbackLinks(id)
+      }
     }
     try {
       const outcome = await foldTalkFeedback(row._id, {
