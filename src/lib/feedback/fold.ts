@@ -414,8 +414,9 @@ export interface FoldReport {
 /**
  * Fold every talk past the retention (§12.2), talk by talk. Never throws for
  * one talk: it is logged, and the next goes on. After a talk folded anything
- * its conference's Feedback Code index is expired at once (§5.1): the fold
- * unset its code.
+ * its conference's Feedback Code index is expired at once (§5.1), and so is
+ * its conference read, which the programme's "Give feedback" link rides
+ * (§7.5): the fold unset its code.
  */
 export async function foldExpiredFeedback({
   now,

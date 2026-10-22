@@ -261,8 +261,10 @@ the same (one read per cache refresh), and expiries take effect.
 - A code resolves against a **per-conference index**: code → talk id, for
   **confirmed, published talks only**. It is read with `clientReadUncached`
   inside `'use cache: remote'` (plain `'use cache'` is per-instance memory) and
-  tagged `feedbackCodeIndexTag(conferenceId)` (`src/lib/cache/tags.ts`; not
-  `conferenceTag`, which would flush the whole site on every mint). A flood of
+  tagged `feedbackCodeIndexTag(conferenceId)` (`src/lib/cache/tags.ts`), its
+  own tag so that rotation, status and schedule changes need not flush the
+  whole site. _Refinement (#1472):_ a mint, bulk mint and fold ALSO expire
+  `conferenceTag`, for the programme link (§7.5). A flood of
   random codes costs no Sanity reads. The index is server-only and never passed
   to a Client Component.
 - The talk's title, speakers and slots for the page come from a second cached
@@ -1086,8 +1088,11 @@ Per `AGENTS.md` ("Agent discipline"):
   CDN's own lag. They
   can still disagree: a code two talks share (the index drops it), a stored
   value that is not a code shape, a talk referenced only from a non-official
-  day, and a code set or unset in Studio (which expires nothing) until the
-  conference cache's own refresh (up to 6 hours). A link then lands on Unknown,
+  day, a code set or unset in Studio (which expires nothing), and a code unset
+  by speaker erasure (which reaches `conferenceTag` only through the
+  operator's provisioning invalidation, stale-while-revalidate), until the
+  conference read's own 6-hour refresh plus `/program`'s hour around it
+  (about 7 hours). A link then lands on Unknown,
   or a code shows no link yet; neither reveals a code. Accepted (#1472).
 
 ## 16. Decided in review
