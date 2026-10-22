@@ -13,7 +13,10 @@
  * Refusals 1 and 2 answer with the page state the attendee would see on a
  * reload. Then the talk is read again by id through the doc endpoint, since
  * the index can be one `cacheLife` stale: a rotated, withdrawn, folded or
- * erased talk refuses at once.
+ * erased talk refuses at once. So does a talk none of whose speakers exists
+ * and is not erased: its feedback would belong to nobody (§12.3). An erasure
+ * unsets such a talk's code, but a draft or release copy that dropped a live
+ * co-speaker, published later, can bring one back.
  *
  * THE WRITE is one transaction: `createIfNotExists` on the deterministic id,
  * then a patch that `set`s only the colour, the comment and the time (an
@@ -38,6 +41,8 @@ import {
 } from './device'
 import { MAX_COMMENT_LENGTH } from './comment'
 import { attendeeState, type AttendeeFeedbackState } from './page'
+import { requestCap } from './talk-versions'
+import { SUBMIT_COMMIT_BUDGET_MS, SUBMIT_REQUEST_TIMEOUT_MS } from './bounds'
 
 const INVALID_COMMENT = Symbol('invalid comment')
 
@@ -64,6 +69,7 @@ interface TalkDoc {
   status?: string
   feedbackCode?: unknown
   conference?: { _ref?: string }
+  speakers?: ({ _ref?: unknown } | null)[] | null
 }
 
 /**
@@ -98,9 +104,15 @@ export async function submitFeedback({
   const comment = normalizeComment(rawComment)
   if (comment === INVALID_COMMENT) return { outcome: page }
 
+  // Bounded on its own, not by the platform: a speaker erasure waits out
+  // SUBMIT_WRITE_BOUND_MS before folding a talk whose code it unset (§12.3).
+  const readStartedAt = Date.now()
   let talk: TalkDoc | undefined
   try {
-    talk = await clientWrite.getDocument<TalkDoc>(target.talkId)
+    talk = await clientWrite.getDocument<TalkDoc>(
+      target.talkId,
+      requestCap(SUBMIT_REQUEST_TIMEOUT_MS),
+    )
   } catch (error) {
     console.error('Could not read the talk of a Feedback Code', error)
     return { outcome: { state: 'unavailable' } }
@@ -114,6 +126,19 @@ export async function submitFeedback({
     ) !== target.code
   ) {
     return { outcome: { state: 'unknown' } }
+  }
+  let live: boolean
+  try {
+    live = await hasLiveSpeaker(talk)
+  } catch (error) {
+    console.error('Could not read the speakers of a Feedback Code', error)
+    return { outcome: { state: 'unavailable' } }
+  }
+  if (!live) return { outcome: { state: 'unknown' } }
+  // The code checked above may be gone by now: too late, write nothing.
+  if (Date.now() - readStartedAt > SUBMIT_COMMIT_BUDGET_MS) {
+    console.error('A Feedback Response came too late after its check')
+    return { outcome: { state: 'unavailable' } }
   }
 
   // The cookie is set whatever the write's outcome: a commit that was applied
@@ -146,7 +171,10 @@ export async function submitFeedback({
         })
         return comment === null ? set.unset(['comment']) : set
       })
-      .commit({ returnDocuments: true })
+      .commit({
+        returnDocuments: true,
+        ...requestCap(SUBMIT_REQUEST_TIMEOUT_MS),
+      })
     stored = (docs as (ResponseDoc | undefined)[])
       .filter((doc) => doc?._id === id)
       .at(-1)
@@ -172,6 +200,19 @@ export async function submitFeedback({
 interface ResponseDoc {
   _id: string
   comment?: unknown
+}
+
+/** A speaker of the talk exists and is not erased (minting's rule, §5). */
+async function hasLiveSpeaker(talk: TalkDoc): Promise<boolean> {
+  const ids = (talk.speakers ?? []).flatMap((s) =>
+    typeof s?._ref === 'string' ? [s._ref] : [],
+  )
+  if (ids.length === 0) return false
+  const speakers = await clientWrite.getDocuments<{
+    _type?: string
+    erasedAt?: unknown
+  }>(ids, requestCap(SUBMIT_REQUEST_TIMEOUT_MS))
+  return speakers.some((s) => s?._type === 'speaker' && !s.erasedAt)
 }
 
 /**

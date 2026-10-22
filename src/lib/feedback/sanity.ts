@@ -40,6 +40,14 @@ export const PUBLISHED_ONLY =
   '!(_id in path("drafts.**")) && !(_id in path("versions.**"))'
 
 /**
+ * The live, published Feedback Responses of the talk an outer query is
+ * testing (`^`), of the talk's own conference: the responses the totals
+ * count (§4.3). For a projection or a `count()` inside a talk query.
+ */
+// groq-global-scoped: correlated to the talk being tested, and to its own conference, by `^._id` and `^.conference._ref`
+export const LIVE_RESPONSES = `*[_type == "feedbackResponse" && talk._ref == ^._id && conference._ref == ^.conference._ref && ${PUBLISHED_ONLY}]`
+
+/**
  * Every slot of `talkId` on the conference's published, official schedule
  * days (§6). Placeholder slots never carry a talk reference, so they never
  * match.

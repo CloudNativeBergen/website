@@ -41,8 +41,12 @@
  * NOT ATOMIC END TO END, AND THAT IS DELIBERATE. Every document mutation is one
  * revision-guarded transaction, but the image ASSET delete cannot join it:
  * Sanity refuses to delete an asset while a reference to it is live, so the
- * unset must commit first. Idempotency is what covers the gap — a failed run is
- * re-run, not repaired.
+ * unset must commit first. Nor can the Session Feedback FOLD: after a settle
+ * wait, a fresh look unsets any code back on a talk the subject was alone on
+ * (then sweeps it), and the responses go in chunks (so they cannot fail the
+ * transaction), each followed by the post-commit sweep of the talk's
+ * versions. Idempotency is what covers the gap — a failed run is re-run,
+ * not repaired.
  *
  * MARKETING IMAGES (#1162). Every image of the speaker the marketing tools hold
  * — gallery assets about them or a talk they give, Task renders about either —
@@ -53,6 +57,13 @@
  * POST VARIANTS (#1232). Every `socialPostVariant` loses its records of the
  * speaker (`mentions[]`: ref, handle, DID, name), and a body not yet posted
  * loses their tag and plain name. See `./erasure-mentions.ts`.
+ *
+ * SESSION FEEDBACK (#1438, speaker feedback spec §12.3). A talk whose ONLY
+ * non-erased speaker is the subject loses its Feedback Code on every version
+ * in the transaction, and its responses are folded into totals and deleted
+ * after it; a talk with another live speaker is untouched. A version locked
+ * in a release is never patched (it would fail the transaction on every run):
+ * the talk is reported as held. See `./erasure-feedback.ts`.
  *
  * SENT COMMUNICATIONS (#1265). Every `sponsorActivity` send record naming the
  * subject as a recipient — by ADDRESS, it holds no reference — has that
@@ -78,7 +89,13 @@ import {
   clientReadUncached as clientRead,
   clientWrite,
 } from '@/lib/sanity/client'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { groq } from 'next-sanity'
+import {
+  MINT_WRITE_BOUND_MS,
+  SUBMIT_MAX_DURATION_S,
+  SUBMIT_WRITE_BOUND_MS,
+} from '@/lib/feedback/bounds'
 import {
   COUNT_API_VERSION,
   deleteImageAssetIfOrphaned,
@@ -98,6 +115,24 @@ import {
   type MentionIdentity,
   type SpeakerMentionInputs,
 } from './erasure-mentions'
+import {
+  fetchSpeakerFeedbackInputs,
+  planSpeakerFeedbackErasure,
+  soleTalkIds,
+  stillSubjectsAlone,
+  residualSpeakerFeedback,
+  type SpeakerFeedbackInputs,
+} from './erasure-feedback'
+// Not through the `@/lib/feedback/server` barrel: it loads the summary's
+// email config, which asserts RESEND_API_KEY at import, and
+// `pnpm erase-speaker` must run without the email key.
+import {
+  FoldError,
+  foldTalkFeedback,
+  sweepUnsetFeedbackCode,
+  type Eligibility,
+  type FoldOutcome,
+} from '@/lib/feedback/fold'
 import {
   fetchSponsorRecipientDocs,
   planSponsorRecipientRedaction,
@@ -381,6 +416,12 @@ export interface ErasureInputs {
    * `./erasure-mentions.ts`.
    */
   mentions: SpeakerMentionInputs
+  /**
+   * The subject's talks with their versions, other live speakers and
+   * response counts, for the Session Feedback branch (speaker feedback spec
+   * §12.3). See `./erasure-feedback.ts`.
+   */
+  feedback: SpeakerFeedbackInputs
   /** Erasure timestamp, injected so tests are deterministic. */
   now: string
 }
@@ -454,6 +495,20 @@ export interface ErasurePlan {
     variantIds: string[]
     listedBy: string[]
   }[]
+  /**
+   * Talks with no other live speaker whose Feedback Responses are folded
+   * AFTER the transaction (speaker feedback spec §12.3), in chunks, so a
+   * large talk cannot fail the erasure.
+   */
+  feedbackFoldTalkIds: string[]
+  /** Talks whose code the transaction unsets: swept after it (§4.2). */
+  feedbackCodeTalkIds: string[]
+  /**
+   * Talks of that kind the erasure cannot finish this run: a version locked
+   * in a release keeps its code, or the releases could not be listed. Never
+   * patched (a locked version would fail the whole transaction); re-run.
+   */
+  feedbackHeld: { talkId: string; reason: string }[]
   /** Conference ids whose caches must be revalidated. */
   affectedConferenceIds: string[]
   /** Non-empty ⇒ the operation must not run. */
@@ -842,16 +897,7 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
   // one revision guard: a second guarded patch of the same document in the
   // same transaction would be refused against the revision the first wrote.
   const mentionPlan = planSpeakerMentionErasure(speakerId, inputs.mentions)
-  for (const patch of mentionPlan.patches) {
-    const same = documentPatches.find((p) => p.id === patch.id)
-    if (!same) {
-      documentPatches.push(patch)
-      continue
-    }
-    if (patch.set) same.set = { ...same.set, ...patch.set }
-    if (patch.unset) same.unset = [...(same.unset ?? []), ...patch.unset]
-    same.reason = `${same.reason}; ${patch.reason}`
-  }
+  for (const patch of mentionPlan.patches) mergeInto(documentPatches, patch)
   refusals.push(...mentionPlan.refusals)
 
   // --- the merge trail on OTHER speakers ----------------------------------
@@ -873,15 +919,16 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
   // the mentions branch is: one document, one revision guard.
   for (const doc of inputs.sponsorActivityDocs) {
     const patch = planSponsorRecipientRedaction(doc, emails, refusals)
-    if (!patch) continue
-    const same = documentPatches.find((p) => p.id === patch.id)
-    if (!same) {
-      documentPatches.push(patch)
-      continue
-    }
-    same.set = { ...same.set, ...patch.set }
-    same.reason = `${same.reason}; ${patch.reason}`
+    if (patch) mergeInto(documentPatches, patch)
   }
+
+  // --- Session Feedback on talks no live speaker is left on (§12.3) -------
+
+  // The code is unset here, in the transaction; the responses are folded
+  // after it. A talk the ticket branch already patches gets ONE patch, so it
+  // keeps one revision guard (the ticket's, read with the arrays it rewrites).
+  const feedbackPlan = planSpeakerFeedbackErasure(speakerId, inputs.feedback)
+  for (const patch of feedbackPlan.patches) mergeInto(documentPatches, patch)
 
   const noop =
     refusals.length === 0 &&
@@ -891,7 +938,8 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     documentPatches.length === 0 &&
     documentDeletes.length === 0 &&
     imageAssetId === null &&
-    assetPlan.fileIds.length === 0
+    assetPlan.fileIds.length === 0 &&
+    feedbackPlan.foldTalkIds.length === 0
 
   return {
     speakerId,
@@ -908,10 +956,33 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     linkedFileIds: assetPlan.fileIds,
     retainedBanking,
     sharedByLinkOnly: linkOnlySharedResidual(speakerId, inputs.mentions),
+    feedbackFoldTalkIds: feedbackPlan.foldTalkIds,
+    feedbackCodeTalkIds: feedbackPlan.codeTalkIds,
+    feedbackHeld: feedbackPlan.held,
     affectedConferenceIds: [...affectedConferenceIds],
     refusals,
     noop,
   }
+}
+
+/**
+ * Add `patch` to `patches`, or merge it into the patch of the same document
+ * already there: one document gets ONE patch, so it keeps one revision guard
+ * (a second guarded patch of it in the same transaction would be refused
+ * against the revision the first wrote). The first patch's guard is kept.
+ */
+function mergeInto(
+  patches: ErasureDocumentPatch[],
+  patch: ErasureDocumentPatch,
+): void {
+  const same = patches.find((p) => p.id === patch.id)
+  if (!same) {
+    patches.push(patch)
+    return
+  }
+  if (patch.set) same.set = { ...same.set, ...patch.set }
+  if (patch.unset) same.unset = [...(same.unset ?? []), ...patch.unset]
+  same.reason = `${same.reason}; ${patch.reason}`
 }
 
 /**
@@ -1228,7 +1299,28 @@ export interface EraseSpeakerOptions {
    * or `--verify` can find those handles again.
    */
   acceptSharedHandles?: boolean
+  /**
+   * Waits before the Session Feedback fold of a talk whose code this run
+   * unset, so a Submit that re-read the code before the transaction has
+   * landed first and is folded once (§12.3). Defaults to a real wait of
+   * {@link FEEDBACK_SETTLE_MS}; injected in tests.
+   */
+  waitForInFlightSubmits?: (ms: number) => Promise<void>
 }
+
+/**
+ * How long after `erasedAt` the erasure waits before its last look at the
+ * subject's talks (spec §12.3): comfortably above Submit's and a code mint's
+ * own bounds from their check to their write's request ending
+ * (`SUBMIT_WRITE_BOUND_MS`, `MINT_WRITE_BOUND_MS`, 20 s each) and above the
+ * `/f/[code]` page's `maxDuration` (30 s), with 30 s to spare.
+ */
+export const FEEDBACK_SETTLE_MS =
+  Math.max(
+    SUBMIT_WRITE_BOUND_MS,
+    MINT_WRITE_BOUND_MS,
+    SUBMIT_MAX_DURATION_S * 1000,
+  ) + 30_000
 
 /** What the operator gets back. */
 export interface EraseSpeakerResult {
@@ -1245,6 +1337,12 @@ export interface EraseSpeakerResult {
   cache: { tags: string[]; revalidated: boolean; error: string | null }
   verification: ErasureVerification | null
   /**
+   * Each talk whose Feedback Responses were folded after the transaction
+   * (speaker feedback spec §12.3). A `failed` one keeps its unfolded
+   * responses, which a re-run folds; `held` waits on a locked release.
+   */
+  feedbackFolds: FeedbackFoldResult[]
+  /**
    * Post variants the commit's verification found saved during the run and
    * repaired in a second transaction (#1232). Counts toward `committed`.
    */
@@ -1255,6 +1353,15 @@ export interface EraseSpeakerResult {
    */
   acceptedSharedHandles: ErasurePlan['sharedByLinkOnly']
   err: Error | null
+}
+
+/** What happened to one talk's fold after the erasure transaction. */
+export interface FeedbackFoldResult {
+  talkId: string
+  status: FoldOutcome['status'] | 'failed'
+  /** Responses this run folded (chunks that committed). */
+  responses: number
+  error: string | null
 }
 
 /** What happened to one marketing file linked to the subject. */
@@ -1351,6 +1458,24 @@ export interface ErasureVerification {
       variantIds: string[]
       listedBy: string[]
     }[]
+    /**
+     * Feedback Codes still held by a talk no live speaker is left on, or by
+     * one of its versions (speaker feedback spec §12.3), a locked release's
+     * included. Counted by re-running the planner.
+     */
+    feedbackCodes: number
+    /**
+     * Feedback Responses not folded yet on such talks: a fold that failed or
+     * waits on a locked release. A re-run folds them.
+     */
+    feedbackResponses: number
+    /**
+     * Such talks the erasure could not finish: a version locked in a release,
+     * or releases that could not be listed (a release copy may then still
+     * hold the code unseen). Re-run once the release is published or
+     * archived, or the releases list again.
+     */
+    feedbackHeld: number
   }
 }
 
@@ -1506,6 +1631,11 @@ async function fetchErasureInputs(
     priorMentions,
   )
 
+  const feedback = await fetchSpeakerFeedbackInputs(
+    speakerId,
+    referencingDocs ?? [],
+  )
+
   return {
     speaker,
     referencingDocs: referencingDocs ?? [],
@@ -1517,6 +1647,7 @@ async function fetchErasureInputs(
     assetFileIds: assets.fileIds,
     assets: assets.inputs,
     mentions,
+    feedback,
     now,
   }
 }
@@ -1547,12 +1678,14 @@ export async function eraseSpeakerInPlace(
     dryRun = false,
     revalidate,
     acceptSharedHandles = false,
+    waitForInFlightSubmits = (ms: number) => sleep(ms),
   } = opts
   const empty: EraseSpeakerResult = {
     plan: null,
     committed: false,
     imageAsset: { id: null, deleted: false, remainingReferences: 0 },
     linkedFiles: [],
+    feedbackFolds: [],
     cache: { tags: [], revalidated: false, error: null },
     verification: null,
     repairedPostVariants: 0,
@@ -1668,8 +1801,33 @@ export async function eraseSpeakerInPlace(
     // the CDN; the asset itself goes too, unless something else still uses it.
     const imageAsset = await deleteImageAssetIfOrphaned(plan.imageAssetId)
 
+    // The Session Feedback of talks no live speaker is left on: their code
+    // went in the transaction; after the settle wait, a fresh look unsets any
+    // code still or again on any version (one created during the commit, or
+    // a late mint), sweeps, and folds their responses, in chunks.
+    // The settle can take minutes: the anonymised speaker reaches the cached
+    // pages now, and again after it (a late code's unset, the final state).
+    if (revalidate && soleTalkIds(plan.speakerId, inputs.feedback).length > 0) {
+      await revalidateErasureTags(plan, revalidate)
+    }
+    const {
+      folds: feedbackFolds,
+      settled: feedbackSettled,
+      conferenceIds: feedbackConferenceIds,
+    } = await settleAndFoldFeedback(plan, inputs, { waitForInFlightSubmits })
+
     // --- phase 4: caches ----------------------------------------------------
-    const cache = await revalidateErasureTags(plan, revalidate)
+    // Also the conferences the looks after the wait unset or folded under: a
+    // talk may have moved since the plan, and that index holds its code.
+    const cache = await revalidateErasureTags(
+      {
+        ...plan,
+        affectedConferenceIds: [
+          ...new Set([...plan.affectedConferenceIds, ...feedbackConferenceIds]),
+        ],
+      },
+      revalidate,
+    )
 
     // --- phase 5: verification ---------------------------------------------
     // The PRE-erasure match set is threaded through: phase 2 has just destroyed
@@ -1722,6 +1880,12 @@ export async function eraseSpeakerInPlace(
       }
     }
 
+    // A fold that never settled may still have something landing: never
+    // CLEAN, so the operator re-runs (runbook step 3d).
+    if (verification && !feedbackSettled) {
+      verification = { ...verification, clean: false }
+    }
+
     console.info('[speaker-erasure] anonymised speaker in place', {
       actor,
       speakerId: plan.speakerId,
@@ -1733,6 +1897,18 @@ export async function eraseSpeakerInPlace(
       imageAssetDeleted: imageAsset.deleted,
       linkedFilesDeleted: linkedFiles.filter((f) => f.deleted).length,
       linkedFilesKept: linkedFiles.filter((f) => !f.deleted).length,
+      feedbackResponsesFolded: feedbackFolds.reduce(
+        (n, f) => n + f.responses,
+        0,
+      ),
+      feedbackTalksHeld: new Set([
+        ...plan.feedbackHeld.map((h) => h.talkId),
+        ...feedbackFolds
+          .filter((f) => f.status === 'held')
+          .map((f) => f.talkId),
+      ]).size,
+      feedbackFoldsFailed: feedbackFolds.filter((f) => f.status === 'failed')
+        .length,
       verificationClean: verification?.clean ?? null,
     })
 
@@ -1741,6 +1917,7 @@ export async function eraseSpeakerInPlace(
       committed: !plan.noop || repairedPostVariants > 0,
       imageAsset,
       linkedFiles,
+      feedbackFolds,
       cache,
       verification,
       repairedPostVariants,
@@ -1790,6 +1967,219 @@ async function repairPostVariants(
     })
   await tx.commit()
   return { patched: patches.length, identity: mentions.identity }
+}
+
+/** Looks after the settle wait before a run that keeps changing gives up. */
+export const MAX_SETTLE_LOOKS = 4
+
+/**
+ * The Session Feedback fold after the transaction (spec §12.3), on every run
+ * over a subject who has talks no other live speaker is on, whatever this
+ * run itself changed.
+ *
+ * 1. Wait one full {@link FEEDBACK_SETTLE_MS} from now. Admission closes
+ *    when the speaker's erasure commits (a mint checks the speaker) and when
+ *    a talk's code is unset (Submit checks the code); when an earlier,
+ *    crashed run did either is not stored, so every run waits as if it were
+ *    now. A Submit or a mint admitted before has landed by then (its own
+ *    bound is below the period). A re-run of an old erasure pays a minute.
+ * 2. Look again from fresh reads: unset any code back on such a talk or a
+ *    version (a late mint), each guarded, then sweep it; fold every such talk
+ *    that has responses now, including one that had none before.
+ * 3. A look that unset a code or folded anything may have let something in
+ *    behind it (an answer admitted through a late mint's code): wait the
+ *    period again and look again, until a look changes nothing, at most
+ *    {@link MAX_SETTLE_LOOKS} looks. Still changing then: reported as
+ *    `failed` (`held`, with its reason, for a talk the last look held), and
+ *    the verification is not CLEAN, so the operator re-runs.
+ *
+ * Never throws.
+ */
+async function settleAndFoldFeedback(
+  plan: ErasurePlan,
+  inputs: ErasureInputs,
+  {
+    waitForInFlightSubmits,
+  }: { waitForInFlightSubmits: (ms: number) => Promise<void> },
+): Promise<{
+  folds: FeedbackFoldResult[]
+  settled: boolean
+  /** Conferences of the talks a look unset a code on or folded. */
+  conferenceIds: string[]
+}> {
+  if (soleTalkIds(plan.speakerId, inputs.feedback).length === 0) {
+    return { folds: [], settled: true, conferenceIds: [] }
+  }
+  let closedAt = Date.now()
+  let held: FeedbackFoldResult[] = []
+  const conferences = new Set<string>()
+  const done = (folds: FeedbackFoldResult[], settled: boolean) => ({
+    folds: oneOutcomePerTalk(folds),
+    settled,
+    conferenceIds: [...conferences],
+  })
+  const eligible = stillSubjectsAlone(plan.speakerId)
+
+  const failedAll = (talkIds: string[], what: string, error: unknown) =>
+    talkIds.map((talkId) => ({
+      talkId,
+      status: 'failed' as const,
+      responses: 0,
+      error: `${what}: ${error instanceof Error ? error.message : String(error)}`,
+    }))
+  const folds: FeedbackFoldResult[] = []
+  for (let look = 1; look <= MAX_SETTLE_LOOKS; look++) {
+    const remaining = closedAt + FEEDBACK_SETTLE_MS - Date.now()
+    if (remaining > 0) {
+      console.info(
+        `[speaker-erasure] waiting ${Math.ceil(remaining / 1000)} s for in-flight Session Feedback answers and code mints (look ${look})`,
+      )
+      await waitForInFlightSubmits(remaining)
+    }
+    let fresh: ReturnType<typeof planSpeakerFeedbackErasure>
+    try {
+      const freshInputs = await fetchSpeakerFeedbackInputs(
+        plan.speakerId,
+        inputs.referencingDocs,
+      )
+      fresh = planSpeakerFeedbackErasure(plan.speakerId, freshInputs)
+      const acted = new Set([...fresh.codeTalkIds, ...fresh.foldTalkIds])
+      for (const t of freshInputs.talks) {
+        const id = t.talk.conference?._ref
+        if (acted.has(t.talk._id) && id) conferences.add(id)
+      }
+    } catch (error) {
+      // Every talk the subject was alone on, one outcome each: a talk an
+      // earlier look folded is still reported once, a talk that only had a
+      // code unset too.
+      folds.push(
+        ...failedAll(
+          soleTalkIds(plan.speakerId, inputs.feedback),
+          'could not list the talks to fold',
+          error,
+        ),
+      )
+      return done([...folds, ...held], false)
+    }
+    // Talks this look could not finish (a release turned non-active, or
+    // stopped listing, during the wait): reported as of the last look.
+    held = fresh.held.map(({ talkId, reason }) => ({
+      talkId,
+      status: 'held' as const,
+      responses: 0,
+      error: reason,
+    }))
+    let changed = false
+    if (fresh.patches.length > 0) {
+      // A change from the moment it is sent: a commit whose reply was lost
+      // may have applied, and an answer admitted through the code it unset
+      // may still be on its way. The next look retries what did not apply.
+      changed = true
+      try {
+        const tx = clientWrite
+          .withConfig({ apiVersion: COUNT_API_VERSION })
+          .transaction()
+        for (const patch of fresh.patches) {
+          tx.patch(patch.id, (p) =>
+            p.ifRevisionId(patch.rev ?? '').unset(patch.unset ?? []),
+          )
+        }
+        await tx.commit()
+        for (const talkId of fresh.codeTalkIds) {
+          await sweepUnsetFeedbackCode(talkId)
+        }
+      } catch (error) {
+        console.error(
+          '[speaker-erasure] unsetting a Feedback Code that came back failed or lost its reply; looking again',
+          error,
+        )
+      }
+    }
+    const folded = await foldFeedback(
+      fresh.foldTalkIds,
+      new Date(inputs.now),
+      async (talk) => {
+        // The conference the fold is checked, and so runs, under.
+        const verdict = await eligible(talk)
+        const id = talk.conference?._ref
+        if (verdict && id) conferences.add(id)
+        return verdict
+      },
+    )
+    folds.push(...folded)
+    if (folded.some((f) => f.responses > 0)) changed = true
+    if (!changed) return done([...folds, ...held], true)
+    closedAt = Date.now()
+  }
+  // Held last, so a talk held at the last look keeps that reason and its
+  // remedy rather than a bare `failed`.
+  return done(
+    [
+      ...folds,
+      ...failedAll(
+        soleTalkIds(plan.speakerId, inputs.feedback),
+        `still changing after ${MAX_SETTLE_LOOKS} looks`,
+        new Error('re-run the erasure'),
+      ),
+      ...held,
+    ],
+    false,
+  )
+}
+
+/**
+ * One outcome per talk across the looks: the responses each look folded,
+ * added up, and the LATEST status other than `nothing` (a chunk that failed
+ * and a later look that folded the rest is `folded`).
+ */
+function oneOutcomePerTalk(
+  results: FeedbackFoldResult[],
+): FeedbackFoldResult[] {
+  const byTalk = new Map<string, FeedbackFoldResult>()
+  for (const r of results) {
+    const was = byTalk.get(r.talkId)
+    if (!was) {
+      byTalk.set(r.talkId, { ...r })
+      continue
+    }
+    byTalk.set(
+      r.talkId,
+      r.status === 'nothing'
+        ? { ...was, responses: was.responses + r.responses }
+        : { ...r, responses: was.responses + r.responses },
+    )
+  }
+  return [...byTalk.values()]
+}
+
+/**
+ * Fold each talk's responses (speaker feedback spec §12.3, §12.2), one talk
+ * at a time and never throwing: the erasure has committed, and a failed fold
+ * leaves unfolded responses that a re-run plans again.
+ */
+async function foldFeedback(
+  talkIds: string[],
+  now: Date,
+  eligible: Eligibility,
+): Promise<FeedbackFoldResult[]> {
+  const out: FeedbackFoldResult[] = []
+  for (const talkId of talkIds) {
+    try {
+      const { status, responses } = await foldTalkFeedback(talkId, {
+        now,
+        eligible,
+      })
+      out.push({ talkId, status, responses, error: null })
+    } catch (error) {
+      out.push({
+        talkId,
+        status: 'failed',
+        responses: error instanceof FoldError ? error.responses : 0,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return out
 }
 
 /**
@@ -2086,6 +2476,8 @@ async function verifyErasureDetailed(
     (field) => !isAbsent(doc, field),
   ) as string[]
 
+  const feedback = residualSpeakerFeedback(speakerId, inputs.feedback)
+
   const nameIsPlaceholder = doc.name === ERASED_SPEAKER_NAME
   const emailIsAnonymised = doc.email === targetEmail
   const slugIsAnonymised = currentSlug(doc) === targetSlug
@@ -2116,6 +2508,9 @@ async function verifyErasureDetailed(
     postVariants,
     postVariantIds,
     sharedByLinkOnly,
+    feedbackCodes: feedback.codes,
+    feedbackResponses: feedback.responses,
+    feedbackHeld: feedback.held,
   }
 
   const clean =
@@ -2142,7 +2537,10 @@ async function verifyErasureDetailed(
     videoProjects === 0 &&
     linkedFiles === 0 &&
     postVariants === 0 &&
-    sharedByLinkOnly.length === 0
+    sharedByLinkOnly.length === 0 &&
+    feedback.codes === 0 &&
+    feedback.responses === 0 &&
+    feedback.held === 0
 
   return {
     verification: { clean, residual },

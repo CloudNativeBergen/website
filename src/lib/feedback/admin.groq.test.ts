@@ -277,6 +277,21 @@ describe('readAdminFeedback — what is read', () => {
     expect(ids).toEqual(['talk-a', 'talk-b', 'talk-withdrawn'])
   })
 
+  it('keeps a withdrawn talk whose last responses were folded, with its folded totals', async () => {
+    h.dataset.push(
+      talk('talk-folded', {
+        status: 'withdrawn',
+        feedbackFolded: { greenCount: 1, yellowCount: 0, redCount: 0 },
+      }),
+    )
+    const out = await read()
+    expect(
+      out.sessions.find((s) => s.talkId === 'talk-folded')?.totals.combined,
+    ).toEqual({ green: 1, yellow: 0, red: 0 })
+    // talk-a: 3 cards + 1 folded green, 1 yellow card; talk-folded: 1 green.
+    expect(out.totals.combined).toEqual({ green: 5, yellow: 1, red: 0 })
+  })
+
   it('shows organizers every comment oldest first, hidden ones marked, empty ones left out', async () => {
     h.dataset.push(
       response('talk-a', 'green', { comment: 'Great demo' }),

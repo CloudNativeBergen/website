@@ -32,6 +32,8 @@ const h = vi.hoisted(() => ({
   releasesFail: false,
   /** Ids asked of the doc endpoint, in order. */
   docReads: [] as string[],
+  /** Runs on every doc-endpoint read of speakers only (a liveness check). */
+  onSpeakerRead: null as null | (() => void),
   /** Each doc-endpoint read with how many commits had landed before it. */
   readLog: [] as { id: string; commits: number }[],
   revs: 0,
@@ -101,6 +103,7 @@ vi.mock('@/lib/sanity/client', async () => {
     // what Sanity would read.
     getDocument: async (id: string) => {
       h.docReads.push(id)
+      if (id.startsWith('sp-')) h.onSpeakerRead?.()
       h.readLog.push({ id, commits: h.commits })
       const found = id
         .split(',')
@@ -111,6 +114,9 @@ vi.mock('@/lib/sanity/client', async () => {
     },
     getDocuments: async (ids: string[]) => {
       h.docReads.push(...ids)
+      if (ids.length > 0 && ids.every((id) => id.startsWith('sp-'))) {
+        h.onSpeakerRead?.()
+      }
       return ids.map(byId)
     },
     transaction: () => {
@@ -195,6 +201,7 @@ import { initTRPC, TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import type { Context } from '@/server/trpc'
 import { feedbackCodeIndexTag } from '@/lib/cache/tags'
+import { MINT_COMMIT_BUDGET_MS } from '@/lib/feedback/bounds'
 import { sessionFeedbackRouter } from './sessionFeedback'
 
 const t = initTRPC.context<Context>().create()
@@ -252,6 +259,7 @@ beforeEach(() => {
   h.revs = 0
   h.commits = 0
   h.attempts = 0
+  h.onSpeakerRead = null
   h.releases = []
   h.releasesFail = false
   h.docReads = []
@@ -1083,6 +1091,81 @@ describe('organizer mint — races', () => {
   })
 })
 
+describe('organizer mint — its own time budget (#1438)', () => {
+  const jump = () =>
+    vi.setSystemTime(new Date(Date.now() + MINT_COMMIT_BUDGET_MS + 1))
+
+  it('a mint whose check ran past its budget writes nothing and asks to try again', async () => {
+    h.onSpeakerRead = jump
+    await expect(
+      organizer().mintCode({ talkId: 'talk-1' }),
+    ).rejects.toMatchObject({ code: 'TIMEOUT' })
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+    expect(h.attempts).toBe(0)
+  })
+
+  it('a rotation past its budget keeps the old code and asks to try again', async () => {
+    setTalk('talk-1', { feedbackCode: 'k7m2qx' })
+    h.onSpeakerRead = jump
+    await expect(
+      organizer().rotateCode({ talkId: 'talk-1', code: 'k7m2qx' }),
+    ).rejects.toMatchObject({ code: 'TIMEOUT' })
+    expect(doc('talk-1')?.feedbackCode).toBe('k7m2qx')
+    expect(h.attempts).toBe(0)
+  })
+
+  it('a speaker’s own mint past its budget asks to try again too', async () => {
+    h.onSpeakerRead = jump
+    await expect(
+      caller().ensureCode({ talkId: 'talk-1' }),
+    ).rejects.toMatchObject({ code: 'TIMEOUT' })
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+  })
+
+  it('mintAll reports such a talk as failed, to run again, not as changed', async () => {
+    let reads = 0
+    h.onSpeakerRead = () => {
+      if (reads++ === 0) jump()
+    }
+    const out = await organizer().mintAll()
+    // Every mint in flight when the clock jumped is past its budget.
+    expect(out.failed.length).toBeGreaterThan(0)
+    for (const t of out.failed)
+      expect(doc(t.talkId)?.feedbackCode).toBeUndefined()
+    expect(out.skipped.filter((t) => t.reason === 'changed')).toEqual([])
+  })
+
+  it('a retry starts a fresh budget at its new liveness check', async () => {
+    // The first commit loses to a concurrent edit, and takes long.
+    h.beforeCommit.push(() => {
+      h.dataset = h.dataset.map((d) =>
+        d._id === 'talk-1' ? { ...d, _rev: 'rev-edited' } : d,
+      )
+      jump()
+    })
+    const out = await organizer().mintCode({ talkId: 'talk-1' })
+    expect(out.code).toMatch(CODE)
+    expect(doc('talk-1')?.feedbackCode).toBe(out.code)
+  })
+
+  it('a retry’s budget runs from the start of its liveness re-read, not its end', async () => {
+    h.beforeCommit.push(() => {
+      h.dataset = h.dataset.map((d) =>
+        d._id === 'talk-1' ? { ...d, _rev: 'rev-edited' } : d,
+      )
+    })
+    // The retry's re-read of the speakers is what takes long.
+    let reads = 0
+    h.onSpeakerRead = () => {
+      if (reads++ === 1) jump()
+    }
+    await expect(
+      organizer().mintCode({ talkId: 'talk-1' }),
+    ).rejects.toMatchObject({ code: 'TIMEOUT' })
+    expect(doc('talk-1')?.feedbackCode).toBeUndefined()
+  })
+})
+
 describe('mintAll — within the function’s time limit', () => {
   const extra = Array.from({ length: 8 }, (_, i) => `talk-x${i}`)
   beforeEach(() => {
@@ -1104,12 +1187,17 @@ describe('mintAll — within the function’s time limit', () => {
     const out = await organizer().mintAll()
     const notReached = out.skipped.filter((t) => t.reason === 'notReached')
     expect(notReached.length).toBeGreaterThan(0)
-    for (const t of notReached)
-      expect(doc(t.talkId)?.feedbackCode).toBeUndefined()
-    expect(out.minted.length + notReached.length).toBe(extra.length + 2)
+    // A mint already in flight when the clock jumped is past its commit
+    // budget (#1438): it writes nothing and fails, and the next run mints it.
+    const left = [
+      ...out.skipped.filter((t) => t.reason === 'notReached'),
+      ...out.failed,
+    ]
+    for (const t of left) expect(doc(t.talkId)?.feedbackCode).toBeUndefined()
+    expect(out.minted.length + left.length).toBe(extra.length + 2)
     const again = await organizer().mintAll()
     expect(again.minted.map((m) => m.talkId).sort()).toEqual(
-      notReached.map((t) => t.talkId).sort(),
+      left.map((t) => t.talkId).sort(),
     )
   })
 })

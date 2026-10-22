@@ -86,4 +86,23 @@ describe('Session Feedback on /privacy', () => {
     // Never the false "can't be linked to you after the window" (R1).
     expect(rights).not.toMatch(/linked to you/)
   })
+
+  it('states the retention: the 24-month fold, and earlier when every speaker of the session is erased (§12.2, §12.3)', () => {
+    const copy = text(SessionFeedbackPrivacy)
+    expect(copy).toMatch(
+      /24 months after the conference ends; then comments and individual answers are deleted and only per-session totals remain/,
+    )
+    expect(copy).toMatch(
+      /If every speaker of a session has their personal data erased, this happens then/,
+    )
+    // Never an unqualified promise: a held or moved session can outlive it.
+    // A session waiting on a site update is deleted later by itself; one
+    // moved to another conference keeps its earlier answers until asked.
+    expect(copy).toMatch(
+      /waiting on a scheduled site update, this happens once that update is published/,
+    )
+    expect(copy).toMatch(
+      /moved to another conference, the answers it got before the move are only deleted on request: ask the organizers/,
+    )
+  })
 })

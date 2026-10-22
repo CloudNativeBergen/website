@@ -43,6 +43,7 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 import { submitFeedbackAnswer } from '@/app/(public)/f/[code]/actions'
 import { feedbackResponseTag } from '@/lib/cache/tags'
+import { SUBMIT_COMMIT_BUDGET_MS } from '@/lib/feedback/bounds'
 
 const store = () => h.store!
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
@@ -64,6 +65,7 @@ const talk = (id: string, conference: string, code: string) => ({
   status: 'confirmed',
   title: `Title of ${id}`,
   feedbackCode: code,
+  speakers: [{ ...ref('sp-live'), _key: 'k1' }],
 })
 
 const day = (
@@ -115,6 +117,7 @@ beforeEach(() => {
   h.resolution = { conference: CONF, status: 'resolved' }
   h.updateTag.mockReset()
   store().reset([
+    { _id: 'sp-live', _type: 'speaker', _rev: 'rev-sp', name: 'Live' },
     talk('talk-open', 'conf-A', 'k7m2qx'),
     talk('talk-later', 'conf-A', 'abc234'),
     talk('talk-done', 'conf-A', 'def567'),
@@ -131,6 +134,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  // A spy on the shared client must not outlive its test (#1438).
+  vi.restoreAllMocks()
 })
 
 describe('the first tap', () => {
@@ -140,7 +145,7 @@ describe('the first tap', () => {
       colour: 'green',
       comment: null,
       // The talk is public, so the thank-you keeps its heading.
-      talk: { title: 'Title of talk-open', speakers: [] },
+      talk: { title: 'Title of talk-open', speakers: ['Live'] },
     })
 
     const [response] = responses()
@@ -301,7 +306,7 @@ describe('the comment (F2)', () => {
       state: 'answered',
       colour: 'green',
       comment: 'Great demo!',
-      talk: { title: 'Title of talk-open', speakers: [] },
+      talk: { title: 'Title of talk-open', speakers: ['Live'] },
     })
     expect(responses()[0]).toMatchObject({
       colour: 'green',
@@ -352,7 +357,7 @@ describe('the comment (F2)', () => {
       state: 'answered',
       colour: 'red',
       comment: 'Great demo',
-      talk: { title: 'Title of talk-open', speakers: [] },
+      talk: { title: 'Title of talk-open', speakers: ['Live'] },
     })
     expect(responses()).toHaveLength(1)
     expect(responses()[0]).toMatchObject({
@@ -422,7 +427,13 @@ describe('the comment (F2)', () => {
       colour: 'red',
       comment: 'Stays put',
     })
-    expect(store().docReads).toEqual(['talk-open', 'talk-open', _id])
+    expect(store().docReads).toEqual([
+      'talk-open',
+      'sp-live',
+      'talk-open',
+      'sp-live',
+      _id,
+    ])
   })
 
   it('is unknown, not "none", when the read-back fails after a colour-only tap', async () => {
@@ -566,7 +577,7 @@ describe('the talk is read again by id before the write', () => {
     expect(await submitFeedbackAnswer('k7m2qx', 'green')).toMatchObject({
       state: 'answered',
     })
-    expect(store().docReads).toEqual(['talk-open'])
+    expect(store().docReads).toEqual(['talk-open', 'sp-live'])
   })
 
   it.each([
@@ -581,6 +592,41 @@ describe('the talk is read again by id before the write', () => {
     })
     expect(store().commits).toHaveLength(0)
     expect(writtenCookies()).toEqual([])
+  })
+
+  it.each([
+    ['every speaker is erased', { erasedAt: '2026-10-20T00:00:00.000Z' }],
+    ['the speaker document is gone', null],
+  ])(
+    'refuses as Unknown when no live speaker is left on the talk: %s',
+    async (_, change) => {
+      if (change) store().put({ ...store().doc('sp-live')!, ...change })
+      else store().remove('sp-live')
+      expect(await submitFeedbackAnswer('k7m2qx', 'green')).toEqual({
+        state: 'unknown',
+      })
+      expect(store().commits).toHaveLength(0)
+      expect(writtenCookies()).toEqual([])
+    },
+  )
+
+  it('writes when one of several speakers is still live', async () => {
+    store().put({ ...store().doc('sp-live')!, erasedAt: undefined })
+    store().put({
+      _id: 'sp-erased',
+      _type: 'speaker',
+      erasedAt: '2026-10-20T00:00:00.000Z',
+    })
+    store().put({
+      ...store().doc('talk-open')!,
+      speakers: [
+        { ...ref('sp-erased'), _key: 'k0' },
+        { ...ref('sp-live'), _key: 'k1' },
+      ],
+    })
+    expect(await submitFeedbackAnswer('k7m2qx', 'green')).toMatchObject({
+      state: 'answered',
+    })
   })
 
   it('refuses as Unknown when the talk was deleted', async () => {
@@ -638,8 +684,88 @@ describe('a failed write', () => {
     expect(await submitFeedbackAnswer('k7m2qx', 'green')).toEqual({
       state: 'unavailable',
     })
-    expect(spy).toHaveBeenCalledWith('talk-open')
+    // Capped since #1438 (an abort signal); the read itself is unchanged.
+    expect(spy).toHaveBeenCalledWith('talk-open', expect.anything())
     expect(store().commits).toHaveLength(0)
     expect(writtenCookies()).toEqual([])
+  })
+})
+
+describe('Submit is bounded on its own (speaker feedback spec §12.3)', () => {
+  // A spy left on the shared client by an earlier test would wrap itself
+  // here, and its failure would read as the refusal under test.
+  beforeEach(() => vi.restoreAllMocks())
+  afterEach(() => vi.restoreAllMocks())
+
+  const writer = () =>
+    store().clients.clientWrite as {
+      getDocument: (id: string, options?: unknown) => Promise<unknown>
+      getDocuments: (ids: string[], options?: unknown) => Promise<unknown>
+      transaction: () => { commit: (options?: unknown) => Promise<unknown> }
+    }
+
+  it('caps its talk re-read, its speakers read and its commit with an abort signal each', async () => {
+    const w = writer()
+    const read = vi.spyOn(w, 'getDocument')
+    const speakersRead = vi.spyOn(w, 'getDocuments')
+    const transaction = w.transaction.bind(w)
+    const commitOptions: unknown[] = []
+    vi.spyOn(w, 'transaction').mockImplementation(() => {
+      const tx = transaction()
+      const commit = tx.commit.bind(tx)
+      tx.commit = (options?: unknown) => {
+        commitOptions.push(options)
+        return commit(options)
+      }
+      return tx
+    })
+
+    await submitFeedbackAnswer('k7m2qx', 'green')
+
+    expect(read).toHaveBeenCalledWith(
+      'talk-open',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(speakersRead).toHaveBeenCalledWith(
+      ['sp-live'],
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(commitOptions).toEqual([
+      expect.objectContaining({
+        returnDocuments: true,
+        signal: expect.any(AbortSignal),
+      }),
+    ])
+  })
+
+  it('writes nothing when its read of the speakers took it past the budget', async () => {
+    const w = writer()
+    const getDocuments = w.getDocuments.bind(w)
+    vi.spyOn(w, 'getDocuments').mockImplementation(async (ids, options) => {
+      vi.setSystemTime(DURING.getTime() + SUBMIT_COMMIT_BUDGET_MS + 1)
+      return getDocuments(ids, options)
+    })
+
+    expect(await submitFeedbackAnswer('k7m2qx', 'green')).toEqual({
+      state: 'unavailable',
+    })
+    expect(store().commits).toEqual([])
+  })
+
+  it('writes nothing when its re-read of the talk took longer than the budget', async () => {
+    const w = writer()
+    const getDocument = w.getDocument.bind(w)
+    expect(vi.isMockFunction(w.getDocument)).toBe(false)
+    vi.spyOn(w, 'getDocument').mockImplementation(async (id, options) => {
+      // The re-read stalls past the budget before it answers.
+      vi.setSystemTime(DURING.getTime() + SUBMIT_COMMIT_BUDGET_MS + 1)
+      return getDocument(id, options)
+    })
+
+    const outcome = await submitFeedbackAnswer('k7m2qx', 'green')
+
+    expect(outcome).toEqual({ state: 'unavailable' })
+    expect(responses()).toEqual([])
+    expect(store().commits).toEqual([])
   })
 })

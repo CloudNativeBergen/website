@@ -6,7 +6,9 @@ import { DEVICE_COOKIE_DAYS } from '@/lib/feedback'
  * a session collects, for EVERY tenant, since any conference can print one.
  * "Your rights" names Delete my answer (F2) with its two exceptions and, past
  * them, the organizers (R1: never "can't be linked to you" while the cookie
- * lives). The cookie's lifetime comes from `src/lib/feedback/device.ts`.
+ * lives). "Retention" names the 24-month fold and the early fold when the
+ * session's last speaker is erased (§12.2, §12.3). The cookie's lifetime
+ * comes from `src/lib/feedback/device.ts`.
  */
 export function SessionFeedbackPrivacy() {
   return (
@@ -50,7 +52,12 @@ export function SessionFeedbackPrivacy() {
         <li>
           <strong>Retention:</strong> 24 months after the conference ends; then
           comments and individual answers are deleted and only per-session
-          totals remain.
+          totals remain. If every speaker of a session has their personal data
+          erased, this happens then, and the session&apos;s QR code stops taking
+          answers. For a session waiting on a scheduled site update, this
+          happens once that update is published. For a session moved to another
+          conference, the answers it got before the move are only deleted on
+          request: ask the organizers.
         </li>
         <li>
           <strong>Your rights:</strong> you can delete your answer yourself from
