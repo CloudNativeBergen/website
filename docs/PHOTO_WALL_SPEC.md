@@ -157,16 +157,12 @@ conference's existing dataset.
   `client.assets.upload('image', bytes, …)` on the write client, after every
   check has passed. Options: `filename: '<uploadId>.jpg'`, `contentType:
 'image/jpeg'`, `source: { name: 'photo-wall', id: <conferenceId> }` (so the
-  cron can find a wall's assets), and **no optional metadata extraction**
-  (`extract` set so that no `exif` or `location` is stored; the bytes carry
-  none anyway, §6.4). The JPEG is ≤ 4 MiB, so the whole request fits Vercel's
+  cron can find a wall's assets), and **`extract: []`**, which the client sends as `meta=none`: no palette, LQIP, blurhash, EXIF or location is stored (dimensions always are; the bytes carry no metadata anyway, §6.4). The JPEG is ≤ 4 MiB, so the whole request fits Vercel's
   4.5 MB body limit.
 - **Approve, Reject and Remove only patch the post.** Nothing is copied or
   deleted, so re-approving from Not shown just works.
 - **Delete and the cron delete the asset** after the post stops referencing
-  it (§12, §11). Sanity refuses to delete an asset another document still
-  references; that refusal counts as done (two posts with identical bytes
-  share one asset, because Sanity names assets by content hash).
+  it (§12, §11). Sanity refuses to delete an asset another document still references; that refusal counts as done. Identical bytes give one shared asset (Sanity names assets by content hash), **across tenants too**, and the sharer can be any document (a sponsor logo, a gallery image), not only a post. Reuse `src/lib/sanity/orphaned-asset.ts` (`countAssetReferences`, `deleteImageAssetIfOrphaned`), which counts references under `perspective: 'raw'` at a recent API version for exactly this reason (#1160), instead of writing a new count.
 
 **What this costs, accepted (§3):**
 
@@ -241,23 +237,20 @@ Vercel's 4.5 MB request limit. It is a **route handler**, `POST
 `cropX`, `cropY`, `marketingConsent`), not a Server Action, because Server
 Actions take 1 MB by default (`serverActions.bodySizeLimit`).
 
-In this order, **guard before upload** (nothing reaches Sanity's asset store
-until every check has passed):
+First, a request whose `Content-Length` exceeds 4.5 MB is refused before the body is read (Vercel itself answers 413 above its limit; the composer treats any 413 as a refusal, never as a lost response). Then the multipart body is parsed once, and in this order, **guard before upload** (nothing reaches Sanity's asset store until every check has passed):
 
 1. the conference from the domain; a valid cookie (refused otherwise, §6.1); an `uploadId` that is a UUID v4;
 2. if `wallPost-<uploadId>` already exists: success when it belongs to this
    conference and this cookie's device key (**a retry after a lost response**
    never refuses and never uploads again), the generic refusal otherwise;
 3. the wall exists, posting is open (§7), and the limits allow it (§6.3);
-4. the request is no bigger than 4.5 MB and the photo no bigger than 4 MiB,
-   then the checks in §6.4, on the bytes in memory;
+4. the photo is no bigger than 4 MiB, then the checks in §6.4, on the bytes in memory;
 5. upload the asset (§5), then **`create`** (strict, not `createIfNotExists`)
    the `wallPost` (status `pending`, the fields, `submittedAt`) referencing it,
    and expire the admin and device tags with `revalidateTag(tag, { expire: 0 })`
    (a route handler, §8). If the create fails because the id now exists (two
    concurrent submits with one `uploadId`), re-read it: this device's post
-   means success, anyone else's the generic refusal. Any failed or lost create
-   deletes the asset just uploaded unless a post references it.
+   means success, anyone else's the generic refusal. Any failed or lost create deletes the asset just uploaded unless a document references it (§5).
 
 **Reads that decide** (the limits and the existence read here, the revision
 reads in §10) use the **non-CDN** Sanity client (`src/lib/sanity/client.ts`); a
@@ -293,8 +286,8 @@ Organizers don't see refusals; the pending count shows how full the queue is.
 | No metadata    | No APPn segment except APP0, and no COM segment: this covers Exif and XMP (APP1) and IPTC (APP13), which can all carry location or creator data. The composer strips them (§6.5), so their presence means the file didn't come from the composer: refused, not stripped. |
 | Caption        | Unicode NFC; control characters removed; any run of whitespace (newlines included) becomes one space; trimmed; empty becomes absent; more than **80** code points is refused.                                                                                            |
 | Name           | Same normalisation; more than **40** code points is refused.                                                                                                                                                                                                             |
-| Crop           | `x` and `y` are finite numbers in [0, 1].                                                                                                                                                                                                                                |
-| Marketing      | A boolean; anything else is refused.                                                                                                                                                                                                                                     |
+| Crop           | `cropX` and `cropY` parse as finite decimal numbers in [0, 1].                                                                                                                                                                                                           |
+| Marketing      | The field is exactly `true` or `false`; anything else is refused.                                                                                                                                                                                                        |
 | Posting Window | Open at Submit time (§7).                                                                                                                                                                                                                                                |
 
 _Refinement (spec):_ "it decodes" is checked **structurally** (signature, SOF,
@@ -383,7 +376,7 @@ Sanity.** _Tags and function names below are implementation details._
 | Cached read                                                                                                                                                                    | Tag                               | Expired by                                                                                                                                        | Polled by                                                                         |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `getWall(conferenceId)`: settings + the newest **200** approved posts (`id`, the asset URL, `width`, `height`, `crop`, `caption`, `name`, `approvedAt`), newest approval first | `photo-wall:<conferenceId>`       | Approve, Reject/Remove of an approved post, Delete (the contributor's or Delete now) of an approved post, any settings change, the retention cron | Screen Mode every **5 s**, always; the Wall page every **10 s** while visible     |
-| `getModerationQueue(conferenceId)`: every post with its status and asset URL, and the pending count                                                                            | `photo-wall-admin:<conferenceId>` | Submit, every moderation action, contributor Delete and marketing change, the cron                                                                | The admin page every **10 s** while visible                                       |
+| `getModerationQueue(conferenceId)`: every post with its status and asset URL (none for a `deleting` post, whose card shows no image), and the pending count                    | `photo-wall-admin:<conferenceId>` | Submit, every moderation action, contributor Delete and marketing change, the cron                                                                | The admin page every **10 s** while visible                                       |
 | `getMyPosts(conferenceId, deviceKey)`: this device's posts                                                                                                                     | `photo-wall-device:<deviceKey>`   | Submit, Delete, marketing change by that device; any moderation of a post with that `deviceKey`                                                   | My posts on load, after each action, and every **15 s** while the page is visible |
 
 - **Inside each cached function**, read with the **uncached** Sanity client
@@ -559,7 +552,7 @@ From [Decide the Photo Wall window, retention, consent and erasure](https://gith
   1. **close it to writes first:** set `closedAt` (if unset) and expire the
      tags. `isPostingOpen` is false and Approve refuses once `closedAt` is set, whatever `postingMode` says, and Submit and Approve re-check it just before their final commit. **Delete (both kinds) stays allowed**, so an abusive photo can still be taken down. From `closedAt` on, `getWall` returns no posts and the pages show "This wall has closed.";
   2. purge only walls whose deletion date is **today or earlier** and whose `closedAt` is more than 15 minutes old (a submit in flight has finished by then). Closing the day before means the purge runs **on** the deletion date; the wall shows "This wall has closed" from the day before;
-  3. hard-delete every `wallPost` of the conference (Not shown included, history purged, §12), then every image asset those posts referenced and every asset with `source.name == 'photo-wall'` and `source.id == <conferenceId>` that no document references;
+  3. read every `wallPost` of the conference with its asset id (and `deletingAssetId`), hard-delete the posts (Not shown included, history purged, §12), then every image asset they referenced and every asset with `source.name == 'photo-wall'` and `source.id == <conferenceId>` that no document references;
   4. set `purgedAt`.
 - Re-running is safe: an interrupted run leaves `purgedAt` unset, so the next
   run repeats step 3. `closedAt` means "closed to writes", `purgedAt` means
@@ -605,10 +598,10 @@ The same cron deletes:
   posts older than an hour.
 
 - **History.** A plain Sanity delete keeps the document's revisions in its
-  history, with the caption, name and consent. Every final delete here (Delete, Delete now, a failed submit's asset, the cron) **purges history**. Purge exists only in the **Actions API** (`sanity.action.document.delete` with `purge: true`), which answers only from API version **2024-05-23**, while the shared client defaults to `2023-05-03` (`src/lib/sanity/client.ts`); so these deletes use `clientWrite.withConfig({ apiVersion: '2025-02-19' })` or later. Purging also needs the write token's history permission, and whether the delete action accepts an image asset's id is unverified.
+  history, with the caption, name and consent. Every final delete here (Delete, Delete now, a failed submit's asset, the cron) **purges history**. The client's typed `delete()` and `transaction().delete()` **drop `purge`** (they send only the id), so the delete is a raw mutation, `clientWrite.mutate([{ delete: { id, purge: true } }])`, which passes through as written (the Actions API's `sanity.action.document.delete` also takes `purge`, but only from API version 2024-05-23, while the shared client defaults to 2023-05-03). Purging needs the token's **`editHistory`** permission, which no predefined Sanity role grants, so it means a custom role. On a 403 the delete falls back to a plain delete and logs it, so a photo is never left behind for want of the permission; §14 asserts the serialized mutation carries `purge: true`.
   M4b proves it once on a real document, with the user's go for that
   production write; if the token can't purge, the user decides between
-  granting the permission and adding Sanity's history retention to the
+  granting the permission (a custom role with `editHistory`) and adding Sanity's history retention to the
   `/privacy` copy. Until proven, §15 lists it.
 - **Lost cookie:** contact the organizers, describing the photo. They use
   Delete now.
@@ -701,9 +694,8 @@ Every slice is filed under [Photo Wall: implementation](https://github.com/Cloud
   (organizer only). Remove it, show the specific test fails on a value (the
   write or the asset upload happening), restore.
 - **Guard before upload:** every refusal in §6.2 (cookie, foreign `uploadId`, window, limits, size, JPEG and field checks) happens **without** calling `client.assets.upload` (assert it was never called); a foreign existing `uploadId` gets the same refusal as any other failure.
-- **Upload options:** the real client's upload request carries the
-  `source`, the filename and the `extract` setting of §5 (inspect the request
-  the installed `@sanity/client` builds, not a mock of it).
+- **Upload options:** the real client's upload request carries `sourceName=photo-wall`, the conference as `sourceId`, the filename and `meta=none` (inspect the request the installed `@sanity/client` builds, not a mock of it).
+- **Purge:** the serialized delete mutation carries `purge: true`; a 403 falls back to a plain delete.
 - **JPEG checks** on real files: a canvas-made JPEG (including a Safari-made sample, after the composer's APPn strip) passes; a camera JPEG with EXIF, a JPEG with an IPTC APP13 segment, one with a COM segment, a PNG renamed `.jpg`, a truncated file, a 4096 px image and a 200 px
   image are refused.
 - **Executed GROQ, not mocks,** for the limits, `getWall`, the queue and My
