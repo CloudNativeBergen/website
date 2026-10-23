@@ -24,7 +24,7 @@ import type {
 const CARD =
   'rounded-lg border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-700 dark:bg-gray-800'
 const BUTTON =
-  'inline-flex min-h-9 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+  'inline-flex min-h-9 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:focus:outline-indigo-400 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
 
 export interface PhotoWallAdminProps {
   view: PhotoWallAdminView
@@ -142,7 +142,7 @@ function SetUp({
         type="button"
         onClick={onSetUp}
         disabled={saving}
-        className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-md bg-brand-cloud-blue px-4 text-sm font-semibold text-white shadow-xs hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-wait disabled:opacity-60 dark:bg-indigo-600 dark:hover:bg-indigo-500"
+        className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-md bg-brand-cloud-blue px-4 text-sm font-semibold text-white shadow-xs hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-wait disabled:opacity-60 dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:focus-visible:outline-indigo-400"
       >
         <PhotoIcon className="size-5" aria-hidden="true" />
         {saving ? 'Setting up…' : 'Set up the Photo Wall'}
@@ -232,7 +232,7 @@ function PostingSetting({
           return (
             <label
               key={m.value}
-              className={`flex min-h-9 min-w-20 items-center justify-center rounded-md px-3 text-sm font-semibold has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-brand-cloud-blue ${
+              className={`flex min-h-9 min-w-20 items-center justify-center rounded-md px-3 text-sm font-semibold has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-brand-cloud-blue dark:has-focus-visible:outline-indigo-400 ${
                 saving ? 'cursor-wait' : 'cursor-pointer'
               } ${
                 checked
@@ -302,8 +302,10 @@ function SponsorStripSetting({
         // 44×24 to look at; the `after` box makes the touch target 44×44.
         // Off is gray-500: 3:1 or more against both cards and the thumb
         // (WCAG 1.4.11), which gray-300 on white (1.5:1) was not.
-        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:cursor-wait ${
-          on ? 'bg-brand-cloud-blue dark:bg-indigo-500' : 'bg-gray-500'
+        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:cursor-wait dark:focus-visible:outline-indigo-400 ${
+          // Not bg-brand-cloud-blue: an unlayered `.dark` rule in tailwind.css
+          // overrides any dark: variant of it, to 1.7:1 on the card.
+          on ? 'bg-blue-700 dark:bg-indigo-500' : 'bg-gray-500'
         }`}
       >
         <span

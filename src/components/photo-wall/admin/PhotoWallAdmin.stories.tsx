@@ -105,6 +105,14 @@ export const PausedKeyboard: Story = {
   },
 }
 
+/** The keyboard focus ring in dark: indigo-400, 3:1 or more on every dark surface. */
+export const PausedKeyboardDark: Story = {
+  ...PausedKeyboard,
+  args: { ...PausedKeyboard.args, onChange: fn() },
+  globals: { theme: 'dark' },
+  parameters: PHONE,
+}
+
 /** A save on its way: says so, keeps focus, and ignores another press. */
 export const Saving: Story = {
   args: { saving: true },
