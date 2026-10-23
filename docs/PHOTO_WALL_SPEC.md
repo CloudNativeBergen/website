@@ -219,7 +219,7 @@ _Same pattern as Feedback Responses (`src/lib/feedback/device.ts`)._
 - Value: a 16-byte random token plus its issue time, HMAC-SHA256-signed with
   `INVITATION_TOKEN_SECRET`, as `deviceCookie()` does. A cookie whose
   signature doesn't verify is treated as absent.
-- **Issued** by the submit route (§6.2) when the phone has no valid cookie.
+- **Issued before the first post:** the composer calls a Server Action `ensureDevice()` when it loads and enables **Post to the wall** only once it has answered, so the cookie is already set when a submit runs. _Refinement (spec):_ if the first submit's response (and a `Set-Cookie` on it) were lost, the retry would arrive as a different device and fail the ownership check (§6.2). The submit route refuses a request without a valid cookie.
   **Lifetime:** until the end of the wall's deletion date (§11.1); the cookie
   is strictly necessary (#1480).
 - **Device key** = the first 32 hex characters of SHA-256 of the token. Posts
@@ -244,19 +244,20 @@ Actions take 1 MB by default (`serverActions.bodySizeLimit`).
 In this order, **guard before upload** (nothing reaches Sanity's asset store
 until every check has passed):
 
-1. the conference from the domain; a valid cookie, or issue one; an
-   `uploadId` that is a UUID v4;
+1. the conference from the domain; a valid cookie (refused otherwise, §6.1); an `uploadId` that is a UUID v4;
 2. if `wallPost-<uploadId>` already exists: success when it belongs to this
    conference and this cookie's device key (**a retry after a lost response**
    never refuses and never uploads again), the generic refusal otherwise;
 3. the wall exists, posting is open (§7), and the limits allow it (§6.3);
 4. the request is no bigger than 4.5 MB and the photo no bigger than 4 MiB,
    then the checks in §6.4, on the bytes in memory;
-5. upload the asset (§5), then `createIfNotExists` the `wallPost` (status
-   `pending`, the fields, `submittedAt`) referencing it, and expire the admin
-   and device tags with `revalidateTag(tag, { expire: 0 })` (a route handler,
-   §8). If the create fails, delete the asset (unless another post references
-   it) and refuse.
+5. upload the asset (§5), then **`create`** (strict, not `createIfNotExists`)
+   the `wallPost` (status `pending`, the fields, `submittedAt`) referencing it,
+   and expire the admin and device tags with `revalidateTag(tag, { expire: 0 })`
+   (a route handler, §8). If the create fails because the id now exists (two
+   concurrent submits with one `uploadId`), re-read it: this device's post
+   means success, anyone else's the generic refusal. Any failed or lost create
+   deletes the asset just uploaded unless a post references it.
 
 **Reads that decide** (the limits and the existence read here, the revision
 reads in §10) use the **non-CDN** Sanity client (`src/lib/sanity/client.ts`); a
@@ -538,12 +539,10 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   can't interleave. On a revision conflict the server re-reads once: if the
   post is gone, the card reports "This photo was deleted"; if its status no
   longer allows the action (someone else already removed it), the card
-  refreshes with no change; otherwise it retries once, and **only if the post is still in the state the action began from**: Approve only if the status is still the one it started from (an Approve begun on Pending doesn't retry after someone rejected the post); Remove only if the post is still approved. A marketing untick is the usual reason to retry.
+  refreshes with no change; otherwise it retries once, and **only if no moderation decision happened in between**: the status **and** `decidedAt` are what the action read (a marketing untick changes neither). So an Approve begun on Pending doesn't retry after a rejection, and a Remove doesn't retry after someone removed and re-approved the post. A marketing untick is the usual reason to retry.
 - **Approve** patches `status: approved`, `approvedAt` and `decidedAt`.
 - **Reject** and **Remove** patch `status: notShown` and `decidedAt`.
-- **Approve all pending** approves the posts pending when pressed, in
-  transactions of up to 50 patches, each guarded by its revision; a conflicted
-  post is skipped and stays pending. It reports how many it approved.
+- **Approve all pending** approves the posts pending when pressed, one guarded patch per post, four at a time, within a 30 s budget (a transaction is all-or-nothing, so one conflicted post would sink a whole batch). A conflicted post is skipped and stays pending. It reports how many it approved; pressing again picks up the rest.
 - **Delete now** runs the same Delete as the contributor's (§12).
 - The contributor's My posts says **Not shown**, with no reason.
 
@@ -606,8 +605,7 @@ The same cron deletes:
   posts older than an hour.
 
 - **History.** A plain Sanity delete keeps the document's revisions in its
-  history, with the caption, name and consent. Every final delete here (Delete, Delete now, a failed submit's asset, the cron) **purges history** (the delete
-  action's `purge: true`), which needs the write token's history permission.
+  history, with the caption, name and consent. Every final delete here (Delete, Delete now, a failed submit's asset, the cron) **purges history**. Purge exists only in the **Actions API** (`sanity.action.document.delete` with `purge: true`), which answers only from API version **2024-05-23**, while the shared client defaults to `2023-05-03` (`src/lib/sanity/client.ts`); so these deletes use `clientWrite.withConfig({ apiVersion: '2025-02-19' })` or later. Purging also needs the write token's history permission, and whether the delete action accepts an image asset's id is unverified.
   M4b proves it once on a real document, with the user's go for that
   production write; if the token can't purge, the user decides between
   granting the permission and adding Sanity's history retention to the
@@ -624,12 +622,9 @@ The same cron deletes:
 > the photo (filtered and resized on your phone, with location and other
 > camera data removed), your caption, your name if you give one, how the photo
 > is cropped on the wall, whether you allow marketing use, and a cookie that
-> recognises your phone. Organizers see your post before anyone else; once
-> they approve it, anyone can see it on the wall at the venue and on the
-> conference website. We show it because you chose to post it, and you can
+> recognises your phone. Your post appears on the wall at the venue and on the conference website only after an organizer approves it. The photo file itself is stored with an unlisted web address from the moment you post it, so anyone who has that address can open it, even before approval or after it is taken off the wall, until it is deleted; the platform's administrators can also see it. We show it because you chose to post it, and you can
 > withdraw that by deleting it. If you tick the marketing box, the organizers
-> may also use your photo in their own marketing; untick it at any time. We
-> delete every Photo Wall post 30 days after the conference. Copies the
+> may also use your photo in their own marketing; untick it at any time. We delete every Photo Wall post 30 days after the conference; a deleted photo can stay in our provider's cache for a short while. Copies the
 > organizers downloaded for marketing before you unticked the box or deleted
 > the post are theirs and aren't covered by that deletion. To delete a post,
 > open the wall's posting page on the same phone and use My posts, or contact
@@ -722,7 +717,9 @@ Every slice is filed under [Photo Wall: implementation](https://github.com/Cloud
 - **Retry after a lost response:** submit twice with the same `uploadId`, the second after pausing posting; the second returns success, uploads nothing, and the post still has its photo.
 - **No `next/image` for Wall Post photos:** a test (or lint rule) fails if a
   Wall Post photo is rendered through `/_next/image`.
-- **Moderation races:** two organizers acting on one post, and Approve racing the contributor's Delete, end in one consistent state; a deleted post can't come back approved.
+- **Moderation races:** two organizers acting on one post, and Approve racing the contributor's Delete, end in one consistent state; a deleted post can't come back approved. Include: Removes A and B read the same revision; A removes; another organizer re-approves; B's retry must leave the post approved.
+- **First post with a lost response:** the cookie is already set by `ensureDevice()`, so the retry is the same device and gets success; a submit without a cookie is refused; two concurrent submits with one `uploadId` from two devices leave one post and one refusal, and no orphan asset.
+- **Approve all** with one post changed mid-run approves the others.
 - **Failure path:** an asset delete that fails leaves the post `deleting`, and pressing again finishes it from `deletingAssetId`; an asset shared by two posts survives the first post's Delete.
 - **Pollers keep polling:** with fake timers, past five idle minutes, an approval still arrives on Screen Mode and a removal still leaves, and My posts still turns Waiting into On the wall; a removed and re-approved
   post arrives again; Screen Mode sends no analytics request.
