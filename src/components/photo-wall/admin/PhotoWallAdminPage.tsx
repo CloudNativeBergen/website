@@ -44,15 +44,10 @@ export function PhotoWallAdminPage({
       </div>
     )
   const { wall } = settings.data
-  const pending = update.isPending ? update.variables : undefined
   return (
     <PhotoWallAdmin
-      // The pressed value shows at once; the server's answer replaces it.
-      view={
-        wall && pending
-          ? { ...settings.data, wall: { ...wall, ...pending } }
-          : settings.data
-      }
+      view={settings.data}
+      pending={update.isPending ? update.variables : undefined}
       conferenceTitle={conferenceTitle}
       onSetUp={() => setUp.mutate()}
       onChange={(change) => update.mutate(change)}

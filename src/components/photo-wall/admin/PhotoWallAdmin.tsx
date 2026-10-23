@@ -33,6 +33,8 @@ export interface PhotoWallAdminProps {
   onChange: (change: PhotoWallSettingsChange) => void
   /** A Set up or a settings change is on its way. */
   saving?: boolean
+  /** The change on its way: shown at once, the server's answer replaces it. */
+  pending?: PhotoWallSettingsChange
   /** The last Set up or change failed. */
   failed?: boolean
 }
@@ -48,9 +50,10 @@ export function PhotoWallAdmin({
   onSetUp,
   onChange,
   saving = false,
+  pending,
   failed = false,
 }: PhotoWallAdminProps) {
-  const { wall } = view
+  const wall = view.wall && pending ? { ...view.wall, ...pending } : view.wall
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -82,7 +85,9 @@ export function PhotoWallAdmin({
             <div className="mt-4 divide-y divide-gray-200 dark:divide-gray-700">
               <PostingSetting
                 mode={wall.postingMode}
-                state={view.posting}
+                // Until the server answers, why posting is open or closed is
+                // not known yet.
+                state={pending?.postingMode ? 'saving' : view.posting}
                 saving={saving}
                 onChange={(postingMode) => onChange({ postingMode })}
               />
@@ -153,7 +158,11 @@ const MODES: { value: PostingMode; label: string }[] = [
 ]
 
 /** What the Posting row says, and whether it is a warning (§7). */
-const POSTING_NOTES: Record<PostingState, { text: string; warn: boolean }> = {
+const POSTING_NOTES: Record<
+  PostingState | 'saving',
+  { text: string; warn: boolean }
+> = {
+  saving: { text: 'Saving…', warn: false },
   open: {
     text: 'Attendees can post. Posting closes by itself at the end of the conference’s last day.',
     warn: false,
@@ -183,7 +192,7 @@ function PostingSetting({
   onChange,
 }: {
   mode: PostingMode
-  state: PostingState
+  state: PostingState | 'saving'
   saving: boolean
   onChange: (mode: PostingMode) => void
 }) {

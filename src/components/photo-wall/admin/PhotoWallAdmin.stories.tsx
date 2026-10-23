@@ -236,19 +236,32 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     const paused = await canvas.findByRole('radio', { name: 'Paused' })
     await expect(paused).toBeChecked()
     await userEvent.click(canvas.getByRole('radio', { name: 'Open' }))
-    // The pressed value shows while the answer is still on its way.
-    await expect(canvas.getByRole('status')).toHaveTextContent('Saving…')
+    // The pressed value shows while the answer is still on its way, and the
+    // note says so rather than giving the old mode's reason.
+    await waitFor(() =>
+      expect(canvas.getByRole('status')).toHaveTextContent('Saving…'),
+    )
     await expect(canvas.getByRole('radio', { name: 'Open' })).toBeChecked()
+    await expect(
+      canvas.getByRole('radiogroup', { name: 'Posting' }),
+    ).toHaveAccessibleDescription('Saving…')
     await waitFor(() =>
       expect(canvas.getByRole('status')).toHaveTextContent(''),
     )
+    // The server's answer: still Open.
     await expect(canvas.getByRole('radio', { name: 'Open' })).toBeChecked()
+    await expect(canvas.getByText(/Attendees can post/)).toBeVisible()
     await userEvent.click(canvas.getByRole('switch', { name: 'Sponsor strip' }))
+    // Wait for the server's answer, not the pressed value shown meanwhile.
     await waitFor(() =>
-      expect(
-        canvas.getByRole('switch', { name: 'Sponsor strip' }),
-      ).toBeChecked(),
+      expect(canvas.getByRole('status')).toHaveTextContent('Saving…'),
     )
+    await waitFor(() =>
+      expect(canvas.getByRole('status')).toHaveTextContent(''),
+    )
+    await expect(
+      canvas.getByRole('switch', { name: 'Sponsor strip' }),
+    ).toBeChecked()
     await expect(updates).toEqual([
       { postingMode: 'open' },
       { sponsorStrip: true },
