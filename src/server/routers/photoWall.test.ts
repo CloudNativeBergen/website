@@ -154,9 +154,14 @@ describe('photoWall.settings', () => {
   it('refuses, writing nothing, when the live read is another conference than the tenant', async () => {
     store().reset([wallOf('conf-A')])
     cdn.conference = { _id: 'conf-Z' }
-    await expect(
-      organizer().updateSettings({ postingMode: 'open' }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    const error = await organizer()
+      .updateSettings({ postingMode: 'open' })
+      .catch((e: unknown) => e)
+    // The code AND the exit: two refusals answer NOT_FOUND.
+    expect(error).toMatchObject({ code: 'NOT_FOUND' })
+    expect((error as Error).message).toBe(
+      'Could not resolve conference from domain',
+    )
     expect(store().commits).toEqual([])
   })
 
@@ -238,11 +243,33 @@ describe('photoWall.updateSettings (§10)', () => {
 
   it('refuses before Set up, writing nothing', async () => {
     store().reset([wallOf('conf-B')])
-    await expect(
-      organizer().updateSettings({ postingMode: 'open' }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    const error = await organizer()
+      .updateSettings({ postingMode: 'open' })
+      .catch((e: unknown) => e)
+    // The code AND the exit: two refusals answer NOT_FOUND.
+    expect(error).toMatchObject({ code: 'NOT_FOUND' })
+    expect((error as Error).message).toBe('Set up the Photo Wall first')
     expect(store().commits).toEqual([])
     expect(store().doc('photoWall-conf-B')?.postingMode).toBeUndefined()
+  })
+
+  it('refuses a field it does not know, writing nothing', async () => {
+    await expect(
+      organizer().updateSettings({
+        postingMode: 'open',
+        closedAt: null,
+      } as { postingMode: 'open' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(store().commits).toEqual([])
+  })
+
+  it('answers with the change even when the cache expiry throws', async () => {
+    h.revalidateTag.mockImplementationOnce(() => {
+      throw new Error('outside a request scope')
+    })
+    const view = await organizer().updateSettings({ postingMode: 'open' })
+    expect(view.wall?.postingMode).toBe('open')
+    expect(store().doc('photoWall-conf-A')?.postingMode).toBe('open')
   })
 
   it('refuses a mode Monday does not offer, and an empty change', async () => {

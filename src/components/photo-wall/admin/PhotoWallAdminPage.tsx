@@ -1,6 +1,7 @@
 'use client'
 
 import { AdminPageLoading } from '@/components/admin/PageLoadingSkeleton'
+import type { PhotoWall, PhotoWallSettingsChange } from '@/lib/photo-wall'
 import { api } from '@/lib/trpc/client'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 
@@ -42,16 +43,37 @@ export function PhotoWallAdminPage({
         </p>
       </div>
     )
+  const { wall } = settings.data
+  const pending = update.isPending ? update.variables : undefined
   return (
     <PhotoWallAdmin
-      view={settings.data}
+      // The pressed value shows at once; the server's answer replaces it.
+      view={
+        wall && pending
+          ? { ...settings.data, wall: { ...wall, ...pending } }
+          : settings.data
+      }
       conferenceTitle={conferenceTitle}
       onSetUp={() => setUp.mutate()}
       onChange={(change) => update.mutate(change)}
       saving={setUp.isPending || update.isPending}
-      // A Set up whose answer was lost may still have landed: once the
-      // wall shows, its failure is over.
-      failed={(setUp.isError && !settings.data.wall) || update.isError}
+      // A write whose answer was lost may still have landed: once the wall
+      // read again shows it, its failure is over.
+      failed={
+        (setUp.isError && !wall) ||
+        (update.isError && !landed(update.variables, wall))
+      }
     />
+  )
+}
+
+/** Whether the wall already holds every value of a change. */
+function landed(
+  change: PhotoWallSettingsChange | undefined,
+  wall: PhotoWall | null,
+): boolean {
+  if (!change || !wall) return false
+  return Object.entries(change).every(
+    ([key, value]) => wall[key as keyof PhotoWallSettingsChange] === value,
   )
 }

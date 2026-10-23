@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import type {
   PhotoWall,
@@ -171,9 +171,27 @@ export const NoEndDate: Story = {
 export const SaveFailed: Story = {
   args: { failed: true },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByRole('alert')).toHaveTextContent(
+    // In the Settings card, beside the switch just pressed.
+    const settings = within(canvasElement).getByRole('region', {
+      name: 'Settings',
+    })
+    await expect(within(settings).getByRole('alert')).toHaveTextContent(
       'Couldn’t save. Try again.',
     )
+  },
+}
+
+/** Set up failed: the alert sits under the button. */
+export const SetUpFailed: Story = {
+  args: { view: view(null), failed: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      'Couldn’t save. Try again.',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Set up the Photo Wall' }),
+    ).toBeVisible()
   },
 }
 
@@ -202,6 +220,7 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
         http.post(`${TRPC}.updateSettings`, async ({ request }) => {
           const change = (await request.json()) as Partial<PhotoWall>
           updates.push(change)
+          await delay(600)
           const wall = { ...served.wall!, ...change }
           served = view(wall, wall.postingMode === 'open' ? 'open' : 'paused')
           return trpc(served)
@@ -217,9 +236,13 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     const paused = await canvas.findByRole('radio', { name: 'Paused' })
     await expect(paused).toBeChecked()
     await userEvent.click(canvas.getByRole('radio', { name: 'Open' }))
+    // The pressed value shows while the answer is still on its way.
+    await expect(canvas.getByRole('status')).toHaveTextContent('Saving…')
+    await expect(canvas.getByRole('radio', { name: 'Open' })).toBeChecked()
     await waitFor(() =>
-      expect(canvas.getByRole('radio', { name: 'Open' })).toBeChecked(),
+      expect(canvas.getByRole('status')).toHaveTextContent(''),
     )
+    await expect(canvas.getByRole('radio', { name: 'Open' })).toBeChecked()
     await userEvent.click(canvas.getByRole('switch', { name: 'Sponsor strip' }))
     await waitFor(() =>
       expect(
@@ -261,5 +284,62 @@ export const SetUpAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
       await canvas.findByRole('radio', { name: 'Paused' }),
     ).toBeChecked()
     await expect(canvas.queryByRole('alert')).toBeNull()
+  },
+}
+
+/** A change landed but its answer was lost: the wall read again shows it, and no failure. */
+export const ChangeAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
+  render: () => (
+    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" />
+  ),
+  beforeEach: () => {
+    served = view(WALL)
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(`${TRPC}.settings`, () => trpc(served)),
+        http.post(`${TRPC}.updateSettings`, async ({ request }) => {
+          const change = (await request.json()) as Partial<PhotoWall>
+          served = view({ ...served.wall!, ...change }, 'open')
+          return HttpResponse.error()
+        }),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByRole('radio', { name: 'Open' }))
+    await waitFor(() =>
+      expect(canvas.getByText(/Attendees can post/)).toBeVisible(),
+    )
+    await expect(canvas.getByRole('radio', { name: 'Open' })).toBeChecked()
+    await expect(canvas.queryByRole('alert')).toBeNull()
+  },
+}
+
+/** A change that did not land: the alert stays, and the switch shows the stored value. */
+export const ChangeFailed: StoryObj<typeof PhotoWallAdminPage> = {
+  render: () => (
+    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" />
+  ),
+  beforeEach: () => {
+    served = view(WALL)
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(`${TRPC}.settings`, () => trpc(served)),
+        http.post(`${TRPC}.updateSettings`, () => HttpResponse.error()),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByRole('radio', { name: 'Open' }))
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'Couldn’t save. Try again.',
+    )
+    await expect(canvas.getByRole('radio', { name: 'Paused' })).toBeChecked()
   },
 }

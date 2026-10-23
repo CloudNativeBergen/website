@@ -59,14 +59,6 @@ export function PhotoWallAdmin({
         description="Attendees post photos from their phones. Nothing appears until an organizer approves it."
         contextHighlight={conferenceTitle}
       />
-      {failed && (
-        <p
-          role="alert"
-          className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300"
-        >
-          Couldn’t save. Try again.
-        </p>
-      )}
       {wall ? (
         <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
           <section aria-labelledby="photo-wall-settings" className={CARD}>
@@ -84,6 +76,9 @@ export function PhotoWallAdmin({
                 {saving ? 'Saving…' : ''}
               </p>
             </div>
+            {/* In the card, next to the switch just pressed: on a phone the
+                page top may be out of sight. */}
+            {failed && <SaveFailed />}
             <div className="mt-4 divide-y divide-gray-200 dark:divide-gray-700">
               <PostingSetting
                 mode={wall.postingMode}
@@ -101,13 +96,32 @@ export function PhotoWallAdmin({
           <WallLinks links={view.links} />
         </div>
       ) : (
-        <SetUp onSetUp={onSetUp} saving={saving} />
+        <SetUp onSetUp={onSetUp} saving={saving} failed={failed} />
       )}
     </div>
   )
 }
 
-function SetUp({ onSetUp, saving }: { onSetUp: () => void; saving: boolean }) {
+function SaveFailed() {
+  return (
+    <p
+      role="alert"
+      className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300"
+    >
+      Couldn’t save. Try again.
+    </p>
+  )
+}
+
+function SetUp({
+  onSetUp,
+  saving,
+  failed,
+}: {
+  onSetUp: () => void
+  saving: boolean
+  failed: boolean
+}) {
   return (
     <section className={`${CARD} max-w-xl`}>
       <h2 className="text-base font-semibold text-gray-900 dark:text-white">
@@ -128,6 +142,7 @@ function SetUp({ onSetUp, saving }: { onSetUp: () => void; saving: boolean }) {
         <PhotoIcon className="size-5" aria-hidden="true" />
         {saving ? 'Setting up…' : 'Set up the Photo Wall'}
       </button>
+      {failed && <SaveFailed />}
     </section>
   )
 }
@@ -213,7 +228,7 @@ function PostingSetting({
               } ${
                 checked
                   ? m.value === 'open'
-                    ? 'bg-green-600 text-white shadow-xs'
+                    ? 'bg-green-700 text-white shadow-xs'
                     : 'bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-white'
                   : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
               }`}

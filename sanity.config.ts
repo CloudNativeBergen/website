@@ -8,6 +8,10 @@ import { structureTool } from 'sanity/structure'
 import { slugOnSave } from './sanity/actions/slugOnSave'
 import { shortCodeSafeActions } from './sanity/actions/shortCodeSafeActions'
 import { sponsorLinkSafeActions } from './sanity/actions/sponsorLinkSafeActions'
+import {
+  PHOTO_WALL_TYPES,
+  photoWallSafeActions,
+} from './sanity/actions/photoWallSafeActions'
 import { taskEntrySafeActions } from './sanity/actions/taskEntrySafeActions'
 import { inlineSvgInput } from '@starefossen/sanity-plugin-inline-svg-input'
 
@@ -19,8 +23,13 @@ export default defineConfig({
   basePath: '/studio',
   projectId,
   dataset,
-  // Add and edit the content schema in the './sanity/schema' folder
-  schema,
+  // Add and edit the content schema in the './sanity/schema' folder.
+  // No "Create new" for the Photo Wall types: only the server writes them.
+  schema: {
+    ...schema,
+    templates: (prev) =>
+      prev.filter((template) => !PHOTO_WALL_TYPES.has(template.schemaType)),
+  },
   plugins: [
     // Default structure MINUS the platform-internal auth artifacts. Those hold
     // only hashes, but they are not content and must not invite hand-editing.
@@ -50,9 +59,14 @@ export default defineConfig({
       // which is found by the `task` a copy would carry too.
       // And it is removed for a sponsor of a conference (#1346): a copy would
       // hold the same early-access and portal tokens under another id.
-      sponsorLinkSafeActions(
-        taskEntrySafeActions(
-          shortCodeSafeActions(prev, context.schemaType),
+      // And every action is removed from the Photo Wall types, which only
+      // the server writes (Photo Wall spec §4, §12).
+      photoWallSafeActions(
+        sponsorLinkSafeActions(
+          taskEntrySafeActions(
+            shortCodeSafeActions(prev, context.schemaType),
+            context.schemaType,
+          ),
           context.schemaType,
         ),
         context.schemaType,
