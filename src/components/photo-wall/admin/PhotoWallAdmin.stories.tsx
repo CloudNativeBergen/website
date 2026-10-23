@@ -113,6 +113,19 @@ export const PausedKeyboardDark: Story = {
   parameters: PHONE,
 }
 
+/** A Copy button's keyboard focus in dark: the shared button's indigo-400 ring. */
+export const CopyFocusDark: Story = {
+  globals: { theme: 'dark' },
+  parameters: PHONE,
+  play: async ({ canvasElement }) => {
+    const copy = within(canvasElement).getAllByRole('button', {
+      name: 'Copy link',
+    })[0]
+    copy.focus()
+    await expect(copy).toHaveFocus()
+  },
+}
+
 /** A save on its way: says so, keeps focus, and ignores another press. */
 export const Saving: Story = {
   args: { saving: true },
