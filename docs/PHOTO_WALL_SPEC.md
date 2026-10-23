@@ -363,8 +363,7 @@ capture="environment">`) and **Choose from your photos** (no `capture`).
   organizers may also use my photo in their own marketing."
 - **Post to the wall** runs Start → Upload (with progress) → Submit, then shows
   My posts with the new card on top, "Waiting for approval".
-- **Retries on venue Wi-Fi:** a failed Submit is retried with the same
-  `uploadId` (Submit is idempotent). An Upload that fails because the blob
+- **Retries on venue Wi-Fi:** a Submit whose response was lost (a network error, not a refusal) is retried with the same `uploadId` (Submit is idempotent). A Submit that answers with a refusal has already deleted its reservation, so the composer keeps the photo and fields, shows the message, and the next press starts over with Start. An Upload that fails because the blob
   already exists (`allowOverwrite: false`, the first attempt's response was
   lost) goes on to Submit, which checks the blob is there; only a failed Start
   starts over.
@@ -483,8 +482,7 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
 - **No update banner.** `ServiceWorkerRegistrar` (`src/app/layout.tsx`) shows
   `UpdateBanner` after a deploy and waits for a click, which nobody gives a
   venue screen. On `/wall/screen` it accepts the update by itself (post
-  `SKIP_WAITING`, then reload), so a screen picks up Monday fixes without
-  anyone touching it. A private window doesn't avoid this: the service worker
+  `SKIP_WAITING`, then reload), so a screen picks up Monday fixes without anyone touching it. The registrar only checks for updates on focus and visibility changes, which a screen never has, so Screen Mode also calls `registration.update()` every **10 minutes**. A private window doesn't avoid this: the service worker
   registers there too. _Refinement (spec):_ a venue screen
   polling for days would otherwise count as one endless visit.
 - Conference logo (`logoBright`) and brand accents (`theme.primaryColor`,
@@ -600,15 +598,12 @@ From [Decide the Photo Wall window, retention, consent and erasure](https://gith
 - **Deletion date:** the conference's `endDate` + 30 days (Cloud Native Days
   Norway 2026: **26 November 2026**).
 - A daily cron (`vercel.json`, authenticated with `CRON_SECRET` like
-  `/api/cron/cleanup-notifications`) finds every `photoWall` whose deletion
-  date is today or past and `purgedAt` is unset. For each:
+  `/api/cron/cleanup-notifications`) handles every `photoWall` whose deletion date is **tomorrow or earlier** and `purgedAt` is unset:
   1. **close it to writes first:** set `closedAt` (if unset) and expire the
      tags. `isPostingOpen` is false and every moderation action refuses once
      `closedAt` is set, whatever `postingMode` says, and Submit and Approve
      re-check it just before their final commit;
-  2. wait out in-flight work: run the deletion only when `closedAt` is more
-     than 15 minutes old (an upload token lives 10 minutes), so in practice on
-     the next day's run;
+  2. purge only walls whose deletion date is **today or earlier** and whose `closedAt` is more than 15 minutes old (an upload token lives 10 minutes). Closing the day before means the purge runs **on** the deletion date; the wall shows "This wall has closed" from the day before;
   3. hard-delete every `wallPost` of the conference (Not shown included) and
      every blob under `photo-wall/<conferenceId>/` in **both** stores;
   4. set `purgedAt`.
@@ -752,11 +747,8 @@ can be tried on a preview.
 - **Reservations:** the upload route refuses a pathname without a live
   reservation of this device, and a fourth Start from one device is refused
   while three reservations or pending posts are live.
-- **Reservation cleanup transaction** (`ifRevisionId` patch + delete of the
-  same document) is shown to fail as a whole when the revision moved, on the
-  real `@sanity/mutator` against the built transaction's `serialize()` (the
-  repo's precedent for transactions; there is no writable scratch dataset).
-- **Screen Mode accepts a service-worker update** without a click.
+- **Reservation cleanup transaction:** a test asserts the real client's `serialize()` puts the `ifRevisionID` patch and the delete in **one** transaction. The installed `@sanity/mutator` ignores `ifRevisionID` (`__tests__/helpers/versionedSanityStore.ts`), so the conflict path is a modelled race test, and Sanity's all-or-nothing transaction semantics stay **unverified** here (no writable scratch dataset); the PR says so.
+- **Screen Mode finds and accepts a service-worker update** without a click, focus or visibility change (fake timers past 10 minutes).
 - **Retry after a lost response:** Submit twice for the same `uploadId`, the
   second after pausing posting; the second returns success and the photo still
   exists.
