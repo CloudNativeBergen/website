@@ -133,3 +133,25 @@ _Avoid_: archived counts, historical feedback
 **Feedback Window**:
 The time a session accepts Feedback Responses: from the start of its earliest scheduled slot until 24 hours after its latest slot ends. A session with no slot has no window.
 _Avoid_: feedback period, voting window
+
+### Photo Wall
+
+**Photo Wall**:
+A conference's shared wall of attendee photos. Anyone with its QR link can contribute a Wall Post, and the approved ones are shown on the public Wall page.
+_Avoid_: gallery (an organizer's official photos), social wall, photo booth
+
+**Wall Post**:
+One attendee contribution to a Photo Wall: a photo with an optional filter, text and name. It is pending until an organizer approves it, which puts it on the wall, or rejects or removes it, which leaves it not shown; before approval only its contributor and the organizers see it. Organizers never edit it.
+_Avoid_: post (what a marketing publishing Task produces), upload, submission, photo
+
+**Screen Mode**:
+The fullscreen presentation of the public Wall page on a venue display.
+_Avoid_: slideshow, kiosk, live wall
+
+**Wall Look**:
+How a Photo Wall is laid out: Pinboard (tilted polaroid cards), Mosaic (photos at their own shape, with a spotlight tile) or Spotlight (one large post at a time). An organizer sets one per Photo Wall; a single screen can show a different one.
+_Avoid_: layout, theme, template (a Plan Template is a marketing term), style
+
+**Posting Window**:
+The time a Photo Wall accepts Wall Posts: the conference days, unless an organizer pauses it or opens it early. Outside it the wall can still be viewed.
+_Avoid_: upload window, open period, Feedback Window (a Session Feedback term)
