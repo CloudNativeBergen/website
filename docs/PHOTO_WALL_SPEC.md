@@ -95,6 +95,11 @@ Decided by the user while this spec was written (2026-10-23):
   the Monday cut** (§9.4).
 - **Trial run**: the user runs the checklist in §14 on production on Sunday 25
   October, and again on the venue screen on Monday before the doors open.
+- **Photos are stored in Sanity**, as image assets, decided after the spec's
+  review (2026-10-23). This replaces the private-Blob-then-copy storage from
+  [Decide whether to build the Photo Wall or pilot a vendor](https://github.com/CloudNativeBergen/website/issues/1481).
+  The trade-off, accepted: a Sanity asset is public on `cdn.sanity.io` to
+  anyone with its URL, including while it is pending (§5).
 
 ## 4. Data model
 
@@ -114,28 +119,28 @@ Two new document types. `conference` is **not** touched (it is append-only,
 | `purgedAt`     | datetime                                     | Set by the retention cron when the deletion is done (§11.1).                                                                 |
 
 **A conference without a `photoWall` document has no Photo Wall:** `/wall`,
-`/wall/post` and `/wall/screen` return 404, and the upload route refuses. An
+`/wall/post` and `/wall/screen` return 404, and the submit route refuses. An
 organizer creates it with **Set up the Photo Wall** on the admin page (§10),
 which creates it paused. _Refinement (spec):_ this keeps the routes from
 appearing on every tenant's domain the day this ships.
 
 ### 4.2 `wallPost`
 
-| Field              | Type                                                                 | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `_id`              | `wallPost-<uploadId>`                                                | `uploadId` is the UUID v4 in the upload's pathname (§6.2), so a double submit converges on one document.                                                                                                                                                                                                                                                                                                                                          |
-| `conference`       | reference → `conference`, required                                   |                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `status`           | `'uploading' \| 'pending' \| 'approved' \| 'notShown' \| 'deleting'` | **Not shown** covers both Reject and Remove (#1479). `uploading` is the reservation Start writes (§6.2); it isn't a Wall Post yet, and no list, count or page shows it except the limits. `deleting` marks a Delete in progress (§12): the admin page shows it in **Not shown** and My posts shows the card, both with "Couldn't delete. Try again.". `cleaning` exists only inside the reservation-cleanup transaction (§6.2) and is never seen. |
-| `photo`            | object                                                               | `pathname` (private store), `publicUrl` (set only while approved), `width`, `height`, `bytes`. Its own object, so a later video can sit beside it.                                                                                                                                                                                                                                                                                                |
-| `crop`             | `{ x: number, y: number }`, each 0–1                                 | The square crop's position (CSS `object-position` semantics) on the whole photo. The square's side is the photo's short edge; there is no zoom.                                                                                                                                                                                                                                                                                                   |
-| `caption`          | string ≤ 80, optional                                                | Normalised on the server (§6.4).                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `name`             | string ≤ 40, optional                                                |                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `marketingConsent` | boolean                                                              | The optional checkbox (#1480). The contributor can untick it later.                                                                                                                                                                                                                                                                                                                                                                               |
-| `deviceKey`        | string                                                               | §6.1. Never the raw cookie token.                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `startedAt`        | datetime                                                             | When Start wrote the reservation. Server time.                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `submittedAt`      | datetime                                                             | When Submit accepted it. Server time.                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `approvedAt`       | datetime                                                             | Set on every approval (also re-approval from Not shown). Orders the wall: newest approval first.                                                                                                                                                                                                                                                                                                                                                  |
-| `decidedAt`        | datetime                                                             | Last Approve, Reject or Remove.                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Field              | Type                                                  | Notes                                                                                                                                                                                                            |
+| ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_id`              | `wallPost-<uploadId>`                                 | `uploadId` is a UUID v4 the phone picks per post (§6.2), so a retried submit converges on one document.                                                                                                          |
+| `conference`       | reference → `conference`, required                    |                                                                                                                                                                                                                  |
+| `status`           | `'pending' \| 'approved' \| 'notShown' \| 'deleting'` | **Not shown** covers both Reject and Remove (#1479). `deleting` marks a Delete in progress (§12): the admin page shows it in **Not shown** and My posts shows the card, both with "Couldn't delete. Try again.". |
+| `photo`            | `image` (reference to a `sanity.imageAsset`)          | The whole photo, filtered and resized on the phone. Unset by Delete's first step, which keeps the asset id in `deletingAssetId` (§12). A later video would get its own field.                                    |
+| `deletingAssetId`  | string                                                | Only while `deleting`: the asset Delete still has to remove (a plain string, so it doesn't block the asset's deletion).                                                                                          |
+| `crop`             | `{ x: number, y: number }`, each 0–1                  | The square crop's position (CSS `object-position` semantics) on the whole photo. The square's side is the photo's short edge; there is no zoom.                                                                  |
+| `caption`          | string ≤ 80, optional                                 | Normalised on the server (§6.4).                                                                                                                                                                                 |
+| `name`             | string ≤ 40, optional                                 |                                                                                                                                                                                                                  |
+| `marketingConsent` | boolean                                               | The optional checkbox (#1480). The contributor can untick it later.                                                                                                                                              |
+| `deviceKey`        | string                                                | §6.1. Never the raw cookie token.                                                                                                                                                                                |
+| `submittedAt`      | datetime                                              | When Submit accepted it. Server time. Drives the hourly limit.                                                                                                                                                   |
+| `approvedAt`       | datetime                                              | Set on every approval (also re-approval from Not shown). Orders the wall: newest approval first.                                                                                                                 |
+| `decidedAt`        | datetime                                              | Last Approve, Reject or Remove.                                                                                                                                                                                  |
 
 Studio shows both types read-only (organizers moderate on the admin page, not
 in Studio). _Implementation detail._
@@ -145,70 +150,62 @@ data, the contributor's IP address, user agent or email.
 
 ## 5. Storage
 
-From [Research: storing Wall Post photos and delivering them live](https://github.com/CloudNativeBergen/website/issues/1476):
-a pending photo must never be publicly fetchable by URL, so it can't be a
-Sanity asset (public on `cdn.sanity.io` even on a private dataset) or a public
-Blob with a secret suffix.
+**Photos are Sanity image assets** (user, 2026-10-23, §3), in the
+conference's existing dataset.
 
-- **Pending photos** go to a **new private Vercel Blob store** (access mode is
-  fixed per store). Pathname `photo-wall/<conferenceId>/<deviceKey>/<uploadId>.jpg`.
-- **Approval copies** the bytes into the **existing public Blob store**
-  (`BLOB_READ_WRITE_TOKEN`) at `photo-wall/<conferenceId>/<uploadId>.jpg` with
-  a random suffix and `cacheControlMaxAge: 60` (Vercel's floor; the SDK doesn't check it), and stores
-  the URL in `photo.publicUrl`. Blob's `copy()` works within one store only, so
-  "copy" means: `get(pathname, { access: 'private', token })`, buffer the
-  stream (≤ 4 MiB), `put()` to the public store.
-- **Remove deletes exactly the copy it takes down**, the `publicUrl` of the
-  revision it is guarded on, and **deletes it before** patching the post
-  (§10). A later re-approval's new copy is never touched, and a failed delete
-  leaves the post on the wall with an error for the organizer, never a
-  silently orphaned public photo.
-- **Delete and the cron delete every copy:** in the public store every blob
-  under `photo-wall/<conferenceId>/<uploadId>` (the UUID makes the prefix
-  unique); in the private store the document's `photo.pathname`, which is
-  `photo-wall/<conferenceId>/<deviceKey>/<uploadId>.jpg` (a public-store prefix
-  doesn't match it). This runs after the post is marked `deleting`, so no
-  approval can start a new copy (§12).
-- Removing keeps the private original, so an organizer can approve again from
-  Not shown.
+- **Upload.** The submit route (§6.2) uploads the phone's JPEG with
+  `client.assets.upload('image', bytes, …)` on the write client, after every
+  check has passed. Options: `filename: '<uploadId>.jpg'`, `contentType:
+'image/jpeg'`, `source: { name: 'photo-wall', id: <conferenceId> }` (so the
+  cron can find a wall's assets), and **no optional metadata extraction**
+  (`extract` set so that no `exif` or `location` is stored; the bytes carry
+  none anyway, §6.4). The JPEG is ≤ 4 MiB, so the whole request fits Vercel's
+  4.5 MB body limit.
+- **Approve, Reject and Remove only patch the post.** Nothing is copied or
+  deleted, so re-approving from Not shown just works.
+- **Delete and the cron delete the asset** after the post stops referencing
+  it (§12, §11). Sanity refuses to delete an asset another document still
+  references; that refusal counts as done (two posts with identical bytes
+  share one asset, because Sanity names assets by content hash).
 
-Neither copy goes through Sanity's asset pipeline, so the Sanity CDN's missing
-CORS for tenant domains never applies.
+**What this costs, accepted (§3):**
+
+- **A photo is public by URL from the moment it is uploaded,** pending and
+  Not shown included. The URL is
+  `cdn.sanity.io/images/<project>/<dataset>/<sha1>-<w>x<h>.jpg`: not guessable
+  by others, but **computable by its uploader** (the SHA-1 of the bytes they
+  sent). Someone scripting the submit route could therefore use our CDN to
+  host an image an organizer never approves, until it is deleted. The bounds:
+  3 pending per cookie and 200 per wall (§6.3), organizers' **Delete now**
+  removes the asset (§10), and everything is deleted 30 days after the
+  conference (§11).
+- **A Not shown photo stays reachable** by anyone who saved its URL while it
+  was on the wall, until it is deleted. Reject and Remove hide; Delete now
+  removes.
+- **After a delete,** Sanity's CDN may keep serving a cached copy for a while
+  (how long is **unverified**; §14 measures it on Sunday).
+- **Studio's media browser** lists every image asset in the dataset, Wall
+  Post photos of every tenant included, to anyone with Studio access.
+
+**No new subprocessor.** Sanity already stores the platform's content and
+images.
 
 ### 5.1 Showing photos
 
-- **Approved photos** are rendered from `publicUrl` with a plain `<img>`,
-  **never `next/image`**: `next.config.ts` allows the Blob host in
-  `remotePatterns`, and the image optimizer would keep serving a removed photo
-  from `/_next/image` for its `minimumCacheTTL` (4 hours by default in Next 16).
-  This holds on the Wall page, Screen Mode, the admin page and My posts.
-- **Nor may anyone else send a Wall Post photo through the optimizer.**
-  `/_next/image?url=<publicUrl>` works for anyone who knows the URL while the
-  Blob host is in `remotePatterns`. Narrow the Blob entry in `next.config.ts`
-  with `pathname` globs for the prefixes that existing `next/image` users need,
-  so no `photo-wall/` path is eligible, and test that a direct optimizer
-  request for one is refused.
-- **Pending and Not shown photos** have no public URL. Two route handlers
-  stream them from the private store, both checking **before** `get()` and
-  answering `Cache-Control: private, no-store`:
-  - `/wall/post/photo/<uploadId>` for My posts: the pathname is rebuilt from
-    the request's own `konf_wall` cookie (§6.1) and the conference serving the
-    request, so a phone only ever sees its own photos.
-  - `/api/admin/photo-wall/photo/<uploadId>` for the admin page: an organizer
-    of the conference serving the request, and a `wallPost` of that conference.
-
-  A foreign, unknown or still-`uploading` id gets the same 404 from either
-  route.
-
-**User prerequisite, the first step of the Monday plan (M3b can't be tried on
-a preview, nor the Sunday trial run, without it):** create a
-**private** Blob store in the Vercel project (region `fra1` or `arn1`, per the
-research), connect it to Production, Preview and Development with the
-environment prefix `PHOTO_WALL_PRIVATE`, which should give **`PHOTO_WALL_PRIVATE_READ_WRITE_TOKEN`**, and add it to `fnox.toml` for local runs. Every slice uses that one name; if Vercel names it differently, the user records the real name on the parent issue. Every call against the private store passes
-that token explicitly. Production environment changes are the user's call.
-
-**No new subprocessor.** Vercel is already disclosed for file storage; its
-wording widens to photos (§12).
+- Every Wall Post photo is rendered with a **plain `<img>`** from the asset URL
+  with Sanity image parameters (`sanityImage()` in `src/lib/sanity/client.ts`):
+  - the Pinboard square: `rect=` computed from `crop` and the photo's
+    dimensions, plus a width;
+  - the Wall page on a phone: about 600 px wide; Screen Mode: about 900 px;
+    the admin card's whole photo: about 1200 px with `fit=max`.
+- **Never `next/image`** for these photos: the optimizer would keep serving a
+  deleted photo from `/_next/image` for its `minimumCacheTTL` (4 hours by
+  default in Next 16). `cdn.sanity.io` has to stay in `remotePatterns` for the
+  rest of the site, so a deliberate `/_next/image?url=…` request for a known
+  photo URL can't be refused; §15 lists it.
+- **No proxy routes:** the admin page and My posts use the same asset URLs.
+- Sanity's CDN has no CORS for tenant domains; that only matters for canvas
+  reads, which nothing here does with a stored photo.
 
 ## 6. Posting a Wall Post
 
@@ -217,15 +214,12 @@ wording widens to photos (§12).
 _Same pattern as Feedback Responses (`src/lib/feedback/device.ts`)._
 
 - Name **`konf_wall`**, `httpOnly`, `secure` outside development,
-  `SameSite=Lax`, **`Path=/wall`**. **Everything that needs the cookie lives
-  under `/wall`:** the Server Actions of `/wall/post` (they post to the page's
-  own path), the upload route `/wall/post/upload` and the photo route
-  `/wall/post/photo/<uploadId>`. **Never tRPC:** `/api/trpc` doesn't receive a
+  `SameSite=Lax`, **`Path=/wall`**. **Everything that needs the cookie lives under `/wall`:** the submit route `/wall/post/submit` and the Server Actions of `/wall/post` (they post to the page's own path). **Never tRPC:** `/api/trpc` doesn't receive a
   `/wall` cookie (the Feedback precedent, `SPEAKER_FEEDBACK_SPEC.md` §7.3).
 - Value: a 16-byte random token plus its issue time, HMAC-SHA256-signed with
   `INVITATION_TOKEN_SECRET`, as `deviceCookie()` does. A cookie whose
   signature doesn't verify is treated as absent.
-- **Issued** by the start step (§6.2) when the phone has no valid cookie.
+- **Issued** by the submit route (§6.2) when the phone has no valid cookie.
   **Lifetime:** until the end of the wall's deletion date (§11.1); the cookie
   is strictly necessary (#1480).
 - **Device key** = the first 32 hex characters of SHA-256 of the token. Posts
@@ -238,90 +232,61 @@ Accepted: human approval is the gate, the per-wall cap bounds the queue
 Feedback precedent,
 [#1417](https://github.com/CloudNativeBergen/website/issues/1417)).
 
-### 6.2 The three steps
+### 6.2 Submit
 
-A phone photo is 3–12 MB and Vercel Functions accept 4.5 MB at most, so the
-JPEG goes straight from the phone to Blob with a server-minted token.
+A phone photo is 3–12 MB, but the composer re-encodes it to a JPEG of at most
+4 MiB (§6.5), so it travels in one request through our own route, inside
+Vercel's 4.5 MB request limit. It is a **route handler**, `POST
+/wall/post/submit` (multipart: the photo, `uploadId`, `caption`, `name`,
+`cropX`, `cropY`, `marketingConsent`), not a Server Action, because Server
+Actions take 1 MB by default (`serverActions.bodySizeLimit`).
 
-1. **Start** (Server Action `startWallPost()`). Resolves the conference from
-   the domain; refuses if there is no wall or posting isn't open (§7); issues
-   the cookie if needed; checks the limits (§6.3); then **writes a
-   reservation**: a `wallPost-<uploadId>` document with a new UUID v4,
-   `status: 'uploading'`, the conference, the device key and `startedAt`. It
-   returns the pathname `photo-wall/<conferenceId>/<deviceKey>/<uploadId>.jpg`.
-2. **Upload** (client `upload()` from `@vercel/blob/client` with `access:
-'private'` and `handleUploadUrl: '/wall/post/upload'`). The route reads the cookie and resolves the conference **before** calling `handleUpload` (`onBeforeGenerateToken` receives only the pathname and client payload, not the request); `onBeforeGenerateToken` closes over them and **throws** to refuse unless:
-   - the pathname is exactly `photo-wall/<this conference>/<this cookie's
-device key>/<UUID v4>.jpg`;
-   - a reservation `wallPost-<uploadId>` exists with that conference and device
-     key, `status: 'uploading'`, and `startedAt` less than 10 minutes ago;
-   - the wall exists and posting is open.
+In this order, **guard before upload** (nothing reaches Sanity's asset store
+until every check has passed):
 
-   The token binds that **pathname**, `allowedContentTypes: ['image/jpeg']`,
-   `maximumSizeInBytes: 4 MiB` (4,194,304 bytes), `validUntil: now + 10 min`,
-   `addRandomSuffix: false` and `allowOverwrite: false`, and is passed the
-   private store's token. **Omit `onUploadCompleted`:** defining it makes Vercel call the route back without the cookie, which the route refuses, and the callback is retried. No rule here depends on it.
+1. the conference from the domain; a valid cookie, or issue one; an
+   `uploadId` that is a UUID v4;
+2. if `wallPost-<uploadId>` already exists: success when it belongs to this
+   conference and this cookie's device key (**a retry after a lost response**
+   never refuses and never uploads again), the generic refusal otherwise;
+3. the wall exists, posting is open (§7), and the limits allow it (§6.3);
+4. the request is no bigger than 4.5 MB and the photo no bigger than 4 MiB,
+   then the checks in §6.4, on the bytes in memory;
+5. upload the asset (§5), then `createIfNotExists` the `wallPost` (status
+   `pending`, the fields, `submittedAt`) referencing it, and expire the admin
+   and device tags with `revalidateTag(tag, { expire: 0 })` (a route handler,
+   §8). If the create fails, delete the asset (unless another post references
+   it) and refuse.
 
-   Without a reservation there is no token, and reservations count against the
-   limits (§6.3), so a script that skips Start can't mint tokens, and one that calls Start one request at a time can hold at most 3 uploads per cookie (concurrent Starts can overshoot, §15).
+**Reads that decide** (the limits and the existence read here, the revision
+reads in §10) use the **non-CDN** Sanity client (`src/lib/sanity/client.ts`); a
+CDN read lags the previous write.
 
-3. **Submit** (Server Action `submitWallPost({ uploadId, caption, name, crop,
-marketingConsent })`). In this order, **guard before fetch**:
-   1. a valid cookie, and an `uploadId` that is a UUID v4;
-   2. the document `wallPost-<uploadId>` exists, belongs to this conference and
-      this cookie's device key; otherwise the generic refusal, the same for a
-      foreign and an unknown id;
-   3. **already submitted** (any status but `uploading`): return success and do
-      nothing else. A retry after a lost response never refuses and never
-      touches the photo;
-   4. the wall exists, posting is open, and the limits allow it (§6.3, not counting this `uploadId`);
-   5. only then read the blob at the pathname rebuilt from **its own cookie's**
-      device key and run the checks in §6.4.
-
-   On success it patches the reservation to `status: 'pending'` with the post's
-   fields and `submittedAt`, guarded with `ifRevisionId`, and expires the admin
-   and device tags (§8). On a refusal at steps 4–5 it deletes the blob and the reservation, but **only
-   while the document is still `uploading`**, so it can never destroy a submitted
-   post's photo. Sanity has no revision-guarded delete, so this is **one
-   transaction**: `patch(id).ifRevisionId(rev).set({ status: 'cleaning' })` plus
-   `delete(id)`, which fails as a whole if the document moved since it was read;
-   the blob is deleted only after that transaction commits.
-
-**Reads that decide** (the limits, the reservation and revision reads here and
-in §10) use the **non-CDN** Sanity client (`src/lib/sanity/client.ts`); a CDN
-read lags the previous write.
-
-Reservations whose upload never arrives, or that are never submitted, stop
-counting after 10 minutes. The daily sweep (§11.2, slice P1) deletes those
-older than 24 hours with their blobs. Until P1 ships they stay, unreachable and
-shown nowhere, and the retention cron deletes them with the wall.
+A crash between the asset upload and the create leaves an asset no post
+references. The daily sweep (§11.2, slice P1) deletes those older than an
+hour; until P1 ships, the retention purge does.
 
 ### 6.3 Limits
 
-| Limit                                | Value                   | Phone shows                                                                                       |
-| ------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------- |
-| Pending posts per device, at once    | **3**                   | "You have 3 photos waiting for approval. You can post again once an organizer has looked at one." |
-| Posts per device, rolling 60 minutes | **10** (by `startedAt`) | "You've posted 10 photos in the last hour. Try again a bit later."                                |
-| Pending posts per wall, at once      | **200**                 | "Lots of photos are waiting right now. Try again in a few minutes."                               |
-| Posting not open                     | §7                      | "The wall isn't open for photos right now." with a link "See the wall".                           |
-| Any other refusal or failure         |                         | "Something went wrong. Your photo wasn't posted. Try again."                                      |
+| Limit                                | Value                     | Phone shows                                                                                       |
+| ------------------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------- |
+| Pending posts per device, at once    | **3**                     | "You have 3 photos waiting for approval. You can post again once an organizer has looked at one." |
+| Posts per device, rolling 60 minutes | **10** (by `submittedAt`) | "You've posted 10 photos in the last hour. Try again a bit later."                                |
+| Pending posts per wall, at once      | **200**                   | "Lots of photos are waiting right now. Try again in a few minutes."                               |
+| Posting not open                     | §7                        | "The wall isn't open for photos right now." with a link "See the wall".                           |
+| Any other refusal or failure         |                           | "Something went wrong. Your photo wasn't posted. Try again."                                      |
 
-"Pending" in both pending limits counts `pending` posts **plus**
-`uploading` reservations younger than 10 minutes. The hourly limit counts every
-document of the device with `startedAt` in the last 60 minutes, whatever its
-status (a refused reservation is deleted, so it doesn't count).
-
-The limits are checked at Start (so nobody uploads for nothing) and again at
-Submit, there not counting this `uploadId`. Two phones racing the last of the
-200 can overshoot by one; accepted.
+Both pending limits count `pending` posts. The hourly limit counts the
+device's posts with `submittedAt` in the last 60 minutes, whatever their
+status. Two phones racing the last of the 200 can overshoot by one; accepted.
 Organizers don't see refusals; the pending count shows how full the queue is.
 
 ### 6.4 What the server checks at Submit
 
 | Check          | Rule                                                                                                                                                                                                                                                                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Exists         | The blob at the rebuilt pathname exists in the private store.                                                                                                                                                                                                            |
-| Size           | ≤ 4 MiB, 4,194,304 bytes (the token already caps it; checked again on the bytes read).                                                                                                                                                                                   |
+| Present        | The request carries exactly one photo part.                                                                                                                                                                                                                              |
+| Size           | ≤ 4 MiB, 4,194,304 bytes, refused before the body is parsed when `Content-Length` already exceeds 4.5 MB.                                                                                                                                                                |
 | Type           | The bytes start with the JPEG signature (`sniffImageType()` in `src/lib/marketing-asset/image-type.ts`) and end with an EOI marker.                                                                                                                                      |
 | Dimensions     | Read from the JPEG's SOF marker: long edge ≤ **2048 px**, short edge ≥ **320 px**.                                                                                                                                                                                       |
 | No metadata    | No APPn segment except APP0, and no COM segment: this covers Exif and XMP (APP1) and IPTC (APP13), which can all carry location or creator data. The composer strips them (§6.5), so their presence means the file didn't come from the composer: refused, not stripped. |
@@ -329,7 +294,7 @@ Organizers don't see refusals; the pending count shows how full the queue is.
 | Name           | Same normalisation; more than **40** code points is refused.                                                                                                                                                                                                             |
 | Crop           | `x` and `y` are finite numbers in [0, 1].                                                                                                                                                                                                                                |
 | Marketing      | A boolean; anything else is refused.                                                                                                                                                                                                                                     |
-| Posting Window | Open at Submit time (§7), not just at Start.                                                                                                                                                                                                                             |
+| Posting Window | Open at Submit time (§7).                                                                                                                                                                                                                                                |
 
 _Refinement (spec):_ "it decodes" is checked **structurally** (signature, SOF,
 EOI), not by a full decode: the repo has no image decoder dependency (`sharp`
@@ -360,9 +325,11 @@ capture="environment">`) and **Choose from your photos** (no `capture`).
 
 - **Marketing:** an optional checkbox, **unticked by default**: "The
   organizers may also use my photo in their own marketing."
-- **Post to the wall** runs Start → Upload (with progress) → Submit, then shows
-  My posts with the new card on top, "Waiting for approval".
-- **Retries on venue Wi-Fi:** a Submit whose response was lost (a network error, not a refusal) is retried with the same `uploadId` (Submit is idempotent). A Submit that answers with a refusal has already deleted its reservation, so the composer keeps the photo and fields, shows the message, and the next press starts over with Start. **Any** failed Upload after a token was minted goes on to Submit (this SDK has no distinct error for an overwrite refusal): Submit's existence check (§6.4) decides, and its refusal starts the next press over from Start.
+- **Post to the wall** sends the one submit request (with upload progress), then shows My posts with the new card on top, "Waiting for approval".
+- **Retries on venue Wi-Fi:** a submit whose response was lost (a network
+  error, not a refusal) is retried with the same `uploadId`; the route answers
+  success if the post already exists (§6.2). A refusal keeps the photo and
+  fields on screen with the message, and the next press uses a new `uploadId`.
 - **Outside the Posting Window** the page shows only "The wall isn't open for
   photos right now." and **See the wall**, plus My posts.
 
@@ -378,7 +345,7 @@ checked in §14):
 - Apply the filter to the resized pixels, then `canvas.toBlob('image/jpeg',
 0.85)`; if the result is over 4 MiB, retry at 0.7. The re-encode drops the
   camera's EXIF and GPS and turns HEIC into JPEG.
-- **Then strip every APPn segment except APP0, and any COM segment, from the encoded bytes** (a marker walk, no decoder), and upload `new Blob([bytes], { type: 'image/jpeg' })` so the token's content type matches. Safari's canvas encoder may write a minimal Exif
+- **Then strip every APPn segment except APP0, and any COM segment, from the encoded bytes** (a marker walk, no decoder), and send `new Blob([bytes], { type: 'image/jpeg' })` as the photo part. Safari's canvas encoder may write a minimal Exif
   APP1 of its own (unverified); without this step the server's no-APP1 rule
   (§6.4) would refuse every iPhone post. M2 inspects a real iPhone's output
   for APP1 and keeps a Safari-made sample as a test fixture.
@@ -401,8 +368,7 @@ checked in §14):
   conference's `startDate` to 23:59:59 on its `endDate`, Europe/Oslo
   (`CONFERENCE_TIME_ZONE` in `src/lib/time.ts`). Open and Paused remain as overrides ("open early" and "pause"); the end-of-last-day close applies to every mode. P2 also makes a missing `postingMode`
   read as `auto`.
-- Every refusal path (Start, the upload route, Submit) uses one function,
-  `isPostingOpen(wall, conference, now)`. _Implementation detail._
+- The submit route uses one function, `isPostingOpen(wall, conference, now)`. _Implementation detail._
 - Viewing is never gated by the window: the Wall page and Screen Mode show the
   wall until it closes (§11.1).
 
@@ -413,11 +379,11 @@ expired on change costs about 1–4k Sanity reads per edition; polling Sanity
 directly would cost about 30% of the monthly quota. **Browsers never query
 Sanity.** _Tags and function names below are implementation details._
 
-| Cached read                                                                                                                                                                  | Tag                               | Expired by                                                                                                                                        | Polled by                                                                         |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `getWall(conferenceId)`: settings + the newest **200** approved posts (`id`, `publicUrl`, `width`, `height`, `crop`, `caption`, `name`, `approvedAt`), newest approval first | `photo-wall:<conferenceId>`       | Approve, Reject/Remove of an approved post, Delete (the contributor's or Delete now) of an approved post, any settings change, the retention cron | Screen Mode every **5 s**, always; the Wall page every **10 s** while visible     |
-| `getModerationQueue(conferenceId)`: every post except reservations, with its status, and the pending count                                                                   | `photo-wall-admin:<conferenceId>` | Submit, every moderation action, contributor Delete and marketing change, the cron                                                                | The admin page every **10 s** while visible                                       |
-| `getMyPosts(conferenceId, deviceKey)`: this device's posts, except reservations                                                                                              | `photo-wall-device:<deviceKey>`   | Submit, Delete, marketing change by that device; any moderation of a post with that `deviceKey`                                                   | My posts on load, after each action, and every **15 s** while the page is visible |
+| Cached read                                                                                                                                                                    | Tag                               | Expired by                                                                                                                                        | Polled by                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `getWall(conferenceId)`: settings + the newest **200** approved posts (`id`, the asset URL, `width`, `height`, `crop`, `caption`, `name`, `approvedAt`), newest approval first | `photo-wall:<conferenceId>`       | Approve, Reject/Remove of an approved post, Delete (the contributor's or Delete now) of an approved post, any settings change, the retention cron | Screen Mode every **5 s**, always; the Wall page every **10 s** while visible     |
+| `getModerationQueue(conferenceId)`: every post with its status and asset URL, and the pending count                                                                            | `photo-wall-admin:<conferenceId>` | Submit, every moderation action, contributor Delete and marketing change, the cron                                                                | The admin page every **10 s** while visible                                       |
+| `getMyPosts(conferenceId, deviceKey)`: this device's posts                                                                                                                     | `photo-wall-device:<deviceKey>`   | Submit, Delete, marketing change by that device; any moderation of a post with that `deviceKey`                                                   | My posts on load, after each action, and every **15 s** while the page is visible |
 
 - **Inside each cached function**, read with the **uncached** Sanity client
   (`clientReadUncached`), never the CDN one: a tag expiry refills from Sanity,
@@ -436,16 +402,11 @@ Sanity.** _Tags and function names below are implementation details._
   page, the admin page and My posts poll while the page is visible
   (`refetchInterval` paused on `visibilitychange`); Screen Mode polls every 5 s
   for as long as it is open.
-- **Expiry call:** Server Actions (Submit, Delete, marketing) use `updateTag`;
-  the admin's tRPC mutations run in the `/api/trpc` Route Handler, where
-  `updateTag` throws, so they use `revalidateTag(tag, { expire: 0 })`, the
-  `src/lib/feedback/cache.ts` precedent.
+- **Expiry call:** the Server Actions (Delete, marketing) use `updateTag`; the submit route and the admin's tRPC mutations are Route Handlers, where `updateTag` throws, so they use `revalidateTag(tag, { expire: 0 })`, the `src/lib/feedback/cache.ts` precedent.
 - **Latency** is the poll interval: a newly approved or removed post reaches
   every screen within about 5 s and every phone within about 10 s. That is
   what "immediate" means here (#1478, #1479).
-- A removed post's public URL keeps answering for up to 60 s from the CDN
-  (`cacheControlMaxAge`), to anyone who already has it. The wall stops showing
-  it on the next poll.
+- A removed post leaves the wall on the next poll; its asset URL keeps working until the post is deleted (§5).
 
 ## 9. The wall
 
@@ -568,30 +529,21 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   - Not shown: **Approve**.
   - Every tab: **Delete now** (inline confirm: "Delete this photo for good? It
     can't be undone."), for abusive or illegal content.
-  - Pending tab: **Approve all pending (N)** with an inline confirm. It
-    approves the posts pending when pressed, four at a time, within a 30 s
-    budget, and reports how many it approved; pressing again finishes the
-    rest.
+  - Pending tab: **Approve all pending (N)** with an inline confirm. It works as described below.
 - **Allowed from-states:** Approve from `pending` or `notShown`; Reject from
   `pending`; Remove from `approved`; Delete (now) from any status. A
-  `deleting` card offers only **Try again** (Delete). Any other combination is
-  refused before any Blob call.
+  `deleting` card offers only **Try again** (Delete). Any other combination is refused before any write.
 - **Every transition is guarded with `ifRevisionId`** against the non-CDN read
   it was decided from, so two organizers (or an organizer and the contributor)
   can't interleave. On a revision conflict the server re-reads once: if the
   post is gone, the card reports "This photo was deleted"; if its status no
   longer allows the action (someone else already removed it), the card
-  refreshes with no change; otherwise it retries once, and **only if the post is still in the state the action began from**: Approve only if the status is still the one it started from (an Approve begun on Pending doesn't retry after someone rejected the post); Remove only if `publicUrl` is still the copy it deleted (a different URL means someone re-approved, and Remove refreshes without acting). A marketing untick is the usual reason to retry.
-- **Approve** copies the photo to the public store (§5), then patches the post
-  (`status: approved`, `publicUrl`, `approvedAt`, `decidedAt`). If the patch
-  fails for good, it deletes the copy it just made.
-- **Reject** (from Pending) patches `status: notShown`; there is no public copy.
-- **Remove** (from On the wall) deletes the revision's `publicUrl` first (retried once; a not-found from `del()` counts as success, which M4b proves once against the real store), then patches `status: notShown` and unsets `publicUrl`. If
-  the delete fails, nothing is patched and the card says "Couldn't remove.
-  Try again."; the post stays on the wall until it succeeds. If the patch
-  fails after the delete, the post shows as a missing image, which Screen Mode
-  skips (§9.2), until the retry. _Refinement (spec):_ this order makes a
-  failure visible instead of leaving a public photo nobody can find.
+  refreshes with no change; otherwise it retries once, and **only if the post is still in the state the action began from**: Approve only if the status is still the one it started from (an Approve begun on Pending doesn't retry after someone rejected the post); Remove only if the post is still approved. A marketing untick is the usual reason to retry.
+- **Approve** patches `status: approved`, `approvedAt` and `decidedAt`.
+- **Reject** and **Remove** patch `status: notShown` and `decidedAt`.
+- **Approve all pending** approves the posts pending when pressed, in
+  transactions of up to 50 patches, each guarded by its revision; a conflicted
+  post is skipped and stays pending. It reports how many it approved.
 - **Delete now** runs the same Delete as the contributor's (§12).
 - The contributor's My posts says **Not shown**, with no reason.
 
@@ -607,9 +559,8 @@ From [Decide the Photo Wall window, retention, consent and erasure](https://gith
   `/api/cron/cleanup-notifications`) handles every `photoWall` whose deletion date is **tomorrow or earlier** and `purgedAt` is unset:
   1. **close it to writes first:** set `closedAt` (if unset) and expire the
      tags. `isPostingOpen` is false and Approve refuses once `closedAt` is set, whatever `postingMode` says, and Submit and Approve re-check it just before their final commit. **Delete (both kinds) stays allowed**, so an abusive photo can still be taken down. From `closedAt` on, `getWall` returns no posts and the pages show "This wall has closed.";
-  2. purge only walls whose deletion date is **today or earlier** and whose `closedAt` is more than 15 minutes old (an upload token lives 10 minutes). Closing the day before means the purge runs **on** the deletion date; the wall shows "This wall has closed" from the day before;
-  3. hard-delete every `wallPost` of the conference (Not shown included) and
-     every blob under `photo-wall/<conferenceId>/` in **both** stores;
+  2. purge only walls whose deletion date is **today or earlier** and whose `closedAt` is more than 15 minutes old (a submit in flight has finished by then). Closing the day before means the purge runs **on** the deletion date; the wall shows "This wall has closed" from the day before;
+  3. hard-delete every `wallPost` of the conference (Not shown included, history purged, §12), then every image asset those posts referenced and every asset with `source.name == 'photo-wall'` and `source.id == <conferenceId>` that no document references;
   4. set `purgedAt`.
 - Re-running is safe: an interrupted run leaves `purgedAt` unset, so the next
   run repeats step 3. `closedAt` means "closed to writes", `purgedAt` means
@@ -620,19 +571,12 @@ From [Decide the Photo Wall window, retention, consent and erasure](https://gith
 
 The same cron deletes:
 
-- `uploading` reservations older than 24 hours, with their private blob;
-- private blobs under `photo-wall/` older than 24 hours with no `wallPost`
-  document;
-- public blobs under `photo-wall/` **older than an hour** that aren't the
-  `photo.publicUrl` of an approved `wallPost`, rechecked on the uncached client
-  just before deleting (the hour covers an Approve between its `put()` and its
-  patch, the existing sweeper's age gate pattern);
+- image assets with `source.name == 'photo-wall'`, older than an hour, that
+  no document references (a crash between upload and create, §6.2), rechecked
+  on the uncached client just before deleting;
 - `deleting` posts older than an hour: finish their Delete (§12).
 
-Extend the existing `/api/cron/cleanup-orphaned-blobs` (`vercel.json`) or sit
-beside it; don't duplicate its listing logic.
-
-**Monday risk:** P1 is not in the Monday cut. If it hasn't shipped by 26 November 2026, the deletion is a manual job that day: first set the wall's `postingMode` to Paused and `closedAt` (posting has already closed at the end of the conference, §7), then delete every `wallPost` of the conference (with history, §12) and both stores' `photo-wall/<conferenceId>/` prefix, then set `purgedAt`.
+**Monday risk:** P1 is not in the Monday cut. If it hasn't shipped by 26 November 2026, the deletion is a manual job that day: first set the wall's `postingMode` to Paused and `closedAt` (posting has already closed at the end of the conference, §7), then delete every `wallPost` of the conference (with history, §12) and the wall's assets (step 3 above), then set `purgedAt`.
 
 ## 12. Privacy
 
@@ -645,20 +589,24 @@ beside it; don't duplicate its listing logic.
   button (inline confirm: "Delete this photo? It's removed from the wall and
   can't be undone.") and a **Marketing** switch.
 - **Delete** is permanent and immediate, in three steps:
-  1. a revision-guarded patch to `status: 'deleting'` (on a conflict, re-read once and retry; Delete accepts every status): the post leaves the wall
-     on the next poll, and a racing Approve's guarded patch fails and deletes
-     its own copy (§10);
-  2. delete every blob in both stores under the post's prefix (§5), retried
-     once;
-  3. delete the document **with its history** (`purge: true`, below).
+  1. a revision-guarded patch (on a conflict, re-read once and retry; Delete
+     accepts every status): `status: 'deleting'`, unset `photo`, and keep the
+     asset id in `deletingAssetId`. The post leaves the wall on the next poll
+     and no longer references the asset;
+  2. delete the asset (history purged), retried once; "still referenced by
+     another post" counts as done;
+  3. delete the document (history purged).
 
-  If step 2 fails, the document stays `deleting` and the card (in My posts, and
-  on the admin page) says "Couldn't delete. Try again."; Delete accepts a `deleting` post, so pressing again finishes it. **One module (`deleteWallPost`, slice M4b)** implements this; the organizer's Delete now and the contributor's Delete (M6) both call it. The module **never expires tags**: each caller does, per §8 (`revalidateTag(tag, { expire: 0 })` from the tRPC mutation, `updateTag` from the Server Action). The sweep (§11.2) also
-  finishes `deleting` posts older than an hour.
+  If step 2 fails, the document stays `deleting` and the card (in My posts and
+  on the admin page) says "Couldn't delete. Try again."; Delete accepts a
+  `deleting` post and resumes from `deletingAssetId`. **One module
+  (`deleteWallPost`, slice M4b)** implements this; the organizer's Delete now
+  and the contributor's Delete (M6) both call it. The module **never expires
+  tags**: each caller does, per §8. The sweep (§11.2) also finishes `deleting`
+  posts older than an hour.
 
 - **History.** A plain Sanity delete keeps the document's revisions in its
-  history, with the caption, name and consent. Every final delete here (Delete,
-  Delete now, reservation cleanup, the cron) **purges history** (the delete
+  history, with the caption, name and consent. Every final delete here (Delete, Delete now, a failed submit's asset, the cron) **purges history** (the delete
   action's `purge: true`), which needs the write token's history permission.
   M4b proves it once on a real document, with the user's go for that
   production write; if the token can't purge, the user decides between
@@ -670,10 +618,7 @@ beside it; don't duplicate its listing logic.
   so.
 
 **New `/privacy` section** (`id="photo-wall"`, in
-`src/app/(main)/privacy/page.tsx`), plus a `konf_wall` row in the cookie list,
-and the Vercel subprocessor wording in `src/lib/legal/subprocessors.ts`
-widened from "file storage for uploaded attachments" to "file storage for
-uploaded attachments and photos". Draft copy:
+`src/app/(main)/privacy/page.tsx`), plus a `konf_wall` row in the cookie list. The subprocessor list doesn't change (Sanity is already on it). Draft copy:
 
 > **Photo Wall.** If you post a photo to a conference's Photo Wall, we store
 > the photo (filtered and resized on your phone, with location and other
@@ -689,8 +634,7 @@ uploaded attachments and photos". Draft copy:
 > the post are theirs and aren't covered by that deletion. To delete a post,
 > open the wall's posting page on the same phone and use My posts, or contact
 > the organizers. If you are in someone else's photo and want it removed,
-> contact the organizers. Photos are stored with our hosting provider, Vercel;
-> no other service receives them.
+> contact the organizers. Photos are stored with our content platform, Sanity; no other service receives them.
 
 `docs/PRIVACY_OPERATIONS.md` gets a line on handling a Photo Wall removal
 request (find the post on the admin page, Delete now).
@@ -706,55 +650,53 @@ dark-mode mechanism checked, per `AGENTS.md`. Every new tRPC endpoint is mocked
 in the affected UI tests and the mutation-surface snapshots are updated.
 
 **Monday cut.** Build order: M1 and M2 at once; then M3a, M4a and M5a; then M3b, M4b
-and M5b; then M6 (after M3b, M4b, M5a). The private Blob store (§5) is the user's step before M3b
-can be tried on a preview.
+and M5b; then M6 (after M3b, M4b, M5a).
 
 | #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                               | After         |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
 | M1  | **Wall setup and admin shell.** Both document types (§4); the `src/app/(public)/wall/` route group with its minimal chrome and the 404 rule for conferences without a wall (§4.1); `/admin/photo-wall` with Set up, the Posting (Open/Paused) and Sponsor strip switches, the links with the posting QR (§10); the nav entry; `isPostingOpen` (§7). Demo: an organizer sets up the wall, opens and pauses it, and downloads the QR. | —             |
 | M2  | **Composer, phone side only.** `/wall/post` landing and the composer (§6.5) with the 9 baked filters, crop, caption, name, consent line and marketing checkbox, producing the JPEG and fields; no server calls yet (Storybook with mocked actions). Try it on a real iPhone as early as possible (§15). Demo: in Storybook at phone width, a picked photo becomes a filtered ≤ 2048 px JPEG with no EXIF.                           | —             |
-| M3a | **Posting rules, server side.** The cookie (§6.1); the reservation write and the limit counts on the non-CDN client (§6.2, §6.3); the JPEG and field checks (§6.4); each a pure, tested module with executed GROQ and real JPEG files (§14). No route or UI.                                                                                                                                                                        | M1            |
-| M3b | **Posting path.** Start, the upload route and Submit (§6.2) on M3a's modules, the phone's messages (§6.3), the window-closed page, M2's composer wired to them, and a minimal "Waiting for approval" card showing the local photo. Demo: a phone posts and the post is pending in Sanity, with its photo only in the private store.                                                                                                 | M2, M3a       |
-| M4a | **Moderation, read side.** `getModerationQueue` (§8), the admin photo route (§5.1), tabs, cards and the live pending count (§10). Demo: an organizer sees pending posts with the whole photo and the crop outline on a phone.                                                                                                                                                                                                       | M1            |
-| M4b | **Moderation actions.** Approve (copy to public), Reject, Remove, Approve all and Delete now with the revision guards, exact-copy and prefix deletes and their failure paths (§5, §10, §12), the tag expiries (§8), the race tests (§14). Demo (with M3b): an organizer approves a post from a phone and its public URL works; Remove makes it 404 within a minute.                                                                 | M3a, M4a      |
-| M5a | **Wall page.** `getWall` (§8); the Wall page (§9.1) with the plain-`<img>` rule (§5.1). Demo: with fixture posts in Storybook, and with M4b, an approval appears on a phone within 10 s.                                                                                                                                                                                                                                            | M1            |
+| M3a | **Posting rules, server side.** The cookie (§6.1); the limit counts on the non-CDN client (§6.3); the JPEG and field checks (§6.4); each a pure, tested module with executed GROQ and real JPEG files (§14). No route or UI.                                                                                                                                                                                                        | M1            |
+| M3b | **Posting path.** The submit route (§6.2) on M3a's modules with the asset upload (§5), the phone's messages and retries (§6.3, §6.5), the window-closed page, M2's composer wired to it, and a minimal "Waiting for approval" card. Demo: a phone posts and the post is pending in Sanity with its photo as an asset.                                                                                                               | M2, M3a       |
+| M4a | **Moderation, read side.** `getModerationQueue` (§8), tabs, cards with the Sanity image URLs (§5.1) and the live pending count (§10). Demo: an organizer sees pending posts with the whole photo and the crop outline on a phone.                                                                                                                                                                                                   | M1            |
+| M4b | **Moderation actions.** Approve, Reject, Remove, Approve all and Delete now with the revision guards (§10), the `deleteWallPost` module with its failure path and history purge (§12), the tag expiries (§8), the race tests (§14). Demo (with M3b): an organizer approves a post from a phone and it appears on the Wall page; Delete now removes its asset.                                                                       | M3a, M4a      |
+| M5a | **Wall page.** `getWall` (§8); the Wall page (§9.1) with the plain-`<img>` Sanity URLs (§5.1). Demo: with fixture posts in Storybook, and with M4b, an approval appears on a phone within 10 s.                                                                                                                                                                                                                                     | M1            |
 | M5b | **Screen Mode.** Pinboard with arrivals, bursts, idle swaps and removal (§9.2), always-on polling (§8), flaky Wi-Fi (§9.3), the sponsor strip (§9.4), and the analytics and install-prompt exclusions (§9.2). Demo: an approval appears on a running screen within 5 s and a removal leaves it, after more than five minutes untouched.                                                                                             | M5a           |
-| M6  | **My posts and privacy.** `getMyPosts` and the device photo route (§5.1, §8); My posts with statuses, Delete (calling M4b's `deleteWallPost`) and the marketing switch (§12); the `/privacy` section, cookie row and subprocessor wording; the `PRIVACY_OPERATIONS.md` line. Demo: a contributor deletes their approved post and it leaves the Wall page.                                                                           | M3b, M4b, M5a |
+| M6  | **My posts and privacy.** `getMyPosts` (§8); My posts with statuses, Delete (calling M4b's `deleteWallPost`) and the marketing switch (§12); the `/privacy` section and cookie row; the `PRIVACY_OPERATIONS.md` line. Demo: a contributor deletes their approved post and it leaves the Wall page.                                                                                                                                  | M3b, M4b, M5a |
 
 **After the event:**
 
-| #   | Slice                                                                                                                                                                                                                                                                                                       | After    | Due         |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------- |
-| P1  | **Retention cron and orphan sweep** (§11), the closed states of every page.                                                                                                                                                                                                                                 | M3b, M4b | 26 Nov 2026 |
-| P2  | **Automatic Posting Window** (§7).                                                                                                                                                                                                                                                                          | M1       | 12 Nov 2026 |
-| P3  | **Wall Look setting and Mosaic.** `photoWall.look` on the admin page, live on screens; `?look=` on the Screen Mode link; the Mosaic look on the Wall page and Screen Mode, from the prototype (#1478).                                                                                                      | M5b      | 12 Nov 2026 |
-| P4  | **Spotlight look**, from the prototype (#1478).                                                                                                                                                                                                                                                             | P3       | 12 Nov 2026 |
-| P5  | **Consented ZIP export.** Download approved posts whose contributor ticked marketing consent, as a ZIP. It must not pass through a function response over 4.5 MB: build it in the browser from the public URLs if Blob serves them with CORS, else write it to the private store and hand out a signed URL. | M4a      | 12 Nov 2026 |
-| P6  | **Pending-count badge** on the nav entry (`AdminNavEntry.count`, as Feedback's flagged badge).                                                                                                                                                                                                              | M4a      | 12 Nov 2026 |
+| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                  | After    | Due         |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ----------- |
+| P1  | **Retention cron and orphan sweep** (§11), the closed states of every page.                                                                                                                                                                                                                                                                                                                            | M3b, M4b | 26 Nov 2026 |
+| P2  | **Automatic Posting Window** (§7).                                                                                                                                                                                                                                                                                                                                                                     | M1       | 12 Nov 2026 |
+| P3  | **Wall Look setting and Mosaic.** `photoWall.look` on the admin page, live on screens; `?look=` on the Screen Mode link; the Mosaic look on the Wall page and Screen Mode, from the prototype (#1478).                                                                                                                                                                                                 | M5b      | 12 Nov 2026 |
+| P4  | **Spotlight look**, from the prototype (#1478).                                                                                                                                                                                                                                                                                                                                                        | P3       | 12 Nov 2026 |
+| P5  | **Consented ZIP export.** Download approved posts whose contributor ticked marketing consent, as a ZIP. Sanity's CDN has no CORS for tenant domains and a function response is capped at 4.5 MB, so the slice first decides: add the tenant origin to Sanity's CORS list (a user step) and zip in the browser, or stream the ZIP from a route handler (whether streaming lifts the cap is unverified). | M4a      | 12 Nov 2026 |
+| P6  | **Pending-count badge** on the nav entry (`AdminNavEntry.count`, as Feedback's flagged badge).                                                                                                                                                                                                                                                                                                         | M4a      | 12 Nov 2026 |
 
 ### 13.1 Tickets
 
 Every slice is filed under [Photo Wall: implementation](https://github.com/CloudNativeBergen/website/issues/1485), with the dependencies above as native blocking edges.
 
-| Slice                         | Issue |
-| ----------------------------- | ----- |
-| User: private Blob store (§5) | #1486 |
-| M1                            | #1487 |
-| M2                            | #1488 |
-| M3a                           | #1489 |
-| M3b                           | #1490 |
-| M4a                           | #1491 |
-| M4b                           | #1492 |
-| M5a                           | #1493 |
-| M5b                           | #1494 |
-| M6                            | #1495 |
-| P1                            | #1496 |
-| P2                            | #1497 |
-| P3                            | #1498 |
-| P4                            | #1499 |
-| P5                            | #1500 |
-| P6                            | #1501 |
-| Sunday trial run (user, §14)  | #1502 |
+| Slice                        | Issue |
+| ---------------------------- | ----- |
+| M1                           | #1487 |
+| M2                           | #1488 |
+| M3a                          | #1489 |
+| M3b                          | #1490 |
+| M4a                          | #1491 |
+| M4b                          | #1492 |
+| M5a                          | #1493 |
+| M5b                          | #1494 |
+| M6                           | #1495 |
+| P1                           | #1496 |
+| P2                           | #1497 |
+| P3                           | #1498 |
+| P4                           | #1499 |
+| P5                           | #1500 |
+| P6                           | #1501 |
+| Sunday trial run (user, §14) | #1502 |
 
 ## 14. Verification
 
@@ -762,13 +704,11 @@ Every slice is filed under [Photo Wall: implementation](https://github.com/Cloud
 
 - **Guards are sabotage-proven:** every refusal in §6.2–6.4, §4.1 and §10
   (organizer only). Remove it, show the specific test fails on a value (the
-  write or the token happening), restore.
-- **Guard before fetch:** Submit with another device's `uploadId`, or for
-  another conference, refuses without reading the blob (assert the read was
-  never called) and with the same refusal as an unknown `uploadId`.
-- **The token binds what §6.2 says**, shown on the real `handleUpload` from the
-  installed `@vercel/blob`, not a mock: pathname, content type, size, expiry,
-  no overwrite.
+  write or the asset upload happening), restore.
+- **Guard before upload:** every refusal in §6.2 (cookie, foreign `uploadId`, window, limits, size, JPEG and field checks) happens **without** calling `client.assets.upload` (assert it was never called); a foreign existing `uploadId` gets the same refusal as any other failure.
+- **Upload options:** the real client's upload request carries the
+  `source`, the filename and the `extract` setting of §5 (inspect the request
+  the installed `@sanity/client` builds, not a mock of it).
 - **JPEG checks** on real files: a canvas-made JPEG (including a Safari-made sample, after the composer's APPn strip) passes; a camera JPEG with EXIF, a JPEG with an IPTC APP13 segment, one with a COM segment, a PNG renamed `.jpg`, a truncated file, a 4096 px image and a 200 px
   image are refused.
 - **Executed GROQ, not mocks,** for the limits, `getWall`, the queue and My
@@ -776,24 +716,14 @@ Every slice is filed under [Photo Wall: implementation](https://github.com/Cloud
 - **Cookie:** a vitest test asserts the `Set-Cookie` attributes (`Path=/wall`,
   httpOnly, `SameSite=Lax`, expiry on the deletion date) and replays the cookie
   into a second call.
-- **Reservations:** the upload route refuses a pathname without a live
-  reservation of this device, and a fourth Start from one device is refused
-  while three reservations or pending posts are live.
-- **Reservation cleanup transaction:** a test asserts the real client's `serialize()` puts the `ifRevisionID` patch and the delete in **one** transaction. The installed `@sanity/mutator` ignores `ifRevisionID`; the repo helper `__tests__/helpers/versionedSanityStore.ts` models Sanity's whole-transaction refusal on a revision mismatch, so the conflict path is proven on that helper. Sanity's all-or-nothing semantics themselves stay a documented guarantee CI can't falsify (no writable scratch dataset); the PR says so.
+- **Limits:** a fourth submit from one device is refused while three of its posts are pending, and the eleventh within an hour.
+- **Revision guards** are asserted on the real client's `serialize()` (the `ifRevisionID` is on the patch); conflicts are proven on `__tests__/helpers/versionedSanityStore.ts`, because the installed `@sanity/mutator` ignores `ifRevisionID`.
 - **Screen Mode finds and accepts a service-worker update** without a click, focus or visibility change (fake timers past 10 minutes).
-- **Retry after a lost response:** Submit twice for the same `uploadId`, the
-  second after pausing posting; the second returns success and the photo still
-  exists.
-- **Photo routes:** each refuses a foreign, unknown or `uploading` id with the
-  same 404, without calling `get()`, and answers `private, no-store`.
+- **Retry after a lost response:** submit twice with the same `uploadId`, the second after pausing posting; the second returns success, uploads nothing, and the post still has its photo.
 - **No `next/image` for Wall Post photos:** a test (or lint rule) fails if a
   Wall Post photo is rendered through `/_next/image`.
-- **Moderation races** on the real client: two Removes, Remove followed by a
-  re-approval, and Approve racing the contributor's Delete, leave no public
-  copy without an approved document, **and** an approved post's `publicUrl` still answers. Include the interleaving: Removes A and B read copy U; A completes; another organizer re-approves (copy V); B's retry must leave V alone.
-- **Failure paths:** a Blob delete that fails on Remove leaves the post
-  approved with the error; one that fails on Delete leaves it `deleting`, and
-  pressing again finishes it.
+- **Moderation races:** two organizers acting on one post, and Approve racing the contributor's Delete, end in one consistent state; a deleted post can't come back approved.
+- **Failure path:** an asset delete that fails leaves the post `deleting`, and pressing again finishes it from `deletingAssetId`; an asset shared by two posts survives the first post's Delete.
 - **Pollers keep polling:** with fake timers, past five idle minutes, an approval still arrives on Screen Mode and a removal still leaves, and My posts still turns Waiting into On the wall; a removed and re-approved
   post arrives again; Screen Mode sends no analytics request.
 - **Visual:** every new component has a story; captures as in §13.
@@ -812,22 +742,17 @@ trial issue):
 6. **Screen:** open `/wall/screen` on a laptop in a private window (no left-over
    service worker). The approved posts are there. Approve the rejected one
    from Not shown: it drops in with the "new" mark within about 5 s.
-7. **Remove while the screen runs:** it leaves the screen within about 5 s, and
-   the Wall page on a phone within about 10 s. Its public URL fails within a
-   minute.
+7. **Remove while the screen runs:** it leaves the screen within about 5 s, and the Wall page on a phone within about 10 s.
 8. **Limit:** from one phone, post until the fourth pending is refused with the
    message.
-9. **My posts:** statuses are right; Delete an approved post, and it leaves
-   the screen.
-10. **Pause:** the composer shows the closed page; a post started before the
-    pause is refused at Submit.
+9. **My posts:** statuses are right; Delete an approved post, and it leaves the screen. Note how long its asset URL keeps answering afterwards (Sanity's CDN cache, §5).
+10. **Pause:** the composer shows the closed page, and a submit is refused.
 11. **Flaky Wi-Fi:** switch the laptop's Wi-Fi off for 30 s. The screen keeps
     cycling and shows the offline dot. Remove a post meanwhile. Wi-Fi on: the
     removal catches up.
 12. **Sponsor strip:** switch it on; the strip appears on the screen with
     readable logos.
-13. **No location:** download an approved photo's public URL and check it has
-    no EXIF (for example `exiftool`).
+13. **No location:** download an approved photo's asset URL and check it has no EXIF (for example `exiftool`).
 14. **Clean up:** Delete now every trial post, and set posting to Paused.
 
 **Monday 26 October, before the doors open** (the user): open
@@ -838,30 +763,27 @@ screen off; nothing else depends on the wall.
 
 ## 15. Known gaps and risks
 
-- **A crash between Approve's `put()` and its patch** leaves a public copy of
-  a photo that was never approved. Same reasoning as the next item: the URL was
-  never stored or shown; the sweep or the manual purge removes it.
-- **Screens on long outages:** with `max-age=60`, an idle swap to a post whose
-  image isn't in memory fails after a minute offline and is skipped; the cards
-  already on screen stay.
-- **An Approve that loses to a Delete and then fails to delete its own new copy** leaves one public photo with no document. Its URL (random suffix) was
-  never stored or shown anywhere, so nobody can find it; the sweep (§11.2) or
-  the manual purge removes it. Accepted for Monday.
+- **Photos are public by URL from upload** (§5): an uploader can compute their
+  own photo's URL and share it before or without approval; a Not shown photo
+  stays reachable until deleted. Bounded by the pending caps, Delete now and
+  the 30-day purge. Accepted with the choice of Sanity (§3).
+- **A deleted photo may linger** in Sanity's CDN cache (duration unverified,
+  measured on Sunday) and, if someone deliberately sent it through
+  `/_next/image`, in Next's optimizer cache for up to 4 hours (§5.1).
+- **Studio's media browser** shows every tenant's Wall Post photos to anyone
+  with Studio access (§5).
 - **History purge** on delete (§12) is unproven until M4b runs it against the
   real dataset.
-- **The limits are soft against a script.** Concurrent Starts from one cookie
-  can each see the same free capacity, and deleting your own posts frees up the
-  hourly count. Accepted: clearing the cookie already defeats the per-device
-  limits, every post still waits for approval, and an organizer can Pause the
-  wall and Delete now. The 200-per-wall cap can overshoot by the number of
-  concurrent Starts.
-
+- **The limits are soft against a script.** Concurrent submits from one cookie
+  can each see the same free capacity, and deleting your own posts frees up
+  the hourly count. Accepted: clearing the cookie already defeats the
+  per-device limits, every post still waits for approval, and an organizer can
+  Pause the wall and Delete now. The 200-per-wall cap can overshoot by the
+  number of concurrent submits.
 - **Clearing cookies resets the device limits.** Accepted: approval is the gate
   and the 200-pending cap bounds the queue.
 - **"Immediate" is up to one poll interval** (about 5 s on screens, 10 s on
   phones), not push.
-- **A removed photo's public URL** answers for up to 60 s more to anyone who
-  has it (§8).
 - **The JPEG check is structural** (§6.4); a crafted file that passes it but
   doesn't render is caught by the organizer's eye.
 - **HEIC on Android** depends on the browser's decoder; the phone shows the
@@ -874,6 +796,5 @@ screen off; nothing else depends on the wall.
   too, or be reloaded after the last deploy.
 - **No automatic deletion on Monday.** P1 is due 26 November 2026; §11.2 has
   the manual fallback.
-- **Approve all** with many pending posts may need more than one press (30 s
-  budget).
-- **ZIP export** depends on Blob's CORS behaviour or a server-side ZIP (P5).
+- **Approve all** skips a post that changed while it ran; that post stays pending.
+- **ZIP export** needs either Sanity CORS for the tenant origin or a streamed ZIP (P5).
