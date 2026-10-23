@@ -95,7 +95,7 @@ describe('photoWall.settings', () => {
   it('has no wall before Set up, with the links of the conference domain', async () => {
     await expect(organizer().settings()).resolves.toEqual({
       wall: null,
-      postingOpen: false,
+      posting: 'paused',
       links: LINKS,
     })
   })
@@ -115,17 +115,17 @@ describe('photoWall.settings', () => {
       sponsorStrip: false,
       closedAt: null,
     })
-    expect(view.postingOpen).toBe(false)
+    expect(view.posting).toBe('paused')
   })
 
   it('says whether posting is open now (§7)', async () => {
     store().reset([wallOf('conf-A', { postingMode: 'open' })])
-    expect((await organizer().settings()).postingOpen).toBe(true)
+    expect((await organizer().settings()).posting).toBe('open')
     // After the end of the last day, the switch still says Open.
     vi.setSystemTime(new Date('2026-10-27T23:00:00Z'))
     const later = await organizer().settings()
     expect(later.wall?.postingMode).toBe('open')
-    expect(later.postingOpen).toBe(false)
+    expect(later.posting).toBe('ended')
   })
 
   it('reads on the non-CDN client', async () => {

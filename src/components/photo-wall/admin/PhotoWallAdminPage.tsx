@@ -25,11 +25,12 @@ export function PhotoWallAdminPage({
     await utils.photoWall.settings.cancel()
     utils.photoWall.settings.setData(undefined, view)
   }
-  const setUp = api.photoWall.setUp.useMutation({ onSuccess })
+  // On a failure, read again: a lost answer may hide a write that landed.
+  const onError = () => void utils.photoWall.settings.invalidate()
+  const setUp = api.photoWall.setUp.useMutation({ onSuccess, onError })
   const update = api.photoWall.updateSettings.useMutation({
     onSuccess,
-    // The switch may have changed elsewhere: show what the server has.
-    onError: () => void utils.photoWall.settings.invalidate(),
+    onError,
   })
 
   if (settings.isPending) return <AdminPageLoading />

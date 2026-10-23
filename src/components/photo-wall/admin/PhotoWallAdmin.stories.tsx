@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
-import type { PhotoWall, PhotoWallAdminView } from '@/lib/photo-wall'
+import type {
+  PhotoWall,
+  PhotoWallAdminView,
+  PostingState,
+} from '@/lib/photo-wall'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 import { PhotoWallAdminPage } from './PhotoWallAdminPage'
 
@@ -18,10 +22,10 @@ const WALL: PhotoWall = {
 }
 const view = (
   wall: Partial<PhotoWall> | null,
-  postingOpen = false,
+  posting: PostingState = 'paused',
 ): PhotoWallAdminView => ({
   wall: wall && { ...WALL, ...wall },
-  postingOpen,
+  posting,
   links: LINKS,
 })
 
@@ -98,7 +102,7 @@ export const PausedPhoneDark: Story = {
 }
 
 export const OpenWithSponsorStrip: Story = {
-  args: { view: view({ postingMode: 'open', sponsorStrip: true }, true) },
+  args: { view: view({ postingMode: 'open', sponsorStrip: true }, 'open') },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getByRole('radio', { name: 'Open' })).toBeChecked()
@@ -120,10 +124,20 @@ export const OpenPhoneDark: Story = {
 
 /** Switched Open, but the conference's last day is over (§7). */
 export const ClosedAfterTheConference: Story = {
-  args: { view: view({ postingMode: 'open' }, false) },
+  args: { view: view({ postingMode: 'open' }, 'ended') },
   play: async ({ canvasElement }) => {
     await expect(
       within(canvasElement).getByText(/Posting has closed/),
+    ).toBeVisible()
+  },
+}
+
+/** Switched Open, but the conference has no end date: fail closed (§7). */
+export const NoEndDate: Story = {
+  args: { view: view({ postingMode: 'open' }, 'noEndDate') },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText(/the conference has no end date/),
     ).toBeVisible()
   },
 }
@@ -163,7 +177,7 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
           const change = (await request.json()) as Partial<PhotoWall>
           updates.push(change)
           const wall = { ...served.wall!, ...change }
-          served = view(wall, wall.postingMode === 'open')
+          served = view(wall, wall.postingMode === 'open' ? 'open' : 'paused')
           return trpc(served)
         }),
       ],

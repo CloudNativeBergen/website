@@ -1,7 +1,7 @@
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import type { PhotoWall, PostingMode } from './types'
+import type { PhotoWall, PhotoWallSettingsChange } from './types'
 
 /**
  * The Photo Wall's document in Sanity (Photo Wall spec §4.1). Every read is
@@ -61,18 +61,13 @@ export async function setUpPhotoWall(conferenceId: string): Promise<PhotoWall> {
   return wall
 }
 
-export interface PhotoWallChanges {
-  postingMode?: PostingMode
-  sponsorStrip?: boolean
-}
-
 /**
  * Change the wall's settings. Null, writing nothing, when the conference has
  * no wall.
  */
 export async function updatePhotoWallSettings(
   conferenceId: string,
-  changes: PhotoWallChanges,
+  changes: PhotoWallSettingsChange,
 ): Promise<PhotoWall | null> {
   const wall = await readPhotoWall(conferenceId)
   if (!wall) return null

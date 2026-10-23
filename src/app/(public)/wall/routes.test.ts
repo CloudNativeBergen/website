@@ -80,7 +80,9 @@ describe.each(ROUTES)('%s', (_path, Page) => {
     h.resolution = { conference: {}, status: 'unavailable' }
     h.store!.reset([wallOf('conf-A')])
     const error = await Page().catch((e: unknown) => e)
-    expect(error).toBeInstanceOf(Error)
+    expect(error).toMatchObject({
+      message: 'Could not read the conference for this Photo Wall',
+    })
     expect(error).not.toMatchObject(NOT_FOUND)
   })
 })

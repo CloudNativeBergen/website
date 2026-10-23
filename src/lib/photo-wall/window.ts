@@ -16,9 +16,7 @@ interface WallSettings {
 }
 
 /** The first instant after the conference's last day, Oslo midnight. */
-export function postingClosesAt(
-  endDate: string | null | undefined,
-): Date | null {
+function postingClosesAt(endDate: string | null | undefined): Date | null {
   if (!endDate || !isCalendarDate(endDate)) return null
   const [y, m, d] = endDate.split('-').map(Number)
   const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
@@ -26,12 +24,30 @@ export function postingClosesAt(
   return iso ? new Date(iso) : null
 }
 
+/**
+ * Whether posting is open, and if not, why: the wall was closed by the
+ * retention cron, an organizer paused it, the conference has no usable end
+ * date, or its last day is over.
+ */
+export type PostingState = 'open' | 'closed' | 'paused' | 'noEndDate' | 'ended'
+
+export function postingState(
+  wall: WallSettings,
+  conference: { endDate?: string | null },
+  now: Date,
+): PostingState {
+  if (wall.closedAt) return 'closed'
+  if (wall.postingMode !== 'open') return 'paused'
+  const closesAt = postingClosesAt(conference.endDate)
+  if (!closesAt) return 'noEndDate'
+  return now < closesAt ? 'open' : 'ended'
+}
+
+/** The one rule Submit and the pages ask (§7). */
 export function isPostingOpen(
   wall: WallSettings,
   conference: { endDate?: string | null },
   now: Date,
 ): boolean {
-  if (wall.postingMode !== 'open' || wall.closedAt) return false
-  const closesAt = postingClosesAt(conference.endDate)
-  return closesAt !== null && now < closesAt
+  return postingState(wall, conference, now) === 'open'
 }

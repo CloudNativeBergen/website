@@ -1,3 +1,3 @@
 export * from './types'
-export { isPostingOpen, postingClosesAt } from './window'
+export { isPostingOpen, postingState, type PostingState } from './window'
 export { photoWallLinks } from './links'

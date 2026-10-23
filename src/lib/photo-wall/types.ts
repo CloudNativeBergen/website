@@ -1,3 +1,5 @@
+import type { PostingState } from './window'
+
 /**
  * The Photo Wall's settings (Photo Wall spec §4.1). Monday offers Open and
  * Paused; Automatic is slice P2.
@@ -19,8 +21,8 @@ export interface PhotoWall {
 export interface PhotoWallAdminView {
   /** Null until an organizer presses Set up the Photo Wall. */
   wall: PhotoWall | null
-  /** Whether a Submit now would find posting open (§7). */
-  postingOpen: boolean
+  /** Whether a Submit now would find posting open, and if not why (§7). */
+  posting: PostingState
   links: PhotoWallLinks
 }
 
@@ -29,4 +31,10 @@ export interface PhotoWallLinks {
   post: string
   wall: string
   screen: string
+}
+
+/** A change an organizer makes on the admin page (§10). */
+export interface PhotoWallSettingsChange {
+  postingMode?: PostingMode
+  sponsorStrip?: boolean
 }

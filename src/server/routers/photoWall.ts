@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { adminProcedure, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
-  isPostingOpen,
+  postingState,
   photoWallLinks,
   POSTING_MODES,
   type PhotoWall,
@@ -36,7 +36,7 @@ function adminView(
 ): PhotoWallAdminView {
   return {
     wall,
-    postingOpen: !!wall && isPostingOpen(wall, conference, new Date()),
+    posting: wall ? postingState(wall, conference, new Date()) : 'paused',
     links: photoWallLinks(conference),
   }
 }

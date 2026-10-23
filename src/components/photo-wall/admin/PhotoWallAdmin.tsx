@@ -16,18 +16,15 @@ import {
 import type {
   PhotoWallAdminView,
   PhotoWallLinks,
+  PhotoWallSettingsChange,
   PostingMode,
+  PostingState,
 } from '@/lib/photo-wall'
 
 const CARD =
   'rounded-lg border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-700 dark:bg-gray-800'
 const BUTTON =
   'inline-flex min-h-9 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
-
-export interface PhotoWallSettingsChange {
-  postingMode?: PostingMode
-  sponsorStrip?: boolean
-}
 
 export interface PhotoWallAdminProps {
   view: PhotoWallAdminView
@@ -82,7 +79,7 @@ export function PhotoWallAdmin({
             <div className="mt-4 divide-y divide-gray-200 dark:divide-gray-700">
               <PostingSetting
                 mode={wall.postingMode}
-                open={view.postingOpen}
+                state={view.posting}
                 saving={saving}
                 onChange={(postingMode) => onChange({ postingMode })}
               />
@@ -132,27 +129,44 @@ const MODES: { value: PostingMode; label: string }[] = [
   { value: 'paused', label: 'Paused' },
 ]
 
-function postingNote(mode: PostingMode, open: boolean): string {
-  if (mode === 'paused')
-    return 'The posting page says the wall isn’t open for photos.'
-  return open
-    ? 'Attendees can post. Posting closes by itself at the end of the conference’s last day.'
-    : 'Posting has closed: the conference’s last day is over.'
+/** What the Posting row says, and whether it is a warning (§7). */
+const POSTING_NOTES: Record<PostingState, { text: string; warn: boolean }> = {
+  open: {
+    text: 'Attendees can post. Posting closes by itself at the end of the conference’s last day.',
+    warn: false,
+  },
+  paused: {
+    text: 'The posting page says the wall isn’t open for photos.',
+    warn: false,
+  },
+  ended: {
+    text: 'Posting has closed: the conference’s last day is over.',
+    warn: true,
+  },
+  noEndDate: {
+    text: 'Posting stays closed: the conference has no end date. Set one in Settings.',
+    warn: true,
+  },
+  closed: {
+    text: 'This wall has closed, and its photos are being deleted.',
+    warn: true,
+  },
 }
 
 function PostingSetting({
   mode,
-  open,
+  state,
   saving,
   onChange,
 }: {
   mode: PostingMode
-  open: boolean
+  state: PostingState
   saving: boolean
   onChange: (mode: PostingMode) => void
 }) {
   const labelId = useId()
   const noteId = useId()
+  const note = POSTING_NOTES[state]
   return (
     <div className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
@@ -165,12 +179,12 @@ function PostingSetting({
         <p
           id={noteId}
           className={`mt-1 text-sm ${
-            mode === 'open' && !open
+            note.warn
               ? 'font-medium text-amber-700 dark:text-amber-400'
               : 'text-gray-600 dark:text-gray-400'
           }`}
         >
-          {postingNote(mode, open)}
+          {note.text}
         </p>
       </div>
       <div

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isPostingOpen } from './window'
+import { isPostingOpen, postingState } from './window'
 
 const at = (iso: string) => new Date(iso)
 const open = { postingMode: 'open' as const }
@@ -70,5 +70,26 @@ describe('isPostingOpen (Photo Wall spec §7)', () => {
       expect(isPostingOpen(open, c, at('2026-03-29T21:59:59Z'))).toBe(true)
       expect(isPostingOpen(open, c, at('2026-03-29T22:00:00Z'))).toBe(false)
     })
+  })
+})
+
+describe('postingState: why posting is not open (§7)', () => {
+  const now = at('2026-10-26T08:00:00Z')
+  it.each([
+    [{ postingMode: 'open' as const }, conference, now, 'open'],
+    [{ postingMode: 'paused' as const }, conference, now, 'paused'],
+    [{}, conference, now, 'paused'],
+    [open, conference, at('2026-10-27T23:00:00Z'), 'ended'],
+    [open, {}, now, 'noEndDate'],
+    [
+      { postingMode: 'open' as const, closedAt: '2026-10-26T07:00:00Z' },
+      conference,
+      now,
+      'closed',
+    ],
+    // Paused wins over the reasons: the organizer chose it.
+    [{ postingMode: 'paused' as const }, {}, now, 'paused'],
+  ])('%o on %o at %s is %s', (wall, c, when, expected) => {
+    expect(postingState(wall, c, when)).toBe(expected)
   })
 })
