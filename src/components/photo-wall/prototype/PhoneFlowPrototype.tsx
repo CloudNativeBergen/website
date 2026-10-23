@@ -71,7 +71,7 @@ interface SentPost {
   status: Status
 }
 
-type FilterKey =
+export type FilterKey =
   | 'original'
   | 'vivid'
   | 'warm'
@@ -90,7 +90,7 @@ interface Filter {
   blend?: React.CSSProperties['mixBlendMode']
 }
 
-const FILTERS: Filter[] = [
+export const FILTERS: Filter[] = [
   { key: 'original', label: 'Original', css: 'none' },
   { key: 'vivid', label: 'Vivid', css: 'contrast(1.15) saturate(1.45)' },
   {
@@ -132,7 +132,7 @@ const FILTERS: Filter[] = [
   },
 ]
 
-const filterOf = (key: FilterKey) =>
+export const filterOf = (key: FilterKey) =>
   FILTERS.find((f) => f.key === key) ?? FILTERS[0]
 
 type OverlayColour = 'white' | 'black' | 'brand'
@@ -151,7 +151,7 @@ export const SAMPLE_PHOTOS = [
   'https://picsum.photos/seed/cndn-wall-coffee/1200/1500',
 ]
 
-const EMPTY_DRAFT: Draft = {
+export const EMPTY_DRAFT: Draft = {
   photo: null,
   filter: 'original',
   crop: { x: 50, y: 50, zoom: 1 },
@@ -386,7 +386,7 @@ function FilterStrip({
   )
 }
 
-function Polaroid({
+export function Polaroid({
   draft,
   tilt = 0,
   small = false,
