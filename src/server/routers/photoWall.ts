@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { adminProcedure, router } from '@/server/trpc'
+import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   postingState,
@@ -16,10 +16,17 @@ import {
   updatePhotoWallSettings,
 } from '@/lib/photo-wall/sanity'
 
-/** The domain's conference; never from the client. */
+/**
+ * The request's conference: the tenant from `resolveConferenceId()`, its
+ * document read live, not from the CDN, so the page shows the end date and
+ * domain Settings just wrote. Never from the client.
+ */
 async function requestConference() {
-  const { conference, error } = await getConferenceForCurrentDomain()
-  if (error || !conference?._id) {
+  const conferenceId = await resolveConferenceId()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    uncached: true,
+  })
+  if (error || conference?._id !== conferenceId) {
     throw new TRPCError({
       code: 'NOT_FOUND',
       message: 'Could not resolve conference from domain',

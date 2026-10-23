@@ -49,7 +49,9 @@ export function PhotoWallAdminPage({
       onSetUp={() => setUp.mutate()}
       onChange={(change) => update.mutate(change)}
       saving={setUp.isPending || update.isPending}
-      failed={setUp.isError || update.isError}
+      // A Set up whose answer was lost may still have landed: once the
+      // wall shows, its failure is over.
+      failed={(setUp.isError && !settings.data.wall) || update.isError}
     />
   )
 }

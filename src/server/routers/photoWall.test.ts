@@ -28,15 +28,22 @@ vi.mock('@/lib/sanity/client', async () => {
   h.store = createVersionedSanityStore()
   return h.store.clients
 })
+const CONFERENCE = {
+  _id: 'conf-A',
+  title: 'CND 2026',
+  organization: { _ref: 'org-A' },
+  endDate: '2026-10-27',
+  domains: ['2026.example.no'],
+}
+const cdn = vi.hoisted(() => ({
+  /** What a CDN read answers, when it lags the live one. */
+  conference: null as null | Record<string, unknown>,
+}))
 vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: async () => ({
-    conference: {
-      _id: 'conf-A',
-      title: 'CND 2026',
-      organization: { _ref: 'org-A' },
-      endDate: '2026-10-27',
-      domains: ['2026.example.no'],
-    },
+  getConferenceForCurrentDomain: async (opts?: { uncached?: boolean }) => ({
+    conference: opts?.uncached
+      ? CONFERENCE
+      : { ...CONFERENCE, ...cdn.conference },
     error: null,
   }),
 }))
@@ -84,6 +91,7 @@ const LINKS = {
 }
 
 beforeEach(() => {
+  cdn.conference = null
   store().reset()
   h.revalidateTag.mockClear()
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -132,6 +140,24 @@ describe('photoWall.settings', () => {
     const later = await organizer().settings()
     expect(later.wall?.postingMode).toBe('open')
     expect(later.posting).toBe('ended')
+  })
+
+  it('reads the conference live, not from a CDN copy that lags Settings', async () => {
+    store().reset([wallOf('conf-A', { postingMode: 'open' })])
+    // The organizer just moved the end date; the CDN still has the old one.
+    cdn.conference = { endDate: '2026-10-01', domains: ['old.example.no'] }
+    const view = await organizer().settings()
+    expect(view.posting).toBe('open')
+    expect(view.links.wall).toBe('https://2026.example.no/wall')
+  })
+
+  it('refuses, writing nothing, when the live read is another conference than the tenant', async () => {
+    store().reset([wallOf('conf-A')])
+    cdn.conference = { _id: 'conf-Z' }
+    await expect(
+      organizer().updateSettings({ postingMode: 'open' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(store().commits).toEqual([])
   })
 
   it('reads on the non-CDN client', async () => {

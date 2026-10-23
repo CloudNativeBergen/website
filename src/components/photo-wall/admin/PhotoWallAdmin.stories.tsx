@@ -232,3 +232,34 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     ])
   },
 }
+
+/** Set up landed but its answer was lost: the read again shows the wall, and no failure. */
+export const SetUpAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
+  render: () => (
+    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" />
+  ),
+  beforeEach: () => {
+    served = view(null)
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(`${TRPC}.settings`, () => trpc(served)),
+        http.post(`${TRPC}.setUp`, () => {
+          served = view(WALL)
+          return HttpResponse.error()
+        }),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Set up the Photo Wall' }),
+    )
+    await expect(
+      await canvas.findByRole('radio', { name: 'Paused' }),
+    ).toBeChecked()
+    await expect(canvas.queryByRole('alert')).toBeNull()
+  },
+}
