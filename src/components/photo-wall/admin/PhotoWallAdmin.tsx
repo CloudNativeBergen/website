@@ -229,7 +229,7 @@ function PostingSetting({
                 checked
                   ? m.value === 'open'
                     ? 'bg-green-700 text-white shadow-xs'
-                    : 'bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-white'
+                    : 'bg-white text-gray-900 shadow-xs ring-1 ring-gray-500 dark:bg-gray-700 dark:text-white dark:ring-gray-400'
                   : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
               }`}
             >
@@ -291,10 +291,10 @@ function SponsorStripSetting({
         aria-disabled={saving || undefined}
         onClick={() => !saving && onChange(!on)}
         // 44×24 to look at; the `after` box makes the touch target 44×44.
+        // Off is gray-500: 3:1 or more against both cards and the thumb
+        // (WCAG 1.4.11), which gray-300 on white (1.5:1) was not.
         className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:cursor-wait ${
-          on
-            ? 'bg-brand-cloud-blue dark:bg-indigo-500'
-            : 'bg-gray-300 dark:bg-gray-600'
+          on ? 'bg-brand-cloud-blue dark:bg-indigo-500' : 'bg-gray-500'
         }`}
       >
         <span
