@@ -720,6 +720,30 @@ can be tried on a preview.
 | P5  | **Consented ZIP export.** Download approved posts whose contributor ticked marketing consent, as a ZIP. It must not pass through a function response over 4.5 MB: build it in the browser from the public URLs if Blob serves them with CORS, else write it to the private store and hand out a signed URL. | M4a      | 12 Nov 2026 |
 | P6  | **Pending-count badge** on the nav entry (`AdminNavEntry.count`, as Feedback's flagged badge).                                                                                                                                                                                                              | M4a      | 12 Nov 2026 |
 
+### 13.1 Tickets
+
+Every slice is filed under [Photo Wall: implementation](https://github.com/CloudNativeBergen/website/issues/1485), with the dependencies above as native blocking edges.
+
+| Slice                         | Issue |
+| ----------------------------- | ----- |
+| User: private Blob store (§5) | #1486 |
+| M1                            | #1487 |
+| M2                            | #1488 |
+| M3a                           | #1489 |
+| M3b                           | #1490 |
+| M4a                           | #1491 |
+| M4b                           | #1492 |
+| M5a                           | #1493 |
+| M5b                           | #1494 |
+| M6                            | #1495 |
+| P1                            | #1496 |
+| P2                            | #1497 |
+| P3                            | #1498 |
+| P4                            | #1499 |
+| P5                            | #1500 |
+| P6                            | #1501 |
+| Sunday trial run (user, §14)  | #1502 |
+
 ## 14. Verification
 
 **In every PR** (per `AGENTS.md`, "Agent discipline"):
