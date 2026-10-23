@@ -263,8 +263,7 @@ device key>/<UUID v4>.jpg`;
    private store's token. **Omit `onUploadCompleted`:** defining it makes Vercel call the route back without the cookie, which the route refuses, and the callback is retried. No rule here depends on it.
 
    Without a reservation there is no token, and reservations count against the
-   limits (§6.3), so a script that skips Start can't mint tokens, and one that
-   calls Start can hold at most 3 uploads at a time per cookie.
+   limits (§6.3), so a script that skips Start can't mint tokens, and one that calls Start one request at a time can hold at most 3 uploads per cookie (concurrent Starts can overshoot, §15).
 
 3. **Submit** (Server Action `submitWallPost({ uploadId, caption, name, crop,
 marketingConsent })`). In this order, **guard before fetch**:
@@ -299,13 +298,13 @@ shown nowhere, and the retention cron deletes them with the wall.
 
 ### 6.3 Limits
 
-| Limit                                | Value                   | Phone shows                                                                        |
-| ------------------------------------ | ----------------------- | ---------------------------------------------------------------------------------- |
-| Pending posts per device, at once    | **3**                   | "You have 3 photos waiting for approval. You can post again once one is approved." |
-| Posts per device, rolling 60 minutes | **10** (by `startedAt`) | "You've posted 10 photos in the last hour. Try again a bit later."                 |
-| Pending posts per wall, at once      | **200**                 | "Lots of photos are waiting right now. Try again in a few minutes."                |
-| Posting not open                     | §7                      | "The wall isn't open for photos right now." with a link "See the wall".            |
-| Any other refusal or failure         |                         | "Something went wrong. Your photo wasn't posted. Try again."                       |
+| Limit                                | Value                   | Phone shows                                                                                       |
+| ------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------- |
+| Pending posts per device, at once    | **3**                   | "You have 3 photos waiting for approval. You can post again once an organizer has looked at one." |
+| Posts per device, rolling 60 minutes | **10** (by `startedAt`) | "You've posted 10 photos in the last hour. Try again a bit later."                                |
+| Pending posts per wall, at once      | **200**                 | "Lots of photos are waiting right now. Try again in a few minutes."                               |
+| Posting not open                     | §7                      | "The wall isn't open for photos right now." with a link "See the wall".                           |
+| Any other refusal or failure         |                         | "Something went wrong. Your photo wasn't posted. Try again."                                      |
 
 "Pending" in both pending limits counts `pending` posts **plus**
 `uploading` reservations younger than 10 minutes. The hourly limit counts every
@@ -319,18 +318,18 @@ Organizers don't see refusals; the pending count shows how full the queue is.
 
 ### 6.4 What the server checks at Submit
 
-| Check          | Rule                                                                                                                                                                          |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Exists         | The blob at the rebuilt pathname exists in the private store.                                                                                                                 |
-| Size           | ≤ 4 MiB, 4,194,304 bytes (the token already caps it; checked again on the bytes read).                                                                                        |
-| Type           | The bytes start with the JPEG signature (`sniffImageType()` in `src/lib/marketing-asset/image-type.ts`) and end with an EOI marker.                                           |
-| Dimensions     | Read from the JPEG's SOF marker: long edge ≤ **2048 px**, short edge ≥ **320 px**.                                                                                            |
-| No metadata    | No APP1 segment (`Exif` or XMP). The composer strips every APPn but APP0 (§6.5), so its presence means the file didn't come from the composer: refused, not stripped.         |
-| Caption        | Unicode NFC; control characters removed; any run of whitespace (newlines included) becomes one space; trimmed; empty becomes absent; more than **80** code points is refused. |
-| Name           | Same normalisation; more than **40** code points is refused.                                                                                                                  |
-| Crop           | `x` and `y` are finite numbers in [0, 1].                                                                                                                                     |
-| Marketing      | A boolean; anything else is refused.                                                                                                                                          |
-| Posting Window | Open at Submit time (§7), not just at Start.                                                                                                                                  |
+| Check          | Rule                                                                                                                                                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Exists         | The blob at the rebuilt pathname exists in the private store.                                                                                                                                                                                                            |
+| Size           | ≤ 4 MiB, 4,194,304 bytes (the token already caps it; checked again on the bytes read).                                                                                                                                                                                   |
+| Type           | The bytes start with the JPEG signature (`sniffImageType()` in `src/lib/marketing-asset/image-type.ts`) and end with an EOI marker.                                                                                                                                      |
+| Dimensions     | Read from the JPEG's SOF marker: long edge ≤ **2048 px**, short edge ≥ **320 px**.                                                                                                                                                                                       |
+| No metadata    | No APPn segment except APP0, and no COM segment: this covers Exif and XMP (APP1) and IPTC (APP13), which can all carry location or creator data. The composer strips them (§6.5), so their presence means the file didn't come from the composer: refused, not stripped. |
+| Caption        | Unicode NFC; control characters removed; any run of whitespace (newlines included) becomes one space; trimmed; empty becomes absent; more than **80** code points is refused.                                                                                            |
+| Name           | Same normalisation; more than **40** code points is refused.                                                                                                                                                                                                             |
+| Crop           | `x` and `y` are finite numbers in [0, 1].                                                                                                                                                                                                                                |
+| Marketing      | A boolean; anything else is refused.                                                                                                                                                                                                                                     |
+| Posting Window | Open at Submit time (§7), not just at Start.                                                                                                                                                                                                                             |
 
 _Refinement (spec):_ "it decodes" is checked **structurally** (signature, SOF,
 EOI), not by a full decode: the repo has no image decoder dependency (`sharp`
@@ -379,7 +378,7 @@ checked in §14):
 - Apply the filter to the resized pixels, then `canvas.toBlob('image/jpeg',
 0.85)`; if the result is over 4 MiB, retry at 0.7. The re-encode drops the
   camera's EXIF and GPS and turns HEIC into JPEG.
-- **Then strip every APPn segment except APP0 from the encoded bytes** (a marker walk, no decoder), and upload `new Blob([bytes], { type: 'image/jpeg' })` so the token's content type matches. Safari's canvas encoder may write a minimal Exif
+- **Then strip every APPn segment except APP0, and any COM segment, from the encoded bytes** (a marker walk, no decoder), and upload `new Blob([bytes], { type: 'image/jpeg' })` so the token's content type matches. Safari's canvas encoder may write a minimal Exif
   APP1 of its own (unverified); without this step the server's no-APP1 rule
   (§6.4) would refuse every iPhone post. M2 inspects a real iPhone's output
   for APP1 and keeps a Safari-made sample as a test fixture.
@@ -392,11 +391,15 @@ checked in §14):
 ## 7. Posting Window
 
 - **Monday (M1):** `photoWall.postingMode` is **Open** or **Paused**, set on
-  the admin page. A new wall starts Paused. There is no date automation.
+  the admin page. A new wall starts Paused. There is no automatic opening, but
+  **posting always closes at the end of the conference's last day**
+  (23:59:59 on `endDate`, Europe/Oslo), even when the switch says Open, so a
+  wall nobody pauses doesn't keep taking anonymous posts for a month.
+  _Refinement (spec):_ the decided window ends with the conference days; this
+  enforces its end from day one. Opening early stays the organizer's switch.
 - **Later (P2):** adds **Automatic**, the default: open from 00:00 on the
   conference's `startDate` to 23:59:59 on its `endDate`, Europe/Oslo
-  (`CONFERENCE_TIME_ZONE` in `src/lib/time.ts`). Open and Paused remain as
-  overrides ("open early" and "pause"). P2 also makes a missing `postingMode`
+  (`CONFERENCE_TIME_ZONE` in `src/lib/time.ts`). Open and Paused remain as overrides ("open early" and "pause"); the end-of-last-day close applies to every mode. P2 also makes a missing `postingMode`
   read as `auto`.
 - Every refusal path (Start, the upload route, Submit) uses one function,
   `isPostingOpen(wall, conference, now)`. _Implementation detail._
@@ -458,6 +461,9 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
   top, then the approved posts as a **two-column grid of slightly tilted
   polaroids** (square crop, handwritten caption and name), newest approval
   first.
+- At most the **200** newest approvals (§8); when a 201st is approved, the
+  oldest leaves the Wall page and Screen Mode but stays On the wall in the
+  admin queue.
 - **Add your photo** (to `/wall/post`) while posting is open.
 - Footer: "In a photo and want it removed? Contact the organizers at
   <contactEmail>." (`conference.contactEmail`, #1480).
@@ -575,7 +581,7 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   can't interleave. On a revision conflict the server re-reads once: if the
   post is gone, the card reports "This photo was deleted"; if its status no
   longer allows the action (someone else already removed it), the card
-  refreshes with no change; otherwise it retries once, and **only if the post is still in the state the action began from**: Approve if it is still not approved; Remove only if `publicUrl` is still the copy it deleted (a different URL means someone re-approved, and Remove refreshes without acting). A marketing untick is the usual reason to retry.
+  refreshes with no change; otherwise it retries once, and **only if the post is still in the state the action began from**: Approve only if the status is still the one it started from (an Approve begun on Pending doesn't retry after someone rejected the post); Remove only if `publicUrl` is still the copy it deleted (a different URL means someone re-approved, and Remove refreshes without acting). A marketing untick is the usual reason to retry.
 - **Approve** copies the photo to the public store (§5), then patches the post
   (`status: approved`, `publicUrl`, `approvedAt`, `decidedAt`). If the patch
   fails for good, it deletes the copy it just made.
@@ -626,9 +632,7 @@ The same cron deletes:
 Extend the existing `/api/cron/cleanup-orphaned-blobs` (`vercel.json`) or sit
 beside it; don't duplicate its listing logic.
 
-**Monday risk:** P1 is not in the Monday cut. If it hasn't shipped by 26
-November 2026, the deletion is a manual job that day (delete every `wallPost`
-of the conference and both stores' `photo-wall/<conferenceId>/` prefix).
+**Monday risk:** P1 is not in the Monday cut. If it hasn't shipped by 26 November 2026, the deletion is a manual job that day: first set the wall's `postingMode` to Paused and `closedAt` (posting has already closed at the end of the conference, §7), then delete every `wallPost` of the conference (with history, §12) and both stores' `photo-wall/<conferenceId>/` prefix, then set `purgedAt`.
 
 ## 12. Privacy
 
@@ -646,12 +650,20 @@ of the conference and both stores' `photo-wall/<conferenceId>/` prefix).
      its own copy (§10);
   2. delete every blob in both stores under the post's prefix (§5), retried
      once;
-  3. delete the document.
+  3. delete the document **with its history** (`purge: true`, below).
 
   If step 2 fails, the document stays `deleting` and the card (in My posts, and
   on the admin page) says "Couldn't delete. Try again."; Delete accepts a `deleting` post, so pressing again finishes it. **One module (`deleteWallPost`, slice M4b)** implements this; the organizer's Delete now and the contributor's Delete (M6) both call it. The module **never expires tags**: each caller does, per §8 (`revalidateTag(tag, { expire: 0 })` from the tRPC mutation, `updateTag` from the Server Action). The sweep (§11.2) also
   finishes `deleting` posts older than an hour.
 
+- **History.** A plain Sanity delete keeps the document's revisions in its
+  history, with the caption, name and consent. Every final delete here (Delete,
+  Delete now, reservation cleanup, the cron) **purges history** (the delete
+  action's `purge: true`), which needs the write token's history permission.
+  M4b proves it once on a real document, with the user's go for that
+  production write; if the token can't purge, the user decides between
+  granting the permission and adding Sanity's history retention to the
+  `/privacy` copy. Until proven, §15 lists it.
 - **Lost cookie:** contact the organizers, describing the photo. They use
   Delete now.
 - **Exported copies** (slice P5) can't be reached by deletion; `/privacy` says
@@ -757,8 +769,7 @@ Every slice is filed under [Photo Wall: implementation](https://github.com/Cloud
 - **The token binds what §6.2 says**, shown on the real `handleUpload` from the
   installed `@vercel/blob`, not a mock: pathname, content type, size, expiry,
   no overwrite.
-- **JPEG checks** on real files: a canvas-made JPEG (including a Safari-made sample, after the composer's APPn strip) passes; a camera JPEG with
-  EXIF, a PNG renamed `.jpg`, a truncated file, a 4096 px image and a 200 px
+- **JPEG checks** on real files: a canvas-made JPEG (including a Safari-made sample, after the composer's APPn strip) passes; a camera JPEG with EXIF, a JPEG with an IPTC APP13 segment, one with a COM segment, a PNG renamed `.jpg`, a truncated file, a 4096 px image and a 200 px
   image are refused.
 - **Executed GROQ, not mocks,** for the limits, `getWall`, the queue and My
   posts, including a post of another conference that must not count.
@@ -836,6 +847,8 @@ screen off; nothing else depends on the wall.
 - **An Approve that loses to a Delete and then fails to delete its own new copy** leaves one public photo with no document. Its URL (random suffix) was
   never stored or shown anywhere, so nobody can find it; the sweep (§11.2) or
   the manual purge removes it. Accepted for Monday.
+- **History purge** on delete (§12) is unproven until M4b runs it against the
+  real dataset.
 - **The limits are soft against a script.** Concurrent Starts from one cookie
   can each see the same free capacity, and deleting your own posts frees up the
   hourly count. Accepted: clearing the cookie already defeats the per-device
