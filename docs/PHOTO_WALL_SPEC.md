@@ -153,7 +153,7 @@ Blob with a secret suffix.
   fixed per store). Pathname `photo-wall/<conferenceId>/<deviceKey>/<uploadId>.jpg`.
 - **Approval copies** the bytes into the **existing public Blob store**
   (`BLOB_READ_WRITE_TOKEN`) at `photo-wall/<conferenceId>/<uploadId>.jpg` with
-  a random suffix and `cacheControlMaxAge: 60` (the SDK minimum), and stores
+  a random suffix and `cacheControlMaxAge: 60` (Vercel's floor; the SDK doesn't check it), and stores
   the URL in `photo.publicUrl`. Blob's `copy()` works within one store only, so
   "copy" means: `get(pathname, { access: 'private', token })`, buffer the
   stream (≤ 4 MiB), `put()` to the public store.
@@ -162,10 +162,12 @@ Blob with a secret suffix.
   (§10). A later re-approval's new copy is never touched, and a failed delete
   leaves the post on the wall with an error for the organizer, never a
   silently orphaned public photo.
-- **Delete and the cron delete by prefix:** every blob in both stores under
-  `photo-wall/<conferenceId>/<uploadId>` (the UUID makes the prefix unique),
-  after the post is marked `deleting`, so no approval can start a new copy
-  (§12).
+- **Delete and the cron delete every copy:** in the public store every blob
+  under `photo-wall/<conferenceId>/<uploadId>` (the UUID makes the prefix
+  unique); in the private store the document's `photo.pathname`, which is
+  `photo-wall/<conferenceId>/<deviceKey>/<uploadId>.jpg` (a public-store prefix
+  doesn't match it). This runs after the post is marked `deleting`, so no
+  approval can start a new copy (§12).
 - Removing keeps the private original, so an organizer can approve again from
   Not shown.
 
@@ -201,8 +203,7 @@ CORS for tenant domains never applies.
 a preview, nor the Sunday trial run, without it):** create a
 **private** Blob store in the Vercel project (region `fra1` or `arn1`, per the
 research), connect it to Production, Preview and Development with the
-environment prefix `PHOTO_WALL_PRIVATE`, and add the resulting token variable
-to `fnox.toml` for local runs. Every call against the private store passes
+environment prefix `PHOTO_WALL_PRIVATE`, which should give **`PHOTO_WALL_PRIVATE_READ_WRITE_TOKEN`**, and add it to `fnox.toml` for local runs. Every slice uses that one name; if Vercel names it differently, the user records the real name on the parent issue. Every call against the private store passes
 that token explicitly. Production environment changes are the user's call.
 
 **No new subprocessor.** Vercel is already disclosed for file storage; its
@@ -248,10 +249,7 @@ JPEG goes straight from the phone to Blob with a server-minted token.
    `status: 'uploading'`, the conference, the device key and `startedAt`. It
    returns the pathname `photo-wall/<conferenceId>/<deviceKey>/<uploadId>.jpg`.
 2. **Upload** (client `upload()` from `@vercel/blob/client` with `access:
-'private'` and `handleUploadUrl: '/wall/post/upload'`). The route reads the
-   cookie and resolves the conference **before** calling `handleUpload`
-   (`onBeforeGenerateToken` receives only the pathname and client payload,
-   not the request). It refuses unless:
+'private'` and `handleUploadUrl: '/wall/post/upload'`). The route reads the cookie and resolves the conference **before** calling `handleUpload` (`onBeforeGenerateToken` receives only the pathname and client payload, not the request); `onBeforeGenerateToken` closes over them and **throws** to refuse unless:
    - the pathname is exactly `photo-wall/<this conference>/<this cookie's
 device key>/<UUID v4>.jpg`;
    - a reservation `wallPost-<uploadId>` exists with that conference and device
@@ -277,16 +275,18 @@ marketingConsent })`). In this order, **guard before fetch**:
    3. **already submitted** (any status but `uploading`): return success and do
       nothing else. A retry after a lost response never refuses and never
       touches the photo;
-   4. the wall exists and posting is open;
+   4. the wall exists, posting is open, and the limits allow it (§6.3, not counting this `uploadId`);
    5. only then read the blob at the pathname rebuilt from **its own cookie's**
       device key and run the checks in §6.4.
 
    On success it patches the reservation to `status: 'pending'` with the post's
    fields and `submittedAt`, guarded with `ifRevisionId`, and expires the admin
-   and device tags (§8). On a refusal at steps 4–5 it deletes the blob and the
-   reservation, but **only while the document is still `uploading`** (the
-   delete is guarded by its revision), so it can never destroy a submitted
-   post's photo.
+   and device tags (§8). On a refusal at steps 4–5 it deletes the blob and the reservation, but **only
+   while the document is still `uploading`**, so it can never destroy a submitted
+   post's photo. Sanity has no revision-guarded delete, so this is **one
+   transaction**: `patch(id).ifRevisionId(rev).set({ status: 'cleaning' })` plus
+   `delete(id)`, which fails as a whole if the document moved since it was read;
+   the blob is deleted only after that transaction commits.
 
 **Reads that decide** (the limits, the reservation and revision reads here and
 in §10) use the **non-CDN** Sanity client (`src/lib/sanity/client.ts`); a CDN
@@ -325,7 +325,7 @@ Organizers don't see refusals; the pending count shows how full the queue is.
 | Size           | ≤ 4 MiB, 4,194,304 bytes (the token already caps it; checked again on the bytes read).                                                                                        |
 | Type           | The bytes start with the JPEG signature (`sniffImageType()` in `src/lib/marketing-asset/image-type.ts`) and end with an EOI marker.                                           |
 | Dimensions     | Read from the JPEG's SOF marker: long edge ≤ **2048 px**, short edge ≥ **320 px**.                                                                                            |
-| No metadata    | No APP1 segment (`Exif` or XMP). The phone's canvas re-encode never writes one, so its presence means the file didn't come from the composer: refused, not stripped.          |
+| No metadata    | No APP1 segment (`Exif` or XMP). The composer strips every APPn but APP0 (§6.5), so its presence means the file didn't come from the composer: refused, not stripped.         |
 | Caption        | Unicode NFC; control characters removed; any run of whitespace (newlines included) becomes one space; trimmed; empty becomes absent; more than **80** code points is refused. |
 | Name           | Same normalisation; more than **40** code points is refused.                                                                                                                  |
 | Crop           | `x` and `y` are finite numbers in [0, 1].                                                                                                                                     |
@@ -376,8 +376,13 @@ checked in §14):
   px on a side, 16.7 M pixels), so a 24/48 MP photo is downscaled with
   `createImageBitmap` resize options where supported, else in two steps.
 - Apply the filter to the resized pixels, then `canvas.toBlob('image/jpeg',
-0.85)`; if the result is over 4 MiB, retry at 0.7. The re-encode drops EXIF
-  and GPS and turns HEIC into JPEG.
+0.85)`; if the result is over 4 MiB, retry at 0.7. The re-encode drops the
+  camera's EXIF and GPS and turns HEIC into JPEG.
+- **Then strip every APPn segment except APP0 from the encoded bytes** (a
+  marker walk, no decoder). Safari's canvas encoder may write a minimal Exif
+  APP1 of its own (unverified); without this step the server's no-APP1 rule
+  (§6.4) would refuse every iPhone post. M2 inspects a real iPhone's output
+  for APP1 and keeps a Safari-made sample as a test fixture.
 - The preview runs the **same** filter code on a small copy, so what the
   contributor sees is what is uploaded. Don't rely on
   `CanvasRenderingContext2D.filter` without checking it on iOS Safari; a
@@ -517,6 +522,9 @@ _Decided by the user (spec ticket), in the Monday cut._
   **off** for a new wall. _Refinement (spec):_ off by default so no tenant's
   screen shows logos it hasn't checked. Switching it reaches running screens
   on their next poll.
+- Screen Mode loads the sponsors when the page renders; the switch arrives
+  with `getWall` on every poll. A sponsor change reaches a running screen on
+  its next reload. _Implementation detail._
 - No sponsors with a public tier: no strip, even when switched on.
 - The logos must read on the dark screen; the slice checks this visually with
   real sponsor logos.
@@ -674,7 +682,7 @@ admin), light and dark (Screen Mode: dark only), with the story file's
 dark-mode mechanism checked, per `AGENTS.md`. Every new tRPC endpoint is mocked
 in the affected UI tests and the mutation-surface snapshots are updated.
 
-**Monday cut.** Build order: M1 and M2 at once; then M3a, M4 and M5a; then M3b
+**Monday cut.** Build order: M1 and M2 at once; then M3a, M4a and M5a; then M3b, M4b
 and M5b; then M6. The private Blob store (§5) is the user's step before M3b
 can be tried on a preview.
 
@@ -684,21 +692,22 @@ can be tried on a preview.
 | M2  | **Composer, phone side only.** `/wall/post` landing and the composer (§6.5) with the 9 baked filters, crop, caption, name, consent line and marketing checkbox, producing the JPEG and fields; no server calls yet (Storybook with mocked actions). Try it on a real iPhone as early as possible (§15). Demo: in Storybook at phone width, a picked photo becomes a filtered ≤ 2048 px JPEG with no EXIF.                           | —        |
 | M3a | **Posting rules, server side.** The cookie (§6.1); the reservation write and the limit counts on the non-CDN client (§6.2, §6.3); the JPEG and field checks (§6.4); each a pure, tested module with executed GROQ and real JPEG files (§14). No route or UI.                                                                                                                                                                        | M1       |
 | M3b | **Posting path.** Start, the upload route and Submit (§6.2) on M3a's modules, the phone's messages (§6.3), the window-closed page, M2's composer wired to them, and a minimal "Waiting for approval" card showing the local photo. Demo: a phone posts and the post is pending in Sanity, with its photo only in the private store.                                                                                                 | M2, M3a  |
-| M4  | **Moderation.** `getModerationQueue`, the queue, tabs, cards, the admin photo route (§5.1), Approve (copy to public), Reject/Remove, Approve all, Delete now with the revision guards and prefix deletes (§5, §10), the live pending count, the tag expiries (§8). Demo (with M3b): an organizer approves a post from a phone and its public URL works; Remove makes it 404 within a minute.                                        | M1       |
+| M4a | **Moderation, read side.** `getModerationQueue` (§8), the admin photo route (§5.1), tabs, cards and the live pending count (§10). Demo: an organizer sees pending posts with the whole photo and the crop outline on a phone.                                                                                                                                                                                                       | M1       |
+| M4b | **Moderation actions.** Approve (copy to public), Reject, Remove, Approve all and Delete now with the revision guards, exact-copy and prefix deletes and their failure paths (§5, §10, §12), the tag expiries (§8), the race tests (§14). Demo (with M3b): an organizer approves a post from a phone and its public URL works; Remove makes it 404 within a minute.                                                                 | M3a, M4a |
 | M5a | **Wall page.** `getWall` (§8); the Wall page (§9.1) with the plain-`<img>` rule (§5.1). Demo: with fixture posts in Storybook, and with M4, an approval appears on a phone within 10 s.                                                                                                                                                                                                                                             | M1       |
 | M5b | **Screen Mode.** Pinboard with arrivals, bursts, idle swaps and removal (§9.2), always-on polling (§8), flaky Wi-Fi (§9.3), the sponsor strip (§9.4), and the analytics and install-prompt exclusions (§9.2). Demo: an approval appears on a running screen within 5 s and a removal leaves it, after more than five minutes untouched.                                                                                             | M5a      |
 | M6  | **My posts and privacy.** `getMyPosts` and the device photo route (§5.1, §8); My posts with statuses, Delete and the marketing switch (§12); the `/privacy` section, cookie row and subprocessor wording; the `PRIVACY_OPERATIONS.md` line. Demo: a contributor deletes their approved post and it leaves the Wall page.                                                                                                            | M3b, M5a |
 
 **After the event:**
 
-| #   | Slice                                                                                                                                                                                                                                                                                                       | After   | Due         |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ----------- |
-| P1  | **Retention cron and orphan sweep** (§11), the closed states of every page.                                                                                                                                                                                                                                 | M3b, M4 | 26 Nov 2026 |
-| P2  | **Automatic Posting Window** (§7).                                                                                                                                                                                                                                                                          | M1      | 12 Nov 2026 |
-| P3  | **Wall Look setting and Mosaic.** `photoWall.look` on the admin page, live on screens; `?look=` on the Screen Mode link; the Mosaic look on the Wall page and Screen Mode, from the prototype (#1478).                                                                                                      | M5b     | 12 Nov 2026 |
-| P4  | **Spotlight look**, from the prototype (#1478).                                                                                                                                                                                                                                                             | P3      | 12 Nov 2026 |
-| P5  | **Consented ZIP export.** Download approved posts whose contributor ticked marketing consent, as a ZIP. It must not pass through a function response over 4.5 MB: build it in the browser from the public URLs if Blob serves them with CORS, else write it to the private store and hand out a signed URL. | M4      | 12 Nov 2026 |
-| P6  | **Pending-count badge** on the nav entry (`AdminNavEntry.count`, as Feedback's flagged badge).                                                                                                                                                                                                              | M4      | 12 Nov 2026 |
+| #   | Slice                                                                                                                                                                                                                                                                                                       | After    | Due         |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------- |
+| P1  | **Retention cron and orphan sweep** (§11), the closed states of every page.                                                                                                                                                                                                                                 | M3b, M4b | 26 Nov 2026 |
+| P2  | **Automatic Posting Window** (§7).                                                                                                                                                                                                                                                                          | M1       | 12 Nov 2026 |
+| P3  | **Wall Look setting and Mosaic.** `photoWall.look` on the admin page, live on screens; `?look=` on the Screen Mode link; the Mosaic look on the Wall page and Screen Mode, from the prototype (#1478).                                                                                                      | M5b      | 12 Nov 2026 |
+| P4  | **Spotlight look**, from the prototype (#1478).                                                                                                                                                                                                                                                             | P3       | 12 Nov 2026 |
+| P5  | **Consented ZIP export.** Download approved posts whose contributor ticked marketing consent, as a ZIP. It must not pass through a function response over 4.5 MB: build it in the browser from the public URLs if Blob serves them with CORS, else write it to the private store and hand out a signed URL. | M4a      | 12 Nov 2026 |
+| P6  | **Pending-count badge** on the nav entry (`AdminNavEntry.count`, as Feedback's flagged badge).                                                                                                                                                                                                              | M4a      | 12 Nov 2026 |
 
 ## 14. Verification
 
@@ -713,7 +722,7 @@ can be tried on a preview.
 - **The token binds what §6.2 says**, shown on the real `handleUpload` from the
   installed `@vercel/blob`, not a mock: pathname, content type, size, expiry,
   no overwrite.
-- **JPEG checks** on real files: a canvas-made JPEG passes; a camera JPEG with
+- **JPEG checks** on real files: a canvas-made JPEG (including a Safari-made sample, after the composer's APPn strip) passes; a camera JPEG with
   EXIF, a PNG renamed `.jpg`, a truncated file, a 4096 px image and a 200 px
   image are refused.
 - **Executed GROQ, not mocks,** for the limits, `getWall`, the queue and My
