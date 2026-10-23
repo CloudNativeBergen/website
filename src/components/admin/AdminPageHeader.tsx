@@ -63,7 +63,7 @@ export function AdminPageHeader({
           {backLink && (
             <Link
               href={backLink.href}
-              className="shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+              className="shrink-0 rounded-md p-1 text-gray-500 transition-colors dark:text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
               title={backLink.label || 'Back'}
             >
               <ChevronLeftIcon className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -79,7 +79,9 @@ export function AdminPageHeader({
             <h1 className="font-space-grotesk text-xl leading-6 font-bold text-brand-slate-gray sm:text-2xl sm:leading-7 sm:tracking-tight lg:text-3xl lg:leading-8 dark:text-white">
               {title}
             </h1>
-            <div className="font-inter mt-1 text-sm text-brand-slate-gray/70 dark:text-gray-400">
+            {/* /80, not /70: 5.6:1 on white and gray-50, where /70 was 4.35:1
+                (under WCAG AA 4.5:1 for this 14px text). */}
+            <div className="font-inter mt-1 text-sm text-brand-slate-gray/80 dark:text-gray-400">
               {typeof description === 'string' ? (
                 <p>
                   {description}

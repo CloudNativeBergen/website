@@ -89,6 +89,12 @@ export const WithBackLink: Story = {
   },
 }
 
+/** Dark mode follows the global `theme` toolbar (story-level `globals`). */
+export const WithBackLinkDark: Story = {
+  ...WithBackLink,
+  globals: { theme: 'dark' },
+}
+
 export const FullFeatured: Story = {
   args: {
     icon: <TicketIcon className="h-full w-full" />,
