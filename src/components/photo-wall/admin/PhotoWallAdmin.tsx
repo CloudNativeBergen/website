@@ -67,7 +67,7 @@ export function PhotoWallAdmin({
           role="alert"
           className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300"
         >
-          Couldn&apos;t save. Try again.
+          Couldn’t save. Try again.
         </p>
       )}
       {wall ? (
@@ -164,7 +164,11 @@ function PostingSetting({
         </p>
         <p
           id={noteId}
-          className="mt-1 text-sm text-gray-600 dark:text-gray-400"
+          className={`mt-1 text-sm ${
+            mode === 'open' && !open
+              ? 'font-medium text-amber-700 dark:text-amber-400'
+              : 'text-gray-600 dark:text-gray-400'
+          }`}
         >
           {postingNote(mode, open)}
         </p>
@@ -226,7 +230,7 @@ function SponsorStripSetting({
           id={noteId}
           className="mt-1 text-sm text-gray-600 dark:text-gray-400"
         >
-          Show the conference&apos;s sponsors along the bottom of Screen Mode.
+          Show the conference’s sponsors along the bottom of Screen Mode.
         </p>
       </div>
       <button

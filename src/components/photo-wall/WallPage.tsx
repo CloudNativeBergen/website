@@ -57,7 +57,7 @@ export function ComposerPlaceholder({
         Add your photo to the wall
       </h1>
       <p className="mt-3 text-gray-600 dark:text-gray-400">
-        The wall isn&apos;t open for photos right now.
+        The wall isn’t open for photos right now.
       </p>
     </WallChrome>
   )
