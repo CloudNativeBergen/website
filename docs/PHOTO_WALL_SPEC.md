@@ -69,6 +69,10 @@ Terms used only in this spec:
 - **Device key**: the hash of the device cookie's token that a Wall Post
   stores to know which phone made it (§6.1).
 
+`/wall`, `/wall/post` and `/wall/screen` live in `src/app/(public)/wall/`, like
+`/f`: no site navigation, each with its own minimal header (Screen Mode with
+none). _Implementation detail._
+
 ## 3. Decision index
 
 | Topic                                                                 | Decided in                                                                                                                       |
@@ -85,7 +89,8 @@ Terms used only in this spec:
 
 Decided by the user while this spec was written (2026-10-23):
 
-- **Limits** exactly as in §6.3.
+- **Limits** exactly as in §6.3 (the "4 MB" cap is taken as 4 MiB, 4,194,304
+  bytes).
 - **Sponsor strip** on Screen Mode, switchable per wall by an organizer, **in
   the Monday cut** (§9.4).
 - **Trial run**: the user runs the checklist in §14 on production on Sunday 25
@@ -115,20 +120,21 @@ appearing on every tenant's domain the day this ships.
 
 ### 4.2 `wallPost`
 
-| Field              | Type                                    | Notes                                                                                                                                              |
-| ------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `_id`              | `wallPost-<uploadId>`                   | `uploadId` is the UUID v4 in the upload's pathname (§6.2), so a double submit converges on one document.                                           |
-| `conference`       | reference → `conference`, required      |                                                                                                                                                    |
-| `status`           | `'pending' \| 'approved' \| 'notShown'` | **Not shown** covers both Reject and Remove (#1479).                                                                                               |
-| `photo`            | object                                  | `pathname` (private store), `publicUrl` (set only while approved), `width`, `height`, `bytes`. Its own object, so a later video can sit beside it. |
-| `crop`             | `{ x: number, y: number }`, each 0–1    | The square crop's position (CSS `object-position` semantics) on the whole photo. The square's side is the photo's short edge; there is no zoom.    |
-| `caption`          | string ≤ 80, optional                   | Normalised on the server (§6.4).                                                                                                                   |
-| `name`             | string ≤ 40, optional                   |                                                                                                                                                    |
-| `marketingConsent` | boolean                                 | The optional checkbox (#1480). The contributor can untick it later.                                                                                |
-| `deviceKey`        | string                                  | §6.1. Never the raw cookie token.                                                                                                                  |
-| `submittedAt`      | datetime                                | Server time.                                                                                                                                       |
-| `approvedAt`       | datetime                                | Set on every approval (also re-approval from Not shown). Orders the wall: newest approval first.                                                   |
-| `decidedAt`        | datetime                                | Last Approve, Reject or Remove.                                                                                                                    |
+| Field              | Type                                                   | Notes                                                                                                                                                                                     |
+| ------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_id`              | `wallPost-<uploadId>`                                  | `uploadId` is the UUID v4 in the upload's pathname (§6.2), so a double submit converges on one document.                                                                                  |
+| `conference`       | reference → `conference`, required                     |                                                                                                                                                                                           |
+| `status`           | `'uploading' \| 'pending' \| 'approved' \| 'notShown'` | **Not shown** covers both Reject and Remove (#1479). `uploading` is the reservation Start writes (§6.2); it isn't a Wall Post yet, and no list, count or page shows it except the limits. |
+| `photo`            | object                                                 | `pathname` (private store), `publicUrl` (set only while approved), `width`, `height`, `bytes`. Its own object, so a later video can sit beside it.                                        |
+| `crop`             | `{ x: number, y: number }`, each 0–1                   | The square crop's position (CSS `object-position` semantics) on the whole photo. The square's side is the photo's short edge; there is no zoom.                                           |
+| `caption`          | string ≤ 80, optional                                  | Normalised on the server (§6.4).                                                                                                                                                          |
+| `name`             | string ≤ 40, optional                                  |                                                                                                                                                                                           |
+| `marketingConsent` | boolean                                                | The optional checkbox (#1480). The contributor can untick it later.                                                                                                                       |
+| `deviceKey`        | string                                                 | §6.1. Never the raw cookie token.                                                                                                                                                         |
+| `startedAt`        | datetime                                               | When Start wrote the reservation. Server time.                                                                                                                                            |
+| `submittedAt`      | datetime                                               | When Submit accepted it. Server time.                                                                                                                                                     |
+| `approvedAt`       | datetime                                               | Set on every approval (also re-approval from Not shown). Orders the wall: newest approval first.                                                                                          |
+| `decidedAt`        | datetime                                               | Last Approve, Reject or Remove.                                                                                                                                                           |
 
 Studio shows both types read-only (organizers moderate on the admin page, not
 in Studio). _Implementation detail._
@@ -147,16 +153,45 @@ Blob with a secret suffix.
   fixed per store). Pathname `photo-wall/<conferenceId>/<deviceKey>/<uploadId>.jpg`.
 - **Approval copies** the bytes into the **existing public Blob store**
   (`BLOB_READ_WRITE_TOKEN`) at `photo-wall/<conferenceId>/<uploadId>.jpg` with
-  a random suffix and `cacheControlMaxAge: 60`, and stores the URL in
-  `photo.publicUrl`. Removing deletes the public copy; the private original
-  stays, so an organizer can approve again from Not shown.
+  a random suffix and `cacheControlMaxAge: 60` (the SDK minimum), and stores
+  the URL in `photo.publicUrl`. Blob's `copy()` works within one store only, so
+  "copy" means: `get(pathname, { access: 'private', token })`, buffer the
+  stream (≤ 4 MiB), `put()` to the public store.
+- **Public copies are found by prefix, never only by the stored URL.** Every
+  removal of a public copy (Remove, Reject from On the wall, Delete, the cron)
+  deletes **every** public blob listed under
+  `photo-wall/<conferenceId>/<uploadId>` (the UUID makes the prefix unique). A
+  lost or stale `publicUrl` can't leave a copy behind.
+- Removing keeps the private original, so an organizer can approve again from
+  Not shown.
 - **Deleting** a post (contributor's Delete, organizer's Delete now, the
-  retention cron) deletes the document and both blobs.
+  retention cron) deletes the document and both stores' blobs for that
+  `uploadId`.
 
 Neither copy goes through Sanity's asset pipeline, so the Sanity CDN's missing
 CORS for tenant domains never applies.
 
-**User prerequisite (before M3 can be tried on a preview):** create a
+### 5.1 Showing photos
+
+- **Approved photos** are rendered from `publicUrl` with a plain `<img>`,
+  **never `next/image`**: `next.config.ts` allows the Blob host in
+  `remotePatterns`, and the image optimizer would keep serving a removed photo
+  from `/_next/image` for its `minimumCacheTTL` (4 hours by default in Next 16).
+  This holds on the Wall page, Screen Mode, the admin page and My posts.
+- **Pending and Not shown photos** have no public URL. Two route handlers
+  stream them from the private store, both checking **before** `get()` and
+  answering `Cache-Control: private, no-store`:
+  - `/wall/post/photo/<uploadId>` for My posts: the pathname is rebuilt from
+    the request's own `konf_wall` cookie (§6.1) and the conference serving the
+    request, so a phone only ever sees its own photos.
+  - `/api/admin/photo-wall/photo/<uploadId>` for the admin page: an organizer
+    of the conference serving the request, and a `wallPost` of that conference.
+
+  A foreign, unknown or still-`uploading` id gets the same 404 from either
+  route.
+
+**User prerequisite, the first step of the Monday plan (M3b can't be tried on
+a preview, nor the Sunday trial run, without it):** create a
 **private** Blob store in the Vercel project (region `fra1` or `arn1`, per the
 research), connect it to Production, Preview and Development with the
 environment prefix `PHOTO_WALL_PRIVATE`, and add the resulting token variable
@@ -173,8 +208,11 @@ wording widens to photos (§12).
 _Same pattern as Feedback Responses (`src/lib/feedback/device.ts`)._
 
 - Name **`konf_wall`**, `httpOnly`, `secure` outside development,
-  `SameSite=Lax`, **`Path=/wall`**. The upload route lives under
-  `/wall/post/upload` so it receives the cookie.
+  `SameSite=Lax`, **`Path=/wall`**. **Everything that needs the cookie lives
+  under `/wall`:** the Server Actions of `/wall/post` (they post to the page's
+  own path), the upload route `/wall/post/upload` and the photo route
+  `/wall/post/photo/<uploadId>`. **Never tRPC:** `/api/trpc` doesn't receive a
+  `/wall` cookie (the Feedback precedent, `SPEAKER_FEEDBACK_SPEC.md` §7.3).
 - Value: a 16-byte random token plus its issue time, HMAC-SHA256-signed with
   `INVITATION_TOKEN_SECRET`, as `deviceCookie()` does. A cookie whose
   signature doesn't verify is treated as absent.
@@ -198,48 +236,78 @@ JPEG goes straight from the phone to Blob with a server-minted token.
 
 1. **Start** (Server Action `startWallPost()`). Resolves the conference from
    the domain; refuses if there is no wall or posting isn't open (§7); issues
-   the cookie if needed; checks the limits (§6.3); returns a fresh pathname
-   `photo-wall/<conferenceId>/<deviceKey>/<uploadId>.jpg` with a new UUID v4.
-2. **Upload** (client `upload()` from `@vercel/blob/client`, `access:
-'private'`, `handleUploadUrl: '/wall/post/upload'`). The route's
-   `onBeforeGenerateToken`:
-   - refuses unless the pathname is exactly
-     `photo-wall/<this conference>/<this cookie's device key>/<UUID v4>.jpg`,
-     the wall exists and posting is open;
-   - binds the token to that **pathname**, `allowedContentTypes:
-['image/jpeg']`, `maximumSizeInBytes: 4 MiB`, `validUntil: now + 10
-min`, `addRandomSuffix: false`, `allowOverwrite: false`.
+   the cookie if needed; checks the limits (§6.3); then **writes a
+   reservation**: a `wallPost-<uploadId>` document with a new UUID v4,
+   `status: 'uploading'`, the conference, the device key and `startedAt`. It
+   returns the pathname `photo-wall/<conferenceId>/<deviceKey>/<uploadId>.jpg`.
+2. **Upload** (client `upload()` from `@vercel/blob/client` with `access:
+'private'` and `handleUploadUrl: '/wall/post/upload'`). The route reads the
+   cookie and resolves the conference **before** calling `handleUpload`
+   (`onBeforeGenerateToken` receives only the pathname and client payload,
+   not the request). It refuses unless:
+   - the pathname is exactly `photo-wall/<this conference>/<this cookie's
+device key>/<UUID v4>.jpg`;
+   - a reservation `wallPost-<uploadId>` exists with that conference and device
+     key, `status: 'uploading'`, and `startedAt` less than 10 minutes ago;
+   - the wall exists and posting is open.
 
-   `onUploadCompleted` does nothing: it doesn't fire for local development,
-   and no rule here depends on it.
+   The token binds that **pathname**, `allowedContentTypes: ['image/jpeg']`,
+   `maximumSizeInBytes: 4 MiB` (4,194,304 bytes), `validUntil: now + 10 min`,
+   `addRandomSuffix: false` and `allowOverwrite: false`, and is passed the
+   private store's token. `onUploadCompleted` does nothing: it doesn't fire for
+   local development, and no rule here depends on it.
+
+   Without a reservation there is no token, and reservations count against the
+   limits (§6.3), so a script that skips Start can't mint tokens, and one that
+   calls Start can hold at most 3 uploads at a time per cookie.
 
 3. **Submit** (Server Action `submitWallPost({ uploadId, caption, name, crop,
-marketingConsent })`). Rebuilds the pathname from **its own cookie's**
-   device key and the `uploadId` (a UUID v4, else refused), so a phone can only
-   ever submit its own upload. Then, in this order, **guard before fetch**:
-   valid cookie, wall exists, posting open, limits (not counting this
-   `uploadId`); only then reads the blob and runs the checks in §6.4. On
-   success it `createIfNotExists` the `wallPost` (status `pending`) and expires
-   the admin and device tags (§8). On any refusal after the upload, it deletes
-   the blob.
+marketingConsent })`). In this order, **guard before fetch**:
+   1. a valid cookie, and an `uploadId` that is a UUID v4;
+   2. the document `wallPost-<uploadId>` exists, belongs to this conference and
+      this cookie's device key; otherwise the generic refusal, the same for a
+      foreign and an unknown id;
+   3. **already submitted** (any status but `uploading`): return success and do
+      nothing else. A retry after a lost response never refuses and never
+      touches the photo;
+   4. the wall exists and posting is open;
+   5. only then read the blob at the pathname rebuilt from **its own cookie's**
+      device key and run the checks in §6.4.
 
-Uploads that are never submitted (the phone closed mid-way, a refusal before
-the delete ran) are removed by the daily orphan sweep (§11.2, slice P1). Until
-P1 ships they stay in the private store, unreachable, and the retention cron
-deletes them with the wall.
+   On success it patches the reservation to `status: 'pending'` with the post's
+   fields and `submittedAt`, guarded with `ifRevisionId`, and expires the admin
+   and device tags (§8). On a refusal at steps 4–5 it deletes the blob and the
+   reservation, but **only while the document is still `uploading`** (the
+   delete is guarded by its revision), so it can never destroy a submitted
+   post's photo.
+
+**Reads that decide** (the limits, the reservation and revision reads here and
+in §10) use the **non-CDN** Sanity client (`src/lib/sanity/client.ts`); a CDN
+read lags the previous write.
+
+Reservations whose upload never arrives, or that are never submitted, stop
+counting after 10 minutes. The daily sweep (§11.2, slice P1) deletes those
+older than 24 hours with their blobs. Until P1 ships they stay, unreachable and
+shown nowhere, and the retention cron deletes them with the wall.
 
 ### 6.3 Limits
 
-| Limit                                | Value                     | Phone shows                                                                        |
-| ------------------------------------ | ------------------------- | ---------------------------------------------------------------------------------- |
-| Pending posts per device, at once    | **3**                     | "You have 3 photos waiting for approval. You can post again once one is approved." |
-| Posts per device, rolling 60 minutes | **10** (by `submittedAt`) | "You've posted 10 photos in the last hour. Try again a bit later."                 |
-| Pending posts per wall, at once      | **200**                   | "Lots of photos are waiting right now. Try again in a few minutes."                |
-| Posting not open                     | §7                        | "The wall isn't open for photos right now." with a link "See the wall".            |
-| Any other refusal or failure         |                           | "Something went wrong. Your photo wasn't posted. Try again."                       |
+| Limit                                | Value                   | Phone shows                                                                        |
+| ------------------------------------ | ----------------------- | ---------------------------------------------------------------------------------- |
+| Pending posts per device, at once    | **3**                   | "You have 3 photos waiting for approval. You can post again once one is approved." |
+| Posts per device, rolling 60 minutes | **10** (by `startedAt`) | "You've posted 10 photos in the last hour. Try again a bit later."                 |
+| Pending posts per wall, at once      | **200**                 | "Lots of photos are waiting right now. Try again in a few minutes."                |
+| Posting not open                     | §7                      | "The wall isn't open for photos right now." with a link "See the wall".            |
+| Any other refusal or failure         |                         | "Something went wrong. Your photo wasn't posted. Try again."                       |
+
+"Pending" in both pending limits counts `pending` posts **plus**
+`uploading` reservations younger than 10 minutes. The hourly limit counts every
+document of the device with `startedAt` in the last 60 minutes, whatever its
+status (a refused reservation is deleted, so it doesn't count).
 
 The limits are checked at Start (so nobody uploads for nothing) and again at
-Submit. Two phones racing the last of the 200 can overshoot by one; accepted.
+Submit, there not counting this `uploadId`. Two phones racing the last of the
+200 can overshoot by one; accepted.
 Organizers don't see refusals; the pending count shows how full the queue is.
 
 ### 6.4 What the server checks at Submit
@@ -247,7 +315,7 @@ Organizers don't see refusals; the pending count shows how full the queue is.
 | Check          | Rule                                                                                                                                                                          |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Exists         | The blob at the rebuilt pathname exists in the private store.                                                                                                                 |
-| Size           | ≤ 4 MiB (the token already caps it; checked again on the bytes read).                                                                                                         |
+| Size           | ≤ 4 MiB, 4,194,304 bytes (the token already caps it; checked again on the bytes read).                                                                                        |
 | Type           | The bytes start with the JPEG signature (`sniffImageType()` in `src/lib/marketing-asset/image-type.ts`) and end with an EOI marker.                                           |
 | Dimensions     | Read from the JPEG's SOF marker: long edge ≤ **2048 px**, short edge ≥ **320 px**.                                                                                            |
 | No metadata    | No APP1 segment (`Exif` or XMP). The phone's canvas re-encode never writes one, so its presence means the file didn't come from the composer: refused, not stripped.          |
@@ -330,16 +398,28 @@ expired on change costs about 1–4k Sanity reads per edition; polling Sanity
 directly would cost about 30% of the monthly quota. **Browsers never query
 Sanity.** _Tags and function names below are implementation details._
 
-| Cached read                                                                                                                                                                  | Tag                               | Expired by                                                                                                      | Polled by                                                                                                         |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `getWall(conferenceId)`: settings + the newest **200** approved posts (`id`, `publicUrl`, `width`, `height`, `crop`, `caption`, `name`, `approvedAt`), newest approval first | `photo-wall:<conferenceId>`       | Approve, Reject/Remove of an approved post, Delete of an approved post, any settings change, the retention cron | Screen Mode every **5 s**; the Wall page every **10 s** while visible                                             |
-| `getModerationQueue(conferenceId)`: every post with its status, and the pending count                                                                                        | `photo-wall-admin:<conferenceId>` | Submit, every moderation action, contributor Delete and marketing change, the cron                              | The admin page every **10 s** while visible                                                                       |
-| `getMyPosts(conferenceId, deviceKey)`                                                                                                                                        | `photo-wall-device:<deviceKey>`   | Submit, Delete, marketing change by that device; any moderation of a post with that `deviceKey`                 | My posts on load, after each action, and every **15 s** while one of its posts is pending and the page is visible |
+| Cached read                                                                                                                                                                  | Tag                               | Expired by                                                                                                                                        | Polled by                                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `getWall(conferenceId)`: settings + the newest **200** approved posts (`id`, `publicUrl`, `width`, `height`, `crop`, `caption`, `name`, `approvedAt`), newest approval first | `photo-wall:<conferenceId>`       | Approve, Reject/Remove of an approved post, Delete (the contributor's or Delete now) of an approved post, any settings change, the retention cron | Screen Mode every **5 s**, always; the Wall page every **10 s** while visible                                     |
+| `getModerationQueue(conferenceId)`: every post except reservations, with its status, and the pending count                                                                   | `photo-wall-admin:<conferenceId>` | Submit, every moderation action, contributor Delete and marketing change, the cron                                                                | The admin page every **10 s** while visible                                                                       |
+| `getMyPosts(conferenceId, deviceKey)`: this device's posts, except reservations                                                                                              | `photo-wall-device:<deviceKey>`   | Submit, Delete, marketing change by that device; any moderation of a post with that `deviceKey`                                                   | My posts on load, after each action, and every **15 s** while one of its posts is pending and the page is visible |
 
-- The client endpoints are tRPC public queries (`useIdlePolling()` +
-  `refetchInterval`, as `SessionFeedbackResults.tsx` does). They resolve the
-  conference with `resolveConferenceId()` and never accept it from the client.
-  `getMyPosts` reads the device key from the cookie on the server.
+- **Inside each cached function**, read with the **uncached** Sanity client
+  (`clientReadUncached`), never the CDN one: a tag expiry refills from Sanity,
+  and the Sanity CDN can still hold the old answer (the
+  `src/lib/feedback/attendee.ts` precedent). Use the `default` `cacheLife`
+  profile; freshness comes from the tags, not from a short lifetime.
+- **Endpoints.** `getWall` and `getModerationQueue` are tRPC queries (public and
+  `adminProcedure`), resolving the conference with `resolveConferenceId()` and
+  never accepting it from the client. **`getMyPosts` is a Server Action of
+  `/wall/post`**, because it needs the `/wall` cookie (§6.1); it reads the
+  device key from the cookie on the server.
+- **Polling.** The Wall page, the admin page and My posts poll only while the
+  page is visible (`useIdlePolling()` + `refetchInterval`, as
+  `SessionFeedbackResults.tsx` does). **Screen Mode must not use
+  `useIdlePolling()`'s idle stop:** that hook stops after five minutes without
+  interaction (`src/hooks/useIdlePolling.ts`), and nobody touches a venue
+  screen. Screen Mode polls every 5 s for as long as it is open.
 - **Expiry call:** Server Actions (Submit, Delete, marketing) use `updateTag`;
   the admin's tRPC mutations run in the `/api/trpc` Route Handler, where
   `updateTag` throws, so they use `revalidateTag(tag, { expire: 0 })`, the
@@ -373,17 +453,25 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
 
 ### 9.2 Screen Mode (`/wall/screen`)
 
-- **Always dark**, fullscreen, no site chrome or analytics, cursor hidden
-  after 3 s still, and a Screen Wake Lock where the browser supports it.
+- **Always dark**, fullscreen, no site chrome, cursor hidden after 3 s still,
+  and a Screen Wake Lock where the browser supports it.
+- **No analytics and no install prompt.** Leaving the site chrome out isn't
+  enough: the root layout (`src/app/layout.tsx`) renders `VercelInsights`,
+  `TenantAnalytics` and the PWA `InstallPrompt` on every route. Exclude
+  `/wall/screen` from all three, the way `/f` is excluded (PostHog's path list
+  in `src/lib/posthog/config.ts`, `HiddenOnFeedbackPage`), and test that
+  Screen Mode sends no analytics request. _Refinement (spec):_ a venue screen
+  polling for days would otherwise count as one endless visit.
 - Conference logo (`logoBright`) and brand accents (`theme.primaryColor`,
   falling back to the default theme) from the tenant's branding.
 - **Pinboard:** up to **17** tilted polaroids scattered on a dark board, plus a
   **QR polaroid** "Add yours!" pointing at `/wall/post`, always dark code on a
   white card.
 - **First load** shows the newest 17 with no "new" marks.
-- **A new post** (an id not seen before) drops in on top, replacing the oldest
-  card, and wears its **"new" mark for 6 s**. A burst is let in **one post
-  every 2.5 s**, in approval order.
+- **A new post** is an `(id, approvedAt)` pair the screen hasn't seen, so a
+  post removed and approved again arrives again. It drops in on top,
+  replacing the oldest card, and wears its **"new" mark for 6 s**. A burst is
+  let in **one post every 2.5 s**, in approval order.
 - **Idle:** every **6 s** one card swaps to an older post from the rest of the
   list, when there are more than 17.
 - **Removal:** a card whose id is missing from the latest list leaves at once
@@ -456,12 +544,22 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
     approves the posts pending when pressed, four at a time, within a 30 s
     budget, and reports how many it approved; pressing again finishes the
     rest.
-- **Approve** copies the photo to the public store, then patches the post
-  (`status: approved`, `publicUrl`, `approvedAt`, `decidedAt`) guarded with
-  `ifRevisionId`; if the patch fails (the contributor deleted it meanwhile), it
-  deletes the public copy and the card reports "This photo was deleted".
+- **Every transition is guarded with `ifRevisionId`** against the non-CDN read
+  it was decided from, so two organizers (or an organizer and the contributor)
+  can't interleave. On a revision conflict the server re-reads once: if the
+  post is gone, the card reports "This photo was deleted"; if its status no
+  longer allows the action (someone else already removed it), the card
+  refreshes with no change; otherwise (a marketing untick bumped the revision)
+  it retries once.
+- **Approve** copies the photo to the public store (§5), then patches the post
+  (`status: approved`, `publicUrl`, `approvedAt`, `decidedAt`). If the patch
+  fails for good, it deletes the copy it just made.
 - **Reject / Remove** patches `status: notShown`, unsets `publicUrl`, then
-  deletes the public copy.
+  deletes every public copy under the post's prefix (§5). If that delete fails
+  it is retried once and logged; the wall already stopped showing the post, and
+  the sweep (§11.2) deletes what is left.
+- **Delete now** deletes the document, then both stores' blobs for the
+  `uploadId`, by prefix.
 - The contributor's My posts says **Not shown**, with no reason.
 
 ## 11. Retention
@@ -484,9 +582,16 @@ From [Decide the Photo Wall window, retention, consent and erasure](https://gith
 
 ### 11.2 Orphan sweep (slice P1)
 
-The same cron deletes private blobs older than 24 hours that no `wallPost`
-references, and public blobs under `photo-wall/` that no approved
-`wallPost.photo.publicUrl` points at.
+The same cron deletes:
+
+- `uploading` reservations older than 24 hours, with their private blob;
+- private blobs under `photo-wall/` older than 24 hours with no `wallPost`
+  document;
+- public blobs under `photo-wall/` that aren't the `photo.publicUrl` of an
+  approved `wallPost`.
+
+Extend the existing `/api/cron/cleanup-orphaned-blobs` (`vercel.json`) or sit
+beside it; don't duplicate its listing logic.
 
 **Monday risk:** P1 is not in the Monday cut. If it hasn't shipped by 26
 November 2026, the deletion is a manual job that day (delete every `wallPost`
@@ -502,8 +607,9 @@ of the conference and both stores' `photo-wall/<conferenceId>/` prefix).
   (**Waiting for approval**, **On the wall**, **Not shown**), a **Delete**
   button (inline confirm: "Delete this photo? It's removed from the wall and
   can't be undone.") and a **Marketing** switch.
-- **Delete** is permanent and immediate: the document and both blobs, gone from
-  every screen on its next poll.
+- **Delete** is permanent and immediate: a Server Action deletes the document,
+  then both stores' blobs for the `uploadId` by prefix (§5), and the post is
+  gone from every screen on its next poll.
 - **Lost cookie:** contact the organizers, describing the photo. They use
   Delete now.
 - **Exported copies** (slice P5) can't be reached by deletion; `/privacy` says
@@ -545,28 +651,31 @@ admin), light and dark (Screen Mode: dark only), with the story file's
 dark-mode mechanism checked, per `AGENTS.md`. Every new tRPC endpoint is mocked
 in the affected UI tests and the mutation-surface snapshots are updated.
 
-**Monday cut** (in build order; M1, M2 start at once, then M3, M4, M5 in
-parallel, then M6):
+**Monday cut.** Build order: M1 and M2 at once; then M3a, M4 and M5a; then M3b
+and M5b; then M6. The private Blob store (§5) is the user's step before M3b
+can be tried on a preview.
 
-| #   | Slice                                                                                                                                                                                                                                                                                                                                                                   | After  |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| M1  | **Wall setup and admin shell.** Both document types (§4); `/admin/photo-wall` with Set up, the Posting (Open/Paused) and Sponsor strip switches, the links with the posting QR (§10); the nav entry; the 404 rule for conferences without a wall (§4.1); `isPostingOpen` (§7). Demo: an organizer sets up the wall, opens and pauses it, and downloads the QR.          | —      |
-| M2  | **Composer, phone side only.** `/wall/post` landing and the composer (§6.5) with the 9 baked filters, crop, caption, name, consent line and marketing checkbox, producing the JPEG and fields; no server calls yet (Storybook with mocked actions). Demo: in Storybook at phone width, a picked photo becomes a filtered ≤ 2048 px JPEG with no EXIF.                   | —      |
-| M3  | **Posting path.** The cookie (§6.1), Start, the upload route and Submit with every check and limit and the phone's messages (§6.2–6.4), the window-closed page, wiring M2's composer to them, and a minimal "Waiting for approval" card. Needs the private store (§5). Demo: a phone posts and the post is pending in Sanity, with its photo only in the private store. | M1, M2 |
-| M4  | **Moderation.** The queue, tabs, cards, Approve (copy to public), Reject/Remove, Approve all, Delete now and the live pending count (§10), with the tag expiries (§8). Demo (with M3): an organizer approves a post from a phone and its public URL works; Remove makes it 404 within a minute.                                                                         | M1     |
-| M5  | **The wall.** `getWall` and its polling (§8); the Wall page (§9.1); Screen Mode in Pinboard with arrivals, bursts, idle swaps and removal (§9.2), flaky Wi-Fi (§9.3) and the sponsor strip (§9.4). Demo: with fixture posts in Storybook, and with M4, an approval appears on a running screen within 5 s and a removal leaves it.                                      | M1     |
-| M6  | **My posts and privacy.** `getMyPosts`, My posts with statuses, Delete and the marketing switch (§12); the `/privacy` section, cookie row and subprocessor wording; the `PRIVACY_OPERATIONS.md` line. Demo: a contributor deletes their approved post and it leaves the screen.                                                                                         | M3     |
+| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                               | After    |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| M1  | **Wall setup and admin shell.** Both document types (§4); the `src/app/(public)/wall/` route group with its minimal chrome and the 404 rule for conferences without a wall (§4.1); `/admin/photo-wall` with Set up, the Posting (Open/Paused) and Sponsor strip switches, the links with the posting QR (§10); the nav entry; `isPostingOpen` (§7). Demo: an organizer sets up the wall, opens and pauses it, and downloads the QR. | —        |
+| M2  | **Composer, phone side only.** `/wall/post` landing and the composer (§6.5) with the 9 baked filters, crop, caption, name, consent line and marketing checkbox, producing the JPEG and fields; no server calls yet (Storybook with mocked actions). Try it on a real iPhone as early as possible (§15). Demo: in Storybook at phone width, a picked photo becomes a filtered ≤ 2048 px JPEG with no EXIF.                           | —        |
+| M3a | **Posting rules, server side.** The cookie (§6.1); the reservation write and the limit counts on the non-CDN client (§6.2, §6.3); the JPEG and field checks (§6.4); each a pure, tested module with executed GROQ and real JPEG files (§14). No route or UI.                                                                                                                                                                        | M1       |
+| M3b | **Posting path.** Start, the upload route and Submit (§6.2) on M3a's modules, the phone's messages (§6.3), the window-closed page, M2's composer wired to them, and a minimal "Waiting for approval" card showing the local photo. Demo: a phone posts and the post is pending in Sanity, with its photo only in the private store.                                                                                                 | M2, M3a  |
+| M4  | **Moderation.** `getModerationQueue`, the queue, tabs, cards, the admin photo route (§5.1), Approve (copy to public), Reject/Remove, Approve all, Delete now with the revision guards and prefix deletes (§5, §10), the live pending count, the tag expiries (§8). Demo (with M3b): an organizer approves a post from a phone and its public URL works; Remove makes it 404 within a minute.                                        | M1       |
+| M5a | **Wall page.** `getWall` (§8); the Wall page (§9.1) with the plain-`<img>` rule (§5.1). Demo: with fixture posts in Storybook, and with M4, an approval appears on a phone within 10 s.                                                                                                                                                                                                                                             | M1       |
+| M5b | **Screen Mode.** Pinboard with arrivals, bursts, idle swaps and removal (§9.2), always-on polling (§8), flaky Wi-Fi (§9.3), the sponsor strip (§9.4), and the analytics and install-prompt exclusions (§9.2). Demo: an approval appears on a running screen within 5 s and a removal leaves it, after more than five minutes untouched.                                                                                             | M5a      |
+| M6  | **My posts and privacy.** `getMyPosts` and the device photo route (§5.1, §8); My posts with statuses, Delete and the marketing switch (§12); the `/privacy` section, cookie row and subprocessor wording; the `PRIVACY_OPERATIONS.md` line. Demo: a contributor deletes their approved post and it leaves the Wall page.                                                                                                            | M3b, M5a |
 
 **After the event:**
 
-| #   | Slice                                                                                                                                                                                                                                                                                                       | After  | Due         |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
-| P1  | **Retention cron and orphan sweep** (§11), the closed states of every page.                                                                                                                                                                                                                                 | M3, M4 | 26 Nov 2026 |
-| P2  | **Automatic Posting Window** (§7).                                                                                                                                                                                                                                                                          | M1     | 12 Nov 2026 |
-| P3  | **Wall Look setting and Mosaic.** `photoWall.look` on the admin page, live on screens; `?look=` on the Screen Mode link; the Mosaic look on the Wall page and Screen Mode, from the prototype (#1478).                                                                                                      | M5     | 12 Nov 2026 |
-| P4  | **Spotlight look**, from the prototype (#1478).                                                                                                                                                                                                                                                             | P3     | 12 Nov 2026 |
-| P5  | **Consented ZIP export.** Download approved posts whose contributor ticked marketing consent, as a ZIP. It must not pass through a function response over 4.5 MB: build it in the browser from the public URLs if Blob serves them with CORS, else write it to the private store and hand out a signed URL. | M4     | 12 Nov 2026 |
-| P6  | **Pending-count badge** on the nav entry (`AdminNavEntry.count`, as Feedback's flagged badge).                                                                                                                                                                                                              | M4     | 12 Nov 2026 |
+| #   | Slice                                                                                                                                                                                                                                                                                                       | After   | Due         |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ----------- |
+| P1  | **Retention cron and orphan sweep** (§11), the closed states of every page.                                                                                                                                                                                                                                 | M3b, M4 | 26 Nov 2026 |
+| P2  | **Automatic Posting Window** (§7).                                                                                                                                                                                                                                                                          | M1      | 12 Nov 2026 |
+| P3  | **Wall Look setting and Mosaic.** `photoWall.look` on the admin page, live on screens; `?look=` on the Screen Mode link; the Mosaic look on the Wall page and Screen Mode, from the prototype (#1478).                                                                                                      | M5b     | 12 Nov 2026 |
+| P4  | **Spotlight look**, from the prototype (#1478).                                                                                                                                                                                                                                                             | P3      | 12 Nov 2026 |
+| P5  | **Consented ZIP export.** Download approved posts whose contributor ticked marketing consent, as a ZIP. It must not pass through a function response over 4.5 MB: build it in the browser from the public URLs if Blob serves them with CORS, else write it to the private store and hand out a signed URL. | M4      | 12 Nov 2026 |
+| P6  | **Pending-count badge** on the nav entry (`AdminNavEntry.count`, as Feedback's flagged badge).                                                                                                                                                                                                              | M4      | 12 Nov 2026 |
 
 ## 14. Verification
 
@@ -579,7 +688,8 @@ parallel, then M6):
   another conference, refuses without reading the blob (assert the read was
   never called) and with the same refusal as an unknown `uploadId`.
 - **The token binds what §6.2 says**, shown on the real `handleUpload` from the
-  installed `@vercel/blob`, not a mock: pathname, content type, size, expiry.
+  installed `@vercel/blob`, not a mock: pathname, content type, size, expiry,
+  no overwrite.
 - **JPEG checks** on real files: a canvas-made JPEG passes; a camera JPEG with
   EXIF, a PNG renamed `.jpg`, a truncated file, a 4096 px image and a 200 px
   image are refused.
@@ -588,6 +698,22 @@ parallel, then M6):
 - **Cookie:** a vitest test asserts the `Set-Cookie` attributes (`Path=/wall`,
   httpOnly, `SameSite=Lax`, expiry on the deletion date) and replays the cookie
   into a second call.
+- **Reservations:** the upload route refuses a pathname without a live
+  reservation of this device, and a fourth Start from one device is refused
+  while three reservations or pending posts are live.
+- **Retry after a lost response:** Submit twice for the same `uploadId`, the
+  second after pausing posting; the second returns success and the photo still
+  exists.
+- **Photo routes:** each refuses a foreign, unknown or `uploading` id with the
+  same 404, without calling `get()`, and answers `private, no-store`.
+- **No `next/image` for Wall Post photos:** a test (or lint rule) fails if a
+  Wall Post photo is rendered through `/_next/image`.
+- **Moderation races** on the real client: Remove racing a re-approval, and
+  Approve racing the contributor's Delete, leave no public copy without an
+  approved document.
+- **Screen Mode keeps polling:** with fake timers, past five idle minutes, an
+  approval still arrives and a removal still leaves; a removed and re-approved
+  post arrives again; Screen Mode sends no analytics request.
 - **Visual:** every new component has a story; captures as in §13.
 
 **Sunday 25 October, on production** (the user; each line is ticked on the
