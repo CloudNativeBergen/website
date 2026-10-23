@@ -147,3 +147,7 @@ _Avoid_: post (what a marketing publishing Task produces), upload, submission, p
 **Screen Mode**:
 The fullscreen presentation of the public Wall page on a venue display.
 _Avoid_: slideshow, kiosk, live wall
+
+**Wall Look**:
+How a Photo Wall is laid out: Pinboard (tilted polaroid cards), Mosaic (photos at their own shape, with a spotlight tile) or Spotlight (one large post at a time). An organizer sets one per Photo Wall; a single screen can show a different one.
+_Avoid_: layout, theme, template (a Plan Template is a marketing term), style
