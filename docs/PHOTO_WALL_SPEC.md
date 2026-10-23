@@ -785,7 +785,7 @@ trial issue):
 4. **Android, Chrome:** take a photo, post; choose one from the gallery, post.
 5. Admin: all four are pending with the whole photo and the crop outline.
    Approve two, reject one.
-6. **Screen:** open `/wall/screen` on a laptop in a private window (no stale
+6. **Screen:** open `/wall/screen` on a laptop in a private window (no left-over
    service worker). The approved posts are there. Approve the rejected one
    from Not shown: it drops in with the "new" mark within about 5 s.
 7. **Remove while the screen runs:** it leaves the screen within about 5 s, and
