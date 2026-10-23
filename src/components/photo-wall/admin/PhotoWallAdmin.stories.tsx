@@ -203,6 +203,12 @@ export const SetUpFailed: Story = {
   },
 }
 
+/**
+ * The mocked answer waits 600 ms, so the default 1 s of a `waitFor` is
+ * tight on a loaded CI runner.
+ */
+const WAIT = { timeout: 5000 }
+
 const TRPC = '/api/trpc/photoWall'
 const trpc = (data: unknown) => HttpResponse.json({ result: { data } })
 let served: PhotoWallAdminView = view(null)
@@ -246,26 +252,30 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     await userEvent.click(canvas.getByRole('radio', { name: 'Open' }))
     // The pressed value shows while the answer is still on its way, and the
     // note says so rather than giving the old mode's reason.
-    await waitFor(() =>
-      expect(canvas.getByRole('status')).toHaveTextContent('Saving…'),
+    await waitFor(
+      () => expect(canvas.getByRole('status')).toHaveTextContent('Saving…'),
+      WAIT,
     )
     await expect(canvas.getByRole('radio', { name: 'Open' })).toBeChecked()
     await expect(
       canvas.getByRole('radiogroup', { name: 'Posting' }),
     ).toHaveAccessibleDescription('Saving…')
-    await waitFor(() =>
-      expect(canvas.getByRole('status')).toHaveTextContent(''),
+    await waitFor(
+      () => expect(canvas.getByRole('status')).toHaveTextContent(''),
+      WAIT,
     )
     // The server's answer: still Open.
     await expect(canvas.getByRole('radio', { name: 'Open' })).toBeChecked()
     await expect(canvas.getByText(/Attendees can post/)).toBeVisible()
     await userEvent.click(canvas.getByRole('switch', { name: 'Sponsor strip' }))
     // Wait for the server's answer, not the pressed value shown meanwhile.
-    await waitFor(() =>
-      expect(canvas.getByRole('status')).toHaveTextContent('Saving…'),
+    await waitFor(
+      () => expect(canvas.getByRole('status')).toHaveTextContent('Saving…'),
+      WAIT,
     )
-    await waitFor(() =>
-      expect(canvas.getByRole('status')).toHaveTextContent(''),
+    await waitFor(
+      () => expect(canvas.getByRole('status')).toHaveTextContent(''),
+      WAIT,
     )
     await expect(
       canvas.getByRole('switch', { name: 'Sponsor strip' }),
