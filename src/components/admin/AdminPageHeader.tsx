@@ -63,7 +63,7 @@ export function AdminPageHeader({
           {backLink && (
             <Link
               href={backLink.href}
-              className="shrink-0 rounded-md p-1 text-gray-500 transition-colors dark:text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+              className="shrink-0 rounded-md p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
               title={backLink.label || 'Back'}
             >
               <ChevronLeftIcon className="h-5 w-5 sm:h-6 sm:w-6" />
