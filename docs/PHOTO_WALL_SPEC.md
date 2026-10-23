@@ -363,10 +363,7 @@ capture="environment">`) and **Choose from your photos** (no `capture`).
   organizers may also use my photo in their own marketing."
 - **Post to the wall** runs Start → Upload (with progress) → Submit, then shows
   My posts with the new card on top, "Waiting for approval".
-- **Retries on venue Wi-Fi:** a Submit whose response was lost (a network error, not a refusal) is retried with the same `uploadId` (Submit is idempotent). A Submit that answers with a refusal has already deleted its reservation, so the composer keeps the photo and fields, shows the message, and the next press starts over with Start. An Upload that fails because the blob
-  already exists (`allowOverwrite: false`, the first attempt's response was
-  lost) goes on to Submit, which checks the blob is there; only a failed Start
-  starts over.
+- **Retries on venue Wi-Fi:** a Submit whose response was lost (a network error, not a refusal) is retried with the same `uploadId` (Submit is idempotent). A Submit that answers with a refusal has already deleted its reservation, so the composer keeps the photo and fields, shows the message, and the next press starts over with Start. **Any** failed Upload after a token was minted goes on to Submit (this SDK has no distinct error for an overwrite refusal): Submit's existence check (§6.4) decides, and its refusal starts the next press over from Start.
 - **Outside the Posting Window** the page shows only "The wall isn't open for
   photos right now." and **See the wall**, plus My posts.
 
@@ -473,8 +470,7 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
   and a Screen Wake Lock where the browser supports it.
 - **No analytics and no install prompt.** Leaving the site chrome out isn't
   enough: the root layout (`src/app/layout.tsx`) renders `VercelInsights`,
-  `TenantAnalytics` and the PWA `InstallPrompt` on every route. Four places, each by its own mechanism: `VercelInsights`'
-  `beforeSend` returns `null` for `/wall/screen` (on `/f` it only redacts);
+  `TenantAnalytics` and the PWA `InstallPrompt` on every route. Five places, each by its own mechanism: in `VercelInsights`, **both** `<Analytics beforeSend>` and `<SpeedInsights beforeSend>` return `null` for `/wall/screen` (on `/f` Analytics only redacts);
   `EXCLUDED_PATH_PREFIXES` in `src/lib/posthog/config.ts` gains
   `/wall/screen`, which also keeps `AnalyticsConsentBar` off the screen; Pirsch
   and `InstallPrompt` are hidden as `HiddenOnFeedbackPage` hides them on `/f`.
@@ -570,6 +566,10 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
     approves the posts pending when pressed, four at a time, within a 30 s
     budget, and reports how many it approved; pressing again finishes the
     rest.
+- **Allowed from-states:** Approve from `pending` or `notShown`; Reject from
+  `pending`; Remove from `approved`; Delete (now) from any status. A
+  `deleting` card offers only **Try again** (Delete). Any other combination is
+  refused before any Blob call.
 - **Every transition is guarded with `ifRevisionId`** against the non-CDN read
   it was decided from, so two organizers (or an organizer and the contributor)
   can't interleave. On a revision conflict the server re-reads once: if the
@@ -600,9 +600,7 @@ From [Decide the Photo Wall window, retention, consent and erasure](https://gith
 - A daily cron (`vercel.json`, authenticated with `CRON_SECRET` like
   `/api/cron/cleanup-notifications`) handles every `photoWall` whose deletion date is **tomorrow or earlier** and `purgedAt` is unset:
   1. **close it to writes first:** set `closedAt` (if unset) and expire the
-     tags. `isPostingOpen` is false and every moderation action refuses once
-     `closedAt` is set, whatever `postingMode` says, and Submit and Approve
-     re-check it just before their final commit;
+     tags. `isPostingOpen` is false and Approve refuses once `closedAt` is set, whatever `postingMode` says, and Submit and Approve re-check it just before their final commit. **Delete (both kinds) stays allowed**, so an abusive photo can still be taken down. From `closedAt` on, `getWall` returns no posts and the pages show "This wall has closed.";
   2. purge only walls whose deletion date is **today or earlier** and whose `closedAt` is more than 15 minutes old (an upload token lives 10 minutes). Closing the day before means the purge runs **on** the deletion date; the wall shows "This wall has closed" from the day before;
   3. hard-delete every `wallPost` of the conference (Not shown included) and
      every blob under `photo-wall/<conferenceId>/` in **both** stores;
@@ -610,8 +608,7 @@ From [Decide the Photo Wall window, retention, consent and erasure](https://gith
 - Re-running is safe: an interrupted run leaves `purgedAt` unset, so the next
   run repeats step 3. `closedAt` means "closed to writes", `purgedAt` means
   "deletion done".
-- After it runs, the Wall page, the composer and Screen Mode say "This wall has
-  closed."
+- The closed pages key on `closedAt`, not `purgedAt` (step 1).
 
 ### 11.2 Orphan sweep (slice P1)
 
@@ -652,7 +649,7 @@ of the conference and both stores' `photo-wall/<conferenceId>/` prefix).
   3. delete the document.
 
   If step 2 fails, the document stays `deleting` and the card (in My posts, and
-  on the admin page) says "Couldn't delete. Try again."; Delete accepts a `deleting` post, so pressing again finishes it. **One module (`deleteWallPost`, slice M4b)** implements this; the organizer's Delete now and the contributor's Delete (M6) both call it. The sweep (§11.2) also
+  on the admin page) says "Couldn't delete. Try again."; Delete accepts a `deleting` post, so pressing again finishes it. **One module (`deleteWallPost`, slice M4b)** implements this; the organizer's Delete now and the contributor's Delete (M6) both call it. The module **never expires tags**: each caller does, per §8 (`revalidateTag(tag, { expire: 0 })` from the tRPC mutation, `updateTag` from the Server Action). The sweep (§11.2) also
   finishes `deleting` posts older than an hour.
 
 - **Lost cookie:** contact the organizers, describing the photo. They use
@@ -747,7 +744,7 @@ can be tried on a preview.
 - **Reservations:** the upload route refuses a pathname without a live
   reservation of this device, and a fourth Start from one device is refused
   while three reservations or pending posts are live.
-- **Reservation cleanup transaction:** a test asserts the real client's `serialize()` puts the `ifRevisionID` patch and the delete in **one** transaction. The installed `@sanity/mutator` ignores `ifRevisionID` (`__tests__/helpers/versionedSanityStore.ts`), so the conflict path is a modelled race test, and Sanity's all-or-nothing transaction semantics stay **unverified** here (no writable scratch dataset); the PR says so.
+- **Reservation cleanup transaction:** a test asserts the real client's `serialize()` puts the `ifRevisionID` patch and the delete in **one** transaction. The installed `@sanity/mutator` ignores `ifRevisionID`; the repo helper `__tests__/helpers/versionedSanityStore.ts` models Sanity's whole-transaction refusal on a revision mismatch, so the conflict path is proven on that helper. Sanity's all-or-nothing semantics themselves stay a documented guarantee CI can't falsify (no writable scratch dataset); the PR says so.
 - **Screen Mode finds and accepts a service-worker update** without a click, focus or visibility change (fake timers past 10 minutes).
 - **Retry after a lost response:** Submit twice for the same `uploadId`, the
   second after pausing posting; the second returns success and the photo still
