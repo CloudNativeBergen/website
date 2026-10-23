@@ -106,6 +106,12 @@ describe('photoWall.settings', () => {
     expect(view.wall).toBeNull()
   })
 
+  it("does not count a wall with this conference's id that belongs to another", async () => {
+    // Only the tenant predicate tells this one apart: the id matches.
+    store().reset([{ ...wallOf('conf-A'), conference: ref('conf-B') }])
+    expect((await organizer().settings()).wall).toBeNull()
+  })
+
   it('reads a missing mode as Paused and a missing strip as off', async () => {
     store().reset([wallOf('conf-A')])
     const view = await organizer().settings()
@@ -178,6 +184,15 @@ describe('photoWall.updateSettings (§10)', () => {
     const view = await organizer().updateSettings({ postingMode: 'paused' })
     expect(store().doc('photoWall-conf-A')?.postingMode).toBe('paused')
     expect(view.wall?.postingMode).toBe('paused')
+  })
+
+  it('answers with the wall as stored, including a change that landed meanwhile', async () => {
+    // Another organizer switches the strip on between the read and the patch.
+    store().beforeNextCommit(() =>
+      store().put({ ...store().doc('photoWall-conf-A')!, sponsorStrip: true }),
+    )
+    const view = await organizer().updateSettings({ postingMode: 'open' })
+    expect(view.wall).toMatchObject({ postingMode: 'open', sponsorStrip: true })
   })
 
   it('switches the sponsor strip and leaves the mode alone', async () => {

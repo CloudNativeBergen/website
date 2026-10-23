@@ -66,6 +66,16 @@ describe.each(ROUTES)('%s', (_path, Page) => {
     await expect(Page()).rejects.toMatchObject(NOT_FOUND)
   })
 
+  it("is 404 when this conference's wall id belongs to another conference", async () => {
+    h.store!.reset([
+      {
+        ...wallOf('conf-A'),
+        conference: { _type: 'reference', _ref: 'conf-B' },
+      },
+    ])
+    await expect(Page()).rejects.toMatchObject(NOT_FOUND)
+  })
+
   it('renders once the conference has a Photo Wall', async () => {
     h.store!.reset([wallOf('conf-A')])
     await expect(Page()).resolves.toBeTruthy()

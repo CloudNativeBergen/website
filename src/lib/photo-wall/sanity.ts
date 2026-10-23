@@ -62,8 +62,8 @@ export async function setUpPhotoWall(conferenceId: string): Promise<PhotoWall> {
 }
 
 /**
- * Change the wall's settings. Null, writing nothing, when the conference has
- * no wall.
+ * Change the wall's settings, answering with the wall as stored. Null,
+ * writing nothing, when the conference has no wall.
  */
 export async function updatePhotoWallSettings(
   conferenceId: string,
@@ -72,5 +72,6 @@ export async function updatePhotoWallSettings(
   const wall = await readPhotoWall(conferenceId)
   if (!wall) return null
   await clientWrite.patch(wall._id).set(changes).commit()
-  return { ...wall, ...changes }
+  // Read again: another organizer's change may have landed meanwhile.
+  return readPhotoWall(conferenceId)
 }

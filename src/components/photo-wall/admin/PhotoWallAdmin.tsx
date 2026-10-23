@@ -70,12 +70,20 @@ export function PhotoWallAdmin({
       {wall ? (
         <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
           <section aria-labelledby="photo-wall-settings" className={CARD}>
-            <h2
-              id="photo-wall-settings"
-              className="text-base font-semibold text-gray-900 dark:text-white"
-            >
-              Settings
-            </h2>
+            <div className="flex items-baseline justify-between gap-4">
+              <h2
+                id="photo-wall-settings"
+                className="text-base font-semibold text-gray-900 dark:text-white"
+              >
+                Settings
+              </h2>
+              <p
+                role="status"
+                className="text-sm text-gray-500 dark:text-gray-400"
+              >
+                {saving ? 'Saving…' : ''}
+              </p>
+            </div>
             <div className="mt-4 divide-y divide-gray-200 dark:divide-gray-700">
               <PostingSetting
                 mode={wall.postingMode}
@@ -166,6 +174,7 @@ function PostingSetting({
 }) {
   const labelId = useId()
   const noteId = useId()
+  const name = useId()
   const note = POSTING_NOTES[state]
   return (
     <div className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-start sm:justify-between">
@@ -187,6 +196,7 @@ function PostingSetting({
           {note.text}
         </p>
       </div>
+      {/* Native radios: arrow keys move between them, and one tab stop. */}
       <div
         role="radiogroup"
         aria-labelledby={labelId}
@@ -196,14 +206,11 @@ function PostingSetting({
         {MODES.map((m) => {
           const checked = m.value === mode
           return (
-            <button
+            <label
               key={m.value}
-              type="button"
-              role="radio"
-              aria-checked={checked}
-              disabled={saving}
-              onClick={() => !checked && onChange(m.value)}
-              className={`min-h-9 min-w-20 rounded-md px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-wait ${
+              className={`flex min-h-9 min-w-20 items-center justify-center rounded-md px-3 text-sm font-semibold has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-brand-cloud-blue ${
+                saving ? 'cursor-wait' : 'cursor-pointer'
+              } ${
                 checked
                   ? m.value === 'open'
                     ? 'bg-green-600 text-white shadow-xs'
@@ -211,8 +218,19 @@ function PostingSetting({
                   : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
               }`}
             >
+              <input
+                type="radio"
+                name={name}
+                value={m.value}
+                checked={checked}
+                // Not `disabled`: that would drop focus from the radio just
+                // chosen. While a save runs, a choice changes nothing.
+                aria-disabled={saving || undefined}
+                onChange={() => !saving && onChange(m.value)}
+                className="sr-only"
+              />
               {m.label}
-            </button>
+            </label>
           )
         })}
       </div>
@@ -253,10 +271,12 @@ function SponsorStripSetting({
         aria-checked={on}
         aria-labelledby={labelId}
         aria-describedby={noteId}
-        disabled={saving}
-        onClick={() => onChange(!on)}
+        // Not `disabled`, which would drop focus; a press while saving
+        // changes nothing.
+        aria-disabled={saving || undefined}
+        onClick={() => !saving && onChange(!on)}
         // 44×24 to look at; the `after` box makes the touch target 44×44.
-        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-wait ${
+        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:cursor-wait ${
           on
             ? 'bg-brand-cloud-blue dark:bg-indigo-500'
             : 'bg-gray-300 dark:bg-gray-600'

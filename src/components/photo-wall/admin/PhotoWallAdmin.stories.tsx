@@ -94,6 +94,32 @@ export const Paused: Story = {
     await expect(args.onChange).toHaveBeenLastCalledWith({ sponsorStrip: true })
   },
 }
+/** The radios are native: one tab stop, arrow keys choose. */
+export const PausedKeyboard: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.tab()
+    await expect(canvas.getByRole('radio', { name: 'Paused' })).toHaveFocus()
+    await userEvent.keyboard('{ArrowLeft}')
+    await expect(args.onChange).toHaveBeenCalledWith({ postingMode: 'open' })
+  },
+}
+
+/** A save on its way: says so, keeps focus, and ignores another press. */
+export const Saving: Story = {
+  args: { saving: true },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('status')).toHaveTextContent('Saving…')
+    const strip = canvas.getByRole('switch', { name: 'Sponsor strip' })
+    await userEvent.click(strip)
+    await expect(strip).toHaveFocus()
+    await userEvent.click(canvas.getByRole('radio', { name: 'Open' }))
+    await expect(args.onChange).not.toHaveBeenCalled()
+    await expect(canvas.getByRole('radio', { name: 'Paused' })).toBeChecked()
+  },
+}
+
 export const PausedDark: Story = { globals: { theme: 'dark' } }
 export const PausedPhone: Story = { parameters: PHONE }
 export const PausedPhoneDark: Story = {
