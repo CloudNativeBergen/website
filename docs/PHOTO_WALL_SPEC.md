@@ -121,21 +121,21 @@ appearing on every tenant's domain the day this ships.
 
 ### 4.2 `wallPost`
 
-| Field              | Type                                                                 | Notes                                                                                                                                                                                                                                                                                  |
-| ------------------ | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `_id`              | `wallPost-<uploadId>`                                                | `uploadId` is the UUID v4 in the upload's pathname (§6.2), so a double submit converges on one document.                                                                                                                                                                               |
-| `conference`       | reference → `conference`, required                                   |                                                                                                                                                                                                                                                                                        |
-| `status`           | `'uploading' \| 'pending' \| 'approved' \| 'notShown' \| 'deleting'` | **Not shown** covers both Reject and Remove (#1479). `uploading` is the reservation Start writes (§6.2); it isn't a Wall Post yet, and no list, count or page shows it except the limits. `deleting` marks a Delete in progress (§12); only its contributor and the admin page see it. |
-| `photo`            | object                                                               | `pathname` (private store), `publicUrl` (set only while approved), `width`, `height`, `bytes`. Its own object, so a later video can sit beside it.                                                                                                                                     |
-| `crop`             | `{ x: number, y: number }`, each 0–1                                 | The square crop's position (CSS `object-position` semantics) on the whole photo. The square's side is the photo's short edge; there is no zoom.                                                                                                                                        |
-| `caption`          | string ≤ 80, optional                                                | Normalised on the server (§6.4).                                                                                                                                                                                                                                                       |
-| `name`             | string ≤ 40, optional                                                |                                                                                                                                                                                                                                                                                        |
-| `marketingConsent` | boolean                                                              | The optional checkbox (#1480). The contributor can untick it later.                                                                                                                                                                                                                    |
-| `deviceKey`        | string                                                               | §6.1. Never the raw cookie token.                                                                                                                                                                                                                                                      |
-| `startedAt`        | datetime                                                             | When Start wrote the reservation. Server time.                                                                                                                                                                                                                                         |
-| `submittedAt`      | datetime                                                             | When Submit accepted it. Server time.                                                                                                                                                                                                                                                  |
-| `approvedAt`       | datetime                                                             | Set on every approval (also re-approval from Not shown). Orders the wall: newest approval first.                                                                                                                                                                                       |
-| `decidedAt`        | datetime                                                             | Last Approve, Reject or Remove.                                                                                                                                                                                                                                                        |
+| Field              | Type                                                                 | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_id`              | `wallPost-<uploadId>`                                                | `uploadId` is the UUID v4 in the upload's pathname (§6.2), so a double submit converges on one document.                                                                                                                                                                                                                                                                                                                                          |
+| `conference`       | reference → `conference`, required                                   |                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `status`           | `'uploading' \| 'pending' \| 'approved' \| 'notShown' \| 'deleting'` | **Not shown** covers both Reject and Remove (#1479). `uploading` is the reservation Start writes (§6.2); it isn't a Wall Post yet, and no list, count or page shows it except the limits. `deleting` marks a Delete in progress (§12): the admin page shows it in **Not shown** and My posts shows the card, both with "Couldn't delete. Try again.". `cleaning` exists only inside the reservation-cleanup transaction (§6.2) and is never seen. |
+| `photo`            | object                                                               | `pathname` (private store), `publicUrl` (set only while approved), `width`, `height`, `bytes`. Its own object, so a later video can sit beside it.                                                                                                                                                                                                                                                                                                |
+| `crop`             | `{ x: number, y: number }`, each 0–1                                 | The square crop's position (CSS `object-position` semantics) on the whole photo. The square's side is the photo's short edge; there is no zoom.                                                                                                                                                                                                                                                                                                   |
+| `caption`          | string ≤ 80, optional                                                | Normalised on the server (§6.4).                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `name`             | string ≤ 40, optional                                                |                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `marketingConsent` | boolean                                                              | The optional checkbox (#1480). The contributor can untick it later.                                                                                                                                                                                                                                                                                                                                                                               |
+| `deviceKey`        | string                                                               | §6.1. Never the raw cookie token.                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `startedAt`        | datetime                                                             | When Start wrote the reservation. Server time.                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `submittedAt`      | datetime                                                             | When Submit accepted it. Server time.                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `approvedAt`       | datetime                                                             | Set on every approval (also re-approval from Not shown). Orders the wall: newest approval first.                                                                                                                                                                                                                                                                                                                                                  |
+| `decidedAt`        | datetime                                                             | Last Approve, Reject or Remove.                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 Studio shows both types read-only (organizers moderate on the admin page, not
 in Studio). _Implementation detail._
@@ -260,8 +260,7 @@ device key>/<UUID v4>.jpg`;
    The token binds that **pathname**, `allowedContentTypes: ['image/jpeg']`,
    `maximumSizeInBytes: 4 MiB` (4,194,304 bytes), `validUntil: now + 10 min`,
    `addRandomSuffix: false` and `allowOverwrite: false`, and is passed the
-   private store's token. `onUploadCompleted` does nothing: it doesn't fire for
-   local development, and no rule here depends on it.
+   private store's token. **Omit `onUploadCompleted`:** defining it makes Vercel call the route back without the cookie, which the route refuses, and the callback is retried. No rule here depends on it.
 
    Without a reservation there is no token, and reservations count against the
    limits (§6.3), so a script that skips Start can't mint tokens, and one that
@@ -364,6 +363,11 @@ capture="environment">`) and **Choose from your photos** (no `capture`).
   organizers may also use my photo in their own marketing."
 - **Post to the wall** runs Start → Upload (with progress) → Submit, then shows
   My posts with the new card on top, "Waiting for approval".
+- **Retries on venue Wi-Fi:** a failed Submit is retried with the same
+  `uploadId` (Submit is idempotent). An Upload that fails because the blob
+  already exists (`allowOverwrite: false`, the first attempt's response was
+  lost) goes on to Submit, which checks the blob is there; only a failed Start
+  starts over.
 - **Outside the Posting Window** the page shows only "The wall isn't open for
   photos right now." and **See the wall**, plus My posts.
 
@@ -379,8 +383,7 @@ checked in §14):
 - Apply the filter to the resized pixels, then `canvas.toBlob('image/jpeg',
 0.85)`; if the result is over 4 MiB, retry at 0.7. The re-encode drops the
   camera's EXIF and GPS and turns HEIC into JPEG.
-- **Then strip every APPn segment except APP0 from the encoded bytes** (a
-  marker walk, no decoder). Safari's canvas encoder may write a minimal Exif
+- **Then strip every APPn segment except APP0 from the encoded bytes** (a marker walk, no decoder), and upload `new Blob([bytes], { type: 'image/jpeg' })` so the token's content type matches. Safari's canvas encoder may write a minimal Exif
   APP1 of its own (unverified); without this step the server's no-APP1 rule
   (§6.4) would refuse every iPhone post. M2 inspects a real iPhone's output
   for APP1 and keeps a Safari-made sample as a test fixture.
@@ -471,10 +474,18 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
   and a Screen Wake Lock where the browser supports it.
 - **No analytics and no install prompt.** Leaving the site chrome out isn't
   enough: the root layout (`src/app/layout.tsx`) renders `VercelInsights`,
-  `TenantAnalytics` and the PWA `InstallPrompt` on every route. Exclude
-  `/wall/screen` from all three, the way `/f` is excluded (PostHog's path list
-  in `src/lib/posthog/config.ts`, `HiddenOnFeedbackPage`), and test that
-  Screen Mode sends no analytics request. _Refinement (spec):_ a venue screen
+  `TenantAnalytics` and the PWA `InstallPrompt` on every route. Four places, each by its own mechanism: `VercelInsights`'
+  `beforeSend` returns `null` for `/wall/screen` (on `/f` it only redacts);
+  `EXCLUDED_PATH_PREFIXES` in `src/lib/posthog/config.ts` gains
+  `/wall/screen`, which also keeps `AnalyticsConsentBar` off the screen; Pirsch
+  and `InstallPrompt` are hidden as `HiddenOnFeedbackPage` hides them on `/f`.
+  Test that Screen Mode sends no analytics request.
+- **No update banner.** `ServiceWorkerRegistrar` (`src/app/layout.tsx`) shows
+  `UpdateBanner` after a deploy and waits for a click, which nobody gives a
+  venue screen. On `/wall/screen` it accepts the update by itself (post
+  `SKIP_WAITING`, then reload), so a screen picks up Monday fixes without
+  anyone touching it. A private window doesn't avoid this: the service worker
+  registers there too. _Refinement (spec):_ a venue screen
   polling for days would otherwise count as one endless visit.
 - Conference logo (`logoBright`) and brand accents (`theme.primaryColor`,
   falling back to the default theme) from the tenant's branding.
@@ -571,8 +582,7 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   (`status: approved`, `publicUrl`, `approvedAt`, `decidedAt`). If the patch
   fails for good, it deletes the copy it just made.
 - **Reject** (from Pending) patches `status: notShown`; there is no public copy.
-- **Remove** (from On the wall) deletes the revision's `publicUrl` first
-  (retried once), then patches `status: notShown` and unsets `publicUrl`. If
+- **Remove** (from On the wall) deletes the revision's `publicUrl` first (retried once; a not-found from `del()` counts as success, which M4b proves once against the real store), then patches `status: notShown` and unsets `publicUrl`. If
   the delete fails, nothing is patched and the card says "Couldn't remove.
   Try again."; the post stays on the wall until it succeeds. If the patch
   fails after the delete, the post shows as a missing image, which Screen Mode
@@ -639,7 +649,7 @@ of the conference and both stores' `photo-wall/<conferenceId>/` prefix).
   button (inline confirm: "Delete this photo? It's removed from the wall and
   can't be undone.") and a **Marketing** switch.
 - **Delete** is permanent and immediate, in three steps:
-  1. a revision-guarded patch to `status: 'deleting'`: the post leaves the wall
+  1. a revision-guarded patch to `status: 'deleting'` (on a conflict, re-read once and retry; Delete accepts every status): the post leaves the wall
      on the next poll, and a racing Approve's guarded patch fails and deletes
      its own copy (§10);
   2. delete every blob in both stores under the post's prefix (§5), retried
@@ -647,8 +657,7 @@ of the conference and both stores' `photo-wall/<conferenceId>/` prefix).
   3. delete the document.
 
   If step 2 fails, the document stays `deleting` and the card (in My posts, and
-  on the admin page) says "Couldn't delete. Try again."; Delete accepts a
-  `deleting` post, so pressing again finishes it. The sweep (§11.2) also
+  on the admin page) says "Couldn't delete. Try again."; Delete accepts a `deleting` post, so pressing again finishes it. **One module (`deleteWallPost`, slice M4b)** implements this; the organizer's Delete now and the contributor's Delete (M6) both call it. The sweep (§11.2) also
   finishes `deleting` posts older than an hour.
 
 - **Lost cookie:** contact the organizers, describing the photo. They use
@@ -693,20 +702,20 @@ dark-mode mechanism checked, per `AGENTS.md`. Every new tRPC endpoint is mocked
 in the affected UI tests and the mutation-surface snapshots are updated.
 
 **Monday cut.** Build order: M1 and M2 at once; then M3a, M4a and M5a; then M3b, M4b
-and M5b; then M6. The private Blob store (§5) is the user's step before M3b
+and M5b; then M6 (after M3b, M4b, M5a). The private Blob store (§5) is the user's step before M3b
 can be tried on a preview.
 
-| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                               | After    |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| M1  | **Wall setup and admin shell.** Both document types (§4); the `src/app/(public)/wall/` route group with its minimal chrome and the 404 rule for conferences without a wall (§4.1); `/admin/photo-wall` with Set up, the Posting (Open/Paused) and Sponsor strip switches, the links with the posting QR (§10); the nav entry; `isPostingOpen` (§7). Demo: an organizer sets up the wall, opens and pauses it, and downloads the QR. | —        |
-| M2  | **Composer, phone side only.** `/wall/post` landing and the composer (§6.5) with the 9 baked filters, crop, caption, name, consent line and marketing checkbox, producing the JPEG and fields; no server calls yet (Storybook with mocked actions). Try it on a real iPhone as early as possible (§15). Demo: in Storybook at phone width, a picked photo becomes a filtered ≤ 2048 px JPEG with no EXIF.                           | —        |
-| M3a | **Posting rules, server side.** The cookie (§6.1); the reservation write and the limit counts on the non-CDN client (§6.2, §6.3); the JPEG and field checks (§6.4); each a pure, tested module with executed GROQ and real JPEG files (§14). No route or UI.                                                                                                                                                                        | M1       |
-| M3b | **Posting path.** Start, the upload route and Submit (§6.2) on M3a's modules, the phone's messages (§6.3), the window-closed page, M2's composer wired to them, and a minimal "Waiting for approval" card showing the local photo. Demo: a phone posts and the post is pending in Sanity, with its photo only in the private store.                                                                                                 | M2, M3a  |
-| M4a | **Moderation, read side.** `getModerationQueue` (§8), the admin photo route (§5.1), tabs, cards and the live pending count (§10). Demo: an organizer sees pending posts with the whole photo and the crop outline on a phone.                                                                                                                                                                                                       | M1       |
-| M4b | **Moderation actions.** Approve (copy to public), Reject, Remove, Approve all and Delete now with the revision guards, exact-copy and prefix deletes and their failure paths (§5, §10, §12), the tag expiries (§8), the race tests (§14). Demo (with M3b): an organizer approves a post from a phone and its public URL works; Remove makes it 404 within a minute.                                                                 | M3a, M4a |
-| M5a | **Wall page.** `getWall` (§8); the Wall page (§9.1) with the plain-`<img>` rule (§5.1). Demo: with fixture posts in Storybook, and with M4b, an approval appears on a phone within 10 s.                                                                                                                                                                                                                                            | M1       |
-| M5b | **Screen Mode.** Pinboard with arrivals, bursts, idle swaps and removal (§9.2), always-on polling (§8), flaky Wi-Fi (§9.3), the sponsor strip (§9.4), and the analytics and install-prompt exclusions (§9.2). Demo: an approval appears on a running screen within 5 s and a removal leaves it, after more than five minutes untouched.                                                                                             | M5a      |
-| M6  | **My posts and privacy.** `getMyPosts` and the device photo route (§5.1, §8); My posts with statuses, Delete and the marketing switch (§12); the `/privacy` section, cookie row and subprocessor wording; the `PRIVACY_OPERATIONS.md` line. Demo: a contributor deletes their approved post and it leaves the Wall page.                                                                                                            | M3b, M5a |
+| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                               | After         |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| M1  | **Wall setup and admin shell.** Both document types (§4); the `src/app/(public)/wall/` route group with its minimal chrome and the 404 rule for conferences without a wall (§4.1); `/admin/photo-wall` with Set up, the Posting (Open/Paused) and Sponsor strip switches, the links with the posting QR (§10); the nav entry; `isPostingOpen` (§7). Demo: an organizer sets up the wall, opens and pauses it, and downloads the QR. | —             |
+| M2  | **Composer, phone side only.** `/wall/post` landing and the composer (§6.5) with the 9 baked filters, crop, caption, name, consent line and marketing checkbox, producing the JPEG and fields; no server calls yet (Storybook with mocked actions). Try it on a real iPhone as early as possible (§15). Demo: in Storybook at phone width, a picked photo becomes a filtered ≤ 2048 px JPEG with no EXIF.                           | —             |
+| M3a | **Posting rules, server side.** The cookie (§6.1); the reservation write and the limit counts on the non-CDN client (§6.2, §6.3); the JPEG and field checks (§6.4); each a pure, tested module with executed GROQ and real JPEG files (§14). No route or UI.                                                                                                                                                                        | M1            |
+| M3b | **Posting path.** Start, the upload route and Submit (§6.2) on M3a's modules, the phone's messages (§6.3), the window-closed page, M2's composer wired to them, and a minimal "Waiting for approval" card showing the local photo. Demo: a phone posts and the post is pending in Sanity, with its photo only in the private store.                                                                                                 | M2, M3a       |
+| M4a | **Moderation, read side.** `getModerationQueue` (§8), the admin photo route (§5.1), tabs, cards and the live pending count (§10). Demo: an organizer sees pending posts with the whole photo and the crop outline on a phone.                                                                                                                                                                                                       | M1            |
+| M4b | **Moderation actions.** Approve (copy to public), Reject, Remove, Approve all and Delete now with the revision guards, exact-copy and prefix deletes and their failure paths (§5, §10, §12), the tag expiries (§8), the race tests (§14). Demo (with M3b): an organizer approves a post from a phone and its public URL works; Remove makes it 404 within a minute.                                                                 | M3a, M4a      |
+| M5a | **Wall page.** `getWall` (§8); the Wall page (§9.1) with the plain-`<img>` rule (§5.1). Demo: with fixture posts in Storybook, and with M4b, an approval appears on a phone within 10 s.                                                                                                                                                                                                                                            | M1            |
+| M5b | **Screen Mode.** Pinboard with arrivals, bursts, idle swaps and removal (§9.2), always-on polling (§8), flaky Wi-Fi (§9.3), the sponsor strip (§9.4), and the analytics and install-prompt exclusions (§9.2). Demo: an approval appears on a running screen within 5 s and a removal leaves it, after more than five minutes untouched.                                                                                             | M5a           |
+| M6  | **My posts and privacy.** `getMyPosts` and the device photo route (§5.1, §8); My posts with statuses, Delete (calling M4b's `deleteWallPost`) and the marketing switch (§12); the `/privacy` section, cookie row and subprocessor wording; the `PRIVACY_OPERATIONS.md` line. Demo: a contributor deletes their approved post and it leaves the Wall page.                                                                           | M3b, M4b, M5a |
 
 **After the event:**
 
@@ -743,6 +752,11 @@ can be tried on a preview.
 - **Reservations:** the upload route refuses a pathname without a live
   reservation of this device, and a fourth Start from one device is refused
   while three reservations or pending posts are live.
+- **Reservation cleanup transaction** (`ifRevisionId` patch + delete of the
+  same document) is shown to fail as a whole when the revision moved, on the
+  real `@sanity/mutator` against the built transaction's `serialize()` (the
+  repo's precedent for transactions; there is no writable scratch dataset).
+- **Screen Mode accepts a service-worker update** without a click.
 - **Retry after a lost response:** Submit twice for the same `uploadId`, the
   second after pausing posting; the second returns success and the photo still
   exists.
@@ -800,8 +814,13 @@ screen off; nothing else depends on the wall.
 
 ## 15. Known gaps and risks
 
-- **An Approve that loses to a Delete and then fails to delete its own new
-  copy** leaves one public photo with no document. Its URL (random suffix) was
+- **A crash between Approve's `put()` and its patch** leaves a public copy of
+  a photo that was never approved. Same reasoning as the next item: the URL was
+  never stored or shown; the sweep or the manual purge removes it.
+- **Screens on long outages:** with `max-age=60`, an idle swap to a post whose
+  image isn't in memory fails after a minute offline and is skipped; the cards
+  already on screen stay.
+- **An Approve that loses to a Delete and then fails to delete its own new copy** leaves one public photo with no document. Its URL (random suffix) was
   never stored or shown anywhere, so nobody can find it; the sweep (§11.2) or
   the manual purge removes it. Accepted for Monday.
 - **The limits are soft against a script.** Concurrent Starts from one cookie
