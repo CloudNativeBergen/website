@@ -142,7 +142,9 @@ function SetUp({
         type="button"
         onClick={onSetUp}
         disabled={saving}
-        className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-md bg-brand-cloud-blue px-4 text-sm font-semibold text-white shadow-xs hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-wait disabled:opacity-60 dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:focus-visible:outline-indigo-400"
+        // Tenant-branded: `bg-brand-cloud-blue` is an unlayered rule (light
+        // and dark), so hover dims it rather than recolouring it.
+        className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-md bg-brand-cloud-blue px-4 text-sm font-semibold text-white shadow-xs hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-wait disabled:opacity-60 dark:focus-visible:outline-indigo-400"
       >
         <PhotoIcon className="size-5" aria-hidden="true" />
         {saving ? 'Setting up…' : 'Set up the Photo Wall'}
