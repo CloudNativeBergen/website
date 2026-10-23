@@ -77,8 +77,17 @@ function QrCode({ url }: { url: string }) {
   )
 }
 
-/** Copy a URL, saying whether it worked; reused by the Photo Wall admin. */
-export function CopyLinkButton({ url }: { url: string }) {
+/**
+ * Copy a URL, saying whether it worked; reused by the Photo Wall admin.
+ * `describedBy` names which link it copies where several share a page.
+ */
+export function CopyLinkButton({
+  url,
+  describedBy,
+}: {
+  url: string
+  describedBy?: string
+}) {
   const [result, setResult] = useState<'copied' | 'failed' | null>(null)
   // "Copied" fades; the failure stays, since it tells the speaker what to do.
   useEffect(() => {
@@ -90,6 +99,7 @@ export function CopyLinkButton({ url }: { url: string }) {
     <>
       <button
         type="button"
+        aria-describedby={describedBy}
         onClick={() =>
           // `clipboard` is absent outside a secure context, and writeText can be
           // refused; either way the URL stays visible to copy by hand.

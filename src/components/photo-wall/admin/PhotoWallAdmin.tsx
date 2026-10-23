@@ -359,6 +359,7 @@ function PostingLink({ url }: { url: string }) {
   // Drawn as the download is, so the organizer sees what they get.
   const { src, failed: drawFailed } = useFeedbackQrPng(url, 352)
   const [downloadFailed, setDownloadFailed] = useState(false)
+  const titleId = useId()
   const download = () => {
     setDownloadFailed(false)
     renderFeedbackQrPng(url)
@@ -383,7 +384,10 @@ function PostingLink({ url }: { url: string }) {
         )}
       </div>
       <div className="min-w-0 space-y-2">
-        <p className="text-sm font-medium text-gray-900 dark:text-white">
+        <p
+          id={titleId}
+          className="text-sm font-medium text-gray-900 dark:text-white"
+        >
           Posting link
         </p>
         <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -391,11 +395,16 @@ function PostingLink({ url }: { url: string }) {
         </p>
         <DisplayUrl url={url} />
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={download} className={BUTTON}>
+          <button
+            type="button"
+            onClick={download}
+            aria-describedby={titleId}
+            className={BUTTON}
+          >
             <ArrowDownTrayIcon className="size-4" aria-hidden="true" />
             Download QR (PNG)
           </button>
-          <CopyLinkButton url={url} />
+          <CopyLinkButton url={url} describedBy={titleId} />
         </div>
         {downloadFailed && (
           <p role="alert" className="text-sm text-red-700 dark:text-red-400">
@@ -416,19 +425,31 @@ function LinkRow({
   note: string
   url: string
 }) {
+  // Three Copy buttons and two Open links share a name: each is described
+  // by its row's title, so a screen reader can tell them apart.
+  const titleId = useId()
   return (
     <div className="space-y-2 border-t border-gray-200 pt-4 dark:border-gray-700">
-      <p className="text-sm font-medium text-gray-900 dark:text-white">
+      <p
+        id={titleId}
+        className="text-sm font-medium text-gray-900 dark:text-white"
+      >
         {title}
       </p>
       <p className="text-sm text-gray-600 dark:text-gray-400">{note}</p>
       <DisplayUrl url={url} />
       <div className="flex flex-wrap gap-2">
-        <a href={url} target="_blank" rel="noreferrer" className={BUTTON}>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          aria-describedby={titleId}
+          className={BUTTON}
+        >
           <ArrowTopRightOnSquareIcon className="size-4" aria-hidden="true" />
           Open
         </a>
-        <CopyLinkButton url={url} />
+        <CopyLinkButton url={url} describedBy={titleId} />
       </div>
     </div>
   )

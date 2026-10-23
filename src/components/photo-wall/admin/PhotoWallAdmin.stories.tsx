@@ -141,6 +141,23 @@ export const Saving: Story = {
   },
 }
 
+/** Each Copy and Open says which link it is: three Copy buttons share a name. */
+export const LinksNamed: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const copies = canvas.getAllByRole('button', { name: 'Copy link' })
+    await expect(copies[0]).toHaveAccessibleDescription('Posting link')
+    await expect(copies[1]).toHaveAccessibleDescription('Wall page')
+    await expect(copies[2]).toHaveAccessibleDescription('Screen Mode')
+    const opens = canvas.getAllByRole('link', { name: 'Open' })
+    await expect(opens[0]).toHaveAccessibleDescription('Wall page')
+    await expect(opens[1]).toHaveAccessibleDescription('Screen Mode')
+    await expect(
+      canvas.getByRole('button', { name: 'Download QR (PNG)' }),
+    ).toHaveAccessibleDescription('Posting link')
+  },
+}
+
 export const PausedDark: Story = { globals: { theme: 'dark' } }
 export const PausedPhone: Story = { parameters: PHONE }
 export const PausedPhoneDark: Story = {
