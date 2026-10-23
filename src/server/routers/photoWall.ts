@@ -19,14 +19,22 @@ import {
 /**
  * The request's conference: the tenant from `resolveConferenceId()`, its
  * document read live, not from the CDN, so the page shows the end date and
- * domain Settings just wrote. Never from the client.
+ * domain Settings just wrote. Never from the client. The live document must
+ * still belong to `orgId`, the organization the authz waist checked (from a
+ * cached read): a conference moved to another organization meanwhile is
+ * refused to the old one's organizers.
  */
-async function requestConference() {
+async function requestConference(orgId: string | null) {
   const conferenceId = await resolveConferenceId()
   const { conference, error } = await getConferenceForCurrentDomain({
     uncached: true,
   })
-  if (error || conference?._id !== conferenceId) {
+  if (
+    error ||
+    conference?._id !== conferenceId ||
+    !orgId ||
+    conference.organization?._ref !== orgId
+  ) {
     throw new TRPCError({
       code: 'NOT_FOUND',
       message: 'Could not resolve conference from domain',
@@ -64,13 +72,13 @@ const settingsInput = z
  * conference's organization only, through the `adminProcedure` waist.
  */
 export const photoWallRouter = router({
-  settings: adminProcedure.query(async () => {
-    const conference = await requestConference()
+  settings: adminProcedure.query(async ({ ctx }) => {
+    const conference = await requestConference(ctx.orgId)
     return adminView(conference, await readPhotoWall(conference._id))
   }),
 
-  setUp: adminProcedure.mutation(async () => {
-    const conference = await requestConference()
+  setUp: adminProcedure.mutation(async ({ ctx }) => {
+    const conference = await requestConference(ctx.orgId)
     const wall = await setUpPhotoWall(conference._id)
     expirePhotoWall(conference._id)
     return adminView(conference, wall)
@@ -78,8 +86,8 @@ export const photoWallRouter = router({
 
   updateSettings: adminProcedure
     .input(settingsInput)
-    .mutation(async ({ input }) => {
-      const conference = await requestConference()
+    .mutation(async ({ ctx, input }) => {
+      const conference = await requestConference(ctx.orgId)
       const wall = await updatePhotoWallSettings(conference._id, input)
       if (!wall) {
         throw new TRPCError({

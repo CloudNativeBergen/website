@@ -38,11 +38,13 @@ const CONFERENCE = {
 const cdn = vi.hoisted(() => ({
   /** What a CDN read answers, when it lags the live one. */
   conference: null as null | Record<string, unknown>,
+  /** What the live read answers, when it differs from CONFERENCE. */
+  live: null as null | Record<string, unknown>,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: async (opts?: { uncached?: boolean }) => ({
     conference: opts?.uncached
-      ? CONFERENCE
+      ? { ...CONFERENCE, ...cdn.live }
       : { ...CONFERENCE, ...cdn.conference },
     error: null,
   }),
@@ -92,6 +94,7 @@ const LINKS = {
 
 beforeEach(() => {
   cdn.conference = null
+  cdn.live = null
   store().reset()
   h.revalidateTag.mockClear()
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -163,6 +166,24 @@ describe('photoWall.settings', () => {
       'Could not resolve conference from domain',
     )
     expect(store().commits).toEqual([])
+  })
+
+  it('refuses, writing nothing, when the conference has moved to another organization', async () => {
+    store().reset([wallOf('conf-A')])
+    // The cached read the authz waist used still names org-A; the live
+    // document now belongs to org-B. An org-A organizer must not pass.
+    cdn.live = { organization: { _ref: 'org-B' } }
+    const error = await organizer()
+      .updateSettings({ postingMode: 'open' })
+      .catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'NOT_FOUND' })
+    expect((error as Error).message).toBe(
+      'Could not resolve conference from domain',
+    )
+    expect(store().commits).toEqual([])
+    await expect(organizer().settings()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
   })
 
   it('reads on the non-CDN client', async () => {
