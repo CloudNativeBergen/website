@@ -120,21 +120,21 @@ appearing on every tenant's domain the day this ships.
 
 ### 4.2 `wallPost`
 
-| Field              | Type                                                   | Notes                                                                                                                                                                                     |
-| ------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `_id`              | `wallPost-<uploadId>`                                  | `uploadId` is the UUID v4 in the upload's pathname (§6.2), so a double submit converges on one document.                                                                                  |
-| `conference`       | reference → `conference`, required                     |                                                                                                                                                                                           |
-| `status`           | `'uploading' \| 'pending' \| 'approved' \| 'notShown'` | **Not shown** covers both Reject and Remove (#1479). `uploading` is the reservation Start writes (§6.2); it isn't a Wall Post yet, and no list, count or page shows it except the limits. |
-| `photo`            | object                                                 | `pathname` (private store), `publicUrl` (set only while approved), `width`, `height`, `bytes`. Its own object, so a later video can sit beside it.                                        |
-| `crop`             | `{ x: number, y: number }`, each 0–1                   | The square crop's position (CSS `object-position` semantics) on the whole photo. The square's side is the photo's short edge; there is no zoom.                                           |
-| `caption`          | string ≤ 80, optional                                  | Normalised on the server (§6.4).                                                                                                                                                          |
-| `name`             | string ≤ 40, optional                                  |                                                                                                                                                                                           |
-| `marketingConsent` | boolean                                                | The optional checkbox (#1480). The contributor can untick it later.                                                                                                                       |
-| `deviceKey`        | string                                                 | §6.1. Never the raw cookie token.                                                                                                                                                         |
-| `startedAt`        | datetime                                               | When Start wrote the reservation. Server time.                                                                                                                                            |
-| `submittedAt`      | datetime                                               | When Submit accepted it. Server time.                                                                                                                                                     |
-| `approvedAt`       | datetime                                               | Set on every approval (also re-approval from Not shown). Orders the wall: newest approval first.                                                                                          |
-| `decidedAt`        | datetime                                               | Last Approve, Reject or Remove.                                                                                                                                                           |
+| Field              | Type                                                                 | Notes                                                                                                                                                                                                                                                                                  |
+| ------------------ | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_id`              | `wallPost-<uploadId>`                                                | `uploadId` is the UUID v4 in the upload's pathname (§6.2), so a double submit converges on one document.                                                                                                                                                                               |
+| `conference`       | reference → `conference`, required                                   |                                                                                                                                                                                                                                                                                        |
+| `status`           | `'uploading' \| 'pending' \| 'approved' \| 'notShown' \| 'deleting'` | **Not shown** covers both Reject and Remove (#1479). `uploading` is the reservation Start writes (§6.2); it isn't a Wall Post yet, and no list, count or page shows it except the limits. `deleting` marks a Delete in progress (§12); only its contributor and the admin page see it. |
+| `photo`            | object                                                               | `pathname` (private store), `publicUrl` (set only while approved), `width`, `height`, `bytes`. Its own object, so a later video can sit beside it.                                                                                                                                     |
+| `crop`             | `{ x: number, y: number }`, each 0–1                                 | The square crop's position (CSS `object-position` semantics) on the whole photo. The square's side is the photo's short edge; there is no zoom.                                                                                                                                        |
+| `caption`          | string ≤ 80, optional                                                | Normalised on the server (§6.4).                                                                                                                                                                                                                                                       |
+| `name`             | string ≤ 40, optional                                                |                                                                                                                                                                                                                                                                                        |
+| `marketingConsent` | boolean                                                              | The optional checkbox (#1480). The contributor can untick it later.                                                                                                                                                                                                                    |
+| `deviceKey`        | string                                                               | §6.1. Never the raw cookie token.                                                                                                                                                                                                                                                      |
+| `startedAt`        | datetime                                                             | When Start wrote the reservation. Server time.                                                                                                                                                                                                                                         |
+| `submittedAt`      | datetime                                                             | When Submit accepted it. Server time.                                                                                                                                                                                                                                                  |
+| `approvedAt`       | datetime                                                             | Set on every approval (also re-approval from Not shown). Orders the wall: newest approval first.                                                                                                                                                                                       |
+| `decidedAt`        | datetime                                                             | Last Approve, Reject or Remove.                                                                                                                                                                                                                                                        |
 
 Studio shows both types read-only (organizers moderate on the admin page, not
 in Studio). _Implementation detail._
@@ -157,16 +157,17 @@ Blob with a secret suffix.
   the URL in `photo.publicUrl`. Blob's `copy()` works within one store only, so
   "copy" means: `get(pathname, { access: 'private', token })`, buffer the
   stream (≤ 4 MiB), `put()` to the public store.
-- **Public copies are found by prefix, never only by the stored URL.** Every
-  removal of a public copy (Remove, Reject from On the wall, Delete, the cron)
-  deletes **every** public blob listed under
-  `photo-wall/<conferenceId>/<uploadId>` (the UUID makes the prefix unique). A
-  lost or stale `publicUrl` can't leave a copy behind.
+- **Remove deletes exactly the copy it takes down**, the `publicUrl` of the
+  revision it is guarded on, and **deletes it before** patching the post
+  (§10). A later re-approval's new copy is never touched, and a failed delete
+  leaves the post on the wall with an error for the organizer, never a
+  silently orphaned public photo.
+- **Delete and the cron delete by prefix:** every blob in both stores under
+  `photo-wall/<conferenceId>/<uploadId>` (the UUID makes the prefix unique),
+  after the post is marked `deleting`, so no approval can start a new copy
+  (§12).
 - Removing keeps the private original, so an organizer can approve again from
   Not shown.
-- **Deleting** a post (contributor's Delete, organizer's Delete now, the
-  retention cron) deletes the document and both stores' blobs for that
-  `uploadId`.
 
 Neither copy goes through Sanity's asset pipeline, so the Sanity CDN's missing
 CORS for tenant domains never applies.
@@ -178,6 +179,12 @@ CORS for tenant domains never applies.
   `remotePatterns`, and the image optimizer would keep serving a removed photo
   from `/_next/image` for its `minimumCacheTTL` (4 hours by default in Next 16).
   This holds on the Wall page, Screen Mode, the admin page and My posts.
+- **Nor may anyone else send a Wall Post photo through the optimizer.**
+  `/_next/image?url=<publicUrl>` works for anyone who knows the URL while the
+  Blob host is in `remotePatterns`. Narrow the Blob entry in `next.config.ts`
+  with `pathname` globs for the prefixes that existing `next/image` users need,
+  so no `photo-wall/` path is eligible, and test that a direct optimizer
+  request for one is refused.
 - **Pending and Not shown photos** have no public URL. Two route handlers
   stream them from the private store, both checking **before** `get()` and
   answering `Cache-Control: private, no-store`:
@@ -398,11 +405,11 @@ expired on change costs about 1–4k Sanity reads per edition; polling Sanity
 directly would cost about 30% of the monthly quota. **Browsers never query
 Sanity.** _Tags and function names below are implementation details._
 
-| Cached read                                                                                                                                                                  | Tag                               | Expired by                                                                                                                                        | Polled by                                                                                                         |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `getWall(conferenceId)`: settings + the newest **200** approved posts (`id`, `publicUrl`, `width`, `height`, `crop`, `caption`, `name`, `approvedAt`), newest approval first | `photo-wall:<conferenceId>`       | Approve, Reject/Remove of an approved post, Delete (the contributor's or Delete now) of an approved post, any settings change, the retention cron | Screen Mode every **5 s**, always; the Wall page every **10 s** while visible                                     |
-| `getModerationQueue(conferenceId)`: every post except reservations, with its status, and the pending count                                                                   | `photo-wall-admin:<conferenceId>` | Submit, every moderation action, contributor Delete and marketing change, the cron                                                                | The admin page every **10 s** while visible                                                                       |
-| `getMyPosts(conferenceId, deviceKey)`: this device's posts, except reservations                                                                                              | `photo-wall-device:<deviceKey>`   | Submit, Delete, marketing change by that device; any moderation of a post with that `deviceKey`                                                   | My posts on load, after each action, and every **15 s** while one of its posts is pending and the page is visible |
+| Cached read                                                                                                                                                                  | Tag                               | Expired by                                                                                                                                        | Polled by                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `getWall(conferenceId)`: settings + the newest **200** approved posts (`id`, `publicUrl`, `width`, `height`, `crop`, `caption`, `name`, `approvedAt`), newest approval first | `photo-wall:<conferenceId>`       | Approve, Reject/Remove of an approved post, Delete (the contributor's or Delete now) of an approved post, any settings change, the retention cron | Screen Mode every **5 s**, always; the Wall page every **10 s** while visible     |
+| `getModerationQueue(conferenceId)`: every post except reservations, with its status, and the pending count                                                                   | `photo-wall-admin:<conferenceId>` | Submit, every moderation action, contributor Delete and marketing change, the cron                                                                | The admin page every **10 s** while visible                                       |
+| `getMyPosts(conferenceId, deviceKey)`: this device's posts, except reservations                                                                                              | `photo-wall-device:<deviceKey>`   | Submit, Delete, marketing change by that device; any moderation of a post with that `deviceKey`                                                   | My posts on load, after each action, and every **15 s** while the page is visible |
 
 - **Inside each cached function**, read with the **uncached** Sanity client
   (`clientReadUncached`), never the CDN one: a tag expiry refills from Sanity,
@@ -554,12 +561,15 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
 - **Approve** copies the photo to the public store (§5), then patches the post
   (`status: approved`, `publicUrl`, `approvedAt`, `decidedAt`). If the patch
   fails for good, it deletes the copy it just made.
-- **Reject / Remove** patches `status: notShown`, unsets `publicUrl`, then
-  deletes every public copy under the post's prefix (§5). If that delete fails
-  it is retried once and logged; the wall already stopped showing the post, and
-  the sweep (§11.2) deletes what is left.
-- **Delete now** deletes the document, then both stores' blobs for the
-  `uploadId`, by prefix.
+- **Reject** (from Pending) patches `status: notShown`; there is no public copy.
+- **Remove** (from On the wall) deletes the revision's `publicUrl` first
+  (retried once), then patches `status: notShown` and unsets `publicUrl`. If
+  the delete fails, nothing is patched and the card says "Couldn't remove.
+  Try again."; the post stays on the wall until it succeeds. If the patch
+  fails after the delete, the post shows as a missing image, which Screen Mode
+  skips (§9.2), until the retry. _Refinement (spec):_ this order makes a
+  failure visible instead of leaving a public photo nobody can find.
+- **Delete now** runs the same Delete as the contributor's (§12).
 - The contributor's My posts says **Not shown**, with no reason.
 
 ## 11. Retention
@@ -587,8 +597,11 @@ The same cron deletes:
 - `uploading` reservations older than 24 hours, with their private blob;
 - private blobs under `photo-wall/` older than 24 hours with no `wallPost`
   document;
-- public blobs under `photo-wall/` that aren't the `photo.publicUrl` of an
-  approved `wallPost`.
+- public blobs under `photo-wall/` **older than an hour** that aren't the
+  `photo.publicUrl` of an approved `wallPost`, rechecked on the uncached client
+  just before deleting (the hour covers an Approve between its `put()` and its
+  patch, the existing sweeper's age gate pattern);
+- `deleting` posts older than an hour: finish their Delete (§12).
 
 Extend the existing `/api/cron/cleanup-orphaned-blobs` (`vercel.json`) or sit
 beside it; don't duplicate its listing logic.
@@ -607,9 +620,19 @@ of the conference and both stores' `photo-wall/<conferenceId>/` prefix).
   (**Waiting for approval**, **On the wall**, **Not shown**), a **Delete**
   button (inline confirm: "Delete this photo? It's removed from the wall and
   can't be undone.") and a **Marketing** switch.
-- **Delete** is permanent and immediate: a Server Action deletes the document,
-  then both stores' blobs for the `uploadId` by prefix (§5), and the post is
-  gone from every screen on its next poll.
+- **Delete** is permanent and immediate, in three steps:
+  1. a revision-guarded patch to `status: 'deleting'`: the post leaves the wall
+     on the next poll, and a racing Approve's guarded patch fails and deletes
+     its own copy (§10);
+  2. delete every blob in both stores under the post's prefix (§5), retried
+     once;
+  3. delete the document.
+
+  If step 2 fails, the document stays `deleting` and the card (in My posts, and
+  on the admin page) says "Couldn't delete. Try again."; Delete accepts a
+  `deleting` post, so pressing again finishes it. The sweep (§11.2) also
+  finishes `deleting` posts older than an hour.
+
 - **Lost cookie:** contact the organizers, describing the photo. They use
   Delete now.
 - **Exported copies** (slice P5) can't be reached by deletion; `/privacy` says
@@ -708,9 +731,13 @@ can be tried on a preview.
   same 404, without calling `get()`, and answers `private, no-store`.
 - **No `next/image` for Wall Post photos:** a test (or lint rule) fails if a
   Wall Post photo is rendered through `/_next/image`.
-- **Moderation races** on the real client: Remove racing a re-approval, and
-  Approve racing the contributor's Delete, leave no public copy without an
-  approved document.
+- **Moderation races** on the real client: two Removes, Remove followed by a
+  re-approval, and Approve racing the contributor's Delete, leave no public
+  copy without an approved document, **and** an approved post's `publicUrl`
+  still answers.
+- **Failure paths:** a Blob delete that fails on Remove leaves the post
+  approved with the error; one that fails on Delete leaves it `deleting`, and
+  pressing again finishes it.
 - **Screen Mode keeps polling:** with fake timers, past five idle minutes, an
   approval still arrives and a removal still leaves; a removed and re-approved
   post arrives again; Screen Mode sends no analytics request.
@@ -755,6 +782,13 @@ posting to Open. **Fallback** if anything fails: Pause posting and take the
 screen off; nothing else depends on the wall.
 
 ## 15. Known gaps and risks
+
+- **The limits are soft against a script.** Concurrent Starts from one cookie
+  can each see the same free capacity, and deleting your own posts frees up the
+  hourly count. Accepted: clearing the cookie already defeats the per-device
+  limits, every post still waits for approval, and an organizer can Pause the
+  wall and Delete now. The 200-per-wall cap can overshoot by the number of
+  concurrent Starts.
 
 - **Clearing cookies resets the device limits.** Accepted: approval is the gate
   and the 200-pending cap bounds the queue.
