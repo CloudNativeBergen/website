@@ -110,7 +110,8 @@ Two new document types. `conference` is **not** touched (it is append-only,
 | `postingMode`  | `'open' \| 'paused'` (M1), `'auto'` (P2)     | Monday offers **Open** and **Paused** only; a missing value reads as `paused`. P2 adds `auto` and makes it the default (§7). |
 | `sponsorStrip` | boolean, default `false`                     | Screen Mode shows the sponsor strip when true (§9.4).                                                                        |
 | `look`         | `'pinboard' \| 'mosaic' \| 'spotlight'` (P3) | Absent until P3; reads as `pinboard`.                                                                                        |
-| `closedAt`     | datetime                                     | Set by the retention cron when it deletes the wall's posts (§11.1).                                                          |
+| `closedAt`     | datetime                                     | Set by the retention cron before it deletes anything: the wall is closed to writes (§11.1).                                  |
+| `purgedAt`     | datetime                                     | Set by the retention cron when the deletion is done (§11.1).                                                                 |
 
 **A conference without a `photoWall` document has no Photo Wall:** `/wall`,
 `/wall/post` and `/wall/screen` return 404, and the upload route refuses. An
@@ -426,12 +427,13 @@ Sanity.** _Tags and function names below are implementation details._
   never accepting it from the client. **`getMyPosts` is a Server Action of
   `/wall/post`**, because it needs the `/wall` cookie (§6.1); it reads the
   device key from the cookie on the server.
-- **Polling.** The Wall page, the admin page and My posts poll only while the
-  page is visible (`useIdlePolling()` + `refetchInterval`, as
-  `SessionFeedbackResults.tsx` does). **Screen Mode must not use
-  `useIdlePolling()`'s idle stop:** that hook stops after five minutes without
-  interaction (`src/hooks/useIdlePolling.ts`), and nobody touches a venue
-  screen. Screen Mode polls every 5 s for as long as it is open.
+- **Polling.** **None of these pollers uses `useIdlePolling()`'s idle stop:**
+  that hook stops after five minutes without interaction
+  (`src/hooks/useIdlePolling.ts`), and nobody touches a venue screen, a
+  phone waiting for its post, or an organizer's phone in a pocket. The Wall
+  page, the admin page and My posts poll while the page is visible
+  (`refetchInterval` paused on `visibilitychange`); Screen Mode polls every 5 s
+  for as long as it is open.
 - **Expiry call:** Server Actions (Submit, Delete, marketing) use `updateTag`;
   the admin's tRPC mutations run in the `/api/trpc` Route Handler, where
   `updateTag` throws, so they use `revalidateTag(tag, { expire: 0 })`, the
@@ -564,8 +566,7 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   can't interleave. On a revision conflict the server re-reads once: if the
   post is gone, the card reports "This photo was deleted"; if its status no
   longer allows the action (someone else already removed it), the card
-  refreshes with no change; otherwise (a marketing untick bumped the revision)
-  it retries once.
+  refreshes with no change; otherwise it retries once, and **only if the post is still in the state the action began from**: Approve if it is still not approved; Remove only if `publicUrl` is still the copy it deleted (a different URL means someone re-approved, and Remove refreshes without acting). A marketing untick is the usual reason to retry.
 - **Approve** copies the photo to the public store (§5), then patches the post
   (`status: approved`, `publicUrl`, `approvedAt`, `decidedAt`). If the patch
   fails for good, it deletes the copy it just made.
@@ -590,11 +591,20 @@ From [Decide the Photo Wall window, retention, consent and erasure](https://gith
   Norway 2026: **26 November 2026**).
 - A daily cron (`vercel.json`, authenticated with `CRON_SECRET` like
   `/api/cron/cleanup-notifications`) finds every `photoWall` whose deletion
-  date is today or past and `closedAt` is unset, and hard-deletes every
-  `wallPost` of that conference (Not shown included) and every blob under
-  `photo-wall/<conferenceId>/` in **both** stores; then it sets `closedAt` and
-  expires the wall's tags.
-- Re-running is safe: a wall with `closedAt` and no posts does nothing.
+  date is today or past and `purgedAt` is unset. For each:
+  1. **close it to writes first:** set `closedAt` (if unset) and expire the
+     tags. `isPostingOpen` is false and every moderation action refuses once
+     `closedAt` is set, whatever `postingMode` says, and Submit and Approve
+     re-check it just before their final commit;
+  2. wait out in-flight work: run the deletion only when `closedAt` is more
+     than 15 minutes old (an upload token lives 10 minutes), so in practice on
+     the next day's run;
+  3. hard-delete every `wallPost` of the conference (Not shown included) and
+     every blob under `photo-wall/<conferenceId>/` in **both** stores;
+  4. set `purgedAt`.
+- Re-running is safe: an interrupted run leaves `purgedAt` unset, so the next
+  run repeats step 3. `closedAt` means "closed to writes", `purgedAt` means
+  "deletion done".
 - After it runs, the Wall page, the composer and Screen Mode say "This wall has
   closed."
 
@@ -742,13 +752,11 @@ can be tried on a preview.
   Wall Post photo is rendered through `/_next/image`.
 - **Moderation races** on the real client: two Removes, Remove followed by a
   re-approval, and Approve racing the contributor's Delete, leave no public
-  copy without an approved document, **and** an approved post's `publicUrl`
-  still answers.
+  copy without an approved document, **and** an approved post's `publicUrl` still answers. Include the interleaving: Removes A and B read copy U; A completes; another organizer re-approves (copy V); B's retry must leave V alone.
 - **Failure paths:** a Blob delete that fails on Remove leaves the post
   approved with the error; one that fails on Delete leaves it `deleting`, and
   pressing again finishes it.
-- **Screen Mode keeps polling:** with fake timers, past five idle minutes, an
-  approval still arrives and a removal still leaves; a removed and re-approved
+- **Pollers keep polling:** with fake timers, past five idle minutes, an approval still arrives on Screen Mode and a removal still leaves, and My posts still turns Waiting into On the wall; a removed and re-approved
   post arrives again; Screen Mode sends no analytics request.
 - **Visual:** every new component has a story; captures as in §13.
 
@@ -792,6 +800,10 @@ screen off; nothing else depends on the wall.
 
 ## 15. Known gaps and risks
 
+- **An Approve that loses to a Delete and then fails to delete its own new
+  copy** leaves one public photo with no document. Its URL (random suffix) was
+  never stored or shown anywhere, so nobody can find it; the sweep (§11.2) or
+  the manual purge removes it. Accepted for Monday.
 - **The limits are soft against a script.** Concurrent Starts from one cookie
   can each see the same free capacity, and deleting your own posts frees up the
   hourly count. Accepted: clearing the cookie already defeats the per-device
