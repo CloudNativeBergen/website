@@ -107,3 +107,13 @@ export function feedbackCodeIndexTag(conferenceId: string): string {
 export function feedbackResponseTag(responseId: string): string {
   return `sanity:feedback-response-${responseId}`
 }
+
+/**
+ * A conference's Photo Wall as its public pages read it (Photo Wall spec §8):
+ * the settings now, the approved posts from M5a. Expire it with
+ * `{ expire: 0 }` on Set up and on every settings change, so a running
+ * screen and the `/wall` routes see the change on their next request.
+ */
+export function photoWallTag(conferenceId: string): string {
+  return `photo-wall:${conferenceId}`
+}

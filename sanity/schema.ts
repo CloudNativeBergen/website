@@ -61,6 +61,8 @@ import videoProject from './schemaTypes/videoProject'
 import planTemplateName from './schemaTypes/planTemplateName'
 import staff from './schemaTypes/staff'
 import invitationLetter from './schemaTypes/invitationLetter'
+import photoWall from './schemaTypes/photoWall'
+import wallPost from './schemaTypes/wallPost'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
@@ -135,6 +137,10 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     marketingAsset,
     // Saved studio videos (#1181)
     videoProject,
+
+    // Photo Wall (Photo Wall spec §4), read-only: organizers use /admin/photo-wall
+    photoWall,
+    wallPost,
 
     // Platform-internal identity artifacts (hidden from the Studio structure —
     // see STUDIO_HIDDEN_TYPES in sanity.config.ts). Registered only so their

@@ -22,7 +22,7 @@ import { FeedbackPrintSheetPortal } from './FeedbackPrintSheet'
 import { useFeedbackQrPng } from './useFeedbackQrPng'
 
 const BUTTON =
-  'inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:aria-disabled:hover:bg-gray-800'
+  'inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:focus:outline-indigo-400 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:aria-disabled:hover:bg-gray-800'
 
 /** Who the panel speaks to: the talk's speaker, or an organizer (#1459). */
 type Audience = 'speaker' | 'organizer'
@@ -77,7 +77,17 @@ function QrCode({ url }: { url: string }) {
   )
 }
 
-function CopyLinkButton({ url }: { url: string }) {
+/**
+ * Copy a URL, saying whether it worked; reused by the Photo Wall admin.
+ * `describedBy` names which link it copies where several share a page.
+ */
+export function CopyLinkButton({
+  url,
+  describedBy,
+}: {
+  url: string
+  describedBy?: string
+}) {
   const [result, setResult] = useState<'copied' | 'failed' | null>(null)
   // "Copied" fades; the failure stays, since it tells the speaker what to do.
   useEffect(() => {
@@ -89,6 +99,7 @@ function CopyLinkButton({ url }: { url: string }) {
     <>
       <button
         type="button"
+        aria-describedby={describedBy}
         onClick={() =>
           // `clipboard` is absent outside a secure context, and writeText can be
           // refused; either way the URL stays visible to copy by hand.
