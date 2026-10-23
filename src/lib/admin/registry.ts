@@ -188,6 +188,14 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         keywords: ['partners', 'companies', 'sponsorship'],
       },
       {
+        // No badge yet: the pending count on it is slice P6 (Photo Wall
+        // spec §10).
+        name: 'Photo Wall',
+        href: '/admin/photo-wall',
+        icon: PhotoIcon,
+        keywords: ['photos', 'wall', 'screen', 'attendees', 'qr', 'moderation'],
+      },
+      {
         name: 'Marketing',
         href: '/admin/marketing',
         icon: PresentationChartBarIcon,

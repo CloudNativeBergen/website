@@ -77,7 +77,8 @@ function QrCode({ url }: { url: string }) {
   )
 }
 
-function CopyLinkButton({ url }: { url: string }) {
+/** Copy a URL, saying whether it worked; reused by the Photo Wall admin. */
+export function CopyLinkButton({ url }: { url: string }) {
   const [result, setResult] = useState<'copied' | 'failed' | null>(null)
   // "Copied" fades; the failure stays, since it tells the speaker what to do.
   useEffect(() => {
