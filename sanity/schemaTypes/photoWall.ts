@@ -1,5 +1,5 @@
 import { defineField, defineType } from 'sanity'
-import type { PostingMode } from '@/lib/photo-wall/types'
+import { postingModeOf, type PostingMode } from '@/lib/photo-wall/types'
 
 /** The switch's labels; a missing mode is Automatic (§7). */
 const POSTING_LABELS: Record<PostingMode, string> = {
@@ -78,7 +78,8 @@ export default defineType({
     select: { title: 'conference.title', mode: 'postingMode' },
     prepare: ({ title, mode }) => ({
       title: title ? `Photo Wall: ${title}` : 'Photo Wall',
-      subtitle: POSTING_LABELS[(mode ?? 'auto') as PostingMode] ?? 'Paused',
+      // The read's rule: missing is Automatic, anything unknown Paused.
+      subtitle: POSTING_LABELS[postingModeOf(mode)],
     }),
   },
 })

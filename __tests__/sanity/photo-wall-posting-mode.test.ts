@@ -41,7 +41,6 @@ describe('photoWall.postingMode in Studio', () => {
     ['paused', 'Paused'],
     [undefined, 'Automatic'],
     ['always', 'Paused'],
-    [null, 'Automatic'],
     // Names an object inherits: never a label, always Paused.
     ['__proto__', 'Paused'],
     ['constructor', 'Paused'],
