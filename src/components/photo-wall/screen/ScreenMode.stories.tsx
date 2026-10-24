@@ -4,6 +4,7 @@ import { expect, waitFor, within } from 'storybook/test'
 import type { ScreenPost, ScreenView } from '@/lib/photo-wall/screen'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import { ScreenBoard, type ScreenPoll } from './ScreenBoard'
+import { ScreenError } from './ScreenError'
 
 /**
  * Local fixture photos (`.storybook/main.ts` staticDirs): no network. On the
@@ -317,5 +318,23 @@ export const SponsorStripNoPublicTier: Story = {
   ),
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).queryByRole('marquee')).toBeNull()
+  },
+}
+
+/**
+ * The page failed to render (a read failed): `/wall/screen`'s error
+ * boundary, which reloads by itself with a growing wait. Storybook's path
+ * is not Screen Mode's, so it does not reload here.
+ */
+export const RenderError: Story = {
+  render: () => (
+    <ScreenError error={new Error('Sanity unavailable')} retry={() => {}} />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByText('The wall will be back in a moment.'),
+    ).toBeVisible()
+    await expect(canvas.queryByRole('button')).toBeNull()
   },
 }

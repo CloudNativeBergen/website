@@ -4,73 +4,95 @@
  * offline page a failed reload lands on. So it reloads only once its own
  * URL has just answered, and a worker that stays waiting through a reload
  * (wedged) is tried again with a growing wait instead of every few seconds.
- * The attempts are kept in `sessionStorage`, which a reload keeps.
+ * The attempts are kept in `sessionStorage`, which a reload keeps. Its
+ * error boundary reloads the same way (`screenErrorReloads`).
  */
 import { isScreenModePath } from '@/lib/photo-wall/screen'
-
-/** The first wait after an attempt; it doubles with each one in a row. */
-export const SCREEN_UPDATE_RETRY_MS = 30_000
-export const SCREEN_UPDATE_MAX_WAIT_MS = 15 * 60_000
-
-const ATTEMPT_KEY = 'photo-wall-screen-update'
 
 interface Attempt {
   at: number
   count: number
 }
 
-function readAttempt(): Attempt | null {
-  try {
-    const value: unknown = JSON.parse(
-      window.sessionStorage.getItem(ATTEMPT_KEY) ?? 'null',
-    )
-    if (
-      value &&
-      typeof value === 'object' &&
-      'at' in value &&
-      'count' in value &&
-      typeof value.at === 'number' &&
-      typeof value.count === 'number'
-    ) {
-      return { at: value.at, count: value.count }
+/**
+ * Attempts in a row kept under `key` in `sessionStorage` (a reload keeps
+ * it): the wait before the next is `firstMs`, doubling, at most `maxMs`.
+ * Storage blocked or garbled means no record and no wait.
+ */
+function sessionBackoff(key: string, firstMs: number, maxMs: number) {
+  const read = (): Attempt | null => {
+    try {
+      const value: unknown = JSON.parse(
+        window.sessionStorage.getItem(key) ?? 'null',
+      )
+      if (
+        value &&
+        typeof value === 'object' &&
+        'at' in value &&
+        'count' in value &&
+        typeof value.at === 'number' &&
+        typeof value.count === 'number'
+      ) {
+        return { at: value.at, count: value.count }
+      }
+    } catch {
+      // No record, then.
     }
-  } catch {
-    // Storage blocked or garbled: no record, no wait.
+    return null
   }
-  return null
-}
-
-/** How long to wait before the next attempt at `now`; 0 when none is recorded. */
-export function waitBeforeScreenUpdate(now: number): number {
-  const attempt = readAttempt()
-  if (!attempt) return 0
-  const wait = Math.min(
-    SCREEN_UPDATE_RETRY_MS * 2 ** (attempt.count - 1),
-    SCREEN_UPDATE_MAX_WAIT_MS,
-  )
-  return Math.max(0, attempt.at + wait - now)
-}
-
-export function recordScreenUpdateAttempt(now: number): void {
-  const count = (readAttempt()?.count ?? 0) + 1
-  try {
-    window.sessionStorage.setItem(
-      ATTEMPT_KEY,
-      JSON.stringify({ at: now, count }),
-    )
-  } catch {
-    // Without storage a wedged worker can loop; nothing better to do.
+  return {
+    /** How long to wait before the next attempt at `now`; 0 when none is recorded. */
+    wait(now: number): number {
+      const attempt = read()
+      if (!attempt) return 0
+      const wait = Math.min(firstMs * 2 ** (attempt.count - 1), maxMs)
+      return Math.max(0, attempt.at + wait - now)
+    },
+    record(now: number): void {
+      const count = (read()?.count ?? 0) + 1
+      try {
+        window.sessionStorage.setItem(key, JSON.stringify({ at: now, count }))
+      } catch {
+        // Without storage the attempts cannot back off; nothing better to do.
+      }
+    },
+    clear(): void {
+      try {
+        window.sessionStorage.removeItem(key)
+      } catch {
+        // Nothing recorded, then.
+      }
+    },
   }
 }
 
+/** The first wait after an update attempt; it doubles with each one in a row. */
+export const SCREEN_UPDATE_RETRY_MS = 30_000
+export const SCREEN_UPDATE_MAX_WAIT_MS = 15 * 60_000
+
+const updateAttempts = sessionBackoff(
+  'photo-wall-screen-update',
+  SCREEN_UPDATE_RETRY_MS,
+  SCREEN_UPDATE_MAX_WAIT_MS,
+)
+export const waitBeforeScreenUpdate = updateAttempts.wait
+export const recordScreenUpdateAttempt = updateAttempts.record
 /** The screen opened with no update waiting: the last one took. */
-export function clearScreenUpdateAttempts(): void {
-  try {
-    window.sessionStorage.removeItem(ATTEMPT_KEY)
-  } catch {
-    // Nothing recorded, then.
-  }
-}
+export const clearScreenUpdateAttempts = updateAttempts.clear
+
+/**
+ * The first wait before Screen Mode reloads itself out of its error
+ * boundary (a read failed while it rendered); doubling, at most 5 minutes.
+ */
+export const SCREEN_ERROR_RETRY_MS = 10_000
+export const SCREEN_ERROR_MAX_WAIT_MS = 5 * 60_000
+
+/** Reloads after a render error; cleared once Screen Mode renders. */
+export const screenErrorReloads = sessionBackoff(
+  'photo-wall-screen-error',
+  SCREEN_ERROR_RETRY_MS,
+  SCREEN_ERROR_MAX_WAIT_MS,
+)
 
 /** A probe unanswered this long counts as unreachable (a stalled connection). */
 export const SCREEN_PROBE_TIMEOUT_MS = 10_000
@@ -101,8 +123,12 @@ export async function screenIsReachable(): Promise<boolean> {
 let screenModeShown: boolean | null = null
 const screenModeListeners = new Set<() => void>()
 
-/** Called by Screen Mode on mount (true) and unmount (false). */
+/**
+ * Called by Screen Mode on mount (true) and unmount (false). A mount means
+ * it rendered: the reloads out of its error boundary start afresh.
+ */
 export function markScreenMode(shown: boolean | null): void {
+  if (shown) screenErrorReloads.clear()
   if (screenModeShown === shown) return
   screenModeShown = shown
   for (const listener of screenModeListeners) listener()
