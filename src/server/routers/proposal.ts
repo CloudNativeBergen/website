@@ -1810,12 +1810,14 @@ export const proposalRouter = router({
         const actsAsOrganizer = isOrganizerForProposal && !isSelfWithdraw
 
         // Tickets are only issued on confirm, so only a confirmed talk can
-        // have one to cancel.
+        // have one to cancel. A speaker withdrawing their own confirmed talk
+        // cannot tick "revoke ticket", so the list always goes along then.
         const ticketCancellation =
-          revokeTicket &&
-          actsAsOrganizer &&
           proposal.status === Status.confirmed &&
-          (action === Action.cancel || action === Action.withdraw)
+          (isSelfWithdraw ||
+            (revokeTicket &&
+              actsAsOrganizer &&
+              (action === Action.cancel || action === Action.withdraw)))
             ? await speakersWithoutOtherConfirmedTalk(
                 proposal.speakers as Speaker[],
                 id,

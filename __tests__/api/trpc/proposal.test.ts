@@ -840,7 +840,9 @@ describe('proposal router', () => {
         expect(published().metadata.ticketCancellation).toBeUndefined()
       })
 
-      it('ignores revokeTicket for a speaker withdrawing', async () => {
+      it('always lists tickets when a speaker withdraws their confirmed talk', async () => {
+        // The speaker cannot tick "revoke ticket"; the organizers still need
+        // to cancel it by hand.
         vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
         vi.mocked(updateProposalStatus).mockResolvedValue({
           proposal: { ...confirmed, status: Status.withdrawn } as any,
@@ -850,9 +852,13 @@ describe('proposal router', () => {
           id: 'proposal-1',
           action: Action.withdraw,
           reason: 'Ill',
-          revokeTicket: true,
         })
-        expect(published().metadata.ticketCancellation).toBeUndefined()
+        expect(published().metadata.ticketCancellation).toEqual({
+          speakers: [
+            { name: regularSpeaker.name, email: 'speaker@example.com' },
+          ],
+          unfiltered: false,
+        })
       })
     })
 
