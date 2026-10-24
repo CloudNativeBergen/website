@@ -205,11 +205,17 @@ const eslintConfig = [
       'no-restricted-imports': [
         'error',
         {
-          paths: ['next/image', 'next/legacy/image'].map((name) => ({
-            name,
-            message:
-              'Photo Wall photos are plain <img> elements of their Sanity URLs, never next/image (Photo Wall spec §5.1).',
-          })),
+          patterns: [
+            {
+              // Every spelling that reaches the component: `next/image`,
+              // `next/legacy/image`, with or without `.js`, and the
+              // `next/dist` modules they re-export (also under `esm/`).
+              regex:
+                '^next/(?:(?:legacy/)?image|dist/(?:esm/)?(?:shared/lib/image-external|client/image-component|client/legacy/image))(?:\\.js)?$',
+              message:
+                'Photo Wall photos are plain <img> elements of their Sanity URLs, never next/image (Photo Wall spec §5.1).',
+            },
+          ],
         },
       ],
     },

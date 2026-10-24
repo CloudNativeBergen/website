@@ -39,11 +39,47 @@ describe('Photo Wall photos are never next/image (§5.1, §14)', () => {
     ])
   })
 
-  it('refuses next/legacy/image too', async () => {
-    const code = `import Image from 'next/legacy/image'\nexport const x = Image\n`
+  // Every specifier that reaches the Image component: the two public
+  // entries, with the `.js` that resolves to the same file, and the
+  // `next/dist` modules they re-export (CommonJS and `esm/`).
+  const SPECIFIERS = [
+    'next/legacy/image',
+    'next/image.js',
+    'next/legacy/image.js',
+    'next/dist/shared/lib/image-external',
+    'next/dist/shared/lib/image-external.js',
+    'next/dist/client/image-component',
+    'next/dist/client/legacy/image',
+    'next/dist/esm/shared/lib/image-external.js',
+    'next/dist/esm/client/image-component.js',
+    'next/dist/esm/client/legacy/image.js',
+  ]
+
+  it.each(SPECIFIERS)('refuses %s', async (specifier) => {
+    // A real module of the installed Next, not an invented spelling.
+    expect(() => require.resolve(specifier)).not.toThrow()
+    const code = `import Image from '${specifier}'\nexport const x = Image\n`
     expect(
       await restricted('src/components/photo-wall/wall/WallBoard.tsx', code),
     ).toEqual([expect.stringContaining('never next/image')])
+  })
+
+  it('refuses a re-export of it', async () => {
+    const code = `export { default } from 'next/image'\n`
+    expect(
+      await restricted('src/components/photo-wall/wall/index.ts', code),
+    ).toEqual([expect.stringContaining('never next/image')])
+  })
+
+  it.each([
+    'next/link',
+    'next/navigation',
+    'next/dist/shared/lib/image-config',
+  ])('allows %s, which is not the Image component', async (specifier) => {
+    const code = `import * as m from '${specifier}'\nexport const x = m\n`
+    expect(
+      await restricted('src/components/photo-wall/wall/WallBoard.tsx', code),
+    ).toEqual([])
   })
 
   it('leaves the rest of the site alone', async () => {
