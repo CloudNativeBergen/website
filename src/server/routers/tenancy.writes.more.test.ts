@@ -728,6 +728,7 @@ describe('the volunteer procedure surface is pinned (#858)', () => {
       }
     )._def.procedures
     expect(Object.keys(procedures).sort()).toEqual([
+      'admin.bulkUpdateStatus',
       'admin.delete',
       'admin.getById',
       'admin.list',
