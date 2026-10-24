@@ -144,6 +144,7 @@ describe('TalkCard feedback sheet', () => {
     fireEvent.click(link())
     expect(window.history.length).toBe(before + 1)
     expect(window.location.pathname).toBe('/')
+    expect(screen.getByRole('dialog')).toBeTruthy()
 
     act(() => window.history.back())
 
@@ -160,6 +161,54 @@ describe('TalkCard feedback sheet', () => {
     await waitFor(() => expect(window.history.state).not.toEqual(opened))
     // The sheet's leave transition runs before the dialog unmounts.
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  /** The programme page's own entry, with one entry before it. */
+  const onProgramme = () => {
+    window.history.replaceState({ entry: 'before' }, '')
+    window.history.pushState({ entry: 'programme' }, '')
+  }
+  const settled = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+
+  it('steps back only once when closed twice in a row', async () => {
+    // Browsers run every queued `back()`; jsdom folds two into one, so count
+    // the calls rather than read where history ends up.
+    const back = vi.spyOn(window.history, 'back')
+    try {
+      onProgramme()
+      renderCard(confirmed)
+      fireEvent.click(link())
+      const close = screen.getByRole('button', { name: 'Close' })
+
+      fireEvent.click(close)
+      fireEvent.click(close)
+      await settled()
+
+      expect(back).toHaveBeenCalledTimes(1)
+      expect(window.history.state).toEqual({ entry: 'programme' })
+    } finally {
+      back.mockRestore()
+    }
+  })
+
+  it('reuses a sheet entry left by Forward, so one Back still leaves it', async () => {
+    onProgramme()
+    renderCard(confirmed)
+    fireEvent.click(link())
+    act(() => window.history.back())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    act(() => window.history.forward())
+    await settled()
+    const length = window.history.length
+
+    fireEvent.click(link())
+    expect(window.history.length).toBe(length)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await settled()
+
+    expect(window.history.state).toEqual({ entry: 'programme' })
   })
 
   it('keeps the plain link for navigation without the sheet', () => {

@@ -18,11 +18,14 @@ const SHEET_ENTRY = 'feedbackSheet'
  * The sheet's open state, backed by one history entry so Back (and a mobile
  * swipe-back) closes it instead of leaving the programme (§7.5). The entry
  * keeps the page's URL; Next copies its own router state into it, so Back
- * lands on an entry it knows. Closing in the sheet steps back over the entry,
- * and the `popstate` that follows closes it, so no entry is left behind.
+ * lands on an entry it knows. Closing in the sheet steps back over the entry
+ * (once, however many closes arrive first), so no entry is left behind.
  */
 export function useFeedbackSheet() {
   const [open, setOpen] = useState(false)
+  // Between a close and the `popstate` it causes, the entry is still ours:
+  // a second close (a double tap, Escape twice) must not step back again.
+  const stepping = useRef(false)
 
   useEffect(() => {
     if (!open) return
@@ -34,12 +37,21 @@ export function useFeedbackSheet() {
   return {
     open,
     show: () => {
-      window.history.pushState({ [SHEET_ENTRY]: true }, '')
+      stepping.current = false
+      const entry = { [SHEET_ENTRY]: true }
+      // An entry left behind by Forward or a reload is reused, never stacked.
+      if (window.history.state?.[SHEET_ENTRY]) {
+        window.history.replaceState(entry, '')
+      } else {
+        window.history.pushState(entry, '')
+      }
       setOpen(true)
     },
     close: () => {
-      if (window.history.state?.[SHEET_ENTRY]) window.history.back()
-      else setOpen(false)
+      setOpen(false)
+      if (stepping.current || !window.history.state?.[SHEET_ENTRY]) return
+      stepping.current = true
+      window.history.back()
     },
   }
 }
