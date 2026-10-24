@@ -150,30 +150,21 @@ export default async function AdminBadgePage() {
         }}
         stats={[
           {
-            value: stats.totalBadges,
-            label: 'Total badges issued',
-            color: 'slate' as const,
-          },
-          {
-            value: stats.speakerBadges,
-            label: 'Speaker badges',
+            value: `${stats.speakerBadges} / ${stats.organizerBadges}`,
+            label: 'Badges',
+            subtitle: 'speaker / organizer',
             color: 'blue' as const,
           },
-          {
-            value: stats.organizerBadges,
-            label: 'Organizer badges',
-            color: 'purple' as const,
-          },
-          {
-            value: stats.emailsSent,
-            label: 'Emails sent',
-            color: 'green' as const,
-          },
-          {
-            value: stats.emailsFailed,
-            label: 'Email failures',
-            color: stats.emailsFailed > 0 ? 'purple' : ('slate' as const),
-          },
+          // Not a filter: the list below has none for email state.
+          ...(stats.emailsFailed > 0
+            ? [
+                {
+                  value: stats.emailsFailed,
+                  label: 'Email failures',
+                  color: 'red' as const,
+                },
+              ]
+            : []),
         ]}
       />
 
