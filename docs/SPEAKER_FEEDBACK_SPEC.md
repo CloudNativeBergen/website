@@ -542,7 +542,12 @@ A second way into `/f/<code>` for attendees who miss or skip the room's QR.
   programme inside the sheet). A frame, not a rendering of the page: the code
   stays out of the programme's document, URL and history, and the page keeps
   its own cookie path, bound actions, `maxDuration` and analytics exclusions.
-  The frame is mounted per open, so Back never steps it. A frame that is not
+  The frame is mounted per open, so Back never steps it. Opening adds one
+  history entry on the same URL, so Back (or a swipe-back) closes the sheet
+  rather than leaving the programme; closing in the sheet steps back over that
+  entry. Inside the sheet, Not yet open says to tap Give feedback again
+  instead of scanning the code, and Unknown reads "Feedback isn't available
+  for this session" with no mention of a code. A frame that is not
   an HTML page (the 503, a network failure), or that shows no attendee page
   within 15 seconds, is replaced by a link to the full page. Any other click
   (new tab, new window, modifier keys) and a page without JavaScript follow

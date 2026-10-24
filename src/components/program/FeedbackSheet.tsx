@@ -11,6 +11,51 @@ import { XMarkIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { FEEDBACK_EMBED_ROOT } from '@/lib/feedback/url'
 
+/** Marks the history entry an open sheet added (§7.5). */
+const SHEET_ENTRY = 'feedbackSheet'
+
+/**
+ * The sheet's open state, backed by one history entry so Back (and a mobile
+ * swipe-back) closes it instead of leaving the programme (§7.5). The entry
+ * keeps the page's URL; Next copies its own router state into it, so Back
+ * lands on an entry it knows. Closing in the sheet steps back over the entry
+ * (once, however many closes arrive first), so no entry is left behind.
+ */
+export function useFeedbackSheet() {
+  const [open, setOpen] = useState(false)
+  // Between a close and the `popstate` it causes, the entry is still ours:
+  // a second close (a double tap, Escape twice) must not step back again.
+  const stepping = useRef(false)
+
+  useEffect(() => {
+    if (!open) return
+    const onPop = () => setOpen(false)
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [open])
+
+  return {
+    open,
+    show: () => {
+      stepping.current = false
+      const entry = { [SHEET_ENTRY]: true }
+      // An entry left behind by Forward or a reload is reused, never stacked.
+      if (window.history.state?.[SHEET_ENTRY]) {
+        window.history.replaceState(entry, '')
+      } else {
+        window.history.pushState(entry, '')
+      }
+      setOpen(true)
+    },
+    close: () => {
+      setOpen(false)
+      if (stepping.current || !window.history.state?.[SHEET_ENTRY]) return
+      stepping.current = true
+      window.history.back()
+    },
+  }
+}
+
 /**
  * The programme's feedback sheet (speaker feedback spec §7.5): a bottom sheet
  * that FRAMES the attendee page rather than rendering it, so the code stays
