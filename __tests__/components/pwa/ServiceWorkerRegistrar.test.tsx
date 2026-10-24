@@ -28,6 +28,7 @@ import {
   SCREEN_UPDATE_CHECK_MS,
   ServiceWorkerRegistrar,
 } from '@/components/pwa/ServiceWorkerRegistrar'
+import { SCREEN_UPDATE_RETRY_MS } from '@/components/pwa/screen-update'
 
 /** Minimal event-emitter shared by the service-worker mocks. */
 class Emitter {
@@ -357,21 +358,89 @@ describe('ServiceWorkerRegistrar', () => {
  * for updates on a timer and accepts one by itself.
  */
 describe('ServiceWorkerRegistrar on /wall/screen', () => {
+  /** The screen's own URL, asked for before an update reloads it. */
+  let screenAnswers = true
+  const headFetch = vi.fn(async () => {
+    if (!screenAnswers) throw new TypeError('Failed to fetch')
+    return new Response(null, { status: 200 })
+  })
   beforeEach(() => {
     h.pathname = '/wall/screen'
     vi.useFakeTimers()
+    screenAnswers = true
+    headFetch.mockClear()
+    vi.stubGlobal('fetch', headFetch)
+    window.sessionStorage.clear()
   })
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
 
   /** Render and flush the async register() (microtasks are not faked). */
   async function renderScreen() {
+    const before = container.register.mock.calls.length
     render(<ServiceWorkerRegistrar />)
     await act(async () => {
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
     })
-    expect(container.register).toHaveBeenCalledTimes(1)
+    expect(container.register).toHaveBeenCalledTimes(before + 1)
     return container.registration
   }
+  const wait = (ms: number) =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(ms)
+    })
+
+  it('takes no update while the screen URL does not answer, and takes it once it does', async () => {
+    screenAnswers = false
+    const waiting = new FakeWorker()
+    waiting.state = 'installed'
+    container.controller = {}
+    container.registration.waiting = waiting
+    await renderScreen()
+    expect(headFetch).toHaveBeenCalledWith(
+      window.location.href,
+      expect.objectContaining({ method: 'HEAD', cache: 'no-store' }),
+    )
+    // A reload now would land on the offline page: wait.
+    expect(waiting.postMessage).not.toHaveBeenCalled()
+    await wait(SCREEN_UPDATE_RETRY_MS)
+    expect(headFetch).toHaveBeenCalledTimes(2)
+    expect(waiting.postMessage).not.toHaveBeenCalled()
+    screenAnswers = true
+    await wait(2 * SCREEN_UPDATE_RETRY_MS)
+    expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+  })
+
+  it('backs off a worker that stays waiting across reloads instead of reloading every few seconds', async () => {
+    // A wedged worker: SKIP_WAITING never activates it.
+    const waiting = new FakeWorker()
+    waiting.state = 'installed'
+    container.controller = {}
+    container.registration.waiting = waiting
+    await renderScreen()
+    expect(waiting.postMessage).toHaveBeenCalledTimes(1)
+    await wait(4000)
+    expect(reloadMock).toHaveBeenCalledTimes(1)
+    // The reloaded screen finds the same worker still waiting.
+    cleanup()
+    await renderScreen()
+    await wait(10_000)
+    expect(waiting.postMessage).toHaveBeenCalledTimes(1)
+    expect(reloadMock).toHaveBeenCalledTimes(1)
+    await wait(SCREEN_UPDATE_RETRY_MS - 4000 - 10_000)
+    expect(waiting.postMessage).toHaveBeenCalledTimes(2)
+    await wait(4000)
+    expect(reloadMock).toHaveBeenCalledTimes(2)
+    // And twice as long before the third.
+    cleanup()
+    await renderScreen()
+    await wait(2 * SCREEN_UPDATE_RETRY_MS - 4000 - 1)
+    expect(waiting.postMessage).toHaveBeenCalledTimes(2)
+    await wait(1)
+    expect(waiting.postMessage).toHaveBeenCalledTimes(3)
+  })
 
   it('finds and accepts an update untouched: a check every 10 minutes, SKIP_WAITING, then one reload', async () => {
     const registration = await renderScreen()
@@ -398,7 +467,9 @@ describe('ServiceWorkerRegistrar on /wall/screen', () => {
       registration.dispatch('updatefound')
       worker.setState('installed')
     })
-    // Accepted without a click, and no banner to click.
+    // Once the screen's URL has answered...
+    await wait(0)
+    // ...accepted without a click, and no banner to click.
     expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(reloadMock).not.toHaveBeenCalled()

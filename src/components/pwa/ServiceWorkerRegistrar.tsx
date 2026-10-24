@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isScreenModePath } from '@/lib/photo-wall/screen'
+import {
+  clearScreenUpdateAttempts,
+  recordScreenUpdateAttempt,
+  screenIsReachable,
+  waitBeforeScreenUpdate,
+} from './screen-update'
 import { UpdateBanner } from './UpdateBanner'
 
 // How long to wait for `controllerchange` after `SKIP_WAITING` before forcing a
@@ -36,7 +42,9 @@ export const SCREEN_UPDATE_CHECK_MS = 10 * 60 * 1000
  *     tabs pick up a deploy without a manual refresh.
  *  6. On the Photo Wall's Screen Mode (`/wall/screen`, Photo Wall spec §9.2)
  *     nobody will click: an update is accepted by itself (SKIP_WAITING, then
- *     the reload of step 4) and the check of step 5 also runs every ten
+ *     the reload of step 4) once the screen's own URL has just answered, a
+ *     worker still waiting after that reload is retried with a growing wait
+ *     (`./screen-update`), and the check of step 5 also runs every ten
  *     minutes, since a venue screen never changes focus or visibility.
  *
  * Registration happens only in the browser and only in production builds, so it
@@ -135,12 +143,38 @@ export function ServiceWorkerRegistrar() {
 
     let registration: ServiceWorkerRegistration | undefined
     let screenUpdateTimer: ReturnType<typeof setInterval> | null = null
+    let screenAttemptTimer: ReturnType<typeof setTimeout> | null = null
+    let screenAttempting = false
+    let disposed = false
+
+    // A venue screen has nobody to click Reload: take the update once it is
+    // safe to reload (the screen's URL answers), backing off attempts in a row.
+    const takeScreenUpdate = async () => {
+      screenAttemptTimer = null
+      const wait = waitBeforeScreenUpdate(Date.now())
+      if (wait > 0) {
+        screenAttemptTimer = setTimeout(takeScreenUpdate, wait)
+        return
+      }
+      const reachable = await screenIsReachable()
+      if (disposed) return
+      recordScreenUpdateAttempt(Date.now())
+      if (reachable) acceptUpdate()
+      else {
+        screenAttemptTimer = setTimeout(
+          takeScreenUpdate,
+          waitBeforeScreenUpdate(Date.now()),
+        )
+      }
+    }
 
     const updateFound = (worker: ServiceWorker) => {
       waitingWorkerRef.current = worker
-      // A venue screen has nobody to click Reload: take the update now.
-      if (screenMode) acceptUpdate()
-      else setUpdateAvailable(true)
+      if (!screenMode) setUpdateAvailable(true)
+      else if (!screenAttempting) {
+        screenAttempting = true
+        void takeScreenUpdate()
+      }
     }
 
     const trackInstalling = (worker: ServiceWorker) => {
@@ -181,6 +215,9 @@ export function ServiceWorkerRegistrar() {
           navigator.serviceWorker.controller
         ) {
           updateFound(registration.waiting)
+        } else if (screenMode) {
+          // Nothing waiting: the last update took. Start the waits afresh.
+          clearScreenUpdateAttempts()
         }
 
         registration.addEventListener('updatefound', () => {
@@ -208,6 +245,8 @@ export function ServiceWorkerRegistrar() {
     }
 
     return () => {
+      disposed = true
+      if (screenAttemptTimer !== null) clearTimeout(screenAttemptTimer)
       navigator.serviceWorker.removeEventListener(
         'controllerchange',
         onControllerChange,
@@ -227,8 +266,6 @@ export function ServiceWorkerRegistrar() {
     }
   }, [acceptUpdate, doReload])
 
-  const handleReload = acceptUpdate
-
   const handleDismiss = () => {
     // Keep the current (waiting) version for now. The already-installed worker
     // stays in `waiting`; the user gets it on their next manual reload / tab
@@ -242,7 +279,7 @@ export function ServiceWorkerRegistrar() {
 
   return (
     <UpdateBanner
-      onReload={handleReload}
+      onReload={acceptUpdate}
       onDismiss={handleDismiss}
       pending={updating}
     />
