@@ -7,12 +7,14 @@ const patch = {
   commit: vi.fn(),
 }
 
+const tx = { patch: vi.fn(), commit: vi.fn() }
+
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {},
-  clientWrite: { patch: vi.fn(() => patch) },
+  clientWrite: { patch: vi.fn(() => patch), transaction: vi.fn(() => tx) },
 }))
 
-import { updateVolunteerStatus } from './sanity'
+import { updateVolunteerStatus, bulkUpdateVolunteerStatus } from './sanity'
 import { VolunteerStatus } from './types'
 
 describe('updateVolunteerStatus', () => {
@@ -64,5 +66,29 @@ describe('updateVolunteerStatus', () => {
     expect(set).toEqual({ status: VolunteerStatus.APPROVED })
     expect(patch.setIfMissing).toHaveBeenCalledOnce()
     expect(patch.unset).toHaveBeenCalledWith(['confirmedAt'])
+  })
+})
+
+describe('bulkUpdateVolunteerStatus', () => {
+  it('patches every id in one transaction with the reviewer', async () => {
+    vi.clearAllMocks()
+    patch.set.mockReturnValue(patch)
+    patch.unset.mockReturnValue(patch)
+    tx.commit.mockResolvedValue({})
+    const res = await bulkUpdateVolunteerStatus(
+      ['v1', 'v2'],
+      VolunteerStatus.APPROVED,
+      'org-2',
+    )
+    expect(res).toEqual({ success: true, error: null })
+    expect(tx.patch.mock.calls.map((c) => c[0])).toEqual(['v1', 'v2'])
+    tx.patch.mock.calls[0][1](patch)
+    expect(patch.set).toHaveBeenCalledWith({
+      status: VolunteerStatus.APPROVED,
+      reviewedAt: expect.any(String),
+      reviewedBy: { _type: 'reference', _ref: 'org-2' },
+    })
+    expect(patch.unset).toHaveBeenCalledWith(['confirmedAt'])
+    expect(tx.commit).toHaveBeenCalledOnce()
   })
 })

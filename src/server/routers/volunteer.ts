@@ -8,6 +8,7 @@ import {
 import {
   GetVolunteerByIdSchema,
   UpdateVolunteerStatusSchema,
+  BulkUpdateVolunteerStatusSchema,
   UpdateVolunteerDetailsSchema,
   SendVolunteerEmailSchema,
   SendVolunteerBulkEmailSchema,
@@ -25,6 +26,7 @@ import {
   getVolunteersByConference,
   getVolunteerById,
   updateVolunteerStatus,
+  bulkUpdateVolunteerStatus,
   updateVolunteerDetails,
   deleteVolunteer,
   createVolunteer,
@@ -585,6 +587,54 @@ export const volunteerRouter = router({
             cause: error,
           })
         }
+      }),
+
+    /**
+     * Approve or reject several pending volunteers at once. Only pending
+     * ones move; the rest are reported as skipped. No email is sent.
+     */
+    bulkUpdateStatus: adminProcedure
+      .input(BulkUpdateVolunteerStatusSchema)
+      .mutation(async ({ input, ctx }) => {
+        // OWNERSHIP: one query scoped to the current conference. Any id that
+        // is not in it (another tenant's, or gone) refuses the whole batch.
+        const conferenceId = await resolveConferenceId()
+        const { volunteers, error } =
+          await getVolunteersByConference(conferenceId)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch volunteers',
+            cause: error,
+          })
+        }
+        const byId = new Map(volunteers.map((v) => [v._id, v]))
+        if (input.volunteerIds.some((id) => !byId.has(id))) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more volunteers were not found',
+          })
+        }
+
+        const ids = [...new Set(input.volunteerIds)].filter(
+          (id) => byId.get(id)!.status === VolunteerStatus.PENDING,
+        )
+        const skipped = input.volunteerIds.length - ids.length
+        if (ids.length === 0) return { updated: 0, skipped }
+
+        const { error: writeError } = await bulkUpdateVolunteerStatus(
+          ids,
+          input.status,
+          ctx.speaker._id,
+        )
+        if (writeError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update volunteer status',
+            cause: writeError,
+          })
+        }
+        return { updated: ids.length, skipped }
       }),
 
     update: adminProcedure
