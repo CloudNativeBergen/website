@@ -10,12 +10,14 @@ import {
   UpdateVolunteerStatusSchema,
   UpdateVolunteerDetailsSchema,
   SendVolunteerEmailSchema,
+  SendVolunteerBulkEmailSchema,
   DeleteVolunteerSchema,
   ConfirmVolunteerAttendanceSchema,
   DeclineVolunteerAttendanceSchema,
   CreateVolunteerSchema,
 } from '../schemas/volunteer'
 import { requireDocumentInCurrentConference } from '../tenancy'
+import { fillVolunteerName } from '@/lib/volunteer/fillName'
 import {
   getVolunteersByConference,
   getVolunteerById,
@@ -717,6 +719,69 @@ export const volunteerRouter = router({
             message: 'Failed to send email',
             cause: error,
           })
+        }
+      }),
+
+    sendBulkEmail: adminProcedure
+      .input(SendVolunteerBulkEmailSchema)
+      .mutation(async ({ input }) => {
+        // OWNERSHIP: one query scoped to the current conference. Any id that
+        // is not in it (another tenant's, or gone) refuses the whole batch.
+        const conferenceId = await resolveConferenceId()
+        const { volunteers, error } =
+          await getVolunteersByConference(conferenceId)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch volunteers',
+            cause: error,
+          })
+        }
+        const byId = new Map(volunteers.map((v) => [v._id, v]))
+        if (input.volunteerIds.some((id) => !byId.has(id))) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more volunteers were not found',
+          })
+        }
+
+        // Recipients come from the DB, deduped by email.
+        const seen = new Set<string>()
+        const recipients = input.volunteerIds
+          .map((id) => byId.get(id)!)
+          .filter((v) => {
+            const key = v.email?.trim().toLowerCase()
+            if (!key || seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
+
+        let sent = 0
+        let failed = 0
+        // ponytail: sequential sends with retryWithBackoff inside; switch to
+        // Resend batch if the cap grows past a few hundred.
+        for (const v of recipients) {
+          const result = await sendVolunteerApprovalEmail(
+            v,
+            v.conference,
+            fillVolunteerName(input.subject, v.name),
+            fillVolunteerName(
+              input.message,
+              v.name,
+              input.message.trim().startsWith('['),
+            ),
+            { registrationUrl: null, slackInviteUrl: null, confirmUrl: null },
+          )
+          if (result.error) failed++
+          else sent++
+        }
+        console.log(
+          `Volunteer bulk email: ${sent} sent, ${failed} failed (${conferenceId})`,
+        )
+        return {
+          sent,
+          failed,
+          skipped: input.volunteerIds.length - recipients.length,
         }
       }),
 

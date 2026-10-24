@@ -28,6 +28,7 @@ import { CheckBadgeIcon } from '@heroicons/react/24/solid'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { AdminPageHeader } from '@/components/admin'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { VolunteerBulkEmailModal } from './VolunteerBulkEmailModal'
 import { VolunteerEditModal } from '@/components/volunteer/VolunteerEditModal'
 import { VolunteerApprovalModal } from '@/components/volunteer/VolunteerApprovalModal'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
@@ -134,6 +135,7 @@ export default function VolunteerAdminPage() {
   )
   const [ticketFilter, setTicketFilter] = useState<TicketFilterState>('all')
   const [emailModalOpen, setEmailModalOpen] = useState(false)
+  const [bulkEmailOpen, setBulkEmailOpen] = useState(false)
   const [emailModalVolunteer, setEmailModalVolunteer] =
     useState<VolunteerWithConference | null>(null)
   const [pendingApprovalReviewNotes, setPendingApprovalReviewNotes] =
@@ -280,6 +282,17 @@ export default function VolunteerAdminPage() {
         type: 'error',
         title: 'Failed to update volunteer status',
         message: err.message,
+      })
+    },
+  })
+
+  const sendBulkEmail = api.volunteer.admin.sendBulkEmail.useMutation({
+    onSuccess: ({ sent, failed }) => {
+      setBulkEmailOpen(false)
+      notify?.showNotification({
+        type: failed ? 'warning' : 'success',
+        title: 'Volunteer email sent',
+        message: `${sent} sent${failed ? `, ${failed} failed` : ''}`,
       })
     },
   })
@@ -609,6 +622,13 @@ export default function VolunteerAdminPage() {
         title="Volunteer Management"
         description="Review and coordinate volunteer applications for the conference"
         actionItems={[
+          {
+            label: 'Email Volunteers',
+            onClick: () => setBulkEmailOpen(true),
+            icon: <EnvelopeIcon className="size-4" />,
+            variant: 'secondary',
+            disabled: filteredEmails.length === 0,
+          },
           {
             label: 'Export CSV',
             onClick: exportCsv,
@@ -1497,6 +1517,17 @@ export default function VolunteerAdminPage() {
           onSend={handleSendApprovalEmail}
           onSaveLinks={handleSaveVolunteerLinks}
           isSavingLinks={updateVolunteerLinks.isPending}
+        />
+      )}
+
+      {bulkEmailOpen && (
+        <VolunteerBulkEmailModal
+          isOpen
+          onClose={() => setBulkEmailOpen(false)}
+          volunteers={filteredVolunteers}
+          onSend={async (data) => {
+            await sendBulkEmail.mutateAsync(data)
+          }}
         />
       )}
 

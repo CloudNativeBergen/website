@@ -74,6 +74,15 @@ export const SendVolunteerEmailSchema = z.object({
     .transform((val) => (val === '' ? null : val)),
 })
 
+export const VOLUNTEER_BULK_EMAIL_MAX = 200
+
+export const SendVolunteerBulkEmailSchema = SendVolunteerEmailSchema.pick({
+  subject: true,
+  message: true,
+}).extend({
+  volunteerIds: z.array(z.string()).min(1).max(VOLUNTEER_BULK_EMAIL_MAX),
+})
+
 export const DeleteVolunteerSchema = z.object({
   volunteerId: z.string(),
 })
