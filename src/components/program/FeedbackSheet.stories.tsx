@@ -40,10 +40,11 @@ export const Open: Story = {
       'title',
       'Feedback on Kubernetes for everyone',
     )
-    // Sized to the page once it has loaded, never left at the placeholder.
-    await waitFor(() => expect(iframe.style.height).not.toBe('320px'), {
+    // Shown once the page has loaded and been measured.
+    await waitFor(() => expect(iframe).not.toHaveClass('opacity-0'), {
       timeout: 10_000,
     })
+    await expect(body.queryByText('Loading…')).toBeNull()
   },
 }
 

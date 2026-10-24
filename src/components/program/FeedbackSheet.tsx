@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
+import clsx from 'clsx'
 import { FEEDBACK_EMBED_ROOT } from '@/lib/feedback/url'
 
 /**
@@ -82,6 +83,11 @@ function FeedbackFrame({
   const frame = useRef<HTMLIFrameElement>(null)
   const [height, setHeight] = useState<number | null>(null)
   const [loaded, setLoaded] = useState(0)
+  // Read at keypress: a new `onEscape` each render must not re-attach.
+  const escape = useRef(onEscape)
+  useEffect(() => {
+    escape.current = onEscape
+  })
 
   useEffect(() => {
     const win = frame.current?.contentWindow
@@ -99,14 +105,14 @@ function FeedbackFrame({
     )
     observer.observe(root)
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onEscape()
+      if (event.key === 'Escape') escape.current()
     }
     win.addEventListener('keydown', onKey)
     return () => {
       observer.disconnect()
       win.removeEventListener('keydown', onKey)
     }
-  }, [loaded, onEscape])
+  }, [loaded])
 
   return (
     <div className="relative">
@@ -124,7 +130,10 @@ function FeedbackFrame({
         title={`Feedback on ${title}`}
         onLoad={() => setLoaded((n) => n + 1)}
         style={{ height: height ?? LOADING_HEIGHT }}
-        className={`block w-full border-0 ${height === null ? 'opacity-0' : ''}`}
+        className={clsx(
+          'block w-full border-0',
+          height === null && 'opacity-0',
+        )}
       />
     </div>
   )

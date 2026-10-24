@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import clsx from 'clsx'
 import {
   ClockIcon,
   ExclamationTriangleIcon,
@@ -73,7 +74,10 @@ export function AttendeeFeedbackPage({
   return (
     <div
       data-shell-fit="viewport"
-      className={`${embedded ? '' : 'min-h-dvh'}bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100`}
+      className={clsx(
+        'bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100',
+        !embedded && 'min-h-dvh',
+      )}
     >
       {/* No logo when the conference could not be read: the platform's own
           mark on a tenant's domain would be another brand. */}
@@ -88,7 +92,10 @@ export function AttendeeFeedbackPage({
       )}
       <main
         {...(embedded && { [FEEDBACK_EMBED_ROOT]: '' })}
-        className={`mx-auto max-w-md px-4 ${embedded ? 'pt-4 pb-8' : 'pt-10 pb-12'}`}
+        className={clsx(
+          'mx-auto max-w-md px-4',
+          embedded ? 'pt-4 pb-8' : 'pt-10 pb-12',
+        )}
       >
         {/* Always in the DOM, so the text set after a delete is announced;
             neutral on a refusal, whatever its reason (§7.4). */}
