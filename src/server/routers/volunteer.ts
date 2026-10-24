@@ -12,7 +12,6 @@ import {
   SendVolunteerEmailSchema,
   SendVolunteerBulkEmailSchema,
   SendVolunteerTicketReminderSchema,
-  VOLUNTEER_BULK_EMAIL_MAX,
   DeleteVolunteerSchema,
   ConfirmVolunteerAttendanceSchema,
   DeclineVolunteerAttendanceSchema,
@@ -835,7 +834,8 @@ export const volunteerRouter = router({
     /**
      * Remind approved/confirmed volunteers who have not redeemed their
      * volunteer ticket to register it. Eligibility is computed here from the
-     * ticket provider, never taken from the client; ids only narrow it.
+     * ticket provider, never taken from the client; ids only narrow it. The
+     * client sends at most VOLUNTEER_EMAIL_CHUNK ids per call.
      * Anyone reminded in the last day is skipped, so a double press or two
      * organizers at once do not mail twice.
      */
@@ -864,7 +864,7 @@ export const volunteerRouter = router({
           })
         }
         const byId = new Map(volunteers.map((v) => [v._id, v]))
-        if (input.volunteerIds?.some((id) => !byId.has(id))) {
+        if (input.volunteerIds.some((id) => !byId.has(id))) {
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'One or more volunteers were not found',
@@ -880,9 +880,7 @@ export const volunteerRouter = router({
           })
         }
 
-        const candidates = input.volunteerIds
-          ? input.volunteerIds.map((id) => byId.get(id)!)
-          : volunteers
+        const candidates = input.volunteerIds.map((id) => byId.get(id)!)
         const unredeemed = new Set(
           joinVolunteerTicketStatus(candidates, redeemed)
             .filter((s) => s.state !== 'redeemed')
@@ -891,7 +889,7 @@ export const volunteerRouter = router({
         const now = Date.now()
         const recentCutoff = now - 24 * 60 * 60 * 1000
         const seen = new Set<string>()
-        const eligible = candidates.filter((v) => {
+        const recipients = candidates.filter((v) => {
           if (
             v.status !== VolunteerStatus.APPROVED &&
             v.status !== VolunteerStatus.CONFIRMED
@@ -908,8 +906,6 @@ export const volunteerRouter = router({
           seen.add(key)
           return true
         })
-        const recipients = eligible.slice(0, VOLUNTEER_BULK_EMAIL_MAX)
-
         if (recipients.length && !conference.volunteerRegistrationLink) {
           // Without a link the reminder has nothing to ask them to open.
           throw new TRPCError({
@@ -919,38 +915,38 @@ export const volunteerRouter = router({
           })
         }
 
+        requireSenderAddress(recipients)
+
         const sentAt = new Date(now).toISOString()
-        let sent = 0
-        let failed = 0
-        // ponytail: sequential, like sendBulkEmail; capped at the bulk max.
-        for (const v of recipients) {
-          const result = await sendVolunteerApprovalEmail(
-            v,
-            v.conference,
-            `Register your volunteer ticket - ${v.conference.title}`,
-            `Our records show you have not registered your volunteer ticket yet. Please use the link below to register it, so we have you on the list at the door.\n\nIf you have already registered, you can ignore this email.`,
-            {
-              registrationUrl: conference.volunteerRegistrationLink,
-              slackInviteUrl: null,
-              confirmUrl: null,
-            },
-          )
-          if (result.error) {
-            failed++
-            continue
-          }
-          sent++
-          const recorded = await recordVolunteerTicketReminderSent(
-            v._id,
-            sentAt,
-          )
-          if (!recorded.success) {
-            console.error(
-              'Failed to record volunteer ticket reminder:',
-              recorded.error,
+        const { sent, failed } = await sendEachVolunteer(
+          recipients,
+          (v) =>
+            sendVolunteerApprovalEmail(
+              v,
+              v.conference,
+              `Reminder: register your volunteer ticket for ${v.conference.title}`,
+              'Our records show you have not registered your volunteer ticket yet. Please use the button below to register it, so we have you on the list at the door.\n\nIf you have already registered, you can ignore this email.',
+              {
+                template: 'message',
+                title: `Reminder: register your volunteer ticket for ${v.conference.title}`,
+                registrationUrl: conference.volunteerRegistrationLink,
+                slackInviteUrl: null,
+                confirmUrl: null,
+              },
+            ),
+          async (v) => {
+            const recorded = await recordVolunteerTicketReminderSent(
+              v._id,
+              sentAt,
             )
-          }
-        }
+            if (!recorded.success) {
+              console.error(
+                'Failed to record volunteer ticket reminder:',
+                recorded.error,
+              )
+            }
+          },
+        )
         return {
           sent,
           failed,

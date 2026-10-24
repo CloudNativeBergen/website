@@ -86,11 +86,7 @@ export const SendVolunteerBulkEmailSchema = SendVolunteerEmailSchema.pick({
 })
 
 export const SendVolunteerTicketReminderSchema = z.object({
-  volunteerIds: z
-    .array(z.string())
-    .min(1)
-    .max(VOLUNTEER_BULK_EMAIL_MAX)
-    .optional(),
+  volunteerIds: z.array(z.string()).min(1).max(VOLUNTEER_EMAIL_CHUNK),
 })
 
 export const DeleteVolunteerSchema = z.object({

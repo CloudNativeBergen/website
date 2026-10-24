@@ -29,6 +29,7 @@ import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { AdminPageHeader } from '@/components/admin'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { VolunteerBulkEmailModal } from './VolunteerBulkEmailModal'
+import { sendInChunks } from '@/lib/volunteer/chunkedSend'
 import { VolunteerEditModal } from '@/components/volunteer/VolunteerEditModal'
 import { VolunteerApprovalModal } from '@/components/volunteer/VolunteerApprovalModal'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
@@ -290,31 +291,50 @@ export default function VolunteerAdminPage() {
 
   const sendBulkEmail = api.volunteer.admin.sendBulkEmail.useMutation()
 
-  const sendTicketReminder = api.volunteer.admin.sendTicketReminder.useMutation(
-    {
-      onSuccess: async ({ sent, failed }) => {
-        setReminderTargets(null)
-        await utils.volunteer.admin.list.invalidate()
-        if (selectedVolunteerId) {
-          await utils.volunteer.admin.getById.invalidate({
-            id: selectedVolunteerId,
-          })
-        }
-        notify?.showNotification({
-          type: failed ? 'warning' : 'success',
-          title: 'Ticket reminder sent',
-          message: `${sent} sent${failed ? `, ${failed} failed` : ''}`,
-        })
-      },
-      onError: (err) => {
-        notify?.showNotification({
-          type: 'error',
-          title: 'Failed to send ticket reminder',
-          message: err.message,
-        })
-      },
-    },
-  )
+  const sendTicketReminder =
+    api.volunteer.admin.sendTicketReminder.useMutation()
+  // "Sent 25 of 80" while the reminder chunks go out; null when idle.
+  const [reminderProgress, setReminderProgress] = useState<string | null>(null)
+
+  const runTicketReminder = async (ids: string[]) => {
+    const total = ids.length
+    setReminderProgress(`Sent 0 of ${total}`)
+    const res = await sendInChunks(
+      ids,
+      (volunteerIds) => sendTicketReminder.mutateAsync({ volunteerIds }),
+      (done) => setReminderProgress(`Sent ${done} of ${total}`),
+    )
+    setReminderProgress(null)
+    await utils.volunteer.admin.list.invalidate()
+    if (selectedVolunteerId) {
+      await utils.volunteer.admin.getById.invalidate({
+        id: selectedVolunteerId,
+      })
+    }
+    // Keep the dialog open on what is left: failures plus anything unsent.
+    // Already reminded volunteers are skipped by the server for 24 hours.
+    const left = [...res.failed.map((f) => f.id), ...ids.slice(res.done)]
+    setReminderTargets(left.length > 0 ? left : null)
+    if (res.error) {
+      notify?.showNotification({
+        type: 'error',
+        title: 'Ticket reminder stopped',
+        message: `Stopped after ${res.done} of ${total}: ${res.error.message}. Send again to continue with the rest.`,
+      })
+    } else if (res.failed.length > 0) {
+      notify?.showNotification({
+        type: 'warning',
+        title: 'Some ticket reminders failed',
+        message: `Not sent to: ${res.failed.map((f) => f.email).join(', ')}`,
+      })
+    } else {
+      notify?.showNotification({
+        type: 'success',
+        title: 'Ticket reminder sent',
+        message: `Processed ${total} ${total === 1 ? 'volunteer' : 'volunteers'}`,
+      })
+    }
+  }
 
   const sendEmail = api.volunteer.admin.sendEmail.useMutation({
     onSuccess: async (data, variables) => {
@@ -1653,12 +1673,14 @@ export default function VolunteerAdminPage() {
         isOpen={!!reminderTargets}
         onClose={() => setReminderTargets(null)}
         onConfirm={() => {
-          if (reminderTargets)
-            sendTicketReminder.mutate({ volunteerIds: reminderTargets })
+          if (reminderTargets) void runTicketReminder(reminderTargets)
         }}
-        isLoading={sendTicketReminder.isPending}
+        isLoading={reminderProgress !== null}
         title="Remind to Register Ticket"
-        message={`Send a ticket registration reminder to ${reminderTargets?.length ?? 0} ${reminderTargets?.length === 1 ? 'volunteer' : 'volunteers'} who have not registered their ticket? Anyone reminded in the last 24 hours is skipped.`}
+        message={
+          reminderProgress ??
+          `Send a ticket registration reminder to ${reminderTargets?.length ?? 0} ${reminderTargets?.length === 1 ? 'volunteer' : 'volunteers'} who have not registered their ticket? Anyone reminded in the last 24 hours is skipped.`
+        }
         confirmButtonText="Send Reminder"
         variant="warning"
       />

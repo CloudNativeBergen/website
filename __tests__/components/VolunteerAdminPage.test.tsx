@@ -64,7 +64,7 @@ const {
   const ticketState: {
     data: { available: boolean; statuses: unknown[] } | undefined
   } = { data: undefined }
-  const reminderMutate = vi.fn()
+  const reminderMutate = vi.fn().mockResolvedValue({ sent: 1, failed: [] })
   return {
     volunteers,
     listState,
@@ -118,7 +118,10 @@ vi.mock('@/lib/trpc/client', () => ({
         sendEmail: { useMutation: mutation },
         sendBulkEmail: { useMutation: mutation },
         sendTicketReminder: {
-          useMutation: () => ({ mutate: reminderMutate, isPending: false }),
+          useMutation: () => ({
+            mutateAsync: reminderMutate,
+            isPending: false,
+          }),
         },
         delete: { useMutation: mutation },
         update: { useMutation: mutation },
@@ -337,8 +340,10 @@ describe('VolunteerAdminPage', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Send Reminder' }),
     )
-    expect(reminderMutate).toHaveBeenCalledWith({
-      volunteerIds: ['v-approved'],
-    })
+    await waitFor(() =>
+      expect(reminderMutate).toHaveBeenCalledWith({
+        volunteerIds: ['v-approved'],
+      }),
+    )
   })
 })
