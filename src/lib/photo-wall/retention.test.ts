@@ -684,6 +684,26 @@ describe('an interrupted run repeats the purge: nothing lost, nothing deleted tw
     expect(store().doc('photoWall-conf-A')).not.toHaveProperty('purgedAt')
   })
 
+  it("when only the LAST asset's holder check can't be told, the chunk still deletes nothing", async () => {
+    // Every other check has answered by then: only this one is unknown.
+    store().failReadsThat(
+      (read) =>
+        read.query.includes('references(') &&
+        read.params.assetId === assetId('s6'),
+    )
+    const report = await run(clock(at(DELETION_DAY)))
+    expect(report).toMatchObject({
+      purged: 0,
+      posts: 0,
+      unfinished: ['photoWall-conf-A'],
+    })
+    expect(deletedIds()).toEqual([])
+    expect(store().doc(`drafts.${A('6')}`)).toMatchObject({
+      status: 'deleting',
+      deletingAssetId: assetId('s6'),
+    })
+  })
+
   it('a failed purge of one wall does not stop the next wall', async () => {
     // Both due on 31 December; conf-A's post delete is refused.
     store().put(wall('conf-B', { closedAt: '2026-12-30T03:10:00Z' }))
