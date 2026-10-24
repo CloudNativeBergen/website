@@ -8,13 +8,15 @@ import { Action } from '@/lib/proposal/types'
 /**
  * A speaker withdrew their own talk and the reason went out as a thread
  * message, whose fan-out already posted to Slack. A second "Talk Withdrawn"
- * alert would double-notify the organizers.
+ * alert would double-notify the organizers, unless it carries tickets to
+ * cancel by hand: the thread message has no ticket list.
  */
 function isSelfWithdrawInThread(event: ProposalStatusChangeEvent): boolean {
   return (
     event.action === Action.withdraw &&
     !event.metadata.triggeredBy.isOrganizer &&
-    !!event.metadata.postedToThread
+    !!event.metadata.postedToThread &&
+    !event.metadata.ticketCancellation?.speakers.length
   )
 }
 
