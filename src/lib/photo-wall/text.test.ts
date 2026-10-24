@@ -114,6 +114,27 @@ describe('wallTextLength and limitWallText: the counter and the cut measure the 
     expect(limitWallText('ab🎉', 2)).toBe('ab')
     expect(limitWallText('cafe\u0301!', 4)).toBe('caf\u00e9')
   })
+
+  it('keeps the flag of England whole, and counts it as the server does: 7 code points', () => {
+    // A black flag, five tag letters (g b e n g) and a cancel tag. A tag on
+    // its own is dropped, so the flag only survives if the strip sees it whole.
+    const england =
+      '\u{1f3f4}\u{e0067}\u{e0062}\u{e0065}\u{e006e}\u{e0067}\u{e007f}'
+    expect(limitWallText(`Hi ${england}`, CAPTION_MAX)).toBe(`Hi ${england}`)
+    expect(wallTextLength(england)).toBe(7)
+    // At the limit: 73 letters and the flag are exactly 80.
+    const atLimit = `${'x'.repeat(73)}${england}`
+    expect(limitWallText(atLimit, CAPTION_MAX)).toBe(atLimit)
+    expect(wallTextLength(atLimit)).toBe(CAPTION_MAX)
+  })
+
+  it('reads no more of a paste than the server accepts: the first 1000 UTF-16 units', () => {
+    // 999 spaces, then 'abc': the 1000th unit is the 'a'. What comes after
+    // it is never kept, however few code points the text normalises to.
+    const paste = `${' '.repeat(999)}abc`
+    expect(limitWallText(paste, CAPTION_MAX)).toBe(`${' '.repeat(999)}a`)
+  })
+
   it('cuts a pasted essay in linear time, not one re-count per letter', () => {
     const started = performance.now()
     const cut = limitWallText('x'.repeat(40_000), CAPTION_MAX)

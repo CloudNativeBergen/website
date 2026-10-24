@@ -9,7 +9,7 @@ import {
   waitFor,
   within,
 } from 'storybook/test'
-import { describeCrop } from '@/lib/photo-wall/crop'
+import { CENTER_CROP, describeCrop } from '@/lib/photo-wall/crop'
 import { WALL_FILTERS, type WallFilterKey } from '@/lib/photo-wall/filters'
 import {
   endsWithEoi,
@@ -468,10 +468,22 @@ export const DragAcrossPost: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = await pickFixture(canvasElement)
     const window = canvas.getByRole('button', { name: 'Photo position' })
+    const readout = canvas.getByTestId('crop-readout')
     const pointer = { pointerId: 1, clientX: 100 }
+    // The production build (CI's `storybook build --test`) does not wrap
+    // fireEvent in act, so React renders after it returns: each step waits
+    // for the screen to show the last one before the next is fired.
     fireEvent.pointerDown(window, { ...pointer, clientY: 100 })
     fireEvent.pointerMove(window, { ...pointer, clientY: 140 })
+    await waitFor(() =>
+      expect(readout).not.toHaveTextContent(
+        `Showing ${describeCrop(CENTER_CROP)}`,
+      ),
+    )
     fireEvent.click(canvas.getByRole('button', { name: 'Post to the wall' }))
+    await canvas.findByRole('button', {
+      name: /^(Preparing your photo…|Posting…)$/,
+    })
     fireEvent.pointerMove(window, { ...pointer, clientY: 300 })
     await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(1), {
       timeout: 10_000,
@@ -487,6 +499,37 @@ export const DragAcrossPost: Story = {
     await expect(canvas.getByTestId('crop-readout')).toHaveTextContent(
       `Showing ${describeCrop(draft.crop)}`,
     )
+  },
+}
+
+/**
+ * Lifting the finger ends the drag: a pointer moving over the window
+ * afterwards (a mouse, a stylus hovering) leaves the crop where it was.
+ */
+export const DragEndsOnRelease: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = await pickFixture(canvasElement)
+    const window = canvas.getByRole('button', { name: 'Photo position' })
+    const readout = canvas.getByTestId('crop-readout')
+    const pointer = { pointerId: 1, clientX: 100 }
+    fireEvent.pointerDown(window, { ...pointer, clientY: 100 })
+    fireEvent.pointerMove(window, { ...pointer, clientY: 140 })
+    await waitFor(() =>
+      expect(readout).not.toHaveTextContent(
+        `Showing ${describeCrop(CENTER_CROP)}`,
+      ),
+    )
+    const dropped = readout.textContent
+    fireEvent.pointerUp(window, pointer)
+    fireEvent.pointerMove(window, { ...pointer, clientY: 300 })
+    // Nothing should change, so there is nothing to wait for: give React two
+    // frames and a task to render a move that did go through.
+    await new Promise((resolve) =>
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => setTimeout(resolve, 50)),
+      ),
+    )
+    await expect(readout.textContent).toBe(dropped)
   },
 }
 

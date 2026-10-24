@@ -36,6 +36,17 @@ describe('fitLongEdge', () => {
     expect(fitLongEdge(10_000, 1)).toEqual({ width: 2048, height: 1 })
   })
 
+  it('puts the long edge on the maximum exactly, for every long edge up to 60,000 px', () => {
+    let off = 0
+    for (const max of [128, 256, 512, 1024, 2048, 4096]) {
+      for (let long = max + 1; long <= 60_000; long += 1) {
+        if (fitLongEdge(long, 7, max).width !== max) off += 1
+        if (fitLongEdge(7, long, max).height !== max) off += 1
+      }
+    }
+    expect(off).toBe(0)
+  })
+
   it('takes another maximum, for the preview copies', () => {
     expect(fitLongEdge(4032, 3024, 960)).toEqual({ width: 960, height: 720 })
   })

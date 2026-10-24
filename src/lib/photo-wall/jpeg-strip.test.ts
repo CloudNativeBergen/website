@@ -233,6 +233,65 @@ describe('stripJpegMetadata on a synthetic JPEG with APP1, APP13 and COM', () =>
     expect(stripJpegMetadata(notJpeg)).toBe(notJpeg)
   })
 
+  it('walks past a standalone marker (no length field) and still drops the APP1 after it', () => {
+    // TEM (0x01) and RSTn carry no length: read as one, TEM's "length" would
+    // be the next marker's 0xff 0xe1, and the walk would stop before the APP1.
+    const withTem = new Uint8Array([
+      0xff,
+      0xd8,
+      ...app0,
+      0xff,
+      0x01,
+      ...app1,
+      ...dqt,
+      ...scan,
+      0xff,
+      0xd9,
+    ])
+    expect(markersOf(withTem)).toEqual([0xe0, 0x01, 0xe1, 0xdb])
+    expect(markersOf(stripJpegMetadata(withTem))).toEqual([0xe0, 0x01, 0xdb])
+  })
+
+  it('stops at a byte that is not a marker, rather than reading an APP1 out of what follows', () => {
+    // After APP0 the header is broken: 0x00 where a 0xff must be. Read as a
+    // marker anyway, the 0xe1 after it would make an APP1 to cut out.
+    const broken = new Uint8Array([
+      0xff,
+      0xd8,
+      ...app0,
+      0x00,
+      0xe1,
+      0x00,
+      0x04,
+      0xaa,
+      0xbb,
+      ...scan,
+      0xff,
+      0xd9,
+    ])
+    expect(markersOf(broken)).toEqual([0xe0])
+    expect(stripJpegMetadata(broken)).toBe(broken)
+  })
+
+  it('stops at a marker cut off before its length, instead of taking it as an empty segment', () => {
+    for (const tail of [
+      [0xff, 0xe1],
+      [0xff, 0xe1, 0x00],
+    ]) {
+      const cut = new Uint8Array([0xff, 0xd8, ...app0, ...tail])
+      expect(markersOf(cut)).toEqual([0xe0])
+      expect(stripJpegMetadata(cut)).toBe(cut)
+    }
+  })
+
+  it('an EOI is 0xff 0xd9: a file ending on another marker or a stuffed byte does not end with one', () => {
+    expect(endsWithEoi(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]))).toBe(true)
+    expect(endsWithEoi(new Uint8Array([0xff, 0xd8, 0x12, 0xff, 0x00]))).toBe(
+      false,
+    )
+    expect(endsWithEoi(new Uint8Array([0xff, 0xd8, 0xff, 0xda]))).toBe(false)
+  })
+
   it('stops at a segment whose length runs past the end instead of throwing', () => {
     const truncated = new Uint8Array([
       0xff,

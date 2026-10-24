@@ -99,6 +99,15 @@ describe('what each filter does', () => {
     expect(right[2]).toBeGreaterThan(right[1])
   })
 
+  it('Aurora on a one-pixel-wide image starts on the same green, not black', () => {
+    // A 1x2 column: its top pixel sits where the 2x1 row's left one does.
+    const column = new Uint8ClampedArray([...grey, 255, ...grey, 255])
+    applyWallFilter(column, 1, 2, 'aurora')
+    expect([column[0], column[1], column[2]]).toEqual(
+      run('aurora', grey, grey).left,
+    )
+  })
+
   it('Mono and Noir are grey, Noir with more contrast', () => {
     for (const key of ['mono', 'noir'] as const) {
       const [r, g, b] = run(key, skin).left

@@ -33,11 +33,9 @@ export function fitLongEdge(
 ): Size {
   const long = Math.max(width, height)
   if (long <= max) return { width, height }
-  const size = scaled(width, height, max / long)
-  // Rounding never moves the long edge off the maximum.
-  if (width >= height) size.width = max
-  else size.height = max
-  return size
+  // The long edge lands on `max` exactly: `long * (max / long)` is within
+  // two rounding errors of an integer, which Math.round puts back on it.
+  return scaled(width, height, max / long)
 }
 
 /**

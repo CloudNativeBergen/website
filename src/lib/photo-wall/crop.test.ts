@@ -59,6 +59,24 @@ describe('cropSquare: the square of the short edge the crop places', () => {
       size: 1365,
     })
   })
+
+  it('never places the square outside the photo, whatever crop it is handed', () => {
+    expect(cropSquare(2048, 1536, { x: 1.5, y: -3 })).toEqual({
+      x: 512,
+      y: 0,
+      size: 1536,
+    })
+    expect(cropSquare(2048, 1536, { x: -0.5, y: NaN })).toEqual({
+      x: 0,
+      y: 0,
+      size: 1536,
+    })
+    expect(cropSquare(1536, 2048, { x: 0.5, y: NaN })).toEqual({
+      x: 0,
+      y: 256,
+      size: 1536,
+    })
+  })
 })
 
 describe('clampCrop', () => {
@@ -108,6 +126,12 @@ describe('dragCrop: panning the window by a finger movement', () => {
     expect(crop.y).toBeCloseTo(0.75, 6)
   })
 
+  it('leaves the short axis where it was, off-centre too, rather than resetting it', () => {
+    expect(
+      dragCrop({ x: 0.3, y: 0.2 }, { dx: 0, dy: 80 }, frame, landscape),
+    ).toEqual({ x: 0.3, y: 0.2 })
+  })
+
   it('a square photo cannot pan', () => {
     expect(
       dragCrop(CENTER_CROP, { dx: 40, dy: 40 }, frame, {
@@ -115,6 +139,12 @@ describe('dragCrop: panning the window by a finger movement', () => {
         height: 1000,
       }),
     ).toEqual(CENTER_CROP)
+    expect(
+      dragCrop({ x: 0.1, y: 0.9 }, { dx: 40, dy: 0 }, frame, {
+        width: 1000,
+        height: 1000,
+      }),
+    ).toEqual({ x: 0.1, y: 0.9 })
   })
 })
 
