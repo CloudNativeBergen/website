@@ -13,9 +13,12 @@ export function csvCell(value: string | number | undefined | null): string {
   const raw = String(value ?? '')
     .replace(/[\r\n]+/g, ' ')
     .trim()
-  const safe = FORMULA_PREFIXES.some((prefix) => raw.startsWith(prefix))
-    ? `'${raw}`
-    : raw
+  // A plain phone number like +47 123 45 678 cannot run as a formula.
+  const isPhone = /^\+[\d ]+$/.test(raw)
+  const safe =
+    !isPhone && FORMULA_PREFIXES.some((prefix) => raw.startsWith(prefix))
+      ? `'${raw}`
+      : raw
   return /[",;]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
 }
 
