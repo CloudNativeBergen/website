@@ -3,6 +3,7 @@
 import { PlusIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
+import { photoAlt, tileShape } from '@/lib/photo-wall/look'
 import type { WallLook } from '@/lib/photo-wall/types'
 import {
   WALL_POST_LIMIT,
@@ -44,7 +45,7 @@ function Polaroid({ post, eager }: { post: WallPagePost; eager: boolean }) {
     >
       <img
         src={post.src}
-        alt={post.name ? `Photo by ${post.name}` : 'Photo from the wall'}
+        alt={photoAlt(post)}
         width={600}
         height={600}
         loading={eager ? 'eager' : 'lazy'}
@@ -67,15 +68,6 @@ function Polaroid({ post, eager }: { post: WallPagePost; eager: boolean }) {
   )
 }
 
-const photoAlt = (post: WallPagePost) =>
-  post.name ? `Photo by ${post.name}` : 'Photo from the wall'
-
-/**
- * Height over width of a Mosaic tile: the photo's own shape within these
- * bounds; beyond them (a panorama, a sliver of a portrait) the whole photo
- * is letterboxed inside the tile, never cropped.
- */
-const TILE_SHAPE = { min: 0.5, max: 1.8 }
 /** Grid rows per column width: a tile spans its shape times this. */
 const ROWS_PER_COLUMN = 24
 
@@ -96,10 +88,7 @@ function MosaicGrid({ posts }: { posts: WallPagePost[] }) {
         }}
       >
         {posts.map((post, i) => {
-          const shape = Math.min(
-            TILE_SHAPE.max,
-            Math.max(TILE_SHAPE.min, post.whole.height / post.whole.width),
-          )
+          const shape = tileShape(post.whole)
           return (
             <li
               key={post._id}

@@ -41,7 +41,8 @@ function useLiveBoard<S>(
   // poll, with the tick alongside, trips React's nested-update limit on a
   // screen left open for hours. A look mounted later (switched to) takes
   // the latest answer as its first load.
-  const [seen, setSeen] = useState({ dataAt: 0, errorAt: 0 })
+  // A look switched to does not count a failure from before it mounted.
+  const [seen, setSeen] = useState({ dataAt: 0, errorAt: errorUpdatedAt })
   if (seen.dataAt !== dataUpdatedAt || seen.errorAt !== errorUpdatedAt) {
     setSeen({ dataAt: dataUpdatedAt, errorAt: errorUpdatedAt })
     if (data && seen.dataAt !== dataUpdatedAt) {
@@ -85,8 +86,11 @@ function StreamBoard({
   poll,
   conference,
 }: LookProps & { look: StreamLook }) {
-  const init = useCallback(() => initialStream(look), [look])
-  const { state, ...images } = useLiveBoard(streamReducer, init, poll)
+  const { state, ...images } = useLiveBoard(
+    streamReducer,
+    () => initialStream(look),
+    poll,
+  )
   const Screen = look === 'mosaic' ? MosaicScreen : SpotlightScreen
   return <Screen state={state} conference={conference} {...images} />
 }

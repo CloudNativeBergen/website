@@ -1,7 +1,8 @@
 'use client'
 
 import clsx from 'clsx'
-import { screenPostKey, type ScreenPost } from '@/lib/photo-wall/screen'
+import { photoAlt } from '@/lib/photo-wall/look'
+import type { ScreenPost } from '@/lib/photo-wall/screen'
 import {
   LEAVE_MS,
   type BoardState,
@@ -15,6 +16,7 @@ import {
   QrPolaroid,
   STRIP_HEIGHT,
   ScreenShell,
+  pendingOf,
   showsStrip,
   type ScreenConference,
 } from './ScreenShell'
@@ -52,7 +54,7 @@ function Polaroid({
     >
       <img
         src={post.src}
-        alt={post.name ? `Photo by ${post.name}` : 'Photo from the wall'}
+        alt={photoAlt(post)}
         width={600}
         height={600}
         draggable={false}
@@ -151,11 +153,7 @@ export function ScreenLayout({
       strip={strip}
       header
       background="radial-gradient(ellipse at center, color-mix(in srgb, var(--screen-accent) 14%, #44403c) 0%, #1c1917 75%)"
-      pending={pendingImages(board).map((post) => ({
-        key: screenPostKey(post),
-        id: post._id,
-        src: post.src,
-      }))}
+      pending={pendingImages(board).map((post) => pendingOf(post, post.src))}
       onImageLoaded={onImageLoaded}
       onImageFailed={onImageFailed}
     >

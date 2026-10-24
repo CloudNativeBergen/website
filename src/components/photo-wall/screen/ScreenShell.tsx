@@ -7,6 +7,7 @@ import { SponsorBanner } from '@/components/stream/SponsorBanner'
 import { useFeedbackQrPng } from '@/components/feedback/useFeedbackQrPng'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
 import { feedbackCodeDisplayUrl } from '@/lib/feedback/code-assets'
+import { screenPostKey, type ScreenPost } from '@/lib/photo-wall/screen'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import { filterPublicSponsors } from '@/lib/sponsor/utils'
 
@@ -56,6 +57,11 @@ export interface PendingImage {
   /** The post's id, for tests and the inspector. */
   id: string
   src: string
+}
+
+/** A post's photo at `src`, as an image the screen wants fetched. */
+export function pendingOf(post: ScreenPost, src: string): PendingImage {
+  return { key: screenPostKey(post), id: post._id, src }
 }
 
 /** The strip shows while its switch is on and a public sponsor exists, never on a closed wall (§9.4). */

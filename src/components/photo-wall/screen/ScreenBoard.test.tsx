@@ -641,6 +641,23 @@ describe("Wall Looks (§9): the wall's look, live, and a screen link's ?look=", 
     expect(hero()?.getAttribute('data-post')).toBe('wallPost-14')
   })
 
+  it('a switched look does not count a failed poll from before the switch (§9.3)', async () => {
+    mount(view(posts(8)))
+    await advance(0)
+    loadImages()
+    await advance(100)
+    h.queryFn.mockRejectedValue(new Error('offline'))
+    await nextPoll()
+    h.queryFn.mockResolvedValue(view(posts(8), { look: 'mosaic' }))
+    await nextPoll()
+    h.queryFn.mockRejectedValue(new Error('offline'))
+    await nextPoll()
+    await nextPoll()
+    expect(offlineDot()).toBeNull()
+    await nextPoll()
+    expect(offlineDot()).toBeInTheDocument()
+  })
+
   it("keeps a screen link's ?look= whatever the wall's look", async () => {
     mount(view(posts(8), { look: 'mosaic' }), [], 'spotlight')
     await advance(0)

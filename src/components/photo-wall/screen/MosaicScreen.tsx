@@ -1,11 +1,17 @@
 'use client'
 
 import clsx from 'clsx'
+import { photoAlt, tileShape } from '@/lib/photo-wall/look'
 import { screenPostKey, type ScreenPost } from '@/lib/photo-wall/screen'
 import {
-  ScreenHeader,
-  QrCard,
+  CANVAS,
   NewMark,
+  QrCard,
+  STRIP_HEIGHT,
+  ScreenHeader,
+  ScreenShell,
+  pendingOf,
+  showsStrip,
   type ScreenConference,
 } from './ScreenShell'
 import {
@@ -17,20 +23,13 @@ import {
   streamInvitation,
   type StreamState,
 } from './stream'
-import { STRIP_HEIGHT, ScreenShell, showsStrip } from './ScreenShell'
 
 const COLS = 7
 const GAP = 4
 /** The grid's row unit: a tile spans as many as its photo's shape needs. */
 const ROW = 8
-const COL_WIDTH = (1920 - 2 * GAP - (COLS - 1) * GAP) / COLS
+const COL_WIDTH = (CANVAS.width - 2 * GAP - (COLS - 1) * GAP) / COLS
 
-/**
- * Height over width of a tile. A tile keeps its photo's shape within these
- * bounds; beyond them (a panorama, a strip of a portrait) the whole photo
- * is letterboxed inside it, never cropped.
- */
-const TILE_SHAPE = { min: 0.5, max: 1.8 }
 /** The spotlight tile, two columns wide, stays close to square. */
 const SPOTLIGHT_SHAPE = { min: 0.75, max: 1.25 }
 
@@ -47,10 +46,9 @@ function Tile({
   isNew: boolean
 }) {
   const span = spotlight ? 2 : 1
-  const shape = clamp(
-    post.whole.height / post.whole.width,
-    spotlight ? SPOTLIGHT_SHAPE : TILE_SHAPE,
-  )
+  const shape = spotlight
+    ? clamp(post.whole.height / post.whole.width, SPOTLIGHT_SHAPE)
+    : tileShape(post.whole)
   const height = (COL_WIDTH * span + GAP * (span - 1)) * shape
   const rows = Math.round((height + GAP) / (ROW + GAP))
   return (
@@ -69,7 +67,7 @@ function Tile({
     >
       <img
         src={post.whole.src}
-        alt={post.name ? `Photo by ${post.name}` : 'Photo from the wall'}
+        alt={photoAlt(post)}
         width={post.whole.width}
         height={post.whole.height}
         draggable={false}
@@ -132,11 +130,9 @@ export function MosaicScreen({
       strip={strip}
       header={false}
       background="#000"
-      pending={pendingStreamImages(state).map((post) => ({
-        key: screenPostKey(post),
-        id: post._id,
-        src: post.whole.src,
-      }))}
+      pending={pendingStreamImages(state).map((post) =>
+        pendingOf(post, post.whole.src),
+      )}
       onImageLoaded={onImageLoaded}
       onImageFailed={onImageFailed}
     >

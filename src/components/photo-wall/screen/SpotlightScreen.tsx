@@ -1,5 +1,6 @@
 'use client'
 
+import { photoAlt } from '@/lib/photo-wall/look'
 import { screenPostKey, type ScreenPost } from '@/lib/photo-wall/screen'
 import { formatConferenceClock } from '@/lib/time'
 import { SWAP_EVERY_MS } from './board'
@@ -9,6 +10,7 @@ import {
   STRIP_HEIGHT,
   ScreenHeader,
   ScreenShell,
+  pendingOf,
   showsStrip,
   type ScreenConference,
 } from './ScreenShell'
@@ -22,9 +24,6 @@ import {
   type StreamState,
 } from './stream'
 
-const alt = (post: ScreenPost) =>
-  post.name ? `Photo by ${post.name}` : 'Photo from the wall'
-
 function UpNextItem({ post, isNew }: { post: ScreenPost; isNew: boolean }) {
   return (
     <li
@@ -35,7 +34,7 @@ function UpNextItem({ post, isNew }: { post: ScreenPost; isNew: boolean }) {
     >
       <img
         src={post.whole.src}
-        alt={alt(post)}
+        alt={photoAlt(post)}
         draggable={false}
         decoding="async"
         className="size-20 shrink-0 rounded-lg bg-white/10 object-cover"
@@ -86,11 +85,9 @@ export function SpotlightScreen({
       strip={strip}
       header={false}
       background="#030712"
-      pending={pendingStreamImages(state).map((post) => ({
-        key: screenPostKey(post),
-        id: post._id,
-        src: post.whole.src,
-      }))}
+      pending={pendingStreamImages(state).map((post) =>
+        pendingOf(post, post.whole.src),
+      )}
       onImageLoaded={onImageLoaded}
       onImageFailed={onImageFailed}
     >
@@ -118,7 +115,7 @@ export function SpotlightScreen({
             >
               <img
                 src={hero.whole.src}
-                alt={alt(hero)}
+                alt={photoAlt(hero)}
                 width={hero.whole.width}
                 height={hero.whole.height}
                 draggable={false}
