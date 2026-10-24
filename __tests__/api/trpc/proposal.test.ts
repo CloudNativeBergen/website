@@ -670,7 +670,7 @@ describe('proposal router', () => {
         expect(published().metadata.postedToThread).toBe(true)
       })
 
-      it('does not post into this conference thread for a talk of another conference', async () => {
+      it('does not post or publish under this conference for a talk of another conference', async () => {
         vi.spyOn(console, 'warn').mockImplementation(() => {})
         vi.mocked(updateProposalStatus).mockResolvedValue({
           proposal: {
@@ -687,8 +687,7 @@ describe('proposal router', () => {
           forceEmail: true,
         })
         expect(addMessage).not.toHaveBeenCalled()
-        expect(published().metadata.shouldNotify).toBe(true)
-        expect(published().metadata.postedToThread).toBe(false)
+        expect(eventBus.publish).not.toHaveBeenCalled()
       })
 
       it('treats an organizer withdrawing their own talk as a self-withdraw', async () => {
@@ -1813,6 +1812,33 @@ describe('proposal router', () => {
       expect(expired()).toEqual([
         [feedbackCodeIndexTag('conf-of-the-talk'), { expire: 0 }],
       ])
+    })
+
+    it('a talk of another conference publishes no status event under the host conference', async () => {
+      // The event routes Slack, organizer alerts and email branding by the
+      // host conference; a foreign talk must not alert the host's organizers.
+      vi.mocked(eventBus.publish).mockClear()
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {
+          ...mockProposal,
+          status: Status.withdrawn,
+          conference: { _type: 'reference', _ref: 'conf-of-the-talk' },
+        } as any,
+        err: null,
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.withdraw,
+        reason: 'I can no longer attend the conference.',
+      })
+
+      expect(updateProposalStatus).toHaveBeenCalled()
+      expect(eventBus.publish).not.toHaveBeenCalled()
     })
 
     it('a change that never touches "confirmed" leaves it alone', async () => {
