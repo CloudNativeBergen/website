@@ -167,7 +167,18 @@ export function checkWallPhoto(bytes: Uint8Array): WallPhotoCheck {
       // One frame: a second one (a hierarchical file, or a huge first frame
       // before the real one) is not something the composer makes.
       if (frame) return { ok: false, reason: 'malformed' }
-      if (length < 7) return { ok: false, reason: 'malformed' }
+      // 8-bit, greyscale or colour, and a length of exactly that header: a
+      // 12-bit file decodes in Safari but not Chrome, so an organizer could
+      // approve a photo the wall can't show, and spare bytes could carry text.
+      const precision = bytes[payload]
+      const components = bytes[payload + 5]
+      if (
+        precision !== 8 ||
+        (components !== 1 && components !== 3) ||
+        length !== 8 + 3 * components
+      ) {
+        return { ok: false, reason: 'malformed' }
+      }
       const height = (bytes[payload + 1] << 8) | bytes[payload + 2]
       const width = (bytes[payload + 3] << 8) | bytes[payload + 4]
       // A height of 0 defers to a DNL marker; nothing the composer makes.

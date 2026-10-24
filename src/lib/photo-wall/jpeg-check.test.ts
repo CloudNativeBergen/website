@@ -322,6 +322,52 @@ describe('checkWallPhoto refuses', () => {
     })
   })
 
+  it('a frame header that is not 8-bit with 1 or 3 components, or whose length does not match', () => {
+    const canvas = fixture('canvas-chromium.jpg')
+    const sof = markerAt(canvas, 0xc0)
+    expect(sof).toBeGreaterThan(0)
+    const edited = (edit: (bytes: Uint8Array) => void) => {
+      const bytes = canvas.slice()
+      edit(bytes)
+      return checkWallPhoto(bytes)
+    }
+    // 12- and 16-bit precision: Safari decodes 12-bit, Chrome does not, so an
+    // organizer could approve a photo the wall can't show.
+    for (const precision of [0, 12, 16]) {
+      expect(edited((b) => (b[sof + 4] = precision))).toEqual({
+        ok: false,
+        reason: 'malformed',
+      })
+    }
+    // No components, or 2 or 4 (the composer makes 3).
+    for (const components of [0, 2, 4]) {
+      expect(edited((b) => (b[sof + 9] = components))).toEqual({
+        ok: false,
+        reason: 'malformed',
+      })
+    }
+    // Three extra bytes smuggled inside the frame header, its length grown to
+    // carry them: every segment boundary still lines up.
+    const length = (canvas[sof + 2] << 8) | canvas[sof + 3]
+    const end = sof + 2 + length
+    const smuggled = new Uint8Array(canvas.length + 3)
+    smuggled.set(canvas.subarray(0, end))
+    smuggled.set([0x47, 0x50, 0x53], end)
+    smuggled.set(canvas.subarray(end), end + 3)
+    smuggled[sof + 3] = length + 3
+    expect(checkWallPhoto(smuggled)).toEqual({ ok: false, reason: 'malformed' })
+  })
+
+  it('a byte between two segments, outside any scan', () => {
+    const canvas = fixture('canvas-chromium.jpg')
+    const dqt = markerAt(canvas, 0xdb)
+    const bytes = new Uint8Array(canvas.length + 1)
+    bytes.set(canvas.subarray(0, dqt))
+    bytes[dqt] = 0x41
+    bytes.set(canvas.subarray(dqt), dqt + 1)
+    expect(checkWallPhoto(bytes)).toEqual({ ok: false, reason: 'malformed' })
+  })
+
   it('a JPEG with no frame header at all (SOI straight to EOI)', () => {
     expect(checkWallPhoto(Uint8Array.of(0xff, 0xd8, 0xff, 0xd9))).toEqual({
       ok: false,
