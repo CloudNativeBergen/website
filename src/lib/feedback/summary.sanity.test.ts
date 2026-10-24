@@ -1154,6 +1154,48 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
       expect(report).toMatchObject({ due: 1, failed: 0, notReached: 1 })
     })
 
+    describe('when the deadline timer fires before the clock reaches the deadline', () => {
+      // The run's timer is monotonic and `Date.now()` is not: the timer can
+      // fire a millisecond before the wall clock says the deadline has come.
+      // Hand the run the timer, fire it while the clock is far short of the
+      // deadline, and the read it cut off must still count as not reached.
+      const earlyDeadline = () => {
+        const fired = new AbortController()
+        vi.spyOn(AbortSignal, 'timeout').mockImplementationOnce(
+          () => fired.signal,
+        )
+        return () =>
+          fired.abort(new DOMException('deadline (test)', 'TimeoutError'))
+      }
+
+      it('counts a conference cut off as not reached, not failed', async () => {
+        h.hangDocReadsOf = ['conf-A']
+        const fire = earlyDeadline()
+        setTimeout(fire, 20)
+
+        const report = await deliverFeedbackSummaries({
+          now: NOW,
+          deadline: new Date(Date.now() + 60_000),
+        })
+
+        expect(report).toMatchObject({ failed: 0, notReached: 2 })
+      })
+
+      it('counts a talk cut off as not reached, not failed', async () => {
+        h.hangDocReadsOf = ['talk-1']
+        const fire = earlyDeadline()
+        setTimeout(fire, 20)
+
+        const report = await deliverFeedbackSummaries({
+          now: NOW,
+          deadline: new Date(Date.now() + 60_000),
+        })
+
+        expect(sentAt('talk-1')).toBeUndefined()
+        expect(report).toMatchObject({ due: 1, failed: 0, notReached: 1 })
+      })
+    })
+
     it('gives up on a talk whose own read hangs, and goes on with the next', async () => {
       otherTenant()
       h.hangDocReadsOf = ['talk-1']
