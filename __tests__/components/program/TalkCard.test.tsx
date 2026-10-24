@@ -1,8 +1,16 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, vi } from 'vitest'
+import { FRAME_TIMEOUT_MS } from '@/components/program/FeedbackSheet'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { TalkCard } from '@/components/program/TalkCard'
 import { BookmarksProvider } from '@/contexts/BookmarksContext'
 import type { TrackTalk } from '@/lib/conference/types'
@@ -105,6 +113,25 @@ describe('TalkCard feedback sheet', () => {
     renderCard(confirmed)
     expect(fireEvent.click(link(), modifiers)).toBe(true)
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('offers the full page when the frame never shows the attendee page', () => {
+    vi.useFakeTimers()
+    try {
+      renderCard(confirmed)
+      fireEvent.click(link())
+      const dialog = screen.getByRole('dialog', { name: 'Session feedback' })
+      expect(within(dialog).queryByRole('link')).toBeNull()
+
+      act(() => vi.advanceTimersByTime(FRAME_TIMEOUT_MS))
+
+      const fallback = within(dialog).getByRole('link', {
+        name: 'Open the feedback page',
+      })
+      expect(fallback.getAttribute('href')).toBe('/program/talk-1/feedback')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps the plain link for navigation without the sheet', () => {

@@ -92,6 +92,7 @@ function FeedbackLink({
         open={open}
         onClose={() => setOpen(false)}
         src={`${href}?${FEEDBACK_EMBED_PARAM}=1`}
+        href={href}
         title={title}
       />
     </>

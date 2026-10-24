@@ -24,6 +24,7 @@ const meta = {
     open: true,
     onClose: fn(),
     src: frame('embedded'),
+    href: '/program/talk-1/feedback',
     title: 'Kubernetes for everyone',
   },
 } satisfies Meta<typeof FeedbackSheet>
@@ -74,4 +75,21 @@ export const Dark: Story = {
       </HtmlDark>
     ),
   ],
+}
+
+/** The frame showed something other than the attendee page (here, a 404). */
+export const NotLoaded: Story = {
+  args: { src: '/not-the-attendee-page' },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByRole(
+        'link',
+        { name: 'Open the feedback page' },
+        {
+          timeout: 10_000,
+        },
+      ),
+    ).toHaveAttribute('href', '/program/talk-1/feedback')
+  },
 }

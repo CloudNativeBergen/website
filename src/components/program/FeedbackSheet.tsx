@@ -20,17 +20,22 @@ import { FEEDBACK_EMBED_ROOT } from '@/lib/feedback/url'
  * The frame is mounted per open: a reused iframe given a new `src` would add a
  * history entry, and Back would step the frame instead of leaving the page.
  * Same origin, so the sheet sizes the frame to the page's content and hears
- * Escape pressed inside it.
+ * Escape pressed inside it. Anything but the attendee page, or nothing within
+ * `FRAME_TIMEOUT_MS`, gets a link to the full page instead.
  */
 export function FeedbackSheet({
   open,
   onClose,
   src,
+  href,
   title,
 }: {
   open: boolean
   onClose: () => void
+  /** The framed page: `/program/<talkId>/feedback?embed=1`. */
   src: string
+  /** The full page, offered when the frame does not show it. */
+  href: string
   /** The talk's title, naming the frame. */
   title: string
 }) {
@@ -60,7 +65,12 @@ export function FeedbackSheet({
             </button>
           </div>
           <div className="overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
-            <FeedbackFrame src={src} title={title} onEscape={onClose} />
+            <FeedbackFrame
+              src={src}
+              href={href}
+              title={title}
+              onEscape={onClose}
+            />
           </div>
         </DialogPanel>
       </div>
@@ -71,17 +81,27 @@ export function FeedbackSheet({
 /** Until the page has loaded and been measured. */
 const LOADING_HEIGHT = 320
 
+/**
+ * How long the sheet waits for the attendee page before offering the full
+ * page instead: a frame that never loads (a dropped venue network) fires no
+ * error event, and the browser's own error page is not ours to read.
+ */
+export const FRAME_TIMEOUT_MS = 15_000
+
 function FeedbackFrame({
   src,
+  href,
   title,
   onEscape,
 }: {
   src: string
+  href: string
   title: string
   onEscape: () => void
 }) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [height, setHeight] = useState<number | null>(null)
+  const [failed, setFailed] = useState(false)
   const [loaded, setLoaded] = useState(0)
   // Read at keypress: a new `onEscape` each render must not re-attach.
   const escape = useRef(onEscape)
@@ -89,14 +109,27 @@ function FeedbackFrame({
     escape.current = onEscape
   })
 
+  const shown = height !== null
   useEffect(() => {
+    if (shown) return
+    const timer = setTimeout(() => setFailed(true), FRAME_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [shown])
+
+  useEffect(() => {
+    if (!loaded) return
     const win = frame.current?.contentWindow
-    const doc = frame.current?.contentDocument
-    if (!loaded || !win || !doc) return
-    // The page's own root when it rendered; the body for anything else (the
-    // route's plain-text 503).
-    const root = doc.querySelector(`[${FEEDBACK_EMBED_ROOT}]`) ?? doc.body
-    if (!root) return
+    // Some engines fire a load for the frame's initial blank document.
+    if (win?.location.href === 'about:blank') return
+    // Only the attendee page marks its content. Anything else (the route's
+    // plain-text 503, a 404, a browser error page) is not shown in the sheet.
+    const root = frame.current?.contentDocument?.querySelector(
+      `[${FEEDBACK_EMBED_ROOT}]`,
+    )
+    if (!win || !root) {
+      setFailed(true)
+      return
+    }
     const measure = () => setHeight(Math.ceil(root.scrollHeight))
     measure()
     // The frame's own constructor: it observes the frame's document.
@@ -114,9 +147,28 @@ function FeedbackFrame({
     }
   }, [loaded])
 
+  if (failed) {
+    return (
+      <div role="alert" className="px-4 pt-6 pb-10 text-center">
+        <p className="font-semibold text-gray-900 dark:text-white">
+          Feedback couldn&apos;t be loaded here
+        </p>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Check your connection, or open the feedback page instead.
+        </p>
+        <a
+          href={href}
+          className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-brand-cloud-blue px-4 text-sm font-semibold text-white hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:bg-blue-500 dark:hover:bg-blue-400"
+        >
+          Open the feedback page
+        </a>
+      </div>
+    )
+  }
+
   return (
     <div className="relative">
-      {height === null && (
+      {!shown && (
         <p
           role="status"
           className="absolute inset-x-0 top-16 text-center text-sm text-gray-500 dark:text-gray-400"
@@ -130,10 +182,7 @@ function FeedbackFrame({
         title={`Feedback on ${title}`}
         onLoad={() => setLoaded((n) => n + 1)}
         style={{ height: height ?? LOADING_HEIGHT }}
-        className={clsx(
-          'block w-full border-0',
-          height === null && 'opacity-0',
-        )}
+        className={clsx('block w-full border-0', !shown && 'opacity-0')}
       />
     </div>
   )
