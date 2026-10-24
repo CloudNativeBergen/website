@@ -68,28 +68,63 @@ const myPost = (fields: Partial<MyPost> = {}): MyPost => ({
   ...fields,
 })
 
+/**
+ * What the server lists by default: every post a `postAnswering` mock took,
+ * newest first, until `deleteMyPost` removes it. A test that sets
+ * `getMyPosts` itself speaks for the server instead.
+ */
+let served: MyPost[] = []
+const servedPost = (request: WallPostRequest): MyPost => ({
+  _id: `wallPost-${request.uploadId}`,
+  status: 'pending',
+  src: `https://cdn.sanity.io/images/p/d/${request.uploadId}.jpg?rect=0,0,10,10`,
+  caption: request.caption || null,
+  name: request.name || null,
+  marketingConsent: request.marketingConsent,
+  submittedAt: '2026-10-26T09:00:00Z',
+})
+
 let objectUrls = 0
 beforeEach(() => {
   decodes.clear()
   objectUrls = 0
-  mine.getMyPosts.mockReset().mockResolvedValue([])
-  mine.deleteMyPost.mockReset().mockResolvedValue({ status: 'deleted' })
+  served = []
+  mine.getMyPosts.mockReset().mockImplementation(async () => [...served])
+  mine.deleteMyPost.mockReset().mockImplementation(async (postId) => {
+    served = served.filter((p) => p._id !== postId)
+    return { status: 'deleted' }
+  })
   mine.setMyPostMarketing.mockReset().mockResolvedValue({ status: 'done' })
   URL.createObjectURL = vi.fn(() => `blob:photo-${++objectUrls}`)
   URL.revokeObjectURL = vi.fn()
   window.history.pushState(null, '')
 })
 
-/** A `post` answering each call with the next of `answers`. */
+/**
+ * A `post` answering each call with the next of `answers`; one answered
+ * `ok` is served by `getMyPosts` from then on (unless a test speaks for it).
+ */
 function postAnswering(...answers: WallPostAttempt[]) {
   return vi.fn<(request: WallPostRequest) => Promise<WallPostAttempt>>(
-    async () => {
+    async (request) => {
       const answer = answers.shift()
       if (!answer) throw new Error('no more answers')
+      if (
+        answer.ok &&
+        !served.some((p) => p._id === `wallPost-${request.uploadId}`)
+      ) {
+        served = [servedPost(request), ...served]
+      }
       return answer
     },
   )
 }
+
+/** The `src` the default server lists the post of each press under. */
+const servedSrcs = (post: ReturnType<typeof postAnswering>) =>
+  uploadIds(post)
+    .reverse()
+    .map((id) => `https://cdn.sanity.io/images/p/d/${id}.jpg?rect=0,0,10,10`)
 
 function renderPoster(
   post: ReturnType<typeof postAnswering>,
@@ -208,9 +243,10 @@ describe('WallPoster', () => {
       screen.queryByRole('button', { name: /Post to the wall/ }),
     ).toBeNull()
     expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+    // The read after the post answered: the server's card, under its id.
     expect(
       screen.getByRole('img', { name: 'Your photo: Hei fra fjorden' }),
-    ).toHaveAttribute('src', 'blob:photo-1')
+    ).toHaveAttribute('src', servedSrcs(post)[0])
     expect(screen.getByRole('link', { name: 'See the wall' })).toHaveAttribute(
       'href',
       '/wall',
@@ -230,7 +266,7 @@ describe('WallPoster', () => {
     expect(a).not.toBe(b)
     expect(
       screen.getAllByRole('img').map((img) => img.getAttribute('src')),
-    ).toEqual(['blob:photo-2', 'blob:photo-1'])
+    ).toEqual(servedSrcs(post))
     expect(screen.getAllByText('Waiting for approval')).toHaveLength(2)
   })
 
@@ -465,15 +501,20 @@ describe('WallPoster', () => {
       expect(screen.getByLabelText('Take a photo')).toBeInTheDocument()
     })
 
-    it('reads the list again after a post, and shows the sent JPEG on top until the server lists the post', async () => {
+    it('reads the list again after a post, and shows the sent JPEG on top until that read answers', async () => {
       mine.getMyPosts.mockResolvedValue([myPost()])
       const post = postAnswering({ ok: true })
       renderPoster(post)
       await pick('fresh')
+      let answer: (posts: MyPost[]) => void = () => {}
+      mine.getMyPosts.mockImplementationOnce(
+        () => new Promise((resolve) => (answer = resolve)),
+      )
       await press()
       expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
       const [[request]] = post.mock.calls
 
+      // The read after the post is still out: the JPEG this phone sent.
       expect(
         screen.getAllByRole('img').map((img) => img.getAttribute('src')),
       ).toEqual([
@@ -482,37 +523,80 @@ describe('WallPoster', () => {
       ])
       expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
 
-      // The server lists it now, under the id the submit gave it.
-      mine.getMyPosts.mockResolvedValue([
-        myPost({
-          _id: `wallPost-${request.uploadId}`,
-          status: 'pending',
-          src: 'https://cdn.sanity.io/images/p/d/fresh.jpg?rect=0,0,10,10',
-          caption: null,
-        }),
-        myPost(),
+      // It answers with the post, under the id the submit gave it.
+      await act(async () =>
+        answer([
+          myPost({
+            _id: `wallPost-${request.uploadId}`,
+            status: 'pending',
+            src: 'https://cdn.sanity.io/images/p/d/fresh.jpg?rect=0,0,10,10',
+            caption: null,
+          }),
+          myPost(),
+        ]),
+      )
+      expect(
+        screen.getAllByRole('img').map((img) => img.getAttribute('src')),
+      ).toEqual([
+        'https://cdn.sanity.io/images/p/d/fresh.jpg?rect=0,0,10,10',
+        'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
       ])
-      // The next read (here: the page shown again) swaps the card for it.
+    })
+
+    it('the first read after the post that answers is the authority: a failed one keeps the JPEG, a later one without the post retires it (an organizer’s Delete now)', async () => {
+      renderPoster(postAnswering({ ok: true }))
+      await act(async () => {})
+      await pick('brief')
+      // The read right after the post fails (offline for a moment).
+      mine.getMyPosts.mockRejectedValueOnce(new Error('offline'))
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      await press()
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
+      expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+
+      // Deleted by an organizer before the next read, which lists nothing.
+      mine.getMyPosts.mockResolvedValue([])
       await act(async () => {
         document.dispatchEvent(new Event('visibilitychange'))
       })
       expect(mine.getMyPosts).toHaveBeenCalledTimes(3)
-      await waitFor(() =>
-        expect(
-          screen.getAllByRole('img').map((img) => img.getAttribute('src')),
-        ).toEqual([
-          'https://cdn.sanity.io/images/p/d/fresh.jpg?rect=0,0,10,10',
-          'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
-        ]),
+      expect(screen.queryByText('Waiting for approval')).toBeNull()
+      expect(screen.queryByRole('img')).toBeNull()
+    })
+
+    it('a read that started before the post answered is no authority on it: its list without the post keeps the JPEG', async () => {
+      renderPoster(postAnswering({ ok: true }))
+      await act(async () => {})
+      await pick('early')
+      const answers: ((posts: MyPost[]) => void)[] = []
+      mine.getMyPosts.mockImplementation(
+        () => new Promise((resolve) => answers.push(resolve)),
       )
+      // A read goes out while the photo is still being edited…
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      await press()
+      // …and answers, without the post, only after it went in.
+      expect(answers).toHaveLength(2)
+      await act(async () => answers[0]([]))
+      expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+      expect(screen.getByRole('img')).toHaveAttribute('src', 'blob:photo-1')
     })
 
     it('a post deleted from the posted screen does not come back as Waiting on the landing', async () => {
       const post = postAnswering({ ok: true })
       renderPoster(post)
       await pick('doomed')
+      // No list answers in between: the read after the post never comes
+      // back, and the one after the Delete fails. Only the Delete's own
+      // answer can retire the JPEG.
+      mine.getMyPosts
+        .mockImplementationOnce(() => new Promise(() => {}))
+        .mockRejectedValueOnce(new Error('offline'))
+      vi.spyOn(console, 'error').mockImplementation(() => {})
       await press()
-      expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+      expect(screen.getByRole('img')).toHaveAttribute('src', 'blob:photo-1')
 
       fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
       await act(async () => {
@@ -524,6 +608,7 @@ describe('WallPoster', () => {
       expect(mine.deleteMyPost).toHaveBeenCalledWith(
         `wallPost-${request.uploadId}`,
       )
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(3)
       fireEvent.click(
         screen.getByRole('button', { name: 'Post another photo' }),
       )

@@ -35,11 +35,17 @@ export async function setWallPostMarketing({
   postId,
   deviceKey,
   consent,
+  onWriteAttempt,
 }: {
   conferenceId: string
   postId: string
   deviceKey: string
   consent: boolean
+  /**
+   * Told once, just before the first write is attempted: a throw after it
+   * may have written (an answer lost), a throw before it wrote nothing.
+   */
+  onWriteAttempt?: () => void
 }): Promise<MarketingResult> {
   const read = async (): Promise<StoredWallPost | null> => {
     const post = await readWallPost(conferenceId, postId)
@@ -50,6 +56,7 @@ export async function setWallPostMarketing({
   }
   const first = await read()
   if (!first) return { status: 'gone' }
+  onWriteAttempt?.()
 
   return atMostTwice<MarketingResult>(
     async (attempt) => {

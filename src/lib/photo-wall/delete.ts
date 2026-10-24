@@ -52,6 +52,7 @@ export async function deleteWallPost({
   deviceKey,
   shown,
   onRead,
+  onWriteAttempt,
 }: {
   conferenceId: string
   postId: string
@@ -60,6 +61,11 @@ export async function deleteWallPost({
   shown?: ShownIncarnation
   /** Told the device of every post read, before anything is written. */
   onRead?: (deviceKey: string | null) => void
+  /**
+   * Told once, just before the first write is attempted: a throw after it
+   * may have written (an answer lost), a throw before it wrote nothing.
+   */
+  onWriteAttempt?: () => void
 }): Promise<WallPostDeletion> {
   const read = async () => {
     const post = await readWallPost(conferenceId, postId)
@@ -75,6 +81,7 @@ export async function deleteWallPost({
     return { status: 'gone' }
   }
 
+  onWriteAttempt?.()
   const marked = await markDeleting(first, read)
   if (marked === 'gone') return { status: 'gone' }
   if (marked === 'conflict') {
