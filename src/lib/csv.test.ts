@@ -15,7 +15,9 @@ describe('csvCell', () => {
 
   it('neutralises spreadsheet formulas', () => {
     expect(csvCell('=HYPERLINK("http://evil")')).toContain("'=HYPERLINK")
-    expect(csvCell('+1 555')).toBe("'+1 555")
+    expect(csvCell('+1 555')).toBe('+1 555')
+    expect(csvCell('+1-555')).toBe("'+1-555")
+    expect(csvCell('+SUM(A1)')).toBe("'+SUM(A1)")
     expect(csvCell('@handle')).toBe("'@handle")
   })
 
