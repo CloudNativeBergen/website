@@ -27,7 +27,7 @@ import { formatConferenceDateShort } from '@/lib/time'
 import { hasProposalVideo } from '@/lib/proposal/video'
 import clsx from 'clsx'
 import { FEEDBACK_EMBED_PARAM } from '@/lib/feedback/url'
-import { FeedbackSheet } from './FeedbackSheet'
+import { FeedbackSheet, useFeedbackSheet } from './FeedbackSheet'
 
 interface PortableTextChild {
   _type: string
@@ -52,7 +52,7 @@ function FeedbackLink({
   title: string
   compact: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const sheet = useFeedbackSheet()
   const href = `/program/${encodeURIComponent(talkId)}/feedback`
   return (
     <>
@@ -70,7 +70,7 @@ function FeedbackLink({
           )
             return
           event.preventDefault()
-          setOpen(true)
+          sheet.show()
         }}
         // Named after its talk: a screen reader's link list holds one per card.
         // It starts with the visible text, so voice control still finds it.
@@ -89,8 +89,8 @@ function FeedbackLink({
         {!compact && <span>Give feedback</span>}
       </a>
       <FeedbackSheet
-        open={open}
-        onClose={() => setOpen(false)}
+        open={sheet.open}
+        onClose={sheet.close}
         src={`${href}?${FEEDBACK_EMBED_PARAM}=1`}
         href={href}
         title={title}
