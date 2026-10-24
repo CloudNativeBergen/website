@@ -48,6 +48,8 @@ vi.mock('@/lib/sanity/client', () => ({
 
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: vi.fn(),
+  // A foreign talk's own conference: unloadable unless a test says otherwise.
+  getConferenceById: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('next/cache', async (importOriginal) => ({
@@ -117,7 +119,10 @@ import {
   speakers,
   TEST_ORG_ID,
 } from '../../helpers/trpc'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import {
+  getConferenceById,
+  getConferenceForCurrentDomain,
+} from '@/lib/conference/sanity'
 import {
   getProposal,
   getProposals,
@@ -1814,7 +1819,43 @@ describe('proposal router', () => {
       ])
     })
 
-    it('a talk of another conference publishes no status event under the host conference', async () => {
+    it('a talk of another conference publishes with the talk’s own conference', async () => {
+      // A speaker confirming via another tenant's host must still get their
+      // ticket, routed and branded by their own conference.
+      vi.mocked(eventBus.publish).mockClear()
+      const own = { _id: 'conf-of-the-talk', title: 'Other Conf' }
+      vi.mocked(getConferenceById).mockResolvedValueOnce({
+        conference: own as any,
+        domain: 'other.example',
+      })
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.accepted } as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {
+          ...mockProposal,
+          status: Status.confirmed,
+          conference: { _type: 'reference', _ref: 'conf-of-the-talk' },
+        } as any,
+        err: null,
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.confirm,
+      })
+
+      expect(getConferenceById).toHaveBeenCalledWith('conf-of-the-talk', {
+        includeSpeakerRegistrationLink: true,
+      })
+      expect(eventBus.publish).toHaveBeenCalledTimes(1)
+      const event = vi.mocked(eventBus.publish).mock.calls[0][0] as any
+      expect(event.conference).toBe(own)
+      expect(event.metadata.domain).toBe('other.example')
+    })
+
+    it('a talk of another conference whose conference cannot be loaded publishes nothing', async () => {
       // The event routes Slack, organizer alerts and email branding by the
       // host conference; a foreign talk must not alert the host's organizers.
       vi.mocked(eventBus.publish).mockClear()
