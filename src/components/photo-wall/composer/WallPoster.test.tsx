@@ -56,11 +56,13 @@ beforeEach(() => {
 
 /** A `post` answering each call with the next of `answers`. */
 function postAnswering(...answers: WallPostAttempt[]) {
-  return vi.fn(async (_request: WallPostRequest) => {
-    const answer = answers.shift()
-    if (!answer) throw new Error('no more answers')
-    return answer
-  })
+  return vi.fn<(request: WallPostRequest) => Promise<WallPostAttempt>>(
+    async () => {
+      const answer = answers.shift()
+      if (!answer) throw new Error('no more answers')
+      return answer
+    },
+  )
 }
 
 function renderPoster(
@@ -105,7 +107,7 @@ const uploadIds = (post: ReturnType<typeof postAnswering>) =>
 
 describe('WallPoster', () => {
   it('keeps Post to the wall disabled until ensureDevice has answered', async () => {
-    let answer = (_ok: boolean) => {}
+    let answer: (ok: boolean) => void = () => {}
     const ensureDevice = vi.fn(
       () => new Promise<boolean>((resolve) => (answer = resolve)),
     )
