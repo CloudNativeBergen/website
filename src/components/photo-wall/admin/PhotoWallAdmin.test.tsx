@@ -7,7 +7,13 @@
  * the words carry the meaning, so the class is what is asserted for it.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import type { PhotoWallAdminView, PostingState } from '@/lib/photo-wall'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 
@@ -178,7 +184,9 @@ describe('the Wall Look (§9, P3)', () => {
         onChange={onChange}
       />,
     )
-    fireEvent.click(within(looks()).getByRole('radio', { name: new RegExp(label) }))
+    fireEvent.click(
+      within(looks()).getByRole('radio', { name: new RegExp(label) }),
+    )
     expect(onChange).toHaveBeenCalledWith({ look })
   })
 })

@@ -3,10 +3,7 @@ import { ScreenMode } from '@/components/photo-wall'
 import { pickConferenceLogoProps } from '@/lib/conference/logo'
 import { photoWallLinks } from '@/lib/photo-wall/links'
 import { requirePhotoWall } from '@/lib/photo-wall/page'
-import {
-  SCREEN_LOOK_PARAM,
-  screenLookOverride,
-} from '@/lib/photo-wall/screen'
+import { SCREEN_LOOK_PARAM, screenLookOverride } from '@/lib/photo-wall/screen'
 import { readScreenPage } from '@/lib/photo-wall/screen-page'
 import { getPublicSponsorsForConference } from '@/lib/sponsor-crm/sanity'
 

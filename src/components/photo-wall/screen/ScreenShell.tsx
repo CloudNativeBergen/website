@@ -198,7 +198,7 @@ export function QrCard({ url }: { url: string }) {
   const shown = feedbackCodeDisplayUrl(url)
   return (
     <div className="flex items-center gap-5 rounded-2xl bg-white p-4 text-gray-900 shadow-2xl">
-      <div className="grid size-32 shrink-0 place-items-center">
+      <div className="grid size-28 shrink-0 place-items-center">
         {src ? (
           <img
             src={src}
@@ -212,7 +212,7 @@ export function QrCard({ url }: { url: string }) {
       <div className="min-w-0">
         <p className="text-3xl font-bold">Add your photo</p>
         <p className="mt-1 text-lg text-gray-600">Scan, snap, post</p>
-        <p className="mt-2 font-mono text-base break-all text-gray-700">
+        <p className="mt-2 font-mono text-sm [overflow-wrap:anywhere] text-gray-700">
           {shown}
         </p>
       </div>

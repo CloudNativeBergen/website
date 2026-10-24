@@ -75,7 +75,7 @@ const photoAlt = (post: WallPagePost) =>
  * bounds; beyond them (a panorama, a sliver of a portrait) the whole photo
  * is letterboxed inside the tile, never cropped.
  */
-const TILE_SHAPE = { min: 0.4, max: 1.6 }
+const TILE_SHAPE = { min: 0.5, max: 1.8 }
 /** Grid rows per column width: a tile spans its shape times this. */
 const ROWS_PER_COLUMN = 24
 
@@ -119,7 +119,7 @@ function MosaicGrid({ posts }: { posts: WallPagePost[] }) {
                 {(post.caption || post.name) && (
                   <figcaption className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/35 to-transparent p-2 pt-8 text-white">
                     {post.caption && (
-                      <span className="block text-xs leading-snug font-semibold break-words">
+                      <span className="line-clamp-2 block text-xs leading-snug font-semibold break-words">
                         {post.caption}
                       </span>
                     )}

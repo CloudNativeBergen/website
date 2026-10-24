@@ -107,7 +107,7 @@ export function SpotlightScreen({
             className="absolute inset-0 size-full scale-110 object-cover opacity-40 blur-3xl"
           />
         )}
-        <div className="relative grid size-full grid-cols-[minmax(0,1fr)_440px] gap-10 p-10">
+        <div className="relative grid size-full grid-cols-[minmax(0,1fr)_480px] gap-10 p-10">
           {hero ? (
             <div
               key={screenPostKey(hero)}

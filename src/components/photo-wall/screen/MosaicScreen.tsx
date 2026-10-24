@@ -30,7 +30,7 @@ const COL_WIDTH = (1920 - 2 * GAP - (COLS - 1) * GAP) / COLS
  * bounds; beyond them (a panorama, a strip of a portrait) the whole photo
  * is letterboxed inside it, never cropped.
  */
-const TILE_SHAPE = { min: 0.4, max: 1.6 }
+const TILE_SHAPE = { min: 0.5, max: 1.8 }
 /** The spotlight tile, two columns wide, stays close to square. */
 const SPOTLIGHT_SHAPE = { min: 0.75, max: 1.25 }
 
