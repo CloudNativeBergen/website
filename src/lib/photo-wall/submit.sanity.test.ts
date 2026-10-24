@@ -451,6 +451,17 @@ describe('submitWallPost: guard before upload', () => {
     },
   )
 
+  it('reads no post for an uploadId that is not a UUID v4: the doc endpoint takes a comma-separated id list', async () => {
+    store().put(post({ _id: `wallPost-${OTHER_UPLOAD_ID}` }))
+    await expect(
+      submit({
+        form: form({ uploadId: `${UPLOAD_ID},wallPost-${OTHER_UPLOAD_ID}` }),
+      }),
+    ).resolves.toEqual({ ok: false, refusal: 'failed' })
+    expect(store().docReads).toEqual([])
+    expect(store().reads).toEqual([])
+  })
+
   it('the same request is accepted once the refusing condition is gone (the fixture is otherwise valid)', async () => {
     await expect(submit()).resolves.toEqual({ ok: true })
     expect(h.uploads).toHaveLength(1)
