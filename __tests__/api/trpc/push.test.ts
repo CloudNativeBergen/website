@@ -23,7 +23,6 @@ vi.mock('@/lib/push/sanity', () => ({
   // above imports, so they cannot reference module-level bindings.
   getPushPreferences: vi.fn().mockResolvedValue({
     proposalDecisions: true,
-    talkConfirmed: true,
     coSpeakerInvites: true,
     messages: true,
     otherUpdates: true,
@@ -33,7 +32,6 @@ vi.mock('@/lib/push/sanity', () => ({
     subscriptions: [],
     preferences: {
       proposalDecisions: true,
-      talkConfirmed: true,
       coSpeakerInvites: true,
       otherUpdates: true,
     },
@@ -128,7 +126,6 @@ describe('push router', () => {
     const caller = createAuthenticatedCaller(speakerA)
     const prefs = {
       proposalDecisions: true,
-      talkConfirmed: false,
       coSpeakerInvites: true,
       messages: true,
       otherUpdates: false,

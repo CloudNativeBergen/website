@@ -544,11 +544,13 @@ export default defineType({
           type: 'boolean',
           initialValue: true,
         }),
+        // Retired toggle (nothing ever sent under it). Kept hidden so stored
+        // values do not show as unknown fields; the next save drops it.
         defineField({
           name: 'talkConfirmed',
           title: 'Talk Confirmed',
           type: 'boolean',
-          initialValue: true,
+          hidden: true,
         }),
         defineField({
           name: 'coSpeakerInvites',

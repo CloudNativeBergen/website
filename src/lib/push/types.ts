@@ -9,7 +9,6 @@
 /** The notification categories a speaker can independently toggle. */
 export const PUSH_CATEGORIES = [
   'proposalDecisions',
-  'talkConfirmed',
   'coSpeakerInvites',
   'messages',
   'otherUpdates',
@@ -21,8 +20,6 @@ export type PushCategory = (typeof PUSH_CATEGORIES)[number]
 export interface PushPreferences {
   /** Accepted / rejected / waitlisted decisions on a proposal. */
   proposalDecisions: boolean
-  /** A talk being confirmed for the programme. */
-  talkConfirmed: boolean
   /** Co-speaker activity (an invitation to co-present, or a response to yours). */
   coSpeakerInvites: boolean
   /** New messages in a speaker↔organizer conversation (messaging M1). */
@@ -41,7 +38,6 @@ export interface PushPreferences {
  */
 export const DEFAULT_PUSH_PREFERENCES: PushPreferences = {
   proposalDecisions: true,
-  talkConfirmed: true,
   coSpeakerInvites: true,
   messages: true,
   otherUpdates: true,
@@ -101,8 +97,6 @@ export function normalizePushPreferences(
   return {
     proposalDecisions:
       value?.proposalDecisions ?? DEFAULT_PUSH_PREFERENCES.proposalDecisions,
-    talkConfirmed:
-      value?.talkConfirmed ?? DEFAULT_PUSH_PREFERENCES.talkConfirmed,
     coSpeakerInvites:
       value?.coSpeakerInvites ?? DEFAULT_PUSH_PREFERENCES.coSpeakerInvites,
     messages: value?.messages ?? DEFAULT_PUSH_PREFERENCES.messages,
