@@ -20,17 +20,16 @@ import { expireWallPost } from './cache'
 import type { WallDevice } from './device'
 import { checkWallFields, isUploadId, type WallPostFields } from './fields'
 import { checkWallPhoto } from './jpeg-check'
-import { postingLimitHit, readPostingCounts, type PostingLimit } from './limits'
+import { postingLimitHit, readPostingCounts } from './limits'
+import type { WallSubmitRefusal } from './post'
 import { readPhotoWall } from './sanity'
 import { isPostingOpen } from './window'
 
 /**
- * Why a submit was refused, as the phone words it (§6.3): a limit, posting
- * not open, or the generic refusal for everything else, a foreign `uploadId`
- * included (it must not tell anyone a post with that id exists).
+ * A refusal is a limit, posting not open, or the generic refusal for
+ * everything else, a foreign `uploadId` included: it must not tell anyone a
+ * post with that id exists.
  */
-export type WallSubmitRefusal = PostingLimit | 'closed' | 'failed'
-
 export type WallSubmitOutcome =
   { ok: true } | { ok: false; refusal: WallSubmitRefusal }
 

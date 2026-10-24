@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server'
 import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { WALL_DEVICE_COOKIE, readWallDevice } from '@/lib/photo-wall/device'
-import { submitWallPost, type WallSubmitRefusal } from '@/lib/photo-wall/submit'
+import type { WallSubmitRefusal } from '@/lib/photo-wall/post'
+import { submitWallPost } from '@/lib/photo-wall/submit'
 
 /**
  * Vercel's request body limit (4.5 MB): the composer's JPEG is at most
