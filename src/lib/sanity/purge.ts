@@ -28,12 +28,29 @@ import { sanityStatus } from '@/lib/sanity/status'
  */
 export async function deleteWithHistory(
   id: string,
-  { ifRevisionId }: { ifRevisionId?: string } = {},
+  {
+    ifRevisionId,
+    signal,
+  }: { ifRevisionId?: string; signal?: AbortSignal } = {},
 ): Promise<'purged' | 'historyKept'> {
   const guard = ifRevisionId
     ? [{ patch: { id, ifRevisionID: ifRevisionId, unset: [NO_SUCH_FIELD] } }]
     : []
-  return mutateDeleting(guard, [id])
+  return mutateDeleting(guard, [id], { signal })
+}
+
+/** How a delete is sent. */
+export interface DeleteOptions {
+  /**
+   * Ends the request (the client's `timeout` bounds it only in part). An
+   * aborted delete may still have landed: the caller treats it as unknown.
+   */
+  signal?: AbortSignal
+  /**
+   * The API version to send it at: `versions.*` ids (Content Release
+   * versions) need 2025-02-19 or later.
+   */
+  apiVersion?: string
 }
 
 /**
@@ -46,9 +63,12 @@ export async function deleteWithHistory(
  */
 export async function deleteManyWithHistory(
   ids: readonly string[],
+  options: DeleteOptions = {},
 ): Promise<'purged' | 'historyKept'> {
-  return mutateDeleting([], ids)
+  return mutateDeleting([], ids, options)
 }
+
+type Mutations = Parameters<typeof clientWrite.mutate>[0]
 
 /** The no-op patch that carries a delete's revision guard. */
 interface GuardPatch {
@@ -58,7 +78,13 @@ interface GuardPatch {
 async function mutateDeleting(
   guard: readonly GuardPatch[],
   ids: readonly string[],
+  { signal, apiVersion }: DeleteOptions,
 ): Promise<'purged' | 'historyKept'> {
+  const client = apiVersion
+    ? clientWrite.withConfig({ apiVersion })
+    : clientWrite
+  const mutate = (mutations: Mutations) =>
+    signal ? client.mutate(mutations, { signal }) : client.mutate(mutations)
   // Not a literal in the call: the client's `Mutation` type has no `purge`
   // (it is the typed builders' omission), and the request passes it through.
   const purging = [
@@ -66,7 +92,7 @@ async function mutateDeleting(
     ...ids.map((id) => ({ delete: { id, purge: true } })),
   ]
   try {
-    await clientWrite.mutate(purging)
+    await mutate(purging)
     return 'purged'
   } catch (error) {
     if (sanityStatus(error) !== 403) throw error
@@ -74,7 +100,7 @@ async function mutateDeleting(
   console.warn(
     `Deleted ${ids.join(', ')} WITHOUT history: the write token lacks the editHistory permission`,
   )
-  await clientWrite.mutate([...guard, ...ids.map((id) => ({ delete: { id } }))])
+  await mutate([...guard, ...ids.map((id) => ({ delete: { id } }))])
   return 'historyKept'
 }
 

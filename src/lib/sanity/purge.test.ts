@@ -7,7 +7,7 @@
  * MSW at the HTTP layer. Only Sanity's answer is made up here.
  */
 import { createClient } from '@sanity/client'
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../../../__tests__/mocks/msw/server'
 
@@ -172,6 +172,53 @@ describe('deleteManyWithHistory (§11.1)', () => {
     await expect(deleteManyWithHistory(['wallPost-1'])).rejects.toMatchObject({
       statusCode: 409,
     })
+    expect(sent).toHaveLength(1)
+  })
+})
+
+describe('deleteManyWithHistory: version and budget (§11.1)', () => {
+  it('at the releases API version, a Content Release version is deleted with the rest, at that version’s endpoint', async () => {
+    const at = MUTATE.replace('v2023-05-03', 'v2025-02-19')
+    const urls: string[] = []
+    server.use(
+      http.post(at, async ({ request }) => {
+        urls.push(request.url)
+        sent.push((await request.json()) as Sent)
+        return HttpResponse.json({ transactionId: 'tx', results: [] })
+      }),
+    )
+    const version = 'versions.rSpring.wallPost-1'
+    await expect(
+      deleteManyWithHistory(['wallPost-1', version], {
+        apiVersion: '2025-02-19',
+      }),
+    ).resolves.toBe('purged')
+    expect(urls.map((u) => new URL(u).pathname)).toEqual([
+      '/v2025-02-19/data/mutate/test',
+    ])
+    expect(sent).toEqual([
+      {
+        mutations: [
+          { delete: { id: 'wallPost-1', purge: true } },
+          { delete: { id: version, purge: true } },
+        ],
+      },
+    ])
+  })
+
+  it('a request that never answers is ended by its signal: the real client rejects, and no fallback is sent', async () => {
+    server.use(
+      http.post(MUTATE, async ({ request }) => {
+        sent.push((await request.json()) as Sent)
+        await delay('infinite')
+        return HttpResponse.json({})
+      }),
+    )
+    await expect(
+      deleteManyWithHistory(['wallPost-1'], {
+        signal: AbortSignal.timeout(50),
+      }),
+    ).rejects.toThrow()
     expect(sent).toHaveLength(1)
   })
 })

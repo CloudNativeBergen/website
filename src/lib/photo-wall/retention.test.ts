@@ -167,9 +167,46 @@ const patches = () =>
 const closedYesterday = () =>
   store().put(wall('conf-A', { closedAt: at(DAY_BEFORE).toISOString() }))
 
+type Mutations = { delete?: { id: string } }[]
+type MutateOptions = { signal?: AbortSignal } | undefined
 /** The store's raw `mutate`, as the purge calls it. */
 interface Mutator {
-  mutate: (mutations: { delete?: { id: string } }[]) => Promise<unknown>
+  mutate: (mutations: Mutations, options?: MutateOptions) => Promise<unknown>
+}
+
+/**
+ * Send every raw `mutate` through `through`: the writer's own, and that of
+ * every writer `withConfig` makes (the purge writes at the releases API
+ * version). Answers every batch of mutations sent, in order.
+ */
+const onMutate = (
+  through: (
+    mutations: Mutations,
+    options: MutateOptions,
+    real: Mutator['mutate'],
+  ) => Promise<unknown> = (m, o, real) => real(m, o),
+) => {
+  const writer = clientWrite as unknown as Mutator & {
+    withConfig: (config: { apiVersion: string }) => Mutator
+  }
+  const sent: Mutations[] = []
+  const wrap = (target: Mutator) => {
+    const real = target.mutate.bind(target)
+    return (m: Mutations, o?: MutateOptions) => {
+      sent.push(m)
+      return through(m, o, real)
+    }
+  }
+  const withConfig = writer.withConfig.bind(writer)
+  vi.spyOn(writer, 'withConfig').mockImplementation((config) => {
+    const configured = withConfig(config)
+    configured.mutate = wrap(configured)
+    return configured
+  })
+  // Wrapped BEFORE the spy is installed, so it calls the real one.
+  const own = wrap(writer)
+  vi.spyOn(writer, 'mutate').mockImplementation(own)
+  return sent
 }
 
 const nothing: RetentionReport = {
@@ -386,14 +423,16 @@ describe('steps 3 and 4: the purge on the deletion date (§11.1, §12)', () => {
   })
 
   it("keeps an asset another conference's post or another tenant's sponsor holds, without trying the delete", async () => {
-    const mutate = vi.spyOn(clientWrite as unknown as Mutator, 'mutate')
+    const sent = onMutate()
     await run(clock(at(DELETION_DAY)))
     expect(store().doc(assetId('s2'))).toBeDefined()
     expect(store().doc(assetId('s3'))).toBeDefined()
     // Not even sent: the holder check kept them, not Sanity's refusal.
-    const tried = mutate.mock.calls.flatMap(([m]) =>
+    const tried = sent.flatMap((m) =>
       m.flatMap((x) => (x.delete ? [x.delete.id] : [])),
     )
+    // The spy saw the purge's deletes: an empty list would prove nothing.
+    expect(tried).toContain(assetId('s1'))
     expect(tried).not.toContain(assetId('s2'))
     expect(tried).not.toContain(assetId('s3'))
     expect(store().doc(postId('b1'))).toMatchObject({
@@ -446,6 +485,16 @@ describe('steps 3 and 4: the purge on the deletion date (§11.1, §12)', () => {
       'photo-wall-device:device-a6',
       'photo-wall:conf-A',
     ])
+  })
+
+  it('a Content Release version of a post is marked and deleted with the post, and its asset goes too', async () => {
+    const version = `versions.rSpring.${A('1')}`
+    store().put({ ...post('a1', 'conf-A', assetId('s1')), _id: version })
+    const report = await run(clock(at(DELETION_DAY)))
+    expect(report).toMatchObject({ purged: 1, posts: 7 })
+    expect(store().doc(version)).toBeUndefined()
+    expect(store().doc(assetId('s1'))).toBeUndefined()
+    expect(deletes()).toContainEqual({ id: version, purge: true })
   })
 
   it('a purged wall is not read again the next day', async () => {
@@ -591,18 +640,15 @@ describe('an interrupted run repeats the purge: nothing lost, nothing deleted tw
   })
 
   it('a refused delete transaction leaves purgedAt unset and the posts marked; the next run finishes', async () => {
-    const writer = clientWrite as unknown as Mutator
-    const real = writer.mutate
-    const refused = vi
-      .spyOn(writer, 'mutate')
-      .mockImplementation(async (mutations) => {
-        if (mutations.some((m) => m.delete?.id === assetId('s5'))) {
-          throw Object.assign(new Error('409: contention'), {
-            statusCode: 409,
-          })
-        }
-        return real(mutations)
-      })
+    let refuse = true
+    onMutate(async (mutations, options, real) => {
+      if (refuse && mutations.some((m) => m.delete?.id === assetId('s5'))) {
+        throw Object.assign(new Error('409: contention'), {
+          statusCode: 409,
+        })
+      }
+      return real(mutations, options)
+    })
     const first = await run(clock(at(DELETION_DAY)))
     expect(first).toMatchObject({
       purged: 0,
@@ -616,7 +662,7 @@ describe('an interrupted run repeats the purge: nothing lost, nothing deleted tw
       deletingAssetId: assetId('s5'),
     })
     expect(store().doc('photoWall-conf-A')).not.toHaveProperty('purgedAt')
-    refused.mockRestore()
+    refuse = false
 
     store().commits.length = 0
     const second = await run(clock(at('2026-11-27')))
@@ -641,13 +687,11 @@ describe('an interrupted run repeats the purge: nothing lost, nothing deleted tw
   it('a failed purge of one wall does not stop the next wall', async () => {
     // Both due on 31 December; conf-A's post delete is refused.
     store().put(wall('conf-B', { closedAt: '2026-12-30T03:10:00Z' }))
-    const writer = clientWrite as unknown as Mutator
-    const real = writer.mutate
-    vi.spyOn(writer, 'mutate').mockImplementation(async (mutations) => {
+    onMutate(async (mutations, options, real) => {
       if (mutations.some((m) => m.delete?.id === A('1'))) {
         throw new Error('503')
       }
-      return real(mutations)
+      return real(mutations, options)
     })
     const report = await run(clock(at('2026-12-31')))
     expect(report).toMatchObject({
@@ -686,6 +730,72 @@ describe('the deadline', () => {
       unfinished: ['photoWall-conf-A'],
     })
     expect(store().doc(assetId('s7'))).toBeDefined()
+    expect(store().doc('photoWall-conf-A')).not.toHaveProperty('purgedAt')
+  })
+  it('past the deadline between holder checks, the chunk stops: no delete sent, the posts stay marked, purgedAt unset', async () => {
+    const now = clock(at(DELETION_DAY))
+    const deadline = new Date(now.getTime() + 60_000)
+    let holderReads = 0
+    store().beforeEachRead((read) => {
+      if (read.query.includes('references($assetId)')) {
+        holderReads += 1
+        vi.setSystemTime(new Date(deadline.getTime() + 1))
+      }
+    })
+    const report = await run(now, deadline)
+    // The first check passed the deadline; of the chunk's six assets, no
+    // other check started after it.
+    expect(holderReads).toBe(1)
+    expect(report).toMatchObject({
+      posts: 0,
+      assets: 0,
+      purged: 0,
+      unfinished: ['photoWall-conf-A'],
+    })
+    expect(deletedIds()).toEqual([])
+    expect(store().doc(A('1'))).toMatchObject({
+      status: 'deleting',
+      deletingAssetId: assetId('s1'),
+    })
+  })
+
+  /** A read or a commit that never answers until its signal aborts it. */
+  const hangUntilAborted = (signal: AbortSignal | undefined) =>
+    new Promise<never>((_, reject) => {
+      if (!signal) return
+      signal.addEventListener('abort', () => reject(signal.reason))
+    })
+
+  it('a holder check that hangs is cut off at the deadline: the run ends, nothing deleted, purgedAt unset', async () => {
+    const now = clock(at(DELETION_DAY))
+    store().beforeEachRead((read) =>
+      read.query.includes('references($assetId)')
+        ? hangUntilAborted(read.signal)
+        : undefined,
+    )
+    // A real 50 ms budget: the clock the run reads is frozen.
+    const report = await run(now, new Date(now.getTime() + 50))
+    expect(report).toMatchObject({
+      posts: 0,
+      assets: 0,
+      purged: 0,
+      unfinished: ['photoWall-conf-A'],
+    })
+    expect(deletedIds()).toEqual([])
+  })
+
+  it('a delete transaction that hangs is cut off at the deadline: the run ends with the wall unpurged', async () => {
+    const now = clock(at(DELETION_DAY))
+    const sent = onMutate((_m, options) => hangUntilAborted(options?.signal))
+    const report = await run(now, new Date(now.getTime() + 50))
+    expect(report).toMatchObject({
+      posts: 0,
+      purged: 0,
+      unfinished: ['photoWall-conf-A'],
+    })
+    // The delete was sent, and hung: it is what the deadline cut off.
+    expect(sent).toHaveLength(1)
+    expect(store().doc(A('1'))).toMatchObject({ status: 'deleting' })
     expect(store().doc('photoWall-conf-A')).not.toHaveProperty('purgedAt')
   })
 })
