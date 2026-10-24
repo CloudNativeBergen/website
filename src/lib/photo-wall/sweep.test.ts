@@ -32,6 +32,7 @@ vi.mock('@/lib/sanity/client', async () => {
   return h.store.clients
 })
 
+import { clientWrite } from '@/lib/sanity/client'
 import { SWEEP_AGE_MS, sweepPhotoWall, type SweepReport } from './sweep'
 
 type Doc = Record<string, unknown> & { _id: string }
@@ -147,6 +148,11 @@ const deletedIds = () =>
     .commits.flat()
     .flatMap((m) => ('delete' in m ? [m.delete.id] : []))
 
+/** The store's raw `mutate`, as the deletes call it. */
+interface Mutator {
+  mutate: (mutations: { delete?: { id: string } }[]) => Promise<unknown>
+}
+
 const nothing: SweepReport = {
   orphans: 0,
   assets: 0,
@@ -194,10 +200,16 @@ describe('orphan assets (§11.2)', () => {
   })
 
   it("keeps one only another tenant's document holds, found by the check before the delete", async () => {
+    const mutate = vi.spyOn(clientWrite as unknown as Mutator, 'mutate')
     const report = await run()
     expect(report.assetsKept).toBe(1)
     expect(store().doc(assetId('o4'))).toBeDefined()
-    expect(deletedIds()).not.toContain(assetId('o4'))
+    // Not even sent: the holder check kept it, not Sanity's refusal.
+    expect(
+      mutate.mock.calls.flatMap(([m]) =>
+        m.flatMap((x) => (x.delete ? [x.delete.id] : [])),
+      ),
+    ).not.toContain(assetId('o4'))
   })
 
   it('rechecks on the latest documents: a holder that appears after the candidate read keeps the asset, untried', async () => {

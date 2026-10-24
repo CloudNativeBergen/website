@@ -297,6 +297,16 @@ describe('step 1: close the day before (§11.1)', () => {
     await expect(run(now)).resolves.toMatchObject({ purged: 1 })
   })
 
+  it('the day before the deletion date, a wall closed long ago is still not purged', async () => {
+    store().put(wall('conf-A', { closedAt: '2026-11-20T03:10:00Z' }))
+    await expect(run(clock(at(DAY_BEFORE)))).resolves.toEqual({
+      ...nothing,
+      due: 1,
+    })
+    expect(store().commits).toEqual([])
+    expect(store().doc(A('1'))).toBeDefined()
+  })
+
   it('Delete stays allowed on a closed wall', async () => {
     closedYesterday()
     await expect(
@@ -341,11 +351,16 @@ describe('steps 3 and 4: the purge on the deletion date (§11.1, §12)', () => {
   })
 
   it("keeps an asset another conference's post or another tenant's sponsor holds, without trying the delete", async () => {
+    const mutate = vi.spyOn(clientWrite as unknown as Mutator, 'mutate')
     await run(clock(at(DELETION_DAY)))
     expect(store().doc(assetId('s2'))).toBeDefined()
     expect(store().doc(assetId('s3'))).toBeDefined()
-    expect(deletedIds()).not.toContain(assetId('s2'))
-    expect(deletedIds()).not.toContain(assetId('s3'))
+    // Not even sent: the holder check kept them, not Sanity's refusal.
+    const tried = mutate.mock.calls.flatMap(([m]) =>
+      m.flatMap((x) => (x.delete ? [x.delete.id] : [])),
+    )
+    expect(tried).not.toContain(assetId('s2'))
+    expect(tried).not.toContain(assetId('s3'))
     expect(store().doc(postId('b1'))).toMatchObject({
       photo: { asset: ref(assetId('s2')) },
     })
