@@ -152,6 +152,8 @@ function getActionEmoji(action: Action): string {
       return '✅'
     case Action.withdraw:
       return '🚫'
+    case Action.cancel:
+      return '🛑'
     default:
       return '📝'
   }
@@ -163,6 +165,8 @@ function getActionText(action: Action): string {
       return 'Confirmed'
     case Action.withdraw:
       return 'Withdrawn'
+    case Action.cancel:
+      return 'Canceled'
     default:
       return 'Status Changed'
   }

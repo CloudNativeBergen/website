@@ -22,6 +22,11 @@ export interface ProposalStatusChangeEvent {
     comment?: string
     // Mandatory free-text reason captured on withdrawal (#212).
     reason?: string
+    /**
+     * The cancel/withdraw message was posted to the proposal thread and fanned
+     * out (notifyNewMessage), so it already reached the organizers' hub.
+     */
+    postedToThread?: boolean
     domain: string
   }
 }

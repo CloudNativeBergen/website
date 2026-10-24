@@ -16,7 +16,9 @@ export async function handleSlackNotification(
     return
   }
 
-  if (![Action.confirm, Action.withdraw].includes(event.action)) {
+  if (
+    ![Action.confirm, Action.withdraw, Action.cancel].includes(event.action)
+  ) {
     return
   }
 

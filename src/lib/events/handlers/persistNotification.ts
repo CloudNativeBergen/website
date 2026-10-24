@@ -3,19 +3,12 @@ import { Action } from '@/lib/proposal/types'
 import { createNotifications } from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
-
-/**
- * The set of actions that produce a speaker-facing status notification. Mirrors
- * the gating in `handleEmailNotification` (accept / reject / waitlist / remind)
- * so the in-app notification and the email stay in lockstep — a speaker is
- * notified in-app exactly when they'd be emailed about a status change.
- */
-const SPEAKER_NOTIFY_ACTIONS: readonly Action[] = [
-  Action.accept,
-  Action.reject,
-  Action.waitlist,
-  Action.remind,
-]
+// Same gate as the email, so a speaker is notified in-app exactly when they
+// are emailed about a status change.
+import {
+  isOrganizerRemoval,
+  isSpeakerFacingDecision,
+} from './emailNotification'
 
 /**
  * Persists in-app notifications when a proposal's status changes.
@@ -61,7 +54,11 @@ export async function handlePersistNotification(
     return
   }
 
-  if (event.action === Action.confirm || event.action === Action.withdraw) {
+  if (
+    event.action === Action.confirm ||
+    event.action === Action.withdraw ||
+    event.action === Action.cancel
+  ) {
     // Organizer routing is unconditional (like submit) — it mirrors the Slack
     // organizer alert, not the email-gated speaker notification.
     const isWithdraw = event.action === Action.withdraw
@@ -73,7 +70,9 @@ export async function handlePersistNotification(
     })
     const title = isWithdraw
       ? `Proposal withdrawn: "${proposalTitle}"`
-      : `Speaker confirmed: "${proposalTitle}"`
+      : event.action === Action.cancel
+        ? `Talk canceled: "${proposalTitle}"`
+        : `Speaker confirmed: "${proposalTitle}"`
     // The mandatory withdrawal reason (#212) becomes the message when present.
     const message =
       isWithdraw && event.metadata.reason ? event.metadata.reason : undefined
@@ -89,14 +88,18 @@ export async function handlePersistNotification(
         relatedProposalId: proposalId,
         link: `/admin/proposals/${proposalId}`,
       }))
-    await createNotifications(items)
-    return
+    // The fanned-out thread message already put a hub item in front of the
+    // organizers; a status item on top would double-notify them.
+    const isRemoval = event.action !== Action.confirm
+    if (!(isRemoval && event.metadata.postedToThread)) {
+      await createNotifications(items)
+    }
+    // No return: an organizer cancel/withdraw also notifies the speaker below.
   }
 
-  if (
-    event.metadata.shouldNotify &&
-    SPEAKER_NOTIFY_ACTIONS.includes(event.action)
-  ) {
+  // An organizer cancel/withdraw always tells the speakers in-app; the
+  // formal email is the optional part.
+  if (isOrganizerRemoval(event) || isSpeakerFacingDecision(event)) {
     // De-duplicate by speaker id in case a proposal carries a duplicated
     // speaker, and skip the actor (they triggered the change themselves).
     const seen = new Set<string>()
@@ -112,16 +115,17 @@ export async function handlePersistNotification(
         conferenceId,
         notificationType: 'proposal_status_changed',
         title: `Your proposal "${proposalTitle}" is now ${event.newStatus}`,
-        message: event.metadata.comment || undefined,
+        message: event.metadata.comment || event.metadata.reason || undefined,
         actorId,
         relatedProposalId: proposalId,
         // When the decision carries a comment it is ALSO relayed into the
         // proposal's message thread; point the status notification at the same
         // #messages anchor as the message notification so the two bell rows lead
         // to the same place instead of diverging (batch A / A7).
-        link: event.metadata.comment
-          ? `/cfp/proposal/${proposalId}#messages`
-          : `/cfp/proposal/${proposalId}`,
+        link:
+          event.metadata.comment || event.metadata.postedToThread
+            ? `/cfp/proposal/${proposalId}#messages`
+            : `/cfp/proposal/${proposalId}`,
       })
     }
     await createNotifications(items)
