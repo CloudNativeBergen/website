@@ -282,6 +282,30 @@ describe('checkWallPhoto refuses', () => {
     }
   })
 
+  it('an APP0 of JFIF’s length under another identifier', () => {
+    const bytes = fixture('canvas-chromium.jpg').slice()
+    bytes.set([0x4a, 0x46, 0x58, 0x58, 0x00], 6) // JFXX\0 over JFIF\0
+    expect(checkWallPhoto(bytes)).toEqual({
+      ok: false,
+      reason: 'metadata',
+      segment: 'APP0',
+    })
+  })
+
+  it('a JFIF header that claims a thumbnail it does not carry, in either dimension', () => {
+    // Bytes 18 and 19: the APP0's Xthumb and Ythumb.
+    for (const at of [18, 19]) {
+      const bytes = fixture('canvas-chromium.jpg').slice()
+      expect(bytes[at]).toBe(0)
+      bytes[at] = 1
+      expect(checkWallPhoto(bytes)).toEqual({
+        ok: false,
+        reason: 'metadata',
+        segment: 'APP0',
+      })
+    }
+  })
+
   it('a plain JFIF APP0 anywhere but straight after the SOI', () => {
     const bytes = fixture('canvas-chromium.jpg')
     const app0 = bytes.subarray(2, 2 + 18)
