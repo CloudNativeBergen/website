@@ -12,6 +12,7 @@ import {
   type ProposalAcceptTemplateProps,
   type ProposalRejectTemplateProps,
 } from './types'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 function getEmailTemplate(
   action: Action,
@@ -88,7 +89,7 @@ export async function sendAcceptRejectNotification(params: NotificationParams) {
 
   return retryWithBackoff(async () => {
     const { data, error } = await client.emails.send({
-      from: `${params.event.organizer} <${params.event.contactEmail}>`,
+      from: resolveConferenceFrom(params.event),
       to: [params.speaker.email],
       subject: subject,
       react: template,

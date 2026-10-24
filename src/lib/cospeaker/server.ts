@@ -22,6 +22,7 @@ import { canonicalEmail } from '@/lib/speaker/email'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatDate } from '@/lib/time'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 const TOKEN_SECRET = process.env.INVITATION_TOKEN_SECRET
 
@@ -466,7 +467,10 @@ export async function sendInvitationEmail(
     const result = await sendEmail({
       to: invitation.invitedEmail,
       subject,
-      from: `${conference.organizer} <${conference.cfpEmail}>`,
+      from: resolveConferenceFrom(conference, {
+        field: 'cfpEmail',
+        localPart: 'cfp',
+      }),
       orgId: conference.organization?._ref,
       component: CoSpeakerInvitationTemplate,
       props: {
@@ -553,7 +557,10 @@ export async function sendCoSpeakerAddedEmail(params: {
     const result = await sendEmail({
       to: canonicalEmail(params.toEmail),
       subject,
-      from: `${conference.organizer} <${conference.cfpEmail}>`,
+      from: resolveConferenceFrom(conference, {
+        field: 'cfpEmail',
+        localPart: 'cfp',
+      }),
       orgId: conference.organization?._ref,
       component: CoSpeakerAddedTemplate,
       props: {
@@ -606,7 +613,10 @@ export async function sendCoSpeakerRemovedEmail(params: {
     const result = await sendEmail({
       to: canonicalEmail(params.toEmail),
       subject,
-      from: `${conference.organizer} <${conference.cfpEmail}>`,
+      from: resolveConferenceFrom(conference, {
+        field: 'cfpEmail',
+        localPart: 'cfp',
+      }),
       orgId: conference.organization?._ref,
       component: CoSpeakerRemovedTemplate,
       props: {
@@ -709,7 +719,10 @@ export async function sendResponseNotificationEmail(params: {
     const result = await sendEmail({
       to: inviterEmail,
       subject,
-      from: `${conference.organizer} <${conference.cfpEmail}>`,
+      from: resolveConferenceFrom(conference, {
+        field: 'cfpEmail',
+        localPart: 'cfp',
+      }),
       orgId: conference.organization?._ref,
       component: CoSpeakerResponseTemplate,
       props: {

@@ -14,6 +14,7 @@ import {
   VolunteerMessageTemplate,
 } from '@/components/email/VolunteerApprovalTemplate'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 interface ConferenceForEmail {
   _id?: string
@@ -142,7 +143,7 @@ export async function sendVolunteerApprovalEmail(
 
     const result = await retryWithBackoff(async () => {
       const response = await client.emails.send({
-        from: `${conference.organizer || conference.title} <${fromEmail}>`,
+        from: resolveConferenceFrom(conference),
         to: volunteer.email!,
         subject,
         react: (options?.template === 'message'

@@ -9,6 +9,7 @@ import {
   hasConferenceDomain,
 } from '@/lib/conference/baseUrl'
 import { formatDate } from '@/lib/time'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 /** One email recipient for a new-message notification. */
 export interface MessageEmailRecipient {
@@ -60,7 +61,10 @@ async function sendOne(
         ? `The ${conference.title} organizers started a conversation with you — "${subject}"`
         : `New message about "${subject}"`
       const result = await client.emails.send({
-        from: `${conference.organizer} <${conference.cfpEmail}>`,
+        from: resolveConferenceFrom(conference, {
+          field: 'cfpEmail',
+          localPart: 'cfp',
+        }),
         to: [recipient.email],
         subject: emailSubject,
         react: React.createElement(MessageNotificationTemplate, {
