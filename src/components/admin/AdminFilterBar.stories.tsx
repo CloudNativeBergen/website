@@ -53,10 +53,12 @@ function AdminFilterBarDemo({
   withSearch = true,
   withCount = true,
   many = false,
+  actions,
 }: {
   withSearch?: boolean
   withCount?: boolean
   many?: boolean
+  actions?: React.ReactNode
 }) {
   const [status, setStatus] = useState<string[]>(['submitted'])
   const [format, setFormat] = useState<string[]>([])
@@ -134,6 +136,7 @@ function AdminFilterBarDemo({
   return (
     <AdminFilterBar
       filters={filters}
+      actions={actions}
       search={
         withSearch
           ? {
@@ -208,4 +211,19 @@ export const MobileViewport: Story = {
       </div>
     ),
   ],
+}
+
+export const WithActions: Story = {
+  render: () => (
+    <AdminFilterBarDemo
+      actions={
+        <button
+          type="button"
+          className="inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium text-gray-600 ring-1 ring-gray-300 ring-inset dark:text-gray-400 dark:ring-white/10"
+        >
+          Copy 12
+        </button>
+      }
+    />
+  ),
 }

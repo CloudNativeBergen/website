@@ -27,6 +27,10 @@ import { SpeakerIndicators } from '@/lib/proposal'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
 import { FilterDropdown, FilterOption } from '@/components/admin'
 import {
+  AdminFilterBar,
+  type FilterGroup,
+} from '@/components/admin/AdminFilterBar'
+import {
   ActionMenu,
   ActionMenuItem,
   ActionMenuDivider,
@@ -50,7 +54,6 @@ import {
   TableBody,
   Tr,
   Td,
-  TableToolbar,
   TableEmptyState,
 } from '@/components/DataTable'
 import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
@@ -153,6 +156,21 @@ interface FilterOptions {
   /** Dynamic question filters keyed by question id -> selected answer */
   questionAnswers: Record<string, string>
 }
+
+type SpeakerTypeFlag =
+  | 'newSpeakers'
+  | 'localSpeakers'
+  | 'underrepresentedSpeakers'
+  | 'travelSupportSpeakers'
+  | 'ticketNotRedeemed'
+
+const SPEAKER_TYPE_OPTIONS: { value: SpeakerTypeFlag; label: string }[] = [
+  { value: 'newSpeakers', label: 'New speakers only' },
+  { value: 'localSpeakers', label: 'Local speakers only' },
+  { value: 'underrepresentedSpeakers', label: 'Underrepresented speakers' },
+  { value: 'travelSupportSpeakers', label: 'Travel support needed' },
+  { value: 'ticketNotRedeemed', label: 'Ticket not claimed (chase list)' },
+]
 
 const getCompactFormat = (format: Format): string => {
   const fullFormat = formats.get(format)
@@ -470,17 +488,6 @@ export function SpeakerTable({
     })
   }
 
-  const hasActiveFilters =
-    searchTerm !== '' ||
-    filters.status !== 'all' ||
-    filters.newSpeakers ||
-    filters.localSpeakers ||
-    filters.underrepresentedSpeakers ||
-    filters.travelSupportSpeakers ||
-    filters.ticketNotRedeemed ||
-    filters.ticketClaimState !== 'all' ||
-    Object.values(filters.questionAnswers).some((v) => v && v !== 'all')
-
   const activeQuestionFilterCount = Object.values(
     filters.questionAnswers,
   ).filter((v) => v && v !== 'all').length
@@ -494,6 +501,137 @@ export function SpeakerTable({
     (filters.ticketNotRedeemed ? 1 : 0) +
     (filters.ticketClaimState !== 'all' ? 1 : 0) +
     activeQuestionFilterCount
+
+  const setFlag = (key: SpeakerTypeFlag) =>
+    setFilters((prev) => ({ ...prev, [key]: !prev[key] }))
+
+  const filterGroups: FilterGroup[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      multi: false,
+      defaultValue: 'all',
+      selected: [filters.status],
+      options: [
+        { value: 'all', label: 'All' },
+        { value: 'confirmed', label: 'Confirmed' },
+        { value: 'accepted', label: 'Accepted' },
+      ],
+      onChange: (value) => setFilters((prev) => ({ ...prev, status: value })),
+    },
+    {
+      key: 'speakerType',
+      label: 'Speaker Type',
+      width: 'wide',
+      selected: SPEAKER_TYPE_OPTIONS.filter((o) => filters[o.value]).map(
+        (o) => o.value,
+      ),
+      options: SPEAKER_TYPE_OPTIONS,
+      onChange: (value) => setFlag(value as SpeakerTypeFlag),
+    },
+    {
+      key: 'ticket',
+      label: 'Ticket',
+      multi: false,
+      defaultValue: 'all',
+      width: 'wide',
+      selected: [filters.ticketClaimState],
+      options: [
+        { value: 'all', label: 'All states' },
+        { value: 'redeemed', label: 'Ticket Claimed' },
+        { value: 'invited', label: 'Ticket Invited (Pending)' },
+        { value: 'not-invited', label: 'Ticket Not Invited' },
+      ],
+      onChange: (value) =>
+        setFilters((prev) => ({ ...prev, ticketClaimState: value })),
+    },
+    ...discoveredQuestions
+      .filter((q) => q.type === 'choice')
+      .map((q): FilterGroup => ({
+        key: `q_${q.id}`,
+        label: q.label,
+        multi: false,
+        defaultValue: 'all',
+        width: 'wide',
+        selected: [filters.questionAnswers[q.id] || 'all'],
+        options: [
+          { value: 'all', label: 'All' },
+          ...(q.options ?? []).map((opt) => ({
+            value: opt,
+            label: opt === 'Yes' || opt === 'No' ? `${q.label}: ${opt}` : opt,
+          })),
+          { value: '__unanswered__', label: 'Unanswered / Unclaimed' },
+        ],
+        onChange: (value) =>
+          setFilters((prev) => ({
+            ...prev,
+            questionAnswers: { ...prev.questionAnswers, [q.id]: value },
+          })),
+      })),
+  ]
+
+  // Cards ignore column visibility, so this only shows on desktop.
+  const columnsDropdown = (
+    <FilterDropdown
+      label="Columns"
+      activeCount={Object.values(columnVisibility).filter(Boolean).length}
+      position="right"
+      width="wider"
+    >
+      <div className="p-1.5">
+        <div className="mb-2">
+          <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+            General Columns
+          </label>
+          <div className="space-y-0.5">
+            {(
+              [
+                'ticket',
+                'email',
+                'talks',
+                'indicators',
+                'linkedin',
+                'bluesky',
+                'questions',
+              ] as const
+            ).map((col) => (
+              <FilterOption
+                key={col}
+                checked={columnVisibility[col]}
+                onClick={() => toggleColumnVisibility(col)}
+                keepOpen
+              >
+                {COLUMN_LABELS[col]}
+              </FilterOption>
+            ))}
+          </div>
+        </div>
+
+        {discoveredQuestions.length > 0 && (
+          <div className="border-t border-gray-200 pt-2 dark:border-gray-600">
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+              Question Columns
+            </label>
+            <div className="space-y-0.5">
+              {discoveredQuestions.map((q) => {
+                const colKey = `q_${q.id}` as `q_${string}`
+                return (
+                  <FilterOption
+                    key={q.id}
+                    checked={Boolean(columnVisibility[colKey])}
+                    onClick={() => toggleColumnVisibility(colKey)}
+                    keepOpen
+                  >
+                    {q.label}
+                  </FilterOption>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </FilterDropdown>
+  )
 
   const renderSpeakerTalks = (speaker: SpeakerWithProposals) => (
     <div className="space-y-1">
@@ -747,298 +885,42 @@ export function SpeakerTable({
 
   return (
     <div className="space-y-4">
-      <TableToolbar
-        searchValue={searchTerm}
-        onSearchChange={setSearchTerm}
-        searchPlaceholder="Search speakers..."
-        showClearButton={hasActiveFilters}
-        onClear={resetFilters}
+      <AdminFilterBar
+        filters={filterGroups}
+        search={{
+          value: searchTerm,
+          onChange: setSearchTerm,
+          placeholder: 'Search speakers...',
+        }}
+        onClearAll={resetFilters}
+        activeFilterCount={activeFilterCount}
         resultCount={filteredSpeakers.length}
         totalCount={speakers.length}
         resultLabel="speakers"
-      >
-        <FilterDropdown
-          label="Filters"
-          activeCount={activeFilterCount}
-          width="wider"
-          position="right"
-        >
-          <div className="p-1.5">
-            <div className="mb-2">
-              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                Status
-              </label>
-              <div className="space-y-0.5">
-                <FilterOption
-                  type="radio"
-                  checked={filters.status === 'all'}
-                  onClick={() =>
-                    setFilters((prev) => ({ ...prev, status: 'all' }))
-                  }
-                  keepOpen
-                >
-                  All
-                </FilterOption>
-                <FilterOption
-                  type="radio"
-                  checked={filters.status === 'confirmed'}
-                  onClick={() =>
-                    setFilters((prev) => ({ ...prev, status: 'confirmed' }))
-                  }
-                  keepOpen
-                >
-                  Confirmed
-                </FilterOption>
-                <FilterOption
-                  type="radio"
-                  checked={filters.status === 'accepted'}
-                  onClick={() =>
-                    setFilters((prev) => ({ ...prev, status: 'accepted' }))
-                  }
-                  keepOpen
-                >
-                  Accepted
-                </FilterOption>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 pt-2 dark:border-gray-600">
-              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                Speaker Type
-              </label>
-              <div className="space-y-0.5">
-                <FilterOption
-                  checked={filters.newSpeakers}
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      newSpeakers: !prev.newSpeakers,
-                    }))
-                  }
-                  keepOpen
-                >
-                  New speakers only
-                </FilterOption>
-                <FilterOption
-                  checked={filters.localSpeakers}
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      localSpeakers: !prev.localSpeakers,
-                    }))
-                  }
-                  keepOpen
-                >
-                  Local speakers only
-                </FilterOption>
-                <FilterOption
-                  checked={filters.underrepresentedSpeakers}
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      underrepresentedSpeakers: !prev.underrepresentedSpeakers,
-                    }))
-                  }
-                  keepOpen
-                >
-                  Underrepresented speakers
-                </FilterOption>
-                <FilterOption
-                  checked={filters.travelSupportSpeakers}
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      travelSupportSpeakers: !prev.travelSupportSpeakers,
-                    }))
-                  }
-                  keepOpen
-                >
-                  Travel support needed
-                </FilterOption>
-                <FilterOption
-                  checked={filters.ticketNotRedeemed}
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      ticketNotRedeemed: !prev.ticketNotRedeemed,
-                    }))
-                  }
-                  keepOpen
-                >
-                  Ticket not claimed (chase list)
-                </FilterOption>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 pt-2 dark:border-gray-600">
-              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                Ticket Registration
-              </label>
-              <div className="space-y-0.5">
-                {[
-                  { value: 'all', label: 'All states' },
-                  { value: 'redeemed', label: 'Ticket Claimed' },
-                  { value: 'invited', label: 'Ticket Invited (Pending)' },
-                  { value: 'not-invited', label: 'Ticket Not Invited' },
-                ].map((opt) => (
-                  <FilterOption
-                    key={opt.value}
-                    type="radio"
-                    checked={filters.ticketClaimState === opt.value}
-                    onClick={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        ticketClaimState: opt.value,
-                      }))
-                    }
-                    keepOpen
-                  >
-                    {opt.label}
-                  </FilterOption>
-                ))}
-              </div>
-            </div>
-
-            {discoveredQuestions
-              .filter((q) => q.type === 'choice')
-              .map((q) => (
-                <div
-                  key={q.id}
-                  className="border-t border-gray-200 pt-2 dark:border-gray-600"
-                >
-                  <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {q.label}
-                  </label>
-                  <div className="space-y-0.5">
-                    <FilterOption
-                      type="radio"
-                      checked={
-                        !filters.questionAnswers[q.id] ||
-                        filters.questionAnswers[q.id] === 'all'
-                      }
-                      onClick={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          questionAnswers: {
-                            ...prev.questionAnswers,
-                            [q.id]: 'all',
-                          },
-                        }))
-                      }
-                      keepOpen
-                    >
-                      All
-                    </FilterOption>
-                    {q.options?.map((opt) => (
-                      <FilterOption
-                        key={opt}
-                        type="radio"
-                        checked={
-                          filters.questionAnswers[q.id]?.toLowerCase() ===
-                          opt.toLowerCase()
-                        }
-                        onClick={() =>
-                          setFilters((prev) => ({
-                            ...prev,
-                            questionAnswers: {
-                              ...prev.questionAnswers,
-                              [q.id]: opt,
-                            },
-                          }))
-                        }
-                        keepOpen
-                      >
-                        {opt === 'Yes'
-                          ? `${q.label}: Yes`
-                          : opt === 'No'
-                            ? `${q.label}: No`
-                            : opt}
-                      </FilterOption>
-                    ))}
-                    <FilterOption
-                      type="radio"
-                      checked={
-                        filters.questionAnswers[q.id] === '__unanswered__'
-                      }
-                      onClick={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          questionAnswers: {
-                            ...prev.questionAnswers,
-                            [q.id]: '__unanswered__',
-                          },
-                        }))
-                      }
-                      keepOpen
-                    >
-                      Unanswered / Unclaimed
-                    </FilterOption>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </FilterDropdown>
-
-        <FilterDropdown
-          label="Columns"
-          activeCount={Object.values(columnVisibility).filter(Boolean).length}
-          position="right"
-          width="wider"
-        >
-          <div className="p-1.5">
-            <div className="mb-2">
-              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                General Columns
-              </label>
-              <div className="space-y-0.5">
-                {(
-                  [
-                    'ticket',
-                    'email',
-                    'talks',
-                    'indicators',
-                    'linkedin',
-                    'bluesky',
-                    'questions',
-                  ] as const
-                ).map((col) => (
-                  <FilterOption
-                    key={col}
-                    checked={columnVisibility[col]}
-                    onClick={() => toggleColumnVisibility(col)}
-                    keepOpen
-                  >
-                    {COLUMN_LABELS[col]}
-                  </FilterOption>
-                ))}
-              </div>
-            </div>
-
-            {discoveredQuestions.length > 0 && (
-              <div className="border-t border-gray-200 pt-2 dark:border-gray-600">
-                <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                  Question Columns
-                </label>
-                <div className="space-y-0.5">
-                  {discoveredQuestions.map((q) => {
-                    const colKey = `q_${q.id}` as `q_${string}`
-                    return (
-                      <FilterOption
-                        key={q.id}
-                        checked={Boolean(columnVisibility[colKey])}
-                        onClick={() => toggleColumnVisibility(colKey)}
-                        keepOpen
-                      >
-                        {q.label}
-                      </FilterOption>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </FilterDropdown>
-      </TableToolbar>
+        desktopExtra={columnsDropdown}
+        actions={
+          filteredEmails.length > 0 && (
+            <button
+              type="button"
+              onClick={() => copyAllEmails(filteredEmails.join(', '))}
+              title={
+                copiedAllEmails
+                  ? `Copied ${emailCountLabel}!`
+                  : `Copy all ${emailCountLabel}`
+              }
+              aria-label={`Copy all ${emailCountLabel}`}
+              className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-gray-600 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:text-gray-400 dark:ring-white/10 dark:hover:bg-gray-800"
+            >
+              {copiedAllEmails ? (
+                <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
+              ) : (
+                <ClipboardIcon className="h-4 w-4" />
+              )}
+              {filteredEmails.length}
+            </button>
+          )
+        }
+      />
 
       {/* The filter is on but the read has not landed: say so, so the rows
           below are not mistaken for the answer. */}
@@ -1052,24 +934,6 @@ export function SpeakerTable({
             </span>
           </div>
         )}
-
-      {/* The table header holds this button on desktop; cards have no header. */}
-      {filteredEmails.length > 0 && (
-        <button
-          type="button"
-          onClick={() => copyAllEmails(filteredEmails.join(', '))}
-          className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 md:hidden dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-        >
-          {copiedAllEmails ? (
-            <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
-          ) : (
-            <ClipboardIcon className="h-4 w-4" />
-          )}
-          {copiedAllEmails
-            ? `Copied ${emailCountLabel}`
-            : `Copy all ${emailCountLabel}`}
-        </button>
-      )}
 
       <div className="space-y-3 md:hidden">
         {filteredSpeakers.map((speaker) => {

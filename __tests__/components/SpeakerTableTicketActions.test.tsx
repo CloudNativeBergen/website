@@ -133,7 +133,7 @@ describe('SpeakerTable ticket row actions', () => {
       />,
     )
 
-    // Mobile button (above the cards) renders first, desktop header button second.
+    // Filter bar button renders first, desktop Email header button second.
     const copyBtns = screen.getAllByRole('button', {
       name: 'Copy all 2 emails',
     })
