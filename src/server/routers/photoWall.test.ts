@@ -82,6 +82,24 @@ vi.mock('@/lib/conference/sanity', () => ({
   ),
 }))
 
+/** `stall`: the export count's read never answers, as a hung Sanity read. */
+const count = vi.hoisted(() => ({ stall: false }))
+vi.mock('@/lib/photo-wall/export', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/photo-wall/export')>()
+  return {
+    ...real,
+    // Short, so a stalled count is given up on within the test.
+    COUNT_TIMEOUT_MS: 50,
+    countConsentedPhotos: (conferenceId: string, signal?: AbortSignal) =>
+      count.stall && signal
+        ? // As the real client does (measured, PR #1510): rejects on abort.
+          new Promise<never>((_, reject) =>
+            signal.addEventListener('abort', () => reject(signal.reason)),
+          )
+        : real.countConsentedPhotos(conferenceId, signal),
+  }
+})
+
 import { initTRPC } from '@trpc/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { Context } from '@/server/trpc'
@@ -126,6 +144,7 @@ const LINKS = {
 }
 
 beforeEach(() => {
+  count.stall = false
   cdn.conference = null
   cdn.live = null
   cdn.movedAfter = null
@@ -328,6 +347,61 @@ describe('photoWall.settings', () => {
     expect(store().reads.length).toBeGreaterThan(0)
     expect(store().reads.every((r) => r.client === 'uncached')).toBe(true)
   })
+})
+
+describe('the export count is metadata: it never fails the wall (P5)', () => {
+  const countReads = (read: { query: string }) =>
+    read.query.startsWith('count(')
+
+  const failCount = (how: 'rejects' | 'stalls') => {
+    if (how === 'rejects') store().failReadsThat(countReads)
+    else count.stall = true
+    return vi.spyOn(console, 'error').mockImplementation(() => {})
+  }
+
+  it.each(['rejects', 'stalls'] as const)(
+    'settings still answers when the count read %s, with the count unknown',
+    async (how) => {
+      store().reset([wallOf('conf-A', { postingMode: 'open' })])
+      const logged = failCount(how)
+      const view = await organizer().settings()
+      expect(view.wall?.postingMode).toBe('open')
+      expect(view.marketingExportCount).toBeUndefined()
+      expect(logged).toHaveBeenCalledWith(
+        'Could not count the Photo Wall export',
+        expect.anything(),
+      )
+      logged.mockRestore()
+    },
+    3000,
+  )
+
+  it.each(['rejects', 'stalls'] as const)(
+    'a committed settings change reports success when the count read %s',
+    async (how) => {
+      store().reset([wallOf('conf-A', { postingMode: 'paused' })])
+      const logged = failCount(how)
+      const view = await organizer().updateSettings({ postingMode: 'open' })
+      expect(store().doc('photoWall-conf-A')?.postingMode).toBe('open')
+      expect(view.wall?.postingMode).toBe('open')
+      expect(view.marketingExportCount).toBeUndefined()
+      logged.mockRestore()
+    },
+    3000,
+  )
+
+  it.each(['rejects', 'stalls'] as const)(
+    'a committed Set up reports success when the count read %s',
+    async (how) => {
+      const logged = failCount(how)
+      const view = await organizer().setUp()
+      expect(store().doc('photoWall-conf-A')?._type).toBe('photoWall')
+      expect(view.wall).not.toBeNull()
+      expect(view.marketingExportCount).toBeUndefined()
+      logged.mockRestore()
+    },
+    3000,
+  )
 })
 
 describe('photoWall.setUp (§4.1)', () => {

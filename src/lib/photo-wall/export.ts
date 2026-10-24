@@ -50,14 +50,20 @@ export async function readConsentedPhotos(
   )
 }
 
+/** How long the admin page's count may take before it is left unknown. */
+export const COUNT_TIMEOUT_MS = 3_000
+
 /** How many photos the ZIP would hold now: the admin page's count. */
 export async function countConsentedPhotos(
   conferenceId: string,
+  signal?: AbortSignal,
 ): Promise<number> {
   return scopedFetch<number>(
     clientReadUncached,
     { conferenceId },
     `count(*[${EXPORTABLE}])`,
+    {},
+    { signal },
   )
 }
 

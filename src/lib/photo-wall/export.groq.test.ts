@@ -133,8 +133,8 @@ describe('readConsentedPhotos', () => {
     const signal = new AbortController().signal
     await readConsentedPhotos('conf-A', signal)
     await stillExportable('conf-A', 'wallPost-a1', signal)
-    await countConsentedPhotos('conf-A')
-    expect(h.options).toEqual([{ signal }, { signal }, undefined])
+    await countConsentedPhotos('conf-A', signal)
+    expect(h.options).toEqual([{ signal }, { signal }, { signal }])
   })
 
   it('reads in ONE query, on the non-CDN client', async () => {

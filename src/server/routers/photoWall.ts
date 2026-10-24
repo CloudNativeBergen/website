@@ -10,7 +10,7 @@ import {
   type PhotoWallAdminView,
 } from '@/lib/photo-wall'
 import { expirePhotoWall, getModerationQueue } from '@/lib/photo-wall/cache'
-import { countConsentedPhotos } from '@/lib/photo-wall/export'
+import { COUNT_TIMEOUT_MS, countConsentedPhotos } from '@/lib/photo-wall/export'
 import { liveConferenceInOrg } from '@/lib/photo-wall/tenant'
 import {
   readPhotoWall,
@@ -56,6 +56,23 @@ async function polledConferenceId(orgId: string | null) {
 
 type Conference = Awaited<ReturnType<typeof requestConference>>
 
+/**
+ * The consented export's count (P5), or undefined when it can't be read in
+ * time: metadata, so it never fails the settings read, nor a Set up or
+ * settings change that has already been committed.
+ */
+async function exportCount(conferenceId: string): Promise<number | undefined> {
+  try {
+    return await countConsentedPhotos(
+      conferenceId,
+      AbortSignal.timeout(COUNT_TIMEOUT_MS),
+    )
+  } catch (error) {
+    console.error('Could not count the Photo Wall export', error)
+    return undefined
+  }
+}
+
 async function adminView(
   conference: Conference,
   wall: PhotoWall | null,
@@ -64,7 +81,7 @@ async function adminView(
     wall,
     posting: wall ? postingState(wall, conference, new Date()) : 'paused',
     links: photoWallLinks(conference),
-    marketingExportCount: wall ? await countConsentedPhotos(conference._id) : 0,
+    marketingExportCount: wall ? await exportCount(conference._id) : 0,
   }
 }
 
