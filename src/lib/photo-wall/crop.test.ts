@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { CENTER_CROP, clampCrop, cropSquare, dragCrop } from './crop'
+import {
+  CENTER_CROP,
+  clampCrop,
+  cropSquare,
+  dragCrop,
+  postedCrop,
+} from './crop'
 
 /**
  * The crop (Photo Wall spec §6.5): `{ x, y }` in 0–1 place a square of the
@@ -109,5 +115,39 @@ describe('dragCrop: panning the window by a finger movement', () => {
         height: 1000,
       }),
     ).toEqual(CENTER_CROP)
+  })
+})
+
+describe('postedCrop: the crop as Post to the wall hands it on', () => {
+  it('fifteen arrow-key nudges to the left edge post 0, not 9.71e-17', () => {
+    // A 2048x512 panorama in a 240 px window: one ArrowLeft is 24 CSS px,
+    // a thirtieth of the range, so fifteen land on the edge in floats as a
+    // tiny positive number that String() writes in exponent form.
+    const panorama = { width: 2048, height: 512 }
+    let crop = CENTER_CROP
+    for (let i = 0; i < 15; i++) {
+      crop = dragCrop(crop, { dx: 24, dy: 0 }, 240, panorama)
+    }
+    expect(String(crop.x)).toMatch(/e-/)
+
+    const posted = postedCrop(crop)
+    expect(posted).toEqual({ x: 0, y: 0.5 })
+    expect(String(posted.x)).toBe('0')
+  })
+
+  it('rounds to four decimals, snaps to the edges and stays in 0–1', () => {
+    expect(postedCrop({ x: 0.123456, y: 0.99999999 })).toEqual({
+      x: 0.1235,
+      y: 1,
+    })
+    expect(postedCrop({ x: -3e-17, y: 1.0000000002 })).toEqual({ x: 0, y: 1 })
+    expect(postedCrop({ x: NaN, y: 2 })).toEqual({ x: 0.5, y: 1 })
+  })
+
+  it('always writes as a plain decimal, never in exponent form', () => {
+    for (let i = 0; i <= 10_000; i++) {
+      const { x } = postedCrop({ x: i / 10_000 + 1e-12, y: 0.5 })
+      expect(String(x)).toMatch(/^(0|1|0\.\d{1,4})$/)
+    }
   })
 })

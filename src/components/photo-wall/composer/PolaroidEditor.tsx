@@ -56,13 +56,17 @@ export function PhotoWindow({
   const photo: Size = { width: master.width, height: master.height }
   const frameWidth = () => frame.current?.getBoundingClientRect().width ?? 1
 
+  // A disabled fieldset (while a post goes out) stops clicks and the keyboard
+  // but not pointer events, so a drag checks for itself.
+  const locked = (e: ReactPointerEvent) => e.currentTarget.matches(':disabled')
   const down = (e: ReactPointerEvent) => {
+    if (locked(e)) return
     e.currentTarget.setPointerCapture(e.pointerId)
     drag.current = { x: e.clientX, y: e.clientY, crop }
   }
   const move = (e: ReactPointerEvent) => {
     const start = drag.current
-    if (!start) return
+    if (!start || locked(e)) return
     onCrop(
       dragCrop(
         start.crop,

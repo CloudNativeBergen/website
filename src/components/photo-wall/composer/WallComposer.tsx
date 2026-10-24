@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
-import { CENTER_CROP, type Crop } from '@/lib/photo-wall/crop'
+import { CENTER_CROP, postedCrop, type Crop } from '@/lib/photo-wall/crop'
 import type { WallFilterKey } from '@/lib/photo-wall/filters'
 import {
   PhotoDecodeError,
@@ -54,6 +54,20 @@ export interface WallComposerProps {
   onSubmit: (post: WallPostDraft) => Promise<void> | void
 }
 
+/**
+ * Resolves once the browser has painted: the first frame callback runs
+ * before the paint that shows a just-set status, the second after it.
+ */
+const afterPaint = () =>
+  new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  )
+
+/** Marks the history entry the composer pushes, so Back has somewhere to go. */
+const isComposerEntry = () =>
+  (window.history.state as { wallComposer?: boolean } | null)?.wallComposer ===
+  true
+
 type Stage =
   | { kind: 'landing'; error: string | null }
   | { kind: 'decoding' }
@@ -78,11 +92,35 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
   // Only the photo picked last may land: a large one picked first can finish
   // opening after it.
   const latestPick = useRef(0)
+  const busy = posting !== 'idle'
 
   // A new screen takes focus, so a screen reader lands on it.
   useEffect(() => {
     if (stage.kind === 'composing') heading.current?.focus()
   }, [stage.kind])
+
+  // The composer is a screen of its own: it pushes a history entry, so the
+  // back gesture returns to the landing (dropping the photo) instead of
+  // leaving the page and the draft with it. While a post is going out, Back
+  // stays put: the post cannot be called back.
+  useEffect(() => {
+    if (stage.kind !== 'composing') return
+    if (!isComposerEntry()) window.history.pushState({ wallComposer: true }, '')
+    const onBack = () => {
+      if (busy) {
+        window.history.pushState({ wallComposer: true }, '')
+      } else {
+        setStage({ kind: 'landing', error: null })
+      }
+    }
+    window.addEventListener('popstate', onBack)
+    return () => window.removeEventListener('popstate', onBack)
+  }, [stage.kind, busy])
+
+  const anotherPhoto = () => {
+    if (isComposerEntry()) window.history.back()
+    else setStage({ kind: 'landing', error: null })
+  }
 
   const pick = async (file: File) => {
     const thisPick = ++latestPick.current
@@ -90,8 +128,12 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
     try {
       const master = await decodeWallPhoto(file)
       if (thisPick !== latestPick.current) return
+      // A new photo is a new post: its own look, crop and caption, and the
+      // marketing consent asked again. The name is the same person's.
       setFilter('original')
       setCrop(CENTER_CROP)
+      setCaption('')
+      setMarketingConsent(false)
       setFailure(null)
       setStage({ kind: 'composing', master })
     } catch (error) {
@@ -113,13 +155,16 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
     setFailure(null)
     setPosting('baking')
     try {
+      // The bake blocks the main thread for a moment (more on a phone): let
+      // "Preparing your photo…" paint first.
+      await afterPaint()
       const photo = await bakeWallPhoto(master, filter)
       setPosting('sending')
       await onSubmit({
         photo,
         caption: normalizeWallText(caption),
         name: normalizeWallText(name),
-        crop,
+        crop: postedCrop(crop),
         marketingConsent,
       })
     } catch {
@@ -151,75 +196,79 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
   }
 
   const { master } = stage
-  const busy = posting !== 'idle'
   return (
     <WallChrome logo={logo}>
       <div className="text-left">
-        <button
-          type="button"
-          onClick={() => setStage({ kind: 'landing', error: null })}
-          className="-ml-1 flex items-center gap-1 rounded-md px-1 text-sm text-gray-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:text-gray-400 dark:focus-visible:outline-white"
-        >
-          <ArrowLeftIcon className="size-4" aria-hidden="true" />
-          Another photo
-        </button>
-        <h1 ref={heading} tabIndex={-1} className="sr-only">
-          Your photo
-        </h1>
-
-        <div className="mx-auto mt-4 max-w-xs">
-          <PolaroidEditor
-            master={master}
-            filter={filter}
-            crop={crop}
-            caption={caption}
-            name={name}
-            onCrop={setCrop}
-            onCaption={setCaption}
-            onName={setName}
-          />
-          <p className="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
-            <span>Drag the photo to move it</span>
-            <span data-testid="caption-counter">
-              <span className="sr-only">Caption: </span>
-              {wallTextLength(caption)}/{CAPTION_MAX}
-            </span>
-          </p>
-        </div>
-
-        <div className="mt-5">
-          <FilterStrip
-            master={master}
-            crop={crop}
-            value={filter}
-            onChange={setFilter}
-          />
-        </div>
-
-        <p className="mt-5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
-          Your photo, caption and name are shown on the screens at the venue and
-          on the public wall on this website until{' '}
-          <time dateTime={deletesOn}>
-            {formatDateLocalized(deletesOn, 'en-GB')}
-          </time>
-          . Only post photos the people in them are happy with.{' '}
-          <a
-            className="underline underline-offset-2 hover:text-gray-900 dark:hover:text-white"
-            href="/privacy#photo-wall"
+        {/* Everything that makes up the post is locked while it goes out, so
+            what is posted is what the screen shows (the consent above all).
+            The Post button stays outside: aria-disabled, it keeps focus. */}
+        <fieldset disabled={busy} className="min-w-0">
+          <button
+            type="button"
+            onClick={anotherPhoto}
+            className="-ml-2 flex min-h-11 items-center gap-1 rounded-md px-2 text-sm text-gray-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:text-gray-400 dark:focus-visible:outline-white"
           >
-            Privacy
-          </a>
-        </p>
+            <ArrowLeftIcon className="size-4" aria-hidden="true" />
+            Another photo
+          </button>
+          <h1 ref={heading} tabIndex={-1} className="sr-only">
+            Your photo
+          </h1>
 
-        <label className="mt-4 flex items-start gap-3 text-sm text-gray-700 dark:text-gray-300">
-          <input
-            type="checkbox"
-            checked={marketingConsent}
-            onChange={(e) => setMarketingConsent(e.target.checked)}
-            className="mt-0.5 size-4 shrink-0 rounded border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900"
-          />
-          The organizers may also use my photo in their own marketing.
-        </label>
+          <div className="mx-auto mt-4 max-w-xs">
+            <PolaroidEditor
+              master={master}
+              filter={filter}
+              crop={crop}
+              caption={caption}
+              name={name}
+              onCrop={setCrop}
+              onCaption={setCaption}
+              onName={setName}
+            />
+            <p className="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+              <span>Drag the photo to move it</span>
+              <span data-testid="caption-counter">
+                <span className="sr-only">Caption: </span>
+                {wallTextLength(caption)}/{CAPTION_MAX}
+              </span>
+            </p>
+          </div>
+
+          <div className="mt-5">
+            <FilterStrip
+              master={master}
+              crop={crop}
+              value={filter}
+              onChange={setFilter}
+            />
+          </div>
+
+          <p className="mt-5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+            Your photo, caption and name are shown on the screens at the venue
+            and on the public wall on this website until{' '}
+            <time dateTime={deletesOn}>
+              {formatDateLocalized(deletesOn, 'en-GB')}
+            </time>
+            . Only post photos the people in them are happy with.{' '}
+            <a
+              className="underline underline-offset-2 hover:text-gray-900 dark:hover:text-white"
+              href="/privacy#photo-wall"
+            >
+              Privacy
+            </a>
+          </p>
+
+          <label className="mt-4 flex items-start gap-3 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={marketingConsent}
+              onChange={(e) => setMarketingConsent(e.target.checked)}
+              className="mt-0.5 size-4 shrink-0 rounded border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900"
+            />
+            The organizers may also use my photo in their own marketing.
+          </label>
+        </fieldset>
 
         {failure && (
           <p

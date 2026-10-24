@@ -24,6 +24,17 @@ export function clampCrop(crop: Crop): Crop {
   return { x: clampCoordinate(crop.x), y: clampCoordinate(crop.y) }
 }
 
+/**
+ * The crop as Post to the wall hands it on: clamped, and rounded to four
+ * decimals (a ten-thousandth of the range, finer than a pixel of a 2048 px
+ * photo). Arrow-key nudges add up in floats to values like 9.71e-17, which
+ * `String()` writes in exponent form and the server's decimal check refuses.
+ */
+export function postedCrop(crop: Crop): Crop {
+  const c = clampCrop(crop)
+  return { x: Math.round(c.x * 1e4) / 1e4, y: Math.round(c.y * 1e4) / 1e4 }
+}
+
 /** The square, in whole pixels of a photo of this size, the crop places. */
 export function cropSquare(
   width: number,

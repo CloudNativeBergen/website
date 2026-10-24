@@ -455,6 +455,63 @@ export const SubmitFails: Story = {
   },
 }
 
+/**
+ * While the post goes out nothing that makes it up can change: the consent,
+ * the caption, the name, the filter, the crop (by drag or keys) and Another
+ * photo are locked, so what `onSubmit` got is what the screen shows.
+ */
+export const LockedWhilePosting: Story = {
+  args: {
+    // Never answers: the screen stays on Posting….
+    onSubmit: fn<WallComposerProps['onSubmit']>(() => new Promise(() => {})),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = await pickFixture(canvasElement)
+    await userEvent.type(canvas.getByLabelText('Caption'), 'Hi')
+    await userEvent.click(canvas.getByRole('checkbox'))
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Post to the wall' }),
+    )
+    await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(1), {
+      timeout: 10_000,
+    })
+    await expect(canvas.getByRole('button', { name: 'Posting…' })).toHaveFocus()
+
+    await userEvent.click(canvas.getByRole('checkbox'))
+    await userEvent.type(canvas.getByLabelText('Caption'), ' there')
+    await userEvent.type(canvas.getByLabelText('Your name (optional)'), 'Ola')
+    await userEvent.click(canvas.getByRole('radio', { name: 'Noir' }))
+    const window = canvas.getByRole('button', { name: 'Photo position' })
+    fireEvent.pointerDown(window, { pointerId: 1, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 100, clientY: 300 })
+    fireEvent.pointerUp(window, { pointerId: 1 })
+    await userEvent.click(canvas.getByRole('button', { name: /Another photo/ }))
+
+    const draft = (
+      args.onSubmit as ReturnType<typeof fn<WallComposerProps['onSubmit']>>
+    ).mock.calls[0][0] as WallPostDraft
+    await expect({
+      consent: (canvas.getByRole('checkbox') as HTMLInputElement).checked,
+      caption: canvas.getByLabelText('Caption'),
+      name: canvas.getByLabelText('Your name (optional)'),
+      original: canvas.getByRole('radio', { name: 'Original' }),
+      readout: canvas.getByTestId('crop-readout').textContent,
+    }).toEqual({
+      consent: draft.marketingConsent,
+      caption: expect.objectContaining({ value: draft.caption }),
+      name: expect.objectContaining({ value: draft.name }),
+      original: expect.objectContaining({ checked: true }),
+      readout: 'Showing 50% from the left, 50% from the top',
+    })
+    await expect(draft).toMatchObject({
+      caption: 'Hi',
+      name: '',
+      crop: { x: 0.5, y: 0.5 },
+      marketingConsent: true,
+    })
+  },
+}
+
 // ---------------------------------------------------------------------------
 // The encoder probe: what THIS browser's canvas JPEG encoder writes, before
 // and after the strip. Open it on an iPhone (Safari) to answer §6.5's open
