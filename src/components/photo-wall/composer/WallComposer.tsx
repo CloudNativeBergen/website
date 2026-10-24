@@ -16,7 +16,7 @@ import {
   normalizeWallText,
   wallTextLength,
 } from '@/lib/photo-wall/text'
-import { formatConferenceDateEnglish } from '@/lib/time'
+import { formatDateLocalized } from '@/lib/time'
 import { WallChrome } from '../WallPage'
 import {
   ComposerLanding,
@@ -194,7 +194,7 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
           Your photo, caption and name are shown on the screens at the venue and
           on the public wall on this website until{' '}
           <time dateTime={deletesOn}>
-            {formatConferenceDateEnglish(deletesOn)}
+            {formatDateLocalized(deletesOn, 'en-GB')}
           </time>
           . Only post photos the people in them are happy with.{' '}
           <a

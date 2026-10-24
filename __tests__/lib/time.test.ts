@@ -20,7 +20,6 @@ import {
   osloLocalInputToIso,
   isCalendarDate,
   formatSessionInstant,
-  formatConferenceDateEnglish,
 } from '@/lib/time'
 
 describe('time.ts', () => {
@@ -366,12 +365,5 @@ describe('formatSessionInstant', () => {
     expect(formatSessionInstant('2026-06-10T08:00:00.000Z')).toBe(
       'Wednesday 10 June at 10:00',
     )
-  })
-})
-
-describe('formatConferenceDateEnglish', () => {
-  it('renders a calendar date in English, en-GB order, for the attendee-facing pages', () => {
-    expect(formatConferenceDateEnglish('2026-11-26')).toBe('26 November 2026')
-    expect(formatConferenceDateEnglish('2026-10-01')).toBe('1 October 2026')
   })
 })
