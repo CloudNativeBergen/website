@@ -72,7 +72,10 @@ import {
   isInvitationExpired,
   isInvitationOpen,
 } from '@/lib/cospeaker/constants'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import {
+  getConferenceById,
+  getConferenceForCurrentDomain,
+} from '@/lib/conference/sanity'
 import {
   assertMayBecomeSubmitted,
   topicIdsOf,
@@ -1945,15 +1948,27 @@ export const proposalRouter = router({
         // frozen once the response flushes, which dropped speaker-ticket
         // issuance mid-loop in production. The caller still does not wait.
         //
-        // The event carries the HOST conference (Slack channel, organizer
-        // routing, email branding), so a talk of another conference, admitted
-        // by the owner arm, publishes nothing rather than alerting the wrong
+        // The event routes Slack, organizer alerts, email branding and ticket
+        // issuance by its conference, so a talk of another conference (admitted
+        // by the owner arm) publishes with the TALK's own conference. If that
+        // cannot be loaded, publish nothing rather than reach the wrong
         // organizers.
+        let publish = true
         if (talkConferenceId && talkConferenceId !== conference._id) {
-          console.warn(
-            `Not publishing the ${action} event for proposal ${id}: it belongs to conference ${talkConferenceId}, not ${conference._id}`,
-          )
-        } else {
+          const own = await getConferenceById(talkConferenceId, {
+            includeSpeakerRegistrationLink: true,
+          }).catch(() => null)
+          if (own) {
+            statusChangeEvent.conference = own.conference
+            statusChangeEvent.metadata.domain = own.domain
+          } else {
+            publish = false
+            console.warn(
+              `Not publishing the ${action} event for proposal ${id}: its conference ${talkConferenceId} could not be loaded`,
+            )
+          }
+        }
+        if (publish) {
           runAfterResponse(() =>
             eventBus.publish(statusChangeEvent).catch((error) => {
               console.error('Failed to publish status change event:', error)

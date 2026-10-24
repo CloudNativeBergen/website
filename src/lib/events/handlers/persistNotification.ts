@@ -1,6 +1,9 @@
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { Action } from '@/lib/proposal/types'
-import { createNotifications } from '@/lib/notification/sanity'
+import {
+  createNotifications,
+  getOrganizerSpeakerIdsForOrg,
+} from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 // Same gate as the email, so a speaker is notified in-app exactly when they
@@ -31,6 +34,10 @@ export async function handlePersistNotification(
   const conferenceId = event.conference._id
   const proposalId = event.proposal._id
   const proposalTitle = event.proposal.title
+  // The no-team fallback is the EVENT conference's organizers, not the request
+  // host's: a foreign talk's event carries its own conference.
+  const eventOrgOrganizerIds = () =>
+    getOrganizerSpeakerIdsForOrg(event.conference.organization?._ref ?? null)
 
   if (event.action === Action.submit) {
     // TEAMS-2: proposal events route to the `cfp` team (all organizers when it
@@ -38,6 +45,7 @@ export async function handlePersistNotification(
     const organizerIds = await resolveRoutedOrganizerIds({
       conferenceId,
       teamKey: 'cfp',
+      allOrganizerIds: await eventOrgOrganizerIds(),
     })
     const items: NotificationInput[] = organizerIds
       .filter((id) => id && id !== actorId)
@@ -67,6 +75,7 @@ export async function handlePersistNotification(
     const organizerIds = await resolveRoutedOrganizerIds({
       conferenceId,
       teamKey: 'cfp',
+      allOrganizerIds: await eventOrgOrganizerIds(),
     })
     const title = isWithdraw
       ? `Proposal withdrawn: "${proposalTitle}"`

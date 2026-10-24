@@ -14,12 +14,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: vi.fn(async () => {}),
-  getOrganizerSpeakerIds: vi.fn(async () => [] as string[]),
+  getOrganizerSpeakerIdsForOrg: vi.fn(async () => [] as string[]),
 }))
 
 import {
   createNotifications,
-  getOrganizerSpeakerIds,
+  getOrganizerSpeakerIdsForOrg,
 } from '@/lib/notification/sanity'
 import { handlePersistNotification } from '@/lib/events/handlers/persistNotification'
 import { Action, Status } from '@/lib/proposal/types'
@@ -28,7 +28,7 @@ import type { NotificationInput } from '@/lib/notification/types'
 
 type LooseMock = ReturnType<typeof vi.fn>
 const createMock = createNotifications as unknown as LooseMock
-const organizersMock = getOrganizerSpeakerIds as unknown as LooseMock
+const organizersMock = getOrganizerSpeakerIdsForOrg as unknown as LooseMock
 
 const makeEvent = (
   overrides: Partial<ProposalStatusChangeEvent> = {},
@@ -41,7 +41,10 @@ const makeEvent = (
     previousStatus: Status.submitted,
     newStatus: Status.accepted,
     action: Action.accept,
-    conference: { _id: 'conf-1' },
+    conference: {
+      _id: 'conf-1',
+      organization: { _type: 'reference', _ref: 'org-of-the-talk' },
+    },
     speakers: [],
     metadata: {
       triggeredBy: { speakerId: 'actor-1', isOrganizer: true },
@@ -71,6 +74,9 @@ describe('submit — organizers minus actor', () => {
 
     expect(createMock).toHaveBeenCalledTimes(1)
     const items = lastItems()
+    // Fallback organizers come from the EVENT conference's org, never the
+    // request host's.
+    expect(organizersMock).toHaveBeenCalledWith('org-of-the-talk')
     expect(items.map((i) => i.recipientId).sort()).toEqual(['org-1', 'org-2'])
     for (const item of items) {
       expect(item.notificationType).toBe('proposal_submitted')

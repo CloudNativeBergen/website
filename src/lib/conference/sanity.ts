@@ -178,6 +178,32 @@ export async function getConferenceForCurrentDomain({
   }
 }
 
+/**
+ * Load a conference by id, resolved through its own primary domain so it reads
+ * exactly as the domain read would. For server-side work on a document whose
+ * conference differs from the request host's (e.g. a speaker acting on their
+ * own talk at another tenant). Returns null when the conference or its domain
+ * cannot be found.
+ */
+export async function getConferenceById(
+  conferenceId: string,
+  options: Parameters<typeof getConferenceForDomain>[1] = {},
+): Promise<{ conference: Conference; domain: string } | null> {
+  const domain = await clientReadUncached.fetch<string | null>(
+    // groq-global-scoped: callers pass the id of a document they have already
+    // been proved to own; this reads back that one conference's domain.
+    `*[_type == "conference" && _id == $conferenceId][0].domains[0]`,
+    { conferenceId },
+  )
+  if (!domain) return null
+  const { conference, error } = await getConferenceForDomain(domain, {
+    ...options,
+    uncached: true,
+  })
+  if (error || conference?._id !== conferenceId) return null
+  return { conference, domain }
+}
+
 export async function getConferenceForDomain(
   domain: string,
   {
