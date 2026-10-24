@@ -1,6 +1,10 @@
 import 'server-only'
 import { cacheLife, cacheTag, revalidateTag } from 'next/cache'
-import { photoWallAdminTag, photoWallTag } from '@/lib/cache/tags'
+import {
+  photoWallAdminTag,
+  photoWallDeviceTag,
+  photoWallTag,
+} from '@/lib/cache/tags'
 import type { ModerationQueueData } from './moderation'
 import { readModerationQueue } from './queue'
 import { readPhotoWall } from './sanity'
@@ -49,5 +53,26 @@ export function expirePhotoWall(conferenceId: string): void {
     revalidateTag(tag, { expire: 0 })
   } catch (error) {
     console.error(`Could not expire the Photo Wall cache tag ${tag}`, error)
+  }
+}
+
+/**
+ * Expire what a Wall Post write changes (§8): the moderation queue, the
+ * contributor's My posts and, with `wall`, the public wall. Same
+ * `{ expire: 0 }` and never-fail rule as {@link expirePhotoWall}.
+ */
+export function expireWallPost(
+  conferenceId: string,
+  deviceKey: string,
+  { wall }: { wall: boolean },
+): void {
+  const tags = [photoWallAdminTag(conferenceId), photoWallDeviceTag(deviceKey)]
+  if (wall) tags.push(photoWallTag(conferenceId))
+  for (const tag of tags) {
+    try {
+      revalidateTag(tag, { expire: 0 })
+    } catch (error) {
+      console.error(`Could not expire the Photo Wall cache tag ${tag}`, error)
+    }
   }
 }
