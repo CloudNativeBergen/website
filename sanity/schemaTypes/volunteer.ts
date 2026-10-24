@@ -166,6 +166,14 @@ export default defineType({
       readOnly: true,
       hidden: ({ document }) => document?.status !== 'confirmed',
     }),
+    defineField({
+      name: 'ticketReminderSentAt',
+      title: 'Ticket Reminder Sent At',
+      type: 'datetime',
+      readOnly: true,
+      hidden: ({ document }) =>
+        document?.status !== 'approved' && document?.status !== 'confirmed',
+    }),
 
     // GDPR Consent
     defineField({

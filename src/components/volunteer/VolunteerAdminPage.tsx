@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { api } from '@/lib/trpc/client'
 import { formatDateTimeSafe } from '@/lib/time'
 import { VolunteerStatus, VolunteerWithConference } from '@/lib/volunteer/types'
@@ -136,6 +136,8 @@ export default function VolunteerAdminPage() {
   const [ticketFilter, setTicketFilter] = useState<TicketFilterState>('all')
   const [emailModalOpen, setEmailModalOpen] = useState(false)
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false)
+  // Ids the "remind to register ticket" confirm is about to send to.
+  const [reminderTargets, setReminderTargets] = useState<string[] | null>(null)
   const [emailModalVolunteer, setEmailModalVolunteer] =
     useState<VolunteerWithConference | null>(null)
   const [pendingApprovalReviewNotes, setPendingApprovalReviewNotes] =
@@ -287,6 +289,32 @@ export default function VolunteerAdminPage() {
   })
 
   const sendBulkEmail = api.volunteer.admin.sendBulkEmail.useMutation()
+
+  const sendTicketReminder = api.volunteer.admin.sendTicketReminder.useMutation(
+    {
+      onSuccess: async ({ sent, failed }) => {
+        setReminderTargets(null)
+        await utils.volunteer.admin.list.invalidate()
+        if (selectedVolunteerId) {
+          await utils.volunteer.admin.getById.invalidate({
+            id: selectedVolunteerId,
+          })
+        }
+        notify?.showNotification({
+          type: failed ? 'warning' : 'success',
+          title: 'Ticket reminder sent',
+          message: `${sent} sent${failed ? `, ${failed} failed` : ''}`,
+        })
+      },
+      onError: (err) => {
+        notify?.showNotification({
+          type: 'error',
+          title: 'Failed to send ticket reminder',
+          message: err.message,
+        })
+      },
+    },
+  )
 
   const sendEmail = api.volunteer.admin.sendEmail.useMutation({
     onSuccess: async (data, variables) => {
@@ -443,6 +471,23 @@ export default function VolunteerAdminPage() {
     }
     return emails
   }, [filteredVolunteers])
+  // Approved/confirmed volunteers whose ticket is known not to be redeemed.
+  // The server recomputes this; the count only drives the confirm text.
+  const isReminderEligible = useCallback(
+    (v: { _id: string; status: VolunteerStatus }) => {
+      const state = ticketStatuses[v._id]?.state
+      return (
+        (v.status === VolunteerStatus.APPROVED ||
+          v.status === VolunteerStatus.CONFIRMED) &&
+        (state === 'invited' || state === 'not-invited')
+      )
+    },
+    [ticketStatuses],
+  )
+  const reminderEligibleIds = useMemo(
+    () => filteredVolunteers.filter(isReminderEligible).map((v) => v._id),
+    [filteredVolunteers, isReminderEligible],
+  )
   const emailCountLabel = `${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}`
 
   const stats = useMemo(() => {
@@ -619,6 +664,13 @@ export default function VolunteerAdminPage() {
             icon: <EnvelopeIcon className="size-4" />,
             variant: 'secondary',
             disabled: filteredEmails.length === 0,
+          },
+          {
+            label: `Remind to Register Ticket (${reminderEligibleIds.length})`,
+            onClick: () => setReminderTargets(reminderEligibleIds),
+            icon: <TicketIcon className="size-4" />,
+            variant: 'secondary',
+            disabled: reminderEligibleIds.length === 0,
           },
           {
             label: 'Export CSV',
@@ -1294,6 +1346,17 @@ export default function VolunteerAdminPage() {
                             </span>
                           )}
                         </div>
+                        {selectedVolunteer.ticketReminderSentAt && (
+                          <div>
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+                              <TicketIcon className="h-4 w-4" />
+                              Ticket reminder last sent on{' '}
+                              {formatDateTimeSafe(
+                                selectedVolunteer.ticketReminderSentAt,
+                              )}
+                            </span>
+                          </div>
+                        )}
                         {selectedVolunteer.confirmedAt && (
                           <div>
                             <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 dark:text-blue-400">
@@ -1421,6 +1484,19 @@ export default function VolunteerAdminPage() {
                         ? 'Resend Approval Email'
                         : 'Send Approval Email'}
                     </AdminButton>
+
+                    {isReminderEligible(selectedVolunteer) && (
+                      <AdminButton
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
+                        onClick={() =>
+                          setReminderTargets([selectedVolunteer._id])
+                        }
+                        variant="secondary"
+                      >
+                        <TicketIcon className="h-4 w-4" />
+                        Remind to Register Ticket
+                      </AdminButton>
+                    )}
 
                     {/* For volunteers who confirmed in person instead of via the email link */}
                     {selectedVolunteer.status === VolunteerStatus.APPROVED && (
@@ -1571,6 +1647,20 @@ export default function VolunteerAdminPage() {
         message={`Reject the application from ${selectedVolunteer?.name ?? 'this volunteer'}?`}
         confirmButtonText="Reject Application"
         variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={!!reminderTargets}
+        onClose={() => setReminderTargets(null)}
+        onConfirm={() => {
+          if (reminderTargets)
+            sendTicketReminder.mutate({ volunteerIds: reminderTargets })
+        }}
+        isLoading={sendTicketReminder.isPending}
+        title="Remind to Register Ticket"
+        message={`Send a ticket registration reminder to ${reminderTargets?.length ?? 0} ${reminderTargets?.length === 1 ? 'volunteer' : 'volunteers'} who have not registered their ticket? Anyone reminded in the last 24 hours is skipped.`}
+        confirmButtonText="Send Reminder"
+        variant="warning"
       />
 
       <ConfirmationModal

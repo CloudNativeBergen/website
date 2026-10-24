@@ -58,7 +58,8 @@ export async function getVolunteersByConference(
         _id,
         name
       },
-      confirmedAt
+      confirmedAt,
+      ticketReminderSentAt
     }`
 
     const volunteers = await clientRead.fetch<VolunteerWithConference[]>(
@@ -125,7 +126,8 @@ export async function getVolunteerById(
         _id,
         name
       },
-      confirmedAt
+      confirmedAt,
+      ticketReminderSentAt
     }`
 
     const volunteer = await clientRead.fetch<VolunteerWithConference | null>(
@@ -155,6 +157,24 @@ export async function recordVolunteerApprovalEmailSent(
           _ref: sentBy,
         },
       })
+      .commit()
+    return { success: true, error: null }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error : new Error('Unknown error'),
+    }
+  }
+}
+
+export async function recordVolunteerTicketReminderSent(
+  volunteerId: string,
+  sentAt: string,
+): Promise<{ success: boolean; error: Error | null }> {
+  try {
+    await clientWrite
+      .patch(volunteerId)
+      .set({ ticketReminderSentAt: sentAt })
       .commit()
     return { success: true, error: null }
   } catch (error) {
