@@ -542,9 +542,9 @@ A second way into `/f/<code>` for attendees who miss or skip the room's QR.
   programme inside the sheet). A frame, not a rendering of the page: the code
   stays out of the programme's document, URL and history, and the page keeps
   its own cookie path, bound actions, `maxDuration` and analytics exclusions.
-  The frame is mounted per open, so Back never steps it. Anything in the
-  frame that is not the attendee page (the 503, a network failure), or
-  nothing within 15 seconds, is replaced by a link to the full page. Any other click
+  The frame is mounted per open, so Back never steps it. A frame that is not
+  an HTML page (the 503, a network failure), or that shows no attendee page
+  within 15 seconds, is replaced by a link to the full page. Any other click
   (new tab, new window, modifier keys) and a page without JavaScript follow
   the link as before.
 - **What this changes:** a Feedback Code is no longer for speakers only. Anyone

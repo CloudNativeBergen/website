@@ -20,8 +20,8 @@ import { FEEDBACK_EMBED_ROOT } from '@/lib/feedback/url'
  * The frame is mounted per open: a reused iframe given a new `src` would add a
  * history entry, and Back would step the frame instead of leaving the page.
  * Same origin, so the sheet sizes the frame to the page's content and hears
- * Escape pressed inside it. Anything but the attendee page, or nothing within
- * `FRAME_TIMEOUT_MS`, gets a link to the full page instead.
+ * Escape pressed inside it. A frame that is not an HTML page, or shows no
+ * attendee page within `FRAME_TIMEOUT_MS`, gets a link to the full page.
  */
 export function FeedbackSheet({
   open,
@@ -119,30 +119,48 @@ function FeedbackFrame({
   useEffect(() => {
     if (!loaded) return
     const win = frame.current?.contentWindow
+    // Null for a cross-origin document (a browser error page), whose
+    // `location` would throw on read.
+    const doc = frame.current?.contentDocument
     // Some engines fire a load for the frame's initial blank document.
-    if (win?.location.href === 'about:blank') return
-    // Only the attendee page marks its content. Anything else (the route's
-    // plain-text 503, a 404, a browser error page) is not shown in the sheet.
-    const root = frame.current?.contentDocument?.querySelector(
-      `[${FEEDBACK_EMBED_ROOT}]`,
-    )
-    if (!win || !root) {
+    if (doc?.URL === 'about:blank') return
+    // Not a page of ours (the route's plain-text 503, a browser error page).
+    if (!win || !doc || doc.contentType !== 'text/html') {
       setFailed(true)
       return
     }
-    const measure = () => setHeight(Math.ceil(root.scrollHeight))
-    measure()
-    // The frame's own constructor: it observes the frame's document.
-    const observer = new (win as Window & typeof globalThis).ResizeObserver(
-      measure,
-    )
-    observer.observe(root)
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') escape.current()
     }
     win.addEventListener('keydown', onKey)
+
+    // The frame's own constructors: they observe the frame's document.
+    const frameWindow = win as Window & typeof globalThis
+    let observer: ResizeObserver | undefined
+    const show = (root: Element) => {
+      const measure = () => setHeight(Math.ceil(root.scrollHeight))
+      measure()
+      observer = new frameWindow.ResizeObserver(measure)
+      observer.observe(root)
+    }
+    // Only the attendee page marks its content; any other page never shows,
+    // and `FRAME_TIMEOUT_MS` offers the full page instead.
+    const find = () => doc.querySelector(`[${FEEDBACK_EMBED_ROOT}]`)
+    const root = find()
+    const waiting = root
+      ? undefined
+      : new frameWindow.MutationObserver(() => {
+          const found = find()
+          if (!found) return
+          waiting?.disconnect()
+          show(found)
+        })
+    if (root) show(root)
+    else waiting?.observe(doc, { childList: true, subtree: true })
+
     return () => {
-      observer.disconnect()
+      waiting?.disconnect()
+      observer?.disconnect()
       win.removeEventListener('keydown', onKey)
     }
   }, [loaded])

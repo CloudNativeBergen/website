@@ -77,9 +77,9 @@ export const Dark: Story = {
   ],
 }
 
-/** The frame showed something other than the attendee page (here, a 404). */
+/** The frame is not a page at all (the route's plain-text 503). */
 export const NotLoaded: Story = {
-  args: { src: '/not-the-attendee-page' },
+  args: { src: `data:text/plain,Session feedback is unavailable.` },
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
     await expect(
