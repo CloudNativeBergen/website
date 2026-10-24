@@ -146,7 +146,23 @@ export default function VolunteerAdminPage() {
   // the list and detail swap places and the focused node gets hidden.
   const pendingFocus = useRef<string | 'back' | null>(null)
 
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
+  // Where to go once the admin agrees to drop unsaved review notes.
+  const [pendingSelection, setPendingSelection] = useState<{
+    id: string | null
+  } | null>(null)
+  // Switch only after the modal has closed, so its focus restore does not undo ours.
+  const confirmedSelection = useRef<{ id: string | null } | null>(null)
+
   const selectVolunteer = (id: string | null) => {
+    if (id !== selectedVolunteerId && reviewNotes.trim()) {
+      setPendingSelection({ id })
+      return
+    }
+    switchVolunteer(id)
+  }
+
+  const switchVolunteer = (id: string | null) => {
     pendingFocus.current = id ? 'back' : selectedVolunteerId
     setSelectedVolunteerId(id)
     setReviewNotes('')
@@ -301,7 +317,7 @@ export default function VolunteerAdminPage() {
           : Promise.resolve(),
       ])
       if (selectedVolunteerId === variables.volunteerId) {
-        selectVolunteer(null)
+        switchVolunteer(null)
       }
       setDeleteVolunteerId(null)
       notify?.showNotification({
@@ -1235,9 +1251,7 @@ export default function VolunteerAdminPage() {
                       {/* Reject */}
                       <AdminButton
                         className="min-h-11 w-full sm:min-h-0 sm:w-auto"
-                        onClick={() =>
-                          handleStatusUpdate(VolunteerStatus.REJECTED)
-                        }
+                        onClick={() => setRejectConfirmOpen(true)}
                         disabled={updateStatus.isPending}
                         variant="primary"
                         color="red"
@@ -1278,11 +1292,22 @@ export default function VolunteerAdminPage() {
                       </AdminButton>
                     )}
 
+                    {selectedVolunteer.status === VolunteerStatus.CONFIRMED && (
+                      <AdminButton
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
+                        onClick={() =>
+                          handleStatusUpdate(VolunteerStatus.APPROVED)
+                        }
+                        disabled={updateStatus.isPending}
+                        variant="secondary"
+                      >
+                        Revert to Approved
+                      </AdminButton>
+                    )}
+
                     <AdminButton
                       className="min-h-11 w-full sm:min-h-0 sm:w-auto"
-                      onClick={() =>
-                        handleStatusUpdate(VolunteerStatus.REJECTED)
-                      }
+                      onClick={() => setRejectConfirmOpen(true)}
                       disabled={updateStatus.isPending}
                       variant="secondary"
                     >
@@ -1360,6 +1385,41 @@ export default function VolunteerAdminPage() {
         message="Are you sure you want to delete this volunteer application? This action cannot be undone."
         confirmButtonText="Delete Application"
         variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={rejectConfirmOpen && !!selectedVolunteer}
+        onClose={() => setRejectConfirmOpen(false)}
+        onConfirm={async () => {
+          try {
+            await handleStatusUpdate(VolunteerStatus.REJECTED)
+          } finally {
+            setRejectConfirmOpen(false)
+          }
+        }}
+        isLoading={updateStatus.isPending}
+        title="Reject Volunteer Application"
+        message={`Reject the application from ${selectedVolunteer?.name ?? 'this volunteer'}?`}
+        confirmButtonText="Reject Application"
+        variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={!!pendingSelection}
+        onClose={() => setPendingSelection(null)}
+        onConfirm={() => {
+          confirmedSelection.current = pendingSelection
+          setPendingSelection(null)
+        }}
+        afterLeave={() => {
+          const target = confirmedSelection.current
+          confirmedSelection.current = null
+          if (target) switchVolunteer(target.id)
+        }}
+        title="Discard Review Notes"
+        message="You have unsaved review notes for this volunteer. Leave and discard them?"
+        confirmButtonText="Discard Notes"
+        variant="warning"
       />
     </div>
   )

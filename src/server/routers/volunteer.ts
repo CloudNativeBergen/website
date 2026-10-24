@@ -516,6 +516,8 @@ export const volunteerRouter = router({
             input.status,
             reviewerId,
             input.reviewNotes,
+            volunteer.status === VolunteerStatus.CONFIRMED &&
+              input.status === VolunteerStatus.APPROVED,
           )
 
           if (error || !success) {
