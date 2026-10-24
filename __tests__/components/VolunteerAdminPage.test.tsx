@@ -51,7 +51,9 @@ const { volunteers, listState, updateStatusMutate, mutation } = vi.hoisted(
     const updateStatusMutate = vi.fn().mockResolvedValue({ success: true })
 
     const mutation = () => ({ mutateAsync: vi.fn(), isPending: false })
-    const listState = { data: volunteers }
+    const listState: { data: typeof volunteers | undefined } = {
+      data: volunteers,
+    }
     return { volunteers, listState, updateStatusMutate, mutation }
   },
 )
@@ -77,7 +79,7 @@ vi.mock('@/lib/trpc/client', () => ({
         list: {
           useQuery: () => ({
             data: listState.data,
-            isLoading: false,
+            isLoading: !listState.data,
             error: null,
           }),
         },
@@ -201,5 +203,33 @@ describe('VolunteerAdminPage', () => {
     expect(screen.queryByText('Rita')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Show Rejected' }))
     expect(screen.getByText('Rita')).toBeTruthy()
+  })
+
+  it('shows capitalized status labels in badges', () => {
+    renderPage()
+    expect(screen.getAllByText('Pending').length).toBeGreaterThan(0)
+    expect(screen.queryByText('pending')).toBeNull()
+  })
+
+  it('shows a placeholder in the stat cards while the list loads', () => {
+    listState.data = undefined
+    renderPage()
+    expect(screen.queryByText('0')).toBeNull()
+    expect(screen.getAllByText('…').length).toBeGreaterThan(0)
+  })
+
+  it('moves focus to the back button and back to the card', async () => {
+    renderPage()
+    const card = screen.getByText('Alice', { exact: true }).closest('button')!
+    expect(card.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(card)
+    const back = screen.getByRole('button', { name: /Back to applications/ })
+    await waitFor(() => expect(document.activeElement).toBe(back))
+    fireEvent.click(back)
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByText('Alice', { exact: true }).closest('button'),
+      ),
+    )
   })
 })
