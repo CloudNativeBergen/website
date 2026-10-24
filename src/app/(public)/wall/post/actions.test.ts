@@ -44,7 +44,10 @@ vi.mock('@/lib/sanity/client', async () => {
   h.store = createVersionedSanityStore()
   // The image builder: the suite-wide `@sanity/image-url` mock (one URL).
   const { createImageUrlBuilder } = await import('@sanity/image-url')
-  const builder = createImageUrlBuilder({})
+  const builder = createImageUrlBuilder({
+    projectId: 'proj',
+    dataset: 'production',
+  })
   return { ...h.store.clients, sanityImage: (s: string) => builder.image(s) }
 })
 
