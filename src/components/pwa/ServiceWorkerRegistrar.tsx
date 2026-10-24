@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isScreenModePath } from '@/lib/photo-wall/screen'
 import {
   clearScreenUpdateAttempts,
+  inScreenMode,
+  onScreenModeChange,
   recordScreenUpdateAttempt,
   screenIsReachable,
   waitBeforeScreenUpdate,
@@ -121,11 +122,11 @@ export function ServiceWorkerRegistrar() {
     if (!('serviceWorker' in navigator)) return
     // Registering the SW under Turbopack HMR fights dev reloads; prod only.
     if (process.env.NODE_ENV !== 'production') return
-    // The path at mount, from the browser rather than `usePathname()`: the
-    // root layout mounts this outside any `<Suspense>`, where URL data would
-    // make every page bail out of prerendering. A venue screen is opened
-    // on `/wall/screen` and never navigates away.
-    const screenMode = isScreenModePath(window.location.pathname)
+    // Screen Mode is asked at the moment of acting (`inScreenMode()`: what
+    // the screen page reports on mount and unmount, else the browser's path),
+    // never `usePathname()`: the root layout mounts this outside any
+    // `<Suspense>`, where URL data would make every page bail out of
+    // prerendering.
 
     // Reload exactly once when the active worker changes AFTER the user accepted
     // the update. `doReload`'s `refreshingRef` guard prevents an infinite loop
@@ -145,11 +146,14 @@ export function ServiceWorkerRegistrar() {
     let screenUpdateTimer: ReturnType<typeof setInterval> | null = null
     let screenAttemptTimer: ReturnType<typeof setTimeout> | null = null
     let screenAttempting = false
+    // Bumped when an attempt is called off, so a probe still in flight drops it.
+    let screenAttemptRun = 0
     let disposed = false
 
     // A venue screen has nobody to click Reload: take the update once it is
     // safe to reload (the screen's URL answers), backing off attempts in a row.
     const takeScreenUpdate = async () => {
+      const run = screenAttemptRun
       screenAttemptTimer = null
       const wait = waitBeforeScreenUpdate(Date.now())
       if (wait > 0) {
@@ -157,7 +161,7 @@ export function ServiceWorkerRegistrar() {
         return
       }
       const reachable = await screenIsReachable()
-      if (disposed) return
+      if (disposed || run !== screenAttemptRun) return
       recordScreenUpdateAttempt(Date.now())
       if (reachable) acceptUpdate()
       else {
@@ -170,12 +174,51 @@ export function ServiceWorkerRegistrar() {
 
     const updateFound = (worker: ServiceWorker) => {
       waitingWorkerRef.current = worker
-      if (!screenMode) setUpdateAvailable(true)
+      if (!inScreenMode()) setUpdateAvailable(true)
       else if (!screenAttempting) {
         screenAttempting = true
+        setUpdateAvailable(false)
         void takeScreenUpdate()
       }
     }
+
+    // Screen Mode's ways follow the page, also across client-side
+    // navigation: the ten-minute check and the update taken by itself while
+    // it shows; the banner, and no timer, once it has gone.
+    const syncScreenMode = () => {
+      if (!registration) return
+      const waiting =
+        registration.waiting && navigator.serviceWorker.controller
+          ? registration.waiting
+          : null
+      if (inScreenMode()) {
+        if (screenUpdateTimer === null) {
+          screenUpdateTimer = setInterval(() => {
+            registration?.update().catch(() => {})
+          }, SCREEN_UPDATE_CHECK_MS)
+        }
+        // A screen opened while a worker was already waiting (installed by
+        // an earlier page of this browser) takes it too; elsewhere that
+        // worker stays waiting until the next deploy or a manual reload.
+        if (waiting) updateFound(waiting)
+        // Nothing waiting: the last update took. Start the waits afresh.
+        else if (!screenAttempting) clearScreenUpdateAttempts()
+        return
+      }
+      if (screenUpdateTimer !== null) {
+        clearInterval(screenUpdateTimer)
+        screenUpdateTimer = null
+      }
+      if (screenAttempting) {
+        // Left before the screen took it: offer it the ordinary way.
+        screenAttempting = false
+        screenAttemptRun++
+        if (screenAttemptTimer !== null) clearTimeout(screenAttemptTimer)
+        screenAttemptTimer = null
+        if (!reloadRequestedRef.current) setUpdateAvailable(true)
+      }
+    }
+    const stopWatchingScreenMode = onScreenModeChange(syncScreenMode)
 
     const trackInstalling = (worker: ServiceWorker) => {
       worker.addEventListener('statechange', () => {
@@ -206,19 +249,7 @@ export function ServiceWorkerRegistrar() {
         if (registration.installing) {
           trackInstalling(registration.installing)
         }
-        // A screen opened while a worker was already waiting (installed by an
-        // earlier page of this browser) takes it too; elsewhere that worker
-        // stays waiting until the next deploy or a manual reload, as before.
-        if (
-          screenMode &&
-          registration.waiting &&
-          navigator.serviceWorker.controller
-        ) {
-          updateFound(registration.waiting)
-        } else if (screenMode) {
-          // Nothing waiting: the last update took. Start the waits afresh.
-          clearScreenUpdateAttempts()
-        }
+        syncScreenMode()
 
         registration.addEventListener('updatefound', () => {
           const installing = registration?.installing
@@ -227,11 +258,6 @@ export function ServiceWorkerRegistrar() {
 
         window.addEventListener('focus', onFocusOrVisible)
         document.addEventListener('visibilitychange', onFocusOrVisible)
-        if (screenMode) {
-          screenUpdateTimer = setInterval(() => {
-            registration?.update().catch(() => {})
-          }, SCREEN_UPDATE_CHECK_MS)
-        }
       } catch {
         // Registration failing (unsupported / blocked) is non-fatal.
       }
@@ -246,6 +272,7 @@ export function ServiceWorkerRegistrar() {
 
     return () => {
       disposed = true
+      stopWatchingScreenMode()
       if (screenAttemptTimer !== null) clearTimeout(screenAttemptTimer)
       navigator.serviceWorker.removeEventListener(
         'controllerchange',

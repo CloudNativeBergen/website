@@ -191,7 +191,7 @@ const card = (
   leavingAt: null,
 })
 
-/** The slot an arrival drops onto: a free one, else the oldest approval's. */
+/** The slot an arrival drops onto: a free one, else the oldest approval's; -1 when every card is leaving. */
 function arrivalSlot(slots: (ScreenCard | null)[]): number {
   const free = slots.indexOf(null)
   if (free !== -1) return free
@@ -275,6 +275,8 @@ function advance(state: BoardState, now: number): BoardState {
     }
     if (image !== 'loaded' || now - next.lastArrivalAt < ARRIVAL_GAP_MS) break
     const slot = arrivalSlot(next.slots)
+    // Every card is leaving (a reconnect replaced them all): wait for a slot.
+    if (slot === -1) break
     const slots = [...next.slots]
     slots[slot] = card(head, now, next.nextZ, now + NEW_MARK_MS)
     next = {

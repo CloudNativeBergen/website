@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useReducer, useState } from 'react'
+import { markScreenMode } from '@/components/pwa/screen-update'
 import type { ScreenView } from '@/lib/photo-wall/screen'
 import { boardReducer, initialBoard } from './board'
 import { useScreenPoll } from './polling'
@@ -85,6 +86,12 @@ export function ScreenMode({
   conference: ScreenConference
 }) {
   const { data, dataUpdatedAt, errorUpdatedAt } = useScreenPoll(initial)
+  // Tells the service worker registrar this is a venue screen, also when it
+  // was reached (or left) by a client-side navigation.
+  useEffect(() => {
+    markScreenMode(true)
+    return () => markScreenMode(false)
+  }, [])
   return (
     <ScreenBoard
       poll={{ data, dataUpdatedAt, errorUpdatedAt }}

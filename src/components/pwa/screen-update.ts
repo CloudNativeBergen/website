@@ -6,6 +6,7 @@
  * (wedged) is tried again with a growing wait instead of every few seconds.
  * The attempts are kept in `sessionStorage`, which a reload keeps.
  */
+import { isScreenModePath } from '@/lib/photo-wall/screen'
 
 /** The first wait after an attempt; it doubles with each one in a row. */
 export const SCREEN_UPDATE_RETRY_MS = 30_000
@@ -71,15 +72,50 @@ export function clearScreenUpdateAttempts(): void {
   }
 }
 
+/** A probe unanswered this long counts as unreachable (a stalled connection). */
+export const SCREEN_PROBE_TIMEOUT_MS = 10_000
+
 /** Does the screen's own URL answer now? A reload that cannot would strand it. */
 export async function screenIsReachable(): Promise<boolean> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), SCREEN_PROBE_TIMEOUT_MS)
   try {
     const response = await fetch(window.location.href, {
       method: 'HEAD',
       cache: 'no-store',
+      signal: controller.signal,
     })
     return response.ok
   } catch {
     return false
+  } finally {
+    clearTimeout(timer)
   }
+}
+
+/**
+ * Whether Screen Mode is showing, as the screen page reports it (it mounts
+ * and unmounts with client-side navigation, which the root layout's
+ * registrar cannot see), or null until it has said: then the path decides.
+ */
+let screenModeShown: boolean | null = null
+const screenModeListeners = new Set<() => void>()
+
+/** Called by Screen Mode on mount (true) and unmount (false). */
+export function markScreenMode(shown: boolean | null): void {
+  if (screenModeShown === shown) return
+  screenModeShown = shown
+  for (const listener of screenModeListeners) listener()
+}
+
+export function onScreenModeChange(listener: () => void): () => void {
+  screenModeListeners.add(listener)
+  return () => {
+    screenModeListeners.delete(listener)
+  }
+}
+
+/** Is this Screen Mode now? Asked at the moment of acting, never cached. */
+export function inScreenMode(): boolean {
+  return screenModeShown ?? isScreenModePath(window.location.pathname)
 }

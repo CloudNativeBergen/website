@@ -230,6 +230,26 @@ describe('arrivals (§9.2)', () => {
 })
 
 describe('removal (§9.2)', () => {
+  it('an arrival loaded while every card is still leaving waits for a slot, and keeps its arrival and new mark', () => {
+    let s = started(17)
+    // A reconnect: all 17 shown were removed meanwhile, one new post approved.
+    const arrival = post(40)
+    s = poll(s, [arrival], T0 + 10_000)
+    expect(s.slots.every((c) => c !== null && c.leavingAt !== null)).toBe(true)
+    // Its image loads inside the 300 ms fade, when no slot can take it.
+    s = boardReducer(s, {
+      type: 'imageLoaded',
+      key: keyOf(arrival),
+      now: T0 + 10_100,
+    })
+    expect(Object.keys(s.slots).every((k) => Number(k) >= 0)).toBe(true)
+    expect(s.slots).toHaveLength(SCREEN_SLOTS)
+    expect(s.queue.map((q) => q.post._id)).toEqual(['wallPost-40'])
+    s = advance(s, T0 + 10_100, T0 + 10_000 + LEAVE_MS)
+    expect(shownIds(s).filter(Boolean)).toEqual(['wallPost-40'])
+    expect(newIds(s)).toEqual(['wallPost-40'])
+  })
+
   it('a card missing from the list leaves at once and is gone after the fade; the slot refills from the rest', () => {
     let s = started(24)
     const gone = shownIds(s)[3]!

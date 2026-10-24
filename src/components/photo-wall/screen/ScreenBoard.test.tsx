@@ -18,6 +18,7 @@ import {
 } from '@testing-library/react'
 import { onlineManager } from '@tanstack/react-query'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
+import { inScreenMode, markScreenMode } from '@/components/pwa/screen-update'
 import type { ScreenPost, ScreenView } from '@/lib/photo-wall/screen'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 
@@ -169,6 +170,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   onlineManager.setOnline(true)
+  markScreenMode(null)
   vi.useRealTimers()
 })
 
@@ -467,6 +469,15 @@ describe('images that misbehave (§9.2)', () => {
 })
 
 describe('the display stays awake (§9.2)', () => {
+  it('tells the service worker registrar it is a venue screen while mounted, whatever the path', async () => {
+    // jsdom's path is `/`: a client-side navigation in, as far as the path says.
+    expect(inScreenMode()).toBe(false)
+    mount(view(posts(3)))
+    expect(inScreenMode()).toBe(true)
+    cleanup()
+    expect(inScreenMode()).toBe(false)
+  })
+
   it('takes the wake lock again when the browser releases it while visible', async () => {
     const sentinels: EventTarget[] = []
     const request = vi.fn(async () => {

@@ -28,7 +28,11 @@ import {
   SCREEN_UPDATE_CHECK_MS,
   ServiceWorkerRegistrar,
 } from '@/components/pwa/ServiceWorkerRegistrar'
-import { SCREEN_UPDATE_RETRY_MS } from '@/components/pwa/screen-update'
+import {
+  SCREEN_PROBE_TIMEOUT_MS,
+  SCREEN_UPDATE_RETRY_MS,
+  markScreenMode,
+} from '@/components/pwa/screen-update'
 
 /** Minimal event-emitter shared by the service-worker mocks. */
 class Emitter {
@@ -360,7 +364,7 @@ describe('ServiceWorkerRegistrar', () => {
 describe('ServiceWorkerRegistrar on /wall/screen', () => {
   /** The screen's own URL, asked for before an update reloads it. */
   let screenAnswers = true
-  const headFetch = vi.fn(async () => {
+  const headFetch = vi.fn(async (_url: string, _init?: RequestInit) => {
     if (!screenAnswers) throw new TypeError('Failed to fetch')
     return new Response(null, { status: 200 })
   })
@@ -371,6 +375,7 @@ describe('ServiceWorkerRegistrar on /wall/screen', () => {
     headFetch.mockClear()
     vi.stubGlobal('fetch', headFetch)
     window.sessionStorage.clear()
+    markScreenMode(null)
   })
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -413,6 +418,77 @@ describe('ServiceWorkerRegistrar on /wall/screen', () => {
     screenAnswers = true
     await wait(2 * SCREEN_UPDATE_RETRY_MS)
     expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+  })
+
+  it('gives up a probe that never answers and tries again after the wait', async () => {
+    // A stalled connection: the request is taken and never answered.
+    headFetch.mockImplementationOnce(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(init.signal?.reason),
+          )
+        }),
+    )
+    const waiting = new FakeWorker()
+    waiting.state = 'installed'
+    container.controller = {}
+    container.registration.waiting = waiting
+    await renderScreen()
+    expect(headFetch).toHaveBeenCalledTimes(1)
+    await wait(SCREEN_PROBE_TIMEOUT_MS)
+    expect(headFetch.mock.calls[0][1]?.signal?.aborted).toBe(true)
+    expect(waiting.postMessage).not.toHaveBeenCalled()
+    // Counted as a failed attempt: the next probe after the backoff answers.
+    await wait(SCREEN_UPDATE_RETRY_MS)
+    expect(headFetch).toHaveBeenCalledTimes(2)
+    expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+  })
+
+  it('a client-side navigation into Screen Mode starts the checks and takes updates by itself', async () => {
+    h.pathname = '/program'
+    const registration = await renderScreen()
+    await wait(SCREEN_UPDATE_CHECK_MS)
+    expect(registration.update).not.toHaveBeenCalled()
+    // The screen page mounts after a client-side navigation.
+    act(() => {
+      h.pathname = '/wall/screen'
+      markScreenMode(true)
+    })
+    await wait(SCREEN_UPDATE_CHECK_MS)
+    expect(registration.update).toHaveBeenCalledTimes(1)
+    const worker = new FakeWorker()
+    act(() => {
+      container.controller = {}
+      registration.installing = worker
+      registration.dispatch('updatefound')
+      worker.setState('installed')
+    })
+    await wait(0)
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('a client-side navigation out of Screen Mode stops the checks and shows the banner again', async () => {
+    const registration = await renderScreen()
+    act(() => {
+      h.pathname = '/program'
+      markScreenMode(false)
+    })
+    await wait(3 * SCREEN_UPDATE_CHECK_MS)
+    expect(registration.update).not.toHaveBeenCalled()
+    const worker = new FakeWorker()
+    act(() => {
+      container.controller = {}
+      registration.installing = worker
+      registration.dispatch('updatefound')
+      worker.setState('installed')
+    })
+    await wait(0)
+    expect(worker.postMessage).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('status', { name: 'Update available' }),
+    ).toBeInTheDocument()
   })
 
   it('backs off a worker that stays waiting across reloads instead of reloading every few seconds', async () => {
