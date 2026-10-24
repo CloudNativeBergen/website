@@ -15,11 +15,12 @@ import { describe, expect, it } from 'vitest'
 
 const SRC = join(__dirname, '../../src')
 
-function sourceFiles(dir: string): string[] {
+function sourceFiles(dir: string, includeTests = false): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
-    if (entry.isDirectory()) return sourceFiles(path)
-    return /\.(ts|tsx)$/.test(entry.name) && !/\.(test|stories)\./.test(path)
+    if (entry.isDirectory()) return sourceFiles(path, includeTests)
+    return /\.[cm]?[jt]sx?$/.test(entry.name) &&
+      (includeTests || !/\.(test|stories)\./.test(path))
       ? [path]
       : []
   })
@@ -48,12 +49,12 @@ describe('the Feedback Code stays off analytics', () => {
     expect(layout).toContain('<VercelInsights />')
   })
 
-  it('loads Pirsch once, from the root layout, inside the path gate', () => {
+  it('has no source files referencing the retired analytics endpoint', () => {
     expect(
-      files.filter((f) => /api\.pirsch\.io/.test(f.source)).map((f) => f.path),
-    ).toEqual(['app/layout.tsx'])
-    expect(layout.match(/api\.pirsch\.io/g)).toHaveLength(1)
-    expect(gated.some((jsx) => /api\.pirsch\.io/.test(jsx))).toBe(true)
+      sourceFiles(SRC, true).filter((path) =>
+        /api\.pirsch\.io/.test(readFileSync(path, 'utf8')),
+      ),
+    ).toEqual([])
   })
 
   it('mounts the install prompt once, inside the path gate', () => {

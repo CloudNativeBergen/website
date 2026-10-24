@@ -18,7 +18,7 @@ import '@/styles/tailwind.css'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isConferenceUnlisted } from '@/lib/conference/visibility'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
-import { resolvePirschCode, resolvePosthogToken } from '@/lib/analytics'
+import { resolvePosthogToken } from '@/lib/analytics'
 import { getOrganizationById } from '@/lib/organization/sanity'
 import { ANALYTICS_CONFIG_ELEMENT_ID } from '@/lib/posthog/config'
 import {
@@ -189,11 +189,9 @@ export const viewport: Viewport = {
  * fails on `/speaker/[slug]` and `/cfp/admin` if you try). Streaming the gate
  * in after the shell is fine — the client entry waits for it.
  *
- * THE CUTOVER (issue #1008) is decided here, per organization: a PostHog token
- * on the organization ⇒ the PostHog config element (and the consent bar), and
- * NOTHING for Pirsch even if the edition still stores a code; no token ⇒ the
- * legacy Pirsch tag, or nothing at all. There is deliberately no platform-level
- * fallback for either: see `resolvePosthogToken` / `resolvePirschCode`.
+ * A valid PostHog token on the organization enables the config element and
+ * consent bar. Without a token, nothing is rendered. There is deliberately no
+ * platform-level fallback: see `resolvePosthogToken`.
  *
  * The PostHog init itself lives in `instrumentation-client.ts`: it looks for
  * the element rendered below and refuses to start without it, and it does
@@ -226,21 +224,7 @@ async function TenantAnalytics() {
     )
   }
 
-  const pirschCode = resolvePirschCode(conference.analyticsPirschCode)
-  if (!pirschCode) return null
-
-  // Not on the attendee feedback page (speaker feedback spec §7.1).
-  return (
-    <HiddenOnFeedbackPage>
-      <Script
-        defer
-        src="https://api.pirsch.io/pa.js"
-        id="pianjs"
-        data-code={pirschCode}
-        strategy="afterInteractive"
-      />
-    </HiddenOnFeedbackPage>
-  )
+  return null
 }
 
 export default function RootLayout({
@@ -316,10 +300,9 @@ export default function RootLayout({
         <VercelInsights />
         {/*
           Web analytics — rendered ONLY when this tenant has configured its
-          own PostHog token (organization) or, until it switches, its own
-          Pirsch code (conference). Neither, no script: a tenant's traffic must
-          never be collected into a property they do not own. CTA clicks are
-          tracked declaratively via `data-ph-capture-attribute-cta` — see the
+          own PostHog token (organization). Without it, no script: a tenant's
+          traffic must never be collected into a property they do not own.
+          CTA clicks are tracked declaratively via `data-ph-capture-attribute-cta` — see the
           event naming scheme in src/lib/analytics.ts.
         */}
         <Suspense>

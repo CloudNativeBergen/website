@@ -37,9 +37,9 @@ export const metadata: Metadata = {
  * looked up only in ITS index, so another tenant's code is Unknown here.
  *
  * Enter and leave this page with FULL page loads only, never `next/link`:
- * Pirsch, once loaded on another page, reports every history navigation
- * (pushState and Back) with the full URL, and only a page it never runs on
- * keeps the code out of it.
+ * the attendee URL contains the code. PostHog excludes `/f` and Vercel
+ * Analytics redacts it; full page loads keep any future history-tracking
+ * script from seeing the code through pushState or Back.
  */
 export default async function FeedbackCodePage({
   params,

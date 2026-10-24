@@ -341,7 +341,7 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
   can't see the path. On `/f/**`:
   - no PostHog and no consent bar: add `/f` to `EXCLUDED_PATH_PREFIXES`
     (`src/lib/posthog/config.ts`), which both already follow;
-  - no Pirsch script and no `InstallPrompt`: put them behind a `usePathname`
+  - no `InstallPrompt`: put it behind a `usePathname`
     client gate, like `AnalyticsRouteGate`;
   - Vercel `<Analytics />` redacts the code from `/f/` paths in `beforeSend`
     (supported by the installed `@vercel/analytics` 2.0.1). Both it and

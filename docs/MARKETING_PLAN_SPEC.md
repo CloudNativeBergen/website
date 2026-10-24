@@ -15,7 +15,7 @@ Slice 1 delivers, for one conference edition:
   (manual: copy, post by hand, paste the URL back);
 - five non-publishing **Task Kinds** (studio render, speaker outreach, sponsor outreach, event-page
   update, checklist) with Prerequisites between Tasks;
-- **Outcomes** per Campaign measured through **PostHog** (replacing Pirsch site-wide) plus Bluesky
+- **Outcomes** per Campaign measured through **PostHog** plus Bluesky
   engagement, stored as daily **Snapshots**;
 - a per-edition **Marketing Report** with PDF and CSV export;
 - an admin-dashboard widget of due and overdue Tasks.
@@ -448,21 +448,21 @@ ph.register({ conference })`. The init is **gated** on a server-rendered value (
   the privacy page plus a footer link, privacy-page and subprocessor wording. PostHog is **not loaded**
   under the admin and speaker routes.
 - **Token placement**: `organization.analyticsPosthogToken` (public `phc_`), edited in organization
-  settings, replaces `conference.analyticsPirschCode`. Read keys: new `analytics` `SecretFamily`
+  settings. Read keys: new `analytics` `SecretFamily`
   `{ projectId, apiKey }` (`TENANT_<SLUG>_ANALYTICS_PROJECT_ID`, `…_API_KEY`; personal `phx_` key,
   project-scoped, `query:read`).
-- **Event mapping**: `data-pirsch-event="x"` → `data-ph-capture-attribute-cta="x"`,
-  `data-pirsch-meta-<k>` → `data-ph-capture-attribute-<k>`; `PIRSCH_EVENTS` → `ANALYTICS_EVENTS` in
-  `src/lib/analytics.ts` (same 21 names); per-CTA PostHog **Actions** created in the project for
-  named insights; `usePreviewDomGuard` strips the new prefix. Outbound checkout clicks arrive as
-  `$autocapture` with `$external_click_url`.
+- **Event mapping**: `data-ph-capture-attribute-cta="x"` and `data-ph-capture-attribute-<k>`;
+  `ANALYTICS_EVENTS` in `src/lib/analytics.ts` (21 names); per-CTA PostHog **Actions** created in
+  the project for named insights; `usePreviewDomGuard` strips the capture prefix.
+  Outbound checkout clicks arrive as `$autocapture` with `$external_click_url`.
 - **Declaration**: `src/app/(main)/privacy/page.tsx` and `src/lib/legal/subprocessors.resolve.ts`
-  replace Pirsch with PostHog EU (Frankfurt) and list what is collected: pageviews, CTA clicks, UTM
-  parameters, outbound click URLs, host and conference, a daily-salted hash instead of an
-  identifier; no cookies or local storage; no IP retention.
-- **Cutover**: hard switch per organization — token present ⇒ PostHog loads and Pirsch does not.
-  Pirsch code and the `analyticsPirschCode` field are removed once every organization has switched.
-  No history migration.
+  declare PostHog EU (Frankfurt) and list what is collected: pageviews, CTA clicks, UTM
+  parameters, outbound click URLs, host and conference. Pending/declined analytics uses a
+  daily-salted hash; acceptance enables analytics cookies. The consent choice has a one-year
+  cookie; no IP retention.
+- **Status**: Pirsch is removed. A valid organization token enables PostHog; without one,
+  no tenant analytics loads. The legacy `analyticsPirschCode` Sanity field is hidden and ignored
+  for schema compatibility. No history migration.
 - **Server side**: `posthog-node` client available for future server events (Tito webhook, fog);
   not used by slice 1 beyond wiring.
 
@@ -651,7 +651,7 @@ Where each piece lands, following the conventions found in the repository on 202
 | Admin routes               | `src/app/(admin)/admin/marketing/{page,campaigns/[id]/page,tasks/[id]/page,report/page,studio/page}.tsx`; nav entries and ⌘K destinations in `src/lib/admin/registry.ts` (`ADMIN_NAV_SECTIONS`, `ADMIN_DESTINATIONS`); remove the `?variant=` prototype hook from the current marketing page                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Studio move                | current `src/app/(admin)/admin/marketing/page.tsx` content (`MarketingTabs`, `SpeakerShare`, `SponsorThankYou`, meme and gallery downloaders, `DownloadableImage`) moves to `/admin/marketing/studio`; `studioRender` Tasks open it with `?speaker=`/`?sponsor=` preselected and "attach to Task" saves the raster as a Sanity image asset onto `task.asset`                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | PostHog client             | `instrumentation-client.ts` at project root; `rewrites()` in `next.config.ts`; gating value emitted by the `TenantAnalytics` component in `src/app/layout.tsx`; attribute rename across `Hero`, `CallToAction`, `ProgramHighlights`, `Sponsors`, `TicketsStatusNotice`, `PhaseCtaRow`, `Header`, `/tickets`; `src/components/admin/preview/usePreviewDomGuard.ts`; `src/lib/analytics.ts`                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Organization token         | field on `sanity/schemaTypes/organization.ts` + organization settings UI; Zod in `src/server/schemas/conference.ts` loses `analyticsPirschCode` validation once cutover completes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Organization token         | field on `sanity/schemaTypes/organization.ts` + organization settings UI; legacy conference analytics input removed from Zod in `src/server/schemas/conference.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Conference dates           | `sanity/schemaTypes/conference.ts` fieldset `dates`; editor descriptors in `src/components/admin/EditConferenceCard.tsx`; mutation via `src/server/routers/conference.ts` + `src/server/schemas/conference.ts`; Milestone resolver in `src/lib/marketing/milestones.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | CFP attribution            | optional `utm` object on `talk.ts`, on `ProposalInputBaseSchema`/`ProposalDraftSchema` in `src/server/schemas/proposal.ts`, read from `searchParams` in `src/app/(cfp)/cfp/proposal/page.tsx` and passed as hidden input through `src/components/cfp/ProposalForm.tsx`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Legal                      | `src/app/(main)/privacy/page.tsx`, `src/lib/legal/subprocessors.resolve.ts` (+ its test)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |

@@ -37,7 +37,7 @@ interface PortableTextChild {
  * the room's QR. It goes through `/program/<talkId>/feedback`, which redirects
  * to the talk's CURRENT code, so the programme never carries one. A plain
  * `<a>`, never `next/link`: no prefetch of every card's redirect, and a full
- * page load into `/f` (its analytics exclusions depend on it).
+ * page load into `/f` so future history-tracking scripts cannot see the code.
  */
 function FeedbackLink({
   talkId,
