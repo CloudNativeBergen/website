@@ -192,20 +192,36 @@ export const NotShownWithDeletingDark: Story = {
   globals: { theme: 'dark' },
 }
 
-/** The tabs are keyboard tabs: arrow keys move and select. */
+/**
+ * The tabs are keyboard tabs (WAI-ARIA): arrow keys, Home and End move and
+ * select; only the selected tab is in the Tab order, and it labels the panel.
+ */
 export const Keyboard: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    const panel = canvas.getByRole('tabpanel')
+    const expectSelected = async (name: string) => {
+      const selected = canvas.getByRole('tab', { name })
+      await expect(selected).toHaveFocus()
+      for (const t of canvas.getAllByRole('tab')) {
+        await expect(t).toHaveAttribute('aria-controls', panel.id)
+        await expect(t).toHaveAttribute('aria-selected', String(t === selected))
+        await expect(t.tabIndex).toBe(t === selected ? 0 : -1)
+      }
+      await expect(panel).toHaveAttribute('aria-labelledby', selected.id)
+    }
     canvas.getByRole('tab', { name: 'Pending (3)' }).focus()
     await userEvent.keyboard('{ArrowRight}')
-    await expect(
-      canvas.getByRole('tab', { name: 'On the wall (2)' }),
-    ).toHaveFocus()
+    await expectSelected('On the wall (2)')
     await expect(canvas.getAllByRole('article')).toHaveLength(2)
     await userEvent.keyboard('{End}')
-    await expect(
-      canvas.getByRole('tab', { name: 'Not shown (2)' }),
-    ).toHaveFocus()
+    await expectSelected('Not shown (2)')
+    await userEvent.keyboard('{ArrowLeft}')
+    await expectSelected('On the wall (2)')
+    await userEvent.keyboard('{Home}')
+    await expectSelected('Pending (3)')
+    await userEvent.keyboard('{ArrowLeft}')
+    await expectSelected('Not shown (2)')
   },
 }
 

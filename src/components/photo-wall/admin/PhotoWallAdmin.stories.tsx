@@ -284,6 +284,17 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     )
     const paused = await canvas.findByRole('radio', { name: 'Paused' })
     await expect(paused).toBeChecked()
+    // Once set up, the page mounts the polled queue and the live count (M4a).
+    await expect(
+      await canvas.findByRole('region', { name: 'Posts' }, WAIT),
+    ).toBeVisible()
+    await waitFor(
+      () =>
+        expect(canvas.getByTestId('pending-summary')).toHaveTextContent(
+          'Nothing waiting for approval',
+        ),
+      WAIT,
+    )
     await userEvent.click(canvas.getByRole('radio', { name: 'Open' }))
     // The pressed value shows while the answer is still on its way, and the
     // note says so rather than giving the old mode's reason.

@@ -493,6 +493,26 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
     expect(queue.posts[0]).not.toHaveProperty('deletingAssetId')
   })
 
+  it('reads a post without consent or crop as no consent, centred (§4.2)', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(
+        postOf('conf-A', 'n1', {
+          marketingConsent: undefined,
+          crop: undefined,
+        }),
+      ),
+      ...withPhoto(postOf('conf-A', 'n2', { crop: { x: 0.1 } })),
+    ])
+    const queue = await organizer().moderationQueue()
+    const byId = Object.fromEntries(queue.posts.map((p) => [p._id, p]))
+    expect(byId['wallPost-n1']).toMatchObject({
+      marketingConsent: false,
+      crop: { x: 0.5, y: 0.5 },
+    })
+    expect(byId['wallPost-n2'].crop).toEqual({ x: 0.1, y: 0.5 })
+  })
+
   it('never answers a draft, even one of this conference (§8)', async () => {
     store().reset([
       wallOf('conf-A'),

@@ -106,7 +106,9 @@ describe('the tabs (§10, §12)', () => {
         submittedAt: '2026-10-26T09:00:00Z',
         decidedAt: '2026-10-26T09:30:00Z',
       }),
-      post('deleting', 'deleting', { submittedAt: '2026-10-26T09:10:00Z' }),
+      // No decision: sorts by its submission, which is later than one
+      // decision and earlier than the other.
+      post('deleting', 'deleting', { submittedAt: '2026-10-26T10:00:00Z' }),
       post('new-decision', 'notShown', {
         submittedAt: '2026-10-26T08:00:00Z',
         decidedAt: '2026-10-26T12:00:00Z',
@@ -114,8 +116,8 @@ describe('the tabs (§10, §12)', () => {
     ]
     expect(postsInTab(posts, 'notShown').map((p) => p._id)).toEqual([
       'new-decision',
-      'old-decision',
       'deleting',
+      'old-decision',
     ])
   })
 

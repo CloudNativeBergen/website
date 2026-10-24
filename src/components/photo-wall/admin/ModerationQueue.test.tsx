@@ -307,8 +307,24 @@ describe('ModerationQueueView (§10)', () => {
       within(deleting).getByText('Couldn’t delete. Try again.'),
     ).toBeInTheDocument()
     expect(within(deleting).getByText('Bo')).toBeInTheDocument()
+    // The placeholder stands where the photo was, and says so.
+    expect(within(deleting).getByText('No photo')).toBeInTheDocument()
     const rejected = cards.find((c) => within(c).queryByText('Blurry'))!
     expect(within(rejected).getByRole('img')).toBeInTheDocument()
+  })
+
+  it('only a deleting card says the delete did not finish (§12)', () => {
+    render(<ModerationQueueView queue={QUEUE} />)
+    const notes = () =>
+      within(screen.getByRole('tabpanel'))
+        .getAllByRole('article')
+        .map((c) => c.textContent?.includes('Couldn’t delete. Try again.'))
+    expect(notes()).toEqual([false]) // pending
+    fireEvent.click(tab(/On the wall/))
+    expect(notes()).toEqual([false]) // approved
+    fireEvent.click(tab(/Not shown/))
+    // Rejected (latest decision) first, then the deleting one.
+    expect(notes()).toEqual([false, true])
   })
 
   it('says what an empty tab means', () => {
@@ -326,17 +342,46 @@ describe('ModerationQueueView (§10)', () => {
     )
   })
 
-  it('moves between tabs with the arrow keys', () => {
+  it('moves between tabs with the arrow keys, Home and End (WAI-ARIA tabs)', () => {
     render(<ModerationQueueView queue={QUEUE} />)
-    const pending = tab(/Pending/)
-    pending.focus()
-    fireEvent.keyDown(pending, { key: 'ArrowRight' })
-    expect(tab(/On the wall/)).toHaveFocus()
-    expect(tab(/On the wall/)).toHaveAttribute('aria-selected', 'true')
-    fireEvent.keyDown(tab(/On the wall/), { key: 'End' })
-    expect(tab(/Not shown/)).toHaveFocus()
-    fireEvent.keyDown(tab(/Not shown/), { key: 'ArrowRight' })
-    expect(tab(/Pending/)).toHaveFocus()
+    const panel = screen.getByRole('tabpanel')
+    /** The selected tab: focused, the only one in the Tab order, labelling the panel. */
+    const expectSelected = (name: RegExp) => {
+      const selected = tab(name)
+      expect(selected).toHaveFocus()
+      expect(
+        screen
+          .getAllByRole('tab')
+          .map((t) => [
+            t.getAttribute('aria-selected'),
+            t.tabIndex,
+            t.getAttribute('aria-controls'),
+          ]),
+      ).toEqual(
+        screen
+          .getAllByRole('tab')
+          .map((t) =>
+            t === selected ? ['true', 0, panel.id] : ['false', -1, panel.id],
+          ),
+      )
+      expect(panel).toHaveAttribute('aria-labelledby', selected.id)
+    }
+    tab(/Pending/).focus()
+    const press = (key: string) =>
+      fireEvent.keyDown(document.activeElement!, { key })
+    press('ArrowRight')
+    expectSelected(/On the wall/)
+    press('End')
+    expectSelected(/Not shown/)
+    press('ArrowRight')
+    expectSelected(/Pending/)
+    press('ArrowLeft')
+    expectSelected(/Not shown/)
+    press('ArrowLeft')
+    expectSelected(/On the wall/)
+    press('Home')
+    expectSelected(/Pending/)
+    expect(panel.id).toBe('photo-wall-posts-panel')
   })
 
   it('shows the loading and the failed states', () => {
@@ -363,12 +408,13 @@ describe('ModerationQueue, connected', () => {
       isError: false,
     })
     render(<ModerationQueue />)
-    expect(h.useQuery).toHaveBeenCalledWith(
-      undefined,
-      expect.objectContaining({
-        refetchInterval: moderationQueuePolling.refetchInterval,
-      }),
-    )
+    // The whole options object: the interval AND the focus refetch the app
+    // turns off by default.
+    expect(h.useQuery).toHaveBeenCalledWith(undefined, {
+      refetchInterval: MODERATION_POLL_MS,
+      refetchOnWindowFocus: true,
+    })
+    expect(h.useQuery.mock.calls[0][1]).toBe(moderationQueuePolling)
     expect(tab(/Pending/)).toHaveAccessibleName('Pending (1)')
   })
 
@@ -425,6 +471,9 @@ describe('the live pending count at the top of the page (§10)', () => {
     const summary = screen.getByTestId('pending-summary')
     const count = () => summary.querySelector('[aria-live]')
     expect(count()).toHaveTextContent(/^3 photos waiting$/)
+    // Announced without interrupting the organizer.
+    expect(count()).toHaveAttribute('aria-live', 'polite')
+    expect(count()).toHaveAttribute('aria-atomic', 'true')
     expect(screen.getByRole('link', { name: 'Review' })).toBeInTheDocument()
     rerender(<PendingSummaryView pending={1} />)
     expect(count()).toHaveTextContent(/^1 photo waiting$/)
@@ -565,6 +614,20 @@ describe('the count says when it is not current (§10)', () => {
     expect(live()).toHaveTextContent(/^1 photo waiting$/)
     await act(() => vi.advanceTimersByTimeAsync(MODERATION_POLL_MS))
     expect(live()).toHaveTextContent(/^1 photo waitingNot updated since 08:30$/)
+  })
+
+  it('offline before the first read: no count, and it says so', async () => {
+    onlineManager.setOnline(false)
+    const queryFn = vi.fn(async () => QUEUE)
+    mountPage(queryFn)
+    await act(() => vi.advanceTimersByTimeAsync(3 * MODERATION_POLL_MS))
+    expect(queryFn).not.toHaveBeenCalled()
+    expect(live()).toHaveTextContent(
+      /^Couldn’t load the count\. Trying again…$/,
+    )
+    act(() => onlineManager.setOnline(true))
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(live()).toHaveTextContent(/^1 photo waiting$/)
   })
 
   it('no count at all when the first read fails', async () => {
