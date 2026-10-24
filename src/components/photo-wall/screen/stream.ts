@@ -31,9 +31,11 @@ import {
   OFFLINE_AFTER_FAILURES,
   PRELOAD_AHEAD,
   SWAP_EVERY_MS,
+  meetPosts,
   onList,
   recordImage,
   retryFailedImages,
+  sortsAfter,
   type BoardAction,
   type ImageMemory,
 } from './board'
@@ -151,14 +153,14 @@ export function pendingStreamImages(state: StreamState): ScreenPost[] {
 
 /**
  * Nothing to show once the first load is over: an empty wall, or one whose
- * every photo has failed, also while those are tried again (the screen
- * shows the QR invitation, not an empty body, until one loads).
+ * every photo has failed, also while those are tried again and while a
+ * first approval's photo loads (the screen shows the QR invitation, not an
+ * empty body, until one loads).
  */
 export function streamInvitation(state: StreamState): boolean {
   return (
     state.started &&
     !state.closed &&
-    state.queue.length === 0 &&
     candidates(state).every(
       (post) => screenPostKey(post) in state.imageFailures,
     )
@@ -192,12 +194,10 @@ function rotation(state: StreamState, shown: ScreenPost[]): ScreenPost[] {
  */
 function comesAfter(post: ScreenPost, key: string): boolean {
   const at = key.lastIndexOf('@')
-  const id = key.slice(0, at)
-  const approvedAt = key.slice(at + 1)
-  return (
-    post.approvedAt < approvedAt ||
-    (post.approvedAt === approvedAt && post._id > id)
-  )
+  return sortsAfter(post, {
+    _id: key.slice(0, at),
+    approvedAt: key.slice(at + 1),
+  })
 }
 
 /**
@@ -383,17 +383,9 @@ function onPoll(
   }
 
   // New (id, approvedAt) pairs join the queue in approval order.
-  const fresh = view.posts.filter(
-    (post) => !state.seen.has(screenPostKey(post)),
-  )
-  if (fresh.length > 0) {
-    fresh.sort(
-      (a, b) =>
-        a.approvedAt.localeCompare(b.approvedAt) || a._id.localeCompare(b._id),
-    )
-    const seen = new Set(state.seen)
-    for (const post of fresh) seen.add(screenPostKey(post))
-    next = { ...next, seen, queue: [...next.queue, ...fresh] }
+  const met = meetPosts(state, view.posts)
+  if (met) {
+    next = { ...next, seen: met.seen, queue: [...next.queue, ...met.fresh] }
   }
   return advance(next, now)
 }

@@ -448,3 +448,56 @@ describe('round-2 adversarial findings', () => {
     }
   })
 })
+
+describe('round-2 state findings', () => {
+  it.each(['mosaic', 'spotlight'] as const)(
+    '%s keeps the invitation while the first approval’s photo loads',
+    (look) => {
+      let s = poll(initialStream(look), [], T0)
+      expect(streamInvitation(s)).toBe(true)
+      s = poll(s, [post(1)], T0 + 5_000)
+      expect(shownPosts(s)).toHaveLength(0)
+      expect(streamInvitation(s)).toBe(true)
+      s = loadAll(s, T0 + 5_000)
+      expect(streamInvitation(s)).toBe(false)
+      expect(featuredId(s)).toBe('wallPost-1')
+    },
+  )
+
+  it('Mosaic: a post that slides in from below the 200 is not a new arrival', () => {
+    // 201 approved; the screen sees the newest 200 (2…201).
+    let s = loadAll(poll(initialStream('mosaic'), posts(200, 2), T0), T0)
+    expect(featuredId(s)).toBe('wallPost-201')
+    // 150 removed: post 1 enters the answer at the bottom.
+    const list = [
+      ...posts(200, 2).filter((p) => p._id !== 'wallPost-150'),
+      post(1),
+    ]
+    s = loadAll(poll(s, list, T0 + 1_000), T0 + 1_000)
+    expect(s.queue).toEqual([])
+    expect(isMarkedNew(s, post(1))).toBe(false)
+    s = run(s, T0 + 1_000, T0 + SWAP_EVERY_MS - 100)
+    // The spotlight's turn is not cut short.
+    expect(featuredId(s)).toBe('wallPost-201')
+  })
+
+  it('Spotlight: after an arrival, a removed interrupted post still resumes the walk where it stood', () => {
+    let s = started('spotlight', 12)
+    s = run(s, T0, T0 + 2 * SWAP_EVERY_MS)
+    expect(featuredId(s)).toBe('wallPost-10')
+    s = loadAll(
+      poll(s, posts(13), T0 + 2 * SWAP_EVERY_MS + 500),
+      T0 + 2 * SWAP_EVERY_MS + 500,
+    )
+    s = run(s, T0 + 2 * SWAP_EVERY_MS + 500, T0 + 3 * SWAP_EVERY_MS)
+    expect(featuredId(s)).toBe('wallPost-13')
+    s = poll(
+      s,
+      posts(13).filter((p) => p._id !== 'wallPost-10'),
+      T0 + 3 * SWAP_EVERY_MS + 1_000,
+    )
+    expect(ids(upNext(s))[0]).toBe('wallPost-9')
+    s = run(s, T0 + 3 * SWAP_EVERY_MS + 1_000, T0 + 4 * SWAP_EVERY_MS)
+    expect(featuredId(s)).toBe('wallPost-9')
+  })
+})

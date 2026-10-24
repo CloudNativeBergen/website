@@ -487,3 +487,20 @@ describe('the clock', () => {
     ).toBe(s)
   })
 })
+
+describe('the 200 cap (§8, §9.1)', () => {
+  it('a post that slides in from below the 200 is not a new arrival', () => {
+    // 201 approved; the screen sees the newest 200 (2…201).
+    const first = poll(initialBoard(), posts(200, 2), T0)
+    let s = tick(loadAll(first, T0), T0)
+    // 150 removed: post 1 enters the answer at the bottom.
+    const list = [
+      ...posts(200, 2).filter((p) => p._id !== 'wallPost-150'),
+      post(1),
+    ]
+    s = loadAll(poll(s, list, T0 + 1_000), T0 + 1_000)
+    s = tick(s, T0 + 1_100)
+    expect(s.queue).toEqual([])
+    expect(newIds(s)).toEqual([])
+  })
+})

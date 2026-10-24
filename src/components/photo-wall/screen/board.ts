@@ -8,6 +8,7 @@
  * A post is known by `(id, approvedAt)` ({@link screenPostKey}): the same
  * post removed and approved again is new again.
  */
+import { WALL_POST_LIMIT } from '@/lib/photo-wall/wall'
 import {
   screenPostKey,
   type ScreenPost,
@@ -428,27 +429,53 @@ function onPoll(
   }
 
   // New (id, approvedAt) pairs join the queue in approval order.
-  const fresh = view.posts.filter(
-    (post) => !state.seen.has(screenPostKey(post)),
-  )
-  if (fresh.length > 0) {
-    fresh.sort(
-      (a, b) =>
-        a.approvedAt.localeCompare(b.approvedAt) || a._id.localeCompare(b._id),
-    )
-    const seen = new Set(state.seen)
-    for (const post of fresh) seen.add(screenPostKey(post))
+  const met = meetPosts(state, view.posts)
+  if (met) {
     next = {
       ...next,
-      seen,
+      seen: met.seen,
       queue: [
         ...next.queue,
-        ...fresh.map((post) => ({ post, initial: false })),
+        ...met.fresh.map((post) => ({ post, initial: false })),
       ],
     }
   }
 
   return advance(next, now)
+}
+
+/** Whether `a` comes after `b` on the list: an older approval, or the same one and a later id. */
+export function sortsAfter(
+  a: Pick<ScreenPost, '_id' | 'approvedAt'>,
+  b: Pick<ScreenPost, '_id' | 'approvedAt'>,
+): boolean {
+  return (
+    a.approvedAt < b.approvedAt ||
+    (a.approvedAt === b.approvedAt && a._id > b._id)
+  )
+}
+
+/**
+ * The posts of a new answer the screen has not met: all of them to
+ * remember, and the ones that arrive as new (§9.2), in approval order; null
+ * when there are none. A post that slides in at the bottom of a full list —
+ * the 201st approval, once one of the 200 left — was not approved now: it
+ * is met, not new.
+ */
+export function meetPosts(
+  state: { list: ScreenPost[]; seen: ReadonlySet<string> },
+  posts: ScreenPost[],
+): { seen: ReadonlySet<string>; fresh: ScreenPost[] } | null {
+  const unseen = posts.filter((post) => !state.seen.has(screenPostKey(post)))
+  if (unseen.length === 0) return null
+  const tail =
+    state.list.length >= WALL_POST_LIMIT ? state.list.at(-1) : undefined
+  const fresh = unseen
+    .filter((post) => !tail || !sortsAfter(post, tail))
+    .sort((a, b) => (sortsAfter(a, b) ? -1 : sortsAfter(b, a) ? 1 : 0))
+  const seen = new Set(state.seen)
+  for (const post of unseen) seen.add(screenPostKey(post))
+  return { seen, fresh }
 }
 
 /**
