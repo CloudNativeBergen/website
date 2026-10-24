@@ -122,8 +122,13 @@ describe('PostHog on /wall/screen', () => {
     expect(keepAnalyticsEvent({ properties: {} }, '/wall/screen')).toBe(false)
   })
 
-  it('sends no request at all when the page is Screen Mode, with the real SDK', async () => {
-    window.history.replaceState(null, '', '/wall/screen')
+  /**
+   * `initTenantAnalytics` at `path` with the real SDK and a tenant token,
+   * every way out of the page watched. The same setup for the negative and
+   * its control, so "nothing was sent" is about the path alone.
+   */
+  async function runAt(path: string) {
+    window.history.replaceState(null, '', path)
     const element = document.createElement('div')
     element.id = ANALYTICS_CONFIG_ELEMENT_ID
     element.setAttribute(
@@ -152,16 +157,35 @@ describe('PostHog on /wall/screen', () => {
         initTenantAnalytics(window),
         new Promise((resolve) => setTimeout(resolve, 50)),
       ])
-      expect(init).not.toHaveBeenCalled()
-      expect(transport).not.toHaveBeenCalled()
-      expect(fetchSpy).not.toHaveBeenCalled()
-      expect(beacon).not.toHaveBeenCalled()
-      expect(document.querySelector('script[src*="posthog"]')).toBeNull()
+      return {
+        init: init.mock.calls.length,
+        sent:
+          transport.mock.calls.length +
+          fetchSpy.mock.calls.length +
+          beacon.mock.calls.length,
+        script: document.querySelector('script[src*="posthog"]') !== null,
+      }
     } finally {
       vi.restoreAllMocks()
       element.remove()
       window.history.replaceState(null, '', '/')
     }
+  }
+
+  it('sends no request at all when the page is Screen Mode, with the real SDK', async () => {
+    expect(await runAt('/wall/screen')).toEqual({
+      init: 0,
+      sent: 0,
+      script: false,
+    })
+  })
+
+  // Runs after the negative: the SDK keeps its state once initialised. It
+  // sends nothing in 50 ms even here (no consent yet), so the control is
+  // the init itself, which every request of the SDK needs first.
+  it('control: the same setup on the Wall page does start the SDK', async () => {
+    const result = await runAt('/wall')
+    expect(result.init).toBe(1)
   })
 })
 
