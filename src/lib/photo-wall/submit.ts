@@ -9,17 +9,15 @@
  * even once posting has closed. Every read that decides is on the NON-CDN
  * client (a CDN read lags the previous write).
  *
- * Answers `{ ok: false }` when its own reads say no post was created;
- * anything it cannot tell (a read or the create's re-read failing) throws, so
- * the route answers 500 and the phone retries with the same `uploadId`, which
- * is safe. One case it can't see: a create whose connection dropped after
- * Sanity received it but before it committed. The re-read straight after
- * finds nothing, the asset goes and the phone is refused; if the create then
- * commits, there is a post whose photo was deleted, and the phone, told it
- * was refused, posts again under a new `uploadId`. A window of milliseconds.
+ * Answers `{ ok: false }` only when no post can come of this request: a
+ * check refused it, or Sanity answered the create with a 4xx. Anything it
+ * cannot tell (a read failing, or a create that failed in transport or with
+ * a 5xx and may still commit) throws, so the route answers 500 and the phone
+ * retries with the same `uploadId`, which converges on the post if it landed.
  */
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import { sanityStatus } from '@/lib/feedback/sanity-error'
 import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 import { expireWallPost } from './cache'
 import type { WallDevice } from './device'
@@ -101,11 +99,14 @@ export async function submitWallPost({
   if (!isUploadId(uploadId)) return refuse('failed', 'uploadId')
 
   // 2. A retry after a lost response: success, without uploading again.
+  // Another's post under this id is refused only where an upload would
+  // happen (before step 5), never here: refused here, a taken id would
+  // answer `failed` where a free one answers `closed` or a limit, telling
+  // anyone that a post with that id exists. A deliberate departure from
+  // §6.2's order, which lists the refusal under step 2.
   const existing = await readPost(uploadId)
-  if (existing) {
-    if (!isOwnPost(existing, conferenceId, device.key)) {
-      return refuse('failed', 'uploadId taken')
-    }
+  const taken = !!existing && !isOwnPost(existing, conferenceId, device.key)
+  if (existing && !taken) {
     // Again: the first run may have stopped between its create and expiry.
     expireWallPost(conferenceId, device.key, { wall: false })
     return { ok: true }
@@ -135,7 +136,8 @@ export async function submitWallPost({
   const photo = checkWallPhoto(bytes)
   if (!photo.ok) return refuse('failed', `photo ${photo.reason}`)
 
-  // 5. Upload, then create.
+  // 5. Upload, then create; not under another's id.
+  if (taken) return refuse('failed', 'uploadId taken')
   return createPost({ conferenceId, deviceKey: device.key, fields, bytes, now })
 }
 
@@ -185,14 +187,28 @@ async function createPost({
       })
       .commit()
   } catch (error) {
-    // The id now exists (two submits with one `uploadId`), the create failed,
-    // or it landed and its answer was lost: the stored post decides. The
-    // asset goes unless a document references it: Sanity names assets by
-    // their bytes, across tenants, so it may be the winner's photo too.
-    const stored = await readPost(uploadId).finally(() =>
-      deleteImageAssetIfOrphaned(asset._id),
-    )
+    // The stored post decides. This device's: the create landed and its
+    // answer was lost. Another's: two submits raced on one `uploadId`.
+    // None: refused only when Sanity ANSWERED with a 4xx, which proves the
+    // create was rejected. A transport error or a 5xx may still commit
+    // after this read, so it is not a refusal (the phone would post again
+    // under a new id): it throws, and the phone retries with this one.
+    const stored = await readPost(uploadId)
     if (!isOwnPost(stored, conferenceId, deviceKey)) {
+      const status = sanityStatus(error)
+      const rejected =
+        typeof status === 'number' && status >= 400 && status < 500
+      if (!stored && !rejected) {
+        // The asset stays: a late create references it, and the retry
+        // uploads the same bytes, which Sanity names as the same asset.
+        // One nothing ever references is the orphan sweep's (§11.2).
+        throw new Error('Photo Wall submit: the create’s outcome is unknown', {
+          cause: error,
+        })
+      }
+      // Gone unless a document references it: Sanity names assets by their
+      // bytes, across tenants, so it may be the winner's photo too.
+      await deleteImageAssetIfOrphaned(asset._id)
       console.error('Photo Wall submit: the create failed', error)
       return refuse('failed', stored ? 'uploadId taken at create' : 'create')
     }

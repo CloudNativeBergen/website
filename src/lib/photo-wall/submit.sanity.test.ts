@@ -482,6 +482,41 @@ describe('submitWallPost: guard before upload', () => {
   })
 })
 
+describe('submitWallPost: a taken uploadId tells nothing (no existence oracle)', () => {
+  const foreign = () =>
+    store().put(
+      post({ _id: `wallPost-${UPLOAD_ID}`, deviceKey: OTHER_DEVICE.key }),
+    )
+
+  it.each([
+    ['posting paused', () => store().put(wall({ postingMode: 'paused' })), {}],
+    [
+      'the device limit reached',
+      () => [1, 2, 3].forEach(() => store().put(post())),
+      {},
+    ],
+    ['a field refused', () => {}, { caption: 'x'.repeat(81) }],
+    ['a photo refused', () => {}, { photo: fixture('camera-exif.jpg') }],
+  ] as const)(
+    'with %s, another device’s id and a free id get the same answer',
+    async (_name, arrange, fields) => {
+      arrange()
+      const free = await submit({ form: form({ ...fields }) })
+      foreign()
+      const taken = await submit({ form: form({ ...fields }) })
+      expect(taken).toEqual(free)
+      expect(h.uploads).toHaveLength(0)
+    },
+  )
+
+  it('a valid post under another device’s id is refused generically, at the upload, uploading nothing', async () => {
+    foreign()
+    await expect(submit()).resolves.toEqual({ ok: false, refusal: 'failed' })
+    expect(h.uploads).toHaveLength(0)
+    expect(store().commits).toEqual([])
+  })
+})
+
 describe('submitWallPost: the limits (§6.3, §14)', () => {
   const recent = () => new Date(NOW.getTime() - 30 * 60_000).toISOString()
   const elsewhere = { conference: { _type: 'reference', _ref: 'conf-B' } }
@@ -604,10 +639,13 @@ describe('submitWallPost: races and failed creates (§6.2, §14)', () => {
     expect(h.revalidateTag).toHaveBeenCalledTimes(2)
   })
 
-  it('a create that fails deletes the asset it uploaded and refuses', async () => {
-    store().beforeNextCommit(() => {
-      throw new Error('503: Sanity is down (test)')
-    })
+  /** Sanity answered the create with a 4xx: it was rejected, nothing comes of it. */
+  const rejected = () => {
+    throw Object.assign(new Error('400: rejected (test)'), { statusCode: 400 })
+  }
+
+  it('a create Sanity rejects (4xx) deletes the asset it uploaded and refuses', async () => {
+    store().beforeNextCommit(rejected)
     await expect(submit()).resolves.toEqual({ ok: false, refusal: 'failed' })
     expect(posts()).toHaveLength(0)
     expect(assets()).toEqual([])
@@ -620,10 +658,56 @@ describe('submitWallPost: races and failed creates (§6.2, §14)', () => {
       _type: 'sponsor',
       logo: { asset: { _type: 'reference', _ref: assetIdOf(PHOTO) } },
     })
-    store().beforeNextCommit(() => {
-      throw new Error('503: Sanity is down (test)')
-    })
+    store().beforeNextCommit(rejected)
     await expect(submit()).resolves.toEqual({ ok: false, refusal: 'failed' })
+    expect(assets().map((d) => d._id)).toEqual([assetIdOf(PHOTO)])
+  })
+
+  it.each([
+    ['a transport error', () => new Error('socket hang up (test)')],
+    [
+      'a 503',
+      () => Object.assign(new Error('503: down (test)'), { statusCode: 503 }),
+    ],
+  ])(
+    'after %s on the create, finding no post is not a refusal: it throws, keeps the asset, and the retry converges when the create commits late',
+    async (_name, failure) => {
+      store().beforeNextCommit(() => {
+        throw failure()
+      })
+      await expect(submit()).rejects.toThrow(/outcome is unknown/)
+      expect(assets().map((d) => d._id)).toEqual([assetIdOf(PHOTO)])
+      expect(posts()).toHaveLength(0)
+
+      // The create commits after the re-read: Sanity applies it late.
+      store().put({
+        _id: `wallPost-${UPLOAD_ID}`,
+        _type: 'wallPost',
+        conference: { _type: 'reference', _ref: 'conf-A' },
+        status: 'pending',
+        photo: {
+          _type: 'image',
+          asset: { _type: 'reference', _ref: assetIdOf(PHOTO) },
+        },
+        deviceKey: DEVICE.key,
+        submittedAt: NOW.toISOString(),
+      })
+
+      // The phone retries with the same uploadId (a 5xx is a lost answer).
+      await expect(submit()).resolves.toEqual({ ok: true })
+      expect(posts()).toHaveLength(1)
+      expect(assets()).toHaveLength(1)
+      expect(h.uploads).toHaveLength(1)
+    },
+  )
+
+  it('after an ambiguous failure with no late commit, the retry posts it, on the same asset', async () => {
+    store().beforeNextCommit(() => {
+      throw new Error('socket hang up (test)')
+    })
+    await expect(submit()).rejects.toThrow(/outcome is unknown/)
+    await expect(submit()).resolves.toEqual({ ok: true })
+    expect(posts()).toHaveLength(1)
     expect(assets().map((d) => d._id)).toEqual([assetIdOf(PHOTO)])
   })
 
