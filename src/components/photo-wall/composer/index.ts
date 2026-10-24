@@ -7,4 +7,5 @@ export {
 export { DECODE_FAILED_MESSAGE, TOO_SMALL_MESSAGE } from './ComposerLanding'
 export { ComposerClosed } from './ComposerClosed'
 export { WallPoster, type WallPosterProps } from './WallPoster'
-export { WaitingCard, type PostedPhoto } from './WaitingCard'
+export { MyPosts, type MyPostsProps } from './MyPosts'
+export { MyPostsPanel, type MyPostsPanelProps } from './MyPostsPanel'

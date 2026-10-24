@@ -4,10 +4,17 @@ import { WallChrome } from '../WallPage'
 import { SECONDARY_BUTTON } from './ComposerLanding'
 
 /**
- * `/wall/post` outside the Posting Window (Photo Wall spec §6.5, §7): only
- * the closed line and See the wall. My posts joins it in slice M6.
+ * `/wall/post` outside the Posting Window (Photo Wall spec §6.5, §7): the
+ * closed line and See the wall, then `children`: My posts (§12), whose
+ * Delete stays allowed after the wall closes.
  */
-export function ComposerClosed({ logo }: { logo: ConferenceLogoData | null }) {
+export function ComposerClosed({
+  logo,
+  children,
+}: {
+  logo: ConferenceLogoData | null
+  children?: React.ReactNode
+}) {
   return (
     <WallChrome logo={logo}>
       <h1 className="font-display text-2xl font-semibold">
@@ -19,6 +26,7 @@ export function ComposerClosed({ logo }: { logo: ConferenceLogoData | null }) {
       <a href="/wall" className={`${SECONDARY_BUTTON} mt-8`}>
         See the wall
       </a>
+      {children}
     </WallChrome>
   )
 }

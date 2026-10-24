@@ -31,6 +31,14 @@ import {
  * does, per §8, from what the answer says was written.
  */
 
+/**
+ * Told `true` just before a write is sent and `false` once Sanity refused it
+ * outright (404, 409): a throw while the last word was `true` may have
+ * written (its answer lost); one before any write, or after a refusal, did
+ * not. The contributor's actions expire their tags on that (§8).
+ */
+export type OnWrite = (pending: boolean) => void
+
 export type WallPostDeletion =
   /** The post and (unless still referenced) its asset are gone. */
   | { status: 'deleted'; deviceKey: string | null }
@@ -52,6 +60,7 @@ export async function deleteWallPost({
   deviceKey,
   shown,
   onRead,
+  onWrite,
 }: {
   conferenceId: string
   postId: string
@@ -60,6 +69,8 @@ export async function deleteWallPost({
   shown?: ShownIncarnation
   /** Told the device of every post read, before anything is written. */
   onRead?: (deviceKey: string | null) => void
+  /** See {@link OnWrite}. */
+  onWrite?: OnWrite
 }): Promise<WallPostDeletion> {
   const read = async () => {
     const post = await readWallPost(conferenceId, postId)
@@ -75,7 +86,7 @@ export async function deleteWallPost({
     return { status: 'gone' }
   }
 
-  const marked = await markDeleting(first, read)
+  const marked = await markDeleting(first, read, onWrite)
   if (marked === 'gone') return { status: 'gone' }
   if (marked === 'conflict') {
     return { status: 'failed', deviceKey: first.deviceKey, marked: false }
@@ -113,6 +124,7 @@ export async function deleteWallPost({
 function markDeleting(
   first: StoredWallPost,
   read: () => Promise<StoredWallPost | null>,
+  onWrite: OnWrite | undefined,
 ): Promise<Marked | 'gone' | 'conflict'> {
   return atMostTwice<Marked | 'gone' | 'conflict'>(
     async (attempt) => {
@@ -127,6 +139,7 @@ function markDeleting(
         }
       }
       const assetId = post.photoAssetId
+      onWrite?.(true)
       try {
         const committed = await clientWrite
           .patch(post._id)
@@ -140,8 +153,11 @@ function markDeleting(
           .commit()
         return { assetId, deviceKey: post.deviceKey, rev: committed._rev }
       } catch (error) {
-        if (sanityStatus(error) === 404) return 'gone'
-        if (sanityStatus(error) === 409) return AGAIN
+        const status = sanityStatus(error)
+        // Refused outright: nothing was written.
+        if (status === 404 || status === 409) onWrite?.(false)
+        if (status === 404) return 'gone'
+        if (status === 409) return AGAIN
         throw error
       }
     },

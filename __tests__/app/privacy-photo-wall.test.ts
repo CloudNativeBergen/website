@@ -2,8 +2,8 @@
  * /privacy discloses the Photo Wall (Photo Wall spec §12) from the slice that
  * first collects it (M3b): its own section at `#photo-wall`, where the
  * composer's consent line links, and its cookie in the cookie inventory.
- * Only what ships is promised: deleting or unticking yourself arrives with My
- * posts (M6).
+ * Deleting a post and unticking marketing yourself, from My posts on the
+ * same phone, arrived with M6.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -68,9 +68,21 @@ describe('Photo Wall on /privacy', () => {
     expect(text(PhotoWallCookieNote)).toContain('30 days after the conference')
   })
 
-  it('promises no self-service My posts before M6 ships it', () => {
+  it('says how to delete a post and withdraw marketing consent yourself, and who to ask otherwise (M6)', () => {
     const copy = text(PhotoWallPrivacy)
-    expect(copy).not.toMatch(/My posts/)
-    expect(copy).toMatch(/to have a post deleted, contact the organizers/)
+    expect(copy).toContain(
+      'To delete a post, open the wall\u2019s posting page on the same phone and use My posts, or contact the organizers.',
+    )
+    expect(copy).toContain('withdraw that by deleting it')
+    expect(copy).toContain('untick it at any time')
+    expect(copy).toContain(
+      'If you are in someone else\u2019s photo and want it removed, contact the organizers.',
+    )
+    expect(copy).not.toMatch(/contacting the organizers/)
+  })
+
+  it('names the cookie, konf_wall, in the cookie inventory', () => {
+    expect(text(PhotoWallCookieNote)).toContain('konf_wall')
+    expect(text(PhotoWallCookieNote)).toMatch(/My posts/)
   })
 })
