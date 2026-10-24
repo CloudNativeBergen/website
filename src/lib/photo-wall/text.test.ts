@@ -113,4 +113,31 @@ describe('wallTextLength and limitWallText: the counter and the cut measure the 
     expect(limitWallText('ab🎉', 2)).toBe('ab')
     expect(limitWallText('cafe\u0301!', 4)).toBe('caf\u00e9')
   })
+  it('cuts a pasted essay in linear time, not one re-count per letter', () => {
+    const started = performance.now()
+    const cut = limitWallText('x'.repeat(40_000), CAPTION_MAX)
+    expect(performance.now() - started).toBeLessThan(200)
+    expect(cut).toBe('x'.repeat(CAPTION_MAX))
+  })
+
+  it('keeps the longest prefix whose normalised text fits, on mixed input', () => {
+    // The definition, one re-count per prefix: slow, but obviously right.
+    const longestFitting = (text: string, max: number) => {
+      const points = Array.from(text.normalize('NFC'))
+      let n = points.length
+      while (n > 0 && wallTextLength(points.slice(0, n).join('')) > max) n -= 1
+      return points.slice(0, n).join('')
+    }
+    const alphabet = ['a', ' ', '\n', '\t', '\u0001', '‮', '🎉', '‍', 'é']
+    let seed = 7
+    const next = () => (seed = (seed * 48271) % 2147483647)
+    for (let run = 0; run < 300; run += 1) {
+      const text = Array.from(
+        { length: next() % 40 },
+        () => alphabet[next() % alphabet.length],
+      ).join('')
+      const max = next() % 12
+      expect(limitWallText(text, max)).toBe(longestFitting(text, max))
+    }
+  })
 })

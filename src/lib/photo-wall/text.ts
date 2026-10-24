@@ -28,6 +28,7 @@ export function limitCodePoints(text: string, max: number): string {
  */
 const REMOVED =
   /(?![\t\n\v\f\r])[\p{Cc}\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu
+const IS_REMOVED = new RegExp(REMOVED.source, 'u')
 
 /**
  * What the server stores (§6.4), in its order: NFC; control and bidi
@@ -49,8 +50,24 @@ export function wallTextLength(text: string): number {
  * essay is cut where the server would start refusing.
  */
 export function limitWallText(text: string, max: number): string {
+  // One pass, counting what the normalisation would keep: a removed
+  // character costs nothing, a whitespace run costs one space only once a
+  // visible character follows it, and the cut falls before the first visible
+  // character that would go over. A pasted essay stays instant.
   const points = Array.from(text.normalize('NFC'))
-  let n = points.length
-  while (n > 0 && wallTextLength(points.slice(0, n).join('')) > max) n -= 1
-  return points.slice(0, n).join('')
+  let kept = 0
+  let spaceOwed = false
+  for (let i = 0; i < points.length; i += 1) {
+    const point = points[i]
+    if (IS_REMOVED.test(point)) continue
+    if (/\s/u.test(point)) {
+      spaceOwed = kept > 0
+      continue
+    }
+    const cost = spaceOwed ? 2 : 1
+    if (kept + cost > max) return points.slice(0, i).join('')
+    kept += cost
+    spaceOwed = false
+  }
+  return points.join('')
 }

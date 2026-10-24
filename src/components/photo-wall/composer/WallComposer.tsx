@@ -75,6 +75,9 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
   const [posting, setPosting] = useState<'idle' | 'baking' | 'sending'>('idle')
   const [failure, setFailure] = useState<string | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
+  // Only the photo picked last may land: a large one picked first can finish
+  // opening after it.
+  const latestPick = useRef(0)
 
   // A new screen takes focus, so a screen reader lands on it.
   useEffect(() => {
@@ -82,14 +85,17 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
   }, [stage.kind])
 
   const pick = async (file: File) => {
+    const thisPick = ++latestPick.current
     setStage({ kind: 'decoding' })
     try {
       const master = await decodeWallPhoto(file)
+      if (thisPick !== latestPick.current) return
       setFilter('original')
       setCrop(CENTER_CROP)
       setFailure(null)
       setStage({ kind: 'composing', master })
     } catch (error) {
+      if (thisPick !== latestPick.current) return
       setStage({
         kind: 'landing',
         error:
