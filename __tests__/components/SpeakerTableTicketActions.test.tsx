@@ -133,8 +133,12 @@ describe('SpeakerTable ticket row actions', () => {
       />,
     )
 
-    const copyBtn = screen.getByRole('button', { name: 'Copy all 2 emails' })
-    fireEvent.click(copyBtn)
+    // One button in the desktop table header, one above the mobile cards.
+    const copyBtns = screen.getAllByRole('button', {
+      name: 'Copy all 2 emails',
+    })
+    expect(copyBtns).toHaveLength(2)
+    fireEvent.click(copyBtns[1])
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
@@ -147,7 +151,7 @@ describe('SpeakerTable ticket row actions', () => {
       target: { value: 'Ada' },
     })
 
-    const filteredCopyBtn = screen.getByRole('button', {
+    const [filteredCopyBtn] = screen.getAllByRole('button', {
       name: 'Copy all 1 email',
     })
     fireEvent.click(filteredCopyBtn)

@@ -428,6 +428,26 @@ export function SpeakerTable({
     }
     return emails
   }, [filteredSpeakers])
+  const emailCountLabel = `${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}`
+  const copyAllEmailsButton = filteredEmails.length > 0 && (
+    <button
+      type="button"
+      onClick={() => copyAllEmails(filteredEmails.join(', '))}
+      className="cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+      title={
+        copiedAllEmails
+          ? `Copied ${emailCountLabel}!`
+          : `Copy all ${emailCountLabel}`
+      }
+      aria-label={`Copy all ${emailCountLabel}`}
+    >
+      {copiedAllEmails ? (
+        <CheckIcon className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+      ) : (
+        <ClipboardIcon className="h-3.5 w-3.5" />
+      )}
+    </button>
+  )
 
   const toggleColumnVisibility = (column: string) => {
     setColumnVisibility((prev) => ({
@@ -1033,6 +1053,24 @@ export function SpeakerTable({
           </div>
         )}
 
+      {/* The table header holds this button on desktop; cards have no header. */}
+      {filteredEmails.length > 0 && (
+        <button
+          type="button"
+          onClick={() => copyAllEmails(filteredEmails.join(', '))}
+          className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 md:hidden dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+        >
+          {copiedAllEmails ? (
+            <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
+          ) : (
+            <ClipboardIcon className="h-4 w-4" />
+          )}
+          {copiedAllEmails
+            ? `Copied ${emailCountLabel}`
+            : `Copy all ${emailCountLabel}`}
+        </button>
+      )}
+
       <div className="space-y-3 md:hidden">
         {filteredSpeakers.map((speaker) => {
           const linkedinLink = extractLinkedInLink(speaker.links)
@@ -1188,25 +1226,7 @@ export function SpeakerTable({
                 <Th width="12rem">
                   <div className="flex items-center gap-1.5">
                     <span>Email</span>
-                    {filteredEmails.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => copyAllEmails(filteredEmails.join(', '))}
-                        className="cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-                        title={
-                          copiedAllEmails
-                            ? `Copied ${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}!`
-                            : `Copy all ${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}`
-                        }
-                        aria-label={`Copy all ${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}`}
-                      >
-                        {copiedAllEmails ? (
-                          <CheckIcon className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-                        ) : (
-                          <ClipboardIcon className="h-3.5 w-3.5" />
-                        )}
-                      </button>
-                    )}
+                    {copyAllEmailsButton}
                   </div>
                 </Th>
               )}
