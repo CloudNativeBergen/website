@@ -133,7 +133,10 @@ export const Pinboard: Story = {
     await waitFor(() => expect(cardsOf(canvas)).toHaveLength(17), {
       timeout: 5_000,
     })
-    await expect(canvas.getByRole('img', { name: /QR code for/ })).toBeVisible()
+    // The QR is drawn asynchronously.
+    await expect(
+      await canvas.findByRole('img', { name: /QR code for/ }),
+    ).toBeVisible()
     await expect(canvasElement.querySelector('.dark')).not.toBeNull()
     await expect(canvas.queryByRole('status')).toBeNull()
   },
@@ -225,8 +228,10 @@ export const Few: Story = { args: { initial: view(posts(5)) } }
 export const Empty: Story = {
   args: { initial: view([]) },
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText('Be the first on the wall')).toBeVisible()
     await expect(
-      within(canvasElement).getByText('Be the first on the wall'),
+      await canvas.findByRole('img', { name: /QR code for/ }),
     ).toBeVisible()
   },
 }
