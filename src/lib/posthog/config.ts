@@ -1,6 +1,7 @@
 import type { CaptureResult, PostHogConfig } from 'posthog-js'
 import { CTA_CAPTURE_ATTR, resolvePosthogToken } from '@/lib/analytics'
 import { UTM_PARAMS } from '@/lib/marketing/strip-utm'
+import { SCREEN_MODE_PATH } from '@/lib/photo-wall/screen'
 import { POSTHOG_INGEST_PATH } from './ingest'
 
 export { POSTHOG_INGEST_PATH, posthogRewrites } from './ingest'
@@ -66,7 +67,7 @@ const EXCLUDED_PATH_PREFIXES = [
   '/f',
   // The Photo Wall's Screen Mode (Photo Wall spec §9.2): a venue screen
   // polling for days is not a visit, and must see no consent bar.
-  '/wall/screen',
+  SCREEN_MODE_PATH,
 ] as const
 
 export function isAnalyticsExcludedPath(pathname: string): boolean {

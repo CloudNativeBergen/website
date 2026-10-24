@@ -16,43 +16,63 @@ import {
   screen,
   within,
 } from '@testing-library/react'
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-  type UseQueryOptions,
-} from '@tanstack/react-query'
+import { onlineManager } from '@tanstack/react-query'
+import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import type { ScreenPost, ScreenView } from '@/lib/photo-wall/screen'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 
+/**
+ * The server, behind the REAL tRPC client and React Query: what
+ * `photoWallPublic.screen` answers next. A rejection is a network failure
+ * (`fetch` rejects); a promise that never settles is a hung request, which
+ * only an abort ends, as in a browser.
+ */
 const h = vi.hoisted(() => ({
   queryFn: vi.fn<() => Promise<unknown>>(),
-}))
-vi.mock('@/lib/trpc/client', () => ({
-  api: {
-    photoWallPublic: {
-      screen: {
-        useQuery: (
-          _input: undefined,
-          options: Omit<UseQueryOptions<unknown>, 'queryKey' | 'queryFn'>,
-        ) =>
-          useQuery({
-            queryKey: ['photoWallPublic.screen'],
-            queryFn: () => h.queryFn(),
-            ...options,
-          }),
-      },
-    },
-  },
 }))
 // `qrcode` draws on a canvas jsdom does not have.
 vi.mock('@/components/feedback/useFeedbackQrPng', () => ({
   useFeedbackQrPng: () => ({ src: 'data:image/png;base64,qr', failed: false }),
 }))
 
+const screenFetch = vi.fn(
+  (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = new URL(String(input), 'http://localhost')
+    const procedures = decodeURIComponent(
+      url.pathname.slice('/api/trpc/'.length),
+    ).split(',')
+    if (procedures.some((p) => p !== 'photoWallPublic.screen')) {
+      throw new Error(`unexpected procedure ${procedures.join(',')}`)
+    }
+    return new Promise<Response>((resolve, reject) => {
+      const signal = init?.signal
+      if (signal?.aborted) return reject(signal.reason)
+      signal?.addEventListener('abort', () => reject(signal.reason))
+      h.queryFn().then((data) => {
+        const result = { result: { data } }
+        const body = url.searchParams.has('batch')
+          ? procedures.map(() => result)
+          : result
+        resolve(
+          new Response(JSON.stringify(body), {
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+      }, reject)
+    })
+  },
+)
+
 import { ScreenMode } from './ScreenBoard'
-import { SCREEN_POLL_MS } from './polling'
-import { ARRIVAL_GAP_MS, LEAVE_MS, NEW_MARK_MS } from './board'
+import { SCREEN_POLL_MS, SCREEN_POLL_TIMEOUT_MS } from './polling'
+import {
+  ARRIVAL_GAP_MS,
+  IMAGE_RETRY_MS,
+  LEAVE_MS,
+  NEW_MARK_MS,
+  SWAP_EVERY_MS,
+} from './board'
+import { IMAGE_LOAD_DEADLINE_MS } from './ScreenLayout'
 
 const at = (minutes: number) =>
   new Date(Date.parse('2026-10-26T07:00:00Z') + minutes * 60_000).toISOString()
@@ -99,24 +119,13 @@ const conference = (sponsors: ConferenceSponsor[] = []) => ({
   sponsors,
 })
 
-const appQueryClient = () =>
-  new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 60 * 1000,
-        gcTime: 5 * 60 * 1000,
-        refetchOnWindowFocus: false,
-        retry: 1,
-      },
-    },
-  })
-
+/** Rendered in the app's own provider: its query defaults and tRPC client. */
 function mount(initial: ScreenView, sponsors: ConferenceSponsor[] = []) {
   h.queryFn.mockResolvedValue(initial)
   render(
-    <QueryClientProvider client={appQueryClient()}>
+    <TRPCProvider>
       <ScreenMode initial={initial} conference={conference(sponsors)} />
-    </QueryClientProvider>,
+    </TRPCProvider>,
   )
 }
 
@@ -150,9 +159,16 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-26T09:00:00Z'))
   h.queryFn.mockReset()
+  screenFetch.mockClear()
+  vi.stubGlobal('fetch', screenFetch)
+  // The tRPC logger reports every failed poll; these tests fail polls on purpose.
+  vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+  onlineManager.setOnline(true)
   vi.useRealTimers()
 })
 
@@ -294,6 +310,158 @@ describe('flaky Wi-Fi (§9.3)', () => {
     await advance(LEAVE_MS)
     expect(shown()).toHaveLength(16)
   })
+
+  it('with the browser reporting offline, still polls: the dot after 3 failures, gone when back with a removal caught up', async () => {
+    mount(view(posts(17)))
+    await advance(0)
+    loadImages()
+    await advance(100)
+    // The laptop's Wi-Fi goes off: the browser says offline and fetch fails.
+    h.queryFn.mockRejectedValue(new TypeError('Failed to fetch'))
+    act(() => onlineManager.setOnline(false))
+    const before = screenFetch.mock.calls.length
+    await nextPoll()
+    await nextPoll()
+    expect(offlineDot()).toBeNull()
+    await nextPoll()
+    expect(screenFetch.mock.calls.length - before).toBe(3)
+    expect(offlineDot()).toBeInTheDocument()
+    expect(shown()).toHaveLength(17)
+    // Back on, and wallPost-5 was removed meanwhile.
+    h.queryFn.mockResolvedValue(
+      view(posts(17).filter((p) => p._id !== 'wallPost-5')),
+    )
+    act(() => onlineManager.setOnline(true))
+    await nextPoll()
+    expect(offlineDot()).toBeNull()
+    expect(shown()).not.toContain('wallPost-5')
+  })
+
+  it('a poll that never answers is given up and polling goes on: the dot after 3, gone on the next answer', async () => {
+    mount(view(posts(17)))
+    // The venue Wi-Fi takes every request from now on and never answers.
+    h.queryFn.mockImplementation(() => new Promise(() => {}))
+    loadImages()
+    const calls = () => screenFetch.mock.calls.length
+    // React Query restarts its interval whenever the query changes state, so
+    // a hung poll's cycle is the poll interval plus the time to give up.
+    await advance(SCREEN_POLL_MS + 10)
+    expect(calls()).toBe(1)
+    await advance(SCREEN_POLL_TIMEOUT_MS)
+    expect(screenFetch.mock.calls[0][1]?.signal?.aborted).toBe(true)
+    await advance(SCREEN_POLL_MS)
+    expect(calls()).toBe(2)
+    await advance(SCREEN_POLL_TIMEOUT_MS + SCREEN_POLL_MS)
+    expect(calls()).toBe(3)
+    expect(offlineDot()).toBeNull()
+    await advance(SCREEN_POLL_TIMEOUT_MS)
+    expect(offlineDot()).toBeInTheDocument()
+    expect(shown()).toHaveLength(17)
+    // Every hung request was aborted, not left open.
+    expect(
+      screenFetch.mock.calls.map(([, init]) => init?.signal?.aborted),
+    ).toEqual([true, true, true])
+    h.queryFn.mockResolvedValue(view(posts(17)))
+    await nextPoll()
+    expect(offlineDot()).toBeNull()
+  })
+})
+
+describe('images that misbehave (§9.2)', () => {
+  it('an image already loaded before React attached (server-rendered, cached) counts as loaded', async () => {
+    const complete = vi
+      .spyOn(HTMLImageElement.prototype, 'complete', 'get')
+      .mockReturnValue(true)
+    const width = vi
+      .spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get')
+      .mockReturnValue(600)
+    mount(view(posts(5)))
+    await advance(100)
+    expect(shown()).toHaveLength(5)
+    complete.mockRestore()
+    width.mockRestore()
+  })
+
+  it('an image whose load never reports is given up and blocks nothing behind it', async () => {
+    const first = posts(20)
+    mount(view(first))
+    await advance(0)
+    // Every first-load image reports but the newest one's.
+    act(() => {
+      for (const img of document.querySelectorAll('img[data-preload]')) {
+        if (img.getAttribute('data-preload') !== 'wallPost-20') {
+          fireEvent.load(img)
+        }
+      }
+    })
+    await advance(100)
+    expect(shown()).toHaveLength(16)
+    h.queryFn.mockResolvedValue(view([post(30), ...first]))
+    await nextPoll()
+    // The stuck one is given up; the arrival behind it is asked for and comes in.
+    await advance(IMAGE_LOAD_DEADLINE_MS - SCREEN_POLL_MS)
+    expect(document.querySelector('img[data-preload="wallPost-20"]')).toBeNull()
+    loadImages()
+    await advance(100)
+    expect(fresh()).toEqual(['wallPost-30'])
+    // And the board still swaps when idle.
+    loadImages()
+    const board = shown()
+    await advance(2 * SWAP_EVERY_MS)
+    loadImages()
+    await advance(SWAP_EVERY_MS)
+    expect(shown()).not.toEqual(board)
+  })
+
+  it('a blip during the first load: every image failed shows the QR, then they are retried and the board fills', async () => {
+    mount(view(posts(3)))
+    await advance(0)
+    for (const id of ['wallPost-1', 'wallPost-2', 'wallPost-3']) failImage(id)
+    await advance(100)
+    expect(cards()).toHaveLength(0)
+    // Not a blank board: the large QR invites, without claiming the wall is empty.
+    expect(screen.getByRole('img', { name: /QR code for/ })).toBeInTheDocument()
+    expect(screen.getByTestId('screen-invitation')).toBeInTheDocument()
+    expect(screen.queryByText('Be the first on the wall')).toBeNull()
+    // The Wi-Fi is back: a later successful poll retries them.
+    await advance(IMAGE_RETRY_MS)
+    await nextPoll()
+    expect(document.querySelectorAll('img[data-preload]')).toHaveLength(3)
+    loadImages()
+    await advance(100)
+    expect(shown()).toHaveLength(3)
+    expect(screen.queryByTestId('screen-invitation')).toBeNull()
+  })
+})
+
+describe('the display stays awake (§9.2)', () => {
+  it('takes the wake lock again when the browser releases it while visible', async () => {
+    const sentinels: EventTarget[] = []
+    const request = vi.fn(async () => {
+      const sentinel = Object.assign(new EventTarget(), {
+        release: vi.fn(async () => {}),
+      })
+      sentinels.push(sentinel)
+      return sentinel
+    })
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: { request },
+    })
+    try {
+      mount(view(posts(3)))
+      await advance(0)
+      expect(request).toHaveBeenCalledTimes(1)
+      // The system lets it go (low battery, a power setting) with the page visible.
+      act(() => {
+        sentinels[0].dispatchEvent(new Event('release'))
+      })
+      await advance(0)
+      expect(request).toHaveBeenCalledTimes(2)
+    } finally {
+      Reflect.deleteProperty(navigator, 'wakeLock')
+    }
+  })
 })
 
 describe('sponsor strip, empty and closed (§9.2, §9.4)', () => {
@@ -311,10 +479,16 @@ describe('sponsor strip, empty and closed (§9.2, §9.4)', () => {
     expect(screen.queryByRole('marquee')).toBeNull()
   })
 
-  it('shows no strip with the switch on but no public-tier sponsor', async () => {
+  it('makes no room for a strip with the switch on but no public-tier sponsor', async () => {
     mount(view(posts(3), { sponsorStrip: true }), [TIERLESS])
     await advance(0)
-    expect(screen.queryByRole('marquee')).toBeNull()
+    expect(screen.queryByTestId('screen-strip')).toBeNull()
+  })
+
+  it('makes room for it with a public-tier sponsor (control)', async () => {
+    mount(view(posts(3), { sponsorStrip: true }), [SPONSOR, TIERLESS])
+    await advance(0)
+    expect(screen.getByTestId('screen-strip')).toBeInTheDocument()
   })
 
   it('an empty wall invites with a large QR', async () => {
@@ -325,7 +499,8 @@ describe('sponsor strip, empty and closed (§9.2, §9.4)', () => {
   })
 
   it('a closed wall shows only that it closed', async () => {
-    mount(view(posts(3)))
+    // A public sponsor and the switch on: only the closed state keeps the strip off.
+    mount(view(posts(3), { sponsorStrip: true }), [SPONSOR])
     await advance(0)
     loadImages()
     await advance(100)
@@ -336,6 +511,7 @@ describe('sponsor strip, empty and closed (§9.2, §9.4)', () => {
     expect(screen.getByText('This wall has closed.')).toBeInTheDocument()
     expect(cards()).toHaveLength(0)
     expect(screen.queryByRole('marquee')).toBeNull()
+    expect(screen.queryByTestId('screen-strip')).toBeNull()
     expect(screen.queryByRole('img', { name: /QR code for/ })).toBeNull()
   })
 })

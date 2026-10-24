@@ -1,8 +1,7 @@
 import 'server-only'
 import { getWall } from './cache'
 import type { ScreenView } from './screen'
-import { WALL_PAGE_PHOTO_PX } from './wall'
-import { squareSrc } from './wall-page'
+import { polaroidPost } from './wall-page'
 
 /**
  * Screen Mode's view of the conference's cached wall (Photo Wall spec §8,
@@ -24,10 +23,7 @@ export async function readScreenPage(
     posts: closed
       ? []
       : posts.map((post) => ({
-          _id: post._id,
-          src: squareSrc(post, WALL_PAGE_PHOTO_PX),
-          caption: post.caption,
-          name: post.name,
+          ...polaroidPost(post),
           approvedAt: post.approvedAt,
         })),
   }

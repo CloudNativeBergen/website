@@ -5,7 +5,9 @@
  */
 
 /** The path of Screen Mode, which no analytics may count (§9.2). */
-const SCREEN_PATH = /^\/wall\/screen(\/|$)/i
+export const SCREEN_MODE_PATH = '/wall/screen'
+/** {@link SCREEN_MODE_PATH} and anything under it, in any case. */
+export const SCREEN_PATH = new RegExp(`^${SCREEN_MODE_PATH}(/|$)`, 'i')
 
 /** Is this Screen Mode, `/wall/screen` or anything under it? */
 export function isScreenModePath(pathname: string | null | undefined): boolean {

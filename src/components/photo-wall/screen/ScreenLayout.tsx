@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import clsx from 'clsx'
+import { useEffect, useRef, useState } from 'react'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { SponsorBanner } from '@/components/stream/SponsorBanner'
 import { useFeedbackQrPng } from '@/components/feedback/useFeedbackQrPng'
@@ -15,10 +16,17 @@ import {
   type ScreenCard,
   isOffline,
   pendingImages,
+  showsInvitation,
 } from './board'
 
 /** The venue screen is laid out on this canvas and scaled to whatever shows it. */
-export const CANVAS = { width: 1920, height: 1080 } as const
+const CANVAS = { width: 1920, height: 1080 } as const
+/**
+ * An image that has reported neither `load` nor `error` this long after it
+ * was asked for counts as failed (and is retried like one): a request the
+ * venue Wi-Fi swallows must not hold the posts behind it (§9.2).
+ */
+export const IMAGE_LOAD_DEADLINE_MS = 15_000
 /** The sponsor strip's share of the canvas (§9.4); the pinboard scales into the rest. */
 const STRIP_HEIGHT = 128
 const COLS = 6
@@ -30,7 +38,7 @@ function jitter(key: string, salt: number): number {
   for (let i = 0; i < key.length; i++) {
     hash = (Math.imul(hash ^ key.charCodeAt(i), 0x01000193) + salt) | 0
   }
-  return ((Math.abs(hash) % 2001) / 1000 - 1) * 1
+  return (Math.abs(hash) % 2001) / 1000 - 1
 }
 
 const KEYFRAMES = `
@@ -143,11 +151,13 @@ function Card({ card, slot }: { card: ScreenCard; slot: number }) {
       data-post={card.post._id}
       data-new={isNew || undefined}
       data-leaving={leaving || undefined}
-      className={`pw-card absolute transition-opacity ease-out ${
+      className={clsx(
+        'pw-card absolute transition-opacity ease-out',
         isNew
           ? 'animate-[pw-drop_900ms_cubic-bezier(.2,.8,.2,1.1)]'
-          : 'animate-[pw-fade_600ms_ease-out]'
-      } ${leaving ? 'opacity-0' : 'opacity-100'}`}
+          : 'animate-[pw-fade_600ms_ease-out]',
+        leaving ? 'opacity-0' : 'opacity-100',
+      )}
       style={{
         left,
         top,
@@ -175,7 +185,10 @@ function QrPolaroid({ url, large = false }: { url: string; large?: boolean }) {
   const shown = feedbackCodeDisplayUrl(url)
   return (
     <figure
-      className={`bg-white p-3 pb-2 text-gray-900 shadow-2xl ${large ? 'w-[420px] -rotate-1' : 'w-60 rotate-2'}`}
+      className={clsx(
+        'bg-white p-3 pb-2 text-gray-900 shadow-2xl',
+        large ? 'w-[420px] -rotate-1' : 'w-60 rotate-2',
+      )}
     >
       <div className="grid aspect-square place-items-center bg-white">
         {src ? (
@@ -189,16 +202,60 @@ function QrPolaroid({ url, large = false }: { url: string; large?: boolean }) {
         ) : null}
       </div>
       <figcaption className="font-caveat pt-2 text-center leading-tight">
-        <span className={`block ${large ? 'text-4xl' : 'text-2xl'}`}>
+        <span className={clsx('block', large ? 'text-4xl' : 'text-2xl')}>
           Add yours!
         </span>
         <span
-          className={`block break-all text-gray-500 ${large ? 'text-3xl' : 'text-lg'}`}
+          className={clsx(
+            'block break-all text-gray-500',
+            large ? 'text-3xl' : 'text-lg',
+          )}
         >
           {shown}
         </span>
       </figcaption>
     </figure>
+  )
+}
+
+/**
+ * One image the board wants fetched, off the board. Reports what the
+ * browser says of it, including what it said before React was listening:
+ * these `<img>`s are server-rendered, and a cached square can finish
+ * loading before hydration, whose `load` React never replays. One that
+ * says nothing within {@link IMAGE_LOAD_DEADLINE_MS} counts as failed.
+ */
+function PreloadImage({
+  post,
+  onLoaded,
+  onFailed,
+}: {
+  post: ScreenPost
+  onLoaded: (key: string) => void
+  onFailed: (key: string) => void
+}) {
+  const key = screenPostKey(post)
+  const ref = useRef<HTMLImageElement>(null)
+  useEffect(() => {
+    const img = ref.current
+    // `complete` is also true of a broken image, whose width is 0.
+    if (img?.complete) {
+      if (img.naturalWidth > 0) onLoaded(key)
+      else onFailed(key)
+      return
+    }
+    const deadline = setTimeout(() => onFailed(key), IMAGE_LOAD_DEADLINE_MS)
+    return () => clearTimeout(deadline)
+  }, [key, onLoaded, onFailed])
+  return (
+    <img
+      ref={ref}
+      src={post.src}
+      alt=""
+      data-preload={post._id}
+      onLoad={() => onLoaded(key)}
+      onError={() => onFailed(key)}
+    />
   )
 }
 
@@ -217,19 +274,14 @@ function Preload({
       aria-hidden="true"
       className="pointer-events-none absolute top-0 left-0 size-px overflow-hidden opacity-0"
     >
-      {posts.map((post) => {
-        const key = screenPostKey(post)
-        return (
-          <img
-            key={key}
-            src={post.src}
-            alt=""
-            data-preload={post._id}
-            onLoad={() => onLoaded(key)}
-            onError={() => onFailed(key)}
-          />
-        )
-      })}
+      {posts.map((post) => (
+        <PreloadImage
+          key={screenPostKey(post)}
+          post={post}
+          onLoaded={onLoaded}
+          onFailed={onFailed}
+        />
+      ))}
     </div>
   )
 }
@@ -246,13 +298,16 @@ function useWakeLock() {
         .then((s) => {
           if (gone) return s.release()
           sentinel = s
+          // The system can let it go with the page still showing (a power
+          // setting, low battery): take it again.
+          s.addEventListener('release', onVisible, { once: true })
         })
         .catch(() => {})
-    void request()
     // The lock is released whenever the page is hidden; take it again.
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void request()
+      if (!gone && document.visibilityState === 'visible') void request()
     }
+    void request()
     document.addEventListener('visibilitychange', onVisible)
     return () => {
       gone = true
@@ -262,7 +317,7 @@ function useWakeLock() {
   }, [])
 }
 
-export const CURSOR_HIDE_MS = 3_000
+const CURSOR_HIDE_MS = 3_000
 
 /** The cursor goes after 3 s still, and comes back on a move (§9.2). */
 function useHiddenCursor(): boolean {
@@ -307,11 +362,7 @@ export function ScreenLayout({
     board.sponsorStrip &&
     !board.closed &&
     filterPublicSponsors(sponsors).length > 0
-  const empty =
-    board.started &&
-    !board.closed &&
-    board.list.length === 0 &&
-    board.slots.every((c) => c === null)
+  const invitation = showsInvitation(board)
   const boardScale = strip ? (CANVAS.height - STRIP_HEIGHT) / CANVAS.height : 1
   return (
     // `dark` on the root: the site's dark variant applies inside, whatever
@@ -319,7 +370,10 @@ export function ScreenLayout({
     // the public layout sets it, or the house blue.
     <div
       data-shell-fit="viewport"
-      className={`dark fixed inset-0 overflow-hidden bg-stone-950 text-white select-none ${cursorHidden ? 'cursor-none' : ''}`}
+      className={clsx(
+        'dark fixed inset-0 overflow-hidden bg-stone-950 text-white select-none',
+        cursorHidden && 'cursor-none',
+      )}
       style={
         {
           '--screen-accent': 'var(--brand-primary, #1d4ed8)',
@@ -359,12 +413,18 @@ export function ScreenLayout({
             <p className="font-caveat absolute inset-0 grid place-items-center text-7xl text-white">
               This wall has closed.
             </p>
-          ) : empty ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-10">
+          ) : invitation ? (
+            <div
+              data-testid="screen-invitation"
+              className="absolute inset-0 flex flex-col items-center justify-center gap-10"
+            >
               <QrPolaroid url={postUrl} large />
-              <p className="font-caveat text-6xl text-white">
-                Be the first on the wall
-              </p>
+              {/* Not when there are posts whose photos have yet to load. */}
+              {board.list.length === 0 && (
+                <p className="font-caveat text-6xl text-white">
+                  Be the first on the wall
+                </p>
+              )}
             </div>
           ) : (
             <div
@@ -378,7 +438,7 @@ export function ScreenLayout({
                 (card, slot) =>
                   card && <Card key={card.key} card={card} slot={slot} />,
               )}
-              <div className="absolute right-12 bottom-10 z-[500]">
+              <div className="absolute right-12 bottom-10 z-500">
                 <QrPolaroid url={postUrl} />
               </div>
             </div>
@@ -386,6 +446,7 @@ export function ScreenLayout({
 
           {strip && (
             <div
+              data-testid="screen-strip"
               className="absolute inset-x-0 bottom-0 z-40 px-10 pb-6"
               style={{ height: STRIP_HEIGHT }}
             >

@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest'
 import type { ScreenPost, ScreenView } from '@/lib/photo-wall/screen'
 import {
   ARRIVAL_GAP_MS,
+  IMAGE_RETRY_MAX_MS,
+  IMAGE_RETRY_MS,
   LEAVE_MS,
   NEW_MARK_MS,
   OFFLINE_AFTER_FAILURES,
@@ -15,8 +17,10 @@ import {
   type BoardState,
   boardReducer,
   initialBoard,
+  imageRetryDelay,
   isOffline,
   pendingImages,
+  showsInvitation,
 } from './board'
 
 const T0 = Date.parse('2026-10-26T09:00:00Z')
@@ -387,6 +391,59 @@ describe('closed wall and settings (§9.2, §9.4)', () => {
     expect(s.closed).toBe(true)
     s = advance(s, T0 + 5_000, T0 + 5_000 + LEAVE_MS)
     expect(shownIds(s).filter(Boolean)).toEqual([])
+  })
+})
+
+describe('failed images (§9.2)', () => {
+  const failImage = (s: BoardState, p: ScreenPost, now: number) =>
+    boardReducer(s, { type: 'imageFailed', key: keyOf(p), now })
+  const failAll = (s: BoardState, now: number) =>
+    pendingImages(s).reduce((state, p) => failImage(state, p, now), s)
+
+  it('waits 30 s, doubling, at most 5 minutes', () => {
+    expect([1, 2, 3, 4, 5, 6, 20].map(imageRetryDelay)).toEqual([
+      IMAGE_RETRY_MS,
+      2 * IMAGE_RETRY_MS,
+      4 * IMAGE_RETRY_MS,
+      8 * IMAGE_RETRY_MS,
+      IMAGE_RETRY_MAX_MS,
+      IMAGE_RETRY_MAX_MS,
+      IMAGE_RETRY_MAX_MS,
+    ])
+  })
+
+  it('every photo failed: the invitation shows, and the first successful poll after the wait asks for them again', () => {
+    let s = poll(initialBoard(), posts(3), T0)
+    expect(showsInvitation(s)).toBe(false)
+    s = failAll(s, T0 + 100)
+    expect(showsInvitation(s)).toBe(true)
+    expect(pendingImages(s)).toEqual([])
+    // Too early: still failed, whatever the poll says.
+    s = poll(s, posts(3), T0 + 100 + IMAGE_RETRY_MS - 1)
+    expect(pendingImages(s)).toEqual([])
+    // A failed poll retries nothing: the network is not known good.
+    s = failed(s, T0 + 100 + IMAGE_RETRY_MS)
+    expect(pendingImages(s)).toEqual([])
+    s = poll(s, posts(3), T0 + 100 + IMAGE_RETRY_MS + 1)
+    expect(pendingImages(s).map((p) => p._id)).toEqual([
+      'wallPost-3',
+      'wallPost-2',
+      'wallPost-1',
+    ])
+    s = loadAll(s, T0 + 40_000)
+    expect(shownIds(s).filter(Boolean)).toHaveLength(3)
+    expect(showsInvitation(s)).toBe(false)
+  })
+
+  it('a second failure in a row waits twice as long', () => {
+    let s = poll(initialBoard(), posts(1), T0)
+    s = failAll(s, T0)
+    s = poll(s, posts(1), T0 + IMAGE_RETRY_MS)
+    s = failAll(s, T0 + IMAGE_RETRY_MS)
+    s = poll(s, posts(1), T0 + 2 * IMAGE_RETRY_MS)
+    expect(pendingImages(s)).toEqual([])
+    s = poll(s, posts(1), T0 + 3 * IMAGE_RETRY_MS)
+    expect(pendingImages(s).map((p) => p._id)).toEqual(['wallPost-1'])
   })
 })
 

@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useReducer, useState } from 'react'
 import type { ScreenView } from '@/lib/photo-wall/screen'
-import { api } from '@/lib/trpc/client'
 import { boardReducer, initialBoard } from './board'
-import { screenPolling } from './polling'
+import { useScreenPoll } from './polling'
 import { ScreenLayout, type ScreenConference } from './ScreenLayout'
 
 /** How often the board's clock runs: the resolution of every timed rule. */
-export const TICK_MS = 100
+const TICK_MS = 100
 
 /** What the board needs of a poll: the last answer and when it last failed. */
 export interface ScreenPoll {
@@ -85,11 +84,7 @@ export function ScreenMode({
   initial: ScreenView
   conference: ScreenConference
 }) {
-  const { data, dataUpdatedAt, errorUpdatedAt } =
-    api.photoWallPublic.screen.useQuery(undefined, {
-      ...screenPolling,
-      initialData: initial,
-    })
+  const { data, dataUpdatedAt, errorUpdatedAt } = useScreenPoll(initial)
   return (
     <ScreenBoard
       poll={{ data, dataUpdatedAt, errorUpdatedAt }}

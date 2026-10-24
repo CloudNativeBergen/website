@@ -28,6 +28,14 @@ export const LEAVE_MS = 300
 export const OFFLINE_AFTER_FAILURES = 3
 /** How many queued arrivals have their image fetched ahead of their turn. */
 export const PRELOAD_AHEAD = 3
+/**
+ * A failed image is tried again by the first successful poll this long
+ * after it failed, the wait doubling with each failure up to
+ * {@link IMAGE_RETRY_MAX_MS}: a Wi-Fi blip during the first load must not
+ * leave the board without its photos for the rest of the day.
+ */
+export const IMAGE_RETRY_MS = 30_000
+export const IMAGE_RETRY_MAX_MS = 5 * 60_000
 
 export interface ScreenCard {
   key: string
@@ -63,6 +71,8 @@ export interface BoardState {
   queue: Queued[]
   /** What the browser reported of an image it was asked to fetch. */
   images: Readonly<Record<string, 'loaded' | 'failed'>>
+  /** When each image last failed and how often in a row: when to try it again. */
+  imageFailures: Readonly<Record<string, { at: number; count: number }>>
   /** Where the idle swap is in the rest of the list. */
   cursor: number
   lastArrivalAt: number
@@ -89,6 +99,7 @@ export function initialBoard(): BoardState {
     seen: new Set(),
     queue: [],
     images: {},
+    imageFailures: {},
     cursor: 0,
     lastArrivalAt: 0,
     lastSwapAt: 0,
@@ -100,6 +111,20 @@ export function initialBoard(): BoardState {
 /** Three failed polls in a row: the corner dot shows until the next success (§9.3). */
 export function isOffline(state: BoardState): boolean {
   return state.failures >= OFFLINE_AFTER_FAILURES
+}
+
+/**
+ * Nothing to pin up once the first load is over: an empty wall, or one
+ * whose every photo failed to load (the screen shows the QR invitation, not
+ * a blank board, until a retry lands).
+ */
+export function showsInvitation(state: BoardState): boolean {
+  return (
+    state.started &&
+    !state.closed &&
+    state.slots.every((c) => c === null) &&
+    !state.queue.some((q) => q.initial)
+  )
 }
 
 /**
@@ -126,7 +151,7 @@ function swapCandidate(state: BoardState, candidates: ScreenPost[]) {
 /**
  * The posts whose image the screen wants fetched now, in order: the first
  * load as a whole, otherwise the next {@link PRELOAD_AHEAD} arrivals, and
- * with nothing queued the next refill and the next swap.
+ * with nothing queued a refill for every empty slot and the next swap.
  */
 function wanted(state: BoardState): ScreenPost[] {
   if (state.queue.length > 0) {
@@ -136,10 +161,11 @@ function wanted(state: BoardState): ScreenPost[] {
     ).map((q) => q.post)
   }
   const candidates = rest(state)
-  const out: ScreenPost[] = []
-  for (const post of [candidates[0], swapCandidate(state, candidates)]) {
-    if (post && !out.includes(post)) out.push(post)
-  }
+  // Enough to fill every empty slot at once (after a retry, the whole board).
+  const free = state.slots.filter((c) => c === null).length
+  const out = candidates.slice(0, Math.max(1, free))
+  const swap = swapCandidate(state, candidates)
+  if (swap && !out.includes(swap)) out.push(swap)
   return out
 }
 
@@ -241,13 +267,13 @@ function advance(state: BoardState, now: number): BoardState {
   // An arrival: the head of the queue, once loaded, one every ARRIVAL_GAP_MS.
   while (next.queue.length > 0 && !next.queue[0].initial) {
     const head = next.queue[0].post
-    const state = next.images[screenPostKey(head)]
-    if (state === 'failed') {
+    const image = next.images[screenPostKey(head)]
+    if (image === 'failed') {
       // Skipped (§9.2).
       next = { ...next, queue: next.queue.slice(1) }
       continue
     }
-    if (state !== 'loaded' || now - next.lastArrivalAt < ARRIVAL_GAP_MS) break
+    if (image !== 'loaded' || now - next.lastArrivalAt < ARRIVAL_GAP_MS) break
     const slot = arrivalSlot(next.slots)
     const slots = [...next.slots]
     slots[slot] = card(head, now, next.nextZ, now + NEW_MARK_MS)
@@ -292,7 +318,44 @@ function advance(state: BoardState, now: number): BoardState {
   return next
 }
 
-function onPoll(state: BoardState, view: ScreenView, now: number): BoardState {
+/** The wait before a failed image is tried again, by how often it failed in a row. */
+export function imageRetryDelay(count: number): number {
+  return Math.min(IMAGE_RETRY_MS * 2 ** (count - 1), IMAGE_RETRY_MAX_MS)
+}
+
+/**
+ * A successful poll means the network is back: forget the failures whose
+ * wait is over, so those images are asked for again. The failure count
+ * stays until one loads.
+ */
+function retryFailedImages(state: BoardState, now: number): BoardState {
+  const due = Object.entries(state.imageFailures)
+    .filter(
+      ([key, { at, count }]) =>
+        state.images[key] === 'failed' && now - at >= imageRetryDelay(count),
+    )
+    .map(([key]) => key)
+  if (due.length === 0) return state
+  const images = { ...state.images }
+  for (const key of due) delete images[key]
+  return { ...state, images }
+}
+
+/** Only what is said of the posts still on the list. */
+function onList<T>(record: Readonly<Record<string, T>>, keys: Set<string>) {
+  return Object.keys(record).some((key) => !keys.has(key))
+    ? Object.fromEntries(
+        Object.entries(record).filter(([key]) => keys.has(key)),
+      )
+    : record
+}
+
+function onPoll(
+  previous: BoardState,
+  view: ScreenView,
+  now: number,
+): BoardState {
+  const state = retryFailedImages(previous, now)
   // The same answer again (React Query hands back the same array for an
   // identical answer): only the clock moves. Most polls of a quiet wall.
   if (
@@ -312,12 +375,9 @@ function onPoll(state: BoardState, view: ScreenView, now: number): BoardState {
     sponsorStrip: view.sponsorStrip,
     list: view.posts,
     failures: 0,
-  }
-  // Forget what the browser said of images no longer on the list.
-  if (Object.keys(state.images).some((key) => !listKeys.has(key))) {
-    next.images = Object.fromEntries(
-      Object.entries(state.images).filter(([key]) => listKeys.has(key)),
-    )
+    // Forget what the browser said of images no longer on the list.
+    images: onList(state.images, listKeys),
+    imageFailures: onList(state.imageFailures, listKeys),
   }
 
   if (!state.started) {
@@ -394,8 +454,19 @@ export function boardReducer(
       if (!known) return state
       const result = action.type === 'imageLoaded' ? 'loaded' : 'failed'
       if (state.images[action.key] === result) return state
+      const imageFailures = { ...state.imageFailures }
+      if (result === 'loaded') {
+        delete imageFailures[action.key]
+      } else {
+        const count = (imageFailures[action.key]?.count ?? 0) + 1
+        imageFailures[action.key] = { at: action.now, count }
+      }
       return advance(
-        { ...state, images: { ...state.images, [action.key]: result } },
+        {
+          ...state,
+          images: { ...state.images, [action.key]: result },
+          imageFailures,
+        },
         action.now,
       )
     }
