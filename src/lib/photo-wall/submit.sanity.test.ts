@@ -511,9 +511,15 @@ describe('submitWallPost: retries converge on one post (§6.5, §14)', () => {
     const first = structuredClone(store().doc(`wallPost-${UPLOAD_ID}`))
     store().put(wall({ postingMode: 'paused' }))
 
+    h.revalidateTag.mockReset()
     await expect(submit()).resolves.toEqual({ ok: true })
     expect(h.uploads).toHaveLength(1)
     expect(store().doc(`wallPost-${UPLOAD_ID}`)).toEqual(first)
+    // Expired again, in case the first run stopped before its expiry.
+    expect(h.revalidateTag).toHaveBeenCalledWith(
+      `photo-wall-device:${DEVICE.key}`,
+      { expire: 0 },
+    )
     expect(store().doc(assetIdOf(PHOTO))).toBeTruthy()
     expect(posts()).toHaveLength(1)
   })

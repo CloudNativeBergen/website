@@ -1,5 +1,5 @@
 import { ClockIcon } from '@heroicons/react/24/outline'
-import type { Crop } from '@/lib/photo-wall/crop'
+import { objectPosition, type Crop } from '@/lib/photo-wall/crop'
 
 /** A post this phone just sent, as its Waiting for approval card shows it. */
 export interface PostedPhoto {
@@ -25,7 +25,7 @@ export function WaitingCard({ post }: { post: PostedPhoto }) {
         src={url}
         alt={caption ? `Your photo: ${caption}` : 'Your photo'}
         className="aspect-square w-full object-cover"
-        style={{ objectPosition: `${crop.x * 100}% ${crop.y * 100}%` }}
+        style={{ objectPosition: objectPosition(crop) }}
       />
       <figcaption className="font-caveat">
         {caption && (

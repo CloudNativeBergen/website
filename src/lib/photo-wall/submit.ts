@@ -98,9 +98,12 @@ export async function submitWallPost({
   // 2. A retry after a lost response: success, without uploading again.
   const existing = await readPost(uploadId)
   if (existing) {
-    return isOwnPost(existing, conferenceId, device.key)
-      ? { ok: true }
-      : refuse('failed', 'uploadId taken')
+    if (!isOwnPost(existing, conferenceId, device.key)) {
+      return refuse('failed', 'uploadId taken')
+    }
+    // Again: the first run may have stopped between its create and expiry.
+    expireWallPost(conferenceId, device.key, { wall: false })
+    return { ok: true }
   }
 
   // 3. The wall, the Posting Window and the limits.
