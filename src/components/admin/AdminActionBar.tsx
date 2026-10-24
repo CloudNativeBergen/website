@@ -25,6 +25,7 @@ import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { getSpeakerIndicators } from '@/lib/speaker/utils'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalManagementModal } from './ProposalManagementModal'
+import { ProposalActionModal } from './ProposalActionModal'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
 import { useRouter } from 'next/navigation'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -36,6 +37,8 @@ import { Conference } from '@/lib/conference/types'
 interface AdminActionBarProps {
   proposal: ProposalExisting
   conference: Conference
+  /** Only used for the localhost warning in the action modal. */
+  domain?: string
 }
 
 type ActionColor =
@@ -128,7 +131,11 @@ function ActionsMenu({
   )
 }
 
-export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
+export function AdminActionBar({
+  proposal,
+  conference,
+  domain,
+}: AdminActionBarProps) {
   const router = useRouter()
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
@@ -140,12 +147,10 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
   const speakers = extractSpeakersFromProposal(proposal)
   const indicators = getSpeakerIndicators(speakers)
 
-  const handleAction = (action: Action) => {
-    const event = new CustomEvent('proposalAction', {
-      detail: { action, proposal },
-    })
-    window.dispatchEvent(event)
-  }
+  // The bar owns its action modal so it works wherever it is mounted (detail
+  // page and the proposals list preview pane alike).
+  const [pendingAction, setPendingAction] = useState<Action | null>(null)
+  const handleAction = (action: Action) => setPendingAction(action)
 
   // Two doors to the same thread, and which one a given entry point uses is a
   // decision, not an accident:
@@ -501,6 +506,21 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
           editingProposal={proposal}
           conference={conference}
           onProposalUpdated={handleProposalUpdated}
+        />
+      )}
+
+      {pendingAction && (
+        <ProposalActionModal
+          open={!!pendingAction}
+          close={() => setPendingAction(null)}
+          proposal={proposal}
+          action={pendingAction}
+          adminUI={true}
+          onAction={() => {
+            setPendingAction(null)
+            router.refresh()
+          }}
+          domain={domain}
         />
       )}
 
