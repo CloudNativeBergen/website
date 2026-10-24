@@ -294,6 +294,14 @@ export default function VolunteerAdminPage() {
     statusFilter.size === DEFAULT_STATUS_FILTER.length &&
     DEFAULT_STATUS_FILTER.every((s) => statusFilter.has(s))
 
+  // Default filter hides only rejected, so an empty list here means all are rejected.
+  const allRejectedHidden =
+    !!volunteers?.length &&
+    statusFilterIsDefault &&
+    ticketFilter === 'all' &&
+    !searchQuery.trim() &&
+    volunteers.every((v) => v.status === VolunteerStatus.REJECTED)
+
   const filteredVolunteers = useMemo(() => {
     if (!volunteers) return []
     const matches = volunteers.filter((v) => {
@@ -676,21 +684,41 @@ export default function VolunteerAdminPage() {
                 <EmptyState
                   icon={UserGroupIcon}
                   title={
-                    volunteers && volunteers.length > 0
-                      ? 'No matching volunteers'
-                      : 'No applications yet'
+                    allRejectedHidden
+                      ? 'No active applications'
+                      : volunteers && volunteers.length > 0
+                        ? 'No matching volunteers'
+                        : 'No applications yet'
                   }
                   description={
-                    volunteers && volunteers.length > 0
-                      ? 'Try clearing or modifying your search and status filters.'
-                      : 'No volunteer applications have been submitted for this conference.'
+                    allRejectedHidden
+                      ? volunteers.length === 1
+                        ? 'The only application is rejected.'
+                        : `All ${volunteers.length} applications are rejected.`
+                      : volunteers && volunteers.length > 0
+                        ? 'Try clearing or modifying your search and status filters.'
+                        : 'No volunteer applications have been submitted for this conference.'
                   }
                   action={
-                    volunteers &&
-                    volunteers.length > 0 &&
-                    (!statusFilterIsDefault ||
-                      ticketFilter !== 'all' ||
-                      searchQuery) ? (
+                    allRejectedHidden ? (
+                      <AdminButton
+                        onClick={() =>
+                          setStatusFilter(
+                            new Set([
+                              ...DEFAULT_STATUS_FILTER,
+                              VolunteerStatus.REJECTED,
+                            ]),
+                          )
+                        }
+                        size="sm"
+                      >
+                        Show Rejected
+                      </AdminButton>
+                    ) : volunteers &&
+                      volunteers.length > 0 &&
+                      (!statusFilterIsDefault ||
+                        ticketFilter !== 'all' ||
+                        searchQuery) ? (
                       <AdminButton
                         onClick={() => {
                           setSearchQuery('')
