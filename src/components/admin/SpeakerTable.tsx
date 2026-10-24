@@ -447,25 +447,6 @@ export function SpeakerTable({
     return emails
   }, [filteredSpeakers])
   const emailCountLabel = `${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}`
-  const copyAllEmailsButton = filteredEmails.length > 0 && (
-    <button
-      type="button"
-      onClick={() => copyAllEmails(filteredEmails.join(', '))}
-      className="cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-      title={
-        copiedAllEmails
-          ? `Copied ${emailCountLabel}!`
-          : `Copy all ${emailCountLabel}`
-      }
-      aria-label={`Copy all ${emailCountLabel}`}
-    >
-      {copiedAllEmails ? (
-        <CheckIcon className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-      ) : (
-        <ClipboardIcon className="h-3.5 w-3.5" />
-      )}
-    </button>
-  )
 
   const toggleColumnVisibility = (column: string) => {
     setColumnVisibility((prev) => ({
@@ -570,7 +551,6 @@ export function SpeakerTable({
       })),
   ]
 
-  // Cards ignore column visibility, so this only shows on desktop.
   const columnsDropdown = (
     <FilterDropdown
       label="Columns"
@@ -897,28 +877,31 @@ export function SpeakerTable({
         resultCount={filteredSpeakers.length}
         totalCount={speakers.length}
         resultLabel="speakers"
-        desktopExtra={columnsDropdown}
         actions={
-          filteredEmails.length > 0 && (
-            <button
-              type="button"
-              onClick={() => copyAllEmails(filteredEmails.join(', '))}
-              title={
-                copiedAllEmails
-                  ? `Copied ${emailCountLabel}!`
-                  : `Copy all ${emailCountLabel}`
-              }
-              aria-label={`Copy all ${emailCountLabel}`}
-              className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-gray-600 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:text-gray-400 dark:ring-white/10 dark:hover:bg-gray-800"
-            >
-              {copiedAllEmails ? (
-                <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
-              ) : (
-                <ClipboardIcon className="h-4 w-4" />
-              )}
-              {filteredEmails.length}
-            </button>
-          )
+          <>
+            {/* Shown wherever the table renders (md+); cards ignore columns. */}
+            <div className="hidden md:block">{columnsDropdown}</div>
+            {filteredEmails.length > 0 && (
+              <button
+                type="button"
+                onClick={() => copyAllEmails(filteredEmails.join(', '))}
+                title={
+                  copiedAllEmails
+                    ? `Copied ${emailCountLabel}!`
+                    : `Copy all ${emailCountLabel}`
+                }
+                aria-label={`Copy all ${emailCountLabel}`}
+                className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-gray-600 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:text-gray-400 dark:ring-white/10 dark:hover:bg-gray-800"
+              >
+                {copiedAllEmails ? (
+                  <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
+                ) : (
+                  <ClipboardIcon className="h-4 w-4" />
+                )}
+                {filteredEmails.length}
+              </button>
+            )}
+          </>
         }
       />
 
@@ -1086,14 +1069,7 @@ export function SpeakerTable({
                 </Th>
               )}
               {columnVisibility.ticket && <Th width="9rem">Ticket</Th>}
-              {columnVisibility.email && (
-                <Th width="12rem">
-                  <div className="flex items-center gap-1.5">
-                    <span>Email</span>
-                    {copyAllEmailsButton}
-                  </div>
-                </Th>
-              )}
+              {columnVisibility.email && <Th width="12rem">Email</Th>}
               {columnVisibility.linkedin && <Th width="8rem">LinkedIn</Th>}
               {columnVisibility.bluesky && <Th width="8rem">Bluesky</Th>}
               {columnVisibility.talks && <Th>Talks</Th>}
