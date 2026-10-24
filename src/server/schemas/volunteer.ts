@@ -1,3 +1,4 @@
+import { VOLUNTEER_EMAIL_CHUNK } from '@/lib/volunteer/chunkedSend'
 import { z } from 'zod'
 import { VolunteerStatus, Occupation, TShirtSize } from '@/lib/volunteer/types'
 import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
@@ -72,6 +73,16 @@ export const SendVolunteerEmailSchema = z.object({
     })
     .nullish()
     .transform((val) => (val === '' ? null : val)),
+})
+
+/** Overall recipient limit; the client sends it in VOLUNTEER_EMAIL_CHUNK calls. */
+export const VOLUNTEER_BULK_EMAIL_MAX = 200
+
+export const SendVolunteerBulkEmailSchema = SendVolunteerEmailSchema.pick({
+  subject: true,
+  message: true,
+}).extend({
+  volunteerIds: z.array(z.string()).min(1).max(VOLUNTEER_EMAIL_CHUNK),
 })
 
 export const DeleteVolunteerSchema = z.object({

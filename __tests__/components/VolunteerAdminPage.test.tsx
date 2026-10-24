@@ -100,6 +100,7 @@ vi.mock('@/lib/trpc/client', () => ({
           }),
         },
         sendEmail: { useMutation: mutation },
+        sendBulkEmail: { useMutation: mutation },
         delete: { useMutation: mutation },
         update: { useMutation: mutation },
       },

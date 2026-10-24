@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { render } from '@react-email/render'
-import { VolunteerApprovalTemplate } from './VolunteerApprovalTemplate'
+import {
+  VolunteerApprovalTemplate,
+  VolunteerMessageTemplate,
+} from './VolunteerApprovalTemplate'
 
 describe('VolunteerApprovalTemplate', () => {
   const baseProps = {
@@ -142,5 +145,23 @@ describe('VolunteerApprovalTemplate', () => {
     expect(html).toContain('https://cloudnativebergen.dev/handbook')
     expect(html).toContain('<strong>')
     expect(html).toContain('volunteer handbook')
+  })
+})
+
+describe('VolunteerMessageTemplate', () => {
+  it('sends the message once greeted, without approval wording', async () => {
+    const html = await render(
+      <VolunteerMessageTemplate
+        volunteerName="Ada"
+        eventName="CND"
+        eventLocation="Bergen"
+        eventDate="Oct 28"
+        eventUrl="https://cnd.example"
+        message="Shifts are posted."
+      />,
+    )
+    expect(html).toContain('Dear <!-- -->Ada')
+    expect(html).toContain('Shifts are posted.')
+    expect(html).not.toMatch(/Congratulations|approved|Welcome to the/)
   })
 })
