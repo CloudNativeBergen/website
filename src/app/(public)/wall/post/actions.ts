@@ -82,8 +82,9 @@ export type MyPostDeletion = { status: MyPostDeletionStatus }
  *
  * Expires the wall, the queue and the device ONLY when something was
  * written (§8): `deleted`, `failed` once the `deleting` mark landed, or a
- * throw (the mark may have committed with its answer lost). Never on
- * `gone`: a phone looping Delete on ids it does not own must not make every
+ * throw after the first write was attempted (it may have committed with its
+ * answer lost). Never on `gone`, nor on a throw before any write (a failed
+ * read): a phone looping Delete on ids it does not own must not make every
  * screen's and the admin's poll refill from Sanity. The wall on any write,
  * not only an approved post's: this read does not say which it was, and a
  * `deleting` post has left the wall either way.
@@ -92,9 +93,15 @@ export async function deleteMyPost(postId: string): Promise<MyPostDeletion> {
   const device = await thisDevice()
   if (!device || !isWallPostId(postId)) return { status: 'gone' }
   const { conferenceId, deviceKey } = device
-  let written = true
+  // From the first write attempted on: a throw then may have written.
+  let written = false
   try {
-    const result = await deleteWallPost({ conferenceId, postId, deviceKey })
+    const result = await deleteWallPost({
+      conferenceId,
+      postId,
+      deviceKey,
+      onWriteAttempt: () => (written = true),
+    })
     written =
       result.status === 'deleted' ||
       (result.status === 'failed' && result.marked)
@@ -110,9 +117,10 @@ export type MyPostMarketing = { status: MyPostMarketingStatus }
  * The Marketing switch (§12) on one of this device's posts: a
  * revision-guarded patch of `marketingConsent`, by `setWallPostMarketing`,
  * which refuses a post that is not this device's before any write. Expires
- * the queue (its Marketing OK mark) and the device once written, never the
- * wall: consent changes nothing the wall shows. Nothing on `gone` or
- * `changed`: nothing was written.
+ * the queue (its Marketing OK mark) and the device once written, or on a
+ * throw after the patch was attempted (it may have committed with its
+ * answer lost), never the wall: consent changes nothing the wall shows.
+ * Nothing on `gone`, `changed` or a throw before any write.
  */
 export async function setMyPostMarketing(
   postId: string,
@@ -123,14 +131,18 @@ export async function setMyPostMarketing(
     return { status: 'gone' }
   }
   const { conferenceId, deviceKey } = device
-  const result = await setWallPostMarketing({
-    conferenceId,
-    postId,
-    deviceKey,
-    consent,
-  })
-  if (result.status === 'done') {
-    updateWallPostTags(conferenceId, deviceKey, { wall: false })
+  let written = false
+  try {
+    const result = await setWallPostMarketing({
+      conferenceId,
+      postId,
+      deviceKey,
+      consent,
+      onWriteAttempt: () => (written = true),
+    })
+    written = result.status === 'done'
+    return result
+  } finally {
+    if (written) updateWallPostTags(conferenceId, deviceKey, { wall: false })
   }
-  return result
 }

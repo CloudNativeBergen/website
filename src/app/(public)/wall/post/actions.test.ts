@@ -8,7 +8,7 @@
  * in-memory store. Tag expiry is `updateTag` (a Server Action), asserted on
  * the mock of `next/cache`.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { VersionedSanityStore } from '../../../../../__tests__/helpers/versionedSanityStore'
 
 const h = vi.hoisted(() => ({
@@ -53,7 +53,7 @@ vi.mock('@/lib/sanity/client', async () => {
 
 import { updateTag } from 'next/cache'
 import { readWallDevice } from '@/lib/photo-wall/device'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import {
   deleteMyPost,
   ensureDevice,
@@ -262,6 +262,18 @@ describe('deleteMyPost', () => {
     expect(expired()).toEqual([])
   })
 
+  it('a read that throws before any write expires nothing: no write was attempted', async () => {
+    await phoneWithPost()
+    const refuse = vi
+      .spyOn(clientReadUncached, 'getDocument')
+      .mockRejectedValueOnce(new Error('503: read refused'))
+    onTestFinished(() => refuse.mockRestore())
+    await expect(deleteMyPost(DEVICE_POST)).rejects.toThrow('503')
+    expect(refuse).toHaveBeenCalledTimes(1)
+    expect(h.store!.commits).toEqual([])
+    expect(expired()).toEqual([])
+  })
+
   it('a mark that committed but whose answer was lost expires the tags: the post left the wall', async () => {
     const key = await phoneWithPost()
     h.store!.afterNextCommit(() => {
@@ -354,6 +366,33 @@ describe('setMyPostMarketing', () => {
       status: 'gone',
     })
     expect(h.store!.docReads).toEqual([])
+    expect(h.store!.commits).toEqual([])
+    expect(expired()).toEqual([])
+  })
+
+  it('a change that committed but whose answer was lost expires the queue and the device, not the wall', async () => {
+    const key = await phoneWithPost()
+    h.store!.afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+    await expect(setMyPostMarketing(DEVICE_POST, false)).rejects.toThrow(
+      'socket hang up',
+    )
+    expect(h.store!.doc(DEVICE_POST)).toMatchObject({ marketingConsent: false })
+    expect(expired().sort()).toEqual([
+      'photo-wall-admin:conf-A',
+      `photo-wall-device:${key}`,
+    ])
+  })
+
+  it('a read that throws before any write expires nothing', async () => {
+    await phoneWithPost()
+    const refuse = vi
+      .spyOn(clientReadUncached, 'getDocument')
+      .mockRejectedValueOnce(new Error('503: read refused'))
+    onTestFinished(() => refuse.mockRestore())
+    await expect(setMyPostMarketing(DEVICE_POST, false)).rejects.toThrow('503')
+    expect(refuse).toHaveBeenCalledTimes(1)
     expect(h.store!.commits).toEqual([])
     expect(expired()).toEqual([])
   })

@@ -120,6 +120,32 @@ describe('useMyPosts', () => {
     expect(screen.getByTestId('status')).toHaveTextContent('approved')
   })
 
+  it('reads slower than the interval still land: each answer newer than the last shown is shown', async () => {
+    let status: MyPost['status'] = 'pending'
+    // Every read takes 20 s, longer than the 15 s interval, so a tick always
+    // finds the previous read still out.
+    const load = vi.fn(
+      () =>
+        new Promise<MyPost[]>((resolve) => {
+          const answer = [post(status)]
+          setTimeout(() => resolve(answer), 20_000)
+        }),
+    )
+    render(<Probe load={load} />)
+    await act(async () => {})
+    await tick(20_000)
+    expect(screen.getByTestId('status')).toHaveTextContent('pending')
+
+    // Read 3 starts at 30 s and lands at 50 s, though reads 4 and 5 (45 s,
+    // 60 s) are out by then.
+    status = 'approved'
+    await tick(10_000)
+    expect(screen.getByTestId('status')).toHaveTextContent('pending')
+    await tick(20_000)
+    expect(load.mock.calls.length).toBeGreaterThanOrEqual(4)
+    expect(screen.getByTestId('status')).toHaveTextContent('approved')
+  })
+
   it('refresh reads at once, and an older read that answers after a newer one is ignored', async () => {
     const answers: ((posts: MyPost[]) => void)[] = []
     const load = vi.fn(

@@ -17,13 +17,19 @@ import { useMyPosts } from './useMyPosts'
 import { WallComposer, type WallPostDraft } from './WallComposer'
 
 /**
- * A post this phone just sent, shown from the JPEG it sent until the
- * server's list carries it (the query view can lag the submit for a moment)
- * or it is deleted. Retired then: a later absence from the list is a
- * deletion (the contributor's, or an organizer's Delete now), never lag.
+ * A post this phone just sent, shown from the JPEG it sent until the first
+ * My posts read that STARTED after the submit answered comes back (or until
+ * it is deleted). That read is the authority on it: the submit expired the
+ * device's tag, its create returned once visible to queries (Sanity's
+ * default `visibility: sync`), and the read is uncached. If the list
+ * carries the post, its card takes over; if not, the post is gone (an
+ * organizer's Delete now in between). A read that started earlier, or one
+ * that failed, proves nothing about it; one that carries it retires it too.
  */
 interface PostedPhoto {
   uploadId: string
+  /** How many My posts reads had started when the submit answered. */
+  readsBefore: number
   /** An object URL of the JPEG that was sent. */
   url: string
   crop: Crop
@@ -123,12 +129,17 @@ export function WallPoster({
   } | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const urls = useRef<string[]>([])
-  // Every list the server answers retires the local cards it carries.
+  const reads = useRef(0)
+  // A list retires each local card it carries, and every card whose submit
+  // answered before this read started (see PostedPhoto).
   const load = useCallback(async () => {
+    const read = ++reads.current
     const list = await getMyPosts()
     setPosted((before) =>
       before.filter(
-        (photo) => !list.some((p) => p._id === postIdOf(photo.uploadId)),
+        (photo) =>
+          read <= photo.readsBefore &&
+          !list.some((p) => p._id === postIdOf(photo.uploadId)),
       ),
     )
     return list
@@ -202,6 +213,7 @@ export function WallPoster({
     setPosted((before) => [
       {
         uploadId,
+        readsBefore: reads.current,
         url,
         crop: draft.crop,
         caption: draft.caption,
@@ -211,15 +223,15 @@ export function WallPoster({
       ...before,
     ])
     setComposing(false)
-    // The submit expired the device's tag: the list now carries the post,
-    // unless the query view still lags it (then the local card stands in).
+    // The submit expired the device's tag: this read is the authority on
+    // the post (see PostedPhoto); the local card stands in until it answers.
     void mine.refresh()
   }
 
   // The server's list, with the posts it has not carried yet on top, as the
   // JPEGs this phone sent (its crop by `object-position`: not Sanity's
-  // square yet). A list that carries one retires it (`load`), so the two
-  // never show together.
+  // square yet), each until the first read after its submit answers
+  // (`load`), so the two never show together.
   const listed = mine.posts ?? []
   const myPosts: MyPostView[] = [
     ...posted.map((photo) => ({
