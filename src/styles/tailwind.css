@@ -324,6 +324,7 @@
     var(--font-ibm-plex-mono), 'IBM Plex Mono', monospace;
   --font-family-atkinson:
     var(--font-atkinson), 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-family-caveat: var(--font-caveat), 'Caveat', cursive;
 
   /* Default font mappings */
   --font-family-sans: var(--font-inter), 'Inter', sans-serif;
@@ -667,6 +668,10 @@
 
 .font-atkinson {
   font-family: var(--font-family-atkinson);
+}
+
+.font-caveat {
+  font-family: var(--font-family-caveat);
 }
 
 /* Hover Utilities */
