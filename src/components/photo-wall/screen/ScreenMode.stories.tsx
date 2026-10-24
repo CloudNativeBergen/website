@@ -236,6 +236,28 @@ export const Empty: Story = {
   },
 }
 
+/**
+ * Posts whose photos all failed to load (a Wi-Fi blip during the first
+ * load): the large QR rather than a blank board, without claiming the wall
+ * is empty, until a later poll retries them.
+ */
+export const PhotosUnavailable: Story = {
+  args: {
+    initial: view(
+      posts(6).map((p) => ({ ...p, src: '/storybook-fixtures/missing.jpg' })),
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByTestId('screen-invitation')).toBeVisible()
+    await expect(
+      await canvas.findByRole('img', { name: /QR code for/ }),
+    ).toBeVisible()
+    await expect(canvas.queryByText('Be the first on the wall')).toBeNull()
+    await expect(cardsOf(canvas)).toHaveLength(0)
+  },
+}
+
 /** After the retention cron closed the wall (§11.1). */
 export const Closed: Story = {
   args: { initial: view([], { closed: true }) },
