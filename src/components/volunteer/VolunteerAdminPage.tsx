@@ -28,6 +28,7 @@ import { CheckBadgeIcon } from '@heroicons/react/24/solid'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { AdminPageHeader } from '@/components/admin'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { VolunteerBulkEmailModal } from './VolunteerBulkEmailModal'
 import { VolunteerEditModal } from '@/components/volunteer/VolunteerEditModal'
 import { VolunteerApprovalModal } from '@/components/volunteer/VolunteerApprovalModal'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
@@ -134,6 +135,7 @@ export default function VolunteerAdminPage() {
   )
   const [ticketFilter, setTicketFilter] = useState<TicketFilterState>('all')
   const [emailModalOpen, setEmailModalOpen] = useState(false)
+  const [bulkEmailOpen, setBulkEmailOpen] = useState(false)
   const [emailModalVolunteer, setEmailModalVolunteer] =
     useState<VolunteerWithConference | null>(null)
   const [pendingApprovalReviewNotes, setPendingApprovalReviewNotes] =
@@ -283,6 +285,8 @@ export default function VolunteerAdminPage() {
       })
     },
   })
+
+  const sendBulkEmail = api.volunteer.admin.sendBulkEmail.useMutation()
 
   const sendEmail = api.volunteer.admin.sendEmail.useMutation({
     onSuccess: async (data, variables) => {
@@ -609,6 +613,13 @@ export default function VolunteerAdminPage() {
         title="Volunteer Management"
         description="Review and coordinate volunteer applications for the conference"
         actionItems={[
+          {
+            label: 'Email Volunteers',
+            onClick: () => setBulkEmailOpen(true),
+            icon: <EnvelopeIcon className="size-4" />,
+            variant: 'secondary',
+            disabled: filteredEmails.length === 0,
+          },
           {
             label: 'Export CSV',
             onClick: exportCsv,
@@ -1497,6 +1508,29 @@ export default function VolunteerAdminPage() {
           onSend={handleSendApprovalEmail}
           onSaveLinks={handleSaveVolunteerLinks}
           isSavingLinks={updateVolunteerLinks.isPending}
+        />
+      )}
+
+      {bulkEmailOpen && (
+        <VolunteerBulkEmailModal
+          isOpen
+          onClose={() => setBulkEmailOpen(false)}
+          volunteers={filteredVolunteers}
+          onSend={(data) =>
+            sendBulkEmail.mutateAsync(data).catch(async (e: unknown) => {
+              // A deleted volunteer fails the whole chunk; the refetch drops it
+              // from the list so a retry goes through.
+              await utils.volunteer.admin.list.invalidate()
+              throw e
+            })
+          }
+          onComplete={(sent) =>
+            notify?.showNotification({
+              type: 'success',
+              title: 'Volunteer email sent',
+              message: `Sent to ${sent} ${sent === 1 ? 'volunteer' : 'volunteers'}`,
+            })
+          }
         />
       )}
 

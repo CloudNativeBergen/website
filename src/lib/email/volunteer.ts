@@ -9,7 +9,10 @@ import { mintVolunteerConfirmToken } from '@/lib/volunteer/token'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { formatConferenceDateLong } from '@/lib/time'
-import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalTemplate'
+import {
+  VolunteerApprovalTemplate,
+  VolunteerMessageTemplate,
+} from '@/components/email/VolunteerApprovalTemplate'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 
 interface ConferenceForEmail {
@@ -51,6 +54,12 @@ export async function sendVolunteerApprovalEmail(
     registrationUrl?: string | null
     slackInviteUrl?: string | null
     confirmUrl?: string | null
+    /**
+     * `message` sends the organizer's text in a neutral template (bulk email,
+     * reminders) instead of the approval copy. `title` is its heading.
+     */
+    template?: 'approval' | 'message'
+    title?: string
   },
 ): Promise<EmailResult<{ emailId: string }>> {
   try {
@@ -136,19 +145,32 @@ export async function sendVolunteerApprovalEmail(
         from: `${conference.organizer || conference.title} <${fromEmail}>`,
         to: volunteer.email!,
         subject,
-        react: VolunteerApprovalTemplate({
-          volunteerName: volunteer.name,
-          eventName,
-          eventLocation,
-          eventDate,
-          eventUrl,
-          message,
-          socialLinks,
-          brandColor: emailBrandColor(conference.theme),
-          registrationUrl,
-          slackInviteUrl,
-          confirmUrl,
-        }) as React.ReactElement,
+        react: (options?.template === 'message'
+          ? VolunteerMessageTemplate({
+              volunteerName: volunteer.name,
+              eventName,
+              eventLocation,
+              eventDate,
+              eventUrl,
+              message,
+              socialLinks,
+              brandColor: emailBrandColor(conference.theme),
+              title: options.title,
+              registrationUrl,
+            })
+          : VolunteerApprovalTemplate({
+              volunteerName: volunteer.name,
+              eventName,
+              eventLocation,
+              eventDate,
+              eventUrl,
+              message,
+              socialLinks,
+              brandColor: emailBrandColor(conference.theme),
+              registrationUrl,
+              slackInviteUrl,
+              confirmUrl,
+            })) as React.ReactElement,
       })
 
       if (response.error) {

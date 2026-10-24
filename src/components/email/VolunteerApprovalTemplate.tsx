@@ -26,6 +26,88 @@ function tryParsePortableText(message: string): PortableTextBlock[] | null {
   }
 }
 
+/** The organizer's message: portable text JSON or plain paragraphs. */
+function MessageBody({
+  message,
+  brandColor,
+}: {
+  message: string
+  brandColor?: string
+}) {
+  const blocks = tryParsePortableText(message)
+  if (blocks) {
+    return (
+      <div
+        dangerouslySetInnerHTML={{
+          __html: portableTextToHTML(blocks, brandColor),
+        }}
+      />
+    )
+  }
+  return (
+    <>
+      {message.split(/\n\n+/).map((paragraph, idx) => (
+        <EmailText key={idx}>{paragraph}</EmailText>
+      ))}
+    </>
+  )
+}
+
+export interface VolunteerMessageTemplateProps {
+  volunteerName: string
+  eventName: string
+  eventLocation: string
+  eventDate: string
+  eventUrl: string
+  message: string
+  socialLinks?: string[]
+  brandColor?: string
+  /** Heading; defaults to the event name. */
+  title?: string
+  /** Adds a "Register your volunteer ticket" button. */
+  registrationUrl?: string
+}
+
+/**
+ * A plain organizer message to a volunteer (bulk email, reminders): the
+ * greeting, the message and nothing that claims an approval happened.
+ */
+export const VolunteerMessageTemplate: React.FC<
+  VolunteerMessageTemplateProps
+> = ({
+  volunteerName,
+  eventName,
+  eventLocation,
+  eventDate,
+  eventUrl,
+  message,
+  socialLinks = [],
+  brandColor,
+  title,
+  registrationUrl,
+}) => (
+  <BaseEmailTemplate
+    title={title || eventName}
+    titleTone="brand"
+    speakerName={volunteerName}
+    eventName={eventName}
+    eventLocation={eventLocation}
+    eventDate={eventDate}
+    eventUrl={eventUrl}
+    socialLinks={socialLinks}
+    brandColor={brandColor}
+  >
+    <MessageBody message={message} brandColor={brandColor} />
+    {registrationUrl && (
+      <div style={{ marginTop: '16px' }}>
+        <EmailButton href={registrationUrl}>
+          Register Your Volunteer Ticket
+        </EmailButton>
+      </div>
+    )}
+  </BaseEmailTemplate>
+)
+
 export interface VolunteerApprovalTemplateProps {
   volunteerName: string
   eventName: string
@@ -69,10 +151,6 @@ export const VolunteerApprovalTemplate: React.FC<
   confirmUrl,
 }) => {
   const brand = resolveEmailBrandPalette(brandColor)
-  const portableBlocks = message ? tryParsePortableText(message) : null
-  const richHtml = portableBlocks
-    ? portableTextToHTML(portableBlocks, brandColor)
-    : ''
 
   return (
     <BaseEmailTemplate
@@ -96,15 +174,7 @@ export const VolunteerApprovalTemplate: React.FC<
           borderColor="#CBD5E1"
           borderLeftColor={brandedOr(brand, '#1D4ED8')}
         >
-          {portableBlocks ? (
-            <div dangerouslySetInnerHTML={{ __html: richHtml }} />
-          ) : (
-            message
-              .split(/\n\n+/)
-              .map((paragraph, idx) => (
-                <EmailText key={idx}>{paragraph}</EmailText>
-              ))
-          )}
+          <MessageBody message={message} brandColor={brandColor} />
         </EmailSection>
       )}
 
