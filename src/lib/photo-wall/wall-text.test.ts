@@ -23,21 +23,30 @@ describe('normalizeWallText (Photo Wall spec §6.4)', () => {
   })
 
   it('drops zero-width, tag and soft-hyphen characters but keeps the joiners', () => {
-    expect(normalizeWallText('a​b­c⁠d\u{e0041}e')).toBe('abcde')
-    const family = '👨‍👩‍👧'
+    expect(normalizeWallText('a\u{200b}b\u{ad}c\u{2060}d\u{e0041}e')).toBe(
+      'abcde',
+    )
+    const family = '👨\u{200d}👩\u{200d}👧'
     expect(normalizeWallText(family)).toBe(family)
-    expect(isDroppedPoint('‌')).toBe(false)
-    expect(isDroppedPoint('‍')).toBe(false)
+    expect(isDroppedPoint('\u{200c}')).toBe(false)
+    expect(isDroppedPoint('\u{200d}')).toBe(false)
   })
 
   it('makes a name with nothing visible absent', () => {
-    for (const blank of ['​', 'ㅤㅤ', '⠀', '\u{e0041}\u{e0042}', '‍', ' \n ']) {
+    for (const blank of [
+      '\u{200b}',
+      '\u{3164}\u{3164}',
+      '\u{2800}',
+      '\u{e0041}\u{e0042}',
+      '\u{200d}',
+      ' \n ',
+    ]) {
       expect(normalizeWallText(blank)).toBe('')
     }
   })
 
   it('composes NFC after dropping, so a mark between a letter and its accent leaves NFC text', () => {
-    const stored = normalizeWallText('Cafe‎́')
+    const stored = normalizeWallText('Cafe\u{200e}\u{301}')
     expect(stored).toBe('Café')
     expect(stored.normalize('NFC')).toBe(stored)
   })

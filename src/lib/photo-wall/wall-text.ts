@@ -19,7 +19,8 @@
  * the next step folds into a space, and the joiners U+200C and U+200D, which
  * emoji sequences and Persian and Indic scripts need.
  */
-const DROPPED = /(?![\t\n\v\f\r‌‍])[\p{Cc}\p{Cf}ᅟᅠㅤﾠ⠀]/u
+const DROPPED =
+  /(?![\t\n\v\f\r\u{200c}\u{200d}])[\p{Cc}\p{Cf}\u{115f}\u{1160}\u{3164}\u{ffa0}\u{2800}]/u
 
 /** Something a reader can see: a letter, digit, punctuation or symbol. */
 const VISIBLE = /[\p{L}\p{N}\p{P}\p{S}]/u
