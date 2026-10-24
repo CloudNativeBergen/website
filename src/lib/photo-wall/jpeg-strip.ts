@@ -69,7 +69,9 @@ const dropped = (marker: number) =>
  * (APP0, the tables, SOF, DRI, the scan and EOI) is copied unchanged, so the
  * image decodes identically. Bytes that are not a JPEG come back as they are.
  */
-export function stripJpegMetadata(bytes: Uint8Array): Uint8Array {
+export function stripJpegMetadata(
+  bytes: Uint8Array<ArrayBuffer>,
+): Uint8Array<ArrayBuffer> {
   const segments = listJpegSegments(bytes)
   const toDrop = segments.filter((s) => dropped(s.marker))
   if (toDrop.length === 0) return bytes

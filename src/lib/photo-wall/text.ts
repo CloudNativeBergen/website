@@ -11,9 +11,7 @@ export const NAME_MAX = 40
 
 /** Code points of the NFC form, the unit of both limits. */
 export function codePointCount(text: string): number {
-  let n = 0
-  for (const _ of text.normalize('NFC')) n += 1
-  return n
+  return Array.from(text.normalize('NFC')).length
 }
 
 /** The NFC text cut to at most `max` code points. */
