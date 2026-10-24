@@ -147,6 +147,41 @@ const COMMENT_RELAY_ACTIONS: readonly Action[] = [
   Action.remind,
 ]
 
+type TicketCancellation =
+  ProposalStatusChangeEvent['metadata']['ticketCancellation']
+
+/**
+ * The speakers whose ticket can be cancelled when this talk goes: anyone with
+ * ANOTHER confirmed talk at the same conference still needs theirs. When the
+ * lookup fails every speaker is returned, so organizers are asked to check by
+ * hand rather than silently told nothing.
+ */
+async function speakersWithoutOtherConfirmedTalk(
+  speakers: Speaker[],
+  proposalId: string,
+  conferenceId: string | undefined,
+): Promise<NonNullable<TicketCancellation>> {
+  const toEntry = (s: Speaker) => ({ name: s.name, email: s.email })
+  const all = (speakers ?? []).filter((s) => s?._id)
+  const unfiltered = { speakers: all.map(toEntry), unfiltered: true }
+  if (!conferenceId) return unfiltered
+  const { proposals, proposalsError } = await getProposals({
+    conferenceId,
+    statuses: [Status.confirmed],
+    returnAll: true,
+  })
+  if (proposalsError) return unfiltered
+  const busy = new Set(
+    proposals
+      .filter((p) => p._id !== proposalId)
+      .flatMap((p) => extractSpeakerIds(p.speakers)),
+  )
+  return {
+    speakers: all.filter((s) => !busy.has(s._id)).map(toEntry),
+    unfiltered: false,
+  }
+}
+
 /**
  * REFERENCE INJECTION, `talk.topics[]` (#730/#731).
  *
@@ -1508,7 +1543,15 @@ export const proposalRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const { id, action, notify, forceEmail, comment, reason } = input
+        const {
+          id,
+          action,
+          notify,
+          forceEmail,
+          comment,
+          reason,
+          revokeTicket,
+        } = input
 
         // Get conference context. The confirm action publishes an event whose
         // speaker-ticket handler mails the speaker invite link, so this read
@@ -1727,11 +1770,25 @@ export const proposalRouter = router({
 
         // An organizer withdrawing their OWN talk is a speaker self-withdraw:
         // no "the organizers withdrew your talk" email or message to
-        // themselves.
+        // themselves, no ticket request.
         const isSelfWithdraw =
           action === Action.withdraw &&
           extractSpeakerIds(proposal.speakers).includes(ctx.speaker._id)
         const actsAsOrganizer = isOrganizerForProposal && !isSelfWithdraw
+
+        // Tickets are only issued on confirm, so only a confirmed talk can
+        // have one to cancel.
+        const ticketCancellation =
+          revokeTicket &&
+          actsAsOrganizer &&
+          proposal.status === Status.confirmed &&
+          (action === Action.cancel || action === Action.withdraw)
+            ? await speakersWithoutOtherConfirmedTalk(
+                proposal.speakers as Speaker[],
+                id,
+                talkConferenceId,
+              )
+            : undefined
 
         // Messaging M4/S2: a decision comment lands in the proposal's message
         // thread, so every speaker on the talk keeps it with the rest of the
@@ -1835,6 +1892,7 @@ export const proposalRouter = router({
             comment,
             reason: action === Action.withdraw ? reason : undefined,
             postedToThread,
+            ticketCancellation,
             domain,
           },
         }

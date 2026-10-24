@@ -722,6 +722,128 @@ describe('proposal router', () => {
       })
     })
 
+    describe('ticket cancellation request', () => {
+      const confirmed = { ...mockProposal, status: Status.confirmed }
+      const published = () =>
+        vi.mocked(eventBus.publish).mock.calls.at(-1)![0] as any
+
+      beforeEach(() => {
+        vi.mocked(eventBus.publish).mockClear()
+        vi.mocked(getProposals).mockClear()
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: confirmed as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...confirmed, status: Status.canceled } as any,
+          err: null,
+        })
+        vi.mocked(getProposals).mockResolvedValue({
+          proposals: [],
+          proposalsError: null,
+        })
+      })
+
+      it('asks for no ticket cancellation by default', async () => {
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+        })
+        expect(published().metadata.ticketCancellation).toBeUndefined()
+        expect(getProposals).not.toHaveBeenCalled()
+      })
+
+      it('lists every speaker for manual ticket cancellation when asked', async () => {
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation).toEqual({
+          speakers: [
+            { name: regularSpeaker.name, email: 'speaker@example.com' },
+          ],
+          unfiltered: false,
+        })
+      })
+
+      it('skips a speaker who has another confirmed talk', async () => {
+        vi.mocked(getProposals).mockResolvedValue({
+          proposals: [
+            { _id: 'other-talk', speakers: [{ _id: regularSpeaker._id }] },
+          ] as any,
+          proposalsError: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation).toEqual({
+          speakers: [],
+          unfiltered: false,
+        })
+      })
+
+      it('marks the list unfiltered when the lookup fails', async () => {
+        vi.mocked(getProposals).mockResolvedValue({
+          proposals: [],
+          proposalsError: new Error('boom'),
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation.unfiltered).toBe(true)
+      })
+
+      it('ignores revokeTicket for a talk that was only accepted (no ticket yet)', async () => {
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: { ...mockProposal, status: Status.accepted } as any,
+          proposalError: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation).toBeUndefined()
+      })
+
+      it('ignores revokeTicket for reject', async () => {
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: mockProposal as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...mockProposal, status: Status.rejected } as any,
+          err: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.reject,
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation).toBeUndefined()
+      })
+
+      it('ignores revokeTicket for a speaker withdrawing', async () => {
+        vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...confirmed, status: Status.withdrawn } as any,
+          err: null,
+        })
+        await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Ill',
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation).toBeUndefined()
+      })
+    })
+
     it('should reject unauthenticated requests', async () => {
       const caller = createAnonymousCaller()
       await expect(

@@ -28,6 +28,7 @@ export async function handleSlackNotification(
     event.conference,
     undefined,
     event.metadata.reason,
+    event.metadata.ticketCancellation,
   )
 
   console.log(`Slack notification sent for proposal ${event.proposal._id}`)

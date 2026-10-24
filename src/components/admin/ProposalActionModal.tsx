@@ -116,12 +116,16 @@ export function ProposalActionModal({
   const [notify, setNotify] = useState<boolean>(true)
   const [comment, setComment] = useState<string>('')
   const [forceEmail, setForceEmail] = useState<boolean>(false)
+  const [revokeTicket, setRevokeTicket] = useState<boolean>(false)
 
   const isWithdraw = action === Action.withdraw
   const isCancel = action === Action.cancel
   // Organizer cancel/withdraw: the comment goes to the speakers as a thread
-  // message; the formal email is opt-in.
+  // message; the formal email and the ticket request are opt-in.
   const isOrganizerRemoval = adminUI && (isCancel || isWithdraw)
+  // Speaker tickets are only issued on confirm.
+  const offersTicketCancel =
+    isOrganizerRemoval && proposal.status === Status.confirmed
   // "Cancel" alone would read like the dismiss button beside it.
   const actionLabel = isCancel ? 'Cancel talk' : capitalizeFirstLetter(action)
   // A withdrawal must always record a mandatory, non-empty reason (#212).
@@ -155,6 +159,7 @@ export function ProposalActionModal({
       forceEmail: isOrganizerRemoval ? forceEmail : undefined,
       comment,
       reason: isWithdraw ? comment.trim() : undefined,
+      revokeTicket: offersTicketCancel ? revokeTicket : undefined,
     })
   }
 
@@ -264,6 +269,26 @@ export function ProposalActionModal({
                       Notify the speaker via email
                     </span>
                   </label>
+                </div>
+              )}
+              {offersTicketCancel && (
+                <div className="mt-4">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={revokeTicket}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
+                      onChange={() => setRevokeTicket(!revokeTicket)}
+                    />
+                    <span className="ml-2 text-sm/6 text-gray-700 dark:text-gray-300">
+                      Cancel the speaker&apos;s ticket
+                    </span>
+                  </label>
+                  <HelpText>
+                    Organizers get a Slack message to cancel the ticket by hand
+                    in the ticket provider. Speakers with another confirmed talk
+                    at this conference keep their ticket.
+                  </HelpText>
                 </div>
               )}
               <div className="mt-4">
