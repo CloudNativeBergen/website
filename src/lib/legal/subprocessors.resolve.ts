@@ -68,7 +68,6 @@ async function resolveProcessingFacts(
       tenantKnown: false,
       organizationReadFailed: false,
       ticketing: null,
-      analyticsCode: null,
       analyticsPosthogToken: null,
       slackToken: null,
       workshops: null,
@@ -152,7 +151,6 @@ async function resolveProcessingFacts(
         conference.ticketingProvider === 'tito',
       registrationLink: conference.registrationLink,
     },
-    analyticsCode: conference.analyticsPirschCode,
     // The SAME cached read as the probe above; `null` (no org) is a real "no
     // token", and a rejected read is already `organizationReadFailed`.
     analyticsPosthogToken:

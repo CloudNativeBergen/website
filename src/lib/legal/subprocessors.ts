@@ -47,8 +47,6 @@
  * signal GATHERING lives in `./subprocessors.resolve` (server-only).
  */
 
-import { resolvePosthogToken } from '@/lib/analytics'
-
 /** Every processor this platform can place in a tenant's processing chain. */
 export type SubprocessorId =
   | 'sanity'
@@ -56,7 +54,6 @@ export type SubprocessorId =
   | 'resend'
   | 'checkin'
   | 'tito'
-  | 'pirsch'
   | 'posthog'
   | 'slack'
   | 'oauth-providers'
@@ -156,14 +153,6 @@ export const SUBPROCESSOR_CATALOGUE: Record<SubprocessorId, CatalogueEntry> = {
     group: 'infrastructure',
     chosenBy: 'organizer',
   },
-  pirsch: {
-    id: 'pirsch',
-    name: 'Pirsch Analytics',
-    purpose:
-      'Privacy-focused, cookie-less website analytics (aggregated, no advertising profiles)',
-    group: 'infrastructure',
-    chosenBy: 'organizer',
-  },
   // EU Cloud, hosted in Frankfurt: processing stays inside the EU/EEA, so no
   // `location` — this row must NOT drive the international-transfer section.
   posthog: {
@@ -221,7 +210,6 @@ const DISCLOSURE_ORDER: readonly SubprocessorId[] = [
   'resend',
   'checkin',
   'tito',
-  'pirsch',
   'posthog',
   'slack',
   'buffer',
@@ -247,15 +235,6 @@ export interface TenantProcessingFacts {
   organizationReadFailed: boolean
   /** The conference's ticketing selection + binding, or `null` when unknown. */
   ticketing: TicketingFacts | null
-  /**
-   * The RAW `conference.analyticsPirschCode`. Deliberately raw and not passed
-   * through `resolvePirschCode`: a MALFORMED code serves no script, but
-   * validating here would DROP the disclosure on a typo, which is the
-   * under-report direction. A non-empty value discloses Pirsch — unless the
-   * organization's PostHog token is KNOWN to be set, which is the one case a
-   * successful read proves the Pirsch script is not served (hard cutover).
-   */
-  analyticsCode?: string | null
   /**
    * The RAW `organization.analyticsPosthogToken`, equally unvalidated. A
    * non-empty value discloses PostHog. `undefined`/`null` with the org read
@@ -375,25 +354,6 @@ export function subprocessorSignals(
   const posthog: Signal = orgUnknowable
     ? 'unknown'
     : fromNullableBoolean(Boolean(facts.analyticsPosthogToken?.trim()))
-  // Pirsch is a CONFERENCE signal, gated by the cutover: a stored code serves
-  // the script only while the organization has no USABLE token. This is the
-  // one place validation is right: the layout serves Pirsch when the token is
-  // malformed, so suppressing Pirsch on a raw non-empty value would hide the
-  // processor actually running (the under-report direction). A malformed
-  // token still discloses PostHog above — over-report is allowed. With the
-  // token unknowable, a stored code cannot be resolved either way → unknown.
-  const posthogServes = Boolean(
-    resolvePosthogToken(facts.analyticsPosthogToken),
-  )
-  const pirsch: Signal = !facts.tenantKnown
-    ? 'unknown'
-    : !facts.analyticsCode?.trim()
-      ? 'no'
-      : orgUnknowable
-        ? 'unknown'
-        : posthogServes
-          ? 'no'
-          : 'yes'
 
   return {
     // Shared platform infrastructure. Every tenant's data passes through these
@@ -410,7 +370,6 @@ export function subprocessorSignals(
     tito: facts.tenantKnown
       ? ticketingSignal('tito', facts.ticketing)
       : 'unknown',
-    pirsch,
     posthog,
     slack: orgSignal(facts.slackToken),
     workos: orgSignal(facts.workshops),

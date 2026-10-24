@@ -86,10 +86,11 @@ const config: NextConfig = {
     return [
       ...posthogRewrites(),
       // A Feedback Code typed with caps lock (`/F/K7M2QX`) would otherwise hit
-      // the not-found page, whose links let Pirsch report the code on Back
-      // (speaker feedback spec §7.1). Next matches case-insensitively, so this
-      // also matches `/f/<code>` and rewrites it to itself. A REWRITE, never a
-      // redirect: a redirect matching its own destination would loop.
+      // the not-found page, whose client links could expose the code to a
+      // future history-tracking script on Back (speaker feedback spec §7.1).
+      // Next matches case-insensitively, so this also matches `/f/<code>` and
+      // rewrites it to itself. A REWRITE, never a redirect: a redirect
+      // matching its own destination would loop.
       { source: '/F/:code', destination: '/f/:code' },
       // Extra segments after a code (`/f/k7m2qx/oops`) would also reach the
       // not-found page; they get the session's page instead.

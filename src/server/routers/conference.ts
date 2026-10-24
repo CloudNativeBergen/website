@@ -59,7 +59,6 @@ import {
   UpdateVolunteerLinksSchema,
   UpdateTicketingIdsSchema,
   UpdatePublicFreeTicketsSchema,
-  UpdateAnalyticsSchema,
   UpdateLocalInfoSchema,
   UpdateCfpGoalsSchema,
   UpdateSocialLinksSchema,
@@ -513,18 +512,6 @@ export const conferenceRouter = router({
           cause: error,
         })
       }
-    }),
-
-  /**
-   * Set or clear this conference's OWN analytics identification code. Clearing
-   * it (explicit `null`) is a supported end state: no code means no analytics
-   * script is served on the public site at all.
-   */
-  updateAnalytics: adminProcedure
-    .input(UpdateAnalyticsSchema)
-    .mutation(async ({ input }) => {
-      const conferenceId = await resolveConferenceId()
-      return applyConferencePatch(conferenceId, input)
     }),
 
   /**

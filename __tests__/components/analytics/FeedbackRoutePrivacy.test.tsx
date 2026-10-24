@@ -3,7 +3,7 @@
  *
  * The root layout renders analytics on every route and cannot see the path,
  * so the attendee feedback page's exclusions live in two client components
- * (speaker feedback spec §7.1): a gate that hides Pirsch and `InstallPrompt`
+ * (speaker feedback spec §7.1): a gate that hides `InstallPrompt`
  * on `/f/**`, and the Vercel wrapper whose `beforeSend` redacts the code.
  */
 import { cleanup, render, screen } from '@testing-library/react'
@@ -52,8 +52,8 @@ describe('HiddenOnFeedbackPage', () => {
     for (const path of ['/F/K7M2QX', '/f/k7m2qx']) {
       const Gate = await gate()
       h.pathname = path
-      render(<Gate>pirsch and install prompt</Gate>)
-      expect(screen.queryByText('pirsch and install prompt')).toBeNull()
+      render(<Gate>install prompt</Gate>)
+      expect(screen.queryByText('install prompt')).toBeNull()
       cleanup()
     }
   })
@@ -69,14 +69,14 @@ describe('HiddenOnFeedbackPage', () => {
   })
 
   it('stays shut after a client-side navigation away from the attendee page', async () => {
-    // A push-notification tap can `router.push` out of `/f/<code>`. Pirsch
-    // mounted on the next page would report the Back navigation to the code.
+    // A push-notification tap can `router.push` out of `/f/<code>`. The
+    // install prompt must stay hidden for the rest of that document.
     const Gate = await gate()
     h.pathname = '/f/k7m2qx'
-    const { rerender } = render(<Gate>pirsch</Gate>)
+    const { rerender } = render(<Gate>install prompt</Gate>)
     h.pathname = '/notifications'
-    rerender(<Gate>pirsch</Gate>)
-    expect(screen.queryByText('pirsch')).toBeNull()
+    rerender(<Gate>install prompt</Gate>)
+    expect(screen.queryByText('install prompt')).toBeNull()
   })
 })
 
