@@ -391,24 +391,15 @@ function WorkshopsClientPageFor({
           statsData
             ? [
                 {
-                  value: statsData.data.totals.totalWorkshops,
-                  label: 'Total workshops',
-                  color: 'blue' as const,
-                },
-                {
                   value: statsData.data.totals.uniqueParticipants,
                   label: 'Unique participants',
                   color: 'purple' as const,
                 },
                 {
-                  value: statsData.data.totals.totalSignups,
-                  label: 'Total sign-ups',
-                  color: 'slate' as const,
-                },
-                {
                   value: statsData.data.totals.totalConfirmed,
                   label: 'Confirmed',
                   color: 'green' as const,
+                  subtitle: `of ${statsData.data.totals.totalSignups} sign-ups`,
                 },
                 {
                   value: statsData.data.totals.totalWaitlist,

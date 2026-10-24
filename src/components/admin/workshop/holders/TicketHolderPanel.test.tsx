@@ -83,7 +83,7 @@ const valueOf = (label: string) =>
 describe('TicketHolderPanel', () => {
   it('shows each number on its value', () => {
     renderPanel(READY)
-    expect(valueOf('Holders')).toBe('41')
+    expect(screen.getByText(/of 41 holders/)).toBeTruthy()
     expect(valueOf('Signed up')).toBe('28')
     expect(valueOf('Not signed up')).toBe('13')
     expect(valueOf('Flagged')).toBe('1')
@@ -91,31 +91,31 @@ describe('TicketHolderPanel', () => {
 
   it('counts the workshop tickets beside the people holding them', () => {
     renderPanel(READY)
-    expect(screen.getByText('44 workshop tickets')).toBeTruthy()
+    expect(screen.getByText(/44 workshop tickets$/)).toBeTruthy()
     cleanup()
     renderPanel(ready({ holders: 1, tickets: 1, notSignedUp: 1 }))
-    expect(screen.getByText('1 workshop ticket')).toBeTruthy()
+    expect(screen.getByText(/ 1 workshop ticket$/)).toBeTruthy()
   })
 
   it('gives the share of holders with a sign-up, a waitlist place included', () => {
     // 28 of 41 have a sign-up: 68.3%.
     renderPanel(READY)
-    expect(screen.getByText('68% of holders')).toBeTruthy()
+    expect(screen.getByText(/^68% of /)).toBeTruthy()
   })
 
   it('says 100% only when every holder has signed up', () => {
     // 299 of 300 is 99.7%: rounding to nearest would claim everybody.
     renderPanel(ready({ holders: 300, notSignedUp: 1 }))
-    expect(screen.getByText('99% of holders')).toBeTruthy()
+    expect(screen.getByText(/^99% of /)).toBeTruthy()
     cleanup()
     renderPanel(ready({ holders: 300, notSignedUp: 0 }))
-    expect(screen.getByText('100% of holders')).toBeTruthy()
+    expect(screen.getByText(/^100% of /)).toBeTruthy()
   })
 
   it('rounds an exact share down to itself, not a point below', () => {
     // 29 of 50 is exactly 58%; 29 / 50 * 100 in floats is 57.99999999999999.
     renderPanel(ready({ holders: 50, notSignedUp: 21 }))
-    expect(screen.getByText('58% of holders')).toBeTruthy()
+    expect(screen.getByText(/^58% of /)).toBeTruthy()
   })
 
   it('with no holders, gives no share rather than dividing by zero', () => {
@@ -136,7 +136,7 @@ describe('TicketHolderPanel', () => {
     const panel = screen.getByRole('region', { name: 'Ticket holders' })
     expect(panel.textContent).toMatch(/unavailable/i)
     expect(panel.textContent).not.toMatch(/\d/)
-    expect(screen.queryByText('Holders', { selector: 'span' })).toBeNull()
+    expect(screen.queryByText('Signed up', { selector: 'span' })).toBeNull()
     fireEvent.click(within(panel).getByRole('button', { name: 'Try again' }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })

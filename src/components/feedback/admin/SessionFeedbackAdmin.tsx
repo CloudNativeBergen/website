@@ -329,12 +329,16 @@ export function SessionFeedbackAdmin({
             label: 'Loved it',
             color: 'green',
           },
-          { value: overview.comments, label: 'Comments', color: 'slate' },
-          {
-            value: overview.flagged,
-            label: 'Flagged',
-            color: overview.flagged > 0 ? 'red' : 'slate',
-          },
+          // No filter: the flagged box below already lists every flag.
+          ...(overview.flagged > 0
+            ? [
+                {
+                  value: overview.flagged,
+                  label: 'Flagged',
+                  color: 'red' as const,
+                },
+              ]
+            : []),
         ]}
       />
 

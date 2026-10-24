@@ -627,7 +627,9 @@ describe('the ticket holders (#1333)', () => {
       </Providers>
     )
     const { rerender } = render(page('conf-1'))
-    expect((await tile('Holders')).nextElementSibling).toHaveTextContent('5')
+    expect(
+      await within(await panel()).findByText(/of 5 holders/),
+    ).toBeInTheDocument()
 
     server.conferenceId = 'conf-2'
     server.signups = [server.signups[0]]
@@ -635,7 +637,9 @@ describe('the ticket holders (#1333)', () => {
 
     expect(screen.queryByText('5', { selector: 'span' })).toBeNull()
     await waitFor(async () =>
-      expect((await tile('Holders')).nextElementSibling).toHaveTextContent('4'),
+      expect(
+        within(await panel()).getByText(/of 4 holders/),
+      ).toBeInTheDocument(),
     )
     expect(server.holderReads).toBe(2)
   })
@@ -654,7 +658,9 @@ describe('the ticket holders (#1333)', () => {
     )
     // One client for both visits, as in the app.
     const { rerender } = render(<Providers>{page('conf-1')}</Providers>)
-    expect((await tile('Holders')).nextElementSibling).toHaveTextContent('5')
+    expect(
+      await within(await panel()).findByText(/of 5 holders/),
+    ).toBeInTheDocument()
     rerender(<Providers>{null}</Providers>)
 
     server.conferenceId = 'conf-2'
@@ -662,7 +668,9 @@ describe('the ticket holders (#1333)', () => {
     rerender(<Providers>{page('conf-2')}</Providers>)
 
     await waitFor(async () =>
-      expect((await tile('Holders')).nextElementSibling).toHaveTextContent('4'),
+      expect(
+        within(await panel()).getByText(/of 4 holders/),
+      ).toBeInTheDocument(),
     )
     expect(server.holderReads).toBe(2)
   })
@@ -692,7 +700,9 @@ describe('the ticket holders (#1333)', () => {
     ).toHaveTextContent('Reading the ticket holders')
 
     providerAnswers()
-    expect((await tile('Holders')).nextElementSibling).toHaveTextContent('5')
+    expect(
+      await within(await panel()).findByText(/of 5 holders/),
+    ).toBeInTheDocument()
   })
 
   it.each([
@@ -708,7 +718,7 @@ describe('the ticket holders (#1333)', () => {
       await within(region).findByText(/^Unavailable:/)
       expect(region.textContent).not.toMatch(/\d/)
       // The sign-up totals from the summary are on the page all the same.
-      expect(await screen.findByText('Total sign-ups')).toBeInTheDocument()
+      expect(await screen.findByText(/^of .+ sign-ups$/)).toBeInTheDocument()
     },
   )
 })
