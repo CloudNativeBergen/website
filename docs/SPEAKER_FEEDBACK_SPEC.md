@@ -522,7 +522,8 @@ A second way into `/f/<code>` for attendees who miss or skip the room's QR.
 
 - **Where:** a "Give feedback" link on `TalkCard`, so every `/program` view
   (list, schedule, grid, agenda); icon-only with an accessible name on compact
-  cards. Not on the front page. A plain `<a>` in the same tab (§7.1 analytics).
+  cards. Not on the front page. A plain `<a>`, never `next/link` (§7.1
+  analytics).
 - **When:** on every confirmed talk that holds a Feedback Code, at all times;
   the attendee page explains Not yet open and Closed. No link, and no
   placeholder, for a talk without a code: organizers bulk-mint (§5) before the
@@ -534,6 +535,16 @@ A second way into `/f/<code>` for attendees who miss or skip the room's QR.
   is not confirmed, not public (§7.2), not this conference's, or holds no code
   lands on the generic Unknown page (`/f/unknown`, not a code shape), the same
   for every refusal. A failed read is a 503, never Unknown.
+- **The sheet:** a plain click opens a bottom sheet (`FeedbackSheet`) that
+  FRAMES `/program/<talkId>/feedback?embed=1`; the route keeps `embed=1` on
+  its redirect, and the attendee page then renders without its logo, its
+  full-viewport height or "Back to the programme" (which would load the
+  programme inside the sheet). A frame, not a rendering of the page: the code
+  stays out of the programme's document, URL and history, and the page keeps
+  its own cookie path, bound actions, `maxDuration` and analytics exclusions.
+  The frame is mounted per open, so Back never steps it. Any other click
+  (new tab, new window, modifier keys) and a page without JavaScript follow
+  the link as before.
 - **What this changes:** a Feedback Code is no longer for speakers only. Anyone
   can reach a public talk's code from the programme, from anywhere. The guards
   are the ones §7.4 already names (one answer per device, the window, organizer
