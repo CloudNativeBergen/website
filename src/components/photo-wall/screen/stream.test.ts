@@ -410,3 +410,41 @@ describe('round-1 adversarial findings', () => {
     expect(pendingStreamImages(s)).toHaveLength(PRELOAD_AT_ONCE)
   })
 })
+
+describe('round-2 adversarial findings', () => {
+  it.each(['mosaic', 'spotlight'] as const)(
+    '%s: a removed featured post hands over to the next, not the newest',
+    (look) => {
+      let s = started(look, 4)
+      s = run(s, T0, T0 + 2 * SWAP_EVERY_MS)
+      expect(featuredId(s)).toBe('wallPost-2')
+      s = poll(
+        s,
+        posts(4).filter((p) => p._id !== 'wallPost-2'),
+        T0 + 2 * SWAP_EVERY_MS + 1_000,
+      )
+      expect(featuredId(s)).toBe('wallPost-1')
+    },
+  )
+
+  it('Spotlight: Up next always lists the post that is big next', () => {
+    // Two posts: A loaded, then B arrives and waits; when B is big, A is next.
+    let s = started('spotlight', 1)
+    s = loadAll(poll(s, posts(2), T0 + 1_000), T0 + 1_000)
+    s = run(s, T0 + 1_000, T0 + SWAP_EVERY_MS)
+    expect(featuredId(s)).toBe('wallPost-2')
+    expect(ids(upNext(s))).toEqual(['wallPost-1'])
+    // And in general: the head of Up next is what the next turn shows.
+    let t = started('spotlight', 20)
+    let now = T0
+    for (let turn = 0; turn < 30; turn++) {
+      if (turn % 4 === 1) {
+        t = loadAll(poll(t, posts(21 + turn), now), now)
+      }
+      const head = upNext(t)[0]?._id
+      t = run(t, now, now + SWAP_EVERY_MS)
+      now += SWAP_EVERY_MS
+      expect(featuredId(t)).toBe(head)
+    }
+  })
+})

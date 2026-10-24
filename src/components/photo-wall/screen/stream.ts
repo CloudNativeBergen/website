@@ -185,15 +185,48 @@ function rotation(state: StreamState, shown: ScreenPost[]): ScreenPost[] {
   )
 }
 
-/** The post after `key` in the rotation; its first when `key` is not in it. */
+/**
+ * Where the post with `key` sits in the walk's order (newest approval
+ * first, then id), also once it has left the list: a key is
+ * `id@approvedAt`, so a removed post still says where it was.
+ */
+function comesAfter(post: ScreenPost, key: string): boolean {
+  const at = key.lastIndexOf('@')
+  const id = key.slice(0, at)
+  const approvedAt = key.slice(at + 1)
+  return (
+    post.approvedAt < approvedAt ||
+    (post.approvedAt === approvedAt && post._id > id)
+  )
+}
+
+/**
+ * The post after `key` in the walk, wrapping round; after a post that has
+ * left the walk (removed, its photo failed), the one that followed it.
+ */
 function nextInRotation(
-  state: StreamState,
-  shown: ScreenPost[],
+  walk: ScreenPost[],
   key: string | undefined,
 ): ScreenPost | undefined {
-  const walk = rotation(state, shown)
+  if (walk.length === 0) return undefined
+  if (key === undefined) return walk[0]
   const at = walk.findIndex((post) => screenPostKey(post) === key)
-  return walk[(at + 1) % walk.length]
+  if (at !== -1) return walk[(at + 1) % walk.length]
+  return walk.find((post) => comesAfter(post, key)) ?? walk[0]
+}
+
+/**
+ * The walk's post after the featured one: after an arrival, on from the
+ * post it interrupted, never the arrival itself again.
+ */
+function nextAfter(
+  walk: ScreenPost[],
+  current: Feature | null,
+): ScreenPost | undefined {
+  const post = nextInRotation(walk, current?.resumeAfter ?? current?.key)
+  return post && current && screenPostKey(post) === current.key
+    ? nextInRotation(walk, current.key)
+    : post
 }
 
 /** An arrival featured at `now`, remembering where the walk it interrupted was. */
@@ -214,16 +247,17 @@ export function upNext(state: StreamState): ScreenPost[] {
   const shown = shownPosts(state)
   const byKey = new Map(shown.map((post) => [screenPostKey(post), post]))
   const current = state.feature?.key
-  const walk = rotation(state, shown)
-  const from = state.feature?.resumeAfter ?? current
-  const at = walk.findIndex((post) => screenPostKey(post) === from)
-  const after = [...walk.slice(at + 1), ...walk.slice(0, Math.max(at, 0))]
   const out: ScreenPost[] = []
   for (const key of state.waiting) {
     const post = byKey.get(key)
     if (post) out.push(post)
   }
-  for (const post of after) {
+  // The walk from the post the next turn shows, as `advance` picks it.
+  const walk = rotation(state, shown)
+  const first = nextAfter(walk, state.feature)
+  const at = first ? walk.indexOf(first) : -1
+  for (let i = 0; at !== -1 && i < walk.length; i++) {
+    const post = walk[(at + i) % walk.length]
     const key = screenPostKey(post)
     if (key !== current && !state.waiting.includes(key)) out.push(post)
   }
@@ -297,15 +331,7 @@ function advance(state: StreamState, now: number): StreamState {
         marks: { ...next.marks, [first]: now + NEW_MARK_MS },
       }
     } else {
-      // After an arrival, on from the post it interrupted.
-      let post = nextInRotation(
-        next,
-        shown,
-        current?.resumeAfter ?? current?.key,
-      )
-      if (post && current && screenPostKey(post) === current.key) {
-        post = nextInRotation(next, shown, current.key)
-      }
+      const post = nextAfter(rotation(next, shown), current)
       next = {
         ...next,
         feature: post
