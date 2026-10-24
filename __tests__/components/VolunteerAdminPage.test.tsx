@@ -16,6 +16,7 @@ const {
   mutation,
   ticketState,
   reminderMutate,
+  bulkStatusMutate,
 } = vi.hoisted(() => {
   const volunteers = [
     {
@@ -65,7 +66,9 @@ const {
     data: { available: boolean; statuses: unknown[] } | undefined
   } = { data: undefined }
   const reminderMutate = vi.fn().mockResolvedValue({ sent: 1, failed: [] })
+  const bulkStatusMutate = vi.fn().mockResolvedValue({ updated: 2, skipped: 0 })
   return {
+    bulkStatusMutate,
     volunteers,
     listState,
     updateStatusMutate,
@@ -123,6 +126,12 @@ vi.mock('@/lib/trpc/client', () => ({
             isPending: false,
           }),
         },
+        bulkUpdateStatus: {
+          useMutation: () => ({
+            mutateAsync: bulkStatusMutate,
+            isPending: false,
+          }),
+        },
         delete: { useMutation: mutation },
         update: { useMutation: mutation },
       },
@@ -171,9 +180,86 @@ afterEach(() => {
   listState.data = volunteers
   ticketState.data = undefined
   reminderMutate.mockClear()
+  bulkStatusMutate.mockClear()
 })
 
 describe('VolunteerAdminPage', () => {
+  it('bulk-approves the selected pending volunteers', async () => {
+    renderPage()
+    expect(screen.queryByLabelText('Select Alice')).toBeNull()
+
+    fireEvent.click(screen.getByLabelText('Select Peter'))
+    expect(screen.getByText('1 selected')).toBeTruthy()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select all visible pending' }),
+    )
+    expect(screen.getByText('2 selected')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+    await waitFor(() =>
+      expect(bulkStatusMutate).toHaveBeenCalledWith({
+        volunteerIds: ['v-pending', 'v-pending-2'],
+        status: VolunteerStatus.APPROVED,
+      }),
+    )
+    await waitFor(() => expect(screen.queryByText('2 selected')).toBeNull())
+  })
+
+  it('drops a volunteer approved on its own card from the selection', () => {
+    const { rerender } = renderPage()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select all visible pending' }),
+    )
+    expect(screen.getByText('2 selected')).toBeTruthy()
+
+    // The refetch after a single-card approve shows Peter as approved.
+    listState.data = volunteers.map((v) =>
+      v._id === 'v-pending' ? { ...v, status: 'approved' } : v,
+    )
+    rerender(
+      <NotificationProvider>
+        <VolunteerAdminPage />
+      </NotificationProvider>,
+    )
+    expect(screen.getByText('1 selected')).toBeTruthy()
+  })
+
+  it('ignores selected volunteers hidden by a filter', async () => {
+    renderPage()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select all visible pending' }),
+    )
+    fireEvent.change(
+      screen.getByPlaceholderText('Search volunteers by name, email, task...'),
+      { target: { value: 'Peter' } },
+    )
+    expect(await screen.findByText('1 selected')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+    await waitFor(() =>
+      expect(bulkStatusMutate).toHaveBeenCalledWith({
+        volunteerIds: ['v-pending'],
+        status: VolunteerStatus.APPROVED,
+      }),
+    )
+  })
+
+  it('asks before bulk-rejecting', async () => {
+    renderPage()
+    fireEvent.click(screen.getByLabelText('Select Peter'))
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    expect(bulkStatusMutate).not.toHaveBeenCalled()
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Reject Applications' }),
+    )
+    await waitFor(() =>
+      expect(bulkStatusMutate).toHaveBeenCalledWith({
+        volunteerIds: ['v-pending'],
+        status: VolunteerStatus.REJECTED,
+      }),
+    )
+  })
+
   it('hides rejected volunteers by default and lists pending first', () => {
     renderPage()
 

@@ -8,6 +8,7 @@ import {
 import {
   GetVolunteerByIdSchema,
   UpdateVolunteerStatusSchema,
+  BulkUpdateVolunteerStatusSchema,
   UpdateVolunteerDetailsSchema,
   SendVolunteerEmailSchema,
   SendVolunteerBulkEmailSchema,
@@ -25,6 +26,7 @@ import {
   getVolunteersByConference,
   getVolunteerById,
   updateVolunteerStatus,
+  bulkUpdateVolunteerStatus,
   updateVolunteerDetails,
   deleteVolunteer,
   createVolunteer,
@@ -585,6 +587,65 @@ export const volunteerRouter = router({
             cause: error,
           })
         }
+      }),
+
+    /**
+     * Approve or reject several pending volunteers at once. Only pending
+     * ones move; the rest are reported as skipped. No email is sent.
+     */
+    bulkUpdateStatus: adminProcedure
+      .input(BulkUpdateVolunteerStatusSchema)
+      .mutation(async ({ input, ctx }) => {
+        // OWNERSHIP: one query scoped to the current conference. Any id that
+        // is not in it (another tenant's, or gone) refuses the whole batch.
+        const conferenceId = await resolveConferenceId()
+        const { volunteers, error } =
+          await getVolunteersByConference(conferenceId)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch volunteers',
+            cause: error,
+          })
+        }
+        const byId = new Map(volunteers.map((v) => [v._id, v]))
+        if (input.volunteerIds.some((id) => !byId.has(id))) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more volunteers were not found',
+          })
+        }
+
+        const unique = [...new Set(input.volunteerIds)]
+        const pending = unique
+          .map((id) => byId.get(id)!)
+          .filter((v) => v.status === VolunteerStatus.PENDING)
+        const skipped = unique.length - pending.length
+        if (pending.length === 0) return { updated: 0, skipped }
+
+        const { error: writeError } = await bulkUpdateVolunteerStatus(
+          pending.map(({ _id, _rev }) => ({ _id, _rev })),
+          input.status,
+          ctx.speaker._id,
+        )
+        if (
+          (writeError as { statusCode?: unknown } | null)?.statusCode === 409
+        ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message:
+              'Someone else changed these volunteers, reload and try again',
+            cause: writeError,
+          })
+        }
+        if (writeError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update volunteer status',
+            cause: writeError,
+          })
+        }
+        return { updated: pending.length, skipped }
       }),
 
     update: adminProcedure

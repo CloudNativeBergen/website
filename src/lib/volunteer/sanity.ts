@@ -346,6 +346,43 @@ export async function updateVolunteerStatus(
   }
 }
 
+/**
+ * Review several volunteers in one transaction: same fields as
+ * updateVolunteerStatus for a pending -> approved/rejected move. Callers
+ * check ownership and current status first. Each patch is pinned to the
+ * revision the caller read, so a concurrent edit fails the whole transaction
+ * with a 409 instead of overwriting it.
+ */
+export async function bulkUpdateVolunteerStatus(
+  volunteers: { _id: string; _rev: string }[],
+  status: VolunteerStatus,
+  reviewedBy: string,
+): Promise<{ success: boolean; error: Error | null }> {
+  try {
+    const reviewedAt = new Date().toISOString()
+    const tx = clientWrite.transaction()
+    for (const v of volunteers) {
+      tx.patch(v._id, (p) =>
+        p
+          .ifRevisionId(v._rev)
+          .set({
+            status,
+            reviewedAt,
+            reviewedBy: { _type: 'reference', _ref: reviewedBy },
+          })
+          .unset(['confirmedAt']),
+      )
+    }
+    await tx.commit()
+    return { success: true, error: null }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error : new Error('Unknown error'),
+    }
+  }
+}
+
 /** The organizer-editable subset of a volunteer's detail fields (SE-4). */
 export interface VolunteerDetailsUpdate {
   name: string

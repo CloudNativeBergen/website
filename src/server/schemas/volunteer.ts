@@ -40,6 +40,11 @@ export const UpdateVolunteerStatusSchema = z.object({
   reviewNotes: z.string().optional(),
 })
 
+export const BulkUpdateVolunteerStatusSchema = z.object({
+  volunteerIds: z.array(z.string()).min(1).max(50),
+  status: z.enum([VolunteerStatus.APPROVED, VolunteerStatus.REJECTED]),
+})
+
 export const SendVolunteerEmailSchema = z.object({
   volunteerId: z.string(),
   subject: z
