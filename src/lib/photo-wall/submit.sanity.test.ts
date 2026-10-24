@@ -755,6 +755,26 @@ describe('submitWallPost: the wall closes during the upload (§11.1)', () => {
     expect(h.revalidateTag).not.toHaveBeenCalled()
   })
 
+  it('without the editHistory permission (403), the asset is still deleted, by a plain delete', async () => {
+    h.duringUpload = async () => {
+      store().put(wall({ closedAt: '2026-11-25T03:10:00Z' }))
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    store().beforeNextCommit(() => {
+      throw Object.assign(new Error('403: no editHistory (test)'), {
+        statusCode: 403,
+      })
+    })
+    await expect(submit()).resolves.toEqual({ ok: false, refusal: 'closed' })
+    expect(assets()).toEqual([])
+    // The refused purge never landed; the fallback is the plain delete.
+    expect(store().commits).toEqual([[{ delete: { id: assetIdOf(PHOTO) } }]])
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('WITHOUT history'),
+    )
+    warn.mockRestore()
+  })
+
   it('…keeping the asset when another document (any tenant) holds the same bytes', async () => {
     h.duringUpload = async () => {
       store().put(wall({ closedAt: '2026-11-25T03:10:00Z' }))

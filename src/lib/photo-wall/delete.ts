@@ -160,9 +160,13 @@ interface Marked {
   rev: string
 }
 
+/** Gone (or never there), kept for a document that holds it, or not done. */
+export type WallAssetOutcome = 'deleted' | 'held' | 'failed'
+
 /**
- * Step 2, and the retention cron's asset step (§11.1). True when the asset
- * is gone or still held by another document.
+ * Step 2, and the retention cron's, the sweep's and a failed submit's asset
+ * step (§11.1, §11.2, §6.2): `deleted` when the asset is gone (deleted now,
+ * with its history, or never there), `held` when another document holds it.
  *
  * "Held" is checked on the latest committed documents ({@link isAssetHeld}),
  * leaving out `except` (the post being deleted, if any): the query view can
@@ -172,12 +176,9 @@ interface Marked {
  * A refused delete is never taken at its word either (Sanity answers 409
  * for a held asset and for a contended transaction): held is checked again.
  * Not held means the delete failed, retried once; after a second failure,
- * or when "held" can't be told, false: the post stays `deleting` with its
+ * or when "held" can't be told, `failed`: the post stays `deleting` with its
  * `deletingAssetId`, or the cron leaves the wall unpurged.
  */
-/** Gone (or never there), kept for a document that holds it, or not done. */
-export type WallAssetOutcome = 'deleted' | 'held' | 'failed'
-
 export async function deleteWallAsset(
   assetId: string | null,
   { except }: { except?: string } = {},
