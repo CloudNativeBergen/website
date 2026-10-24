@@ -45,6 +45,7 @@ const STATS: ReadyTicketHolderStats = {
   available: true,
   configured: true,
   holders: 41,
+  tickets: 44,
   confirmed: 23,
   waitlistOnly: 5,
   notSignedUp: 13,
@@ -83,8 +84,45 @@ describe('TicketHolderPanel', () => {
   it('shows each number on its value', () => {
     renderPanel(READY)
     expect(valueOf('Holders')).toBe('41')
+    expect(valueOf('Signed up')).toBe('28')
     expect(valueOf('Not signed up')).toBe('13')
     expect(valueOf('Flagged')).toBe('1')
+  })
+
+  it('counts the workshop tickets beside the people holding them', () => {
+    renderPanel(READY)
+    expect(screen.getByText('44 workshop tickets')).toBeTruthy()
+    cleanup()
+    renderPanel(ready({ holders: 1, tickets: 1, notSignedUp: 1 }))
+    expect(screen.getByText('1 workshop ticket')).toBeTruthy()
+  })
+
+  it('gives the share of holders with a sign-up, a waitlist place included', () => {
+    // 28 of 41 have a sign-up: 68.3%.
+    renderPanel(READY)
+    expect(screen.getByText('68% of holders')).toBeTruthy()
+  })
+
+  it('says 100% only when every holder has signed up', () => {
+    // 299 of 300 is 99.7%: rounding to nearest would claim everybody.
+    renderPanel(ready({ holders: 300, notSignedUp: 1 }))
+    expect(screen.getByText('99% of holders')).toBeTruthy()
+    cleanup()
+    renderPanel(ready({ holders: 300, notSignedUp: 0 }))
+    expect(screen.getByText('100% of holders')).toBeTruthy()
+  })
+
+  it('rounds an exact share down to itself, not a point below', () => {
+    // 29 of 50 is exactly 58%; 29 / 50 * 100 in floats is 57.99999999999999.
+    renderPanel(ready({ holders: 50, notSignedUp: 21 }))
+    expect(screen.getByText('58% of holders')).toBeTruthy()
+  })
+
+  it('with no holders, gives no share rather than dividing by zero', () => {
+    renderPanel(ready({ holders: 0, tickets: 0, notSignedUp: 0 }))
+    expect(valueOf('Signed up')).toBe('0')
+    expect(screen.getByText('No holders yet')).toBeTruthy()
+    expect(screen.queryByText(/%/)).toBeNull()
   })
 
   it('counts no seats or waitlists: the header counts those (#1452)', () => {

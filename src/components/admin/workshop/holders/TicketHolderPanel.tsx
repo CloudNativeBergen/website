@@ -16,7 +16,18 @@ const HEADING_ID = 'ticket-holders-heading'
 /** The anchor "Needs attention" links to. */
 export const TICKET_HOLDERS_ANCHOR = 'ticket-holders'
 
-const LABELS = ['Holders', 'Not signed up', 'Flagged'] as const
+const LABELS = ['Holders', 'Signed up', 'Not signed up', 'Flagged'] as const
+
+/**
+ * The share of holders with a sign-up, rounded DOWN: "100%" only when every
+ * holder has one. `null` while there are no holders to divide by.
+ */
+function signedUpShare(signedUp: number, holders: number) {
+  // Multiplied before dividing: 29 / 50 * 100 is 57.99999999999999 in floats.
+  return holders > 0 ? Math.floor((signedUp * 100) / holders) : null
+}
+
+const ticketCount = (n: number) => `${n} workshop ticket${n === 1 ? '' : 's'}`
 
 /**
  * "Ticket holders" on `/admin/workshops` (#1333, spec §4): the people who hold
@@ -91,7 +102,7 @@ export function TicketHolderPanel({
           </p>
           <div
             aria-hidden
-            className="mt-4 grid animate-pulse grid-cols-2 gap-3 sm:grid-cols-3"
+            className="mt-4 grid animate-pulse grid-cols-2 gap-3 sm:grid-cols-4"
           >
             {LABELS.map((label) => (
               <div
@@ -133,11 +144,15 @@ export function TicketHolderPanel({
 
       {view.state === 'ready' && (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard
               label="Holders"
               value={view.stats.holders}
-              subtitle="Hold a workshop ticket"
+              subtitle={ticketCount(view.stats.tickets)}
+            />
+            <SignedUpCard
+              holders={view.stats.holders}
+              notSignedUp={view.stats.notSignedUp}
             />
             <StatCard
               label="Not signed up"
@@ -146,8 +161,6 @@ export function TicketHolderPanel({
               subtitle="No sign-up yet"
             />
             <StatCard
-              // A row of its own on a phone, where the others pair up.
-              className="col-span-2 sm:col-span-1"
               label="Flagged"
               value={view.stats.flagged.length}
               color={view.stats.flagged.length > 0 ? 'red' : 'slate'}
@@ -187,5 +200,28 @@ export function TicketHolderPanel({
         isRefreshing={isRefreshing}
       />
     </WorkshopSection>
+  )
+}
+
+/**
+ * Holders with at least one sign-up, confirmed or on a waitlist: the rest of
+ * the holders are "Not signed up", so the two always add up to "Holders".
+ */
+function SignedUpCard({
+  holders,
+  notSignedUp,
+}: {
+  holders: number
+  notSignedUp: number
+}) {
+  const signedUp = holders - notSignedUp
+  const share = signedUpShare(signedUp, holders)
+  return (
+    <StatCard
+      label="Signed up"
+      value={signedUp}
+      color="green"
+      subtitle={share === null ? 'No holders yet' : `${share}% of holders`}
+    />
   )
 }
