@@ -57,17 +57,32 @@ const cdn = vi.hoisted(() => ({
   conference: null as null | Record<string, unknown>,
   /** What the live read answers, when it differs from CONFERENCE. */
   live: null as null | Record<string, unknown>,
+  /** After this many cached reads, the cached read names org-B. */
+  movedAfter: null as null | number,
+  cachedReads: 0,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: async (opts?: { uncached?: boolean }) => ({
-    conference: opts?.uncached
-      ? { ...CONFERENCE, ...cdn.live }
-      : { ...CONFERENCE, ...cdn.conference },
-    error: null,
-  }),
+  getConferenceForCurrentDomain: vi.fn(
+    async (opts?: { uncached?: boolean }) => {
+      if (opts?.uncached) {
+        return { conference: { ...CONFERENCE, ...cdn.live }, error: null }
+      }
+      cdn.cachedReads += 1
+      const moved = cdn.movedAfter !== null && cdn.cachedReads > cdn.movedAfter
+      return {
+        conference: {
+          ...CONFERENCE,
+          ...cdn.conference,
+          ...(moved && { organization: { _ref: 'org-B' } }),
+        },
+        error: null,
+      }
+    },
+  ),
 }))
 
 import { initTRPC } from '@trpc/server'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { Context } from '@/server/trpc'
 import { photoWallRouter } from './photoWall'
 
@@ -112,6 +127,9 @@ const LINKS = {
 beforeEach(() => {
   cdn.conference = null
   cdn.live = null
+  cdn.movedAfter = null
+  cdn.cachedReads = 0
+  vi.mocked(getConferenceForCurrentDomain).mockClear()
   store().reset()
   h.revalidateTag.mockClear()
   h.cacheTag.mockClear()
@@ -475,6 +493,38 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
     expect(queue.posts[0]).not.toHaveProperty('deletingAssetId')
   })
 
+  it('never answers a draft, even one of this conference (§8)', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'a1')),
+      {
+        ...postOf('conf-A', 'a1'),
+        _id: 'drafts.wallPost-a1',
+        caption: 'Draft',
+      },
+      { ...postOf('conf-A', 'a2'), _id: 'drafts.wallPost-a2' },
+    ])
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts.map((p) => [p._id, p.caption])).toEqual([
+      ['wallPost-a1', null],
+    ])
+  })
+
+  it('a deleting post shows no photo even while its asset is still referenced (§12)', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'd2', { status: 'deleting' })),
+    ])
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts).toEqual([
+      expect.objectContaining({
+        _id: 'wallPost-d2',
+        status: 'deleting',
+        photo: null,
+      }),
+    ])
+  })
+
   it('answers every status, the deleting post too', async () => {
     store().reset([
       wallOf('conf-A'),
@@ -519,24 +569,42 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
     expect(reads.every((r) => r.client === 'uncached')).toBe(true)
   })
 
-  it('refuses when the live read is another conference than the tenant', async () => {
+  it('polls without a live conference read: the cached tenant read only (§8)', async () => {
     store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    // A live read that differs: a poll must not ask for it at all.
+    cdn.live = { organization: { _ref: 'org-B' } }
+    for (let poll = 0; poll < 3; poll++) {
+      const queue = await organizer().moderationQueue()
+      expect(queue.posts.map((p) => p._id)).toEqual(['wallPost-p1'])
+    }
+    const calls = vi.mocked(getConferenceForCurrentDomain).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls.filter(([opts]) => opts?.uncached === true)).toEqual([])
+  })
+
+  it("answers the cached tenant's posts, not another conference's", async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'a1')),
+      ...withPhoto(postOf('conf-Z', 'z1')),
+    ])
     cdn.conference = { _id: 'conf-Z' }
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts.map((p) => p._id)).toEqual(['wallPost-z1'])
+  })
+
+  it("refuses, reading no post, when the tenant read no longer names the waist's organization", async () => {
+    // The authz waist resolved org-A; by the queue's own read the cached
+    // conference belongs to org-B (it moved, and the cache caught up between
+    // the two reads).
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    cdn.movedAfter = 1
     await expect(organizer().moderationQueue()).rejects.toMatchObject({
       code: 'NOT_FOUND',
       message: 'Could not resolve conference from domain',
     })
-    expect(store().reads.filter((r) => r.query.includes('wallPost'))).toEqual(
-      [],
-    )
-  })
-
-  it('refuses when the conference has moved to another organization', async () => {
-    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
-    cdn.live = { organization: { _ref: 'org-B' } }
-    await expect(organizer().moderationQueue()).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    })
+    // The waist's read and the queue's: the refusal is the queue's own check.
+    expect(cdn.cachedReads).toBe(2)
     expect(store().reads.filter((r) => r.query.includes('wallPost'))).toEqual(
       [],
     )

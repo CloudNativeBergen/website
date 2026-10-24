@@ -4,9 +4,11 @@
  *
  * NOT `useIdlePolling()`: that hook stops after five minutes without a
  * pointer, key or scroll event, and an organizer's phone in a pocket makes
- * none; the pending count must still be right when it comes out. The cached
- * read behind the procedure is what keeps this affordable: a poll that finds
- * the tag unexpired costs no Sanity read.
+ * none; the pending count must still be right when it comes out. What keeps
+ * this affordable: the procedure resolves the conference from the CACHED
+ * tenant read (no live conference read per poll) and the queue itself is a
+ * cached read under its tag, so a poll on a warm cache asks Sanity for
+ * neither.
  */
 
 export const MODERATION_POLL_MS = 10_000

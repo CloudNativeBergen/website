@@ -43,6 +43,30 @@ async function requestConference(orgId: string | null) {
   return conference
 }
 
+/**
+ * The request's conference for the POLLED queue read only, from the CACHED
+ * tenant read: every 10 s per open admin page, a live read would cost about
+ * 360 Sanity reads an hour (§8 budgets 1–4k per edition). It must still
+ * belong to `orgId`. The trade-off: a conference moved to another
+ * organization is refused here only once the cached read has caught up, as
+ * on every other `adminProcedure` read; M1's writes keep the live check.
+ */
+async function polledConferenceId(orgId: string | null) {
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (
+    error ||
+    !conference?._id ||
+    !orgId ||
+    conference.organization?._ref !== orgId
+  ) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve conference from domain',
+    })
+  }
+  return conference._id
+}
+
 type Conference = Awaited<ReturnType<typeof requestConference>>
 
 function adminView(
@@ -77,11 +101,10 @@ export const photoWallRouter = router({
     return adminView(conference, await readPhotoWall(conference._id))
   }),
 
-  /** Every Wall Post with its status and the pending count, polled (§8, §10). */
-  moderationQueue: adminProcedure.query(async ({ ctx }) => {
-    const conference = await requestConference(ctx.orgId)
-    return getModerationQueue(conference._id)
-  }),
+  /** Every Wall Post with its status, polled every 10 s (§8, §10). */
+  moderationQueue: adminProcedure.query(async ({ ctx }) =>
+    getModerationQueue(await polledConferenceId(ctx.orgId)),
+  ),
 
   setUp: adminProcedure.mutation(async ({ ctx }) => {
     const conference = await requestConference(ctx.orgId)

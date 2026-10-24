@@ -38,9 +38,14 @@ interface PostRow {
 const isStatus = (value: unknown): value is WallPostStatus =>
   WALL_POST_STATUSES.includes(value as WallPostStatus)
 
-/** The photo as the card shows it, or null when the post has none (§12). */
+/**
+ * The photo as the card shows it, or null when the post has none. A
+ * `deleting` post never shows one, even while its asset is still referenced
+ * (§8, §12).
+ */
 function photoOf(row: PostRow): ModerationPost['photo'] {
   const { photo } = row
+  if (row.status === 'deleting') return null
   if (!photo?.url || !photo.width || !photo.height) return null
   return {
     url: sanityImage(photo.url)
@@ -61,8 +66,9 @@ export async function readModerationQueue(
     clientReadUncached,
     { conferenceId },
     // The projection names what the browser gets: never `deviceKey`, nor the
-    // asset id a Delete still has to remove.
-    `*[_type == "wallPost"] | order(submittedAt desc) {
+    // asset id a Delete still has to remove. Published posts only: a draft
+    // is never a Wall Post.
+    `*[_type == "wallPost" && !(_id in path("drafts.**"))] | order(submittedAt desc) {
       _id,
       status,
       "photo": photo.asset->{
