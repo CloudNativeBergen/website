@@ -75,7 +75,7 @@ function Tile({
         className="absolute inset-0 size-full object-contain"
       />
       {spotlight && (post.caption || post.name) && (
-        <figcaption className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/85 from-30% via-black/55 to-transparent p-6 pt-16 text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
+        <figcaption className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/90 from-40% via-black/75 via-70% to-transparent p-6 pt-16 text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
           {post.caption && (
             <p className="line-clamp-2 text-3xl leading-tight font-bold break-words">
               {post.caption}

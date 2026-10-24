@@ -501,3 +501,27 @@ describe('round-2 state findings', () => {
     expect(featuredId(s)).toBe('wallPost-9')
   })
 })
+
+describe('round-2 UI findings', () => {
+  it.each(['mosaic', 'spotlight'] as const)(
+    '%s features the newest post first, whatever order the photos load in',
+    (look) => {
+      let s = poll(initialStream(look), posts(10), T0)
+      // The oldest asked-for photos report first, the newest last.
+      for (const p of [...pendingStreamImages(s)].reverse()) {
+        s = streamReducer(s, { type: 'imageLoaded', key: keyOf(p), now: T0 })
+        if (p._id !== 'wallPost-10') expect(featuredId(s)).toBeNull()
+      }
+      expect(featuredId(s)).toBe('wallPost-10')
+    },
+  )
+
+  it('a newest photo that fails hands the first feature to the next newest', () => {
+    let s = poll(initialStream('spotlight'), posts(3), T0)
+    s = streamReducer(s, { type: 'imageLoaded', key: keyOf(post(1)), now: T0 })
+    s = streamReducer(s, { type: 'imageLoaded', key: keyOf(post(2)), now: T0 })
+    expect(featuredId(s)).toBeNull()
+    s = streamReducer(s, { type: 'imageFailed', key: keyOf(post(3)), now: T0 })
+    expect(featuredId(s)).toBe('wallPost-2')
+  })
+})

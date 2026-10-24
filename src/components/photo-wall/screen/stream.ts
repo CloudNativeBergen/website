@@ -314,12 +314,18 @@ function advance(state: StreamState, now: number): StreamState {
     }
   }
   const current = next.feature
+  // The first feature is the newest post: wait for its photo (it loads, or
+  // fails and the next newest is waited for), not whichever reports first.
+  const newest = candidates(next)[0]
+  const settling =
+    !current && newest !== undefined && !next.images[screenPostKey(newest)]
   if (shown.length === 0) {
     if (current) next = { ...next, feature: null }
   } else if (
-    !current ||
-    !shownKeys.has(current.key) ||
-    now - current.at >= SWAP_EVERY_MS
+    !settling &&
+    (!current ||
+      !shownKeys.has(current.key) ||
+      now - current.at >= SWAP_EVERY_MS)
   ) {
     const [first, ...rest] = next.waiting
     if (first) {

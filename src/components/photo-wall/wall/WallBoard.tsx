@@ -68,6 +68,8 @@ function Polaroid({ post, eager }: { post: WallPagePost; eager: boolean }) {
   )
 }
 
+/** A tile this flat or flatter keeps its caption to one line, and no name under it. */
+const SHORT_TILE = 0.6
 /** Grid rows per column width: a tile spans its shape times this. */
 const ROWS_PER_COLUMN = 24
 
@@ -106,13 +108,20 @@ function MosaicGrid({ posts }: { posts: WallPagePost[] }) {
                   className="absolute inset-0 size-full object-contain"
                 />
                 {(post.caption || post.name) && (
-                  <figcaption className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/85 from-30% via-black/55 to-transparent p-2 pt-8 text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
+                  <figcaption className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/90 from-40% via-black/75 via-70% to-transparent p-2 pt-8 text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
                     {post.caption && (
-                      <span className="line-clamp-2 text-xs leading-snug font-semibold break-words">
+                      <span
+                        className={clsx(
+                          'text-xs leading-snug font-semibold break-words',
+                          // A panorama's tile is short: one line, so the
+                          // caption never covers the whole photo.
+                          shape < SHORT_TILE ? 'line-clamp-1' : 'line-clamp-2',
+                        )}
+                      >
                         {post.caption}
                       </span>
                     )}
-                    {post.name && (
+                    {post.name && !(post.caption && shape < SHORT_TILE) && (
                       <span className="block truncate text-[11px] text-white/80">
                         {post.name}
                       </span>

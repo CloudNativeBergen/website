@@ -142,7 +142,9 @@ export function SpotlightScreen({
                   </div>
                 )}
               </div>
-              <div className="mt-6 h-1 overflow-hidden rounded-full bg-white/15">
+              {/* No bar for a viewer who asked for less motion: a full one
+                  that never moves would say the turn is over. */}
+              <div className="mt-6 h-1 overflow-hidden rounded-full bg-white/15 motion-reduce:hidden">
                 <div
                   key={state.feature?.at}
                   className="pw-motion h-full origin-left animate-[pw-progress_linear_forwards] bg-white/70"

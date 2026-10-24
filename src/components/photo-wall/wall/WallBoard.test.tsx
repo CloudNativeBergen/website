@@ -302,6 +302,32 @@ describe('WallBoardView in Mosaic and Spotlight (§9, #1478)', () => {
     expect(photos()[0]).toHaveAttribute('height', '1000')
   })
 
+  it('Mosaic: a panorama keeps its caption to one line and drops the name, so the photo still shows', () => {
+    const panorama = post('wallPost-p', {
+      caption:
+        'Fjord views between talks, and the longest caption a phone allows',
+      name: 'Bo',
+      whole: {
+        src: 'https://cdn.sanity.io/images/p/d/p-2048x320.jpg',
+        width: 2048,
+        height: 320,
+      },
+    })
+    renderView(
+      view({
+        look: 'mosaic',
+        posts: [panorama, post('wallPost-a', { name: 'Ada' })],
+      }),
+    )
+    const [flat, regular] = screen.getAllByRole('figure')
+    expect(within(flat).getByText(/Fjord views/).className).toContain(
+      'line-clamp-1',
+    )
+    expect(within(flat).queryByText('Bo')).toBeNull()
+    // A tile of ordinary shape keeps its name.
+    expect(within(regular).getByText('Ada')).toBeInTheDocument()
+  })
+
   it('Spotlight is a feed: each whole photo, newest first, with the name, the time and the caption', () => {
     const posts = [
       post('wallPost-b', {
