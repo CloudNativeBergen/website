@@ -36,6 +36,11 @@ export interface PhotoWallAdminView {
   /** Whether a Submit now would find posting open, and if not why (§7). */
   posting: PostingState
   links: PhotoWallLinks
+  /**
+   * How many photos the consented ZIP export would hold now (P5); unknown
+   * when absent.
+   */
+  marketingExportCount?: number
 }
 
 export interface PhotoWallLinks {
