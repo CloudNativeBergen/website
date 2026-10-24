@@ -1,6 +1,5 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isScreenModePath } from '@/lib/photo-wall/screen'
 import { UpdateBanner } from './UpdateBanner'
@@ -44,7 +43,6 @@ export const SCREEN_UPDATE_CHECK_MS = 10 * 60 * 1000
  * never fights Turbopack HMR during `next dev`.
  */
 export function ServiceWorkerRegistrar() {
-  const screenMode = isScreenModePath(usePathname())
   const [updateAvailable, setUpdateAvailable] = useState(false)
   // True from the moment the user clicks Reload until the page actually reloads.
   // Drives the banner's in-progress ("Installing…") state.
@@ -115,6 +113,11 @@ export function ServiceWorkerRegistrar() {
     if (!('serviceWorker' in navigator)) return
     // Registering the SW under Turbopack HMR fights dev reloads; prod only.
     if (process.env.NODE_ENV !== 'production') return
+    // The path at mount, from the browser rather than `usePathname()`: the
+    // root layout mounts this outside any `<Suspense>`, where URL data would
+    // make every page bail out of prerendering. A venue screen is opened
+    // on `/wall/screen` and never navigates away.
+    const screenMode = isScreenModePath(window.location.pathname)
 
     // Reload exactly once when the active worker changes AFTER the user accepted
     // the update. `doReload`'s `refreshingRef` guard prevents an infinite loop
@@ -222,7 +225,7 @@ export function ServiceWorkerRegistrar() {
         recoveryTimeoutRef.current = null
       }
     }
-  }, [acceptUpdate, doReload, screenMode])
+  }, [acceptUpdate, doReload])
 
   const handleReload = acceptUpdate
 

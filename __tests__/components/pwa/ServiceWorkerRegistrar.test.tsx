@@ -11,10 +11,18 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The registrar reads the path to tell the Photo Wall's Screen Mode apart;
-// every other test here runs on an ordinary page.
-const h = vi.hoisted(() => ({ pathname: '/' as string | null }))
-vi.mock('next/navigation', () => ({ usePathname: () => h.pathname }))
+// The registrar reads the browser's path at mount to tell the Photo Wall's
+// Screen Mode apart; every other test here runs on an ordinary page.
+const h = {
+  // `window.location` is replaced below by a plain copy (for `reload`), so
+  // the path is set on whatever object the registrar will read.
+  set pathname(path: string) {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, pathname: path },
+    })
+  },
+}
 
 import {
   SCREEN_UPDATE_CHECK_MS,
