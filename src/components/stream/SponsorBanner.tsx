@@ -82,7 +82,16 @@ export function SponsorBanner({
         {duplicatedSponsors.map((sponsor, index) => (
           <div
             key={`${sponsor.sponsor._id}-${index}`}
-            className={variant === 'strip' ? 'shrink-0 px-8' : 'shrink-0 px-12'}
+            className={clsx(
+              'shrink-0',
+              variant === 'strip' ? 'px-8' : 'px-12',
+              // The strip is dark: a sponsor with no bright logo gets its
+              // dark one on a white tile, so it still reads (spec §9.4).
+              variant === 'strip' &&
+                sponsor.sponsor.logo &&
+                !sponsor.sponsor.logoBright &&
+                '[&>a]:rounded-md [&>a]:bg-white [&>a]:px-3 [&>a]:py-2',
+            )}
           >
             <a
               href={sponsor.sponsor.website}

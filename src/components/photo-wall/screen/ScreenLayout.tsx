@@ -188,10 +188,15 @@ function QrPolaroid({ url, large = false }: { url: string; large?: boolean }) {
           <p className="p-4 text-center text-lg text-gray-600">{shown}</p>
         ) : null}
       </div>
-      <figcaption
-        className={`font-caveat pt-2 text-center leading-tight ${large ? 'text-4xl' : 'text-2xl'}`}
-      >
-        Add yours! <span className="text-gray-500">{shown}</span>
+      <figcaption className="font-caveat pt-2 text-center leading-tight">
+        <span className={`block ${large ? 'text-4xl' : 'text-2xl'}`}>
+          Add yours!
+        </span>
+        <span
+          className={`block break-all text-gray-500 ${large ? 'text-3xl' : 'text-lg'}`}
+        >
+          {shown}
+        </span>
       </figcaption>
     </figure>
   )
