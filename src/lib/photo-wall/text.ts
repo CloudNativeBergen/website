@@ -31,8 +31,8 @@ const REMOVED =
 
 /**
  * What the server stores (§6.4), in its order: NFC; control and bidi
- * formatting characters removed; any run of whitespace, newlines included, becomes one space;
- * trimmed. Empty stays empty, the server's "absent".
+ * formatting characters removed; any run of whitespace, newlines included,
+ * becomes one space; trimmed. Empty stays empty, the server's "absent".
  */
 export function normalizeWallText(text: string): string {
   return text.normalize('NFC').replace(REMOVED, '').replace(/\s+/gu, ' ').trim()
