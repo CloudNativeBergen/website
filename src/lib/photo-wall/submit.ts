@@ -17,7 +17,7 @@
  */
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
-import { sanityStatus } from '@/lib/feedback/sanity-error'
+import { sanityStatus } from '@/lib/sanity/status'
 import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 import { expireWallPost } from './cache'
 import type { WallDevice } from './device'

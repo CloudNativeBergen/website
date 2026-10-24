@@ -46,11 +46,8 @@ export async function getWall(conferenceId: string): Promise<WallData | null> {
 
 /**
  * The moderation queue as `/admin/photo-wall` polls it (§8), cached per
- * conference under {@link photoWallAdminTag}. Default life: freshness is to
- * come from the tag, but NO write expires it yet. Submit (M3b), the
- * moderation actions (M4b), a contributor's Delete or marketing change (M6)
- * and the retention cron (P1) add that; until then the queue refreshes on
- * the `default` life alone.
+ * conference under {@link photoWallAdminTag}. Default life: freshness comes
+ * from the tag, which every write to a post expires ({@link expireWallPost}).
  */
 export async function getModerationQueue(
   conferenceId: string,

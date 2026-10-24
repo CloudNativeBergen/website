@@ -600,6 +600,7 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
       wallOf('conf-A'),
       ...withPhoto(
         postOf('conf-A', 'a1', {
+          _createdAt: '2026-10-26T07:30:01Z',
           caption: 'Keynote crowd',
           name: 'Ada',
           marketingConsent: true,
@@ -633,6 +634,11 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
       submittedAt: '2026-10-26T07:30:00Z',
       approvedAt: null,
       decidedAt: null,
+      // Which post the card shows, sent back with every action.
+      incarnation: {
+        createdAt: '2026-10-26T07:30:01Z',
+        assetId: 'image-shaa1-1600x1000-jpg',
+      },
     })
     const a2 = queue.posts.find((p) => p._id === 'wallPost-a2')
     expect(a2).toMatchObject({
@@ -678,6 +684,11 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
       }),
     ])
     expect(queue.posts[0]).not.toHaveProperty('deletingAssetId')
+    // Nor in what the card sends back: the asset id a Delete still holds.
+    expect(queue.posts[0].incarnation).toEqual({
+      createdAt: null,
+      assetId: null,
+    })
   })
 
   it('reads a post without consent or crop as no consent, centred (§4.2)', async () => {
@@ -815,6 +826,407 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
     expect(store().reads.filter((r) => r.query.includes('wallPost'))).toEqual(
       [],
     )
+  })
+})
+
+/**
+ * What a card sends of the post it showed. The fixtures carry no
+ * `_createdAt` and the card no photo id: the incarnation tests set both.
+ */
+const SHOWN = { createdAt: null, assetId: null }
+const shownAll = (ids: string[]) => ids.map((id) => ({ id, ...SHOWN }))
+
+describe('the moderation actions (§8, §10, §12)', () => {
+  const P = 'wallPost-p1'
+  const ASSET = 'image-shap1-1600x1000-jpg'
+  const expired = () => h.revalidateTag.mock.calls
+  const tags = (deviceKey = 'device-hash', wall = true) =>
+    [
+      ['photo-wall-admin:conf-A', { expire: 0 }],
+      [`photo-wall-device:${deviceKey}`, { expire: 0 }],
+      ...(wall ? [['photo-wall:conf-A', { expire: 0 }]] : []),
+    ] as const
+
+  beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => {}))
+
+  it('Approve approves, and expires the queue, the device and the wall', async () => {
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    await expect(
+      organizer().approve({ id: P, from: 'pending', shown: SHOWN }),
+    ).resolves.toEqual({ status: 'done' })
+    expect(store().doc(P)).toMatchObject({ status: 'approved' })
+    expect(expired()).toEqual(tags())
+  })
+
+  it('Reject rejects, and expires all three (every write does, §8)', async () => {
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    await expect(organizer().reject({ id: P, shown: SHOWN })).resolves.toEqual({
+      status: 'done',
+    })
+    expect(store().doc(P)).toMatchObject({ status: 'notShown' })
+    expect(expired()).toEqual(tags())
+  })
+
+  it('Remove takes it off the wall, and expires all three', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'p1', { status: 'approved' })),
+    ])
+    await expect(organizer().remove({ id: P, shown: SHOWN })).resolves.toEqual({
+      status: 'done',
+    })
+    expect(store().doc(P)).toMatchObject({ status: 'notShown' })
+    expect(expired()).toEqual(tags())
+  })
+
+  it('Delete now deletes the post and its asset, and expires all three', async () => {
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    await expect(
+      organizer().deletePost({ id: P, shown: SHOWN }),
+    ).resolves.toEqual({
+      status: 'deleted',
+    })
+    expect(store().doc(P)).toBeUndefined()
+    expect(store().doc(ASSET)).toBeUndefined()
+    expect(expired()).toEqual(tags())
+  })
+
+  it('a Delete that stops at deleting still expires all three, and Try again finishes it', async () => {
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    store().failReadsThat((read) => read.query.includes('references('))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await expect(
+      organizer().deletePost({ id: P, shown: SHOWN }),
+    ).resolves.toEqual({
+      status: 'failed',
+    })
+    expect(store().doc(P)).toMatchObject({ status: 'deleting' })
+    expect(expired()).toEqual(tags())
+    // The queue shows it in Not shown with no photo (M4a).
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts).toEqual([
+      expect.objectContaining({ _id: P, status: 'deleting', photo: null }),
+    ])
+    store().failReadsThat(() => false)
+    await expect(
+      organizer().deletePost({ id: P, shown: SHOWN }),
+    ).resolves.toEqual({
+      status: 'deleted',
+    })
+    expect(store().doc(ASSET)).toBeUndefined()
+  })
+
+  it('a refused action writes nothing, says the post changed, and still expires (every outcome)', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'p1', { status: 'approved' })),
+    ])
+    await expect(organizer().reject({ id: P, shown: SHOWN })).resolves.toEqual({
+      status: 'changed',
+    })
+    await expect(
+      organizer().approve({ id: P, from: 'pending', shown: SHOWN }),
+    ).resolves.toEqual({ status: 'changed' })
+    expect(store().commits).toEqual([])
+    expect(expired()).toEqual([...tags(), ...tags()])
+  })
+
+  it("answers gone, writing nothing, for another conference's post, and expires only this wall's tags", async () => {
+    store().reset([
+      wallOf('conf-A'),
+      // This conference's id everywhere but the reference.
+      ...withPhoto(
+        postOf('conf-B', 'p1', { deviceKey: 'conf-A', caption: 'conf-A' }),
+      ),
+    ])
+    for (const call of [
+      () => organizer().approve({ id: P, from: 'pending', shown: SHOWN }),
+      () => organizer().reject({ id: P, shown: SHOWN }),
+      () => organizer().remove({ id: P, shown: SHOWN }),
+      () => organizer().deletePost({ id: P, shown: SHOWN }),
+    ]) {
+      h.revalidateTag.mockClear()
+      await expect(call()).resolves.toEqual({ status: 'gone' })
+      // Never the other conference's post's device.
+      expect(expired().map(([tag]) => tag)).toEqual([
+        'photo-wall-admin:conf-A',
+        'photo-wall-device:',
+        'photo-wall:conf-A',
+      ])
+    }
+    expect(store().commits).toEqual([])
+  })
+
+  it.each([
+    [
+      'approve',
+      () => organizer().approve({ id: P, from: 'pending', shown: SHOWN }),
+      'pending',
+    ],
+    ['reject', () => organizer().reject({ id: P, shown: SHOWN }), 'pending'],
+    ['remove', () => organizer().remove({ id: P, shown: SHOWN }), 'approved'],
+  ] as const)(
+    '%s: a patch that committed while its answer was lost: the error surfaces, and all three are expired',
+    async (_name, call, status) => {
+      store().reset([
+        wallOf('conf-A'),
+        ...withPhoto(postOf('conf-A', 'p1', { status })),
+      ])
+      store().afterNextCommit(() => {
+        throw new Error('socket hang up')
+      })
+      await expect(call()).rejects.toThrow('socket hang up')
+      expect(store().commits).toHaveLength(1)
+      expect(expired()).toEqual(tags())
+    },
+  )
+
+  it('a mark that committed while its answer was lost: the error surfaces, and the wall, queue and device are expired', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'p1', { status: 'approved' })),
+    ])
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+    await expect(
+      organizer().deletePost({ id: P, shown: SHOWN }),
+    ).rejects.toThrow('socket hang up')
+    expect(store().doc(P)).toMatchObject({ status: 'deleting' })
+    expect(expired()).toEqual(tags())
+  })
+
+  it.each([
+    ['approve', 'changed'],
+    ['reject', 'changed'],
+    ['remove', 'changed'],
+    ['deletePost', 'gone'],
+  ] as const)(
+    '%s from a STALE card: a replacement re-submitted under the id is not touched, and the device the action read is expired',
+    async (name, answer) => {
+      // The card showed the original; a replacement from another device
+      // is stored under its id before the action's first read.
+      store().reset([
+        wallOf('conf-A'),
+        ...withPhoto(
+          postOf('conf-A', 'p1', {
+            _createdAt: '2026-10-26T08:59:00Z',
+            status: name === 'remove' ? 'approved' : 'pending',
+            deviceKey: 'device-new',
+          }),
+        ),
+      ])
+      const original = {
+        createdAt: '2026-10-26T07:30:00Z',
+        assetId: 'image-shap1-1600x1000-jpg',
+      }
+      const call = {
+        approve: () =>
+          organizer().approve({ id: P, from: 'pending', shown: original }),
+        reject: () => organizer().reject({ id: P, shown: original }),
+        remove: () => organizer().remove({ id: P, shown: original }),
+        deletePost: () => organizer().deletePost({ id: P, shown: original }),
+      }[name]
+      await expect(call()).resolves.toEqual({ status: answer })
+      expect(store().commits).toEqual([])
+      expect(expired()).toEqual(tags('device-new'))
+    },
+  )
+
+  it('refuses an id that is not a Wall Post id, reading nothing', async () => {
+    for (const id of ['wallPost-p1,wallPost-p2', 'drafts.wallPost-p1', 'x']) {
+      await expect(
+        organizer().deletePost({ id, shown: SHOWN }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      })
+    }
+    expect(store().docReads).toEqual([])
+  })
+
+  describe('approveAllPending', () => {
+    it('approves the pending posts, says how many, and expires each device once', async () => {
+      store().reset([
+        wallOf('conf-A'),
+        ...withPhoto(postOf('conf-A', 'p1', { deviceKey: 'd1' })),
+        ...withPhoto(postOf('conf-A', 'p2', { deviceKey: 'd1' })),
+        ...withPhoto(postOf('conf-A', 'p3', { deviceKey: 'd2' })),
+        ...withPhoto(postOf('conf-B', 'p4', { deviceKey: 'd3' })),
+      ])
+      // The organizer was shown all four ids; p4 is another conference's.
+      const ids = ['wallPost-p1', 'wallPost-p2', 'wallPost-p3', 'wallPost-p4']
+      await expect(
+        organizer().approveAllPending({ shown: shownAll(ids) }),
+      ).resolves.toEqual({
+        approved: 3,
+        pending: 3,
+      })
+      expect(store().doc('wallPost-p4')?.status).toBe('pending')
+      const tagged = expired().map(([tag]) => tag)
+      expect(new Set(tagged)).toEqual(
+        new Set([
+          'photo-wall-admin:conf-A',
+          'photo-wall:conf-A',
+          'photo-wall-device:d1',
+          'photo-wall-device:d2',
+        ]),
+      )
+      expect(tagged.filter((t) => t === 'photo-wall-device:d1')).toHaveLength(1)
+    })
+
+    it('approves only the posts the organizer was shown: one that arrived since stays pending', async () => {
+      store().reset([
+        wallOf('conf-A'),
+        ...withPhoto(postOf('conf-A', 'p1')),
+        ...withPhoto(postOf('conf-A', 'p2')),
+      ])
+      await expect(
+        organizer().approveAllPending({ shown: shownAll(['wallPost-p1']) }),
+      ).resolves.toEqual({ approved: 1, pending: 1 })
+      expect(store().doc('wallPost-p1')?.status).toBe('approved')
+      expect(store().doc('wallPost-p2')?.status).toBe('pending')
+    })
+
+    it('refuses more ids than the wall can hold pending, reading nothing', async () => {
+      const ids = Array.from({ length: 201 }, (_, i) => `wallPost-p${i}`)
+      await expect(
+        organizer().approveAllPending({ shown: shownAll(ids) }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      expect(store().reads).toEqual([])
+    })
+
+    it('with nothing to approve, still expires the wall and the queue (every outcome)', async () => {
+      store().reset([wallOf('conf-A')])
+      await expect(
+        organizer().approveAllPending({ shown: shownAll([P]) }),
+      ).resolves.toEqual({
+        approved: 0,
+        pending: 0,
+      })
+      expect(expired().map(([tag]) => tag)).toEqual([
+        'photo-wall-admin:conf-A',
+        'photo-wall-device:',
+        'photo-wall:conf-A',
+      ])
+    })
+
+    it('a patch that committed while its answer was lost: not counted, but its device is expired too', async () => {
+      store().reset([
+        wallOf('conf-A'),
+        ...withPhoto(postOf('conf-A', 'p1', { deviceKey: 'd1' })),
+        ...withPhoto(
+          postOf('conf-A', 'p2', {
+            deviceKey: 'd2',
+            submittedAt: '2026-10-26T07:40:00Z',
+          }),
+        ),
+      ])
+      store().afterNextCommit(() => {
+        throw new Error('socket hang up')
+      })
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      await expect(
+        organizer().approveAllPending({
+          shown: shownAll(['wallPost-p1', 'wallPost-p2']),
+        }),
+      ).resolves.toEqual({ approved: 1, pending: 2 })
+      expect(store().doc('wallPost-p1')?.status).toBe('approved')
+      expect(new Set(expired().map(([tag]) => tag))).toEqual(
+        new Set([
+          'photo-wall-admin:conf-A',
+          'photo-wall:conf-A',
+          'photo-wall-device:d1',
+          'photo-wall-device:d2',
+        ]),
+      )
+    })
+  })
+
+  describe('organizers of the conference organization only', () => {
+    const calls = (as: () => ReturnType<typeof caller>) => [
+      () => as().approve({ id: P, from: 'pending', shown: SHOWN }),
+      () => as().reject({ id: P, shown: SHOWN }),
+      () => as().remove({ id: P, shown: SHOWN }),
+      () => as().deletePost({ id: P, shown: SHOWN }),
+      () => as().approveAllPending({ shown: shownAll([P]) }),
+    ]
+
+    it.each([
+      ['a speaker', () => caller('sp-ada')],
+      ['an organizer of another organization', () => caller('sp-x', ['org-B'])],
+    ])('refuses %s, reading and writing nothing', async (_who, as) => {
+      store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+      for (const call of calls(as)) {
+        await expect(call()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      }
+      expect(store().reads).toEqual([])
+      expect(store().docReads).toEqual([])
+      expect(store().commits).toEqual([])
+      expect(store().doc(P)?.status).toBe('pending')
+    })
+
+    it('refuses, reading and writing nothing, when the conference has moved to another organization', async () => {
+      store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+      cdn.live = { organization: { _ref: 'org-B' } }
+      for (const call of calls(organizer)) {
+        await expect(call()).rejects.toMatchObject({
+          code: 'NOT_FOUND',
+          message: 'Could not resolve conference from domain',
+        })
+      }
+      expect(store().docReads).toEqual([])
+      expect(store().reads.filter((r) => r.query.includes('wallPost'))).toEqual(
+        [],
+      )
+      expect(store().commits).toEqual([])
+      expect(expired()).toEqual([])
+    })
+
+    it.each([
+      [
+        'approve',
+        () => organizer().approve({ id: P, from: 'pending', shown: SHOWN }),
+      ],
+      ['reject', () => organizer().reject({ id: P, shown: SHOWN })],
+      ['remove', () => organizer().remove({ id: P, shown: SHOWN })],
+      ['deletePost', () => organizer().deletePost({ id: P, shown: SHOWN })],
+      [
+        'approveAllPending',
+        () => organizer().approveAllPending({ shown: shownAll([P]) }),
+      ],
+    ] as const)('%s reads the conference live', async (_name, call) => {
+      store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+      vi.mocked(getConferenceForCurrentDomain).mockClear()
+      await call()
+      expect(
+        vi
+          .mocked(getConferenceForCurrentDomain)
+          .mock.calls.some(([opts]) => opts?.uncached === true),
+      ).toBe(true)
+    })
+  })
+
+  it('pins the mutation surface: a new write is a deliberate act', () => {
+    const mutations = Object.entries(
+      photoWallRouter._def.procedures as Record<
+        string,
+        { _def?: { type?: string } }
+      >,
+    )
+      .filter(([, p]) => p._def?.type === 'mutation')
+      .map(([name]) => name)
+      .sort()
+    expect(mutations).toMatchInlineSnapshot(`
+      [
+        "approve",
+        "approveAllPending",
+        "deletePost",
+        "reject",
+        "remove",
+        "setUp",
+        "updateSettings",
+      ]
+    `)
   })
 })
 

@@ -13,6 +13,34 @@ export const WALL_POST_STATUSES = [
 ] as const
 export type WallPostStatus = (typeof WALL_POST_STATUSES)[number]
 
+/** What an organizer can decide about a post (§10); Delete is apart. */
+export type ModerationAction = 'approve' | 'reject' | 'remove'
+
+/**
+ * THE ALLOWED TRANSITIONS (§10): the statuses each decision may start from.
+ * The server refuses anything else before any write; the cards offer only
+ * these, and Delete, which every status allows.
+ */
+export const ALLOWED_FROM = {
+  approve: ['pending', 'notShown'],
+  reject: ['pending'],
+  remove: ['approved'],
+} as const satisfies Record<ModerationAction, readonly WallPostStatus[]>
+
+/**
+ * At most this many posts in one Approve all: the wall's pending cap (§6.3),
+ * which the queue shows in full.
+ */
+export const APPROVE_ALL_MAX = 200
+
+/** Whether `action` may start from `status`. */
+export function allowsFrom<A extends ModerationAction>(
+  action: A,
+  status: WallPostStatus,
+): status is (typeof ALLOWED_FROM)[A][number] {
+  return (ALLOWED_FROM[action] as readonly WallPostStatus[]).includes(status)
+}
+
 /**
  * The square crop's position on the whole photo, CSS `object-position`
  * semantics: each 0–1, where 0 is the left/top edge and 1 the right/bottom.
@@ -29,6 +57,19 @@ export interface ModerationPhoto {
   height: number
 }
 
+/**
+ * Which post a card shows, beyond its id: a submit that reuses the
+ * `uploadId` after a Delete creates a new post under the same id (§6.2).
+ * Every card action sends it, and the server refuses (before any write) a
+ * post that is not this one.
+ */
+export interface ShownIncarnation {
+  /** The post's `_createdAt`. */
+  createdAt: string | null
+  /** Its photo's asset id (null for a post without one, or `deleting`). */
+  assetId: string | null
+}
+
 /** One Wall Post on the admin page (§10). */
 export interface ModerationPost {
   _id: string
@@ -42,6 +83,7 @@ export interface ModerationPost {
   submittedAt: string | null
   approvedAt: string | null
   decidedAt: string | null
+  incarnation: ShownIncarnation
 }
 
 /** What `photoWall.moderationQueue` answers: every post of the conference. */

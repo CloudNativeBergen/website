@@ -3,16 +3,29 @@ import { z } from 'zod'
 import { adminProcedure, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
+  ALLOWED_FROM,
+  APPROVE_ALL_MAX,
   postingState,
   photoWallLinks,
   POSTING_MODES,
   type PhotoWall,
   type PhotoWallAdminView,
 } from '@/lib/photo-wall'
-import { expirePhotoWall, getModerationQueue } from '@/lib/photo-wall/cache'
+import {
+  expirePhotoWall,
+  expireWallPost,
+  getModerationQueue,
+} from '@/lib/photo-wall/cache'
+import { deleteWallPost } from '@/lib/photo-wall/delete'
 import { COUNT_TIMEOUT_MS, countConsentedPhotos } from '@/lib/photo-wall/export'
+import {
+  approveAllPending,
+  moderateWallPost,
+  type ModerationResult,
+} from '@/lib/photo-wall/moderate'
 import { pendingOf } from '@/lib/photo-wall/moderation'
 import { liveConferenceInOrg } from '@/lib/photo-wall/tenant'
+import { isWallPostId } from '@/lib/photo-wall/wall-post'
 import {
   readPhotoWall,
   setUpPhotoWall,
@@ -86,6 +99,57 @@ async function adminView(
   }
 }
 
+/**
+ * THE EXPIRY RULE of every moderation write (§8): the wall, the queue and
+ * the device of each post written to, on EVERY outcome, a throw and a
+ * `changed` or `gone` answer included. A write can commit and still throw
+ * (its answer lost), so "nothing was written" is never known for sure, and
+ * over-expiring is cheap. A post whose device is not known (no post, or the
+ * read failed) expires the wall and the queue only: the empty key's tag
+ * holds nothing.
+ */
+function expirePosts(conferenceId: string, deviceKeys: (string | null)[]) {
+  const keys = deviceKeys.length ? deviceKeys : [null]
+  for (const key of new Set(keys)) {
+    expireWallPost(conferenceId, key ?? '', { wall: true })
+  }
+}
+
+/**
+ * Approve, Reject or Remove (§10) on the live conference: decide, expire by
+ * {@link expirePosts} the device of every post the decision READ (it writes
+ * only a post it read, and reports each read before any write, so a write
+ * that commits and then throws is covered too), and answer the outcome only,
+ * never the device key.
+ */
+async function moderate(
+  orgId: string | null,
+  args: Omit<Parameters<typeof moderateWallPost>[0], 'conferenceId' | 'onRead'>,
+): Promise<{ status: ModerationResult['status'] }> {
+  const conference = await requestConference(orgId)
+  const devices: (string | null)[] = []
+  try {
+    const result = await moderateWallPost({
+      conferenceId: conference._id,
+      ...args,
+      onRead: (deviceKey) => devices.push(deviceKey),
+    })
+    return { status: result.status }
+  } finally {
+    expirePosts(conference._id, devices)
+  }
+}
+
+const postId = z.string().refine(isWallPostId, 'Not a Wall Post id')
+
+/** The post a card showed (§10): which one, beyond its id. */
+const shown = z
+  .object({
+    createdAt: z.string().max(64).nullable(),
+    assetId: z.string().max(200).nullable(),
+  })
+  .strict()
+
 const settingsInput = z
   .object({
     postingMode: z.enum(POSTING_MODES).optional(),
@@ -98,8 +162,9 @@ const settingsInput = z
 
 /**
  * `/admin/photo-wall` (Photo Wall spec §10): the wall's settings and links,
- * Set up, and the Posting and Sponsor strip switches. Organizers of the
- * conference's organization only, through the `adminProcedure` waist.
+ * Set up, the Posting and Sponsor strip switches, the moderation queue and
+ * its actions. Organizers of the conference's organization only, through the
+ * `adminProcedure` waist; every write also checks the live conference.
  */
 export const photoWallRouter = router({
   settings: adminProcedure.query(async ({ ctx }) => {
@@ -142,5 +207,106 @@ export const photoWallRouter = router({
       }
       expirePhotoWall(conference._id)
       return adminView(conference, wall)
+    }),
+
+  /**
+   * Approve a Pending or Not shown post (§10). `from` is the status its card
+   * showed: a post another organizer moved meanwhile is left as it is.
+   * Answers `done`, `changed` (the card refreshes) or `gone` ("This photo
+   * was deleted").
+   */
+  approve: adminProcedure
+    .input(
+      z
+        .object({ id: postId, from: z.enum(ALLOWED_FROM.approve), shown })
+        .strict(),
+    )
+    .mutation(({ ctx, input }) =>
+      moderate(ctx.orgId, {
+        postId: input.id,
+        action: 'approve',
+        from: input.from,
+        shown: input.shown,
+      }),
+    ),
+
+  /** Reject a Pending post (§10): Not shown. */
+  reject: adminProcedure
+    .input(z.object({ id: postId, shown }).strict())
+    .mutation(({ ctx, input }) =>
+      moderate(ctx.orgId, {
+        postId: input.id,
+        action: 'reject',
+        shown: input.shown,
+      }),
+    ),
+
+  /** Remove a post from the wall (§10): Not shown. */
+  remove: adminProcedure
+    .input(z.object({ id: postId, shown }).strict())
+    .mutation(({ ctx, input }) =>
+      moderate(ctx.orgId, {
+        postId: input.id,
+        action: 'remove',
+        shown: input.shown,
+      }),
+    ),
+
+  /**
+   * Approve all pending (§10) of the posts the organizer was SHOWN: `shown`
+   * are the Pending cards on their screen, and only those still pending on
+   * this wall, and still the post each card showed, are approved, so a post
+   * that arrived since their last poll never reaches the wall unseen.
+   * Answers how many it approved of how many of them were still pending.
+   */
+  approveAllPending: adminProcedure
+    .input(
+      z
+        .object({
+          shown: z
+            .array(shown.extend({ id: postId }).strict())
+            .max(APPROVE_ALL_MAX),
+        })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const conference = await requestConference(ctx.orgId)
+      // Every post it tried, acknowledged or not (a patch can commit and
+      // still throw); none known if the run itself failed.
+      let attempted: string[] = []
+      try {
+        const result = await approveAllPending({
+          conferenceId: conference._id,
+          shown: input.shown,
+        })
+        attempted = result.deviceKeys
+        return { approved: result.approved, pending: result.pending }
+      } finally {
+        expirePosts(conference._id, attempted)
+      }
+    }),
+
+  /**
+   * Delete now (§10, §12): the post and its photo for good, from any status;
+   * on a `deleting` post, Try again. Answers `deleted`, `failed` (the card
+   * says "Couldn't delete. Try again.") or `gone`.
+   */
+  deletePost: adminProcedure
+    .input(z.object({ id: postId, shown }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const conference = await requestConference(ctx.orgId)
+      // The device of every post the Delete read, as for the decisions.
+      const devices: (string | null)[] = []
+      try {
+        const result = await deleteWallPost({
+          conferenceId: conference._id,
+          postId: input.id,
+          shown: input.shown,
+          onRead: (deviceKey) => devices.push(deviceKey),
+        })
+        return { status: result.status }
+      } finally {
+        expirePosts(conference._id, devices)
+      }
     }),
 })

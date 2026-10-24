@@ -29,7 +29,7 @@ import {
   getFeedbackSlots,
   PUBLISHED_ONLY,
 } from './sanity'
-import { sanityStatus } from './sanity-error'
+import { sanityStatus } from '@/lib/sanity/status'
 import {
   combineTotals,
   talkTotals,

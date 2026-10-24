@@ -10,6 +10,7 @@ import {
 import { ModerationQueue, ModerationQueueView } from './ModerationQueue'
 import { PendingSummary, PendingSummaryView } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
+import type { PostActionOutcome } from './WallPostCard'
 
 /** Local fixture photos (`.storybook/main.ts` staticDirs): no network. */
 const LANDSCAPE = {
@@ -46,6 +47,7 @@ const post = (fields: Partial<ModerationPost>): ModerationPost => ({
   submittedAt: '2026-10-26T07:30:00Z',
   approvedAt: null,
   decidedAt: null,
+  incarnation: { createdAt: null, assetId: null },
   ...fields,
 })
 
@@ -117,11 +119,15 @@ const meta = {
     docs: {
       description: {
         component:
-          'The moderation queue on `/admin/photo-wall` (Photo Wall spec §8, §10), slice M4a: the tabs **Pending**, **On the wall** and **Not shown**, and a card per Wall Post with the whole photo, the square crop the wall shows outlined, caption, name, submitted time and the Marketing OK mark. A `deleting` post sits in Not shown with no image and "Couldn’t delete. Try again." (§12). No actions yet (M4b). Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). One column on a phone, a grid on desktop. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The moderation queue on `/admin/photo-wall` (Photo Wall spec §8, §10), slices M4a and M4b: the tabs **Pending**, **On the wall** and **Not shown**, and a card per Wall Post with the whole photo, the square crop the wall shows outlined, caption, name, submitted time and the Marketing OK mark. Each card offers the actions of its status: Pending **Approve**, **Reject**; On the wall **Remove**; Not shown **Approve**; every tab **Delete now** with an inline confirm. A `deleting` post sits in Not shown with no image, "Couldn’t delete. Try again." and only **Try again** (§12). The Pending tab has **Approve all pending (N)** with an inline confirm. What an action did is said once, politely, above the tabs. Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). One column on a phone, a grid on desktop. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
-  args: { queue: QUEUE },
+  args: {
+    queue: QUEUE,
+    onAction: fn(async (): Promise<PostActionOutcome> => 'done'),
+    onApproveAll: fn(async () => ({ approved: 3, pending: 3 })),
+  },
 } satisfies Meta<typeof ModerationQueueView>
 
 export default meta
@@ -344,7 +350,13 @@ export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
     onSetUp: fn(),
     onChange: fn(),
     summary: <PendingSummaryView pending={countByTab(POSTS).pending} />,
-    queue: <ModerationQueueView queue={QUEUE} />,
+    queue: (
+      <ModerationQueueView
+        queue={QUEUE}
+        onAction={async () => 'done'}
+        onApproveAll={async () => ({ approved: 3, pending: 3 })}
+      />
+    ),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
@@ -428,6 +440,17 @@ export const Polled: StoryObj<typeof ModerationQueue> = {
         http.get('/api/trpc/photoWall.moderationQueue', () =>
           HttpResponse.json({ result: { data: QUEUE } }),
         ),
+        ...['approve', 'reject', 'remove'].map((name) =>
+          http.post(`/api/trpc/photoWall.${name}`, () =>
+            HttpResponse.json({ result: { data: { status: 'done' } } }),
+          ),
+        ),
+        http.post('/api/trpc/photoWall.deletePost', () =>
+          HttpResponse.json({ result: { data: { status: 'deleted' } } }),
+        ),
+        http.post('/api/trpc/photoWall.approveAllPending', () =>
+          HttpResponse.json({ result: { data: { approved: 3, pending: 3 } } }),
+        ),
       ],
     },
   },
@@ -438,6 +461,16 @@ export const Polled: StoryObj<typeof ModerationQueue> = {
       await canvas.findByText('3 photos waiting', {}, { timeout: 5000 }),
     ).toBeVisible()
     await expect(canvas.getAllByRole('article')).toHaveLength(3)
+    // An action goes through the real client to the mocked mutation.
+    const first = canvas.getAllByRole('article')[0]
+    await userEvent.click(
+      within(first).getByRole('button', { name: 'Approve' }),
+    )
+    await expect(
+      await canvas.findByText(
+        'Approved. It shows on the wall within a few seconds.',
+      ),
+    ).toBeVisible()
   },
 }
 
@@ -482,4 +515,158 @@ export const InThePageFirstLoadFailed: StoryObj<typeof PhotoWallAdmin> = {
     await expect(canvas.getByRole('tab', { name: 'Pending' })).toBeVisible()
     await expect(canvas.getByRole('tabpanel')).toHaveTextContent(/^$/)
   },
+}
+
+/** Delete now asks first, inline (§10); focus goes to Cancel. */
+export const DeleteConfirm: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const first = canvas.getAllByRole('article')[0]
+    await userEvent.click(
+      within(first).getByRole('button', { name: 'Delete now' }),
+    )
+    const confirm = within(first).getByRole('group', {
+      name: 'Delete this photo for good? It can’t be undone.',
+    })
+    await expect(confirm).toBeVisible()
+    await expect(
+      within(confirm).getByRole('button', { name: 'Cancel' }),
+    ).toHaveFocus()
+  },
+}
+export const DeleteConfirmDark: Story = {
+  ...DeleteConfirm,
+  globals: { theme: 'dark' },
+}
+export const DeleteConfirmPhone: Story = {
+  ...DeleteConfirm,
+  parameters: PHONE,
+}
+export const DeleteConfirmPhoneDark: Story = {
+  ...DeleteConfirm,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+
+/** Approve all pending (3), confirmed, then the count it reports. */
+export const ApproveAll: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Approve all pending (3)' }),
+    )
+    await expect(
+      canvas.getByRole('group', {
+        name: 'Approve all 3 pending photos? They go on the wall.',
+      }),
+    ).toBeVisible()
+    await expect(args.onApproveAll).not.toHaveBeenCalled()
+  },
+}
+export const ApproveAllDark: Story = {
+  ...ApproveAll,
+  globals: { theme: 'dark' },
+}
+export const ApproveAllPhoneDark: Story = {
+  ...ApproveAll,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+/** Some posts changed meanwhile: it says how many of how many. */
+export const ApproveAllPartly: Story = {
+  args: { onApproveAll: fn(async () => ({ approved: 2, pending: 3 })) },
+  parameters: PHONE,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Approve all pending (3)' }),
+    )
+    await userEvent.click(canvas.getByRole('button', { name: 'Approve all' }))
+    await expect(canvas.getByRole('status')).toHaveTextContent(
+      /^Approved 2 of 3\./,
+    )
+  },
+}
+
+/** A press in flight: its label says so, every action of the card waits. */
+export const Busy: Story = {
+  args: { onAction: fn(() => new Promise<PostActionOutcome>(() => {})) },
+  parameters: PHONE,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const first = canvas.getAllByRole('article')[0]
+    await userEvent.click(
+      within(first).getByRole('button', { name: 'Approve' }),
+    )
+    await expect(
+      within(first).getByRole('button', { name: 'Approving…' }),
+    ).toHaveAttribute('aria-disabled', 'true')
+    await expect(
+      within(first).getByRole('button', { name: 'Reject' }),
+    ).toHaveAttribute('aria-disabled', 'true')
+  },
+}
+
+/** The action did not go through: the card says so. */
+export const ActionFailed: Story = {
+  args: { onAction: fn(async (): Promise<PostActionOutcome> => 'failed') },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const first = canvas.getAllByRole('article')[0]
+    await userEvent.click(within(first).getByRole('button', { name: 'Reject' }))
+    await expect(within(first).getByRole('alert')).toHaveTextContent(
+      'Couldn’t reject. Try again.',
+    )
+  },
+}
+export const ActionFailedPhoneDark: Story = {
+  ...ActionFailed,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+
+/** Another organizer decided first: nothing written, and the queue says so. */
+export const ChangedMeanwhile: Story = {
+  args: { onAction: fn(async (): Promise<PostActionOutcome> => 'changed') },
+  parameters: PHONE,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const first = canvas.getAllByRole('article')[0]
+    await userEvent.click(
+      within(first).getByRole('button', { name: 'Approve' }),
+    )
+    await expect(canvas.getByRole('status')).toHaveTextContent(
+      'Another organizer changed this photo first. Showing it as it is now.',
+    )
+  },
+}
+export const ChangedMeanwhileDark: Story = {
+  ...ChangedMeanwhile,
+  globals: { theme: 'dark' },
+}
+
+/**
+ * Approve all still running after a tab switch: the queue holds the run, so
+ * back on Pending the row says so and a press sends nothing.
+ */
+export const ApproveAllInFlight: Story = {
+  args: { onApproveAll: fn(() => new Promise<{ approved: number }>(() => {})) },
+  parameters: PHONE,
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Approve all pending (3)' }),
+    )
+    await userEvent.click(canvas.getByRole('button', { name: 'Approve all' }))
+    await userEvent.click(canvas.getByRole('tab', { name: 'On the wall (2)' }))
+    await userEvent.click(canvas.getByRole('tab', { name: 'Pending (3)' }))
+    const busy = canvas.getByRole('button', { name: 'Approving all…' })
+    await expect(busy).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.click(busy)
+    await expect(args.onApproveAll).toHaveBeenCalledTimes(1)
+  },
+}
+export const ApproveAllInFlightDark: Story = {
+  ...ApproveAllInFlight,
+  globals: { theme: 'dark' },
 }

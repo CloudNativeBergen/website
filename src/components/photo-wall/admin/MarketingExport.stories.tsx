@@ -104,6 +104,7 @@ const post = (fields: Partial<ModerationPost>): ModerationPost => ({
   submittedAt: '2026-10-26T07:30:00Z',
   approvedAt: '2026-10-26T07:40:00Z',
   decidedAt: '2026-10-26T07:40:00Z',
+  incarnation: { createdAt: null, assetId: null },
   ...fields,
 })
 /** Two exported; a pending, a Not shown and a non-consented one are not. */
