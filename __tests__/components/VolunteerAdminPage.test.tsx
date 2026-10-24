@@ -197,7 +197,7 @@ describe('VolunteerAdminPage', () => {
     )
     renderPage()
 
-    expect(screen.getByText('All 1 applications are rejected.')).toBeTruthy()
+    expect(screen.getByText('The only application is rejected.')).toBeTruthy()
     expect(screen.queryByText('Rita')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Show Rejected' }))
     expect(screen.getByText('Rita')).toBeTruthy()
