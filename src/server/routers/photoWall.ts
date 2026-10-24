@@ -11,6 +11,7 @@ import {
 } from '@/lib/photo-wall'
 import { expirePhotoWall, getModerationQueue } from '@/lib/photo-wall/cache'
 import { COUNT_TIMEOUT_MS, countConsentedPhotos } from '@/lib/photo-wall/export'
+import { pendingOf } from '@/lib/photo-wall/moderation'
 import { liveConferenceInOrg } from '@/lib/photo-wall/tenant'
 import {
   readPhotoWall,
@@ -105,6 +106,16 @@ export const photoWallRouter = router({
     const conference = await requestConference(ctx.orgId)
     return adminView(conference, await readPhotoWall(conference._id))
   }),
+
+  /**
+   * The pending count on the admin nav's Photo Wall entry (§10, P6), read
+   * when the admin shell mounts; `/admin/photo-wall` pushes each count it
+   * polls into it. Counted from the polled queue's cache entry, so the badge
+   * and the page agree, and a warm cache asks Sanity for nothing.
+   */
+  pendingCount: adminProcedure.query(async ({ ctx }) =>
+    pendingOf(await getModerationQueue(await polledConferenceId(ctx.orgId))),
+  ),
 
   /** Every Wall Post with its status, polled every 10 s (§8, §10). */
   moderationQueue: adminProcedure.query(async ({ ctx }) =>

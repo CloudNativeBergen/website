@@ -8,6 +8,7 @@ import {
   visibleDestinations,
   visibleNavSections,
   withNavBadges,
+  type AdminNavSection,
 } from './registry'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
 import { APPEARANCE_SECTIONS } from '@/lib/settings/appearance'
@@ -290,17 +291,16 @@ describe('Session Feedback nav entry (speaker feedback spec §10.1)', () => {
   })
 })
 
-describe('nav badges (speaker feedback spec §10.1)', () => {
-  const feedbackEntry = (sections: ReturnType<typeof withNavBadges>) =>
-    sections
-      .flatMap((s) => s.items)
-      .find((item) => item.href === '/admin/feedback')
+/** The nav entry at `href`. */
+const entry = (sections: readonly AdminNavSection[], href: string) =>
+  sections.flatMap((s) => s.items).find((item) => item.href === href)
 
+describe('nav badges (speaker feedback spec §10.1)', () => {
   it('puts the flagged count on Session Feedback, labelled for a screen reader', () => {
     const sections = withNavBadges(visibleNavSections([]), {
       flaggedFeedback: 3,
     })
-    expect(feedbackEntry(sections)?.badge).toEqual({
+    expect(entry(sections, '/admin/feedback')?.badge).toEqual({
       count: 3,
       label: 'flagged',
     })
@@ -313,13 +313,55 @@ describe('nav badges (speaker feedback spec §10.1)', () => {
   it('shows no badge for 0 or an unknown count', () => {
     for (const counts of [{ flaggedFeedback: 0 }, {}]) {
       expect(
-        feedbackEntry(withNavBadges(visibleNavSections([]), counts))?.badge,
+        entry(withNavBadges(visibleNavSections([]), counts), '/admin/feedback')
+          ?.badge,
       ).toBeUndefined()
     }
   })
 
   it('leaves the registry itself untouched', () => {
     withNavBadges(ADMIN_NAV_SECTIONS, { flaggedFeedback: 3 })
-    expect(feedbackEntry(ADMIN_NAV_SECTIONS)?.badge).toBeUndefined()
+    expect(entry(ADMIN_NAV_SECTIONS, '/admin/feedback')?.badge).toBeUndefined()
+  })
+})
+
+describe('Photo Wall nav badge (Photo Wall spec §10, P6)', () => {
+  it('puts the pending count on Photo Wall, labelled for a screen reader', () => {
+    const sections = withNavBadges(visibleNavSections([]), {
+      pendingWallPosts: 4,
+    })
+    expect(entry(sections, '/admin/photo-wall')?.badge).toEqual({
+      count: 4,
+      label: 'pending',
+    })
+    expect(
+      sections.flatMap((s) => s.items).filter((item) => item.badge),
+    ).toHaveLength(1)
+  })
+
+  it('keeps each count on its own entry', () => {
+    const sections = withNavBadges(visibleNavSections([]), {
+      flaggedFeedback: 3,
+      pendingWallPosts: 4,
+    })
+    expect(entry(sections, '/admin/feedback')?.badge).toEqual({
+      count: 3,
+      label: 'flagged',
+    })
+    expect(entry(sections, '/admin/photo-wall')?.badge).toEqual({
+      count: 4,
+      label: 'pending',
+    })
+  })
+
+  it('shows no badge for 0 or a count that did not arrive', () => {
+    for (const counts of [{ pendingWallPosts: 0 }, {}]) {
+      expect(
+        entry(
+          withNavBadges(visibleNavSections([]), counts),
+          '/admin/photo-wall',
+        )?.badge,
+      ).toBeUndefined()
+    }
   })
 })

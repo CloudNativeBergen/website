@@ -817,3 +817,80 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
     )
   })
 })
+
+describe('photoWall.pendingCount (§10, P6: the admin nav badge)', () => {
+  it('counts only the pending posts of this conference', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'p1')),
+      ...withPhoto(postOf('conf-A', 'p2')),
+      ...withPhoto(postOf('conf-A', 'p3', { status: 'approved' })),
+      ...withPhoto(postOf('conf-A', 'p4', { status: 'notShown' })),
+      postOf('conf-A', 'p5', { status: 'deleting', photo: undefined }),
+      // A draft of this conference is never a Wall Post (§8).
+      { ...postOf('conf-A', 'p6'), _id: 'drafts.wallPost-p6' },
+      // Another conference's pending post, carrying THIS conference's id in
+      // every field but its reference: only a tenant predicate keeps it out.
+      ...withPhoto(
+        postOf('conf-B', 'conf-A', {
+          name: 'conf-A',
+          caption: 'conf-A',
+          deviceKey: 'conf-A',
+        }),
+      ),
+    ])
+    await expect(organizer().pendingCount()).resolves.toBe(2)
+  })
+
+  it('is 0 before Set up and before any post', async () => {
+    store().reset([...withPhoto(postOf('conf-B', 'b1'))])
+    await expect(organizer().pendingCount()).resolves.toBe(0)
+    store().reset([wallOf('conf-A')])
+    await expect(organizer().pendingCount()).resolves.toBe(0)
+  })
+
+  it("counts the cached tenant's posts, never from a live conference read", async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'a1')),
+      ...withPhoto(postOf('conf-Z', 'z1')),
+      ...withPhoto(postOf('conf-Z', 'z2')),
+    ])
+    cdn.conference = { _id: 'conf-Z' }
+    cdn.live = { _id: 'conf-A' }
+    await expect(organizer().pendingCount()).resolves.toBe(2)
+    const calls = vi.mocked(getConferenceForCurrentDomain).mock.calls
+    expect(calls.filter(([opts]) => opts?.uncached === true)).toEqual([])
+  })
+
+  it('reads the moderation queue’s cache entry: one read per tag expiry, shared with the page (§8)', async () => {
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    await organizer().pendingCount()
+    expect(h.cacheTag).toHaveBeenCalledWith('photo-wall-admin:conf-A')
+    expect(h.cacheLife).toHaveBeenCalledWith('default')
+    const reads = store().reads.filter((r) => r.query.includes('wallPost'))
+    expect(reads.map((r) => r.client)).toEqual(['uncached'])
+  })
+
+  it.each([
+    ['a speaker', () => caller('sp-ada')],
+    ['an organizer of another organization', () => caller('sp-x', ['org-B'])],
+  ])('refuses %s before any read', async (_who, as) => {
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    await expect(as().pendingCount()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(store().reads).toEqual([])
+  })
+
+  it("refuses, reading no post, when the tenant read no longer names the waist's organization", async () => {
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    cdn.movedAfter = 1
+    await expect(organizer().pendingCount()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+    expect(store().reads.filter((r) => r.query.includes('wallPost'))).toEqual(
+      [],
+    )
+  })
+})
