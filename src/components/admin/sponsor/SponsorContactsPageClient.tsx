@@ -182,13 +182,20 @@ export function SponsorContactsPageClient({
         description="Contact and billing details for accepted sponsors of"
         contextHighlight={conference.title}
         stats={[
-          {
-            value: stats.billingReady,
-            label: 'Ready to invoice',
-            color: 'green',
-          },
-          // Doubles as the billing filter; hidden at 0 unless it is the
-          // active filter, so it can always be switched off again.
+          // Both cards double as the billing filter; each is hidden at 0
+          // unless it is the active filter, so it can always be switched off.
+          ...(stats.billingReady > 0 || billingFilter === 'yes'
+            ? [
+                {
+                  value: stats.billingReady,
+                  label: 'Ready to invoice',
+                  color: 'green' as const,
+                  onClick: () =>
+                    setBillingFilter(billingFilter === 'yes' ? '' : 'yes'),
+                  pressed: billingFilter === 'yes',
+                },
+              ]
+            : []),
           ...(stats.billingGaps > 0 || billingFilter === 'no'
             ? [
                 {
