@@ -787,8 +787,8 @@ describe('the actions (§10)', () => {
     expect(buttons(card('Keynote crowd'))).toEqual([
       'Approve',
       'Reject',
-      'Withdraw marketing OK',
       'Delete now',
+      'Withdraw marketing OK',
     ])
     fireEvent.click(tab(/^On the wall/))
     expect(buttons(screen.getByRole('article'))).toEqual([

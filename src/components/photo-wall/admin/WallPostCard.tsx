@@ -116,20 +116,24 @@ export function WallPostCard({
 }
 
 /**
- * The actions a post offers: the decisions its status's transitions allow
- * (§10), Withdraw marketing OK while it has the mark (never the other way:
- * only the contributor gives consent, §12), and Delete, which every status
- * allows; a `deleting` post only that, as Try again.
+ * The actions a status offers: the decisions its transitions allow (§10),
+ * and Delete, which every status allows; a `deleting` post only that, as
+ * Try again.
  */
-const actionsFor = (post: ModerationPost): PostAction[] => [
+const actionsFor = (status: ModerationPost['status']): PostAction[] => [
   ...(['approve', 'reject', 'remove'] as const).filter((action) =>
-    allowsFrom(action, post.status),
+    allowsFrom(action, status),
   ),
-  ...(post.marketingConsent && post.status !== 'deleting'
-    ? (['withdrawMarketing'] as const)
-    : []),
   'delete',
 ]
+
+/**
+ * Withdraw marketing OK, on its own quiet line, while the post has the mark
+ * (never the other way: only the contributor gives consent, §12), and not on
+ * a `deleting` post.
+ */
+const offersWithdraw = (post: ModerationPost) =>
+  post.marketingConsent && post.status !== 'deleting'
 
 const LABELS: Record<
   PostAction,
@@ -167,10 +171,9 @@ const BUTTON =
 const PRIMARY = `${BUTTON} bg-green-700 text-white hover:bg-green-800`
 const SECONDARY = `${BUTTON} bg-white text-gray-900 ring-1 ring-gray-300 hover:bg-gray-50 ring-inset dark:bg-gray-700 dark:text-white dark:ring-gray-500 dark:hover:bg-gray-600`
 const DANGER = `${BUTTON} bg-red-700 text-white hover:bg-red-800 dark:bg-red-600 dark:hover:bg-red-500`
+const QUIET =
+  'inline-flex min-h-10 items-center rounded-md text-sm font-medium text-gray-600 underline underline-offset-2 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:cursor-wait aria-disabled:opacity-60 dark:text-gray-300 dark:hover:text-white dark:focus-visible:outline-indigo-400'
 const DANGER_QUIET = `${BUTTON} bg-white text-red-700 ring-1 ring-red-300 hover:bg-red-50 ring-inset dark:bg-gray-800 dark:text-red-400 dark:ring-red-500/60 dark:hover:bg-red-950`
-
-const isConfirmed = (action: PostAction): action is Confirmed =>
-  action === 'withdrawMarketing' || action === 'delete'
 
 /** What each inline confirm asks, and how it looks. */
 const CONFIRMS: Record<
@@ -288,7 +291,7 @@ function Actions({
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        {actionsFor(post).map((action) => {
+        {actionsFor(post.status).map((action) => {
           const label =
             busy === action
               ? LABELS[action].busy
@@ -299,18 +302,18 @@ function Actions({
             <button
               key={action}
               ref={
-                isConfirmed(action)
+                action === 'delete'
                   ? (node) => {
-                      askedRefs.current[action] = node ?? undefined
+                      askedRefs.current.delete = node ?? undefined
                     }
                   : undefined
               }
               type="button"
               aria-disabled={busy !== null || undefined}
               onClick={() =>
-                // Delete now and Withdraw ask first; Try again finishes a
-                // delete already confirmed.
-                isConfirmed(action) && !deleting
+                // Delete now asks first; Try again finishes a delete
+                // already confirmed.
+                action === 'delete' && !deleting
                   ? !busy && ask(action)
                   : run(action)
               }
@@ -327,6 +330,21 @@ function Actions({
           )
         })}
       </div>
+      {offersWithdraw(post) && (
+        <button
+          ref={(node) => {
+            askedRefs.current.withdrawMarketing = node ?? undefined
+          }}
+          type="button"
+          aria-disabled={busy !== null || undefined}
+          onClick={() => !busy && ask('withdrawMarketing')}
+          className={QUIET}
+        >
+          {busy === 'withdrawMarketing'
+            ? LABELS.withdrawMarketing.busy
+            : LABELS.withdrawMarketing.idle}
+        </button>
+      )}
     </div>
   )
 }
