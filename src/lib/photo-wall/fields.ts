@@ -25,7 +25,7 @@ const DECIMAL = /^(\d+\.?\d*|\.\d+)$/
  * for the whitespace step. U+200D (ZWJ) is not matched, so emoji sequences
  * survive.
  */
-const DROPPED = /(?!\s)[\p{Cc}‎‏‪-‮⁦-⁩]/gu
+const DROPPED = /(?!\s)[\p{Cc}\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu
 
 export interface WallPostFields {
   uploadId: string

@@ -67,8 +67,8 @@ describe('checkWallFields', () => {
     const result = checkWallFields(
       body({
         // Decomposed e + combining acute, a zero-width NUL, a newline run.
-        caption: ' Café \u0000time\r\n\n  on\tthe   wall ',
-        name: 'A\u0007. B',
+        caption: ' Cafe\u0301 \u0000time\r\n\n  on\tthe   wall ',
+        name: 'A\u0007.\u00a0B',
       }),
     )
     expect(result).toMatchObject({
@@ -231,15 +231,21 @@ describe('normaliseWallText', () => {
     expect(normaliseWallText('a \u0001 b')).toBe('a b')
   })
 
+  it('folds the whitespace controls (tab, newline, VT, FF, CR) into a space instead of dropping them', () => {
+    expect(normaliseWallText('a\nb')).toBe('a b')
+    expect(normaliseWallText('a\tb')).toBe('a b')
+    expect(normaliseWallText('a\u000bb\u000cc\rd')).toBe('a b c d')
+  })
+
   it('removes bidi formatting characters: overrides, embeddings, isolates and marks', () => {
-    expect(normaliseWallText('‮abc')).toBe('abc')
-    expect(normaliseWallText('a‪‫‬‭z')).toBe('az')
-    expect(normaliseWallText('a⁦⁧⁨⁩z')).toBe('az')
-    expect(normaliseWallText('a‎‏z')).toBe('az')
+    expect(normaliseWallText('\u202eabc')).toBe('abc')
+    expect(normaliseWallText('a\u202a\u202b\u202c\u202dz')).toBe('az')
+    expect(normaliseWallText('a\u2066\u2067\u2068\u2069z')).toBe('az')
+    expect(normaliseWallText('a\u200e\u200fz')).toBe('az')
   })
 
   it('keeps the zero-width joiner, so an emoji family stays one and counts its code points', () => {
-    const family = '👨‍👩‍👧' // 5 code points: 3 emoji, 2 ZWJ
+    const family = '👨\u200d👩\u200d👧' // 5 code points: 3 emoji, 2 ZWJ
     expect(normaliseWallText(family)).toBe(family)
     expect([...family]).toHaveLength(5)
     const sixteen = family.repeat(16) // 80 code points
