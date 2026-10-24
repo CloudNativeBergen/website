@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isDroppedPoint, normalizeWallText } from './wall-text'
+import {
+  MAX_TEXT_INPUT,
+  isDroppedPoint,
+  normalizeWallText,
+  stripDropped,
+} from './wall-text'
 
 describe('normalizeWallText (Photo Wall spec §6.4)', () => {
   it('folds whitespace runs, newlines included, into one space and trims', () => {
@@ -32,10 +37,35 @@ describe('normalizeWallText (Photo Wall spec §6.4)', () => {
     expect(isDroppedPoint('\u{200d}')).toBe(false)
   })
 
+  it('keeps the flags of England, Scotland and Wales, tags and all', () => {
+    const england =
+      '\u{1f3f4}\u{e0067}\u{e0062}\u{e0065}\u{e006e}\u{e0067}\u{e007f}'
+    const scotland =
+      '\u{1f3f4}\u{e0067}\u{e0062}\u{e0073}\u{e0063}\u{e0074}\u{e007f}'
+    expect(normalizeWallText(`Hi ${england} ${scotland}!`)).toBe(
+      `Hi ${england} ${scotland}!`,
+    )
+    expect(stripDropped(`a${england}b`)).toBe(`a${england}b`)
+    // Tags anywhere else still go.
+    expect(normalizeWallText('a\u{e0067}\u{e0062}\u{e007f}b')).toBe('ab')
+  })
+
+  it('keeps a name or caption of only digits or only punctuation', () => {
+    expect(normalizeWallText('2026')).toBe('2026')
+    expect(normalizeWallText('!!!')).toBe('!!!')
+  })
+
+  it('caps the raw input before normalising', () => {
+    expect(MAX_TEXT_INPUT).toBe(1000)
+  })
+
   it('makes a name with nothing visible absent', () => {
     for (const blank of [
       '\u{200b}',
       '\u{3164}\u{3164}',
+      '\u{115f}',
+      '\u{1160}',
+      '\u{ffa0}',
       '\u{2800}',
       '\u{e0041}\u{e0042}',
       '\u{200d}',

@@ -139,6 +139,22 @@ describe('checkWallFields', () => {
     }
   })
 
+  it('refuses an over-long caption or name before normalising it', () => {
+    // A letter and alternating combining marks: NFC reorders them in
+    // quadratic time, sixteen seconds for 0.4 MB.
+    const crafted = 'a' + '\u{316}\u{300}'.repeat(100_000)
+    for (const field of ['caption', 'name'] as const) {
+      const started = performance.now()
+      const result = checkWallFields(body({ [field]: crafted }))
+      expect(performance.now() - started).toBeLessThan(100)
+      expect(result).toEqual({ ok: false, field })
+    }
+    // The cap is on what arrives, so 1,000 units of padding still pass.
+    expect(
+      checkWallFields(body({ caption: ' '.repeat(990) + 'Hello' })),
+    ).toMatchObject({ ok: true, fields: { caption: 'Hello' } })
+  })
+
   it('refuses a long malformed crop at once, without regex backtracking', () => {
     const started = performance.now()
     const result = checkWallFields(body({ cropX: '0'.repeat(80_000) + '!' }))

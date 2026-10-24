@@ -6,7 +6,7 @@
  * `false`. Text is normalised BEFORE it is measured, in code points.
  */
 
-import { normalizeWallText } from './wall-text'
+import { MAX_TEXT_INPUT, normalizeWallText } from './wall-text'
 
 export const MAX_CAPTION_POINTS = 80
 export const MAX_NAME_POINTS = 40
@@ -47,6 +47,8 @@ type TextCheck = { ok: true; value: string | null } | { ok: false }
 function text(value: FormDataEntryValue | null, maxPoints: number): TextCheck {
   if (value === null) return { ok: true, value: null }
   if (typeof value !== 'string') return { ok: false }
+  // Before normalising: NFC on a long crafted value takes minutes.
+  if (value.length > MAX_TEXT_INPUT) return { ok: false }
   const normalised = normalizeWallText(value)
   if (normalised === '') return { ok: true, value: null }
   if ([...normalised].length > maxPoints) return { ok: false }
