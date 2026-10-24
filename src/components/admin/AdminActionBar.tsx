@@ -32,6 +32,7 @@ import { useRouter } from 'next/navigation'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ProposalMessagePanel } from '@/components/messaging/ProposalMessagePanel'
 import { proposalConversationId } from '@/lib/messaging/links'
+import { api } from '@/lib/trpc/client'
 
 import { Conference } from '@/lib/conference/types'
 
@@ -138,6 +139,12 @@ export function AdminActionBar({
   domain,
 }: AdminActionBarProps) {
   const router = useRouter()
+  const utils = api.useUtils()
+  // The proposals list renders tRPC data that router.refresh() doesn't touch.
+  const refreshProposal = () => {
+    router.refresh()
+    void utils.proposal.admin.list.invalidate()
+  }
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   // LOCAL state, never a query param: the panel's open-ness is a property of
@@ -179,7 +186,7 @@ export function AdminActionBar({
   }, [speakers])
 
   const handleProposalUpdated = () => {
-    router.refresh()
+    refreshProposal()
     setShowEditModal(false)
   }
 
@@ -196,7 +203,11 @@ export function AdminActionBar({
     proposal.status === 'accepted' || proposal.status === 'confirmed'
 
   // Keyboard shortcuts
-  const anyModalOpen = showEditModal || showPreviewModal || showMessagePanel
+  const anyModalOpen =
+    showEditModal ||
+    showPreviewModal ||
+    showMessagePanel ||
+    pendingAction !== null
   useEffect(() => {
     // Suppress the bar's global shortcuts while any of its modals is open, so
     // ⌘E/⌘P/⌘M can't stack a second focus-trapped modal on top of the first.
@@ -350,7 +361,7 @@ export function AdminActionBar({
           },
           {
             key: 'cancel',
-            label: 'Cancel',
+            label: 'Cancel talk',
             icon: NoSymbolIcon,
             color: 'red' as const,
             onClick: () => handleAction(Action.cancel),
@@ -527,7 +538,7 @@ export function AdminActionBar({
           adminUI={true}
           onAction={() => {
             setPendingAction(null)
-            router.refresh()
+            refreshProposal()
           }}
           domain={domain}
         />

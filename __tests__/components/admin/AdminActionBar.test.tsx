@@ -37,6 +37,18 @@ vi.mock('@/components/messaging/ProposalMessagePanel', () => ({
     ) : null,
 }))
 const push = vi.fn()
+vi.mock('@/lib/trpc/client', () => ({
+  api: {
+    useUtils: () => ({
+      proposal: { admin: { list: { invalidate: vi.fn() } } },
+    }),
+  },
+}))
+
+vi.mock('@/components/admin/ProposalActionModal', () => ({
+  ProposalActionModal: () => null,
+}))
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push }),
   usePathname: () => '/admin/proposals/prop-1',
@@ -200,7 +212,7 @@ describe('AdminActionBar action split', () => {
       'Confirm',
       'Reject',
       'Withdraw',
-      'Cancel',
+      'Cancel talk',
       'More',
       'Actions',
     ])
