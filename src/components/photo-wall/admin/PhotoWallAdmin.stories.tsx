@@ -250,6 +250,25 @@ export const NoStartDatePhoneDark: Story = {
   globals: { theme: 'dark' },
 }
 
+/** Automatic, but the conference's dates are the wrong way round (§7, P2). */
+export const DatesReversed: Story = {
+  args: { view: view({ postingMode: 'auto' }, 'datesReversed') },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText(/last day is before its first/),
+    ).toBeVisible()
+  },
+}
+export const DatesReversedPhone: Story = {
+  args: DatesReversed.args,
+  parameters: PHONE,
+}
+export const DatesReversedPhoneDark: Story = {
+  args: DatesReversed.args,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+
 /** Switched Open, but the conference's last day is over (§7). */
 export const ClosedAfterTheConference: Story = {
   args: { view: view({ postingMode: 'open' }, 'ended') },
