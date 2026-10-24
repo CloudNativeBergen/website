@@ -151,6 +151,8 @@ export default function VolunteerAdminPage() {
   const [pendingSelection, setPendingSelection] = useState<{
     id: string | null
   } | null>(null)
+  // Switch only after the modal has closed, so its focus restore does not undo ours.
+  const confirmedSelection = useRef<{ id: string | null } | null>(null)
 
   const selectVolunteer = (id: string | null) => {
     if (id !== selectedVolunteerId && reviewNotes.trim()) {
@@ -1389,8 +1391,11 @@ export default function VolunteerAdminPage() {
         isOpen={rejectConfirmOpen && !!selectedVolunteer}
         onClose={() => setRejectConfirmOpen(false)}
         onConfirm={async () => {
-          await handleStatusUpdate(VolunteerStatus.REJECTED)
-          setRejectConfirmOpen(false)
+          try {
+            await handleStatusUpdate(VolunteerStatus.REJECTED)
+          } finally {
+            setRejectConfirmOpen(false)
+          }
         }}
         isLoading={updateStatus.isPending}
         title="Reject Volunteer Application"
@@ -1403,8 +1408,13 @@ export default function VolunteerAdminPage() {
         isOpen={!!pendingSelection}
         onClose={() => setPendingSelection(null)}
         onConfirm={() => {
-          if (pendingSelection) switchVolunteer(pendingSelection.id)
+          confirmedSelection.current = pendingSelection
           setPendingSelection(null)
+        }}
+        afterLeave={() => {
+          const target = confirmedSelection.current
+          confirmedSelection.current = null
+          if (target) switchVolunteer(target.id)
         }}
         title="Discard Review Notes"
         message="You have unsaved review notes for this volunteer. Leave and discard them?"
