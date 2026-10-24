@@ -421,6 +421,12 @@ export const RemoveCoSpeakerSchema = z.object({
     .regex(SANITY_ID_PATTERN, 'Invalid speaker ID'),
 })
 
+// Organizer: take one speaker off a multi-speaker talk.
+export const AdminRemoveSpeakerSchema = RemoveCoSpeakerSchema.extend({
+  comment: z.string().max(5000).optional(),
+  revokeTicket: z.boolean().optional().default(false),
+})
+
 export const AudienceFeedbackSchema = z.object({
   greenCount: z.number().int().min(0),
   yellowCount: z.number().int().min(0),
