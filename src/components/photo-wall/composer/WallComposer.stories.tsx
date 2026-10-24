@@ -374,8 +374,8 @@ const transparentPhoto = (side: number): Story => ({
 })
 
 export const TransparentPhoto = transparentPhoto(640)
-/** Over 2048 px: the browser-resize path (Chromium honours its options). */
-export const TransparentLargePhoto = transparentPhoto(3000)
+/** Two resize steps: the browser-resize path (Chromium honours its options). */
+export const TransparentLargePhoto = transparentPhoto(4500)
 
 /**
  * Enter confirming an IME candidate (Japanese, Chinese) stays in the caption;
