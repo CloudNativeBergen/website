@@ -1,7 +1,6 @@
 import 'server-only'
-import { sanityImage } from '@/lib/sanity/client'
 import { getWall } from './cache'
-import { cropSquare } from './crop'
+import { squareSrc } from './square'
 import {
   WALL_PAGE_PHOTO_PX,
   type WallPagePost,
@@ -10,21 +9,6 @@ import {
 } from './wall'
 import { isPostingOpen } from './window'
 
-/** The square a polaroid shows, cut by Sanity with `rect=` (§5.1). */
-function squareSrc(post: WallPost, px: number): string {
-  const { x, y, size } = cropSquare(
-    post.photo.width,
-    post.photo.height,
-    post.crop,
-  )
-  return sanityImage(post.photo.url)
-    .rect(x, y, size, size)
-    .width(px)
-    .height(px)
-    .auto('format')
-    .url()
-}
-
 /**
  * A post as a polaroid shows it, on the Wall page and on Screen Mode: the
  * same square URL for both, so Sanity cuts each photo once.
@@ -32,7 +16,7 @@ function squareSrc(post: WallPost, px: number): string {
 export function polaroidPost(post: WallPost): WallPagePost {
   return {
     _id: post._id,
-    src: squareSrc(post, WALL_PAGE_PHOTO_PX),
+    src: squareSrc(post.photo, post.crop, WALL_PAGE_PHOTO_PX),
     caption: post.caption,
     name: post.name,
   }

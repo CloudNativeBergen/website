@@ -1,11 +1,13 @@
 import 'server-only'
-import { cacheLife, cacheTag, revalidateTag } from 'next/cache'
+import { cacheLife, cacheTag, revalidateTag, updateTag } from 'next/cache'
 import {
   photoWallAdminTag,
   photoWallDeviceTag,
   photoWallTag,
 } from '@/lib/cache/tags'
 import type { ModerationQueueData } from './moderation'
+import type { MyPost } from './my-posts'
+import { readMyPosts } from './my-posts-read'
 import { readModerationQueue } from './queue'
 import { readPhotoWall } from './sanity'
 import type { PhotoWall } from './types'
@@ -73,22 +75,72 @@ export function expirePhotoWall(conferenceId: string): void {
 }
 
 /**
- * Expire what a Wall Post write changes (§8): the moderation queue, the
- * contributor's My posts and, with `wall`, the public wall. Same
- * `{ expire: 0 }` and never-fail rule as {@link expirePhotoWall}.
+ * The tags a Wall Post write changes (§8): the moderation queue, the
+ * contributor's My posts and, with `wall`, the public wall.
  */
-export function expireWallPost(
+function wallPostTags(
   conferenceId: string,
   deviceKey: string,
   { wall }: { wall: boolean },
-): void {
+): string[] {
   const tags = [photoWallAdminTag(conferenceId), photoWallDeviceTag(deviceKey)]
   if (wall) tags.push(photoWallTag(conferenceId))
+  return tags
+}
+
+/** Expire each tag with `expire`, never failing the write it rides on. */
+function expireEach(tags: string[], expire: (tag: string) => void): void {
   for (const tag of tags) {
     try {
-      revalidateTag(tag, { expire: 0 })
+      expire(tag)
     } catch (error) {
       console.error(`Could not expire the Photo Wall cache tag ${tag}`, error)
     }
   }
+}
+
+/**
+ * Expire what a Wall Post write changes (§8) from a Route Handler or a tRPC
+ * mutation: `revalidateTag` with `{ expire: 0 }`, as {@link expirePhotoWall}.
+ */
+export function expireWallPost(
+  conferenceId: string,
+  deviceKey: string,
+  options: { wall: boolean },
+): void {
+  expireEach(wallPostTags(conferenceId, deviceKey, options), (tag) =>
+    revalidateTag(tag, { expire: 0 }),
+  )
+}
+
+/**
+ * One device's posts as My posts polls them (§8), cached per conference and
+ * device under {@link photoWallDeviceTag}, which Submit, the device's own
+ * Delete and marketing change, and every moderation of one of its posts
+ * expire. `'use cache: remote'` over the uncached client, `default` life:
+ * freshness comes from the tag. The device key comes from the cookie, read
+ * OUTSIDE this scope by the Server Action that calls it.
+ */
+export async function getMyPosts(
+  conferenceId: string,
+  deviceKey: string,
+): Promise<MyPost[]> {
+  'use cache: remote'
+  cacheLife('default')
+  cacheTag(photoWallDeviceTag(deviceKey))
+  return readMyPosts(conferenceId, deviceKey)
+}
+
+/**
+ * {@link expireWallPost} for a Server Action (§8): `updateTag`, so the
+ * action's own next read of My posts waits for the fresh list instead of
+ * serving the one the write just outdated. Same never-fail rule: a missed
+ * expiry is recovered by the next poll after the tag's own life.
+ */
+export function updateWallPostTags(
+  conferenceId: string,
+  deviceKey: string,
+  options: { wall: boolean },
+): void {
+  expireEach(wallPostTags(conferenceId, deviceKey, options), updateTag)
 }

@@ -527,6 +527,9 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   - Not shown: **Approve**.
   - Every tab: **Delete now** (inline confirm: "Delete this photo for good? It
     can't be undone."), for abusive or illegal content.
+  - A card with the Marketing OK mark: **Withdraw marketing OK** (inline
+    confirm), for a contributor who asks without the phone's cookie (§12).
+    It only ever unticks `marketingConsent`; organizers never tick it.
   - Pending tab: **Approve all pending (N)** with an inline confirm. It works as described below.
 - **Allowed from-states:** Approve from `pending` or `notShown`; Reject from
   `pending`; Remove from `approved`; Delete (now) from any status. A

@@ -162,14 +162,29 @@ requests under this SOP.
 
 ### Photo Wall removal requests
 
-A contributor who wants their post gone, or someone in another person's photo,
-asks the organizers (Photo Wall spec §12). Find the post on
-`/admin/photo-wall` from the description (photo, caption, name) and press
-**Delete now**: it removes the post and its photo asset. Posts carry no name,
-email or account, so there is no identity to verify beyond the description.
-Until **Delete now** ships (M4b), delete the `wallPost` document, then its
-image asset (`photo.asset._ref`), with `npx sanity documents delete <id>`
-(Studio shows Wall Posts read-only).
+A contributor deletes their own post from **My posts** on `/wall/post`, on
+the phone that posted it (Photo Wall spec §12); the same page has the
+Marketing switch that withdraws marketing consent. A contributor who has lost
+that phone's cookie, or someone in another person's photo, asks the
+organizers.
+
+- **Verify** as for other channels (§5 above): a post has no email or
+  account, only an optional name the contributor typed, which is a display
+  name, not proof of identity. A contributor describes the photo, the
+  caption, the name and roughly when they posted. Someone in a photo needs no
+  proof beyond pointing out the photo they are in. When in doubt, delete:
+  display rests on the contributor's consent, and the person in it objects.
+- **Erase:** find the post on `/admin/photo-wall` and press **Delete now**.
+  It removes the post with its history, and the photo file unless another
+  post still uses it: Sanity stores byte-identical files once, so the same
+  photo posted twice shares one file. Before confirming erasure, look through
+  every tab for the same photo and Delete now each copy; the file goes with
+  the last one. Every post is deleted 30 days after the conference anyway.
+- **Withdraw marketing consent without deleting:** press **Withdraw
+  marketing OK** on the post's card (only cards with the Marketing OK mark
+  have it). It only unticks: organizers can't give consent on a contributor's
+  behalf. The post leaves the marketing export and the contributor's switch
+  shows it on its next poll. Copies already downloaded are not recalled.
 
 ---
 

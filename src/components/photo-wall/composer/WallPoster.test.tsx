@@ -10,9 +10,14 @@
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MyPost } from '@/lib/photo-wall/my-posts'
 import type { WallPostAttempt, WallPostRequest } from '@/lib/photo-wall/post'
 import type { PolaroidEditorProps } from './PolaroidEditor'
-import { ENSURE_DEVICE_TIMEOUT_MS, WallPoster } from './WallPoster'
+import {
+  ENSURE_DEVICE_TIMEOUT_MS,
+  WallPoster,
+  type WallPosterProps,
+} from './WallPoster'
 
 const decodes = vi.hoisted(
   () => new Map<string, (master: HTMLCanvasElement) => void>(),
@@ -45,25 +50,81 @@ vi.mock('./FilterStrip', () => ({ FilterStrip: () => null }))
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
+/** The My posts Server Actions, each answering as the server would. */
+const mine = {
+  getMyPosts: vi.fn<WallPosterProps['getMyPosts']>(),
+  deleteMyPost: vi.fn<WallPosterProps['deleteMyPost']>(),
+  setMyPostMarketing: vi.fn<WallPosterProps['setMyPostMarketing']>(),
+}
+
+const myPost = (fields: Partial<MyPost> = {}): MyPost => ({
+  _id: 'wallPost-earlier',
+  status: 'approved',
+  src: 'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
+  caption: 'Earlier today',
+  name: 'Ada',
+  marketingConsent: false,
+  submittedAt: '2026-10-26T08:00:00Z',
+  ...fields,
+})
+
+/**
+ * What the server lists by default: every post a `postAnswering` mock took,
+ * newest first, until `deleteMyPost` removes it. A test that sets
+ * `getMyPosts` itself speaks for the server instead.
+ */
+let served: MyPost[] = []
+const servedPost = (request: WallPostRequest): MyPost => ({
+  _id: `wallPost-${request.uploadId}`,
+  status: 'pending',
+  src: `https://cdn.sanity.io/images/p/d/${request.uploadId}.jpg?rect=0,0,10,10`,
+  caption: request.caption || null,
+  name: request.name || null,
+  marketingConsent: request.marketingConsent,
+  submittedAt: '2026-10-26T09:00:00Z',
+})
+
 let objectUrls = 0
 beforeEach(() => {
   decodes.clear()
   objectUrls = 0
+  served = []
+  mine.getMyPosts.mockReset().mockImplementation(async () => [...served])
+  mine.deleteMyPost.mockReset().mockImplementation(async (postId) => {
+    served = served.filter((p) => p._id !== postId)
+    return { status: 'deleted' }
+  })
+  mine.setMyPostMarketing.mockReset().mockResolvedValue({ status: 'done' })
   URL.createObjectURL = vi.fn(() => `blob:photo-${++objectUrls}`)
   URL.revokeObjectURL = vi.fn()
   window.history.pushState(null, '')
 })
 
-/** A `post` answering each call with the next of `answers`. */
+/**
+ * A `post` answering each call with the next of `answers`; one answered
+ * `ok` is served by `getMyPosts` from then on (unless a test speaks for it).
+ */
 function postAnswering(...answers: WallPostAttempt[]) {
   return vi.fn<(request: WallPostRequest) => Promise<WallPostAttempt>>(
-    async () => {
+    async (request) => {
       const answer = answers.shift()
       if (!answer) throw new Error('no more answers')
+      if (
+        answer.ok &&
+        !served.some((p) => p._id === `wallPost-${request.uploadId}`)
+      ) {
+        served = [servedPost(request), ...served]
+      }
       return answer
     },
   )
 }
+
+/** The `src` the default server lists the post of each press under. */
+const servedSrcs = (post: ReturnType<typeof postAnswering>) =>
+  uploadIds(post)
+    .reverse()
+    .map((id) => `https://cdn.sanity.io/images/p/d/${id}.jpg?rect=0,0,10,10`)
 
 function renderPoster(
   post: ReturnType<typeof postAnswering>,
@@ -75,6 +136,7 @@ function renderPoster(
       deletesOn="2026-11-26"
       ensureDevice={ensureDevice}
       post={post}
+      {...mine}
     />,
   )
 }
@@ -181,9 +243,10 @@ describe('WallPoster', () => {
       screen.queryByRole('button', { name: /Post to the wall/ }),
     ).toBeNull()
     expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+    // The read after the post answered: the server's card, under its id.
     expect(
       screen.getByRole('img', { name: 'Your photo: Hei fra fjorden' }),
-    ).toHaveAttribute('src', 'blob:photo-1')
+    ).toHaveAttribute('src', servedSrcs(post)[0])
     expect(screen.getByRole('link', { name: 'See the wall' })).toHaveAttribute(
       'href',
       '/wall',
@@ -203,7 +266,7 @@ describe('WallPoster', () => {
     expect(a).not.toBe(b)
     expect(
       screen.getAllByRole('img').map((img) => img.getAttribute('src')),
-    ).toEqual(['blob:photo-2', 'blob:photo-1'])
+    ).toEqual(servedSrcs(post))
     expect(screen.getAllByText('Waiting for approval')).toHaveLength(2)
   })
 
@@ -395,6 +458,7 @@ describe('WallPoster', () => {
         deletesOn="2026-11-26"
         ensureDevice={async () => true}
         post={post}
+        {...mine}
       />,
     )
     await pick('progress')
@@ -408,5 +472,249 @@ describe('WallPoster', () => {
     expect(postButton()).toHaveTextContent('Posting…')
     await act(async () => finish({ ok: true }))
     expect(screen.queryByRole('progressbar')).toBeNull()
+  })
+
+  describe('My posts (§6.5, §12)', () => {
+    it('is read on load and shows nothing under the landing while this phone has no posts', async () => {
+      renderPoster(postAnswering())
+      await act(async () => {})
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(1)
+      expect(screen.queryByRole('heading', { name: 'My posts' })).toBeNull()
+    })
+
+    it('sits under the landing when this phone has posts', async () => {
+      mine.getMyPosts.mockResolvedValue([myPost()])
+      renderPoster(postAnswering())
+      await waitFor(() =>
+        expect(
+          screen.getByRole('heading', { level: 2, name: 'My posts' }),
+        ).toBeInTheDocument(),
+      )
+      expect(screen.getByText('On the wall')).toBeInTheDocument()
+      expect(
+        screen.getByRole('img', { name: 'Your photo: Earlier today' }),
+      ).toHaveAttribute(
+        'src',
+        'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
+      )
+      // The landing's own buttons are still there, above it.
+      expect(screen.getByLabelText('Take a photo')).toBeInTheDocument()
+    })
+
+    it('reads the list again after a post, and shows the sent JPEG on top until that read answers', async () => {
+      mine.getMyPosts.mockResolvedValue([myPost()])
+      const post = postAnswering({ ok: true })
+      renderPoster(post)
+      await pick('fresh')
+      let answer: (posts: MyPost[]) => void = () => {}
+      mine.getMyPosts.mockImplementationOnce(
+        () => new Promise((resolve) => (answer = resolve)),
+      )
+      await press()
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
+      const [[request]] = post.mock.calls
+
+      // The read after the post is still out: the JPEG this phone sent.
+      expect(
+        screen.getAllByRole('img').map((img) => img.getAttribute('src')),
+      ).toEqual([
+        'blob:photo-1',
+        'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
+      ])
+      expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+
+      // It answers with the post, under the id the submit gave it.
+      await act(async () =>
+        answer([
+          myPost({
+            _id: `wallPost-${request.uploadId}`,
+            status: 'pending',
+            src: 'https://cdn.sanity.io/images/p/d/fresh.jpg?rect=0,0,10,10',
+            caption: null,
+          }),
+          myPost(),
+        ]),
+      )
+      expect(
+        screen.getAllByRole('img').map((img) => img.getAttribute('src')),
+      ).toEqual([
+        'https://cdn.sanity.io/images/p/d/fresh.jpg?rect=0,0,10,10',
+        'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
+      ])
+    })
+
+    it('the first read after the post that answers is the authority: a failed one keeps the JPEG, a later one without the post retires it (an organizer’s Delete now)', async () => {
+      renderPoster(postAnswering({ ok: true }))
+      await act(async () => {})
+      await pick('brief')
+      // The read right after the post fails (offline for a moment).
+      mine.getMyPosts.mockRejectedValueOnce(new Error('offline'))
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      await press()
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
+      expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+
+      // Deleted by an organizer before the next read, which lists nothing.
+      mine.getMyPosts.mockResolvedValue([])
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(3)
+      expect(screen.queryByText('Waiting for approval')).toBeNull()
+      expect(screen.queryByRole('img')).toBeNull()
+    })
+
+    it('a read that started before the post answered is no authority on it: its list without the post keeps the JPEG', async () => {
+      renderPoster(postAnswering({ ok: true }))
+      await act(async () => {})
+      await pick('early')
+      const answers: ((posts: MyPost[]) => void)[] = []
+      mine.getMyPosts.mockImplementation(
+        () => new Promise((resolve) => answers.push(resolve)),
+      )
+      // A read goes out while the photo is still being edited…
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      await press()
+      // One read at a time: the read after the post waits for it…
+      expect(answers).toHaveLength(1)
+      // …which answers, without the post, only after it went in.
+      await act(async () => answers[0]([]))
+      expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+      expect(screen.getByRole('img')).toHaveAttribute('src', 'blob:photo-1')
+      // Then the read after the post goes out: it is the authority.
+      expect(answers).toHaveLength(2)
+      await act(async () => answers[1]([]))
+      expect(screen.queryByText('Waiting for approval')).toBeNull()
+    })
+
+    it('a post deleted from the posted screen does not come back as Waiting on the landing', async () => {
+      const post = postAnswering({ ok: true })
+      renderPoster(post)
+      await pick('doomed')
+      // No list answers in between: the read after the post and the one
+      // after the Delete both fail. Only the Delete's own answer can retire
+      // the JPEG.
+      mine.getMyPosts
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockRejectedValueOnce(new Error('offline'))
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      await press()
+      expect(screen.getByRole('img')).toHaveAttribute('src', 'blob:photo-1')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Delete this photo' }),
+        )
+      })
+      const [[request]] = post.mock.calls
+      expect(mine.deleteMyPost).toHaveBeenCalledWith(
+        `wallPost-${request.uploadId}`,
+      )
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(3)
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Post another photo' }),
+      )
+      await act(async () => {})
+      expect(screen.queryByText('Waiting for approval')).toBeNull()
+      expect(screen.queryByRole('heading', { name: 'My posts' })).toBeNull()
+    })
+
+    it('a post the server listed once and then dropped (an organizer’s Delete now) does not come back as Waiting', async () => {
+      const post = postAnswering({ ok: true })
+      renderPoster(post)
+      await pick('removed')
+      await press()
+      const [[request]] = post.mock.calls
+      const id = `wallPost-${request.uploadId}`
+      mine.getMyPosts.mockResolvedValue([
+        myPost({ _id: id, status: 'pending', caption: 'removed' }),
+      ])
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+
+      mine.getMyPosts.mockResolvedValue([])
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      expect(screen.queryByText('Waiting for approval')).toBeNull()
+      expect(screen.queryByRole('img')).toBeNull()
+    })
+
+    it('a consent change whose refresh failed gives way to the next list, even one with the value it had before (another tab)', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      mine.getMyPosts.mockResolvedValue([myPost({ marketingConsent: true })])
+      renderPoster(postAnswering())
+      const marketing = await screen.findByRole('switch', { name: 'Marketing' })
+      expect(marketing).toHaveAttribute('aria-checked', 'true')
+      mine.getMyPosts.mockRejectedValueOnce(new Error('offline'))
+      await act(async () => {
+        fireEvent.click(marketing)
+      })
+      expect(mine.setMyPostMarketing).toHaveBeenCalledWith(
+        'wallPost-earlier',
+        false,
+      )
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
+      expect(screen.getByRole('switch', { name: 'Marketing' })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      )
+      // Another tab ticked it again; the next read says so.
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(3)
+      expect(screen.getByRole('switch', { name: 'Marketing' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      )
+    })
+
+    it('a Delete answered gone while the list still carries the post shows it again, to press again', async () => {
+      mine.getMyPosts.mockResolvedValue([myPost()])
+      mine.deleteMyPost.mockResolvedValue({ status: 'gone' })
+      renderPoster(postAnswering())
+      fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Delete this photo' }),
+        )
+      })
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible()
+      expect(screen.getByText('On the wall')).toBeInTheDocument()
+    })
+
+    it('Delete and the Marketing switch call the actions with the post’s id, then read the list again', async () => {
+      mine.getMyPosts.mockResolvedValue([myPost()])
+      renderPoster(postAnswering())
+      const marketing = await screen.findByRole('switch', { name: 'Marketing' })
+      await act(async () => {
+        fireEvent.click(marketing)
+      })
+      expect(mine.setMyPostMarketing).toHaveBeenCalledWith(
+        'wallPost-earlier',
+        true,
+      )
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      mine.getMyPosts.mockResolvedValue([])
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Delete this photo' }),
+        )
+      })
+      expect(mine.deleteMyPost).toHaveBeenCalledWith('wallPost-earlier')
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(3)
+      await waitFor(() =>
+        expect(screen.queryByRole('heading', { name: 'My posts' })).toBeNull(),
+      )
+    })
   })
 })

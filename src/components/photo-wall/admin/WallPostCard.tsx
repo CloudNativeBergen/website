@@ -11,10 +11,14 @@ import {
   type WallPostCrop,
 } from '@/lib/photo-wall'
 import { formatConferenceDayTime } from '@/lib/time'
-import { focusIsWith } from './focus'
+import { focusIsWith } from '../focus'
 
-/** What an organizer can do to a post from its card (§10). */
-export type PostAction = 'approve' | 'reject' | 'remove' | 'delete'
+/** What an organizer can do to a post from its card (§10, §12). */
+export type PostAction =
+  'approve' | 'reject' | 'remove' | 'withdrawMarketing' | 'delete'
+
+/** The actions that ask first, inline. */
+type Confirmed = Extract<PostAction, 'withdrawMarketing' | 'delete'>
 
 /**
  * How an action ended: written (`done`), someone else decided first
@@ -123,6 +127,14 @@ const actionsFor = (status: ModerationPost['status']): PostAction[] => [
   'delete',
 ]
 
+/**
+ * Withdraw marketing OK, on its own quiet line, while the post has the mark
+ * (never the other way: only the contributor gives consent, §12), and not on
+ * a `deleting` post.
+ */
+const offersWithdraw = (post: ModerationPost) =>
+  post.marketingConsent && post.status !== 'deleting'
+
 const LABELS: Record<
   PostAction,
   { idle: string; busy: string; failed: string }
@@ -142,6 +154,11 @@ const LABELS: Record<
     busy: 'Removing…',
     failed: 'Couldn’t remove. Try again.',
   },
+  withdrawMarketing: {
+    idle: 'Withdraw marketing OK',
+    busy: 'Withdrawing…',
+    failed: 'Couldn’t withdraw marketing OK. Try again.',
+  },
   delete: {
     idle: 'Delete now',
     busy: 'Deleting…',
@@ -154,7 +171,30 @@ const BUTTON =
 const PRIMARY = `${BUTTON} bg-green-700 text-white hover:bg-green-800`
 const SECONDARY = `${BUTTON} bg-white text-gray-900 ring-1 ring-gray-300 hover:bg-gray-50 ring-inset dark:bg-gray-700 dark:text-white dark:ring-gray-500 dark:hover:bg-gray-600`
 const DANGER = `${BUTTON} bg-red-700 text-white hover:bg-red-800 dark:bg-red-600 dark:hover:bg-red-500`
+const QUIET =
+  'inline-flex min-h-10 items-center rounded-md text-sm font-medium text-gray-600 underline underline-offset-2 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:cursor-wait aria-disabled:opacity-60 dark:text-gray-300 dark:hover:text-white dark:focus-visible:outline-indigo-400'
 const DANGER_QUIET = `${BUTTON} bg-white text-red-700 ring-1 ring-red-300 hover:bg-red-50 ring-inset dark:bg-gray-800 dark:text-red-400 dark:ring-red-500/60 dark:hover:bg-red-950`
+
+/** What each inline confirm asks, and how it looks. */
+const CONFIRMS: Record<
+  Confirmed,
+  { question: string; confirm: string; box: string; text: string }
+> = {
+  delete: {
+    question: 'Delete this photo for good? It can’t be undone.',
+    confirm: 'Delete',
+    box: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
+    text: 'text-red-800 dark:text-red-300',
+  },
+  // Only the contributor can give consent again, from their phone (§12).
+  withdrawMarketing: {
+    question:
+      'Withdraw marketing OK? The photo leaves the marketing export. Only the contributor can give it again.',
+    confirm: 'Withdraw',
+    box: 'border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-900/40',
+    text: 'text-gray-900 dark:text-white',
+  },
+}
 
 function Actions({
   post,
@@ -167,22 +207,29 @@ function Actions({
   busy: PostAction | null
   failed: PostAction | null
 }) {
-  const [confirming, setConfirming] = useState(false)
+  const [confirming, setConfirming] = useState<Confirmed | null>(null)
   const confirmId = useId()
   // The pressed button leaves the page as the confirm replaces it, and back:
-  // focus follows, to Cancel (never the destructive choice) and to Delete now.
+  // focus follows, to Cancel (never the irreversible choice) and to the
+  // button that asked.
   const cancelRef = useRef<HTMLButtonElement>(null)
-  const deleteRef = useRef<HTMLButtonElement>(null)
+  const askedRefs = useRef<Partial<Record<Confirmed, HTMLButtonElement>>>({})
   const groupRef = useRef<HTMLDivElement>(null)
-  const toggled = useRef(false)
+  // The button to hand focus back to on the next render, if any.
+  const handBackTo = useRef<Confirmed | 'cancel' | null>(null)
   useEffect(() => {
-    if (!toggled.current) return
-    toggled.current = false
-    ;(confirming ? cancelRef : deleteRef).current?.focus()
+    const to = handBackTo.current
+    if (!to) return
+    handBackTo.current = null
+    ;(to === 'cancel' ? cancelRef.current : askedRefs.current[to])?.focus()
   }, [confirming])
-  const confirm = (on: boolean, handBack = true) => {
-    toggled.current = handBack
-    setConfirming(on)
+  const ask = (action: Confirmed) => {
+    handBackTo.current = 'cancel'
+    setConfirming(action)
+  }
+  const close = (handBack = true) => {
+    handBackTo.current = handBack ? confirming : null
+    setConfirming(null)
   }
 
   const run = async (action: PostAction) => {
@@ -193,40 +240,39 @@ function Actions({
     )
     // Ignored: already in flight, held by the queue.
     if (outcome === null) return
-    // Focus goes back to Delete now only if it is still in the confirm: the
-    // organizer may have moved on while the answer was on its way.
-    if (confirming) confirm(false, focusIsWith(groupRef.current))
+    // Focus goes back to the button that asked only if it is still in the
+    // confirm: the organizer may have moved on while the answer was on its
+    // way.
+    if (confirming) close(focusIsWith(groupRef.current))
   }
 
   const deleting = post.status === 'deleting'
   if (confirming) {
+    const copy = CONFIRMS[confirming]
     return (
       <div
         ref={groupRef}
         role="group"
         aria-labelledby={confirmId}
-        className="mt-2 space-y-2 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/40"
+        className={`mt-2 space-y-2 rounded-md border p-3 ${copy.box}`}
       >
-        <p
-          id={confirmId}
-          className="text-sm font-medium text-red-800 dark:text-red-300"
-        >
-          Delete this photo for good? It can’t be undone.
+        <p id={confirmId} className={`text-sm font-medium ${copy.text}`}>
+          {copy.question}
         </p>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             aria-disabled={busy !== null || undefined}
-            onClick={() => run('delete')}
+            onClick={() => run(confirming)}
             className={DANGER}
           >
-            {busy === 'delete' ? LABELS.delete.busy : 'Delete'}
+            {busy === confirming ? LABELS[confirming].busy : copy.confirm}
           </button>
           <button
             type="button"
             aria-disabled={busy !== null || undefined}
             ref={cancelRef}
-            onClick={() => !busy && confirm(false)}
+            onClick={() => !busy && close()}
             className={SECONDARY}
           >
             Cancel
@@ -255,14 +301,20 @@ function Actions({
           return (
             <button
               key={action}
-              ref={action === 'delete' ? deleteRef : undefined}
+              ref={
+                action === 'delete'
+                  ? (node) => {
+                      askedRefs.current.delete = node ?? undefined
+                    }
+                  : undefined
+              }
               type="button"
               aria-disabled={busy !== null || undefined}
               onClick={() =>
-                // Delete now asks first; Try again finishes a delete already
-                // confirmed.
+                // Delete now asks first; Try again finishes a delete
+                // already confirmed.
                 action === 'delete' && !deleting
-                  ? !busy && confirm(true)
+                  ? !busy && ask(action)
                   : run(action)
               }
               className={
@@ -278,6 +330,21 @@ function Actions({
           )
         })}
       </div>
+      {offersWithdraw(post) && (
+        <button
+          ref={(node) => {
+            askedRefs.current.withdrawMarketing = node ?? undefined
+          }}
+          type="button"
+          aria-disabled={busy !== null || undefined}
+          onClick={() => !busy && ask('withdrawMarketing')}
+          className={QUIET}
+        >
+          {busy === 'withdrawMarketing'
+            ? LABELS.withdrawMarketing.busy
+            : LABELS.withdrawMarketing.idle}
+        </button>
+      )}
     </div>
   )
 }

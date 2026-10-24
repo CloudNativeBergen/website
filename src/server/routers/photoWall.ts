@@ -23,6 +23,7 @@ import {
   moderateWallPost,
   type ModerationResult,
 } from '@/lib/photo-wall/moderate'
+import { withdrawWallPostMarketing } from '@/lib/photo-wall/marketing'
 import { pendingOf } from '@/lib/photo-wall/moderation'
 import { liveConferenceInOrg } from '@/lib/photo-wall/tenant'
 import { isWallPostId } from '@/lib/photo-wall/wall-post'
@@ -283,6 +284,38 @@ export const photoWallRouter = router({
         return { approved: result.approved, pending: result.pending }
       } finally {
         expirePosts(conference._id, attempted)
+      }
+    }),
+
+  /**
+   * Withdraw marketing OK (§10, §12): how organizers honour a contributor's
+   * withdrawal of marketing consent without deleting the post, for one who
+   * no longer has the phone's cookie. It only ever unticks: there is no
+   * consent in the input, so an organizer can never give it on a
+   * contributor's behalf. Expires the queue and the post's device once
+   * written (or on a throw after the patch was attempted), never the wall:
+   * consent changes nothing it shows. Answers `done`, `changed` or `gone`.
+   */
+  withdrawMarketing: adminProcedure
+    .input(z.object({ id: postId, shown }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const conference = await requestConference(ctx.orgId)
+      let device: string | null = null
+      let written = false
+      try {
+        const result = await withdrawWallPostMarketing({
+          conferenceId: conference._id,
+          postId: input.id,
+          shown: input.shown,
+          onRead: (deviceKey) => (device = deviceKey),
+          onWrite: (pending) => (written = pending),
+        })
+        written = result.status === 'done'
+        return result
+      } finally {
+        if (written) {
+          expireWallPost(conference._id, device ?? '', { wall: false })
+        }
       }
     }),
 
