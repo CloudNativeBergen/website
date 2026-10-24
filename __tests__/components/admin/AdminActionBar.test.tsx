@@ -200,6 +200,7 @@ describe('AdminActionBar action split', () => {
       'Confirm',
       'Reject',
       'Withdraw',
+      'Cancel',
       'More',
       'Actions',
     ])
