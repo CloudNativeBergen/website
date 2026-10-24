@@ -53,10 +53,12 @@ function Polaroid({ post, eager }: { post: WallPagePost; eager: boolean }) {
       />
       <figcaption className="font-caveat min-h-6 pt-1.5 leading-tight break-words">
         {post.caption && (
-          <span className="block text-lg font-medium">{post.caption}</span>
+          <span className="block text-lg leading-tight font-medium">
+            {post.caption}
+          </span>
         )}
         {post.name && (
-          <span className="block text-right text-base font-medium text-gray-500">
+          <span className="block text-right text-base leading-tight font-medium text-gray-500">
             — {post.name}
           </span>
         )}
