@@ -1,6 +1,7 @@
 import 'server-only'
 import { clientWrite } from '@/lib/sanity/client'
 import { sanityStatus } from '@/lib/sanity/status'
+import type { OnWrite } from './delete'
 import type { MyPostMarketingStatus } from './my-posts'
 import {
   AGAIN,
@@ -35,17 +36,14 @@ export async function setWallPostMarketing({
   postId,
   deviceKey,
   consent,
-  onWriteAttempt,
+  onWrite,
 }: {
   conferenceId: string
   postId: string
   deviceKey: string
   consent: boolean
-  /**
-   * Told once, just before the first write is attempted: a throw after it
-   * may have written (an answer lost), a throw before it wrote nothing.
-   */
-  onWriteAttempt?: () => void
+  /** As `deleteWallPost`'s: see {@link OnWrite}. */
+  onWrite?: OnWrite
 }): Promise<MarketingResult> {
   const read = async (): Promise<StoredWallPost | null> => {
     const post = await readWallPost(conferenceId, postId)
@@ -56,7 +54,6 @@ export async function setWallPostMarketing({
   }
   const first = await read()
   if (!first) return { status: 'gone' }
-  onWriteAttempt?.()
 
   return atMostTwice<MarketingResult>(
     async (attempt) => {
@@ -66,6 +63,7 @@ export async function setWallPostMarketing({
         if (!again || !sameIncarnation(again, first)) return { status: 'gone' }
         post = again
       }
+      onWrite?.(true)
       try {
         await clientWrite
           .patch(postId)
@@ -74,8 +72,11 @@ export async function setWallPostMarketing({
           .commit()
         return { status: 'done' }
       } catch (error) {
-        if (sanityStatus(error) === 404) return { status: 'gone' }
-        if (sanityStatus(error) === 409) return AGAIN
+        const status = sanityStatus(error)
+        // Refused outright: nothing was written.
+        if (status === 404 || status === 409) onWrite?.(false)
+        if (status === 404) return { status: 'gone' }
+        if (status === 409) return AGAIN
         throw error
       }
     },

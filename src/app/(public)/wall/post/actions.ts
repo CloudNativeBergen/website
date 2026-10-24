@@ -51,9 +51,17 @@ export async function ensureDevice(): Promise<boolean> {
   return true
 }
 
-/** The Host's conference and the cookie's device, or null without either. */
+/**
+ * The Host's conference and the cookie's device, or null without either. A
+ * conference read that failed THROWS: it says nothing about the posts, and
+ * answering "none" (an empty list, `gone`) would make the phone drop cards
+ * that are still there.
+ */
 async function thisDevice() {
   const host = await wallConference()
+  if (!host.ok && host.reason === 'unavailable') {
+    throw new Error('The conference could not be read; try again')
+  }
   if (!host.ok) return null
   const device = await readDeviceCookie()
   if (!device) return null
@@ -93,14 +101,14 @@ export async function deleteMyPost(postId: string): Promise<MyPostDeletion> {
   const device = await thisDevice()
   if (!device || !isWallPostId(postId)) return { status: 'gone' }
   const { conferenceId, deviceKey } = device
-  // From the first write attempted on: a throw then may have written.
+  // True while a write is out or landed: a throw then may have written.
   let written = false
   try {
     const result = await deleteWallPost({
       conferenceId,
       postId,
       deviceKey,
-      onWriteAttempt: () => (written = true),
+      onWrite: (pending) => (written = pending),
     })
     written =
       result.status === 'deleted' ||
@@ -138,7 +146,7 @@ export async function setMyPostMarketing(
       postId,
       deviceKey,
       consent,
-      onWriteAttempt: () => (written = true),
+      onWrite: (pending) => (written = pending),
     })
     written = result.status === 'done'
     return result

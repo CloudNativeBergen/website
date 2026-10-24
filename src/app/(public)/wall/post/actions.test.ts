@@ -192,6 +192,12 @@ beforeEach(() => {
 })
 
 describe('getMyPosts', () => {
+  it('throws, never an empty list, when the conference read failed: the phone keeps the list it has', async () => {
+    await phoneWithPost()
+    h.resolution = { conference: {}, status: 'unavailable' }
+    await expect(getMyPosts()).rejects.toThrow()
+  })
+
   it("lists the cookie's device's posts on this wall, by the device key the cookie stands for", async () => {
     await phoneWithPost()
     const posts = await getMyPosts()
@@ -218,6 +224,29 @@ describe('getMyPosts', () => {
 })
 
 describe('deleteMyPost', () => {
+  it('throws, never gone, when the conference read failed: reading, writing and expiring nothing, so the card stays to press again', async () => {
+    await phoneWithPost()
+    h.resolution = { conference: {}, status: 'unavailable' }
+    await expect(deleteMyPost(DEVICE_POST)).rejects.toThrow()
+    expect(h.store!.docReads).toEqual([])
+    expect(h.store!.commits).toEqual([])
+    expect(expired()).toEqual([])
+  })
+
+  it('a mark refused outright (409), then a re-read that throws, expires nothing: nothing was written', async () => {
+    await phoneWithPost()
+    const reads = vi.spyOn(clientReadUncached, 'getDocument')
+    onTestFinished(() => reads.mockRestore())
+    h.store!.beforeNextCommit(() => {
+      h.store!.put({ ...h.store!.doc(DEVICE_POST)!, _rev: 'rev-other' })
+      reads.mockRejectedValueOnce(new Error('503: read refused'))
+    })
+    await expect(deleteMyPost(DEVICE_POST)).rejects.toThrow('503')
+    expect(h.store!.commits).toEqual([])
+    expect(h.store!.doc(DEVICE_POST)).toMatchObject({ status: 'approved' })
+    expect(expired()).toEqual([])
+  })
+
   it("deletes the device's own post and its asset, and expires the wall, the queue and the device", async () => {
     const key = await phoneWithPost()
     await expect(deleteMyPost(DEVICE_POST)).resolves.toEqual({
@@ -325,6 +354,29 @@ describe('deleteMyPost', () => {
 })
 
 describe('setMyPostMarketing', () => {
+  it('throws, never gone, when the conference read failed, writing and expiring nothing', async () => {
+    await phoneWithPost()
+    h.resolution = { conference: {}, status: 'unavailable' }
+    await expect(setMyPostMarketing(DEVICE_POST, false)).rejects.toThrow()
+    expect(h.store!.docReads).toEqual([])
+    expect(h.store!.commits).toEqual([])
+    expect(expired()).toEqual([])
+  })
+
+  it('a patch refused outright (409), then a re-read that throws, expires nothing', async () => {
+    await phoneWithPost()
+    const reads = vi.spyOn(clientReadUncached, 'getDocument')
+    onTestFinished(() => reads.mockRestore())
+    h.store!.beforeNextCommit(() => {
+      h.store!.put({ ...h.store!.doc(DEVICE_POST)!, _rev: 'rev-other' })
+      reads.mockRejectedValueOnce(new Error('503: read refused'))
+    })
+    await expect(setMyPostMarketing(DEVICE_POST, false)).rejects.toThrow('503')
+    expect(h.store!.commits).toEqual([])
+    expect(h.store!.doc(DEVICE_POST)).toMatchObject({ marketingConsent: true })
+    expect(expired()).toEqual([])
+  })
+
   it("patches the device's own post, guarded by its revision, and expires the queue and the device but not the wall", async () => {
     const key = await phoneWithPost()
     await expect(setMyPostMarketing(DEVICE_POST, false)).resolves.toEqual({

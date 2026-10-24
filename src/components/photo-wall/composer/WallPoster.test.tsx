@@ -640,6 +640,51 @@ describe('WallPoster', () => {
       expect(screen.queryByRole('img')).toBeNull()
     })
 
+    it('a consent change whose refresh failed gives way to the next list, even one with the value it had before (another tab)', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      mine.getMyPosts.mockResolvedValue([myPost({ marketingConsent: true })])
+      renderPoster(postAnswering())
+      const marketing = await screen.findByRole('switch', { name: 'Marketing' })
+      expect(marketing).toHaveAttribute('aria-checked', 'true')
+      mine.getMyPosts.mockRejectedValueOnce(new Error('offline'))
+      await act(async () => {
+        fireEvent.click(marketing)
+      })
+      expect(mine.setMyPostMarketing).toHaveBeenCalledWith(
+        'wallPost-earlier',
+        false,
+      )
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
+      expect(screen.getByRole('switch', { name: 'Marketing' })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      )
+      // Another tab ticked it again; the next read says so.
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(3)
+      expect(screen.getByRole('switch', { name: 'Marketing' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      )
+    })
+
+    it('a Delete answered gone while the list still carries the post shows it again, to press again', async () => {
+      mine.getMyPosts.mockResolvedValue([myPost()])
+      mine.deleteMyPost.mockResolvedValue({ status: 'gone' })
+      renderPoster(postAnswering())
+      fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Delete this photo' }),
+        )
+      })
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible()
+      expect(screen.getByText('On the wall')).toBeInTheDocument()
+    })
+
     it('Delete and the Marketing switch call the actions with the post’s id, then read the list again', async () => {
       mine.getMyPosts.mockResolvedValue([myPost()])
       renderPoster(postAnswering())

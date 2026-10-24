@@ -50,8 +50,15 @@ const meta = {
   },
   args: {
     posts: POSTS,
-    onDelete: fn<MyPostsProps['onDelete']>(async () => 'deleted'),
-    onMarketing: fn<MyPostsProps['onMarketing']>(async () => 'done'),
+    listRead: 1,
+    onDelete: fn<MyPostsProps['onDelete']>(async () => ({
+      status: 'deleted',
+      readsBefore: 1,
+    })),
+    onMarketing: fn<MyPostsProps['onMarketing']>(async () => ({
+      status: 'done',
+      readsBefore: 1,
+    })),
   },
   render: (args) => (
     <WallChrome logo={{ title: 'Cloud Native Days Norway' }}>
@@ -110,7 +117,10 @@ export const DeleteConfirmDark: Story = {
 export const DeleteFailed: Story = {
   args: {
     posts: POSTS.slice(0, 1),
-    onDelete: fn<MyPostsProps['onDelete']>(async () => 'failed'),
+    onDelete: fn<MyPostsProps['onDelete']>(async () => ({
+      status: 'failed',
+      readsBefore: 1,
+    })),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
