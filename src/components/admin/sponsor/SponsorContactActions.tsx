@@ -5,6 +5,7 @@ import { useState } from 'react'
 import {
   EnvelopeIcon,
   DocumentArrowDownIcon,
+  ClipboardDocumentIcon,
 } from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
@@ -16,6 +17,7 @@ import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
   buildContactsCsv,
+  contactEmails,
   contactsCsvFilename,
 } from '@/lib/sponsor-crm/contacts-csv'
 
@@ -82,6 +84,28 @@ export function SponsorContactActions({
     }
   }
 
+  const visibleEmails = contactEmails(visibleSponsors)
+
+  const copyEmails = async () => {
+    try {
+      await navigator.clipboard.writeText(visibleEmails.join(', '))
+      showNotification({
+        type: 'success',
+        title: 'Emails copied',
+        message: `${visibleEmails.length} address${
+          visibleEmails.length === 1 ? '' : 'es'
+        } copied to the clipboard.`,
+      })
+    } catch (error) {
+      console.error('[SponsorContactActions] Copy failed:', error)
+      showNotification({
+        type: 'error',
+        title: 'Copy failed',
+        message: 'Could not write to the clipboard. Use Export instead.',
+      })
+    }
+  }
+
   return (
     <>
       <AdminHeaderActions
@@ -92,6 +116,13 @@ export function SponsorContactActions({
             icon: <DocumentArrowDownIcon className="h-4 w-4" />,
             variant: 'secondary',
             disabled: visibleSponsors.length === 0 || isExporting,
+          },
+          {
+            label: `Copy Emails (${visibleEmails.length})`,
+            onClick: copyEmails,
+            icon: <ClipboardDocumentIcon className="h-4 w-4" />,
+            variant: 'secondary',
+            disabled: visibleEmails.length === 0,
           },
           {
             label: `Send Broadcast (${broadcastRecipientCount})`,

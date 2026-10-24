@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import {
   EnvelopeIcon,
   DocumentArrowDownIcon,
+  ClipboardDocumentIcon,
 } from '@heroicons/react/24/outline'
 
 const meta = {
@@ -13,7 +14,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Action bar for sponsor contact management with export (CSV download) and broadcast email buttons. Disables actions when no contacts are available.',
+          'Action bar for sponsor contact management with export (CSV download), copy emails (clipboard) and broadcast email buttons. Disables actions when no contacts are available.',
       },
     },
   },
@@ -67,6 +68,11 @@ export const Default: Story = {
             variant="secondary"
           />
           <ActionButton
+            icon={<ClipboardDocumentIcon className="h-4 w-4" />}
+            label="Copy Emails (15)"
+            variant="secondary"
+          />
+          <ActionButton
             icon={<EnvelopeIcon className="h-4 w-4" />}
             label="Send Broadcast (15)"
           />
@@ -92,6 +98,12 @@ export const NoContacts: Story = {
           <ActionButton
             icon={<DocumentArrowDownIcon className="h-4 w-4" />}
             label="Export Contacts"
+            variant="secondary"
+            disabled
+          />
+          <ActionButton
+            icon={<ClipboardDocumentIcon className="h-4 w-4" />}
+            label="Copy Emails (0)"
             variant="secondary"
             disabled
           />
@@ -150,6 +162,10 @@ export const Documentation: Story = {
           <li>
             <strong>Export Contacts</strong> - Download CSV/Excel of all sponsor
             contacts
+          </li>
+          <li>
+            <strong>Copy Emails</strong> - Copy the distinct contact emails of
+            the visible rows, comma-separated, for Slack invites
           </li>
           <li>
             <strong>Send Broadcast</strong> - Opens modal to compose and send
