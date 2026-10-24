@@ -280,6 +280,72 @@ describe('WallBoardView (§9.1)', () => {
   })
 })
 
+describe('WallBoardView in Mosaic and Spotlight (§9, #1478)', () => {
+  const photos = () =>
+    within(screen.getByRole('list', { name: 'Photos' })).getAllByRole('img')
+
+  it('Mosaic shows each whole photo, newest first, with its caption and name over it', () => {
+    const posts = [
+      post('wallPost-b', { caption: 'Keynote crowd', name: 'Ada' }),
+      post('wallPost-a'),
+    ]
+    renderView(view({ look: 'mosaic', posts }))
+    expect(photos().map((img) => img.getAttribute('src'))).toEqual(
+      posts.map((p) => p.whole.src),
+    )
+    const figures = screen.getAllByRole('figure')
+    expect(within(figures[0]).getByText('Keynote crowd')).toBeInTheDocument()
+    expect(within(figures[0]).getByText('Ada')).toBeInTheDocument()
+    expect(figures[1].querySelector('figcaption')).toBeNull()
+    // Sized to the photo's own shape, so the whole photo shows.
+    expect(photos()[0]).toHaveAttribute('width', '1600')
+    expect(photos()[0]).toHaveAttribute('height', '1000')
+  })
+
+  it('Spotlight is a feed: each whole photo, newest first, with the name, the time and the caption', () => {
+    const posts = [
+      post('wallPost-b', {
+        caption: 'Keynote crowd',
+        name: 'Ada',
+        approvedAt: '2026-10-26T07:52:00Z',
+      }),
+      post('wallPost-a', { approvedAt: '2026-10-26T07:40:00Z' }),
+    ]
+    renderView(view({ look: 'spotlight', posts }))
+    expect(photos().map((img) => img.getAttribute('src'))).toEqual(
+      posts.map((p) => p.whole.src),
+    )
+    const items = within(
+      screen.getByRole('list', { name: 'Photos' }),
+    ).getAllByRole('listitem')
+    expect(within(items[0]).getByText('Ada')).toBeInTheDocument()
+    // Oslo time: 07:52Z is 08:52 on Monday 26 October.
+    expect(within(items[0]).getByText('Mon 26 Oct, 08:52')).toBeInTheDocument()
+    expect(within(items[0]).getByText('Keynote crowd')).toBeInTheDocument()
+    expect(within(items[1]).getByText('Anonymous')).toBeInTheDocument()
+  })
+
+  it.each(['mosaic', 'spotlight'] as const)(
+    '%s keeps the page around it: the count, Add your photo, the footer, the empty and closed states',
+    (look) => {
+      renderView(
+        view({ look, posts: [post('wallPost-1'), post('wallPost-2')] }),
+      )
+      expect(screen.getByText(/2 photos/)).toBeInTheDocument()
+      expect(
+        screen.getByRole('link', { name: 'Add your photo' }),
+      ).toHaveAttribute('href', '/wall/post')
+      expect(screen.getByText(/want it removed/)).toBeInTheDocument()
+      cleanup()
+      renderView(view({ look, posts: [] }))
+      expect(screen.getByText('No photos yet.')).toBeInTheDocument()
+      cleanup()
+      renderView(view({ look, closed: true, posts: [] }))
+      expect(screen.getByText('This wall has closed.')).toBeInTheDocument()
+    },
+  )
+})
+
 describe('WallBoard, connected', () => {
   it('polls photoWallPublic.get from the server’s first answer, visible-only and with no idle stop', () => {
     const initial = view({ posts: [post('wallPost-1')] })
