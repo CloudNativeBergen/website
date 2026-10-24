@@ -133,12 +133,12 @@ describe('SpeakerTable ticket row actions', () => {
       />,
     )
 
-    // One button in the desktop table header, one above the mobile cards.
+    // Mobile button (above the cards) renders first, desktop header button second.
     const copyBtns = screen.getAllByRole('button', {
       name: 'Copy all 2 emails',
     })
     expect(copyBtns).toHaveLength(2)
-    fireEvent.click(copyBtns[1])
+    fireEvent.click(copyBtns[0])
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
