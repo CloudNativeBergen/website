@@ -105,7 +105,7 @@ export const PostedTwice: Story = {
       { timeout: 10_000 },
     )
     const captions = canvas
-      .getAllByRole('img')
+      .getAllByRole('img', { name: /^Your photo/ })
       .map((img) => img.getAttribute('alt'))
     await expect(captions).toEqual([
       'Your photo: Second one',
