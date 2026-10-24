@@ -114,7 +114,7 @@ Two new document types. `conference` is **not** touched (it is append-only,
 | `conference`   | reference → `conference`, required           | The tenancy key (`conference._ref == $conferenceId`).                                                                        |
 | `postingMode`  | `'open' \| 'paused'` (M1), `'auto'` (P2)     | Monday offers **Open** and **Paused** only; a missing value reads as `paused`. P2 adds `auto` and makes it the default (§7). |
 | `sponsorStrip` | boolean, default `false`                     | Screen Mode shows the sponsor strip when true (§9.4).                                                                        |
-| `look`         | `'pinboard' \| 'mosaic' \| 'spotlight'` (P3) | Absent until P3; reads as `pinboard`.                                                                                        |
+| `look`         | `'pinboard' \| 'mosaic' \| 'spotlight'` (P3) | The Wall Look (§9). Missing or unknown reads as `pinboard`.                                                                  |
 | `closedAt`     | datetime                                     | Set by the retention cron before it deletes anything: the wall is closed to writes (§11.1).                                  |
 | `purgedAt`     | datetime                                     | Set by the retention cron when the deletion is done (§11.1).                                                                 |
 
@@ -408,11 +408,24 @@ Sanity.** _Tags and function names below are implementation details._
 
 ## 9. The wall
 
-Only the **Pinboard** look ships on Monday. Mosaic, Spotlight, look switching
-and `?look=` are slices P3–P4 (§13), built to
+The **Pinboard** shipped on Monday; **Mosaic** (P3) and **Spotlight** (P4)
+followed, built to
 [Prototype the Photo Wall look](https://github.com/CloudNativeBergen/website/issues/1478)
 and its prototype (`Prototypes/PhotoWall/WallLook` on branch
 `prototype/photo-wall-look`).
+
+- An organizer picks the **Wall Look** per wall on the admin page (§10). It is
+  the look of the Wall page and of every screen, and running screens switch
+  on their next poll: `getWall` carries it, and the change expires
+  `photo-wall:<conferenceId>` like every settings change (§8).
+- A screen's own link overrides it with `?look=pinboard|mosaic|spotlight`, so
+  rooms can differ. Any other value is ignored. Visitors can't switch looks:
+  the Wall page has no override.
+- Pinboard shows the square crop; Mosaic and Spotlight show the **whole
+  photo**, scaled by Sanity with `max-w`/`max-h` (never `w`+`h`, which makes
+  the URL builder add a `rect=` that cuts it).
+- A screen that switches look starts that look afresh from the latest list,
+  with nothing marked new. _Refinement (spec)._
 
 ### 9.1 Wall page (`/wall`)
 
@@ -467,6 +480,34 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
 - After the wall closes: "This wall has closed."
 - The behaviour above is fixed, with no organizer settings (#1478).
 
+**Mosaic** (P3, #1478 variant B):
+
+- Screen Mode: an edge-to-edge masonry of the newest **40** posts' whole
+  photos on black, each tile its photo's shape (height over width held
+  within 0.5–1.8; beyond that the photo is letterboxed, never cropped). One
+  post is **featured** as a two-column tile with its caption and name. The
+  feature walks the **6** newest, one every 6 s; a new post takes it at once
+  with a "Just posted" mark for 6 s. The logo and a QR card sit over a
+  gradient at the bottom.
+- Wall page: the same masonry in two columns (three and four on wider
+  screens), the caption and name over a gradient.
+
+**Spotlight** (P4, #1478 variant C):
+
+- Screen Mode: one big post at a time over a blurred copy of itself, with
+  its caption, name and approval time and a bar for its 6 s turn; a rail
+  with the logo, the QR card and **Up next** (4). The big post walks the
+  **12** newest. A new post goes **next in line**, first on Up next; a burst
+  waits its turns in approval order. _Refinement (spec):_ it wears the "new"
+  mark while it waits on Up next and for its 6 s turn as the big post, so a
+  burst's later posts still arrive marked.
+- Wall page: a single-column feed, each whole photo with the name, the day
+  and time, and the caption.
+
+Both: a burst is let in one post every 2.5 s; a removed post leaves at once
+(a featured one hands over to the next); a post is shown only once its photo
+has loaded; §9.3 and §9.4 apply as for the Pinboard.
+
 ### 9.3 Screens on flaky Wi-Fi
 
 _Decided (spec ticket):_
@@ -511,8 +552,9 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   is slice P6.
 - **Phone-first.** One column of cards on a phone, a grid on desktop.
 - **Before setup:** a short explanation and **Set up the Photo Wall** (§4.1).
-- **Settings row:** **Posting** (Open / Paused; Automatic from P2) and
-  **Sponsor strip** (on/off).
+- **Settings row:** **Posting** (Open / Paused; Automatic from P2),
+  **Sponsor strip** (on/off) and **Wall Look** (Pinboard / Mosaic /
+  Spotlight, P3; §9).
 - **Links:** the posting link with its QR code (PNG download, reusing the
   `qr-code-styling` helper the Feedback Code uses), the Wall page link and the
   Screen Mode link, each with Copy.
