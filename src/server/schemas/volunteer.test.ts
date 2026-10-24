@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { SendVolunteerEmailSchema } from './volunteer'
+import {
+  SendVolunteerEmailSchema,
+  UpdateVolunteerDetailsSchema,
+} from './volunteer'
+import { Occupation } from '@/lib/volunteer/types'
 import {
   UpdateRegistrationSchema,
   UpdateCommunicationSchema,
@@ -151,5 +155,45 @@ describe('Conference Volunteer Links Validation', () => {
       volunteerSlackInviteUrl: 'http://join.slack.com/t/test/shared_invite/123',
     })
     expect(parsed.success).toBe(false)
+  })
+})
+
+describe('UpdateVolunteerDetailsSchema assignedTasks', () => {
+  const base = {
+    volunteerId: 'v1',
+    name: 'Ola',
+    email: 'ola@example.com',
+    phone: '+4712345678',
+    occupation: Occupation.STUDENT,
+  }
+  it('is optional and nullable', () => {
+    expect(UpdateVolunteerDetailsSchema.safeParse(base).success).toBe(true)
+    expect(
+      UpdateVolunteerDetailsSchema.safeParse({ ...base, assignedTasks: null })
+        .success,
+    ).toBe(true)
+  })
+  it('trims entries and rejects blank or too many', () => {
+    const ok = UpdateVolunteerDetailsSchema.parse({
+      ...base,
+      assignedTasks: [' Info desk '],
+    })
+    expect(ok.assignedTasks).toEqual(['Info desk'])
+    expect(
+      UpdateVolunteerDetailsSchema.parse({
+        ...base,
+        assignedTasks: ['Info desk', 'info DESK', 'Bar'],
+      }).assignedTasks,
+    ).toEqual(['Info desk', 'Bar'])
+    expect(
+      UpdateVolunteerDetailsSchema.safeParse({ ...base, assignedTasks: ['  '] })
+        .success,
+    ).toBe(false)
+    expect(
+      UpdateVolunteerDetailsSchema.safeParse({
+        ...base,
+        assignedTasks: Array.from({ length: 21 }, (_, i) => `t${i}`),
+      }).success,
+    ).toBe(false)
   })
 })

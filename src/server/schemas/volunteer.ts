@@ -125,6 +125,24 @@ export const UpdateVolunteerDetailsSchema = z.object({
     .max(10, 'Maximum 10 tasks allowed')
     .nullable()
     .optional(),
+  assignedTasks: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(100, 'Each task must be less than 100 characters'),
+    )
+    .max(20, 'Maximum 20 assigned tasks allowed')
+    // Case-insensitive dedupe, first spelling wins.
+    .transform((tasks) =>
+      tasks.filter(
+        (t, i) =>
+          tasks.findIndex((o) => o.toLowerCase() === t.toLowerCase()) === i,
+      ),
+    )
+    .nullable()
+    .optional(),
   tshirtSize: z.nativeEnum(TShirtSize).nullable().optional(),
   dietaryRestrictions: z
     .string()

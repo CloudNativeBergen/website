@@ -352,6 +352,15 @@ export default function VolunteerAdminPage() {
     !searchQuery.trim() &&
     volunteers.every((v) => v.status === VolunteerStatus.REJECTED)
 
+  // Volunteers come from the current conference only, so suggestions stay tenant-scoped.
+  const taskSuggestions = useMemo(
+    () =>
+      [
+        ...new Set((volunteers ?? []).flatMap((v) => v.assignedTasks ?? [])),
+      ].sort(),
+    [volunteers],
+  )
+
   const filteredVolunteers = useMemo(() => {
     if (!volunteers) return []
     const matches = volunteers.filter((v) => {
@@ -383,9 +392,10 @@ export default function VolunteerAdminPage() {
         const matchesOccupation = v.occupation
           ? v.occupation.toLowerCase().includes(query)
           : false
-        const matchesTasks = Array.isArray(v.preferredTasks)
-          ? v.preferredTasks.some((t) => t?.toLowerCase().includes(query))
-          : false
+        const matchesTasks = [
+          ...(v.preferredTasks ?? []),
+          ...(v.assignedTasks ?? []),
+        ].some((t) => t?.toLowerCase().includes(query))
 
         if (
           !matchesName &&
@@ -945,6 +955,18 @@ export default function VolunteerAdminPage() {
                         </span>
                       </span>
 
+                      {(volunteer.assignedTasks?.length ?? 0) > 0 && (
+                        <span className="mt-2 flex flex-wrap gap-1">
+                          {volunteer.assignedTasks!.map((task, i) => (
+                            <span
+                              key={`${i}-${task}`}
+                              className="rounded bg-green-50 px-1.5 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                            >
+                              {task}
+                            </span>
+                          ))}
+                        </span>
+                      )}
                       <span className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-gray-700/50 dark:text-gray-400">
                         <span className="font-medium text-gray-700 capitalize dark:text-gray-300">
                           {volunteer.occupation || 'Volunteer'}
@@ -1137,6 +1159,25 @@ export default function VolunteerAdminPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Assigned Tasks */}
+                  {(selectedVolunteer.assignedTasks?.length ?? 0) > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                        Assigned Tasks
+                      </span>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {selectedVolunteer.assignedTasks!.map((task, i) => (
+                          <span
+                            key={`${i}-${task}`}
+                            className="inline-flex items-center rounded-md bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-green-700/10 ring-inset dark:bg-green-900/30 dark:text-green-300 dark:ring-green-400/20"
+                          >
+                            {task}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Availability */}
                   {selectedVolunteer.availability && (
@@ -1465,6 +1506,7 @@ export default function VolunteerAdminPage() {
           isOpen={editModalOpen}
           onClose={() => setEditModalOpen(false)}
           volunteer={selectedVolunteer}
+          taskSuggestions={taskSuggestions}
         />
       )}
 

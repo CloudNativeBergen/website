@@ -18,6 +18,7 @@ const COLUMNS = [
   'Availability',
   'Ticket status',
   'Confirmed at',
+  'Assigned tasks',
 ] as const
 
 const TICKET_LABELS: Record<VolunteerTicketStatus['state'], string> = {
@@ -38,6 +39,7 @@ type Exportable = Pick<
   | 'tshirtSize'
   | 'dietaryRestrictions'
   | 'preferredTasks'
+  | 'assignedTasks'
   | 'availability'
   | 'confirmedAt'
 >
@@ -63,6 +65,7 @@ export function buildVolunteersCsv(
         v.availability,
         ticket ? TICKET_LABELS[ticket.state] : '',
         v.confirmedAt,
+        v.assignedTasks?.join('; '),
       ]
     }),
   )
