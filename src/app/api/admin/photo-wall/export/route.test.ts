@@ -25,6 +25,7 @@ vi.mock('@/lib/photo-wall/export', async (importOriginal) => ({
   stillExportable: h.recheck,
   // Short, so a stalled photo times out within the test.
   PHOTO_TIMEOUT_MS: 50,
+  READ_TIMEOUT_MS: 50,
 }))
 
 import { GET } from './route'
@@ -160,7 +161,7 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
       expect.objectContaining({ redirect: 'error' }),
     )
     // Read for THIS request's conference, the one the server resolved.
-    expect(h.photos).toHaveBeenCalledWith('conf-A')
+    expect(h.photos).toHaveBeenCalledWith('conf-A', expect.any(AbortSignal))
   })
 
   it('answers before it has fetched every photo: the ZIP streams, never buffered', async () => {
@@ -174,7 +175,11 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
   describe('re-checks each post live, right before fetching its photo', () => {
     it('re-reads a post, fetches its photo, then the next', async () => {
       await (await get()).arrayBuffer()
-      expect(h.recheck).toHaveBeenCalledWith('conf-A', 'wallPost-a6')
+      expect(h.recheck).toHaveBeenCalledWith(
+        'conf-A',
+        'wallPost-a6',
+        expect.any(AbortSignal),
+      )
       expect(h.log).toEqual(
         ['a6', 'a5', 'a4', 'a3', 'a2', 'a1'].flatMap((id) => [
           `recheck wallPost-${id}`,
@@ -248,9 +253,56 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
     )
     await response.body!.getReader().read()
     const [, init] = h.upstream.mock.calls[0] as [string, RequestInit]
+    const [, , recheck] = h.recheck.mock.calls[0] as [
+      string,
+      string,
+      AbortSignal,
+    ]
     expect(init.signal!.aborted).toBe(false)
+    expect(recheck.aborted).toBe(false)
     cancel.abort()
     expect(init.signal!.aborted).toBe(true)
+    expect(recheck.aborted).toBe(true)
+  })
+
+  describe('ends a stalled Sanity read, within its timeout', () => {
+    /** As the real client does (measured, see the PR): rejects on abort. */
+    const stalled = (signal: AbortSignal) =>
+      new Promise<never>((_, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason)),
+      )
+
+    it('answers 502 when the list read stalls, fetching nothing', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+      h.photos.mockImplementation((_: string, signal: AbortSignal) =>
+        stalled(signal),
+      )
+      const response = await get()
+      expect(response.status).toBe(502)
+      expect(await response.json()).toEqual({
+        error: 'The photos could not be read.',
+      })
+      expect(h.upstream).not.toHaveBeenCalled()
+      expect(logged).toHaveBeenCalledWith(
+        'Photo Wall export: could not read the photos',
+        expect.anything(),
+      )
+    }, 3000)
+
+    it('fails the download when a re-check stalls', async () => {
+      h.recheck.mockImplementation(
+        async (_: string, id: string, signal: AbortSignal) =>
+          id === 'wallPost-a5' ? stalled(signal) : true,
+      )
+      const response = await get()
+      await expect(response.arrayBuffer()).rejects.toThrow(
+        'Wall Post wallPost-a5 could not be re-checked',
+      )
+      expect(h.upstream).not.toHaveBeenCalledWith(
+        PHOTOS[1].url,
+        expect.anything(),
+      )
+    }, 3000)
   })
 
   describe('fails the download when a photo stalls, within its timeout', () => {

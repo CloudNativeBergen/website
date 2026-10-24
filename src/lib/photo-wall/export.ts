@@ -26,9 +26,16 @@ export interface ConsentedPhoto {
   submittedAt: string | null
 }
 
+/**
+ * How long one Sanity read of the export may take: the client's own
+ * `timeout` doesn't bound a read, so each takes an `AbortSignal`.
+ */
+export const READ_TIMEOUT_MS = 15_000
+
 /** This wall's exportable posts, newest approval first. */
 export async function readConsentedPhotos(
   conferenceId: string,
+  signal?: AbortSignal,
 ): Promise<ConsentedPhoto[]> {
   return scopedFetch<ConsentedPhoto[]>(
     clientReadUncached,
@@ -38,6 +45,8 @@ export async function readConsentedPhotos(
       "url": photo.asset->url,
       submittedAt
     }`,
+    {},
+    { signal },
   )
 }
 
@@ -67,12 +76,14 @@ export const PHOTO_TIMEOUT_MS = 60_000
 export async function stillExportable(
   conferenceId: string,
   id: string,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   const live = await scopedFetch<string | null>(
     clientReadUncached,
     { conferenceId },
     `*[${EXPORTABLE} && _id == $id][0]._id`,
     { id },
+    { signal },
   )
   return live === id
 }

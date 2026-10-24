@@ -16,10 +16,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   dataset: [] as Record<string, unknown>[],
   queries: [] as string[],
+  options: [] as unknown[],
 }))
 
-async function run(query: string, params: Record<string, unknown> = {}) {
+async function run(
+  query: string,
+  params: Record<string, unknown> = {},
+  options?: unknown,
+) {
   h.queries.push(query)
+  h.options.push(options)
   const value = await evaluate(parse(query), { dataset: h.dataset, params })
   return value.get()
 }
@@ -70,6 +76,7 @@ const post = (
 
 beforeEach(() => {
   h.queries.length = 0
+  h.options.length = 0
   h.dataset = [
     ...['a1', 'a2', 'b1', 'p1', 'n1', 'x1', 'd1', 'f1', 'r1', 'conf-A'].map(
       asset,
@@ -120,6 +127,14 @@ describe('readConsentedPhotos', () => {
     h.dataset.push(post('gone', 'conf-A', {}))
     const ids = (await readConsentedPhotos('conf-A')).map((p) => p._id)
     expect(ids).toEqual(['wallPost-a2', 'wallPost-a1'])
+  })
+
+  it('ends with the signal it is given: the client’s timeout bounds no read', async () => {
+    const signal = new AbortController().signal
+    await readConsentedPhotos('conf-A', signal)
+    await stillExportable('conf-A', 'wallPost-a1', signal)
+    await countConsentedPhotos('conf-A')
+    expect(h.options).toEqual([{ signal }, { signal }, undefined])
   })
 
   it('reads in ONE query, on the non-CDN client', async () => {

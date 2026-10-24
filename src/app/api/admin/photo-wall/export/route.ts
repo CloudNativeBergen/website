@@ -7,6 +7,7 @@ import {
   exportEntryName,
   isOurPhotoOriginal,
   PHOTO_TIMEOUT_MS,
+  READ_TIMEOUT_MS,
   readConsentedPhotos,
   stillExportable,
   type ConsentedPhoto,
@@ -35,6 +36,10 @@ async function organizerConferenceId(): Promise<string | null> {
   return (await liveConferenceInOrg(orgId))?._id ?? null
 }
 
+/** Ends when the organizer cancels or after `ms`, whichever comes first. */
+const deadline = (request: AbortSignal, ms: number) =>
+  AbortSignal.any([request, AbortSignal.timeout(ms)])
+
 /**
  * Each photo's original, fetched only when the ZIP is ready for it. Each post
  * is re-read live right before its photo is fetched: one unticked, taken off
@@ -50,12 +55,18 @@ async function* entries(
   request: AbortSignal,
 ) {
   for (const photo of photos) {
-    if (!(await stillExportable(conferenceId, photo._id))) continue
+    const exportable = await stillExportable(
+      conferenceId,
+      photo._id,
+      deadline(request, READ_TIMEOUT_MS),
+    ).catch((error: unknown) => {
+      throw new Error(`Wall Post ${photo._id} could not be re-checked`, {
+        cause: error,
+      })
+    })
+    if (!exportable) continue
     // Bounds the headers AND the body: the body is read under this signal.
-    const signal = AbortSignal.any([
-      request,
-      AbortSignal.timeout(PHOTO_TIMEOUT_MS),
-    ])
+    const signal = deadline(request, PHOTO_TIMEOUT_MS)
     const upstream = await fetch(photo.url, {
       // The host check holds for the first hop only: never follow one.
       redirect: 'error',
@@ -105,7 +116,19 @@ export async function GET(request: Request) {
   }
   if (!conferenceId) return refused()
 
-  const photos = await readConsentedPhotos(conferenceId)
+  let photos: ConsentedPhoto[]
+  try {
+    photos = await readConsentedPhotos(
+      conferenceId,
+      deadline(request.signal, READ_TIMEOUT_MS),
+    )
+  } catch (error) {
+    console.error('Photo Wall export: could not read the photos', error)
+    return NextResponse.json(
+      { error: 'The photos could not be read.' },
+      { status: 502 },
+    )
+  }
   if (photos.length === 0)
     return NextResponse.json(
       { error: 'No approved photos with marketing consent' },
