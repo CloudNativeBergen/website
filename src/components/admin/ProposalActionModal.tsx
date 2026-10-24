@@ -330,7 +330,8 @@ export function ProposalActionModal({
                     required
                   />
                   <HelpText>
-                    A reason is required and will be recorded on the proposal.
+                    A reason is required. It is recorded on the proposal and
+                    sent to the organizers as a message on this talk.
                   </HelpText>
                 </div>
               )}

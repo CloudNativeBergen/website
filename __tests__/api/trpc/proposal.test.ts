@@ -844,6 +844,80 @@ describe('proposal router', () => {
       })
     })
 
+    describe('speaker self-withdraw', () => {
+      const confirmed = { ...mockProposal, status: Status.confirmed }
+      const published = () =>
+        vi.mocked(eventBus.publish).mock.calls.at(-1)![0] as any
+
+      beforeEach(() => {
+        vi.mocked(eventBus.publish).mockClear()
+        vi.mocked(addMessage).mockClear()
+        vi.mocked(notifyNewMessage).mockClear()
+        vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
+        vi.mocked(ensureProposalConversation).mockResolvedValue('conv-1')
+        vi.mocked(addMessage).mockResolvedValue({ _id: 'msg-1' } as any)
+        vi.mocked(getConversationById).mockResolvedValue({
+          _id: 'conv-1',
+        } as any)
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: confirmed as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...confirmed, status: Status.withdrawn } as any,
+          err: null,
+        })
+      })
+
+      it('posts the reason as a speaker-authored thread message and fans it out', async () => {
+        await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Ill',
+        })
+        expect(addMessage).toHaveBeenCalledWith({
+          conversationId: 'conv-1',
+          authorId: regularSpeaker._id,
+          body: 'Withdrawn: Ill',
+        })
+        expect(notifyNewMessage).toHaveBeenCalledTimes(1)
+        expect(published().metadata.postedToThread).toBe(true)
+        expect(published().metadata.shouldNotify).toBe(false)
+      })
+
+      it('keeps the organizer alerts when an organizer withdraws their own talk', async () => {
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: {
+            ...confirmed,
+            speakers: [{ _id: adminSpeaker._id, name: adminSpeaker.name }],
+          } as any,
+          proposalError: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Ill',
+        })
+        expect(addMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ body: 'Withdrawn: Ill' }),
+        )
+        // The message is organizer-authored, so it skips Slack and the
+        // org-contact copy; the status alerts must still fire.
+        expect(published().metadata.postedToThread).toBe(false)
+      })
+
+      it('reports postedToThread false when the thread write fails', async () => {
+        vi.mocked(addMessage).mockRejectedValue(new Error('down'))
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Ill',
+        })
+        expect(published().metadata.postedToThread).toBe(false)
+      })
+    })
+
     it('should reject unauthenticated requests', async () => {
       const caller = createAnonymousCaller()
       await expect(

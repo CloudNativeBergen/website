@@ -5,6 +5,19 @@ import {
 } from '@/lib/slack/notify'
 import { Action } from '@/lib/proposal/types'
 
+/**
+ * A speaker withdrew their own talk and the reason went out as a thread
+ * message, whose fan-out already posted to Slack. A second "Talk Withdrawn"
+ * alert would double-notify the organizers.
+ */
+function isSelfWithdrawInThread(event: ProposalStatusChangeEvent): boolean {
+  return (
+    event.action === Action.withdraw &&
+    !event.metadata.triggeredBy.isOrganizer &&
+    !!event.metadata.postedToThread
+  )
+}
+
 export async function handleSlackNotification(
   event: ProposalStatusChangeEvent,
 ): Promise<void> {
@@ -17,7 +30,9 @@ export async function handleSlackNotification(
   }
 
   if (
-    ![Action.confirm, Action.withdraw, Action.cancel].includes(event.action)
+    ![Action.confirm, Action.withdraw, Action.cancel].includes(event.action) ||
+    // The thread message already posted to Slack (speaker-authored fan-out).
+    isSelfWithdrawInThread(event)
   ) {
     return
   }
