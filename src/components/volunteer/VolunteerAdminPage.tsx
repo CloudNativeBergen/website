@@ -20,6 +20,8 @@ import {
   MinusCircleIcon,
   QuestionMarkCircleIcon,
   ArrowTopRightOnSquareIcon,
+  ClipboardIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline'
 import { CheckBadgeIcon } from '@heroicons/react/24/solid'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
@@ -33,6 +35,7 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { TableToolbar } from '@/components/DataTable/TableToolbar'
 import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 import type { VolunteerTicketStatus } from '@/lib/tickets/volunteerStatus'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 
 const volunteerStatusConfig: Record<
   VolunteerStatus,
@@ -80,6 +83,22 @@ const ticketStatusConfig: Record<
   },
 }
 
+// Pending first: those are the applications that need an organizer's attention.
+const STATUS_SORT_ORDER: Record<VolunteerStatus, number> = {
+  [VolunteerStatus.PENDING]: 0,
+  [VolunteerStatus.APPROVED]: 1,
+  [VolunteerStatus.CONFIRMED]: 2,
+  [VolunteerStatus.REJECTED]: 3,
+}
+
+// Rejected applications are hidden by default; tick "rejected" in the Status
+// filter to see them. Clearing filters restores this default.
+const DEFAULT_STATUS_FILTER = [
+  VolunteerStatus.PENDING,
+  VolunteerStatus.APPROVED,
+  VolunteerStatus.CONFIRMED,
+]
+
 type TicketFilterState =
   'all' | 'redeemed' | 'invited' | 'not-invited' | 'unclaimed'
 
@@ -98,7 +117,7 @@ export default function VolunteerAdminPage() {
   )
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<Set<VolunteerStatus>>(
-    new Set(),
+    () => new Set(DEFAULT_STATUS_FILTER),
   )
   const [ticketFilter, setTicketFilter] = useState<TicketFilterState>('all')
   const [emailModalOpen, setEmailModalOpen] = useState(false)
@@ -271,9 +290,13 @@ export default function VolunteerAdminPage() {
     },
   })
 
+  const statusFilterIsDefault =
+    statusFilter.size === DEFAULT_STATUS_FILTER.length &&
+    DEFAULT_STATUS_FILTER.every((s) => statusFilter.has(s))
+
   const filteredVolunteers = useMemo(() => {
     if (!volunteers) return []
-    return volunteers.filter((v) => {
+    const matches = volunteers.filter((v) => {
       if (statusFilter.size > 0 && !statusFilter.has(v.status)) {
         return false
       }
@@ -318,7 +341,30 @@ export default function VolunteerAdminPage() {
       }
       return true
     })
+    // Array.prototype.sort is stable, so the server order holds within a group.
+    return matches.sort(
+      (a, b) => STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status],
+    )
   }, [volunteers, statusFilter, ticketFilter, ticketStatuses, searchQuery])
+
+  const { copied: copiedAllEmails, copyToClipboard: copyAllEmails } =
+    useCopyToClipboard()
+
+  const filteredEmails = useMemo(() => {
+    const seen = new Set<string>()
+    const emails: string[] = []
+    for (const volunteer of filteredVolunteers) {
+      const email = volunteer.email?.trim()
+      if (!email) continue
+      const key = email.toLowerCase()
+      if (!seen.has(key)) {
+        seen.add(key)
+        emails.push(email)
+      }
+    }
+    return emails
+  }, [filteredVolunteers])
+  const emailCountLabel = `${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}`
 
   const stats = useMemo(() => {
     if (!volunteers)
@@ -511,11 +557,11 @@ export default function VolunteerAdminPage() {
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search volunteers by name, email, task..."
         showClearButton={Boolean(
-          searchQuery || statusFilter.size > 0 || ticketFilter !== 'all',
+          searchQuery || !statusFilterIsDefault || ticketFilter !== 'all',
         )}
         onClear={() => {
           setSearchQuery('')
-          setStatusFilter(new Set())
+          setStatusFilter(new Set(DEFAULT_STATUS_FILTER))
           setTicketFilter('all')
         }}
         resultCount={filteredVolunteers.length}
@@ -573,9 +619,30 @@ export default function VolunteerAdminPage() {
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">
               Applications
             </h2>
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              {filteredVolunteers.length} showing
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                {filteredVolunteers.length} showing
+              </span>
+              {filteredEmails.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => copyAllEmails(filteredEmails.join(', '))}
+                  className="cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                  title={
+                    copiedAllEmails
+                      ? `Copied ${emailCountLabel}!`
+                      : `Copy all ${emailCountLabel}`
+                  }
+                  aria-label={`Copy all ${emailCountLabel}`}
+                >
+                  {copiedAllEmails ? (
+                    <CheckIcon className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                  ) : (
+                    <ClipboardIcon className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              )}
+            </div>
           </div>
 
           {listError ? (
@@ -611,13 +678,13 @@ export default function VolunteerAdminPage() {
                   action={
                     volunteers &&
                     volunteers.length > 0 &&
-                    (statusFilter.size > 0 ||
+                    (!statusFilterIsDefault ||
                       ticketFilter !== 'all' ||
                       searchQuery) ? (
                       <AdminButton
                         onClick={() => {
                           setSearchQuery('')
-                          setStatusFilter(new Set())
+                          setStatusFilter(new Set(DEFAULT_STATUS_FILTER))
                           setTicketFilter('all')
                         }}
                         size="sm"
@@ -1120,6 +1187,20 @@ export default function VolunteerAdminPage() {
                         ? 'Resend Approval Email'
                         : 'Send Approval Email'}
                     </AdminButton>
+
+                    {/* For volunteers who confirmed in person instead of via the email link */}
+                    {selectedVolunteer.status === VolunteerStatus.APPROVED && (
+                      <AdminButton
+                        onClick={() =>
+                          handleStatusUpdate(VolunteerStatus.CONFIRMED)
+                        }
+                        disabled={updateStatus.isPending}
+                        variant="secondary"
+                      >
+                        <CheckBadgeIcon className="h-4 w-4" />
+                        Mark confirmed
+                      </AdminButton>
+                    )}
 
                     <AdminButton
                       onClick={() =>
