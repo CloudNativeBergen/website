@@ -140,6 +140,7 @@ export default function VolunteerAdminPage() {
 
   const backButtonRef = useRef<HTMLButtonElement>(null)
   const cardRefs = useRef(new Map<string, HTMLButtonElement>())
+  const listHeadingRef = useRef<HTMLHeadingElement>(null)
   // Focus target after a selection change: the back button when opening the
   // detail view, the card again when going back. Only matters below lg, where
   // the list and detail swap places and the focused node gets hidden.
@@ -158,7 +159,8 @@ export default function VolunteerAdminPage() {
     // focus() is a no-op on display:none nodes, so on desktop focus stays put.
     ;(target === 'back'
       ? backButtonRef.current
-      : cardRefs.current.get(target)
+      : // The card is gone after a delete, or hidden by the filter after a reject.
+        (cardRefs.current.get(target) ?? listHeadingRef.current)
     )?.focus()
   }, [selectedVolunteerId])
 
@@ -415,7 +417,7 @@ export default function VolunteerAdminPage() {
         approved: '…',
         confirmed: '…',
         rejected: '…',
-        claimed: 0,
+        claimed: '…',
       }
     const claimed = volunteers.filter(
       (v) => ticketStatuses[v._id]?.state === 'redeemed',
@@ -660,7 +662,11 @@ export default function VolunteerAdminPage() {
           }`}
         >
           <div className="flex items-center justify-between pb-1">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            <h2
+              ref={listHeadingRef}
+              tabIndex={-1}
+              className="text-base font-semibold text-gray-900 focus:outline-none dark:text-white"
+            >
               Applications
             </h2>
             <div className="flex items-center gap-1.5">
@@ -671,7 +677,7 @@ export default function VolunteerAdminPage() {
                 <button
                   type="button"
                   onClick={() => copyAllEmails(filteredEmails.join(', '))}
-                  className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                  className="-my-3 -mr-3.5 inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                   title={
                     copiedAllEmails
                       ? `Copied ${emailCountLabel}!`
@@ -930,7 +936,7 @@ export default function VolunteerAdminPage() {
 
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <AdminButton
-                    className="min-h-11 w-full sm:w-auto"
+                    className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                     onClick={() => setEditModalOpen(true)}
                     variant="secondary"
                     size="sm"
@@ -939,7 +945,7 @@ export default function VolunteerAdminPage() {
                     Edit Details
                   </AdminButton>
                   <AdminButton
-                    className="min-h-11 w-full sm:w-auto"
+                    className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                     onClick={() => setDeleteVolunteerId(selectedVolunteer._id)}
                     variant="primary"
                     color="red"
@@ -1202,7 +1208,7 @@ export default function VolunteerAdminPage() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                       {/* Primary Approve Action: Opens Approval Email Dialog */}
                       <AdminButton
-                        className="min-h-11 w-full sm:w-auto"
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                         onClick={() =>
                           handleOpenApprovalModal(selectedVolunteer)
                         }
@@ -1216,7 +1222,7 @@ export default function VolunteerAdminPage() {
 
                       {/* Secondary: Approve without sending email */}
                       <AdminButton
-                        className="min-h-11 w-full sm:w-auto"
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                         onClick={() =>
                           handleStatusUpdate(VolunteerStatus.APPROVED)
                         }
@@ -1228,7 +1234,7 @@ export default function VolunteerAdminPage() {
 
                       {/* Reject */}
                       <AdminButton
-                        className="min-h-11 w-full sm:w-auto"
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                         onClick={() =>
                           handleStatusUpdate(VolunteerStatus.REJECTED)
                         }
@@ -1246,7 +1252,7 @@ export default function VolunteerAdminPage() {
                   selectedVolunteer.status === VolunteerStatus.CONFIRMED) && (
                   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                     <AdminButton
-                      className="min-h-11 w-full sm:w-auto"
+                      className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                       onClick={() => handleOpenApprovalModal(selectedVolunteer)}
                       variant="primary"
                       color="brand"
@@ -1260,7 +1266,7 @@ export default function VolunteerAdminPage() {
                     {/* For volunteers who confirmed in person instead of via the email link */}
                     {selectedVolunteer.status === VolunteerStatus.APPROVED && (
                       <AdminButton
-                        className="min-h-11 w-full sm:w-auto"
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                         onClick={() =>
                           handleStatusUpdate(VolunteerStatus.CONFIRMED)
                         }
@@ -1273,7 +1279,7 @@ export default function VolunteerAdminPage() {
                     )}
 
                     <AdminButton
-                      className="min-h-11 w-full sm:w-auto"
+                      className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                       onClick={() =>
                         handleStatusUpdate(VolunteerStatus.REJECTED)
                       }
@@ -1288,7 +1294,7 @@ export default function VolunteerAdminPage() {
                 {selectedVolunteer.status === VolunteerStatus.REJECTED && (
                   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                     <AdminButton
-                      className="min-h-11 w-full sm:w-auto"
+                      className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                       onClick={() =>
                         handleStatusUpdate(VolunteerStatus.PENDING)
                       }
@@ -1298,7 +1304,7 @@ export default function VolunteerAdminPage() {
                       Reopen as Pending
                     </AdminButton>
                     <AdminButton
-                      className="min-h-11 w-full sm:w-auto"
+                      className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                       onClick={() => handleOpenApprovalModal(selectedVolunteer)}
                       disabled={updateStatus.isPending}
                       variant="primary"
