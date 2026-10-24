@@ -684,9 +684,11 @@ export default function VolunteerAdminPage() {
                 <EmptyState
                   icon={UserGroupIcon}
                   title={
-                    volunteers && volunteers.length > 0
-                      ? 'No matching volunteers'
-                      : 'No applications yet'
+                    allRejectedHidden
+                      ? 'No active applications'
+                      : volunteers && volunteers.length > 0
+                        ? 'No matching volunteers'
+                        : 'No applications yet'
                   }
                   description={
                     allRejectedHidden

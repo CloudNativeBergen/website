@@ -36,6 +36,8 @@ describe('updateVolunteerStatus', () => {
       reviewedAt: expect.any(String),
       reviewedBy: { _type: 'reference', _ref: 'org-2' },
     })
+    expect(patch.unset).not.toHaveBeenCalled()
+    expect(patch.commit).toHaveBeenCalledOnce()
   })
 
   it('records the reviewer and clears confirmedAt on other statuses', async () => {
