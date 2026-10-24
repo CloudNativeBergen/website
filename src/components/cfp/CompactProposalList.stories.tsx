@@ -407,6 +407,29 @@ export const WithdrawnStatusRendered: Story = {
   },
 }
 
+export const CanceledStatusRendered: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Canceled Talk', Status.canceled),
+      createMockProposal('talk-2', 'Confirmed Talk', Status.confirmed),
+    ],
+    canEdit: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A talk the organizers canceled shows like a withdrawn one: a Canceled badge, sorted last and muted next to an approved talk, with no Confirm action.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.getByText('Canceled')).toBeInTheDocument()
+    expect(canvas.queryByRole('button', { name: /confirm/i })).toBeNull()
+  },
+}
+
 export const ShowsProposalCount: Story = {
   args: {
     proposals: allSubmittedProposals,
