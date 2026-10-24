@@ -73,6 +73,22 @@ const flattened = (canvas: HTMLCanvasElement): HTMLCanvasElement => {
 }
 
 /**
+ * The decoded photo, the right way up. Safari before 17.2 (iOS 16, 17.0 and
+ * 17.1) has no `imageOrientation: 'from-image'` and rejects the options with
+ * a TypeError (webkit.org/b/250476); it applies the EXIF orientation without
+ * them, as current Chromium does, so the plain call is the fallback. A file
+ * the browser cannot decode rejects with something else and is not retried.
+ */
+async function orientedBitmap(file: Blob): Promise<ImageBitmap> {
+  try {
+    return await createImageBitmap(file, { imageOrientation: 'from-image' })
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error
+    return createImageBitmap(file)
+  }
+}
+
+/**
  * The photo as the browser decodes it, oriented, drawn onto a canvas with a
  * long edge of at most 2048 px and no filter: the master the preview copies
  * and the bake read from. Rejects with {@link PhotoDecodeError} for a file
@@ -81,7 +97,7 @@ const flattened = (canvas: HTMLCanvasElement): HTMLCanvasElement => {
 export async function decodeWallPhoto(file: Blob): Promise<HTMLCanvasElement> {
   let bitmap: ImageBitmap
   try {
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+    bitmap = await orientedBitmap(file)
   } catch (cause) {
     throw new PhotoDecodeError('The browser could not decode the photo', {
       cause,
@@ -94,8 +110,9 @@ export async function decodeWallPhoto(file: Blob): Promise<HTMLCanvasElement> {
     const steps = resizeSteps(bitmap.width, bitmap.height)
     const target = steps[steps.length - 1]
     if (steps.length > 1) {
-      // Let the browser resize in one go where it supports the options
-      // (Chrome does; Safari ignores them and hands back the full size).
+      // Let the browser resize in one go (Chrome, and Safari since 15); the
+      // size it hands back is checked, and the stepped canvases are the
+      // fallback for one that ignores the options.
       const resized = await createImageBitmap(bitmap, {
         resizeWidth: target.width,
         resizeHeight: target.height,
