@@ -19,6 +19,7 @@ import {
   StarIcon,
   DocumentTextIcon,
   NoSymbolIcon,
+  UserMinusIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
@@ -35,7 +36,7 @@ import {
   ActionMenuItem,
   ActionMenuDivider,
 } from '@/components/ActionMenu'
-import { useState, useMemo } from 'react'
+import { Fragment, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { invitationLetterHref } from '@/lib/invitation-letter/prefill'
@@ -44,6 +45,7 @@ import {
   proposalConferenceId,
 } from '@/lib/invitation-letter/sessions'
 import { ProposalActionModal } from '@/components/admin/ProposalActionModal'
+import { RemoveSpeakerModal } from '@/components/admin/RemoveSpeakerModal'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { api } from '@/lib/trpc/client'
@@ -316,6 +318,10 @@ export function SpeakerTable({
   const router = useRouter()
   const [proposalToCancel, setProposalToCancel] =
     useState<ProposalExisting | null>(null)
+  const [speakerToRemove, setSpeakerToRemove] = useState<{
+    proposal: ProposalExisting
+    speaker: SpeakerWithProposals
+  } | null>(null)
   const addFeaturedSpeaker = api.featured.admin.addSpeaker.useMutation()
   const removeFeaturedSpeaker = api.featured.admin.removeSpeaker.useMutation()
 
@@ -811,16 +817,30 @@ export function SpeakerTable({
             proposalConferenceId(proposal) === currentConferenceId,
         )
         .map((proposal) => (
-          <ActionMenuItem
-            key={proposal._id}
-            // The table's proposals carry no speakers; name the row's speaker.
-            onClick={() =>
-              setProposalToCancel({ ...proposal, speakers: [speaker] })
-            }
-            icon={NoSymbolIcon}
-          >
-            Cancel talk: {proposal.title}
-          </ActionMenuItem>
+          <Fragment key={proposal._id}>
+            <ActionMenuItem
+              // The table's proposals carry speaker refs, not names; name the
+              // row's speaker.
+              onClick={() =>
+                setProposalToCancel({ ...proposal, speakers: [speaker] })
+              }
+              icon={NoSymbolIcon}
+            >
+              Cancel talk: {proposal.title}
+            </ActionMenuItem>
+            {(proposal.speakers?.length ?? 0) > 1 && (
+              <ActionMenuItem
+                variant="danger"
+                title={`Remove from talk: ${proposal.title}`}
+                onClick={() => setSpeakerToRemove({ proposal, speaker })}
+                icon={UserMinusIcon}
+              >
+                <span className="block max-w-xs truncate">
+                  Remove from talk: {proposal.title}
+                </span>
+              </ActionMenuItem>
+            )}
+          </Fragment>
         ))}
       {AppEnvironment.isDevelopment && (
         <>
@@ -1247,6 +1267,15 @@ export function SpeakerTable({
             setProposalToCancel(null)
             router.refresh()
           }}
+        />
+      )}
+      {speakerToRemove && (
+        <RemoveSpeakerModal
+          open
+          close={() => setSpeakerToRemove(null)}
+          proposal={speakerToRemove.proposal}
+          speaker={speakerToRemove.speaker}
+          onRemoved={() => router.refresh()}
         />
       )}
     </div>

@@ -1400,6 +1400,7 @@ async function querySpeakers(
         language,
         level,
         audiences,
+        speakers[]{ _type, _ref },
         conference-> {
           _id,
           title,
