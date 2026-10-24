@@ -55,6 +55,56 @@ export async function countAssetReferences(assetId: string): Promise<number> {
   }
 }
 
+/**
+ * Whether a document other than `except` (and its draft and release
+ * versions) holds `assetId` NOW: true, false, or null when it can't be told.
+ *
+ * The query that finds the holders lags the document store, so a holder it
+ * names may have let go already (a Wall Post whose Delete unset its `photo`
+ * moments ago). Each is read again through the doc endpoint, the latest
+ * committed version, and counts only if it still references the asset; the
+ * first that does answers true.
+ */
+export async function isAssetHeld(
+  assetId: string,
+  { except }: { except: string },
+): Promise<boolean | null> {
+  const client = clientReadUncached.withConfig({
+    apiVersion: COUNT_API_VERSION,
+  })
+  let holders: string[]
+  try {
+    holders = await client.fetch<string[]>(
+      // groq-global: an asset can be held by a document of any tenant.
+      groq`*[references($assetId) && !(_id in [$except, "drafts." + $except]) && !(_id in path("versions.*." + $except))]._id`,
+      { assetId, except },
+      { cache: 'no-store', perspective: 'raw' },
+    )
+  } catch {
+    return null
+  }
+  for (const id of holders ?? []) {
+    let doc: Record<string, unknown> | null | undefined
+    try {
+      doc = await client.getDocument(id)
+    } catch {
+      return null
+    }
+    // `getDocument('a,b')` reads a list: checked on what came back.
+    if (doc && doc._id === id && refersTo(doc, assetId)) return true
+  }
+  return false
+}
+
+/** Whether any reference in `value` points at `id`. */
+function refersTo(value: unknown, id: string): boolean {
+  if (Array.isArray(value)) return value.some((v) => refersTo(v, id))
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Record<string, unknown>
+  if (record._ref === id) return true
+  return Object.values(record).some((v) => refersTo(v, id))
+}
+
 async function deleteAssetIfOrphaned(
   assetId: string | null,
 ): Promise<OrphanedAssetDeletion> {

@@ -32,7 +32,13 @@
  *    here (#1344).
  *  - A delete is refused while another document holds a STRONG reference to
  *    the deleted one (Sanity's rule). `_weak: true` on the stored reference is
- *    what makes it weak.
+ *    what makes it weak. The refusal's status, 409 (`statusCode` on the
+ *    error), is MODELLED: Sanity documents the refusal, not its status, and
+ *    it also answers 409 for other conflicts.
+ *  - A raw `clientWrite.mutate([...])` (as `deleteWithHistory` sends a
+ *    `{ delete: { id, purge: true } }`) is applied like any commit and kept in
+ *    `commits` as written, `purge` included; the store keeps no history, so
+ *    `purge` changes nothing else here.
  *
  * WHAT IT IS NOT: the Content Lake.
  *
@@ -50,10 +56,10 @@ import { createClient } from '@sanity/client'
 import { Mutation, runGroq } from './sanityStore'
 
 type Doc = Record<string, unknown> & { _id: string }
-type PatchBody = { id: string; ifRevisionID?: string }
+type PatchBody = { id: string; ifRevisionID?: string; unset?: string[] }
 type SerializedMutation =
   | { patch: PatchBody }
-  | { delete: { id: string } }
+  | { delete: { id: string; purge?: boolean } }
   | { create: Doc }
   | { createIfNotExists: Doc }
   | { createOrReplace: Doc }
@@ -285,7 +291,10 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         'delete' in mutation &&
         stronglyReferenced(next, mutation.delete.id)
       ) {
-        throw new Error(`409: ${mutation.delete.id} is still referenced`)
+        throw Object.assign(
+          new Error(`409: ${mutation.delete.id} is still referenced`),
+          { statusCode: 409 },
+        )
       }
     }
     documents = next
@@ -334,6 +343,16 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     // other, so `commits` and `events` see it as a transaction would.
     delete: async (id: string) => {
       await apply(apiVersion, [{ delete: { id } }])
+      return { transactionId: `tx-${commits.length}`, results: [] }
+    },
+    // A raw `client.mutate([...])`: the mutations as the caller wrote them,
+    // committed like any other. A delete's `purge` is kept in `commits` for a
+    // test to pin; the store keeps no history, so it changes nothing else.
+    mutate: async (mutations: SerializedMutation | SerializedMutation[]) => {
+      await apply(
+        apiVersion,
+        Array.isArray(mutations) ? mutations : [mutations],
+      )
       return { transactionId: `tx-${commits.length}`, results: [] }
     },
     patch: (id: string) => {

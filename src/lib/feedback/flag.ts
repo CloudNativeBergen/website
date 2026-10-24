@@ -31,7 +31,7 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { displayName } from '@/lib/text/display'
 import { commentOf } from './comment'
 import { readSpeakerTalk } from './results'
-import { sanityStatus } from './sanity-error'
+import { sanityStatus } from '@/lib/sanity/status'
 import { getFeedbackSlots } from './sanity'
 import { feedbackWindow } from './window'
 

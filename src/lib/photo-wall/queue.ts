@@ -20,6 +20,8 @@ export const ADMIN_PHOTO_WIDTH = 1200
 
 interface PostRow {
   _id: string
+  _createdAt: string | null
+  assetId: string | null
   status: string | null
   photo: {
     url: string | null
@@ -70,6 +72,8 @@ export async function readModerationQueue(
     // is never a Wall Post.
     `*[_type == "wallPost" && !(_id in path("drafts.**"))] | order(submittedAt desc) {
       _id,
+      _createdAt,
+      "assetId": photo.asset._ref,
       status,
       "photo": photo.asset->{
         url,
@@ -103,6 +107,11 @@ export async function readModerationQueue(
       submittedAt: row.submittedAt ?? null,
       approvedAt: row.approvedAt ?? null,
       decidedAt: row.decidedAt ?? null,
+      incarnation: {
+        createdAt: row._createdAt ?? null,
+        // A `deleting` post shows no photo, and its asset id stays hidden.
+        assetId: row.status === 'deleting' ? null : (row.assetId ?? null),
+      },
     })
   }
   return { posts }

@@ -61,6 +61,7 @@ const post = (
   submittedAt: null,
   approvedAt: null,
   decidedAt: null,
+  incarnation: { createdAt: null, assetId: null },
   ...times,
 })
 

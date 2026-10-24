@@ -53,6 +53,7 @@ const queueOf = (...statuses: WallPostStatus[]): ModerationQueueData => ({
     submittedAt: null,
     approvedAt: null,
     decidedAt: null,
+    incarnation: { createdAt: null, assetId: null },
   })),
 })
 

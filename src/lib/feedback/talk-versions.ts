@@ -15,7 +15,7 @@
 import 'server-only'
 import type { Patch } from '@sanity/client'
 import { versionsClient } from './sanity'
-import { sanityStatus } from './sanity-error'
+import { sanityStatus } from '@/lib/sanity/status'
 import type { StoredCounts } from './totals'
 
 /** The talk as these writes read it, through the doc endpoint. */

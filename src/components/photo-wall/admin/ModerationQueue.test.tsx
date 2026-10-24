@@ -29,20 +29,38 @@ import type {
 
 const h = vi.hoisted(() => ({
   useQuery: vi.fn(),
-  // The nav badge push (P6), proven on the real wiring in
-  // `usePushPendingCount.test.tsx`.
-  utils: {
-    photoWall: {
-      pendingCount: { cancel: async () => {}, setData: () => {} },
+  invalidate: vi.fn(),
+  approve: vi.fn(),
+  reject: vi.fn(),
+  remove: vi.fn(),
+  deletePost: vi.fn(),
+  approveAllPending: vi.fn(),
+}))
+vi.mock('@/lib/trpc/client', () => {
+  const mutation = (mutateAsync: unknown) => ({
+    useMutation: () => ({ mutateAsync }),
+  })
+  return {
+    api: {
+      useUtils: () => ({
+        photoWall: {
+          moderationQueue: { invalidate: h.invalidate },
+          // The nav badge push (P6), proven on the real wiring in
+          // `usePushPendingCount.test.tsx`.
+          pendingCount: { cancel: async () => {}, setData: () => {} },
+        },
+      }),
+      photoWall: {
+        moderationQueue: { useQuery: h.useQuery },
+        approve: mutation(h.approve),
+        reject: mutation(h.reject),
+        remove: mutation(h.remove),
+        deletePost: mutation(h.deletePost),
+        approveAllPending: mutation(h.approveAllPending),
+      },
     },
-  },
-}))
-vi.mock('@/lib/trpc/client', () => ({
-  api: {
-    useUtils: () => h.utils,
-    photoWall: { moderationQueue: { useQuery: h.useQuery } },
-  },
-}))
+  }
+})
 // The page's QR code draws on a canvas jsdom does not have.
 vi.mock('@/components/feedback/useFeedbackQrPng', () => ({
   useFeedbackQrPng: () => ({ failed: false }),
@@ -190,6 +208,7 @@ const post = (
   submittedAt: '2026-10-26T07:30:00Z',
   approvedAt: null,
   decidedAt: null,
+  incarnation: { createdAt: null, assetId: null },
   ...fields,
 })
 const QUEUE: ModerationQueueData = {
@@ -234,6 +253,8 @@ const QUEUE: ModerationQueueData = {
 }
 
 const tab = (name: RegExp) => screen.getByRole('tab', { name })
+/** The incarnation the fixtures' cards show: no creation time, no photo id. */
+const NO_PHOTO_ID = { createdAt: null, assetId: null }
 
 describe('ModerationQueueView (§10)', () => {
   it('has the three tabs with their counts, Pending first', () => {
@@ -728,5 +749,860 @@ describe('the card (§10)', () => {
     )
     expect(screen.getByText('شكرا')).toHaveAttribute('dir', 'auto')
     expect(screen.getByText('سارة')).toHaveAttribute('dir', 'auto')
+  })
+})
+
+describe('the actions (§10)', () => {
+  beforeEach(() => {
+    for (const fn of [
+      h.invalidate,
+      h.approve,
+      h.reject,
+      h.remove,
+      h.deletePost,
+      h.approveAllPending,
+    ]) {
+      fn.mockReset()
+    }
+    h.useQuery.mockReturnValue({
+      data: QUEUE,
+      isPending: false,
+      isError: false,
+    })
+  })
+
+  const card = (name: string) => screen.getByRole('article', { name })
+  const buttons = (el: HTMLElement) =>
+    within(el)
+      .queryAllByRole('button')
+      .map((b) => b.textContent)
+  const notice = () => screen.getByRole('status')
+
+  it('each status offers its own actions; a deleting card only Try again', () => {
+    render(<ModerationQueue />)
+    expect(buttons(card('Keynote crowd'))).toEqual([
+      'Approve',
+      'Reject',
+      'Delete now',
+    ])
+    fireEvent.click(tab(/^On the wall/))
+    expect(buttons(screen.getByRole('article'))).toEqual([
+      'Remove',
+      'Delete now',
+    ])
+    fireEvent.click(tab(/^Not shown/))
+    expect(buttons(card('Blurry'))).toEqual(['Approve', 'Delete now'])
+    expect(buttons(card('Gone soon'))).toEqual(['Try again'])
+  })
+
+  it('a card without onAction has no actions (read only)', () => {
+    render(<ModerationQueueView queue={QUEUE} />)
+    expect(buttons(card('Keynote crowd'))).toEqual([])
+  })
+
+  it('Approve sends the status the card showed, says so, and reads the queue again', async () => {
+    h.approve.mockResolvedValue({ status: 'done' })
+    render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('Keynote crowd')).getByRole('button', { name: 'Approve' }),
+    )
+    await screen.findByText(
+      'Approved. It shows on the wall within a few seconds.',
+    )
+    expect(h.approve).toHaveBeenCalledWith({
+      id: 'wallPost-1',
+      from: 'pending',
+      shown: NO_PHOTO_ID,
+    })
+    expect(h.invalidate).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(tab(/^Not shown/))
+    fireEvent.click(
+      within(card('Blurry')).getByRole('button', { name: 'Approve' }),
+    )
+    await vi.waitFor(() =>
+      expect(h.approve).toHaveBeenLastCalledWith({
+        id: 'wallPost-3',
+        from: 'notShown',
+        shown: NO_PHOTO_ID,
+      }),
+    )
+  })
+
+  it.each([
+    ['Reject', h.reject, 'Keynote crowd', 'Rejected. It’s in Not shown.'],
+  ] as const)('%s', async (label, fn, name, said) => {
+    fn.mockResolvedValue({ status: 'done' })
+    render(<ModerationQueue />)
+    fireEvent.click(within(card(name)).getByRole('button', { name: label }))
+    await screen.findByText(said)
+    expect(fn).toHaveBeenCalledWith({ id: 'wallPost-1', shown: NO_PHOTO_ID })
+  })
+
+  it('Remove', async () => {
+    h.remove.mockResolvedValue({ status: 'done' })
+    render(<ModerationQueue />)
+    fireEvent.click(tab(/^On the wall/))
+    fireEvent.click(
+      within(screen.getByRole('article')).getByRole('button', {
+        name: 'Remove',
+      }),
+    )
+    await screen.findByText('Removed from the wall. It’s in Not shown.')
+    expect(h.remove).toHaveBeenCalledWith({
+      id: 'wallPost-2',
+      shown: NO_PHOTO_ID,
+    })
+  })
+
+  it('Delete now asks first; Cancel deletes nothing and gives focus back', async () => {
+    render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('Keynote crowd')).getByRole('button', { name: 'Delete now' }),
+    )
+    const confirm = within(card('Keynote crowd')).getByRole('group', {
+      name: 'Delete this photo for good? It can’t be undone.',
+    })
+    // Focus goes to Cancel, never the destructive choice.
+    await vi.waitFor(() =>
+      expect(
+        within(confirm).getByRole('button', { name: 'Cancel' }),
+      ).toHaveFocus(),
+    )
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    await vi.waitFor(() =>
+      expect(
+        within(card('Keynote crowd')).getByRole('button', {
+          name: 'Delete now',
+        }),
+      ).toHaveFocus(),
+    )
+    expect(h.deletePost).not.toHaveBeenCalled()
+  })
+
+  it('Delete now, confirmed, deletes it', async () => {
+    h.deletePost.mockResolvedValue({ status: 'deleted' })
+    render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('Keynote crowd')).getByRole('button', { name: 'Delete now' }),
+    )
+    fireEvent.click(
+      within(card('Keynote crowd')).getByRole('button', { name: 'Delete' }),
+    )
+    await screen.findByText('Deleted for good.')
+    expect(h.deletePost).toHaveBeenCalledWith({
+      id: 'wallPost-1',
+      shown: NO_PHOTO_ID,
+    })
+  })
+
+  it('Try again finishes a delete without asking again', async () => {
+    h.deletePost.mockResolvedValue({ status: 'deleted' })
+    render(<ModerationQueue />)
+    fireEvent.click(tab(/^Not shown/))
+    fireEvent.click(
+      within(card('Gone soon')).getByRole('button', { name: 'Try again' }),
+    )
+    await screen.findByText('Deleted for good.')
+    expect(h.deletePost).toHaveBeenCalledWith({
+      id: 'wallPost-4',
+      shown: NO_PHOTO_ID,
+    })
+  })
+
+  it('a press while the card is busy does nothing, and the button keeps focus', async () => {
+    let finish: (value: { status: string }) => void = () => {}
+    h.approve.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    render(<ModerationQueue />)
+    const approve = within(card('Keynote crowd')).getByRole('button', {
+      name: 'Approve',
+    })
+    approve.focus()
+    fireEvent.click(approve)
+    await vi.waitFor(() => expect(approve).toHaveTextContent('Approving…'))
+    expect(approve).toHaveAttribute('aria-disabled', 'true')
+    expect(approve).toHaveFocus()
+    fireEvent.click(approve)
+    fireEvent.click(
+      within(card('Keynote crowd')).getByRole('button', { name: 'Reject' }),
+    )
+    expect(h.approve).toHaveBeenCalledTimes(1)
+    expect(h.reject).not.toHaveBeenCalled()
+    await act(async () => finish({ status: 'done' }))
+  })
+
+  it('says when someone else changed the post first, and when it is gone', async () => {
+    h.reject.mockResolvedValueOnce({ status: 'changed' })
+    h.reject.mockResolvedValueOnce({ status: 'gone' })
+    render(<ModerationQueue />)
+    const reject = () =>
+      fireEvent.click(
+        within(card('Keynote crowd')).getByRole('button', { name: 'Reject' }),
+      )
+    reject()
+    await vi.waitFor(() =>
+      expect(notice()).toHaveTextContent(
+        'Another organizer changed this photo first. Showing it as it is now.',
+      ),
+    )
+    reject()
+    await vi.waitFor(() =>
+      expect(notice()).toHaveTextContent('This photo was deleted.'),
+    )
+    expect(h.invalidate).toHaveBeenCalledTimes(2)
+  })
+
+  it('a failed action says so on the card, and the queue is read again', async () => {
+    h.approve.mockRejectedValue(new Error('offline'))
+    render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('Keynote crowd')).getByRole('button', { name: 'Approve' }),
+    )
+    expect(
+      await within(card('Keynote crowd')).findByRole('alert'),
+    ).toHaveTextContent('Couldn’t approve. Try again.')
+    expect(notice()).toHaveTextContent('')
+    expect(h.invalidate).toHaveBeenCalledTimes(1)
+  })
+
+  describe('Approve all pending (§10)', () => {
+    const many: ModerationQueueData = {
+      posts: [
+        ...QUEUE.posts,
+        post({ _id: 'wallPost-5', caption: 'Second' }),
+        post({ _id: 'wallPost-6', caption: 'Third' }),
+      ],
+    }
+
+    it('names the pending count, asks first, and says how many it approved', async () => {
+      h.useQuery.mockReturnValue({
+        data: many,
+        isPending: false,
+        isError: false,
+      })
+      h.approveAllPending.mockResolvedValue({ approved: 3, pending: 3 })
+      render(<ModerationQueue />)
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Approve all pending (3)' }),
+      )
+      expect(
+        screen.getByRole('group', {
+          name: 'Approve all 3 pending photos? They go on the wall.',
+        }),
+      ).toBeVisible()
+      expect(h.approveAllPending).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByRole('button', { name: 'Approve all' }))
+      await vi.waitFor(() =>
+        expect(notice()).toHaveTextContent('Approved 3 photos.'),
+      )
+      // The Pending cards shown, oldest first: nothing the organizer did not see.
+      expect(h.approveAllPending).toHaveBeenCalledTimes(1)
+      expect(h.approveAllPending).toHaveBeenCalledWith({
+        shown: ['wallPost-1', 'wallPost-5', 'wallPost-6'].map((id) => ({
+          id,
+          ...NO_PHOTO_ID,
+        })),
+      })
+      expect(h.invalidate).toHaveBeenCalledTimes(1)
+    })
+
+    it('says when some were skipped, of the count the button named', async () => {
+      h.useQuery.mockReturnValue({
+        data: many,
+        isPending: false,
+        isError: false,
+      })
+      h.approveAllPending.mockResolvedValue({ approved: 2, pending: 3 })
+      render(<ModerationQueue />)
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Approve all pending (3)' }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Approve all' }))
+      await vi.waitFor(() =>
+        expect(notice()).toHaveTextContent(
+          'Approved 2 of 3. The others changed meanwhile or took too long; any still pending can be approved again.',
+        ),
+      )
+    })
+
+    it('Cancel approves nothing', () => {
+      render(<ModerationQueue />)
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Approve all pending (1)' }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(h.approveAllPending).not.toHaveBeenCalled()
+      expect(
+        screen.getByRole('button', { name: 'Approve all pending (1)' }),
+      ).toBeVisible()
+    })
+
+    it('is offered on the Pending tab only, and only with something pending', () => {
+      h.useQuery.mockReturnValue({
+        data: { posts: QUEUE.posts.filter((p) => p.status !== 'pending') },
+        isPending: false,
+        isError: false,
+      })
+      render(<ModerationQueue />)
+      expect(screen.queryByRole('button', { name: /^Approve all/ })).toBeNull()
+      cleanup()
+      h.useQuery.mockReturnValue({
+        data: QUEUE,
+        isPending: false,
+        isError: false,
+      })
+      render(<ModerationQueue />)
+      fireEvent.click(tab(/^On the wall/))
+      expect(screen.queryByRole('button', { name: /^Approve all/ })).toBeNull()
+    })
+
+    it('a run in flight survives a tab switch: back on Pending it says so, and a press sends nothing', async () => {
+      h.useQuery.mockReturnValue({
+        data: many,
+        isPending: false,
+        isError: false,
+      })
+      h.approveAllPending.mockReturnValue(new Promise(() => {}))
+      render(<ModerationQueue />)
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Approve all pending (3)' }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Approve all' }))
+      fireEvent.click(tab(/^On the wall/))
+      fireEvent.click(tab(/^Pending/))
+      const again = screen.getByRole('button', { name: 'Approving all…' })
+      expect(again).toHaveAttribute('aria-disabled', 'true')
+      fireEvent.click(again)
+      expect(screen.queryByRole('button', { name: 'Approve all' })).toBeNull()
+      expect(h.approveAllPending).toHaveBeenCalledTimes(1)
+    })
+
+    it('a failed run says so and can be pressed again', async () => {
+      h.approveAllPending.mockRejectedValueOnce(new Error('offline'))
+      render(<ModerationQueue />)
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Approve all pending (1)' }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Approve all' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Couldn’t approve them. Try again.',
+      )
+      expect(screen.getByRole('button', { name: 'Approve all' })).toBeVisible()
+    })
+  })
+})
+
+describe('the queue holds what is in flight, and where focus goes (§10)', () => {
+  const pendingTwo: ModerationQueueData = {
+    posts: [
+      post({ _id: 'wallPost-1', caption: 'First' }),
+      post({
+        _id: 'wallPost-5',
+        caption: 'Second',
+        submittedAt: '2026-10-26T07:40:00Z',
+      }),
+      post({
+        _id: 'wallPost-2',
+        status: 'approved',
+        caption: 'Up',
+        approvedAt: '2026-10-26T08:00:00Z',
+      }),
+    ],
+  }
+  const serve = (data: ModerationQueueData) =>
+    h.useQuery.mockReturnValue({ data, isPending: false, isError: false })
+  const card = (name: string) => screen.getByRole('article', { name })
+  const approved = (data: ModerationQueueData, ...ids: string[]) => ({
+    posts: data.posts.map((p) =>
+      ids.includes(p._id) ? { ...p, status: 'approved' as const } : p,
+    ),
+  })
+
+  beforeEach(() => {
+    for (const fn of [h.invalidate, h.approve, h.approveAllPending]) {
+      fn.mockReset()
+    }
+    serve(pendingTwo)
+  })
+
+  it('a card action in flight survives a tab switch: back on the tab, a press sends nothing', () => {
+    h.approve.mockReturnValue(new Promise(() => {}))
+    render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('First')).getByRole('button', { name: 'Approve' }),
+    )
+    fireEvent.click(tab(/^On the wall/))
+    fireEvent.click(tab(/^Pending/))
+    const busy = within(card('First')).getByRole('button', {
+      name: 'Approving…',
+    })
+    expect(busy).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(busy)
+    fireEvent.click(
+      within(card('First')).getByRole('button', { name: 'Reject' }),
+    )
+    expect(h.approve).toHaveBeenCalledTimes(1)
+    expect(h.reject).not.toHaveBeenCalled()
+  })
+
+  it('when the card acted on leaves the tab, focus goes to the card now in its place', async () => {
+    h.approve.mockResolvedValue({ status: 'done' })
+    const { rerender } = render(<ModerationQueue />)
+    const button = within(card('First')).getByRole('button', {
+      name: 'Approve',
+    })
+    button.focus()
+    fireEvent.click(button)
+    await screen.findByText(
+      'Approved. It shows on the wall within a few seconds.',
+    )
+    serve(approved(pendingTwo, 'wallPost-1'))
+    rerender(<ModerationQueue />)
+    expect(
+      within(card('Second')).getByRole('button', { name: 'Approve' }),
+    ).toHaveFocus()
+  })
+
+  it('when a poll takes the card away before the answer comes, focus still goes to the card now in its place', async () => {
+    let answer: (value: { status: string }) => void = () => {}
+    h.approve.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const { rerender } = render(<ModerationQueue />)
+    const button = within(card('First')).getByRole('button', {
+      name: 'Approve',
+    })
+    button.focus()
+    fireEvent.click(button)
+    // Another organizer's approval arrives with the next poll, first.
+    serve(approved(pendingTwo, 'wallPost-1'))
+    rerender(<ModerationQueue />)
+    // At once, not only when the answer comes (it may take a while).
+    expect(
+      within(card('Second')).getByRole('button', { name: 'Approve' }),
+    ).toHaveFocus()
+    await act(async () => answer({ status: 'changed' }))
+    // A later poll with the same posts changes nothing.
+    rerender(<ModerationQueue />)
+    expect(
+      within(card('Second')).getByRole('button', { name: 'Approve' }),
+    ).toHaveFocus()
+  })
+
+  it('two approvals at once, the second card leaving first: focus goes to the card left, then to the tab', async () => {
+    const answers: ((value: { status: string }) => void)[] = []
+    h.approve.mockImplementation(
+      () => new Promise((resolve) => answers.push(resolve)),
+    )
+    const { rerender } = render(<ModerationQueue />)
+    const press = (name: string) => {
+      const button = within(card(name)).getByRole('button', {
+        name: 'Approve',
+      })
+      button.focus()
+      fireEvent.click(button)
+    }
+    press('First')
+    press('Second')
+    // B is answered and leaves first.
+    await act(async () => answers[1]({ status: 'done' }))
+    serve(approved(pendingTwo, 'wallPost-5'))
+    rerender(<ModerationQueue />)
+    expect(within(card('First')).getAllByRole('button')[0]).toHaveFocus()
+    // Then A.
+    await act(async () => answers[0]({ status: 'done' }))
+    serve(approved(pendingTwo, 'wallPost-1', 'wallPost-5'))
+    rerender(<ModerationQueue />)
+    expect(tab(/^Pending/)).toHaveFocus()
+  })
+
+  it('goes to the card now at the index of the one that left, not the first', async () => {
+    const three: ModerationQueueData = {
+      posts: [
+        ...pendingTwo.posts,
+        post({
+          _id: 'wallPost-6',
+          caption: 'Third',
+          submittedAt: '2026-10-26T07:50:00Z',
+        }),
+      ],
+    }
+    serve(three)
+    h.approve.mockResolvedValue({ status: 'done' })
+    const { rerender } = render(<ModerationQueue />)
+    const button = within(card('Second')).getByRole('button', {
+      name: 'Approve',
+    })
+    button.focus()
+    fireEvent.click(button)
+    await screen.findByText(
+      'Approved. It shows on the wall within a few seconds.',
+    )
+    serve(approved(three, 'wallPost-5'))
+    rerender(<ModerationQueue />)
+    expect(
+      within(card('Third')).getByRole('button', { name: 'Approve' }),
+    ).toHaveFocus()
+  })
+
+  it('a press elsewhere on the page after the action: focus is not pulled back', async () => {
+    h.approve.mockResolvedValue({ status: 'done' })
+    const { rerender } = render(<ModerationQueue />)
+    const button = within(card('First')).getByRole('button', {
+      name: 'Approve',
+    })
+    button.focus()
+    fireEvent.click(button)
+    await screen.findByText(
+      'Approved. It shows on the wall within a few seconds.',
+    )
+    fireEvent.pointerDown(document.body)
+    serve(approved(pendingTwo, 'wallPost-1'))
+    rerender(<ModerationQueue />)
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  it('a press on a card’s caption (no control) means focus is not pulled back', async () => {
+    const { rerender } = render(<ModerationQueue />)
+    const button = within(card('First')).getByRole('button', {
+      name: 'Approve',
+    })
+    button.focus()
+    // The press drops focus to the page, as a browser does.
+    fireEvent.pointerDown(within(card('First')).getByText('First'))
+    button.blur()
+    serve(approved(pendingTwo, 'wallPost-5'))
+    rerender(<ModerationQueue />)
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  it('leaves focus alone when it was last outside the queue', async () => {
+    h.approve.mockResolvedValue({ status: 'done' })
+    const { rerender } = render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('First')).getByRole('button', { name: 'Approve' }),
+    )
+    await screen.findByText(
+      'Approved. It shows on the wall within a few seconds.',
+    )
+    serve(approved(pendingTwo, 'wallPost-1'))
+    rerender(<ModerationQueue />)
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  it('when the tab empties, focus goes to the tab', async () => {
+    serve({ posts: [pendingTwo.posts[0]] })
+    h.approve.mockResolvedValue({ status: 'done' })
+    const { rerender } = render(<ModerationQueue />)
+    const button = within(card('First')).getByRole('button', {
+      name: 'Approve',
+    })
+    button.focus()
+    fireEvent.click(button)
+    await screen.findByText(
+      'Approved. It shows on the wall within a few seconds.',
+    )
+    serve(approved({ posts: [pendingTwo.posts[0]] }, 'wallPost-1'))
+    rerender(<ModerationQueue />)
+    expect(tab(/^Pending/)).toHaveFocus()
+  })
+
+  it('when Approve all empties Pending, focus goes to the tab', async () => {
+    h.approveAllPending.mockResolvedValue({ approved: 2, pending: 2 })
+    const { rerender } = render(<ModerationQueue />)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Approve all pending (2)' }),
+    )
+    // Pressed as a browser does: the button pressed has focus.
+    const confirm = screen.getByRole('button', { name: 'Approve all' })
+    confirm.focus()
+    fireEvent.click(confirm)
+    await screen.findByText('Approved 2 photos.')
+    serve(approved(pendingTwo, 'wallPost-1', 'wallPost-5'))
+    rerender(<ModerationQueue />)
+    expect(tab(/^Pending/)).toHaveFocus()
+  })
+
+  it('leaves focus alone when it was not lost', async () => {
+    h.approve.mockResolvedValue({ status: 'done' })
+    const { rerender } = render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('First')).getByRole('button', { name: 'Approve' }),
+    )
+    await screen.findByText(
+      'Approved. It shows on the wall within a few seconds.',
+    )
+    tab(/^Not shown/).focus()
+    serve(approved(pendingTwo, 'wallPost-1'))
+    rerender(<ModerationQueue />)
+    expect(tab(/^Not shown/)).toHaveFocus()
+  })
+})
+
+describe('closing a confirm when the answer comes hands focus back only if it is still there (§10)', () => {
+  const many: ModerationQueueData = {
+    posts: [
+      post({ _id: 'wallPost-1', caption: 'First' }),
+      post({ _id: 'wallPost-5', caption: 'Second' }),
+      post({ _id: 'wallPost-6', caption: 'Third' }),
+    ],
+  }
+  const card = (name: string) => screen.getByRole('article', { name })
+
+  beforeEach(() => {
+    for (const fn of [h.invalidate, h.deletePost, h.approveAllPending]) {
+      fn.mockReset()
+    }
+    h.useQuery.mockReturnValue({ data: many, isPending: false, isError: false })
+  })
+
+  const deleteFailingLater = () => {
+    let answer: (value: unknown) => void = () => {}
+    h.deletePost.mockReturnValue(
+      new Promise((_, reject) => (answer = () => reject(new Error('503')))),
+    )
+    render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('First')).getByRole('button', { name: 'Delete now' }),
+    )
+    const press = within(card('First')).getByRole('button', { name: 'Delete' })
+    press.focus()
+    fireEvent.click(press)
+    return () => act(async () => answer(undefined))
+  }
+
+  it('a failed Delete, focus moved on meanwhile: it stays where the organizer put it', async () => {
+    const fail = deleteFailingLater()
+    tab(/^Not shown/).focus()
+    await fail()
+    expect(within(card('First')).getByRole('alert')).toHaveTextContent(
+      'Couldn’t delete. Try again.',
+    )
+    expect(tab(/^Not shown/)).toHaveFocus()
+  })
+
+  it('a failed Delete, focus still in the confirm: back to Delete now', async () => {
+    const fail = deleteFailingLater()
+    await fail()
+    expect(
+      within(card('First')).getByRole('button', { name: 'Delete now' }),
+    ).toHaveFocus()
+  })
+
+  const approveAllPartlyLater = () => {
+    let answer: (value: {
+      approved: number
+      pending: number
+    }) => void = () => {}
+    h.approveAllPending.mockReturnValue(
+      new Promise((resolve) => (answer = resolve)),
+    )
+    render(<ModerationQueue />)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Approve all pending (3)' }),
+    )
+    const confirm = screen.getByRole('button', { name: 'Approve all' })
+    confirm.focus()
+    fireEvent.click(confirm)
+    return () => act(async () => answer({ approved: 2, pending: 3 }))
+  }
+
+  it('Approve all partly done, focus moved on meanwhile: it stays where the organizer put it', async () => {
+    const finish = approveAllPartlyLater()
+    const elsewhere = within(card('Third')).getByRole('button', {
+      name: 'Reject',
+    })
+    elsewhere.focus()
+    await finish()
+    expect(elsewhere).toHaveFocus()
+  })
+
+  it('Approve all partly done, focus still in the confirm: back to its button', async () => {
+    const finish = approveAllPartlyLater()
+    await finish()
+    expect(
+      screen.getByRole('button', { name: 'Approve all pending (3)' }),
+    ).toHaveFocus()
+  })
+})
+
+describe('a failed card action, held by the queue (§10)', () => {
+  const two: ModerationQueueData = {
+    posts: [
+      post({ _id: 'wallPost-1', caption: 'First' }),
+      post({
+        _id: 'wallPost-2',
+        status: 'approved',
+        caption: 'Up',
+        approvedAt: '2026-10-26T08:00:00Z',
+      }),
+    ],
+  }
+  const card = (name: string) => screen.getByRole('article', { name })
+
+  beforeEach(() => {
+    for (const fn of [h.invalidate, h.approve]) fn.mockReset()
+    h.useQuery.mockReturnValue({ data: two, isPending: false, isError: false })
+  })
+
+  it('a handler that throws leaves the card usable: a second press is sent', async () => {
+    const onAction = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce('done')
+    render(<ModerationQueueView queue={two} onAction={onAction} />)
+    fireEvent.click(
+      within(card('First')).getByRole('button', { name: 'Approve' }),
+    )
+    const again = await within(card('First')).findByRole('button', {
+      name: 'Approve',
+    })
+    await vi.waitFor(() => expect(again).not.toHaveAttribute('aria-disabled'))
+    fireEvent.click(again)
+    await vi.waitFor(() => expect(onAction).toHaveBeenCalledTimes(2))
+  })
+
+  it('fails while another tab is open: back on the tab, the card says so', async () => {
+    let fail: (error: Error) => void = () => {}
+    h.approve.mockReturnValue(new Promise((_, reject) => (fail = reject)))
+    render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('First')).getByRole('button', { name: 'Approve' }),
+    )
+    fireEvent.click(tab(/^On the wall/))
+    await act(async () => fail(new Error('offline')))
+    fireEvent.click(tab(/^Pending/))
+    expect(within(card('First')).getByRole('alert')).toHaveTextContent(
+      'Couldn’t approve. Try again.',
+    )
+  })
+
+  it('a change of the post’s status clears it', async () => {
+    h.approve.mockRejectedValueOnce(new Error('offline'))
+    const { rerender } = render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('First')).getByRole('button', { name: 'Approve' }),
+    )
+    await within(card('First')).findByRole('alert')
+    // Another organizer rejected it meanwhile.
+    h.useQuery.mockReturnValue({
+      data: {
+        posts: two.posts.map((p) =>
+          p._id === 'wallPost-1' ? { ...p, status: 'notShown' as const } : p,
+        ),
+      },
+      isPending: false,
+      isError: false,
+    })
+    rerender(<ModerationQueue />)
+    fireEvent.click(tab(/^Not shown/))
+    expect(within(card('First')).queryByRole('alert')).toBeNull()
+  })
+
+  it('a decision seen since clears it, even one that brought the status back', async () => {
+    h.remove.mockReset()
+    h.remove.mockRejectedValueOnce(new Error('offline'))
+    const served = (status: 'approved' | 'notShown', decidedAt: string) =>
+      h.useQuery.mockReturnValue({
+        data: {
+          posts: two.posts.map((p) =>
+            p._id === 'wallPost-2' ? { ...p, status, decidedAt } : p,
+          ),
+        },
+        isPending: false,
+        isError: false,
+      })
+    served('approved', '2026-10-26T08:00:00Z')
+    const { rerender } = render(<ModerationQueue />)
+    fireEvent.click(tab(/^On the wall/))
+    fireEvent.click(within(card('Up')).getByRole('button', { name: 'Remove' }))
+    expect(await within(card('Up')).findByRole('alert')).toHaveTextContent(
+      'Couldn’t remove. Try again.',
+    )
+    // Another organizer removes it, and a third approves it again.
+    served('notShown', '2026-10-26T08:05:00Z')
+    rerender(<ModerationQueue />)
+    served('approved', '2026-10-26T08:06:00Z')
+    rerender(<ModerationQueue />)
+    expect(within(card('Up')).queryByRole('alert')).toBeNull()
+  })
+
+  it('the next action on the post clears it', async () => {
+    h.approve.mockRejectedValueOnce(new Error('offline'))
+    h.approve.mockReturnValueOnce(new Promise(() => {}))
+    render(<ModerationQueue />)
+    const approve = () =>
+      fireEvent.click(
+        within(card('First')).getByRole('button', { name: /^Approv/ }),
+      )
+    approve()
+    await within(card('First')).findByRole('alert')
+    approve()
+    await vi.waitFor(() =>
+      expect(within(card('First')).queryByRole('alert')).toBeNull(),
+    )
+  })
+})
+
+describe('a post re-created under the same id gets a fresh card (§6.2)', () => {
+  const A = post({
+    _id: 'wallPost-1',
+    caption: 'Original',
+    incarnation: {
+      createdAt: '2026-10-26T07:30:00Z',
+      assetId: 'image-a-10x10-jpg',
+    },
+  })
+  const B = post({
+    _id: 'wallPost-1',
+    caption: 'Replacement',
+    incarnation: {
+      createdAt: '2026-10-26T08:59:00Z',
+      assetId: 'image-b-10x10-jpg',
+    },
+  })
+  const serve = (p: ModerationPost) =>
+    h.useQuery.mockReturnValue({
+      data: { posts: [p] },
+      isPending: false,
+      isError: false,
+    })
+
+  beforeEach(() => {
+    for (const fn of [h.invalidate, h.approve, h.deletePost]) fn.mockReset()
+  })
+
+  it('a Delete confirm open on the deleted post is not open on its replacement, and nothing is sent', () => {
+    serve(A)
+    const { rerender } = render(<ModerationQueue />)
+    const original = screen.getByRole('article', { name: 'Original' })
+    fireEvent.click(
+      within(original).getByRole('button', { name: 'Delete now' }),
+    )
+    expect(within(original).getByRole('group')).toBeVisible()
+    serve(B)
+    rerender(<ModerationQueue />)
+    const replacement = screen.getByRole('article', { name: 'Replacement' })
+    expect(within(replacement).queryByRole('group')).toBeNull()
+    expect(
+      within(replacement).queryByRole('button', { name: 'Delete' }),
+    ).toBeNull()
+    expect(h.deletePost).not.toHaveBeenCalled()
+  })
+
+  it('an action in flight on the deleted post does not lock its replacement', () => {
+    h.approve.mockReturnValue(new Promise(() => {}))
+    serve(A)
+    const { rerender } = render(<ModerationQueue />)
+    fireEvent.click(
+      within(screen.getByRole('article', { name: 'Original' })).getByRole(
+        'button',
+        { name: 'Approve' },
+      ),
+    )
+    serve(B)
+    rerender(<ModerationQueue />)
+    const approve = within(
+      screen.getByRole('article', { name: 'Replacement' }),
+    ).getByRole('button', { name: 'Approve' })
+    expect(approve).not.toHaveAttribute('aria-disabled')
   })
 })
