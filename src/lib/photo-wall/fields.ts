@@ -16,6 +16,17 @@ const UPLOAD_ID =
 /** A decimal number: digits with at most one point; no sign, exponent or space. */
 const DECIMAL = /^(\d+\.?\d*|\.\d+)$/
 
+/**
+ * What normalisation drops: control characters (`Cc`) and the bidi
+ * formatting characters (LRM, RLM, the embeddings and overrides U+202A–U+202E
+ * and the isolates U+2066–U+2069), which can make a caption read backwards
+ * or hide text. Tab, newline and their kin are controls AND whitespace: they
+ * become a space (the spec says so of newlines), so the lookahead keeps them
+ * for the whitespace step. U+200D (ZWJ) is not matched, so emoji sequences
+ * survive.
+ */
+const DROPPED = /(?!\s)[\p{Cc}‎‏‪-‮⁦-⁩]/gu
+
 export interface WallPostFields {
   uploadId: string
   photo: Blob
@@ -26,7 +37,7 @@ export interface WallPostFields {
 }
 
 export type WallField =
-  'uploadId' | 'photo' | 'caption' | 'name' | 'crop' | 'marketing'
+  'uploadId' | 'photo' | 'caption' | 'name' | 'crop' | 'marketingConsent'
 
 export type WallFieldsCheck =
   { ok: true; fields: WallPostFields } | { ok: false; field: WallField }
@@ -36,29 +47,23 @@ export function isUploadId(value: unknown): value is string {
 }
 
 /**
- * Unicode NFC; control characters removed; any run of whitespace (newlines
- * included) becomes one space; trimmed. Tab, newline and their kin are both
- * control characters and whitespace: they become a space, as the spec says
- * of newlines, so only the controls that are not whitespace are dropped.
+ * Unicode NFC; control and bidi formatting characters removed; any run of
+ * whitespace (newlines included) becomes one space; trimmed.
  */
 export function normaliseWallText(raw: string): string {
-  return raw
-    .normalize('NFC')
-    .replace(/(?!\s)\p{Cc}/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  return raw.normalize('NFC').replace(DROPPED, '').replace(/\s+/g, ' ').trim()
 }
 
-/** Normalised text, `null` when empty, `undefined` when refused. */
-function text(
-  value: FormDataEntryValue | null,
-  maxPoints: number,
-): string | null | undefined {
-  if (value === null) return null
-  if (typeof value !== 'string') return undefined
+type TextCheck = { ok: true; value: string | null } | { ok: false }
+
+/** A caption or name: normalised, `null` when empty, refused over `maxPoints`. */
+function text(value: FormDataEntryValue | null, maxPoints: number): TextCheck {
+  if (value === null) return { ok: true, value: null }
+  if (typeof value !== 'string') return { ok: false }
   const normalised = normaliseWallText(value)
-  if (normalised === '') return null
-  return [...normalised].length > maxPoints ? undefined : normalised
+  if (normalised === '') return { ok: true, value: null }
+  if ([...normalised].length > maxPoints) return { ok: false }
+  return { ok: true, value: normalised }
 }
 
 /** A finite decimal in [0, 1], or `undefined`. */
@@ -80,9 +85,9 @@ export function checkWallFields(form: FormData): WallFieldsCheck {
   }
 
   const caption = text(form.get('caption'), MAX_CAPTION_POINTS)
-  if (caption === undefined) return { ok: false, field: 'caption' }
+  if (!caption.ok) return { ok: false, field: 'caption' }
   const name = text(form.get('name'), MAX_NAME_POINTS)
-  if (name === undefined) return { ok: false, field: 'name' }
+  if (!name.ok) return { ok: false, field: 'name' }
 
   const x = cropCoordinate(form.get('cropX'))
   const y = cropCoordinate(form.get('cropY'))
@@ -90,7 +95,7 @@ export function checkWallFields(form: FormData): WallFieldsCheck {
 
   const marketing = form.get('marketingConsent')
   if (marketing !== 'true' && marketing !== 'false') {
-    return { ok: false, field: 'marketing' }
+    return { ok: false, field: 'marketingConsent' }
   }
 
   return {
@@ -98,8 +103,8 @@ export function checkWallFields(form: FormData): WallFieldsCheck {
     fields: {
       uploadId,
       photo,
-      caption,
-      name,
+      caption: caption.value,
+      name: name.value,
       crop: { x, y },
       marketingConsent: marketing === 'true',
     },

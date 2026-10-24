@@ -5,16 +5,14 @@
  * frame header's dimensions, and any segment that can carry metadata.
  *
  * Metadata rule: no APPn except APP0 (JFIF) and no COM, which covers Exif and
- * XMP (APP1) and IPTC (APP13). _Refinement (spec):_ an APP2 whose payload is
- * an `ICC_PROFILE` is allowed too: Chromium's canvas encoder writes one with
- * every JPEG (a 472-byte sRGB profile, seen in the fixture), and a colour
- * profile names no person, place or device. Any other APP2 is refused.
+ * XMP (APP1), ICC profiles (APP2) and IPTC (APP13). The composer strips them
+ * (§6.5), so their presence means the file didn't come from the composer.
  *
  * Never throws on bad input: every malformed file is a refusal.
  */
 import { sniffImageType } from '@/lib/marketing-asset/image-type'
 
-/** 4 MiB (§6.2): the composer re-encodes to at most this. */
+/** 4 MiB (§6.4): the composer re-encodes to at most this. */
 export const MAX_PHOTO_BYTES = 4_194_304
 export const MAX_LONG_EDGE = 2048
 export const MIN_SHORT_EDGE = 320
@@ -24,7 +22,7 @@ export type WallPhotoRefusal =
   | { ok: false; reason: 'notJpeg' }
   /** No EOI where one is due: cut short, or bytes after the EOI. */
   | { ok: false; reason: 'truncated' }
-  /** Not a JPEG this walk can follow (no frame header, a bad length). */
+  /** Not a JPEG this walk can follow (no frame header or scan, a bad length). */
   | { ok: false; reason: 'malformed' }
   | { ok: false; reason: 'longEdge'; width: number; height: number }
   | { ok: false; reason: 'shortEdge'; width: number; height: number }
@@ -38,8 +36,6 @@ const EOI = 0xd9
 const SOS = 0xda
 const COM = 0xfe
 const APP0 = 0xe0
-const APP2 = 0xe2
-const ICC_PROFILE = [...'ICC_PROFILE\0'].map((c) => c.charCodeAt(0))
 
 /** SOF0–SOF15, less the three in that range that are not frame headers. */
 const isFrameHeader = (marker: number) =>
@@ -56,8 +52,10 @@ const isStandalone = (marker: number) =>
 const segmentName = (marker: number) =>
   marker === COM ? 'COM' : `APP${marker - APP0}`
 
-const startsWith = (bytes: Uint8Array, at: number, signature: number[]) =>
-  signature.every((b, i) => bytes[at + i] === b)
+interface Frame {
+  width: number
+  height: number
+}
 
 export function checkWallPhoto(bytes: Uint8Array): WallPhotoCheck {
   if (bytes.length > MAX_PHOTO_BYTES) return { ok: false, reason: 'size' }
@@ -66,8 +64,10 @@ export function checkWallPhoto(bytes: Uint8Array): WallPhotoCheck {
   }
   if (bytes[1] !== SOI) return { ok: false, reason: 'malformed' }
 
-  let width: number | null = null
-  let height: number | null = null
+  /** The frame header seen so far. */
+  let frame: Frame | null = null
+  /** The frame a scan was started for: a JPEG needs a frame AND a scan. */
+  let scanned: Frame | null = null
   let i = 2
   let inScan = false
   for (;;) {
@@ -93,9 +93,8 @@ export function checkWallPhoto(bytes: Uint8Array): WallPhotoCheck {
     inScan = false
     if (marker === EOI) {
       if (i + 2 !== bytes.length) return { ok: false, reason: 'truncated' }
-      if (width === null || height === null) {
-        return { ok: false, reason: 'malformed' }
-      }
+      if (!scanned) return { ok: false, reason: 'malformed' }
+      const { width, height } = scanned
       const long = Math.max(width, height)
       const short = Math.min(width, height)
       if (long > MAX_LONG_EDGE) {
@@ -118,18 +117,16 @@ export function checkWallPhoto(bytes: Uint8Array): WallPhotoCheck {
     if (next > bytes.length) return { ok: false, reason: 'truncated' }
 
     if (marker === COM || (marker >= 0xe1 && marker <= 0xef)) {
-      const icc = marker === APP2 && startsWith(bytes, payload, ICC_PROFILE)
-      if (!icc) {
-        return { ok: false, reason: 'metadata', segment: segmentName(marker) }
-      }
+      return { ok: false, reason: 'metadata', segment: segmentName(marker) }
     } else if (isFrameHeader(marker)) {
       if (length < 7) return { ok: false, reason: 'malformed' }
-      height = (bytes[payload + 1] << 8) | bytes[payload + 2]
-      width = (bytes[payload + 3] << 8) | bytes[payload + 4]
+      const height = (bytes[payload + 1] << 8) | bytes[payload + 2]
+      const width = (bytes[payload + 3] << 8) | bytes[payload + 4]
       // A height of 0 defers to a DNL marker; nothing the composer makes.
       if (width === 0 || height === 0) return { ok: false, reason: 'malformed' }
+      frame = { width, height }
     } else if (marker === SOS) {
-      if (width === null) return { ok: false, reason: 'malformed' }
+      scanned = frame
       inScan = true
     }
     i = next

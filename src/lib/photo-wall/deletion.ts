@@ -25,10 +25,12 @@ export function deletionDate(
 export function deletionDateEnd(
   endDate: string | null | undefined,
 ): Date | null {
-  const date = deletionDate(endDate)
-  if (!date) return null
-  const [y, m, d] = date.split('-').map(Number)
-  const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
+  if (!endDate || !isCalendarDate(endDate)) return null
+  const [y, m, d] = endDate.split('-').map(Number)
+  // The day AFTER the deletion date, at Oslo midnight, less one second.
+  const next = new Date(Date.UTC(y, m - 1, d + DELETION_DAYS + 1))
+    .toISOString()
+    .slice(0, 10)
   const midnight = osloLocalInputToIso(`${next}T00:00`)
   return midnight ? new Date(Date.parse(midnight) - 1000) : null
 }

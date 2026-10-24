@@ -172,7 +172,7 @@ describe('checkWallFields', () => {
     ]) {
       expect(checkWallFields(body({ marketingConsent: bad }))).toEqual({
         ok: false,
-        field: 'marketing',
+        field: 'marketingConsent',
       })
     }
   })
@@ -225,6 +225,32 @@ describe('normaliseWallText', () => {
     expect(normaliseWallText('a\u007fb\u0085c\u009fd')).toBe('abcd')
     expect(normaliseWallText('a\u0000b\u001bc')).toBe('abc')
     expect(normaliseWallText('a\tb\nc\r\nd\u000be')).toBe('a b c d e')
+  })
+
+  it('drops a control inside a run of spaces and leaves one space', () => {
+    expect(normaliseWallText('a \u0001 b')).toBe('a b')
+  })
+
+  it('removes bidi formatting characters: overrides, embeddings, isolates and marks', () => {
+    expect(normaliseWallText('‮abc')).toBe('abc')
+    expect(normaliseWallText('a‪‫‬‭z')).toBe('az')
+    expect(normaliseWallText('a⁦⁧⁨⁩z')).toBe('az')
+    expect(normaliseWallText('a‎‏z')).toBe('az')
+  })
+
+  it('keeps the zero-width joiner, so an emoji family stays one and counts its code points', () => {
+    const family = '👨‍👩‍👧' // 5 code points: 3 emoji, 2 ZWJ
+    expect(normaliseWallText(family)).toBe(family)
+    expect([...family]).toHaveLength(5)
+    const sixteen = family.repeat(16) // 80 code points
+    expect(checkWallFields(body({ caption: sixteen }))).toMatchObject({
+      ok: true,
+      fields: { caption: sixteen },
+    })
+    expect(checkWallFields(body({ caption: `${sixteen}!` }))).toEqual({
+      ok: false,
+      field: 'caption',
+    })
   })
 
   it('keeps letters of every script and emoji', () => {

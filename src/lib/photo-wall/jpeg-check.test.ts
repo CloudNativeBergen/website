@@ -2,11 +2,13 @@
  * @vitest-environment node
  *
  * The JPEG checks (Photo Wall spec §6.4) on REAL files in
- * `__tests__/fixtures/photo-wall/`:
+ * `__tests__/fixtures/photo-wall/` (see `make-canvas-fixtures.mjs` there):
  *
  * - `canvas-chromium.jpg`, `wide-4096.jpg`, `small-200.jpg`: Chromium 153's
- *   `canvas.toBlob('image/jpeg')` through Playwright; `truncated.jpg` is the
- *   first file cut 64 bytes before its EOI.
+ *   `canvas.toBlob('image/jpeg')` through Playwright, after the composer's
+ *   APPn strip (§6.5); `truncated.jpg` is the first file cut 64 bytes before
+ *   its EOI. `canvas-chromium-raw.jpg` is the same canvas output UNSTRIPPED:
+ *   Chromium writes an APP2 ICC profile with every JPEG.
  * - `camera-exif.jpg` (an EXIF APP1 with Make, Model, DateTimeOriginal and a
  *   GPS IFD), `comment.jpg` (a COM segment), `png-renamed.jpg`: Pillow 12.
  * - `iptc-app13.jpg`: a Pillow JPEG with a Photoshop IRB APP13 segment
@@ -24,44 +26,16 @@ const FIXTURES = join(__dirname, '../../../__tests__/fixtures/photo-wall')
 const fixture = (name: string) =>
   new Uint8Array(readFileSync(join(FIXTURES, name)))
 
-/** The file with `segment` (marker + length + payload) spliced after APP0. */
-function withSegment(bytes: Uint8Array, marker: number, payload: Uint8Array) {
-  const app0Length = (bytes[4] << 8) | bytes[5]
-  const cut = 4 + app0Length
-  const length = payload.length + 2
-  const header = Uint8Array.of(0xff, marker, length >> 8, length & 0xff)
-  const out = new Uint8Array(bytes.length + header.length + payload.length)
-  out.set(bytes.subarray(0, cut))
-  out.set(header, cut)
-  out.set(payload, cut + header.length)
-  out.set(bytes.subarray(cut), cut + header.length + payload.length)
-  return out
-}
-
-const ascii = (s: string) => new TextEncoder().encode(s)
+/** The index of the first `FF <marker>` in the file. */
+const markerAt = (bytes: Uint8Array, marker: number) =>
+  bytes.findIndex((b, i) => b === 0xff && bytes[i + 1] === marker)
 
 describe('checkWallPhoto accepts', () => {
-  it('a Chromium canvas JPEG, reporting its dimensions', () => {
+  it('a Chromium canvas JPEG after the composer’s strip, reporting its dimensions', () => {
     expect(checkWallPhoto(fixture('canvas-chromium.jpg'))).toEqual({
       ok: true,
       width: 640,
       height: 480,
-    })
-  })
-
-  it('a colour profile (APP2 ICC_PROFILE, which Chromium writes), since it names no person or place', () => {
-    const bytes = fixture('canvas-chromium.jpg')
-    // The fixture itself carries one; prove the check SAW it by removing
-    // the identifier: the same segment under another name is refused.
-    const spliced = withSegment(
-      bytes,
-      0xe2,
-      new Uint8Array([...ascii('FPXR\0'), 1, 0, 0, 0]),
-    )
-    expect(checkWallPhoto(spliced)).toEqual({
-      ok: false,
-      reason: 'metadata',
-      segment: 'APP2',
     })
   })
 
@@ -75,6 +49,14 @@ describe('checkWallPhoto accepts', () => {
 })
 
 describe('checkWallPhoto refuses', () => {
+  it('a raw Chromium canvas JPEG, which carries an APP2 ICC profile the composer must strip', () => {
+    expect(checkWallPhoto(fixture('canvas-chromium-raw.jpg'))).toEqual({
+      ok: false,
+      reason: 'metadata',
+      segment: 'APP2',
+    })
+  })
+
   it('a camera JPEG with EXIF (APP1)', () => {
     expect(checkWallPhoto(fixture('camera-exif.jpg'))).toEqual({
       ok: false,
@@ -166,10 +148,27 @@ describe('checkWallPhoto refuses', () => {
     // The same on a metadata segment: cut short is the answer, not the
     // segment it never finished reading.
     const exif = fixture('camera-exif.jpg').slice()
-    const app1 = exif.findIndex((b, i) => b === 0xff && exif[i + 1] === 0xe1)
+    const app1 = markerAt(exif, 0xe1)
     expect(app1).toBeGreaterThan(0)
     exif[app1 + 2] = 0xff
     expect(checkWallPhoto(exif)).toEqual({ ok: false, reason: 'truncated' })
+  })
+
+  it('a JPEG with no frame header before its scan', () => {
+    const bytes = fixture('canvas-chromium.jpg')
+    const sof = markerAt(bytes, 0xc0)
+    expect(sof).toBeGreaterThan(0)
+    const broken = bytes.slice()
+    broken[sof + 1] = 0xc4 // Renamed to a DHT marker.
+    expect(checkWallPhoto(broken)).toEqual({ ok: false, reason: 'malformed' })
+  })
+
+  it('a JPEG with a frame header but no scan: the tables and SOF, then EOI', () => {
+    const bytes = fixture('canvas-chromium.jpg')
+    const sos = markerAt(bytes, 0xda)
+    expect(sos).toBeGreaterThan(0)
+    const noScan = new Uint8Array([...bytes.subarray(0, sos), 0xff, 0xd9])
+    expect(checkWallPhoto(noScan)).toEqual({ ok: false, reason: 'malformed' })
   })
 
   it('a JPEG with no frame header at all (SOI straight to EOI)', () => {
@@ -177,15 +176,5 @@ describe('checkWallPhoto refuses', () => {
       ok: false,
       reason: 'malformed',
     })
-  })
-
-  it('a JPEG with no frame header before its scan', () => {
-    const bytes = fixture('canvas-chromium.jpg')
-    // Rename the SOF0 marker to a DHT one.
-    const sof = bytes.findIndex((b, i) => b === 0xff && bytes[i + 1] === 0xc0)
-    expect(sof).toBeGreaterThan(0)
-    const broken = bytes.slice()
-    broken[sof + 1] = 0xc4
-    expect(checkWallPhoto(broken)).toEqual({ ok: false, reason: 'malformed' })
   })
 })
