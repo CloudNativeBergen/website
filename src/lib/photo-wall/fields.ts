@@ -15,8 +15,12 @@ export const MAX_NAME_POINTS = 40
 const UPLOAD_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
-/** A decimal number: digits with at most one point; no sign, exponent or space. */
-const DECIMAL = /^(\d+\.?\d*|\.\d+)$/
+/**
+ * A decimal number: digits with at most one point; no sign, exponent or
+ * space. Each string has one way to match, so a long malformed value fails
+ * in linear time instead of backtracking.
+ */
+const DECIMAL = /^(?:\d+(?:\.\d*)?|\.\d+)$/
 
 export interface WallPostFields {
   uploadId: string

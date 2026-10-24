@@ -139,6 +139,13 @@ describe('checkWallFields', () => {
     }
   })
 
+  it('refuses a long malformed crop at once, without regex backtracking', () => {
+    const started = performance.now()
+    const result = checkWallFields(body({ cropX: '0'.repeat(80_000) + '!' }))
+    expect(performance.now() - started).toBeLessThan(100)
+    expect(result).toEqual({ ok: false, field: 'crop' })
+  })
+
   it('refuses a crop outside [0, 1], not a decimal, or missing', () => {
     for (const bad of [
       '1.01',
