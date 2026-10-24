@@ -18,8 +18,8 @@
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { sanityStatus } from '@/lib/sanity/status'
-import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 import { expireWallPost } from './cache'
+import { deleteWallAsset } from './delete'
 import type { WallDevice } from './device'
 import { checkWallFields, isUploadId, type WallPostFields } from './fields'
 import { MAX_PHOTO_BYTES, checkWallPhoto } from './jpeg-check'
@@ -167,11 +167,11 @@ async function createPost({
   })
 
   // Just before the create (§11.1): the retention cron may have closed the
-  // wall since step 3. The asset goes unless a document references it, as
-  // after a failed create.
+  // wall since step 3. The asset goes, with its history (§12), unless a
+  // document references it, as after a failed create.
   const wall = await readPhotoWall(conferenceId)
   if (!wall || wall.closedAt) {
-    await deleteImageAssetIfOrphaned(asset._id)
+    await deleteWallAsset(asset._id)
     return refuse('closed', 'wall closed before the create')
   }
 
@@ -213,12 +213,12 @@ async function createPost({
         cause: error,
       })
     }
-    // This request's asset goes unless a document references it: the
-    // stored post (this create landed, or the winner sent the same bytes;
-    // Sanity names assets by their bytes) or any other, in any tenant. Also
-    // when the stored post is this device's: a concurrent request with
-    // other bytes may have won.
-    await deleteImageAssetIfOrphaned(asset._id)
+    // This request's asset goes, with its history (§12), unless a document
+    // references it: the stored post (this create landed, or the winner
+    // sent the same bytes; Sanity names assets by their bytes) or any
+    // other, in any tenant. Also when the stored post is this device's: a
+    // concurrent request with other bytes may have won.
+    await deleteWallAsset(asset._id)
     if (!isOwnPost(stored, conferenceId, deviceKey)) {
       console.error('Photo Wall submit: the create failed', error)
       return refuse('failed', stored ? 'uploadId taken at create' : 'create')

@@ -7,15 +7,18 @@ import { isCalendarDate, osloLocalInputToIso } from '@/lib/time'
 
 export const DELETION_DAYS = 30
 
+/** A calendar date (`YYYY-MM-DD`) plus `days`, on the calendar. */
+export function plusDays(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+}
+
 /** `YYYY-MM-DD`, or null for a conference without a usable end date. */
 export function deletionDate(
   endDate: string | null | undefined,
 ): string | null {
   if (!endDate || !isCalendarDate(endDate)) return null
-  const [y, m, d] = endDate.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + DELETION_DAYS))
-    .toISOString()
-    .slice(0, 10)
+  return plusDays(endDate, DELETION_DAYS)
 }
 
 /**
@@ -26,11 +29,8 @@ export function deletionDateEnd(
   endDate: string | null | undefined,
 ): Date | null {
   if (!endDate || !isCalendarDate(endDate)) return null
-  const [y, m, d] = endDate.split('-').map(Number)
   // The day AFTER the deletion date, at Oslo midnight, less one second.
-  const next = new Date(Date.UTC(y, m - 1, d + DELETION_DAYS + 1))
-    .toISOString()
-    .slice(0, 10)
+  const next = plusDays(endDate, DELETION_DAYS + 1)
   const midnight = osloLocalInputToIso(`${next}T00:00`)
   return midnight ? new Date(Date.parse(midnight) - 1000) : null
 }

@@ -9,7 +9,8 @@ import { sweepPhotoWall } from '@/lib/photo-wall/sweep'
  * writes, every wall whose deletion date is today or earlier and that has
  * been closed for over 15 minutes has its posts and photos deleted with
  * their history, and the orphan sweep (§11.2) runs after. 03:10 UTC: the
- * same Oslo day as the other purges, and after them.
+ * same Oslo day as the other daily purges (`cleanup-orphaned-blobs` 03:00,
+ * `cleanup-notifications` 04:00), on a slot of its own.
  *
  * Its own route, as the feedback fold is: a purge that keeps failing must
  * not stop the purges `cleanup-notifications` carries, and a wall with

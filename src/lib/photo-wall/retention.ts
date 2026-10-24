@@ -1,11 +1,12 @@
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import { isAssetHeld } from '@/lib/sanity/orphaned-asset'
 import { deleteManyWithHistory } from '@/lib/sanity/purge'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { osloTodayDateString } from '@/lib/time'
 import { expireWallPost } from './cache'
 import { deleteWallAsset } from './delete'
-import { deletionDate } from './deletion'
+import { deletionDate, plusDays } from './deletion'
 
 /**
  * THE 30-DAY DELETION (Photo Wall spec §11.1): run daily by the retention
@@ -14,28 +15,43 @@ import { deletionDate } from './deletion'
  * earlier is CLOSED first: `closedAt` set if unset, and its caches expired,
  * so posting, Submit and Approve refuse from then on. A wall whose deletion
  * date is today or earlier and whose `closedAt` is more than
- * {@link CLOSE_SETTLE_MS} old (a submit in flight has finished) is PURGED:
- * every Wall Post of the conference is read with its asset id and
- * `deletingAssetId`, the posts are deleted with their history, then every
- * asset they referenced and every `photo-wall` asset of the conference that
- * no document holds, and only then is `purgedAt` set.
+ * {@link CLOSE_SETTLE_MS} old (a submit in flight has finished) is PURGED,
+ * {@link POST_DELETE_CHUNK} posts at a time, in two transactions per chunk:
+ *
+ *  a. MARK every post of the chunk `deleting`, its asset id kept in
+ *     `deletingAssetId` and `photo` unset (Delete's own step 1, §12). This
+ *     is the durable record of which assets to delete: a crash after it
+ *     leaves the ids on the posts, where the next run reads them again. It
+ *     matters because identical bytes are ONE asset across tenants, named
+ *     after the first uploader (`source.id` may be another conference), so
+ *     a post's asset can be found through the post only;
+ *  b. DELETE, with their history, the chunk's assets that no document
+ *     holds any more (checked on the latest documents of every tenant,
+ *     {@link isAssetHeld}) and then the chunk's posts, in one transaction.
+ *     An asset a later chunk's post still holds is left to that chunk; one
+ *     another tenant's document holds is kept.
+ *
+ * Then every `photo-wall` asset uploaded under the conference
+ * (`source.id`) that nothing holds, and only then `purgedAt`.
  *
  * `closedAt` means "closed to writes", `purgedAt` means "deletion done". A
  * run that stops between any two steps (a crash, the deadline, a refused
- * write) leaves `purgedAt` unset and the next run repeats the purge: a
- * delete of a document that is already gone is a no-op, and an asset
- * another document holds is kept and counted as done, so nothing is lost
- * and nothing is deleted twice. Closing the day before means the purge runs
- * ON the deletion date, after a day in which no write could have landed.
+ * write) leaves `purgedAt` unset and the next run repeats the purge: the
+ * mark of a marked post changes nothing, a delete of a document that is
+ * already gone succeeds (Sanity: "considered successful even if the
+ * document did not exist"), and an asset another document holds is kept
+ * and counted as done, so nothing is lost and nothing is deleted twice.
+ * Closing the day before means the purge runs ON the deletion date, after
+ * a day in which no write could have landed.
  */
 
 /** How long after `closedAt` a wall may be purged. */
 export const CLOSE_SETTLE_MS = 15 * 60_000
 
-/** Posts deleted per transaction. */
+/** Posts per chunk: each chunk is two transactions. */
 export const POST_DELETE_CHUNK = 50
 
-/** Assets deleted at the same time. */
+/** Assets checked or deleted at the same time. */
 export const ASSET_CONCURRENCY = 4
 
 export interface RetentionReport {
@@ -70,12 +86,6 @@ interface PostRow {
   assetId: string | null
   deletingAssetId: string | null
   deviceKey: string | null
-}
-
-/** `date` plus `days`, on the calendar. */
-function plusDays(date: string, days: number): string {
-  const [y, m, d] = date.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
 }
 
 /** Every wall with `purgedAt` unset: the retention's and the sweep's. */
@@ -119,11 +129,72 @@ interface Purge {
   done: boolean
 }
 
+/** Run `work` over `items`, {@link ASSET_CONCURRENCY} at a time, until `go` says stop. */
+async function eachAsset(
+  items: readonly string[],
+  go: () => boolean,
+  work: (id: string) => Promise<void>,
+): Promise<boolean> {
+  let next = 0
+  const worker = async () => {
+    while (next < items.length && go()) await work(items[next++])
+  }
+  await Promise.all(Array.from({ length: ASSET_CONCURRENCY }, worker))
+  return next >= items.length
+}
+
 /**
- * Step 3 and 4 for one wall. Every delete is checked against the latest
- * documents, never the query view alone ({@link deleteWallAsset}), so a
- * reference the view still shows for a post deleted moments ago does not
- * keep its asset, and one a document of another conference holds does.
+ * Steps a and b for one chunk. Throws when a transaction is refused or a
+ * holder check can't be told: the wall stays unpurged, nothing is lost.
+ */
+async function purgeChunk(chunk: readonly PostRow[], result: Purge) {
+  const mark = clientWrite.transaction()
+  for (const post of chunk) {
+    mark.patch(post._id, (patch) =>
+      post.assetId
+        ? patch
+            .set({ status: 'deleting', deletingAssetId: post.assetId })
+            .unset(['photo'])
+        : patch.set({ status: 'deleting' }),
+    )
+  }
+  await mark.commit()
+
+  const assetIds = [
+    ...new Set(
+      chunk.flatMap((post) => {
+        const id = post.assetId ?? post.deletingAssetId
+        return id ? [id] : []
+      }),
+    ),
+  ]
+  const free: string[] = []
+  let unknown = false
+  await eachAsset(
+    assetIds,
+    () => !unknown,
+    async (assetId) => {
+      // The chunk's posts hold nothing now; the view may still show them,
+      // so holders are read again through the doc endpoint.
+      const held = await isAssetHeld(assetId)
+      if (held === null) unknown = true
+      else if (held) result.assetsKept += 1
+      else free.push(assetId)
+    },
+  )
+  if (unknown) throw new Error('Could not tell whether an asset is held')
+
+  await deleteManyWithHistory([...free, ...chunk.map((post) => post._id)])
+  result.assets += free.length
+  result.posts += chunk.length
+  return assetIds
+}
+
+/**
+ * Steps 3 and 4 for one wall. Every delete is checked against the latest
+ * documents, never the query view alone, so a reference the view still
+ * shows for a post marked moments ago does not keep its asset, and one a
+ * document of another conference holds does.
  */
 async function purgeWall(
   wall: UnpurgedWall & { conferenceId: string },
@@ -136,34 +207,33 @@ async function purgeWall(
   const deviceKeys = new Set(
     posts.map((p) => p.deviceKey).filter((k): k is string => !!k),
   )
-  // Posts first: a post's strong reference would refuse its asset's delete.
+  // Every asset a chunk decided on, so the sweep of uploads below does not
+  // count a kept one twice.
+  const decided = new Set<string>()
   for (let at = 0; at < posts.length; at += POST_DELETE_CHUNK) {
     if (!withinDeadline()) return result
     const chunk = posts.slice(at, at + POST_DELETE_CHUNK)
-    await deleteManyWithHistory(chunk.map((p) => p._id))
-    result.posts += chunk.length
+    for (const id of await purgeChunk(chunk, result)) decided.add(id)
   }
 
-  const assetIds = new Set<string>()
-  for (const post of posts) {
-    if (post.assetId) assetIds.add(post.assetId)
-    if (post.deletingAssetId) assetIds.add(post.deletingAssetId)
-  }
-  for (const id of await readWallAssets(conferenceId)) assetIds.add(id)
-  const queue = [...assetIds]
+  // The conference's own uploads that no post named any more: a crash
+  // between a submit's upload and its create (§6.2), or a Delete's step 1
+  // whose step 2 never ran.
+  const uploads = (await readWallAssets(conferenceId)).filter(
+    (id) => !decided.has(id),
+  )
   let failed = false
-  let next = 0
-  const worker = async () => {
-    while (next < queue.length && withinDeadline()) {
-      const assetId = queue[next++]
+  const reached = await eachAsset(
+    uploads,
+    () => withinDeadline() && !failed,
+    async (assetId) => {
       const outcome = await deleteWallAsset(assetId)
       if (outcome === 'deleted') result.assets += 1
       else if (outcome === 'held') result.assetsKept += 1
       else failed = true
-    }
-  }
-  await Promise.all(Array.from({ length: ASSET_CONCURRENCY }, worker))
-  if (failed || next < queue.length) return result
+    },
+  )
+  if (failed || !reached) return result
 
   await clientWrite
     .patch(wall._id)
