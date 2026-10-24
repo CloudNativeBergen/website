@@ -254,8 +254,12 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
             <a
               className="underline underline-offset-2 hover:text-gray-900 dark:hover:text-white"
               href="/privacy#photo-wall"
+              // A new tab, so reading it never drops the photo or a post
+              // going out (the busy lock doesn't cover links).
+              target="_blank"
+              rel="noopener noreferrer"
             >
-              Privacy
+              Privacy<span className="sr-only"> (opens in a new tab)</span>
             </a>
           </p>
 
