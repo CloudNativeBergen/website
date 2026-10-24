@@ -10,6 +10,8 @@ const h = vi.hoisted(() => ({
   upstream: vi.fn(),
   /** The order of re-checks and fetches. */
   log: [] as string[],
+  /** The posts a live re-read finds still exportable. */
+  eligible: new Set<string>(),
 }))
 vi.mock('@/lib/auth', () => ({ getAuthSession: h.session }))
 // The one Sanity boundary of the authorization: the organization resolver
@@ -21,6 +23,8 @@ vi.mock('@/lib/photo-wall/export', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/photo-wall/export')>()),
   readConsentedPhotos: h.photos,
   stillExportable: h.recheck,
+  // Short, so a stalled photo times out within the test.
+  PHOTO_TIMEOUT_MS: 50,
 }))
 
 import { GET } from './route'
@@ -112,9 +116,10 @@ beforeEach(() => {
   h.session.mockResolvedValue({ speaker: ORGANIZER })
   h.conference.mockResolvedValue({ conference: CONF_A, error: null })
   h.photos.mockResolvedValue(PHOTOS)
-  h.recheck.mockImplementation(async (_: string, ids: string[]) => {
-    h.log.push(`recheck ${ids.join(',')}`)
-    return new Set(ids)
+  h.eligible = new Set(PHOTOS.map((p) => p._id))
+  h.recheck.mockImplementation(async (_: string, id: string) => {
+    h.log.push(`recheck ${id}`)
+    return h.eligible.has(id)
   })
   h.upstream.mockImplementation(async (url: string) => {
     h.log.push(`fetch ${url.slice(CDN.length + 1, CDN.length + 3)}`)
@@ -166,30 +171,21 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
     expect(h.upstream).toHaveBeenCalledTimes(PHOTOS.length)
   })
 
-  describe('re-checks each batch of posts live, right before fetching it', () => {
-    it('re-reads four posts, fetches them, then the next batch', async () => {
+  describe('re-checks each post live, right before fetching its photo', () => {
+    it('re-reads a post, fetches its photo, then the next', async () => {
       await (await get()).arrayBuffer()
-      expect(h.recheck).toHaveBeenCalledWith('conf-A', expect.any(Array))
-      expect(h.log).toEqual([
-        'recheck wallPost-a6,wallPost-a5,wallPost-a4,wallPost-a3',
-        'fetch a6',
-        'fetch a5',
-        'fetch a4',
-        'fetch a3',
-        'recheck wallPost-a2,wallPost-a1',
-        'fetch a2',
-        'fetch a1',
-      ])
+      expect(h.recheck).toHaveBeenCalledWith('conf-A', 'wallPost-a6')
+      expect(h.log).toEqual(
+        ['a6', 'a5', 'a4', 'a3', 'a2', 'a1'].flatMap((id) => [
+          `recheck wallPost-${id}`,
+          `fetch ${id}`,
+        ]),
+      )
     })
 
     it('skips a post unticked, taken off the wall or deleted since the list was read', async () => {
-      // a5 unticked, a2 deleted: the live re-read no longer returns them.
-      h.recheck.mockImplementation(
-        async (_: string, ids: string[]) =>
-          new Set(
-            ids.filter((id) => !['wallPost-a5', 'wallPost-a2'].includes(id)),
-          ),
-      )
+      h.eligible.delete('wallPost-a5')
+      h.eligible.delete('wallPost-a2')
       const entries = await zipOf(await get())
       expect(Object.keys(entries)).toEqual([
         'a6.jpg',
@@ -200,6 +196,30 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
       const fetched = h.upstream.mock.calls.map(([url]) => url)
       expect(fetched).not.toContain(PHOTOS[1].url)
       expect(fetched).not.toContain(PHOTOS[4].url)
+    })
+
+    it('skips a post whose consent is revoked while the photo before it streams', async () => {
+      h.upstream.mockImplementation(async (url: string) => {
+        if (url !== PHOTOS[0].url)
+          return new Response(bytesOf(url), { status: 200 })
+        // a6's body: while the ZIP reads it, a5's contributor unticks.
+        const body = new ReadableStream<Uint8Array>({
+          pull(controller) {
+            h.eligible.delete('wallPost-a5')
+            controller.enqueue(bytesOf(url))
+            controller.close()
+          },
+        })
+        return new Response(body, { status: 200 })
+      })
+      const entries = await zipOf(await get())
+      expect(Object.keys(entries)).toEqual([
+        'a6.jpg',
+        'a4.jpg',
+        'a3.jpg',
+        'a2.jpg',
+        'a1.jpg',
+      ])
     })
 
     it('skips a photo the CDN no longer has, deleted after the re-check', async () => {
@@ -217,6 +237,65 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
         'a1.jpg',
       ])
     })
+  })
+
+  it('stops fetching a photo when the organizer cancels the download', async () => {
+    const cancel = new AbortController()
+    const response = await GET(
+      new Request('https://2026.example.no/api/admin/photo-wall/export', {
+        signal: cancel.signal,
+      }),
+    )
+    await response.body!.getReader().read()
+    const [, init] = h.upstream.mock.calls[0] as [string, RequestInit]
+    expect(init.signal!.aborted).toBe(false)
+    cancel.abort()
+    expect(init.signal!.aborted).toBe(true)
+  })
+
+  describe('fails the download when a photo stalls, within its timeout', () => {
+    /** a5 answers through `stall`; every other photo at once. */
+    const stallOn = (stall: (signal: AbortSignal) => Promise<Response>) =>
+      h.upstream.mockImplementation(
+        async (url: string, init: { signal: AbortSignal }) =>
+          url === PHOTOS[1].url
+            ? stall(init.signal)
+            : new Response(bytesOf(url), { status: 200 }),
+      )
+
+    it('when its headers never come', async () => {
+      // As the real fetch does: rejects with the signal's reason on abort.
+      stallOn(
+        (signal) =>
+          new Promise((_, reject) =>
+            signal.addEventListener('abort', () => reject(signal.reason)),
+          ),
+      )
+      const response = await get()
+      await expect(response.arrayBuffer()).rejects.toThrow(
+        'Photo wallPost-a5 timed out',
+      )
+    }, 3000)
+
+    it('when its body stops halfway', async () => {
+      // As the real fetch's body does (measured on undici, see the PR):
+      // errors with the signal's reason when it aborts after the headers.
+      stallOn(async (signal) => {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('first half'))
+            signal.addEventListener('abort', () =>
+              controller.error(signal.reason),
+            )
+          },
+        })
+        return new Response(body, { status: 200 })
+      })
+      const response = await get()
+      await expect(response.arrayBuffer()).rejects.toMatchObject({
+        name: 'TimeoutError',
+      })
+    }, 3000)
   })
 
   describe('refuses, before any Wall Post is read', () => {

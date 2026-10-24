@@ -52,25 +52,29 @@ export async function countConsentedPhotos(
   )
 }
 
-/** Posts the export route re-checks per live read, before fetching them. */
-export const RECHECK_BATCH = 4
+/**
+ * How long one photo may take, headers AND body, before the download fails:
+ * 4 MiB in a minute is about 0.56 Mbit/s. The body is read as the browser
+ * takes the ZIP, so a slower download hits it too.
+ */
+export const PHOTO_TIMEOUT_MS = 60_000
 
 /**
- * Which of `ids` are still exportable, read live just before their photos
- * are fetched: a post unticked, taken off the wall or deleted since the list
- * was read is left out.
+ * Whether the post is still exportable, read live just before its photo is
+ * fetched: one unticked, taken off the wall or deleted since the list was
+ * read is not.
  */
 export async function stillExportable(
   conferenceId: string,
-  ids: string[],
-): Promise<Set<string>> {
-  const live = await scopedFetch<string[]>(
+  id: string,
+): Promise<boolean> {
+  const live = await scopedFetch<string | null>(
     clientReadUncached,
     { conferenceId },
-    `*[${EXPORTABLE} && _id in $ids]._id`,
-    { ids },
+    `*[${EXPORTABLE} && _id == $id][0]._id`,
+    { id },
   )
-  return new Set(live)
+  return live === id
 }
 
 /** The name the ZIP downloads as. */

@@ -6,8 +6,8 @@ import {
   EXPORT_FILENAME,
   exportEntryName,
   isOurPhotoOriginal,
+  PHOTO_TIMEOUT_MS,
   readConsentedPhotos,
-  RECHECK_BATCH,
   stillExportable,
   type ConsentedPhoto,
 } from '@/lib/photo-wall/export'
@@ -36,46 +36,50 @@ async function organizerConferenceId(): Promise<string | null> {
 }
 
 /**
- * Each photo's original, fetched only when the ZIP is ready for it. Every
- * {@link RECHECK_BATCH} posts are re-read live first: one unticked, taken off
- * the wall or deleted since the list was read is skipped, as is one whose
- * photo the CDN no longer has. Any other failure ends the stream with an
- * error, so the download fails rather than arrive with a photo silently
- * left out.
+ * Each photo's original, fetched only when the ZIP is ready for it. Each post
+ * is re-read live right before its photo is fetched: one unticked, taken off
+ * the wall or deleted since the list was read (or while the photo before it
+ * streamed) is skipped, as is one whose photo the CDN no longer has (404).
+ * Any other failure, a photo that takes longer than {@link PHOTO_TIMEOUT_MS}
+ * included, ends the stream with an error, so the download fails rather
+ * than arrive with a consented photo silently left out.
  */
 async function* entries(
   conferenceId: string,
   photos: ConsentedPhoto[],
-  signal: AbortSignal,
+  request: AbortSignal,
 ) {
-  for (let i = 0; i < photos.length; i += RECHECK_BATCH) {
-    const batch = photos.slice(i, i + RECHECK_BATCH)
-    const live = await stillExportable(
-      conferenceId,
-      batch.map((photo) => photo._id),
-    )
-    for (const photo of batch) {
-      if (!live.has(photo._id)) continue
-      const upstream = await fetch(photo.url, {
-        // The host check holds for the first hop only: never follow one.
-        redirect: 'error',
-        cache: 'no-store',
-        signal,
-      })
-      // Deleted between the re-check and this fetch.
-      if (upstream.status === 404) {
-        void upstream.body?.cancel()
-        continue
-      }
-      if (!upstream.ok || !upstream.body)
-        throw new Error(
-          `Photo ${photo._id} could not be fetched (${upstream.status})`,
-        )
-      yield {
-        name: exportEntryName(photo._id),
-        lastModified: photo.submittedAt ?? undefined,
-        input: upstream.body,
-      }
+  for (const photo of photos) {
+    if (!(await stillExportable(conferenceId, photo._id))) continue
+    // Bounds the headers AND the body: the body is read under this signal.
+    const signal = AbortSignal.any([
+      request,
+      AbortSignal.timeout(PHOTO_TIMEOUT_MS),
+    ])
+    const upstream = await fetch(photo.url, {
+      // The host check holds for the first hop only: never follow one.
+      redirect: 'error',
+      cache: 'no-store',
+      signal,
+    }).catch((error: unknown) => {
+      throw signal.reason instanceof DOMException &&
+        signal.reason.name === 'TimeoutError'
+        ? new Error(`Photo ${photo._id} timed out`)
+        : error
+    })
+    // Deleted between the re-check and this fetch.
+    if (upstream.status === 404) {
+      void upstream.body?.cancel()
+      continue
+    }
+    if (!upstream.ok || !upstream.body)
+      throw new Error(
+        `Photo ${photo._id} could not be fetched (${upstream.status})`,
+      )
+    yield {
+      name: exportEntryName(photo._id),
+      lastModified: photo.submittedAt ?? undefined,
+      input: upstream.body,
     }
   }
 }

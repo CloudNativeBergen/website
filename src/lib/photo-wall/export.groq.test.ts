@@ -138,37 +138,25 @@ describe('countConsentedPhotos: the same rule as the ZIP', () => {
 })
 
 describe('stillExportable: the re-check before each photo', () => {
-  it('keeps only ids that are still this wall’s exportable posts', async () => {
+  it.each([
+    ['an approved, consented post of this wall', 'wallPost-a1', true],
+    ['a pending post', 'wallPost-p1', false],
+    ['a Not shown post', 'wallPost-n1', false],
+    ['an unticked post', 'wallPost-x1', false],
+    ['a post whose photo is gone', 'wallPost-gone', false],
+    ['a draft', 'drafts.wallPost-f1', false],
+    ['a deleted post', 'wallPost-deleted', false],
+    // Another conference's approved, consented post, its id naming conf-A.
+    ['another conference’s post', 'wallPost-conf-A', false],
+  ])('%s: %s', async (_, id, expected) => {
     h.dataset.push(post('gone', 'conf-A', {}))
-    const live = await stillExportable('conf-A', [
-      'wallPost-a1',
-      'wallPost-a2',
-      // Pending, Not shown, unticked, photo gone, a draft.
-      'wallPost-p1',
-      'wallPost-n1',
-      'wallPost-x1',
-      'wallPost-gone',
-      'drafts.wallPost-f1',
-      // Deleted since the list was read.
-      'wallPost-deleted',
-      // Another conference's approved, consented post, its id naming conf-A.
-      'wallPost-conf-A',
-    ])
-    expect([...live].sort()).toEqual(['wallPost-a1', 'wallPost-a2'])
-  })
-
-  it('answers for the ids asked about only', async () => {
-    expect([...(await stillExportable('conf-A', ['wallPost-a1']))]).toEqual([
-      'wallPost-a1',
-    ])
+    expect(await stillExportable('conf-A', id)).toBe(expected)
   })
 
   it('sees a consent unticked since the list was read', async () => {
-    const listed = (await readConsentedPhotos('conf-A')).map((p) => p._id)
+    expect(await stillExportable('conf-A', 'wallPost-a1')).toBe(true)
     const a1 = h.dataset.find((d) => d._id === 'wallPost-a1')!
     a1.marketingConsent = false
-    expect([...(await stillExportable('conf-A', listed))]).toEqual([
-      'wallPost-a2',
-    ])
+    expect(await stillExportable('conf-A', 'wallPost-a1')).toBe(false)
   })
 })
