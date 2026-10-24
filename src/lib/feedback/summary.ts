@@ -142,7 +142,6 @@ export async function findDueFeedbackSummaries(
     .byConference) {
     const selected = await selectConference(client, conferenceId, talkIds, {
       now,
-      deadline: undefined,
       cap,
     })
     for (const { talkId } of selected.due) due.push({ talkId, conferenceId })
@@ -182,11 +181,7 @@ async function selectConference(
   client: VersionsClient,
   conferenceId: string,
   talkIds: string[],
-  {
-    now,
-    deadline,
-    cap,
-  }: { now: Date; deadline: Date | undefined; cap: ReadCap },
+  { now, cap }: { now: Date; cap: ReadCap },
 ): Promise<{
   due: (DueSummary & { conference: SummaryConference })[]
   /** Candidates of the conference, its reads failed: not tried this run. */
@@ -195,7 +190,7 @@ async function selectConference(
   late: number
 }> {
   const none = { due: [], unread: 0, late: 0 }
-  if (deadline && Date.now() >= deadline.getTime()) {
+  if (cap.pastDeadline()) {
     return { ...none, late: talkIds.length }
   }
   // One conference's failed or hung read holds back only its own talks:
@@ -226,7 +221,7 @@ async function selectConference(
       error,
     )
     // Cut off by the run's deadline: not reached, rather than failed.
-    return deadline && Date.now() >= deadline.getTime()
+    return cap.pastDeadline()
       ? { ...none, late: talkIds.length }
       : { ...none, unread: talkIds.length }
   }
@@ -263,7 +258,16 @@ const SELECTION_TIMEOUT_MS = 30_000
 const READ_TIMEOUT_MS = 10_000
 
 /** A signal for one read before a claim, given its own limit. */
-type ReadCap = (ms?: number) => AbortSignal
+interface ReadCap {
+  (ms?: number): AbortSignal
+  /**
+   * Whether the run's deadline has passed, by its timer or by the clock. The
+   * timer is monotonic and `Date.now()` is not: it can fire a millisecond
+   * before the clock says the deadline has come, and a read it cut off must
+   * count as not reached, not failed.
+   */
+  pastDeadline(): boolean
+}
 
 /**
  * Each read before a claim ends after its own limit, and at the run's
@@ -274,10 +278,14 @@ function readCapUntil(deadline: Date | undefined): ReadCap {
   const run = deadline
     ? AbortSignal.timeout(Math.max(0, deadline.getTime() - Date.now()))
     : undefined
-  return (ms = READ_TIMEOUT_MS) =>
+  const cap = (ms = READ_TIMEOUT_MS) =>
     run
       ? AbortSignal.any([AbortSignal.timeout(ms), run])
       : AbortSignal.timeout(ms)
+  return Object.assign(cap, {
+    pastDeadline: () =>
+      !!deadline && (run!.aborted || Date.now() >= deadline.getTime()),
+  })
 }
 
 interface SpeakerDoc {
@@ -371,7 +379,6 @@ export async function deliverFeedbackSummaries({
   for (const [conferenceId, talkIds] of shuffled([...byConference])) {
     const selected = await selectConference(client, conferenceId, talkIds, {
       now,
-      deadline,
       cap,
     })
     report.due += selected.due.length
@@ -384,7 +391,7 @@ export async function deliverFeedbackSummaries({
     for (const item of selected.due) {
       // Past the deadline nothing more is read: a backlog must not run the
       // function past its budget and lose this report.
-      if (deadline && Date.now() >= deadline.getTime()) {
+      if (cap.pastDeadline()) {
         report.notReached++
         continue
       }
@@ -442,7 +449,7 @@ export async function deliverFeedbackSummaries({
         }
       } catch (error) {
         // A read cut off by the run's deadline: not reached, rather than failed.
-        if (deadline && Date.now() >= deadline.getTime()) report.notReached++
+        if (cap.pastDeadline()) report.notReached++
         else {
           report.failed++
           failedInARow++
