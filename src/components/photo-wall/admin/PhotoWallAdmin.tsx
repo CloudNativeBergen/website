@@ -41,6 +41,8 @@ export interface PhotoWallAdminProps {
   queue?: ReactNode
   /** The live pending count (M4a), under the page header once the wall is set up. */
   summary?: ReactNode
+  /** The consented ZIP export (P5), under the queue once the wall is set up. */
+  marketingExport?: ReactNode
 }
 
 /**
@@ -58,6 +60,7 @@ export function PhotoWallAdmin({
   failed = false,
   queue,
   summary,
+  marketingExport,
 }: PhotoWallAdminProps) {
   const wall = view.wall && pending ? { ...view.wall, ...pending } : view.wall
   return (
@@ -111,6 +114,7 @@ export function PhotoWallAdmin({
         <SetUp onSetUp={onSetUp} saving={saving} failed={failed} />
       )}
       {wall ? queue : null}
+      {wall ? marketingExport : null}
     </div>
   )
 }
