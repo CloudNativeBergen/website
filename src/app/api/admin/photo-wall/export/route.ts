@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server'
 import { makeZip } from 'client-zip'
 import { getAuthSession } from '@/lib/auth'
-import { isOrganizerForOrg } from '@/lib/authz/organizer'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isOrganizerForOrg, resolveCurrentOrgId } from '@/lib/authz/organizer'
 import {
   EXPORT_FILENAME,
   exportEntryName,
   isOurPhotoOriginal,
   readConsentedPhotos,
+  RECHECK_BATCH,
+  stillExportable,
   type ConsentedPhoto,
 } from '@/lib/photo-wall/export'
+import { liveConferenceInOrg } from '@/lib/photo-wall/tenant'
 
 /**
  * Up to a few hundred photos of at most 4 MiB, relayed one at a time. The
@@ -21,50 +23,59 @@ const refused = () => NextResponse.json({ error: 'Not found' }, { status: 404 })
 
 /**
  * The request's conference, for an organizer of its organization only: the
- * same rule as the `adminProcedure` waist and `photoWall`'s live check. The
- * tenant comes from the domain, never from the request; the live document
- * must still be that conference, in the organization the caller organizes.
+ * same organization resolver as the other `/api/admin` routes and the same
+ * live check as the `photoWall` router. Null refuses.
  */
 async function organizerConferenceId(): Promise<string | null> {
-  try {
-    const session = await getAuthSession()
-    // Signed out: refused before even the tenant read.
-    if (!session?.speaker?._id) return null
-    const { conference: tenant } = await getConferenceForCurrentDomain()
-    const orgId = tenant?.organization?._ref ?? null
-    if (!tenant?._id || !isOrganizerForOrg(session?.speaker, orgId)) return null
-    const { conference: live } = await getConferenceForCurrentDomain({
-      uncached: true,
-    })
-    if (live?._id !== tenant._id || live.organization?._ref !== orgId)
-      return null
-    return tenant._id
-  } catch {
-    return null
-  }
+  const session = await getAuthSession()
+  // Signed out: refused before even the tenant read.
+  if (!session?.speaker?._id) return null
+  const orgId = await resolveCurrentOrgId()
+  if (!isOrganizerForOrg(session.speaker, orgId)) return null
+  return (await liveConferenceInOrg(orgId))?._id ?? null
 }
 
 /**
- * Each photo's original, fetched only when the ZIP is ready for it. A photo
- * that can't be fetched ends the stream with an error, so the download fails
- * rather than arrive with a photo silently left out.
+ * Each photo's original, fetched only when the ZIP is ready for it. Every
+ * {@link RECHECK_BATCH} posts are re-read live first: one unticked, taken off
+ * the wall or deleted since the list was read is skipped, as is one whose
+ * photo the CDN no longer has. Any other failure ends the stream with an
+ * error, so the download fails rather than arrive with a photo silently
+ * left out.
  */
-async function* entries(photos: ConsentedPhoto[], signal: AbortSignal) {
-  for (const photo of photos) {
-    const upstream = await fetch(photo.url, {
-      // The host check holds for the first hop only: never follow one.
-      redirect: 'error',
-      cache: 'no-store',
-      signal,
-    })
-    if (!upstream.ok || !upstream.body)
-      throw new Error(
-        `Photo ${photo._id} could not be fetched (${upstream.status})`,
-      )
-    yield {
-      name: exportEntryName(photo._id),
-      lastModified: photo.submittedAt ?? undefined,
-      input: upstream.body,
+async function* entries(
+  conferenceId: string,
+  photos: ConsentedPhoto[],
+  signal: AbortSignal,
+) {
+  for (let i = 0; i < photos.length; i += RECHECK_BATCH) {
+    const batch = photos.slice(i, i + RECHECK_BATCH)
+    const live = await stillExportable(
+      conferenceId,
+      batch.map((photo) => photo._id),
+    )
+    for (const photo of batch) {
+      if (!live.has(photo._id)) continue
+      const upstream = await fetch(photo.url, {
+        // The host check holds for the first hop only: never follow one.
+        redirect: 'error',
+        cache: 'no-store',
+        signal,
+      })
+      // Deleted between the re-check and this fetch.
+      if (upstream.status === 404) {
+        void upstream.body?.cancel()
+        continue
+      }
+      if (!upstream.ok || !upstream.body)
+        throw new Error(
+          `Photo ${photo._id} could not be fetched (${upstream.status})`,
+        )
+      yield {
+        name: exportEntryName(photo._id),
+        lastModified: photo.submittedAt ?? undefined,
+        input: upstream.body,
+      }
     }
   }
 }
@@ -80,7 +91,14 @@ async function* entries(photos: ConsentedPhoto[], signal: AbortSignal) {
  * any Wall Post is read.
  */
 export async function GET(request: Request) {
-  const conferenceId = await organizerConferenceId()
+  let conferenceId: string | null
+  try {
+    conferenceId = await organizerConferenceId()
+  } catch (error) {
+    // An outage, not a refusal: logged, while the answer stays the one 404.
+    console.error('Photo Wall export: could not check the organizer', error)
+    return refused()
+  }
   if (!conferenceId) return refused()
 
   const photos = await readConsentedPhotos(conferenceId)
@@ -97,7 +115,7 @@ export async function GET(request: Request) {
     )
   }
 
-  const zip = makeZip(entries(photos, request.signal))
+  const zip = makeZip(entries(conferenceId, photos, request.signal))
   return new Response(zip, {
     status: 200,
     headers: {

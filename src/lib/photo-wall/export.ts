@@ -9,6 +9,16 @@ import { scopedFetch } from '@/lib/sanity/scoped'
  * answer that lags it.
  */
 
+/**
+ * THE export rule, one GROQ filter for the list, the count the admin page
+ * shows and the re-check before each photo: a published Wall Post (a draft is
+ * never one), approved, with marketing consent, whose photo asset exists.
+ * `scopedFetch` leads it with the tenant predicate.
+ */
+const EXPORTABLE = `_type == "wallPost" && !(_id in path("drafts.**"))
+  && status == "approved" && marketingConsent == true
+  && defined(photo.asset->url)`
+
 export interface ConsentedPhoto {
   _id: string
   /** The asset's original on Sanity's CDN, no image parameters. */
@@ -16,27 +26,51 @@ export interface ConsentedPhoto {
   submittedAt: string | null
 }
 
-/** This wall's approved, consented posts with a photo, newest approval first. */
+/** This wall's exportable posts, newest approval first. */
 export async function readConsentedPhotos(
   conferenceId: string,
 ): Promise<ConsentedPhoto[]> {
-  const rows = await scopedFetch<
-    { _id: string; url: string | null; submittedAt: string | null }[]
-  >(
+  return scopedFetch<ConsentedPhoto[]>(
     clientReadUncached,
     { conferenceId },
-    // Published posts only: a draft is never a Wall Post.
-    `*[_type == "wallPost" && !(_id in path("drafts.**"))
-      && status == "approved" && marketingConsent == true]
-      | order(approvedAt desc) {
-        _id,
-        "url": photo.asset->url,
-        submittedAt
-      }`,
+    `*[${EXPORTABLE}] | order(approvedAt desc) {
+      _id,
+      "url": photo.asset->url,
+      submittedAt
+    }`,
   )
-  return rows.flatMap(({ _id, url, submittedAt }) =>
-    url ? [{ _id, url, submittedAt: submittedAt ?? null }] : [],
+}
+
+/** How many photos the ZIP would hold now: the admin page's count. */
+export async function countConsentedPhotos(
+  conferenceId: string,
+): Promise<number> {
+  return scopedFetch<number>(
+    clientReadUncached,
+    { conferenceId },
+    `count(*[${EXPORTABLE}])`,
   )
+}
+
+/** Posts the export route re-checks per live read, before fetching them. */
+export const RECHECK_BATCH = 4
+
+/**
+ * Which of `ids` are still exportable, read live just before their photos
+ * are fetched: a post unticked, taken off the wall or deleted since the list
+ * was read is left out.
+ */
+export async function stillExportable(
+  conferenceId: string,
+  ids: string[],
+): Promise<Set<string>> {
+  const live = await scopedFetch<string[]>(
+    clientReadUncached,
+    { conferenceId },
+    `*[${EXPORTABLE} && _id in $ids]._id`,
+    { ids },
+  )
+  return new Set(live)
 }
 
 /** The name the ZIP downloads as. */

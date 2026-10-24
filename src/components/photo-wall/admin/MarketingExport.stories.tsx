@@ -1,34 +1,29 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { http, HttpResponse } from 'msw'
 import { expect, fn, within } from 'storybook/test'
 import type {
   ModerationPost,
   ModerationQueueData,
   PhotoWallAdminView,
 } from '@/lib/photo-wall'
-import {
-  MARKETING_EXPORT_ROUTE,
-  MarketingExport,
-  MarketingExportView,
-} from './MarketingExport'
+import { MARKETING_EXPORT_ROUTE, MarketingExport } from './MarketingExport'
 import { ModerationQueueView } from './ModerationQueue'
 import { PendingSummaryView } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 
 const meta = {
   title: 'Systems/PhotoWall/MarketingExport',
-  component: MarketingExportView,
+  component: MarketingExport,
   parameters: {
     layout: 'padded',
     docs: {
       description: {
         component:
-          'The consented ZIP export on `/admin/photo-wall` (Photo Wall spec §12, §13 P5): a download of every approved Wall Post whose contributor allowed marketing use, streamed by `GET /api/admin/photo-wall/export`, and the note that downloaded copies are the organizers’ and fall outside the 30-day deletion. The count comes from the polled moderation queue. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The consented ZIP export on `/admin/photo-wall` (Photo Wall spec §12, §13 P5): a download of every approved Wall Post whose contributor allowed marketing use, streamed by `GET /api/admin/photo-wall/export`, and the note that downloaded copies are the organizers’ and fall outside the 30-day deletion. The count is the server’s, by the ZIP’s own rule (`photoWall.settings`). Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
   args: { count: 12 },
-} satisfies Meta<typeof MarketingExportView>
+} satisfies Meta<typeof MarketingExport>
 
 export default meta
 type Story = StoryObj<typeof meta>
@@ -45,6 +40,9 @@ export const WithPhotos: Story = {
       /30-day deletion doesn’t remove them/,
     )
     await expect(canvas.getByText('12 photos')).toBeVisible()
+    await expect(
+      canvas.getByText('If the download stops partway, start it again.'),
+    ).toBeVisible()
   },
 }
 export const WithPhotosDark: Story = { globals: { theme: 'dark' } }
@@ -119,29 +117,6 @@ const QUEUE: ModerationQueueData = {
   ],
 }
 
-/**
- * Connected: `photoWall.moderationQueue` mocked; only approved posts with
- * consent are counted.
- */
-export const Polled: StoryObj<typeof MarketingExport> = {
-  render: () => <MarketingExport />,
-  parameters: {
-    msw: {
-      handlers: [
-        http.get('/api/trpc/photoWall.moderationQueue', () =>
-          HttpResponse.json({ result: { data: QUEUE } }),
-        ),
-      ],
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    await expect(
-      await canvas.findByText('2 photos', {}, { timeout: 5000 }),
-    ).toBeVisible()
-  },
-}
-
 const VIEW: PhotoWallAdminView = {
   wall: {
     _id: 'photoWall-conf-A',
@@ -167,7 +142,7 @@ export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
     onChange: fn(),
     summary: <PendingSummaryView pending={1} />,
     queue: <ModerationQueueView queue={QUEUE} />,
-    marketingExport: <MarketingExportView count={2} />,
+    marketingExport: <MarketingExport count={2} />,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)

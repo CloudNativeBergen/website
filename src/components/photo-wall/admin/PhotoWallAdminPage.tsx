@@ -64,7 +64,9 @@ export function PhotoWallAdminPage({
       // Mounted, and so polled, only once the wall is set up.
       queue={<ModerationQueue />}
       summary={<PendingSummary />}
-      marketingExport={<MarketingExport />}
+      marketingExport={
+        <MarketingExport count={settings.data.marketingExportCount} />
+      }
     />
   )
 }

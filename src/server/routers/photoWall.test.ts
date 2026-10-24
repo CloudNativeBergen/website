@@ -146,7 +146,37 @@ describe('photoWall.settings', () => {
       wall: null,
       posting: 'paused',
       links: LINKS,
+      marketingExportCount: 0,
     })
+  })
+
+  it('counts the photos the consented ZIP export would hold, this wall’s only (P5)', async () => {
+    const asset = (id: string) =>
+      ({
+        _id: `image-${id}-800x600-jpg`,
+        _type: 'sanity.imageAsset',
+        url: `https://cdn.sanity.io/images/test/test/${id}-800x600.jpg`,
+      }) as Doc
+    const post = (id: string, conference: string, fields = {}) =>
+      ({
+        _id: `wallPost-${id}`,
+        _type: 'wallPost',
+        conference: ref(conference),
+        status: 'approved',
+        marketingConsent: true,
+        photo: { _type: 'image', asset: ref(`image-${id}-800x600-jpg`) },
+        ...fields,
+      }) as Doc
+    store().reset([
+      wallOf('conf-A'),
+      ...['a1', 'a2', 'p1', 'x1', 'b1'].map(asset),
+      post('a1', 'conf-A'),
+      post('a2', 'conf-A'),
+      post('p1', 'conf-A', { status: 'pending' }),
+      post('x1', 'conf-A', { marketingConsent: false }),
+      post('b1', 'conf-B'),
+    ])
+    expect((await organizer().settings()).marketingExportCount).toBe(2)
   })
 
   it("does not count another conference's wall", async () => {

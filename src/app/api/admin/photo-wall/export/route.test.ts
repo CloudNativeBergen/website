@@ -6,32 +6,39 @@ const h = vi.hoisted(() => ({
   session: vi.fn(),
   conference: vi.fn(),
   photos: vi.fn(),
+  recheck: vi.fn(),
   upstream: vi.fn(),
+  /** The order of re-checks and fetches. */
+  log: [] as string[],
 }))
 vi.mock('@/lib/auth', () => ({ getAuthSession: h.session }))
+// The one Sanity boundary of the authorization: the organization resolver
+// and the live check run for real on top of it.
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.conference,
 }))
 vi.mock('@/lib/photo-wall/export', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/photo-wall/export')>()),
   readConsentedPhotos: h.photos,
+  stillExportable: h.recheck,
 }))
 
 import { GET } from './route'
 
 const CDN = 'https://cdn.sanity.io/images/proj/production'
+const photo = (id: string, submittedAt: string | null = null) => ({
+  _id: `wallPost-${id}`,
+  url: `${CDN}/${id}-800x600.jpg`,
+  submittedAt,
+})
+/** Newest approval first; six, so the re-check runs in two batches. */
 const PHOTOS = [
-  {
-    _id: 'wallPost-a2',
-    url: `${CDN}/a2-800x600.jpg`,
-    submittedAt: '2026-10-26T09:30:00.000Z',
-  },
-  {
-    _id: 'wallPost-a1',
-    url: `${CDN}/a1-800x600.jpg`,
-    submittedAt: '2026-10-26T09:00:00.000Z',
-  },
-  { _id: 'wallPost-a0', url: `${CDN}/a0-800x600.jpg`, submittedAt: null },
+  photo('a6', '2026-10-26T09:30:00.000Z'),
+  photo('a5', '2026-10-26T09:00:00.000Z'),
+  photo('a4'),
+  photo('a3'),
+  photo('a2'),
+  photo('a1'),
 ]
 /** Each photo's bytes: its URL, so a mixed-up entry shows. */
 const bytesOf = (url: string) => new TextEncoder().encode(`jpeg:${url}`)
@@ -74,30 +81,50 @@ function unzip(zip: Uint8Array): Record<string, string> {
   return entries
 }
 
+const zipOf = async (response: Response) =>
+  unzip(new Uint8Array(await response.arrayBuffer()))
+
+const entryOf = (id: string) => ({
+  [`${id}.jpg`]: `jpeg:${CDN}/${id}-800x600.jpg`,
+})
+
 async function expectRefused(response: Response) {
   expect(response.status).toBe(404)
   expect(await response.json()).toEqual({ error: 'Not found' })
   // Guard before fetch: no Wall Post is read, no photo fetched.
   expect(h.photos).not.toHaveBeenCalled()
+  expect(h.recheck).not.toHaveBeenCalled()
   expect(h.upstream).not.toHaveBeenCalled()
 }
 
+/** The cached tenant read answers CONF_A; the live one `live`. */
+const liveIs = (live: () => Promise<unknown>) =>
+  h.conference.mockImplementation(async (opts?: { uncached?: boolean }) =>
+    opts?.uncached ? live() : { conference: CONF_A, error: null },
+  )
+
 beforeEach(() => {
   vi.clearAllMocks()
+  h.log.length = 0
   vi.stubGlobal('fetch', h.upstream)
   vi.stubEnv('NEXT_PUBLIC_SANITY_PROJECT_ID', 'proj')
   vi.stubEnv('NEXT_PUBLIC_SANITY_DATASET', 'production')
   h.session.mockResolvedValue({ speaker: ORGANIZER })
-  // The cached tenant read and the live one agree.
   h.conference.mockResolvedValue({ conference: CONF_A, error: null })
   h.photos.mockResolvedValue(PHOTOS)
-  h.upstream.mockImplementation(
-    async (url: string) => new Response(bytesOf(url), { status: 200 }),
-  )
+  h.recheck.mockImplementation(async (_: string, ids: string[]) => {
+    h.log.push(`recheck ${ids.join(',')}`)
+    return new Set(ids)
+  })
+  h.upstream.mockImplementation(async (url: string) => {
+    h.log.push(`fetch ${url.slice(CDN.length + 1, CDN.length + 3)}`)
+    return new Response(bytesOf(url), { status: 200 })
+  })
 })
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
 })
 
 describe('the consented ZIP export route (Photo Wall P5)', () => {
@@ -109,13 +136,16 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
       'attachment; filename="photo-wall-marketing.zip"',
     )
     expect(response.headers.get('cache-control')).toBe('private, no-store')
-    const entries = unzip(new Uint8Array(await response.arrayBuffer()))
-    expect(entries).toEqual({
-      'a2.jpg': `jpeg:${CDN}/a2-800x600.jpg`,
-      'a1.jpg': `jpeg:${CDN}/a1-800x600.jpg`,
-      'a0.jpg': `jpeg:${CDN}/a0-800x600.jpg`,
-    })
-    expect(Object.keys(entries)).toEqual(['a2.jpg', 'a1.jpg', 'a0.jpg'])
+    const entries = await zipOf(response)
+    expect(Object.keys(entries)).toEqual([
+      'a6.jpg',
+      'a5.jpg',
+      'a4.jpg',
+      'a3.jpg',
+      'a2.jpg',
+      'a1.jpg',
+    ])
+    expect(entries).toMatchObject({ ...entryOf('a6'), ...entryOf('a1') })
     // The originals: the CDN URL exactly, never following a redirect.
     expect(h.upstream.mock.calls.map(([url]) => url)).toEqual(
       PHOTOS.map((p) => p.url),
@@ -136,9 +166,57 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
     expect(h.upstream).toHaveBeenCalledTimes(PHOTOS.length)
   })
 
-  it('reads the conference live, not only from the cached tenant read', async () => {
-    await get()
-    expect(h.conference).toHaveBeenCalledWith({ uncached: true })
+  describe('re-checks each batch of posts live, right before fetching it', () => {
+    it('re-reads four posts, fetches them, then the next batch', async () => {
+      await (await get()).arrayBuffer()
+      expect(h.recheck).toHaveBeenCalledWith('conf-A', expect.any(Array))
+      expect(h.log).toEqual([
+        'recheck wallPost-a6,wallPost-a5,wallPost-a4,wallPost-a3',
+        'fetch a6',
+        'fetch a5',
+        'fetch a4',
+        'fetch a3',
+        'recheck wallPost-a2,wallPost-a1',
+        'fetch a2',
+        'fetch a1',
+      ])
+    })
+
+    it('skips a post unticked, taken off the wall or deleted since the list was read', async () => {
+      // a5 unticked, a2 deleted: the live re-read no longer returns them.
+      h.recheck.mockImplementation(
+        async (_: string, ids: string[]) =>
+          new Set(
+            ids.filter((id) => !['wallPost-a5', 'wallPost-a2'].includes(id)),
+          ),
+      )
+      const entries = await zipOf(await get())
+      expect(Object.keys(entries)).toEqual([
+        'a6.jpg',
+        'a4.jpg',
+        'a3.jpg',
+        'a1.jpg',
+      ])
+      const fetched = h.upstream.mock.calls.map(([url]) => url)
+      expect(fetched).not.toContain(PHOTOS[1].url)
+      expect(fetched).not.toContain(PHOTOS[4].url)
+    })
+
+    it('skips a photo the CDN no longer has, deleted after the re-check', async () => {
+      h.upstream.mockImplementation(async (url: string) =>
+        url === PHOTOS[2].url
+          ? new Response('gone', { status: 404 })
+          : new Response(bytesOf(url), { status: 200 }),
+      )
+      const entries = await zipOf(await get())
+      expect(Object.keys(entries)).toEqual([
+        'a6.jpg',
+        'a5.jpg',
+        'a3.jpg',
+        'a2.jpg',
+        'a1.jpg',
+      ])
+    })
   })
 
   describe('refuses, before any Wall Post is read', () => {
@@ -170,34 +248,36 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
     })
 
     it('a conference moved to another organization since the cached read', async () => {
-      h.conference.mockImplementation(
-        async (opts?: { uncached?: boolean }) => ({
-          conference: opts?.uncached
-            ? { ...CONF_A, organization: { _ref: 'org-B' } }
-            : CONF_A,
-          error: null,
-        }),
-      )
+      liveIs(async () => ({
+        conference: { ...CONF_A, organization: { _ref: 'org-B' } },
+        error: null,
+      }))
       await expectRefused(await get())
     })
 
     it('a live read that names another conference', async () => {
-      h.conference.mockImplementation(
-        async (opts?: { uncached?: boolean }) => ({
-          conference: opts?.uncached ? { ...CONF_A, _id: 'conf-B' } : CONF_A,
-          error: null,
-        }),
-      )
+      liveIs(async () => ({
+        conference: { ...CONF_A, _id: 'conf-B' },
+        error: null,
+      }))
       await expectRefused(await get())
     })
 
     it('a live read that fails', async () => {
-      h.conference.mockImplementation(async (opts?: { uncached?: boolean }) =>
-        opts?.uncached
-          ? { conference: null, error: new Error('timeout') }
-          : { conference: CONF_A, error: null },
-      )
+      liveIs(async () => ({ conference: null, error: new Error('timeout') }))
       await expectRefused(await get())
+    })
+
+    it('a live read that throws, logged as an outage', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+      liveIs(async () => {
+        throw new Error('Sanity is down')
+      })
+      await expectRefused(await get())
+      expect(logged).toHaveBeenCalledWith(
+        'Photo Wall export: could not check the organizer',
+        expect.objectContaining({ message: 'Sanity is down' }),
+      )
     })
   })
 
@@ -214,24 +294,26 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
   it('fails the download rather than leave a photo out silently', async () => {
     h.upstream.mockImplementation(async (url: string) =>
       url === PHOTOS[1].url
-        ? new Response('gone', { status: 404 })
+        ? new Response('oops', { status: 500 })
         : new Response(bytesOf(url), { status: 200 }),
     )
-    vi.spyOn(console, 'error').mockImplementation(() => {})
     const response = await get()
-    await expect(response.arrayBuffer()).rejects.toThrow()
+    await expect(response.arrayBuffer()).rejects.toThrow(
+      'Photo wallPost-a5 could not be fetched (500)',
+    )
   })
 
   it('never fetches a photo URL off our own project’s CDN', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     h.photos.mockResolvedValue([
       {
         ...PHOTOS[0],
         url: 'https://evil.example/images/proj/production/a.jpg',
       },
     ])
-    vi.spyOn(console, 'error').mockImplementation(() => {})
     const response = await get()
     expect(response.status).toBe(502)
     expect(h.upstream).not.toHaveBeenCalled()
+    expect(logged).toHaveBeenCalled()
   })
 })

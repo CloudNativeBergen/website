@@ -135,7 +135,7 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       client-zip:
-        specifier: 2.5.1
+        specifier: ^2.5.1
         version: 2.5.1
       clsx:
         specifier: ^2.1.1

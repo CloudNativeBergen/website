@@ -1,10 +1,6 @@
 export { PhotoWallAdmin, type PhotoWallAdminProps } from './PhotoWallAdmin'
 export { PhotoWallAdminPage } from './PhotoWallAdminPage'
-export {
-  MarketingExport,
-  MarketingExportView,
-  type MarketingExportViewProps,
-} from './MarketingExport'
+export { MarketingExport, type MarketingExportProps } from './MarketingExport'
 export {
   ModerationQueue,
   ModerationQueueView,

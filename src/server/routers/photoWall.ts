@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
+import { adminProcedure, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   postingState,
@@ -10,31 +10,18 @@ import {
   type PhotoWallAdminView,
 } from '@/lib/photo-wall'
 import { expirePhotoWall, getModerationQueue } from '@/lib/photo-wall/cache'
+import { countConsentedPhotos } from '@/lib/photo-wall/export'
+import { liveConferenceInOrg } from '@/lib/photo-wall/tenant'
 import {
   readPhotoWall,
   setUpPhotoWall,
   updatePhotoWallSettings,
 } from '@/lib/photo-wall/sanity'
 
-/**
- * The request's conference: the tenant from `resolveConferenceId()`, its
- * document read live, not from the CDN, so the page shows the end date and
- * domain Settings just wrote. Never from the client. The live document must
- * still belong to `orgId`, the organization the authz waist checked (from a
- * cached read): a conference moved to another organization meanwhile is
- * refused to the old one's organizers.
- */
+/** The request's conference, read live, in the caller's organization. */
 async function requestConference(orgId: string | null) {
-  const conferenceId = await resolveConferenceId()
-  const { conference, error } = await getConferenceForCurrentDomain({
-    uncached: true,
-  })
-  if (
-    error ||
-    conference?._id !== conferenceId ||
-    !orgId ||
-    conference.organization?._ref !== orgId
-  ) {
+  const conference = await liveConferenceInOrg(orgId)
+  if (!conference) {
     throw new TRPCError({
       code: 'NOT_FOUND',
       message: 'Could not resolve conference from domain',
@@ -69,14 +56,15 @@ async function polledConferenceId(orgId: string | null) {
 
 type Conference = Awaited<ReturnType<typeof requestConference>>
 
-function adminView(
+async function adminView(
   conference: Conference,
   wall: PhotoWall | null,
-): PhotoWallAdminView {
+): Promise<PhotoWallAdminView> {
   return {
     wall,
     posting: wall ? postingState(wall, conference, new Date()) : 'paused',
     links: photoWallLinks(conference),
+    marketingExportCount: wall ? await countConsentedPhotos(conference._id) : 0,
   }
 }
 
