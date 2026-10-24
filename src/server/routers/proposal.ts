@@ -1909,11 +1909,22 @@ export const proposalRouter = router({
         // write); a bare floating promise races the serverless instance being
         // frozen once the response flushes, which dropped speaker-ticket
         // issuance mid-loop in production. The caller still does not wait.
-        runAfterResponse(() =>
-          eventBus.publish(statusChangeEvent).catch((error) => {
-            console.error('Failed to publish status change event:', error)
-          }),
-        )
+        //
+        // The event carries the HOST conference (Slack channel, organizer
+        // routing, email branding), so a talk of another conference, admitted
+        // by the owner arm, publishes nothing rather than alerting the wrong
+        // organizers.
+        if (talkConferenceId && talkConferenceId !== conference._id) {
+          console.warn(
+            `Not publishing the ${action} event for proposal ${id}: it belongs to conference ${talkConferenceId}, not ${conference._id}`,
+          )
+        } else {
+          runAfterResponse(() =>
+            eventBus.publish(statusChangeEvent).catch((error) => {
+              console.error('Failed to publish status change event:', error)
+            }),
+          )
+        }
 
         return { proposalStatus: updatedProposal.status }
       } catch (error) {
