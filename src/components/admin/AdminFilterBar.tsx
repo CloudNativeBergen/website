@@ -89,6 +89,8 @@ export interface AdminFilterBarProps {
   variant?: 'card' | 'bare'
   /** Extra controls rendered inline on desktop (e.g. sort, view switcher). */
   desktopExtra?: ReactNode
+  /** Controls rendered after the filters at every breakpoint (e.g. export). */
+  actions?: ReactNode
   /** Extra controls rendered inside the mobile sheet body. */
   sheetExtra?: ReactNode
   /** Label for the mobile filter trigger. Defaults to "Filters". */
@@ -155,6 +157,7 @@ export function AdminFilterBar({
   activeFilterCount,
   variant = 'card',
   desktopExtra,
+  actions,
   sheetExtra,
   mobileFilterLabel = 'Filters',
   className,
@@ -215,6 +218,7 @@ export function AdminFilterBar({
         activeFilterCount={computedActiveCount}
         extra={sheetExtra}
       />
+      {actions}
     </>
   )
 

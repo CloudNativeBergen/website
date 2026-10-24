@@ -102,7 +102,7 @@ describe('SpeakerTable ticket row actions', () => {
     expect(buttons.every((b) => !b.hasAttribute('disabled'))).toBe(true)
   })
 
-  it('copies all filtered speaker emails from the Email column header', async () => {
+  it('copies all filtered speaker emails from the filter bar', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
 
@@ -133,11 +133,10 @@ describe('SpeakerTable ticket row actions', () => {
       />,
     )
 
-    // Mobile button (above the cards) renders first, desktop header button second.
     const copyBtns = screen.getAllByRole('button', {
       name: 'Copy all 2 emails',
     })
-    expect(copyBtns).toHaveLength(2)
+    expect(copyBtns).toHaveLength(1)
     fireEvent.click(copyBtns[0])
 
     await waitFor(() => {
