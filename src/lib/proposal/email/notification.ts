@@ -1,6 +1,7 @@
 import { Action } from '../types'
 import {
   ProposalAcceptTemplate,
+  ProposalCancelTemplate,
   ProposalRejectTemplate,
   ProposalWaitlistTemplate,
 } from '@/components/email'
@@ -29,6 +30,12 @@ function getEmailTemplate(
       return ProposalWaitlistTemplate(templateProps)
     case Action.reject:
       return ProposalRejectTemplate(templateProps)
+    case Action.cancel:
+    case Action.withdraw:
+      return ProposalCancelTemplate({
+        ...templateProps,
+        withdrawn: action === Action.withdraw,
+      })
     default:
       throw new Error(`No template found for action: ${action}`)
   }
@@ -44,21 +51,28 @@ function getEmailSubject(action: Action, eventName: string): string {
       return `⏰ Reminder: Please confirm your participation in ${eventName}`
     case Action.reject:
       return `Thank you for your proposal submission to ${eventName}`
+    case Action.cancel:
+      return `Your talk at ${eventName} has been canceled`
+    case Action.withdraw:
+      return `Your talk at ${eventName} has been withdrawn`
     default:
       return `Update on your proposal for ${eventName}`
   }
 }
 
+const EMAIL_ACTIONS: readonly Action[] = [
+  Action.accept,
+  Action.remind,
+  Action.waitlist,
+  Action.reject,
+  Action.cancel,
+  Action.withdraw,
+]
+
 export async function sendAcceptRejectNotification(params: NotificationParams) {
   const { action } = params
 
-  if (
-    !action ||
-    (action !== Action.accept &&
-      action !== Action.remind &&
-      action !== Action.waitlist &&
-      action !== Action.reject)
-  ) {
+  if (!action || !EMAIL_ACTIONS.includes(action)) {
     throw new Error(`Invalid action for notification: ${action}`)
   }
 

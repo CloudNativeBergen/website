@@ -115,8 +115,10 @@ import { getFeaturedTalks } from '@/lib/featured/sanity'
 import {
   ensureProposalConversation,
   addMessage,
+  getConversationById,
   syncProposalConversationParticipants,
 } from '@/lib/messaging/sanity'
+import { notifyNewMessage } from '@/lib/messaging/notify'
 import '@/lib/events/registry'
 
 /**
@@ -1506,7 +1508,7 @@ export const proposalRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const { id, action, notify, comment, reason } = input
+        const { id, action, notify, forceEmail, comment, reason } = input
 
         // Get conference context. The confirm action publishes an event whose
         // speaker-ticket handler mails the speaker invite link, so this read
@@ -1723,6 +1725,91 @@ export const proposalRouter = router({
           revalidateTag(conferenceTag(talkConferenceId), 'default')
         }
 
+        // An organizer withdrawing their OWN talk is a speaker self-withdraw:
+        // no "the organizers withdrew your talk" email or message to
+        // themselves.
+        const isSelfWithdraw =
+          action === Action.withdraw &&
+          extractSpeakerIds(proposal.speakers).includes(ctx.speaker._id)
+        const actsAsOrganizer = isOrganizerForProposal && !isSelfWithdraw
+
+        // Messaging M4/S2: a decision comment lands in the proposal's message
+        // thread, so every speaker on the talk keeps it with the rest of the
+        // conversation.
+        //
+        // Accept/reject/waitlist/remind: add the message but SKIP the fan-out
+        // (notifyNewMessage) — the decision status rail (hub notification +
+        // decision email, published below) already carries the comment.
+        //
+        // Cancel/withdraw: the thread message IS the delivery. It is always
+        // posted (with a stock line when there is no comment) and fans out
+        // through notifyNewMessage, so the hub + per-speaker email preference
+        // apply. The one exception is an organizer ticking "Force email": the
+        // formal email then goes out, and fanning the message out too would
+        // email the speaker twice.
+        //
+        // Never-fail: the status change is already committed.
+        const isRemoval = action === Action.cancel || action === Action.withdraw
+        const trimmedComment = comment?.trim()
+        const trimmedReason = reason?.trim()
+        let relayBody: string | undefined
+        if (isRemoval && actsAsOrganizer) {
+          relayBody =
+            trimmedComment ||
+            trimmedReason ||
+            `Your talk "${proposal.title}" has been ${action === Action.cancel ? 'canceled' : 'withdrawn'} by the organizers.`
+        } else if (actsAsOrganizer && COMMENT_RELAY_ACTIONS.includes(action)) {
+          relayBody = trimmedComment
+        }
+        const fanOut = isRemoval && !(actsAsOrganizer && forceEmail)
+        // Set only when the message fanned out, so it can stand in for the
+        // organizer status alert.
+        let postedToThread = false
+        // A cancel/withdraw message belongs in the talk's own conference
+        // thread; the owner arm admits a proposal of another conference.
+        const foreignTalk = isRemoval && talkConferenceId !== conference._id
+        if (relayBody && foreignTalk) {
+          console.warn(
+            `Not posting the ${action} message for proposal ${id}: it belongs to conference ${talkConferenceId}, not ${conference._id}`,
+          )
+        } else if (relayBody) {
+          try {
+            const conversationId = await ensureProposalConversation({
+              conferenceId: conference._id,
+              proposalId: id,
+              proposalTitle: proposal.title ?? 'Proposal',
+              createdById: ctx.speaker._id,
+              // Party model (G1): the proposal's current speakers seed the
+              // dual-written participants[] (see ensureProposalConversation).
+              proposalSpeakerIds: extractSpeakerIds(proposal.speakers),
+            })
+            const message = await addMessage({
+              conversationId,
+              authorId: ctx.speaker._id,
+              body: relayBody,
+            })
+            if (fanOut) {
+              const conversation = await getConversationById(conversationId)
+              if (conversation) {
+                postedToThread = true
+                runAfterResponse(() =>
+                  notifyNewMessage({
+                    conversation,
+                    message,
+                    authorId: ctx.speaker._id,
+                    conference,
+                  }),
+                )
+              }
+            }
+          } catch (error) {
+            console.error(
+              'Failed to mirror decision comment into the proposal thread:',
+              error,
+            )
+          }
+        }
+
         // Publish status change event for notifications
         const statusChangeEvent: ProposalStatusChangeEvent = {
           eventType: 'proposal.status.changed',
@@ -1736,11 +1823,18 @@ export const proposalRouter = router({
           metadata: {
             triggeredBy: {
               speakerId: ctx.speaker._id,
-              isOrganizer: isOrganizerForProposal,
+              isOrganizer: actsAsOrganizer,
             },
-            shouldNotify: notify,
+            // Cancel/withdraw: the formal email goes out only when forced;
+            // the thread message below is the normal channel.
+            shouldNotify: isSelfWithdraw
+              ? false
+              : isRemoval
+                ? forceEmail
+                : notify,
             comment,
             reason: action === Action.withdraw ? reason : undefined,
+            postedToThread,
             domain,
           },
         }
@@ -1756,47 +1850,6 @@ export const proposalRouter = router({
             console.error('Failed to publish status change event:', error)
           }),
         )
-
-        // Messaging M4/S2: an organizer decision comment also lands in the
-        // proposal's message thread, so the speaker keeps it with the rest of
-        // the conversation. We add the message (thread content + lastMessageAt
-        // bump) but DELIBERATELY SKIP the message fan-out (notifyNewMessage) —
-        // the DECISION STATUS RAIL is the single delivery for a decision: the
-        // `proposal_status_changed` hub notification and the decision email
-        // (published on `eventBus` above) ALREADY carry this same comment. Firing
-        // notifyNewMessage too would double-notify the speaker (a second hub
-        // item + a second email) for one organizer action. The message still
-        // appears in the thread on next open; it just doesn't generate its own
-        // notification. Guarded never-fail: the status change is already
-        // committed, so a messaging failure must not fail the action.
-        const trimmedComment = comment?.trim()
-        if (
-          isOrganizerForProposal &&
-          trimmedComment &&
-          COMMENT_RELAY_ACTIONS.includes(action)
-        ) {
-          try {
-            const conversationId = await ensureProposalConversation({
-              conferenceId: conference._id,
-              proposalId: id,
-              proposalTitle: proposal.title ?? 'Proposal',
-              createdById: ctx.speaker._id,
-              // Party model (G1): the proposal's current speakers seed the
-              // dual-written participants[] (see ensureProposalConversation).
-              proposalSpeakerIds: extractSpeakerIds(proposal.speakers),
-            })
-            await addMessage({
-              conversationId,
-              authorId: ctx.speaker._id,
-              body: trimmedComment,
-            })
-          } catch (error) {
-            console.error(
-              'Failed to mirror decision comment into the proposal thread:',
-              error,
-            )
-          }
-        }
 
         return { proposalStatus: updatedProposal.status }
       } catch (error) {

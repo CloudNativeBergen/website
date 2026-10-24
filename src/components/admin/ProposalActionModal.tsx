@@ -115,10 +115,13 @@ export function ProposalActionModal({
   const [error, setError] = useState<string>('')
   const [notify, setNotify] = useState<boolean>(true)
   const [comment, setComment] = useState<string>('')
+  const [forceEmail, setForceEmail] = useState<boolean>(false)
 
   const isWithdraw = action === Action.withdraw
-  // Cancel sends no email and stores no comment yet, so the modal offers neither.
   const isCancel = action === Action.cancel
+  // Organizer cancel/withdraw: the comment goes to the speakers as a thread
+  // message; the formal email is opt-in.
+  const isOrganizerRemoval = adminUI && (isCancel || isWithdraw)
   // "Cancel" alone would read like the dismiss button beside it.
   const actionLabel = isCancel ? 'Cancel talk' : capitalizeFirstLetter(action)
   // A withdrawal must always record a mandatory, non-empty reason (#212).
@@ -149,6 +152,7 @@ export function ProposalActionModal({
       id: proposal._id,
       action,
       notify,
+      forceEmail: isOrganizerRemoval ? forceEmail : undefined,
       comment,
       reason: isWithdraw ? comment.trim() : undefined,
     })
@@ -201,8 +205,9 @@ export function ProposalActionModal({
           {(action === Action.accept ||
             action === Action.remind ||
             action === Action.waitlist ||
-            action === Action.reject) &&
-            notify &&
+            action === Action.reject ||
+            isOrganizerRemoval) &&
+            (isOrganizerRemoval ? forceEmail : notify) &&
             createLocalhostWarning(domain, 'speakers') && (
               <div className="mt-2">
                 {createLocalhostWarning(domain, 'speakers')}
@@ -228,43 +233,59 @@ export function ProposalActionModal({
                 </span>
                 ?
               </p>
-              {!isCancel && (
-                <>
-                  <div className="mt-4">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={notify}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
-                        onChange={() => setNotify(!notify)}
-                      />
-                      <span className="ml-2 text-sm/6 text-gray-700 dark:text-gray-300">
-                        Notify the speaker via email
-                      </span>
-                    </label>
-                  </div>
-                  <div className="mt-4">
-                    <Textarea
-                      name="action-comment"
-                      label={isWithdraw ? 'Reason for withdrawal' : 'Comment'}
-                      rows={3}
-                      value={comment}
-                      setValue={setComment}
-                      placeholder={
-                        isWithdraw
-                          ? 'Why is this proposal being withdrawn?'
-                          : 'Add a comment...'
-                      }
-                      required={isWithdraw}
+              {isOrganizerRemoval ? (
+                <div className="mt-4">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={forceEmail}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
+                      onChange={() => setForceEmail(!forceEmail)}
                     />
-                    <HelpText>
-                      {isWithdraw
-                        ? 'A reason is required and will be recorded on the proposal.'
-                        : 'Your comment will be included in the email to the speaker.'}
-                    </HelpText>
-                  </div>
-                </>
+                    <span className="ml-2 text-sm/6 text-gray-700 dark:text-gray-300">
+                      Force email
+                    </span>
+                  </label>
+                  <HelpText>
+                    Also send the formal email to every speaker on the talk,
+                    even if they turned message emails off.
+                  </HelpText>
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={notify}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
+                      onChange={() => setNotify(!notify)}
+                    />
+                    <span className="ml-2 text-sm/6 text-gray-700 dark:text-gray-300">
+                      Notify the speaker via email
+                    </span>
+                  </label>
+                </div>
               )}
+              <div className="mt-4">
+                <Textarea
+                  name="action-comment"
+                  label={isWithdraw ? 'Reason for withdrawal' : 'Comment'}
+                  rows={3}
+                  value={comment}
+                  setValue={setComment}
+                  placeholder={
+                    isWithdraw
+                      ? 'Why is this proposal being withdrawn?'
+                      : 'Add a comment...'
+                  }
+                  required={isWithdraw}
+                />
+                <HelpText>
+                  {isOrganizerRemoval
+                    ? `${isWithdraw ? 'A reason is required and is recorded on the proposal. ' : ''}It is posted as a message to every speaker on the talk, who also get an in-app notice.${isCancel ? ' Left empty, they get a short note that the talk was canceled.' : ''}`
+                    : 'Your comment will be included in the email to the speaker.'}
+                </HelpText>
+              </div>
             </div>
           ) : (
             <div className="mt-2">

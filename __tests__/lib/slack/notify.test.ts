@@ -130,6 +130,20 @@ describe('Slack notifications', () => {
       expect(fields[1].text).toContain('Test Speaker')
     })
 
+    it('should send cancel notification', async () => {
+      const { notifyProposalStatusChange } = await import('@/lib/slack/notify')
+
+      await notifyProposalStatusChange(
+        createMockProposal(),
+        Action.cancel,
+        createMockConference(),
+        'Speaker',
+      )
+
+      const [message] = mockPostSlackMessage.mock.calls[0]
+      expect(message.blocks[0].text?.text).toContain('Canceled')
+    })
+
     it('should include admin link with correct domain', async () => {
       const { notifyNewProposal } = await import('@/lib/slack/notify')
       const proposal = createMockProposal()
