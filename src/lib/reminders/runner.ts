@@ -228,8 +228,8 @@ export async function fetchReminderSpeakers(
 /**
  * Evaluate the fixed reminder registry against the conference's speakers and
  * emit every due, not-already-sent reminder (one hub notification per speaker;
- * push + email ride free through `createNotifications`). Deduped and cadence-
- * gated by the `scheduledReminderLog` marker.
+ * push rides free through `createNotifications`; there is no email). Deduped
+ * and cadence-gated by the `scheduledReminderLog` marker.
  */
 export async function runSpeakerReminders(
   conference: ReminderConference,
