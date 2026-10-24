@@ -14,6 +14,14 @@
  * - `iptc-app13.jpg`: a Pillow JPEG with a Photoshop IRB APP13 segment
  *   carrying IPTC Keywords and By-line records spliced after its APP0.
  *
+ * - Crafted by `make-crafted-fixtures.py` (Pillow re-reads each one to prove
+ *   the metadata is really in it): `embedded-soi.jpg` (an Exif APP1 hidden
+ *   behind a second SOI), `multiframe-huge-first.jpg` (a 30000 x 30000 frame
+ *   before the real one), `unknown-marker.jpg` (text in a JPG0 segment),
+ *   `app0-exif.jpg`, `app0-jfxx.jpg`, `jfif-thumbnail.jpg`,
+ *   `jfif-trailing.jpg` (an APP0 that is not plain JFIF), and the two Pillow
+ *   files that must pass: `progressive.jpg` and `restart-markers.jpg`.
+ *
  * A Safari-made sample (after the composer's APPn strip, M2) is added once
  * that fixture exists.
  */
@@ -37,6 +45,27 @@ describe('checkWallPhoto accepts', () => {
       width: 640,
       height: 480,
     })
+  })
+
+  it('a progressive JPEG: SOF2, many scans, Huffman tables between them', () => {
+    expect(checkWallPhoto(fixture('progressive.jpg'))).toEqual({
+      ok: true,
+      width: 640,
+      height: 480,
+    })
+  })
+
+  it('a baseline JPEG with a restart interval and restart markers in its scan', () => {
+    const bytes = fixture('restart-markers.jpg')
+    expect(markerAt(bytes, 0xdd)).toBeGreaterThan(0)
+    expect(markerAt(bytes, 0xd0)).toBeGreaterThan(markerAt(bytes, 0xda))
+    expect(checkWallPhoto(bytes)).toEqual({ ok: true, width: 640, height: 480 })
+  })
+
+  it('an extended sequential frame header (SOF1), which canvas encoders may write', () => {
+    const bytes = fixture('canvas-chromium.jpg').slice()
+    bytes[markerAt(bytes, 0xc0) + 1] = 0xc1
+    expect(checkWallPhoto(bytes)).toEqual({ ok: true, width: 640, height: 480 })
   })
 
   it('exactly 4 MiB by size, so the size rule is ≤, not <', () => {
@@ -169,6 +198,104 @@ describe('checkWallPhoto refuses', () => {
     expect(sos).toBeGreaterThan(0)
     const noScan = new Uint8Array([...bytes.subarray(0, sos), 0xff, 0xd9])
     expect(checkWallPhoto(noScan)).toEqual({ ok: false, reason: 'malformed' })
+  })
+
+  it('a second SOI, whose two following bytes a lenient walk would take as a length and skip the Exif behind them', () => {
+    expect(checkWallPhoto(fixture('embedded-soi.jpg'))).toEqual({
+      ok: false,
+      reason: 'unexpectedMarker',
+      marker: 'FFD8',
+    })
+  })
+
+  it('a second frame header, even one after a scan: the first one is 30000 x 30000', () => {
+    expect(checkWallPhoto(fixture('multiframe-huge-first.jpg'))).toEqual({
+      ok: false,
+      reason: 'malformed',
+    })
+    // Back to back, before any scan.
+    const bytes = fixture('canvas-chromium.jpg')
+    const sof = markerAt(bytes, 0xc0)
+    const sofEnd = sof + 2 + ((bytes[sof + 2] << 8) | bytes[sof + 3])
+    const twice = new Uint8Array([
+      ...bytes.subarray(0, sofEnd),
+      ...bytes.subarray(sof, sofEnd),
+      ...bytes.subarray(sofEnd),
+    ])
+    expect(checkWallPhoto(twice)).toEqual({ ok: false, reason: 'malformed' })
+  })
+
+  it('every marker off the allow-list, carrying text where a lenient walk would skip it', () => {
+    const bytes = fixture('unknown-marker.jpg')
+    const at = markerAt(bytes, 0xf0)
+    expect(at).toBeGreaterThan(0)
+    // JPGn, reserved, JPG, DAC, DNL, DHP, EXP, TEM, a restart marker outside
+    // a scan, SOI, and the frame types no canvas writes (lossless,
+    // hierarchical, arithmetic).
+    const offList = [
+      0xf0, 0xfd, 0x02, 0xbf, 0xc8, 0xcc, 0xdc, 0xde, 0xdf, 0x01, 0xd0, 0xd8,
+      0xc3, 0xc5, 0xc9, 0xcf,
+    ]
+    for (const marker of offList) {
+      const renamed = bytes.slice()
+      renamed[at + 1] = marker
+      const hex = marker.toString(16).toUpperCase().padStart(2, '0')
+      expect(checkWallPhoto(renamed)).toEqual({
+        ok: false,
+        reason: 'unexpectedMarker',
+        marker: `FF${hex}`,
+      })
+    }
+    // The real frame header renamed to a lossless one.
+    const lossless = fixture('canvas-chromium.jpg').slice()
+    lossless[markerAt(lossless, 0xc0) + 1] = 0xc3
+    expect(checkWallPhoto(lossless)).toEqual({
+      ok: false,
+      reason: 'unexpectedMarker',
+      marker: 'FFC3',
+    })
+  })
+
+  it('an APP0 that is not JFIF: raw Exif with a GPS IFD in it', () => {
+    expect(checkWallPhoto(fixture('app0-exif.jpg'))).toEqual({
+      ok: false,
+      reason: 'metadata',
+      segment: 'APP0',
+    })
+  })
+
+  it('a JFXX APP0 whose thumbnail is a whole camera JPEG with GPS', () => {
+    expect(checkWallPhoto(fixture('app0-jfxx.jpg'))).toEqual({
+      ok: false,
+      reason: 'metadata',
+      segment: 'APP0',
+    })
+  })
+
+  it('a JFIF APP0 with a thumbnail, or with bytes after its header', () => {
+    for (const name of ['jfif-thumbnail.jpg', 'jfif-trailing.jpg']) {
+      expect(checkWallPhoto(fixture(name))).toEqual({
+        ok: false,
+        reason: 'metadata',
+        segment: 'APP0',
+      })
+    }
+  })
+
+  it('a plain JFIF APP0 anywhere but straight after the SOI', () => {
+    const bytes = fixture('canvas-chromium.jpg')
+    const app0 = bytes.subarray(2, 2 + 18)
+    const dqt = markerAt(bytes, 0xdb)
+    const late = new Uint8Array([
+      ...bytes.subarray(0, dqt),
+      ...app0,
+      ...bytes.subarray(dqt),
+    ])
+    expect(checkWallPhoto(late)).toEqual({
+      ok: false,
+      reason: 'metadata',
+      segment: 'APP0',
+    })
   })
 
   it('a JPEG with no frame header at all (SOI straight to EOI)', () => {
