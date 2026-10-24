@@ -9,9 +9,14 @@
  * even once posting has closed. Every read that decides is on the NON-CDN
  * client (a CDN read lags the previous write).
  *
- * Answers `{ ok: false }` only when it KNOWS no post was created; anything it
- * cannot tell (a read or the create's re-read failing) throws, so the route
- * answers 500 and the phone retries with the same `uploadId`, which is safe.
+ * Answers `{ ok: false }` when its own reads say no post was created;
+ * anything it cannot tell (a read or the create's re-read failing) throws, so
+ * the route answers 500 and the phone retries with the same `uploadId`, which
+ * is safe. One case it can't see: a create whose connection dropped after
+ * Sanity received it but before it committed. The re-read straight after
+ * finds nothing, the asset goes and the phone is refused; if the create then
+ * commits, there is a post whose photo was deleted, and the phone, told it
+ * was refused, posts again under a new `uploadId`. A window of milliseconds.
  */
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
@@ -19,7 +24,7 @@ import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 import { expireWallPost } from './cache'
 import type { WallDevice } from './device'
 import { checkWallFields, isUploadId, type WallPostFields } from './fields'
-import { checkWallPhoto } from './jpeg-check'
+import { MAX_PHOTO_BYTES, checkWallPhoto } from './jpeg-check'
 import { postingLimitHit, readPostingCounts } from './limits'
 import type { WallSubmitRefusal } from './post'
 import { readPhotoWall } from './sanity'
@@ -117,8 +122,12 @@ export async function submitWallPost({
   )
   if (limit) return refuse(limit, `limit ${limit}`)
 
-  // 4. The fields, then the photo: its size first, then the §6.4 checks on
-  // the bytes in memory (`checkWallPhoto`).
+  // 4. The photo's size, then the §6.4 checks: the fields, and the JPEG on
+  // the bytes in memory. Every photo part, before any is read.
+  const parts = form.getAll('photo')
+  if (parts.some((p) => p instanceof Blob && p.size > MAX_PHOTO_BYTES)) {
+    return refuse('failed', 'size')
+  }
   const checked = checkWallFields(form)
   if (!checked.ok) return refuse('failed', `field ${checked.field}`)
   const { fields } = checked
@@ -127,16 +136,25 @@ export async function submitWallPost({
   if (!photo.ok) return refuse('failed', `photo ${photo.reason}`)
 
   // 5. Upload, then create.
-  return createPost(conferenceId, device.key, fields, bytes, now)
+  return createPost({ conferenceId, deviceKey: device.key, fields, bytes, now })
 }
 
-async function createPost(
-  conferenceId: string,
-  deviceKey: string,
-  fields: WallPostFields,
-  bytes: Uint8Array,
-  now: Date,
-): Promise<WallSubmitOutcome> {
+interface NewPost {
+  conferenceId: string
+  deviceKey: string
+  fields: WallPostFields
+  /** The photo, checked. */
+  bytes: Uint8Array
+  now: Date
+}
+
+async function createPost({
+  conferenceId,
+  deviceKey,
+  fields,
+  bytes,
+  now,
+}: NewPost): Promise<WallSubmitOutcome> {
   const { uploadId } = fields
   const asset = await clientWrite.assets.upload('image', Buffer.from(bytes), {
     filename: `${uploadId}.jpg`,

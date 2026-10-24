@@ -1,9 +1,6 @@
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { WALL_DEVICE_COOKIE, readWallDevice } from '@/lib/photo-wall/device'
 import type { WallSubmitRefusal } from '@/lib/photo-wall/post'
+import { readDeviceCookie, wallConference } from '@/lib/photo-wall/request'
 import { submitWallPost } from '@/lib/photo-wall/submit'
 
 /**
@@ -12,21 +9,29 @@ import { submitWallPost } from '@/lib/photo-wall/submit'
  */
 const MAX_SUBMIT_BYTES = 4_500_000
 
+/** Why the route refused: the submit's own reasons, and the route's. */
+type Refusal = WallSubmitRefusal | 'tooLarge' | 'malformed' | 'unknownHost'
+
 /**
- * The status of each refusal. The body says which one (`{ ok: false,
- * refusal }`); the phone shows its message and never retries a 4xx.
+ * The status and body of each refusal. The body names a refusal the phone
+ * knows (`{ ok: false, refusal }`); the phone shows its message and never
+ * retries a 4xx.
  */
-const STATUS: Record<WallSubmitRefusal | 'tooLarge', number> = {
-  pendingDevice: 429,
-  hourly: 429,
-  pendingWall: 429,
-  closed: 403,
-  failed: 400,
-  tooLarge: 413,
+const ANSWER: Record<Refusal, [number, WallSubmitRefusal]> = {
+  pendingDevice: [429, 'pendingDevice'],
+  hourly: [429, 'hourly'],
+  pendingWall: [429, 'pendingWall'],
+  closed: [403, 'closed'],
+  failed: [400, 'failed'],
+  malformed: [400, 'failed'],
+  unknownHost: [404, 'failed'],
+  tooLarge: [413, 'failed'],
 }
 
-const refused = (refusal: WallSubmitRefusal, status = STATUS[refusal]) =>
-  NextResponse.json({ ok: false, refusal }, { status })
+const refused = (why: Refusal) => {
+  const [status, refusal] = ANSWER[why]
+  return NextResponse.json({ ok: false, refusal }, { status })
+}
 
 /**
  * The body, read once and at most `max` bytes of it, or null past that: a
@@ -73,32 +78,29 @@ async function readCapped(
 export async function POST(request: Request) {
   // Before the body is read: Vercel answers 413 above its own limit anyway.
   if (Number(request.headers.get('content-length')) > MAX_SUBMIT_BYTES) {
-    return refused('failed', STATUS.tooLarge)
+    return refused('tooLarge')
   }
   const body = await readCapped(request, MAX_SUBMIT_BYTES)
-  if (!body) return refused('failed', STATUS.tooLarge)
+  if (!body) return refused('tooLarge')
   let form: FormData
   try {
     form = await new Response(body as BodyInit, {
       headers: { 'content-type': request.headers.get('content-type') ?? '' },
     }).formData()
   } catch {
-    return refused('failed')
+    return refused('malformed')
   }
 
-  const resolution = await getConferenceForCurrentDomain()
+  const host = await wallConference()
   // A failed read is not a refusal: a 5xx, so the phone retries.
-  if (isConferenceUnavailable(resolution)) {
+  if (!host.ok && host.reason === 'unavailable') {
     throw new Error('Could not read the conference for this Photo Wall')
   }
-  if (isUnknownHost(resolution)) return refused('failed', 404)
+  if (!host.ok) return refused('unknownHost')
 
-  const device = readWallDevice(
-    (await cookies()).get(WALL_DEVICE_COOKIE)?.value,
-  )
   const outcome = await submitWallPost({
-    conference: resolution.conference,
-    device,
+    conference: host.conference,
+    device: await readDeviceCookie(),
     form,
     now: new Date(),
   })

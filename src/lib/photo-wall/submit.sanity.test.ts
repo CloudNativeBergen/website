@@ -451,6 +451,20 @@ describe('submitWallPost: guard before upload', () => {
     },
   )
 
+  it('checks the photo’s size before the other §6.4 checks', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const big = new Blob([new Uint8Array(4_194_305)], { type: 'image/jpeg' })
+    const body = form({ caption: 'x'.repeat(81) })
+    body.set('photo', big, 'photo.jpg')
+    await expect(submit({ form: body })).resolves.toEqual({
+      ok: false,
+      refusal: 'failed',
+    })
+    expect(warn).toHaveBeenCalledWith('Photo Wall submit refused: size')
+    expect(h.uploads).toHaveLength(0)
+    warn.mockRestore()
+  })
+
   it('reads no post for an uploadId that is not a UUID v4: the doc endpoint takes a comma-separated id list', async () => {
     store().put(post({ _id: `wallPost-${OTHER_UPLOAD_ID}` }))
     await expect(

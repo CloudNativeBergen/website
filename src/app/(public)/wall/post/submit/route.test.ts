@@ -223,11 +223,20 @@ describe('POST /wall/post/submit', () => {
     expect(h.uploads).toBe(0)
   })
 
-  it('refuses a cookie whose signature does not verify', async () => {
+  it('refuses a cookie whose signature does not verify, where the same request with the real cookie goes in', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const [data] = device.value.split('.')
     h.cookie = `${data}.${'A'.repeat(43)}`
     expect((await submit()).status).toBe(400)
+    expect(warn).toHaveBeenCalledWith(
+      'Photo Wall submit refused: no device cookie',
+    )
     expect(h.uploads).toBe(0)
+
+    h.cookie = device.value
+    expect((await submit()).status).toBe(200)
+    expect(h.uploads).toBe(1)
+    warn.mockRestore()
   })
 
   it('answers a limit 429 with the limit named', async () => {

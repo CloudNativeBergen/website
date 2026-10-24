@@ -1,16 +1,10 @@
 'use server'
 
 import { cookies } from 'next/headers'
-import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getPhotoWall } from '@/lib/photo-wall/cache'
 import { deletionDateEnd } from '@/lib/photo-wall/deletion'
-import {
-  WALL_DEVICE_COOKIE,
-  issueWallDevice,
-  readWallDevice,
-  wallDeviceCookie,
-} from '@/lib/photo-wall/device'
+import { issueWallDevice, wallDeviceCookie } from '@/lib/photo-wall/device'
+import { readDeviceCookie, wallConference } from '@/lib/photo-wall/request'
 
 /**
  * `ensureDevice()` (Photo Wall spec §6.1): the composer calls it when it
@@ -26,19 +20,16 @@ import {
  * `SameSite=Lax`, host-only cookie.
  */
 export async function ensureDevice(): Promise<boolean> {
-  const resolution = await getConferenceForCurrentDomain()
-  if (isConferenceUnavailable(resolution) || isUnknownHost(resolution)) {
-    return false
-  }
-  const { conference } = resolution
+  const host = await wallConference()
+  if (!host.ok) return false
+  const { conference } = host
   if (!(await getPhotoWall(conference._id))) return false
 
-  const store = await cookies()
-  if (readWallDevice(store.get(WALL_DEVICE_COOKIE)?.value)) return true
+  if (await readDeviceCookie()) return true
   const expires = deletionDateEnd(conference.endDate)
   // No end date: posting never opens (§7), so no device is needed.
   if (!expires) return false
   const { name, options } = wallDeviceCookie(expires)
-  store.set(name, issueWallDevice().value, options)
+  ;(await cookies()).set(name, issueWallDevice().value, options)
   return true
 }
