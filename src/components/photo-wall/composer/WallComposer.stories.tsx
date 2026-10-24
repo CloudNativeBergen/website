@@ -183,10 +183,13 @@ export const Composer: Story = {
         name: 'The organizers may also use my photo in their own marketing.',
       }),
     ).not.toBeChecked()
-    await expect(canvas.getByRole('link', { name: 'Privacy' })).toHaveAttribute(
-      'href',
-      '/privacy#photo-wall',
-    )
+    // A new tab, so reading it never drops the photo or a post going out.
+    const privacy = canvas.getByRole('link', {
+      name: 'Privacy (opens in a new tab)',
+    })
+    await expect(privacy).toHaveAttribute('href', '/privacy#photo-wall')
+    await expect(privacy).toHaveAttribute('target', '_blank')
+    await expect(privacy).toHaveAttribute('rel', 'noopener noreferrer')
     await expect(canvas.getByText(/until/)).toHaveTextContent(
       'until 26 November 2026',
     )
