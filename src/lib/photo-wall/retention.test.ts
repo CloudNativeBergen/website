@@ -320,13 +320,48 @@ describe('step 1: close the day before (§11.1)', () => {
 describe('steps 3 and 4: the purge on the deletion date (§11.1, §12)', () => {
   beforeEach(closedYesterday)
 
-  it('deletes every post of the conference with its history, in one transaction, before any asset', async () => {
+  it('step a: ONE transaction marks every post of the chunk deleting, its asset id kept, photo unset', async () => {
     await run(clock(at(DELETION_DAY)))
-    const posts = [A('1'), A('2'), A('3'), A('4'), A('5'), `drafts.${A('6')}`]
-    expect(store().commits[0]).toEqual(
-      posts.map((id) => ({ delete: { id, purge: true } })),
-    )
-    for (const id of posts) expect(store().doc(id)).toBeUndefined()
+    const marked = (id: string, assetId: string | null) => ({
+      patch: assetId
+        ? {
+            id,
+            set: { status: 'deleting', deletingAssetId: assetId },
+            unset: ['photo'],
+          }
+        : { id, set: { status: 'deleting' } },
+    })
+    expect(store().commits[0]).toEqual([
+      marked(A('1'), assetId('s1')),
+      marked(A('2'), assetId('s2')),
+      marked(A('3'), assetId('s3')),
+      // Already deleting: its deletingAssetId stays.
+      marked(A('4'), null),
+      marked(A('5'), assetId('s5')),
+      marked(`drafts.${A('6')}`, assetId('s6')),
+    ])
+  })
+
+  it('step b: ONE transaction deletes the assets only the chunk held, then its posts, every delete with its history', async () => {
+    await run(clock(at(DELETION_DAY)))
+    const purged = (id: string) => ({ delete: { id, purge: true } })
+    expect(store().commits[1]).toEqual([
+      // Not s2 (the other conference's post) nor s3 (the sponsor).
+      purged(assetId('s1')),
+      purged(assetId('s4')),
+      purged(assetId('s5')),
+      purged(assetId('s6')),
+      purged(A('1')),
+      purged(A('2')),
+      purged(A('3')),
+      purged(A('4')),
+      purged(A('5')),
+      purged(`drafts.${A('6')}`),
+    ])
+    for (const id of [A('1'), A('2'), A('3'), A('4'), A('5')]) {
+      expect(store().doc(id)).toBeUndefined()
+    }
+    expect(store().doc(`drafts.${A('6')}`)).toBeUndefined()
   })
 
   it('then the assets the posts referenced (deletingAssetId included), with history, and the orphan of the conference', async () => {
@@ -430,25 +465,30 @@ describe('steps 3 and 4: the purge on the deletion date (§11.1, §12)', () => {
     expect(store().doc(assetId('s1'))).toBeUndefined()
   })
 
-  it(`deletes posts ${POST_DELETE_CHUNK} per transaction`, async () => {
+  it(`marks and deletes posts ${POST_DELETE_CHUNK} per chunk, two transactions each`, async () => {
     for (let i = 0; i < POST_DELETE_CHUNK + 5; i += 1) {
       store().put(post(`x${i}`, 'conf-A', null, { status: 'notShown' }))
     }
     const report = await run(clock(at(DELETION_DAY)))
     expect(report).toMatchObject({ purged: 1, posts: POST_DELETE_CHUNK + 11 })
-    const sizes = store()
-      .commits.filter((c) =>
-        c.every((m) => 'delete' in m && !m.delete.id.startsWith('image-')),
-      )
-      .map((c) => c.length)
-    expect(sizes).toEqual([POST_DELETE_CHUNK, 11])
+    const kinds = store().commits.map((c) =>
+      c.every((m) => 'patch' in m)
+        ? `mark ${c.length}`
+        : `delete ${c.filter((m) => 'delete' in m && !m.delete.id.startsWith('image-')).length}`,
+    )
+    expect(kinds.slice(0, 4)).toEqual([
+      `mark ${POST_DELETE_CHUNK}`,
+      `delete ${POST_DELETE_CHUNK}`,
+      'mark 11',
+      'delete 11',
+    ])
   })
 })
 
 describe('an interrupted run repeats the purge: nothing lost, nothing deleted twice (§11.1)', () => {
   beforeEach(closedYesterday)
 
-  it('a crash right after the posts are deleted leaves purgedAt unset; the next run deletes the assets only', async () => {
+  it('a crash right after the mark leaves purgedAt unset and the asset ids on the posts; the next run finishes from them', async () => {
     const now = clock(at(DELETION_DAY))
     store().afterNextCommit(() => {
       throw new Error('socket hang up')
@@ -456,10 +496,15 @@ describe('an interrupted run repeats the purge: nothing lost, nothing deleted tw
     const first = await run(now)
     expect(first).toMatchObject({
       purged: 0,
+      posts: 0,
+      assets: 0,
       unfinished: ['photoWall-conf-A'],
     })
     expect(store().doc('photoWall-conf-A')).not.toHaveProperty('purgedAt')
-    expect(store().doc(A('1'))).toBeUndefined()
+    expect(store().doc(A('1'))).toMatchObject({
+      status: 'deleting',
+      deletingAssetId: assetId('s1'),
+    })
     expect(store().doc(assetId('s1'))).toBeDefined()
 
     store().commits.length = 0
@@ -468,16 +513,84 @@ describe('an interrupted run repeats the purge: nothing lost, nothing deleted tw
       ...nothing,
       due: 1,
       purged: 1,
+      posts: 6,
       assets: 5,
       assetsKept: 3,
     })
-    // No post to delete again, every asset once.
-    expect(deletedIds().filter((id) => !id.startsWith('image-'))).toEqual([])
     expect(new Set(deletedIds()).size).toBe(deletedIds().length)
+    expect(store().doc(A('1'))).toBeUndefined()
+    expect(store().doc(assetId('s1'))).toBeUndefined()
     expect(store().doc('photoWall-conf-A')).toHaveProperty('purgedAt')
   })
 
-  it('an asset whose delete keeps failing leaves purgedAt unset; the next run finishes', async () => {
+  it('an asset deduplicated from ANOTHER conference’s upload, held only by this wall’s post, is found through the post after a crash and deleted', async () => {
+    // Sanity names identical bytes after the first uploader: conf-B's
+    // source.id, conf-A's post. A read of conf-A's uploads never finds it.
+    store().put(asset('sx', { name: 'photo-wall', id: 'conf-B' }))
+    store().put(post('a7', 'conf-A', assetId('sx')))
+    const now = clock(at(DELETION_DAY))
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+    await run(now)
+    expect(store().doc(assetId('sx'))).toBeDefined()
+    const second = await run(clock(at('2026-11-27')))
+    expect(second).toMatchObject({ purged: 1, posts: 7, assets: 6 })
+    expect(store().doc(assetId('sx'))).toBeUndefined()
+    expect(store().doc(postId('a7'))).toBeUndefined()
+    // …while the one another conference's post also holds survives.
+    expect(store().doc(assetId('s2'))).toBeDefined()
+    expect(store().doc(postId('b1'))).toMatchObject({
+      photo: { asset: ref(assetId('s2')) },
+    })
+  })
+
+  it('a crash after one chunk’s delete leaves the next chunk’s posts unmarked; the next run deletes only what is left, nothing twice', async () => {
+    for (let i = 0; i < POST_DELETE_CHUNK; i += 1) {
+      store().put(post(`x${i}`, 'conf-A', assetId(`sx${i}`)))
+      store().put(asset(`sx${i}`, { name: 'photo-wall', id: 'conf-B' }))
+    }
+    const wallPosts = () =>
+      store()
+        .all()
+        .filter(
+          (d) =>
+            d._type === 'wallPost' &&
+            (d.conference as { _ref: string })._ref === 'conf-A',
+        )
+    expect(wallPosts()).toHaveLength(6 + POST_DELETE_CHUNK)
+    const now = clock(at(DELETION_DAY))
+    // The second commit is the first chunk's delete: it lands, then the
+    // answer is lost.
+    store().afterNextCommit(() => {})
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+    const first = await run(now)
+    expect(first).toMatchObject({
+      purged: 0,
+      posts: 0,
+      unfinished: ['photoWall-conf-A'],
+    })
+    expect(wallPosts()).toHaveLength(6)
+    const firstDeleted = deletedIds()
+    expect(firstDeleted.filter((id) => !id.startsWith('image-'))).toHaveLength(
+      POST_DELETE_CHUNK,
+    )
+
+    store().commits.length = 0
+    const second = await run(clock(at('2026-11-27')))
+    expect(second).toMatchObject({ purged: 1, posts: 6 })
+    expect(deletedIds().filter((id) => firstDeleted.includes(id))).toEqual([])
+    expect(wallPosts()).toEqual([])
+    expect(
+      store()
+        .all()
+        .filter((d) => d._id.startsWith('image-sx')),
+    ).toEqual([])
+  })
+
+  it('a refused delete transaction leaves purgedAt unset and the posts marked; the next run finishes', async () => {
     const writer = clientWrite as unknown as Mutator
     const real = writer.mutate
     const refused = vi
@@ -493,32 +606,35 @@ describe('an interrupted run repeats the purge: nothing lost, nothing deleted tw
     const first = await run(clock(at(DELETION_DAY)))
     expect(first).toMatchObject({
       purged: 0,
-      posts: 6,
-      assets: 4,
+      posts: 0,
+      assets: 0,
       unfinished: ['photoWall-conf-A'],
     })
     expect(store().doc(assetId('s5'))).toBeDefined()
+    expect(store().doc(A('5'))).toMatchObject({
+      status: 'deleting',
+      deletingAssetId: assetId('s5'),
+    })
     expect(store().doc('photoWall-conf-A')).not.toHaveProperty('purgedAt')
     refused.mockRestore()
 
     store().commits.length = 0
     const second = await run(clock(at('2026-11-27')))
-    expect(second).toMatchObject({ purged: 1, posts: 0, assets: 1 })
-    expect(deletedIds()).toEqual([assetId('s5')])
+    expect(second).toMatchObject({ purged: 1, posts: 6, assets: 5 })
     expect(store().doc(assetId('s5'))).toBeUndefined()
   })
 
-  it("when 'held' can't be told, the asset is kept and purgedAt stays unset", async () => {
+  it("when 'held' can't be told, nothing is deleted and purgedAt stays unset", async () => {
     store().failReadsThat((read) => read.query.includes('references('))
     const report = await run(clock(at(DELETION_DAY)))
     expect(report).toMatchObject({
       purged: 0,
-      posts: 6,
+      posts: 0,
       assets: 0,
       assetsKept: 0,
       unfinished: ['photoWall-conf-A'],
     })
-    expect(deletedIds().filter((id) => id.startsWith('image-'))).toEqual([])
+    expect(deletedIds()).toEqual([])
     expect(store().doc('photoWall-conf-A')).not.toHaveProperty('purgedAt')
   })
 
@@ -555,20 +671,41 @@ describe('the deadline', () => {
     expect(store().commits).toEqual([])
   })
 
-  it('past the deadline after the posts are deleted, no asset is touched and purgedAt stays unset', async () => {
+  it('past the deadline after a chunk, the conference’s loose uploads are not touched and purgedAt stays unset', async () => {
     const now = clock(at(DELETION_DAY))
     const deadline = new Date(now.getTime() + 60_000)
+    store().afterNextCommit(() => {})
     store().afterNextCommit(() => {
       vi.setSystemTime(new Date(deadline.getTime() + 1))
     })
     const report = await run(now, deadline)
     expect(report).toMatchObject({
       posts: 6,
-      assets: 0,
+      assets: 4,
       purged: 0,
       unfinished: ['photoWall-conf-A'],
     })
-    expect(deletedIds().filter((id) => id.startsWith('image-'))).toEqual([])
+    expect(store().doc(assetId('s7'))).toBeDefined()
     expect(store().doc('photoWall-conf-A')).not.toHaveProperty('purgedAt')
+  })
+})
+
+describe('the deduplicated asset is already gone after a crash past the chunk’s delete (§11.1)', () => {
+  beforeEach(closedYesterday)
+
+  it('a crash right after the chunk’s delete: the asset and the posts went together, the next run has nothing of them left to find', async () => {
+    store().put(asset('sx', { name: 'photo-wall', id: 'conf-B' }))
+    store().put(post('a7', 'conf-A', assetId('sx')))
+    const now = clock(at(DELETION_DAY))
+    store().afterNextCommit(() => {})
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+    await run(now)
+    expect(store().doc(assetId('sx'))).toBeUndefined()
+    expect(store().doc(postId('a7'))).toBeUndefined()
+    const second = await run(clock(at('2026-11-27')))
+    expect(second).toMatchObject({ purged: 1, posts: 0 })
+    expect(store().doc(assetId('sx'))).toBeUndefined()
   })
 })

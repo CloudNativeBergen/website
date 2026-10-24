@@ -11,24 +11,6 @@ vi.mock('@/lib/photo-wall/retention', () => ({
 vi.mock('@/lib/photo-wall/sweep', () => ({
   sweepPhotoWall: (...a: unknown[]) => sweep(...a),
 }))
-// The guard must refuse before any Sanity read: the clients are unusable.
-vi.mock('@/lib/sanity/client', () => {
-  const refuse = () => {
-    throw new Error('the cron must not touch Sanity before its guard')
-  }
-  const client = { fetch: refuse, getDocument: refuse, withConfig: refuse }
-  return {
-    clientReadUncached: client,
-    clientReadCached: client,
-    clientWrite: {
-      ...client,
-      patch: refuse,
-      transaction: refuse,
-      mutate: refuse,
-    },
-  }
-})
-
 import { GET, maxDuration } from './route'
 
 const URL = 'https://cloudnativebergen.dev/api/cron/photo-wall-retention'

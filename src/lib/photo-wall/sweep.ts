@@ -31,9 +31,6 @@ import { readUnpurgedWalls } from './retention'
 /** How old an orphan asset or a stuck `deleting` post must be. */
 export const SWEEP_AGE_MS = 60 * 60_000
 
-/** At most this many of each per run; the rest waits for the next day. */
-export const SWEEP_LIMIT = 200
-
 export interface SweepReport {
   /** Orphan assets the query found. */
   orphans: number
@@ -59,7 +56,9 @@ export interface SweepReport {
  * Read at the API version whose `raw` perspective sees drafts and Content
  * Release versions, so a reference only a draft holds counts as one
  * (`orphaned-asset.ts`). One another tenant's document holds passes this
- * filter and is kept by the check before the delete.
+ * filter and is kept by the check before the delete. No cap: such kept
+ * candidates would fill a cap every day and starve newer orphans; the
+ * deadline bounds the run instead.
  */
 async function readOrphanCandidates(
   conferenceId: string,
@@ -70,7 +69,7 @@ async function readOrphanCandidates(
     .fetch<string[]>(
       // groq-global-scoped: an asset carries no `conference` reference; the
       // submit route stores the conference as `source.id` (§5), filtered here.
-      `*[_type == "sanity.imageAsset" && source.name == "photo-wall" && source.id == $conferenceId && dateTime(_createdAt) < dateTime($before) && count(*[conference._ref == $conferenceId && references(^._id)]) == 0] | order(_createdAt asc) [0...${SWEEP_LIMIT}]._id`,
+      `*[_type == "sanity.imageAsset" && source.name == "photo-wall" && source.id == $conferenceId && dateTime(_createdAt) < dateTime($before) && count(*[conference._ref == $conferenceId && references(^._id)]) == 0] | order(_createdAt asc)._id`,
       { conferenceId, before },
       { cache: 'no-store', perspective: 'raw' },
     )
@@ -82,12 +81,16 @@ interface StuckRow {
   conferenceId: string | null
 }
 
-/** Posts a Delete left `deleting` more than an hour ago (its mark is the last write). */
+/**
+ * Posts a Delete left `deleting` more than an hour ago (its mark is the last
+ * write). No cap, for the same reason as the candidates: a post whose
+ * finish keeps failing would otherwise hold a slot every day.
+ */
 async function readStuckDeletes(before: string): Promise<StuckRow[]> {
   const rows = await clientReadUncached.fetch<StuckRow[]>(
     // groq-global: the platform SWEEP finishes every tenant's stuck deletes
     // by design; each is deleted through its own conference.
-    `*[_type == "wallPost" && status == "deleting" && dateTime(_updatedAt) < dateTime($before) && !(_id in path("drafts.**"))] | order(_updatedAt asc) [0...${SWEEP_LIMIT}]{ _id, "conferenceId": conference._ref }`,
+    `*[_type == "wallPost" && status == "deleting" && dateTime(_updatedAt) < dateTime($before) && !(_id in path("drafts.**"))] | order(_updatedAt asc){ _id, "conferenceId": conference._ref }`,
     { before },
     { cache: 'no-store' },
   )

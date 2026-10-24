@@ -175,13 +175,16 @@ interface Marked {
  * or when "held" can't be told, false: the post stays `deleting` with its
  * `deletingAssetId`, or the cron leaves the wall unpurged.
  */
+/** Gone (or never there), kept for a document that holds it, or not done. */
+export type WallAssetOutcome = 'deleted' | 'held' | 'failed'
+
 export async function deleteWallAsset(
   assetId: string | null,
   { except }: { except?: string } = {},
-): Promise<'deleted' | 'held' | 'failed'> {
+): Promise<WallAssetOutcome> {
   if (!assetId) return 'deleted'
   const held = () => isAssetHeld(assetId, { except })
-  return atMostTwice<'deleted' | 'held' | 'failed'>(
+  return atMostTwice<WallAssetOutcome>(
     async () => {
       const holds = await held()
       // Held by another post, or by any document of any tenant: done.

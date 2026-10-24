@@ -655,11 +655,15 @@ describe('submitWallPost: races and failed creates (§6.2, §14)', () => {
     expect(assets().map((d) => d._id)).toEqual([assetIdOf(other)])
   })
 
-  it('a create Sanity rejects (4xx) deletes the asset it uploaded and refuses', async () => {
+  it('a create Sanity rejects (4xx) deletes the asset it uploaded, with its history, and refuses', async () => {
     store().beforeNextCommit(rejected)
     await expect(submit()).resolves.toEqual({ ok: false, refusal: 'failed' })
     expect(posts()).toHaveLength(0)
     expect(assets()).toEqual([])
+    // The raw delete carries purge: true (§12).
+    expect(store().commits).toEqual([
+      [{ delete: { id: assetIdOf(PHOTO), purge: true } }],
+    ])
     expect(h.revalidateTag).not.toHaveBeenCalled()
   })
 
@@ -744,6 +748,10 @@ describe('submitWallPost: the wall closes during the upload (§11.1)', () => {
     expect(h.uploads).toHaveLength(1)
     expect(posts()).toEqual([])
     expect(assets()).toEqual([])
+    // With its history (§12): the raw delete carries purge: true.
+    expect(store().commits).toEqual([
+      [{ delete: { id: assetIdOf(PHOTO), purge: true } }],
+    ])
     expect(h.revalidateTag).not.toHaveBeenCalled()
   })
 
@@ -765,16 +773,18 @@ describe('submitWallPost: the wall closes during the upload (§11.1)', () => {
     expect(assets().map((a) => a._id)).toEqual([assetIdOf(PHOTO)])
   })
 
-  it('the wall is read AFTER the upload, before the create (the check is of the latest state)', async () => {
-    store().reads.length = 0
+  it('the wall is read twice: before the upload, and again AFTER it and before the create', async () => {
+    // How many uploads had happened, and commits, at each wall read.
+    const at: string[] = []
+    store().beforeEachRead((read) => {
+      if (read.query.includes('"photoWall"')) {
+        at.push(
+          `uploads ${h.uploads.length}, commits ${store().commits.length}`,
+        )
+      }
+    })
     await expect(submit()).resolves.toEqual({ ok: true })
-    const wallReads = store().reads.filter((r) =>
-      r.query.includes('"photoWall"'),
-    )
-    expect(wallReads).toHaveLength(2)
-    expect(store().events.filter((e) => e === 'commit')).toHaveLength(1)
-    // The second wall read happened after the upload: the uploaded asset
-    // was already stored when it ran.
-    expect(h.uploads).toHaveLength(1)
+    expect(at).toEqual(['uploads 0, commits 0', 'uploads 1, commits 0'])
+    expect(store().commits).toHaveLength(1)
   })
 })
