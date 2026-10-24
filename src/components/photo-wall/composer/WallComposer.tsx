@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
 import { CENTER_CROP, postedCrop, type Crop } from '@/lib/photo-wall/crop'
+import { REFUSAL_MESSAGES, WallPostRefused } from '@/lib/photo-wall/post'
 import type { WallFilterKey } from '@/lib/photo-wall/filters'
 import {
   PhotoDecodeError,
@@ -38,9 +39,8 @@ export interface WallPostDraft {
   marketingConsent: boolean
 }
 
-/** The generic failure line (§6.3); a submit's own refusals are M3b's. */
-export const GENERIC_FAILURE_MESSAGE =
-  'Something went wrong. Your photo wasn’t posted. Try again.'
+/** The generic failure line (§6.3). */
+export const GENERIC_FAILURE_MESSAGE = REFUSAL_MESSAGES.failed
 
 export interface WallComposerProps {
   logo: ConferenceLogoData | null
@@ -48,10 +48,17 @@ export interface WallComposerProps {
   deletesOn: string
   /**
    * Post to the wall. Resolves when the post is in; rejects for a refusal or
-   * a failure, which keeps the photo and fields on screen with the generic
-   * message (§6.5). The submit itself is slice M3b's.
+   * a failure, which keeps the photo and fields on screen with the message:
+   * a {@link WallPostRefused}'s own (§6.3), the generic one for anything
+   * else. A caller that shows something else once the post is in swaps its
+   * view BEFORE resolving: a resolved submit leaves this screen as it was.
    */
   onSubmit: (post: WallPostDraft) => Promise<void> | void
+  /**
+   * Whether Post to the wall may send yet: false until the device cookie is
+   * set (§6.1). The button stays visible, `aria-disabled`, meanwhile.
+   */
+  canPost?: boolean
 }
 
 /**
@@ -79,7 +86,12 @@ type Stage =
  * card is the editor. It decodes, resizes, filters and encodes the photo on
  * the phone and hands the result to `onSubmit`; it makes no request itself.
  */
-export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
+export function WallComposer({
+  logo,
+  deletesOn,
+  onSubmit,
+  canPost = true,
+}: WallComposerProps) {
   const [stage, setStage] = useState<Stage>({ kind: 'landing', error: null })
   const [filter, setFilter] = useState<WallFilterKey>('original')
   const [crop, setCrop] = useState<Crop>(CENTER_CROP)
@@ -87,7 +99,7 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
   const [name, setName] = useState('')
   const [marketingConsent, setMarketingConsent] = useState(false)
   const [posting, setPosting] = useState<'idle' | 'baking' | 'sending'>('idle')
-  const [failure, setFailure] = useState<string | null>(null)
+  const [failure, setFailure] = useState<Error | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const landingHeading = useRef<HTMLHeadingElement>(null)
   const previousKind = useRef(stage.kind)
@@ -159,7 +171,7 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
   }
 
   const post = async (master: HTMLCanvasElement) => {
-    if (posting !== 'idle') return
+    if (posting !== 'idle' || !canPost) return
     setFailure(null)
     setPosting('baking')
     try {
@@ -175,8 +187,12 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
         crop: postedCrop(crop),
         marketingConsent,
       })
-    } catch {
-      setFailure(GENERIC_FAILURE_MESSAGE)
+    } catch (error) {
+      setFailure(
+        error instanceof WallPostRefused
+          ? error
+          : new Error(GENERIC_FAILURE_MESSAGE),
+      )
     } finally {
       setPosting('idle')
     }
@@ -288,14 +304,26 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
             role="alert"
             className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-100"
           >
-            {failure}
+            {failure.message}
+            {failure instanceof WallPostRefused &&
+              failure.refusal === 'closed' && (
+                <>
+                  {' '}
+                  <a
+                    href="/wall"
+                    className="font-semibold underline underline-offset-2"
+                  >
+                    See the wall
+                  </a>
+                </>
+              )}
           </p>
         )}
 
         <button
           type="button"
           onClick={() => post(master)}
-          aria-disabled={busy}
+          aria-disabled={busy || !canPost}
           className={`${PRIMARY_BUTTON} mt-4`}
         >
           {posting === 'baking'
