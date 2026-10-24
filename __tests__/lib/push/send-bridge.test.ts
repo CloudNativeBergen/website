@@ -52,7 +52,6 @@ const sendNotification = vi.fn()
 
 const ALL_ON = {
   proposalDecisions: true,
-  talkConfirmed: true,
   coSpeakerInvites: true,
   messages: true,
   otherUpdates: true,
@@ -136,7 +135,6 @@ describe('pushCategoryForNotificationType', () => {
     'sponsor_activity',
     'gallery_tagged',
     'schedule_update',
-    'proposal_comment',
     'system',
   ] as const)('maps %s → otherUpdates', (type) => {
     expect(pushCategoryForNotificationType(type)).toBe('otherUpdates')

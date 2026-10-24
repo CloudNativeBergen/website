@@ -52,9 +52,6 @@ export default defineType({
             title: 'Proposal Status Changed',
             value: 'proposal_status_changed',
           },
-          // Reserved, currently unused — superseded by 'message_received'
-          // (decision comments relay via the message thread). No emitter.
-          { title: 'Proposal Comment', value: 'proposal_comment' },
           { title: 'Message Received', value: 'message_received' },
           { title: 'Stale Conversation', value: 'message_stale' },
           { title: 'Conversation Assigned', value: 'conversation_assigned' },

@@ -8,11 +8,6 @@
 export type NotificationType =
   | 'proposal_submitted'
   | 'proposal_status_changed'
-  // Reserved, currently UNUSED: superseded by `message_received` — proposal
-  // decision comments now relay through the speaker↔organizer message thread
-  // rather than a dedicated notification. Kept for back-compat with any legacy
-  // stored documents; no emitter creates it.
-  | 'proposal_comment'
   // Speaker↔organizer conversation message (messaging M1).
   | 'message_received'
   // A stale, unanswered speaker↔organizer thread (ticketing stale-nudge cron).
