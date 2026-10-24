@@ -346,6 +346,17 @@ describe('checkWallPhoto refuses', () => {
         reason: 'malformed',
       })
     }
+    // Four components with a header of exactly that length (CMYK-like):
+    // consistent, but not something the composer makes.
+    const sofLength = (canvas[sof + 2] << 8) | canvas[sof + 3]
+    const sofEnd = sof + 2 + sofLength
+    const four = new Uint8Array(canvas.length + 3)
+    four.set(canvas.subarray(0, sofEnd))
+    four.set([4, 0x11, 1], sofEnd)
+    four.set(canvas.subarray(sofEnd), sofEnd + 3)
+    four[sof + 3] = sofLength + 3
+    four[sof + 9] = 4
+    expect(checkWallPhoto(four)).toEqual({ ok: false, reason: 'malformed' })
     // Three extra bytes smuggled inside the frame header, its length grown to
     // carry them: every segment boundary still lines up.
     const length = (canvas[sof + 2] << 8) | canvas[sof + 3]
