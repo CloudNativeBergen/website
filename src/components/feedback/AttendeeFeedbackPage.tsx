@@ -10,6 +10,7 @@ import {
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
 import type { FeedbackColour } from '@/lib/feedback/colour'
+import { FEEDBACK_EMBED_ROOT } from '@/lib/feedback/url'
 import type {
   AttendeeFeedbackState,
   PublicFeedbackTalk,
@@ -86,6 +87,7 @@ export function AttendeeFeedbackPage({
         </header>
       )}
       <main
+        {...(embedded && { [FEEDBACK_EMBED_ROOT]: '' })}
         className={`mx-auto max-w-md px-4 ${embedded ? 'pt-4 pb-8' : 'pt-10 pb-12'}`}
       >
         {/* Always in the DOM, so the text set after a delete is announced;

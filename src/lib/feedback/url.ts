@@ -29,6 +29,13 @@ export const UNKNOWN_FEEDBACK_PATH = '/f/unknown'
  */
 export const FEEDBACK_EMBED_PARAM = 'embed'
 
+/**
+ * Marks the embedded attendee page's content, which the sheet measures to
+ * size its frame. Not the page root: the layout's flex body stretches that to
+ * the frame's height, so it could grow and never shrink.
+ */
+export const FEEDBACK_EMBED_ROOT = 'data-feedback-embed'
+
 export function isFeedbackEmbed(value: string | string[] | null | undefined) {
   return value === '1'
 }

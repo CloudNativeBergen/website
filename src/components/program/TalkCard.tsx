@@ -26,6 +26,8 @@ import { TalkStatus } from '@/lib/program/time-utils'
 import { formatConferenceDateShort } from '@/lib/time'
 import { hasProposalVideo } from '@/lib/proposal/video'
 import clsx from 'clsx'
+import { FEEDBACK_EMBED_PARAM } from '@/lib/feedback/url'
+import { FeedbackSheet } from './FeedbackSheet'
 
 interface PortableTextChild {
   _type: string
@@ -36,8 +38,10 @@ interface PortableTextChild {
  * The programme's way into Session Feedback (#1472), for attendees who miss
  * the room's QR. It goes through `/program/<talkId>/feedback`, which redirects
  * to the talk's CURRENT code, so the programme never carries one. A plain
- * `<a>`, never `next/link`: no prefetch of every card's redirect, and a full
- * page load into `/f` (its analytics exclusions depend on it).
+ * click opens it in a bottom sheet that frames the page (`FeedbackSheet`);
+ * every other click follows the link. A plain `<a>`, never `next/link`: no
+ * prefetch of every card's redirect, and a full page load into `/f` (its
+ * analytics exclusions depend on it).
  */
 function FeedbackLink({
   talkId,
@@ -48,25 +52,49 @@ function FeedbackLink({
   title: string
   compact: boolean
 }) {
+  const [open, setOpen] = useState(false)
+  const href = `/program/${encodeURIComponent(talkId)}/feedback`
   return (
-    <a
-      href={`/program/${encodeURIComponent(talkId)}/feedback`}
-      // Named after its talk: a screen reader's link list holds one per card.
-      // It starts with the visible text, so voice control still finds it.
-      aria-label={`Give feedback on ${title}`}
-      title={compact ? 'Give feedback' : undefined}
-      className={clsx(
-        'ml-auto inline-flex shrink-0 items-center gap-1 rounded text-sm font-medium whitespace-nowrap text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue-hover hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-blue-400 dark:hover:text-blue-300 dark:focus-visible:outline-blue-400 print:hidden',
-        // A 32px target, level with the meta's first (24px) line.
-        compact && '-mx-2 -mt-1 -mb-2 p-2',
-      )}
-    >
-      <ChatBubbleLeftEllipsisIcon
-        aria-hidden="true"
-        className={compact ? 'size-4' : 'size-3.5'}
+    <>
+      <a
+        href={href}
+        onClick={(event) => {
+          // The sheet takes a plain click only: a new tab or window still
+          // follows the link (§7.5).
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          )
+            return
+          event.preventDefault()
+          setOpen(true)
+        }}
+        // Named after its talk: a screen reader's link list holds one per card.
+        // It starts with the visible text, so voice control still finds it.
+        aria-label={`Give feedback on ${title}`}
+        title={compact ? 'Give feedback' : undefined}
+        className={clsx(
+          'ml-auto inline-flex shrink-0 items-center gap-1 rounded text-sm font-medium whitespace-nowrap text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue-hover hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:text-blue-400 dark:hover:text-blue-300 dark:focus-visible:outline-blue-400 print:hidden',
+          // A 32px target, level with the meta's first (24px) line.
+          compact && '-mx-2 -mt-1 -mb-2 p-2',
+        )}
+      >
+        <ChatBubbleLeftEllipsisIcon
+          aria-hidden="true"
+          className={compact ? 'size-4' : 'size-3.5'}
+        />
+        {!compact && <span>Give feedback</span>}
+      </a>
+      <FeedbackSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        src={`${href}?${FEEDBACK_EMBED_PARAM}=1`}
+        title={title}
       />
-      {!compact && <span>Give feedback</span>}
-    </a>
+    </>
   )
 }
 
