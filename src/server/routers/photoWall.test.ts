@@ -124,6 +124,53 @@ describe('photoWall.settings', () => {
     expect((await organizer().settings()).wall).toBeNull()
   })
 
+  it("does not count another type of this conference's document at the wall's id", async () => {
+    store().reset([
+      {
+        _id: 'photoWall-conf-A',
+        _type: 'wallPost',
+        conference: ref('conf-A'),
+        postingMode: 'open',
+        sponsorStrip: true,
+      },
+    ])
+    expect((await organizer().settings()).wall).toBeNull()
+  })
+
+  it('reads the wall at its own id, not another photoWall of this conference', async () => {
+    // Stored first, so a read without the id predicate would find it first.
+    const stray = {
+      ...wallOf('conf-A', { postingMode: 'open', sponsorStrip: true }),
+      _id: 'photoWall-conf-A-copy',
+    }
+    store().reset([stray])
+    expect((await organizer().settings()).wall).toBeNull()
+    store().reset([stray, wallOf('conf-A', { postingMode: 'paused' })])
+    expect((await organizer().settings()).wall).toEqual({
+      _id: 'photoWall-conf-A',
+      postingMode: 'paused',
+      sponsorStrip: false,
+      closedAt: null,
+    })
+  })
+
+  it('reads a stored strip that is not the boolean true as off', async () => {
+    store().reset([wallOf('conf-A', { sponsorStrip: 'yes' })])
+    expect((await organizer().settings()).wall?.sponsorStrip).toBe(false)
+  })
+
+  it('reads the closedAt the retention cron stored, and posting is closed', async () => {
+    store().reset([
+      wallOf('conf-A', {
+        postingMode: 'open',
+        closedAt: '2026-10-26T07:00:00Z',
+      }),
+    ])
+    const view = await organizer().settings()
+    expect(view.wall?.closedAt).toBe('2026-10-26T07:00:00Z')
+    expect(view.posting).toBe('closed')
+  })
+
   it('reads a missing mode as Automatic and a missing strip as off (§7)', async () => {
     store().reset([wallOf('conf-A')])
     const view = await organizer().settings()
@@ -229,6 +276,15 @@ describe('photoWall.setUp (§4.1)', () => {
     expect(h.revalidateTag).toHaveBeenCalledWith('photo-wall:conf-A', {
       expire: 0,
     })
+  })
+
+  it('fails when the wall it wrote cannot be read back', async () => {
+    // The query store lags the write: the wall is stored, not yet readable.
+    store().readsLagFor('photoWall-conf-A', null)
+    await expect(organizer().setUp()).rejects.toThrow(
+      'The Photo Wall was not found after Set up',
+    )
+    expect(store().doc('photoWall-conf-A')?._type).toBe('photoWall')
   })
 
   it('converges on a second press without resetting the settings', async () => {

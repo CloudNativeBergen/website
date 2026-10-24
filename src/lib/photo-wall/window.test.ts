@@ -176,6 +176,35 @@ describe('Automatic (§7, P2): open from the first day to the end of the last', 
     ).toBe('noStartDate')
   })
 
+  // The right shape is not a date: each of these would roll over to a real
+  // day (2026-02-30 is 2 March) if only the shape were checked.
+  const impossible = ['2026-02-30', '2026-13-01', '2026-00-10']
+
+  it.each(impossible)('an impossible start date %s is no start date', (d) => {
+    expect(
+      postingState(
+        auto,
+        { startDate: d, endDate: '2026-10-27' },
+        at('2026-10-26T08:00:00Z'),
+      ),
+    ).toBe('noStartDate')
+  })
+
+  it.each(
+    impossible.flatMap((d) => [
+      [d, auto],
+      [d, open],
+    ]),
+  )('an impossible end date %s is no end date (%o)', (d, wall) => {
+    expect(
+      postingState(
+        wall,
+        { startDate: '2026-01-01', endDate: d },
+        at('2026-10-26T08:00:00Z'),
+      ),
+    ).toBe('noEndDate')
+  })
+
   it('fails closed without a usable end date, whatever the start date says', () => {
     expect(
       postingState(
