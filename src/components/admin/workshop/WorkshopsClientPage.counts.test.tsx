@@ -155,6 +155,7 @@ async function answer(
         available: true,
         configured: true,
         holders: server.signups.length + 3,
+        tickets: server.signups.length + 3,
         confirmed: count('confirmed'),
         waitlistOnly: count('waitlist'),
         notSignedUp: server.notSignedUp,

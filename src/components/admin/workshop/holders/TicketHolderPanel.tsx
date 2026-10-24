@@ -23,7 +23,8 @@ const LABELS = ['Holders', 'Signed up', 'Not signed up', 'Flagged'] as const
  * holder has one. `null` while there are no holders to divide by.
  */
 function signedUpShare(signedUp: number, holders: number) {
-  return holders > 0 ? Math.floor((signedUp / holders) * 100) : null
+  // Multiplied before dividing: 29 / 50 * 100 is 57.99999999999999 in floats.
+  return holders > 0 ? Math.floor((signedUp * 100) / holders) : null
 }
 
 const ticketCount = (n: number) => `${n} workshop ticket${n === 1 ? '' : 's'}`
