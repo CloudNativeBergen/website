@@ -1490,3 +1490,36 @@ export const EmbeddedAnswered: Story = {
     ).toBeNull()
   },
 }
+
+/** Not yet open inside the programme's sheet: back to the programme, not a QR. */
+export const EmbeddedNotYetOpen: Story = {
+  args: {
+    embedded: true,
+    page: {
+      state: 'not-yet-open',
+      talk,
+      opensAt: '2026-10-27T09:00:00.000Z',
+      canDelete: false,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByText(/Tap Give feedback again then\./),
+    ).toBeInTheDocument()
+    await expect(canvas.queryByText(/scan/i)).toBeNull()
+  },
+}
+
+/** Unknown inside the programme's sheet: no code to check. */
+export const EmbeddedUnknown: Story = {
+  args: { embedded: true, page: { state: 'unknown' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('heading', {
+        name: "Feedback isn't available for this session",
+      }),
+    ).toBeInTheDocument()
+  },
+}

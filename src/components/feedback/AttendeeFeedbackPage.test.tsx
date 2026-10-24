@@ -78,7 +78,7 @@ describe('AttendeeFeedbackPage', () => {
         embedded
       />,
     )
-    expect(screen.getByText(/Come back to the programme then\./)).toBeTruthy()
+    expect(screen.getByText(/Tap Give feedback again then\./)).toBeTruthy()
     expect(screen.queryByText(/scan/i)).toBeNull()
   })
 

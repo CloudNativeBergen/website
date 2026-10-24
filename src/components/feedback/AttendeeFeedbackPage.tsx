@@ -262,7 +262,7 @@ function PageState({
 
 /** Where to come back from: the room's code, or the programme's sheet. */
 function notYetOpenText(opensAt: string | null, embedded: boolean): string {
-  const again = embedded ? 'Come back to the programme' : 'Scan the code again'
+  const again = embedded ? 'Tap Give feedback again' : 'Scan the code again'
   return opensAt
     ? `It opens on ${formatSessionInstant(opensAt)}. ${again} then.`
     : `${again} during the session.`
@@ -326,7 +326,7 @@ function AnswerForm({
 function TalkHeading({ talk }: { talk: PublicFeedbackTalk | null }) {
   if (!talk) return null
   return (
-    <div className="mb-8">
+    <div className="mb-8 text-center">
       <h1 className="font-display text-2xl leading-tight font-bold tracking-tight text-balance wrap-anywhere">
         {talk.title}
       </h1>
