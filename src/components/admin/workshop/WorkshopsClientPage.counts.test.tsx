@@ -136,7 +136,7 @@ async function answer(
                 utilization: (server.confirmed / server.capacity) * 100,
               },
             ],
-            totals: {},
+            totals: { totalSignups: server.confirmed + server.waitlist },
           },
         }),
         200,
@@ -718,7 +718,8 @@ describe('the ticket holders (#1333)', () => {
       await within(region).findByText(/^Unavailable:/)
       expect(region.textContent).not.toMatch(/\d/)
       // The sign-up totals from the summary are on the page all the same.
-      expect(await screen.findByText(/^of .+ sign-ups$/)).toBeInTheDocument()
+      expect(await screen.findByText('of 127 sign-ups')).toBeInTheDocument()
+      expect(document.body.textContent).not.toMatch(/undefined/)
     },
   )
 })

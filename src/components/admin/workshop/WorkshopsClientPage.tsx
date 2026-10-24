@@ -399,7 +399,10 @@ function WorkshopsClientPageFor({
                   value: statsData.data.totals.totalConfirmed,
                   label: 'Confirmed',
                   color: 'green' as const,
-                  subtitle: `of ${statsData.data.totals.totalSignups} sign-ups`,
+                  subtitle:
+                    statsData.data.totals.totalSignups == null
+                      ? undefined
+                      : `of ${statsData.data.totals.totalSignups} sign-ups`,
                 },
                 {
                   value: statsData.data.totals.totalWaitlist,
