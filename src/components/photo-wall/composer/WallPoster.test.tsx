@@ -298,12 +298,15 @@ describe('WallPoster', () => {
       await pick('hung')
       expect(postButton()).toHaveAttribute('aria-disabled', 'true')
 
+      // Half way, with seconds of margin: the faked clock also moves with
+      // real time (`shouldAdvanceTime`), so an exact boundary would race a
+      // slow runner.
       await act(async () => {
-        vi.advanceTimersByTime(ENSURE_DEVICE_TIMEOUT_MS - 1)
+        vi.advanceTimersByTime(ENSURE_DEVICE_TIMEOUT_MS / 2)
       })
       expect(postButton()).toHaveAttribute('aria-disabled', 'true')
       await act(async () => {
-        vi.advanceTimersByTime(1)
+        vi.advanceTimersByTime(ENSURE_DEVICE_TIMEOUT_MS / 2)
       })
       expect(postButton()).toHaveAttribute('aria-disabled', 'false')
 
