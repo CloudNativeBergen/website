@@ -14,7 +14,10 @@ export function WallChrome({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-dvh bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+    <div
+      data-shell-fit="viewport"
+      className="min-h-dvh bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100"
+    >
       {logo && (
         <header className="flex justify-center px-4 pt-8">
           <ConferenceLogo

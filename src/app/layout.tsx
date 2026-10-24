@@ -7,6 +7,7 @@ import {
   IBM_Plex_Mono,
   Bricolage_Grotesque,
   Atkinson_Hyperlegible,
+  Caveat,
 } from 'next/font/google'
 import Script from 'next/script'
 import clsx from 'clsx'
@@ -90,6 +91,16 @@ const atkinsonHyperlegible = Atkinson_Hyperlegible({
   weight: ['400', '700'],
   display: 'swap',
   variable: '--font-atkinson',
+  preload: false,
+})
+
+// The Photo Wall's handwritten face (Photo Wall spec §6.5): the caption on a
+// Wall Post's polaroid card. Only the `/wall` routes render it.
+const caveat = Caveat({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['500', '700'],
+  display: 'swap',
+  variable: '--font-caveat',
   preload: false,
 })
 
@@ -247,6 +258,7 @@ export default function RootLayout({
         ibmPlexMono.variable,
         bricolageGrotesque.variable,
         atkinsonHyperlegible.variable,
+        caveat.variable,
       )}
       suppressHydrationWarning
     >
