@@ -43,6 +43,8 @@ import { createNotifications } from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 import { TravelSupportStatus, ExpenseStatus } from '@/lib/travel-support/types'
+import { sendTravelSupportDecisionEmail } from '@/lib/email/travel-support'
+import { runAfterResponse } from '@/server/runAfterResponse'
 
 /**
  * Human-readable notification titles for the travel support statuses that
@@ -66,6 +68,29 @@ const TRAVEL_STATUS_NOTIFY_TITLES: Partial<
 const EXPENSE_STATUS_NOTIFY_TITLES: Partial<Record<ExpenseStatus, string>> = {
   [ExpenseStatus.APPROVED]: 'Expense approved',
   [ExpenseStatus.REJECTED]: 'Expense rejected',
+}
+
+/**
+ * Email the speaker a decision, after the response. Only for the host
+ * conference, so the email never carries another conference's branding.
+ */
+async function emailDecision(
+  speaker: { name: string; email: string } | undefined,
+  conferenceId: string | undefined,
+  decision: string,
+  notes: string | undefined,
+): Promise<void> {
+  if (!speaker?.email) return
+  const { conference } = await getConferenceForCurrentDomain()
+  if (!conference || conference._id !== conferenceId) return
+  runAfterResponse(async () => {
+    await sendTravelSupportDecisionEmail({
+      speaker,
+      decision,
+      notes: notes || undefined,
+      conference,
+    })
+  })
 }
 
 export const travelSupportRouter = router({
@@ -768,6 +793,12 @@ export const travelSupportRouter = router({
                   link: '/cfp/expense',
                 },
               ])
+              await emailDecision(
+                travelSupport.speaker,
+                travelSupport.conference._id,
+                statusTitle,
+                input.reviewNotes,
+              )
             }
           } catch (notifyError) {
             console.error(
@@ -888,6 +919,12 @@ export const travelSupportRouter = router({
                       link: '/cfp/expense',
                     },
                   ])
+                  await emailDecision(
+                    travelSupport.speaker,
+                    conferenceId,
+                    statusTitle,
+                    input.reviewNotes,
+                  )
                 }
               }
             }
