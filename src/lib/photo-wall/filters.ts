@@ -40,10 +40,6 @@ export const WALL_FILTERS: readonly WallFilter[] = [
   { key: 'retro', label: 'Retro' },
 ]
 
-export const isWallFilterKey = (value: unknown): value is WallFilterKey =>
-  typeof value === 'string' &&
-  (WALL_FILTER_KEYS as readonly string[]).includes(value)
-
 // ---------------------------------------------------------------------------
 // Colour matrices: a 3x3 on RGB in 0–1 plus an offset, composed in CSS order.
 // The coefficients are the Filter Effects spec's.

@@ -43,11 +43,7 @@ const jpegOf = (size: number) => {
 /** A canvas whose encoder answers with a blob of the size given per quality. */
 const canvasAnswering = (sizes: Record<string, number | null>) => {
   const toBlob = vi.fn(
-    (
-      cb: (blob: Blob | null) => void,
-      _type?: string,
-      quality?: number,
-    ) => {
+    (cb: (blob: Blob | null) => void, _type?: string, quality?: number) => {
       const size = sizes[String(quality)]
       cb(size == null ? null : jpegOf(size))
     },
