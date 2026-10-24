@@ -173,13 +173,77 @@ function getActionText(action: Action): string {
   }
 }
 
+type TicketCancellation =
+  ProposalStatusChangeEvent['metadata']['ticketCancellation']
+
+// No provider API cancels tickets, so organizers do it by hand.
+function pushTicketCancellation(
+  blocks: SlackBlock[],
+  ticketCancellation: TicketCancellation,
+) {
+  if (!ticketCancellation?.speakers.length) return
+  const list = ticketCancellation.speakers
+    .map(
+      (s) =>
+        `• ${escapeMrkdwn(s.name)}${s.email ? ` (${escapeMrkdwn(s.email)})` : ''}`,
+    )
+    .join('\n')
+  const caveat = ticketCancellation.unfiltered
+    ? '\n_Could not check for other confirmed talks: this list is unfiltered. Check by hand that each speaker has no other confirmed talk before cancelling._'
+    : ''
+  blocks.push({
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `*🎟️ Cancel ticket by hand in the ticket provider's dashboard for:*\n${list}${caveat}`,
+    },
+  })
+}
+
+/** An organizer took one speaker off a talk that keeps its other speakers. */
+export async function notifySpeakerRemoved(
+  proposal: ProposalExisting,
+  conference: Conference,
+  removedName: string,
+  remainingNames: string,
+  comment?: string,
+  ticketCancellation?: TicketCancellation,
+) {
+  const domain = getDomainFromConference(conference)
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: '👋 Speaker removed from talk',
+        emoji: true,
+      },
+    },
+    ...createProposalInfoBlocks(proposal, remainingNames),
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Removed:* ${escapeMrkdwn(removedName)}${comment?.trim() ? `\n*Comment:*\n${escapeMrkdwn(comment.trim())}` : ''}`,
+      },
+    },
+  ]
+  pushTicketCancellation(blocks, ticketCancellation)
+  if (domain) {
+    blocks.push(
+      createAdminButton(proposal, domain, 'View in Admin', 'view_proposal'),
+    )
+  }
+  await sendSlackNotification({ blocks }, conference)
+}
+
 export async function notifyProposalStatusChange(
   proposal: ProposalExisting,
   action: Action,
   conference: Conference,
   speakerNames?: string,
   reason?: string,
-  ticketCancellation?: ProposalStatusChangeEvent['metadata']['ticketCancellation'],
+  ticketCancellation?: TicketCancellation,
 ) {
   const names = speakerNames || (await resolveSpeakerNames(proposal))
   const domain = getDomainFromConference(conference)
@@ -206,25 +270,7 @@ export async function notifyProposalStatusChange(
     })
   }
 
-  // No provider API cancels tickets, so organizers do it by hand.
-  if (ticketCancellation?.speakers.length) {
-    const list = ticketCancellation.speakers
-      .map(
-        (s) =>
-          `• ${escapeMrkdwn(s.name)}${s.email ? ` (${escapeMrkdwn(s.email)})` : ''}`,
-      )
-      .join('\n')
-    const caveat = ticketCancellation.unfiltered
-      ? '\n_Could not check for other confirmed talks: this list is unfiltered. Check by hand that each speaker has no other confirmed talk before cancelling._'
-      : ''
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*🎟️ Cancel ticket by hand in the ticket provider's dashboard for:*\n${list}${caveat}`,
-      },
-    })
-  }
+  pushTicketCancellation(blocks, ticketCancellation)
 
   if (domain) {
     blocks.push(

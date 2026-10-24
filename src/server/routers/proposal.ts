@@ -1,4 +1,5 @@
 import { revalidateTag } from 'next/cache'
+import { notifySpeakerRemoved } from '@/lib/slack/notify'
 import { conferenceTag } from '@/lib/cache/tags'
 import { expireFeedbackCodeIndex } from '@/lib/feedback/server'
 import { z } from 'zod'
@@ -31,6 +32,7 @@ import {
   InvitationResponseSchema,
   InvitationCancelSchema,
   RemoveCoSpeakerSchema,
+  AdminRemoveSpeakerSchema,
   AddCoSpeakerProfileSchema,
   MAX_SPEAKERS_PER_PROPOSAL,
   IdParamSchema,
@@ -57,6 +59,7 @@ import {
   sendInvitationEmail,
   sendResponseNotificationEmail,
   sendCoSpeakerAddedEmail,
+  sendCoSpeakerRemovedEmail,
 } from '@/lib/cospeaker/server'
 import {
   remindCoSpeakerInvitation,
@@ -486,6 +489,49 @@ async function reconcileRemovedCoSpeakers({
       speakerId,
     })
   }
+}
+
+/**
+ * Take one speaker off a proposal: unset the reference and cancel their
+ * accepted invitation(s) in one transaction, clean up message notifications
+ * they can no longer open, and re-derive the thread's participants from the
+ * REMAINING speakers (G2a snapshot sync), so the removed speaker does not
+ * linger as a thread member. `speakers[0]` is the primary speaker; unsetting
+ * it makes the next speaker primary. Callers check access and refuse removing
+ * the last speaker; the write is gated on the revision they checked
+ * (`rev`), so two concurrent removals cannot both pass that guard and leave
+ * the talk with no speakers. A lost race answers CONFLICT.
+ */
+async function dropSpeakerFromProposal(
+  proposalId: string,
+  speakerId: string,
+  speakerIds: string[],
+  rev: string,
+): Promise<void> {
+  const transaction = clientWrite.transaction()
+  transaction.patch(proposalId, (patch) =>
+    patch.ifRevisionId(rev).unset([`speakers[_ref=="${speakerId}"]`]),
+  )
+  try {
+    await reconcileRemovedCoSpeakers({
+      proposalId,
+      removedSpeakerIds: [speakerId],
+      transaction,
+    })
+  } catch (error) {
+    if ((error as { statusCode?: number }).statusCode === 409) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This talk was just updated. Refresh and try again.',
+        cause: error,
+      })
+    }
+    throw error
+  }
+  await syncProposalConversationParticipants(
+    proposalId,
+    speakerIds.filter((id) => id !== speakerId),
+  )
 }
 
 /**
@@ -1497,29 +1543,11 @@ export const proposalRouter = router({
           })
         }
 
-        // Remove the speaker reference and cancel their accepted
-        // invitation(s) in a single atomic transaction, then clean up the
-        // message notifications they can no longer open.
-        const transaction = clientWrite.transaction()
-
-        transaction.patch(input.proposalId, (patch) =>
-          patch.unset([`speakers[_ref=="${input.speakerId}"]`]),
-        )
-
-        await reconcileRemovedCoSpeakers({
-          proposalId: input.proposalId,
-          removedSpeakerIds: [input.speakerId],
-          transaction,
-        })
-
-        // SNAPSHOT SYNC (G2a): the read path now prefers the conversation's
-        // participants[], so re-derive it from the proposal's REMAINING speakers
-        // — otherwise the removed co-speaker would linger as a thread member (and
-        // a stale snapshot could keep granting them access). Never-fail / no-op
-        // when the proposal has no thread yet.
-        await syncProposalConversationParticipants(
+        await dropSpeakerFromProposal(
           input.proposalId,
-          speakerIds.filter((id) => id !== input.speakerId),
+          input.speakerId,
+          speakerIds,
+          proposal._rev,
         )
 
         return { success: true }
@@ -1961,6 +1989,174 @@ export const proposalRouter = router({
             cause: error,
           })
         }
+      }),
+
+    // Take one speaker off a multi-speaker talk (they dropped out) without
+    // canceling the talk. Notifies like an organizer cancel: a thread message
+    // for the remaining speakers and organizers, an in-app notice and an email
+    // for the removed speaker (they leave the thread, so the email is always
+    // sent), and a Slack alert with an optional "cancel ticket by hand" list.
+    removeSpeaker: adminProcedure
+      .input(AdminRemoveSpeakerSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { proposalId, speakerId, revokeTicket } = input
+        const comment = input.comment?.trim() || undefined
+        const { conference, domain } = await getConferenceForCurrentDomain()
+        if (!conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to get current conference',
+          })
+        }
+        const { proposal, proposalError } = await getProposal({
+          id: proposalId,
+          speakerId: ctx.speaker._id,
+          isOrganizer: true,
+          organizerOrgId: ctx.orgId,
+        })
+        if (proposalError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch proposal',
+            cause: proposalError,
+          })
+        }
+        // Org arm only, like admin.getById: a foreign-tenant proposal the
+        // caller owns reads as not found here.
+        if (!proposal?._id || proposal._organizationId !== ctx.orgId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Proposal not found',
+          })
+        }
+        const talkConference = proposal.conference
+        const talkConferenceId =
+          talkConference && '_ref' in talkConference
+            ? talkConference._ref
+            : talkConference?._id
+        // The thread and ticket rules are per conference; another edition's
+        // talk is out of scope here.
+        if (talkConferenceId !== conference._id) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This talk belongs to another conference edition.',
+          })
+        }
+        const speakers = ((proposal.speakers ?? []) as Speaker[]).filter(
+          (s) => s?._id,
+        )
+        const speakerIds = speakers.map((s) => s._id)
+        const removed = speakers.find((s) => s._id === speakerId)
+        if (!removed) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This person is not currently a speaker on this talk.',
+          })
+        }
+        if (speakerIds.length <= 1) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Cannot remove the only speaker on this talk. Cancel the talk instead.',
+          })
+        }
+
+        await dropSpeakerFromProposal(
+          proposalId,
+          speakerId,
+          speakerIds,
+          proposal._rev,
+        )
+
+        revalidateTag(conferenceTag(talkConferenceId), 'default')
+        if (proposal.status === Status.confirmed) {
+          expireFeedbackCodeIndex(talkConferenceId)
+        }
+
+        // Never-fail from here: the removal is committed.
+        const isSelf = speakerId === ctx.speaker._id
+        const remaining = speakers.filter((s) => s._id !== speakerId)
+        const removedName = removed.name || 'A speaker'
+        const ticketCancellation =
+          revokeTicket && !isSelf && proposal.status === Status.confirmed
+            ? await speakersWithoutOtherConfirmedTalk(
+                [removed],
+                proposalId,
+                talkConferenceId,
+              )
+            : undefined
+
+        try {
+          const conversationId = await ensureProposalConversation({
+            conferenceId: conference._id,
+            proposalId,
+            proposalTitle: proposal.title ?? 'Proposal',
+            createdById: ctx.speaker._id,
+            proposalSpeakerIds: remaining.map((s) => s._id),
+          })
+          const message = await addMessage({
+            conversationId,
+            authorId: ctx.speaker._id,
+            body: `${removedName} is no longer a speaker on this talk.${comment ? `\n\n${comment}` : ''}`,
+          })
+          const conversation = await getConversationById(conversationId)
+          if (conversation) {
+            runAfterResponse(() =>
+              notifyNewMessage({
+                conversation,
+                message,
+                authorId: ctx.speaker._id,
+                conference,
+              }),
+            )
+          }
+        } catch (error) {
+          console.error('Failed to post speaker removal to thread:', error)
+        }
+
+        if (!isSelf) {
+          await createNotifications([
+            {
+              recipientId: speakerId,
+              conferenceId: conference._id,
+              notificationType: 'proposal_status_changed',
+              title: `You are no longer a speaker on "${proposal.title}"`,
+              message: comment,
+              actorId: ctx.speaker._id,
+              link: '/cfp/list',
+            },
+          ])
+          const email = removed.email
+          if (email && domain) {
+            runAfterResponse(async () => {
+              await sendCoSpeakerRemovedEmail({
+                toEmail: email,
+                toName: removedName,
+                proposalTitle: proposal.title ?? 'Proposal',
+                comment,
+                conference,
+                domain,
+              })
+            })
+          }
+        }
+
+        runAfterResponse(async () => {
+          try {
+            await notifySpeakerRemoved(
+              proposal,
+              conference,
+              removedName,
+              remaining.map((s) => s.name).join(', '),
+              comment,
+              ticketCancellation,
+            )
+          } catch (error) {
+            console.error('Failed to send speaker removal to Slack:', error)
+          }
+        })
+
+        return { success: true }
       }),
 
     // Get proposal by ID (admin)

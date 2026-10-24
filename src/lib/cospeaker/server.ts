@@ -15,6 +15,7 @@ import { emailBrandColor } from '@/lib/branding/theme'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { CoSpeakerAddedTemplate } from '@/components/email/CoSpeakerAddedTemplate'
+import { CoSpeakerRemovedTemplate } from '@/components/email/CoSpeakerRemovedTemplate'
 import { AppEnvironment } from '@/lib/environment'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { canonicalEmail } from '@/lib/speaker/email'
@@ -574,6 +575,56 @@ export async function sendCoSpeakerAddedEmail(params: {
     return result.success
   } catch (error) {
     console.error(`Error sending ${role} added email:`, error)
+    return false
+  }
+}
+
+/**
+ * Tell a speaker an organizer took them off a talk. Sent every time: the
+ * speaker leaves the talk's message thread, so the thread message cannot
+ * reach them. Never throws; the removal is already committed.
+ */
+export async function sendCoSpeakerRemovedEmail(params: {
+  toEmail: string
+  toName: string
+  proposalTitle: string
+  comment?: string
+  conference: Conference
+  domain: string
+}): Promise<boolean> {
+  const { conference, domain } = params
+  const subject = `You are no longer a speaker on "${params.proposalTitle}"`
+  try {
+    if (AppEnvironment.isTestMode) {
+      console.log('[TEST MODE] Would send co-speaker removed email:')
+      console.log('To:', params.toEmail)
+      console.log('Subject:', subject)
+      return true
+    }
+    const { eventName, eventLocation, eventDate, eventUrl } =
+      buildEmailEventContext(conference, domain)
+    const result = await sendEmail({
+      to: canonicalEmail(params.toEmail),
+      subject,
+      from: `${conference.organizer} <${conference.cfpEmail}>`,
+      orgId: conference.organization?._ref,
+      component: CoSpeakerRemovedTemplate,
+      props: {
+        speakerName: params.toName,
+        proposalTitle: params.proposalTitle,
+        comment: params.comment,
+        contactEmail: conference.cfpEmail,
+        eventName,
+        eventLocation,
+        eventDate,
+        eventUrl,
+        socialLinks: conference.socialLinks || [],
+        brandColor: emailBrandColor(conference.theme),
+      },
+    })
+    return result.success
+  } catch (error) {
+    console.error('Error sending co-speaker removed email:', error)
     return false
   }
 }
