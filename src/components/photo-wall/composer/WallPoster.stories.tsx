@@ -8,6 +8,24 @@ import { WallPoster, type WallPosterProps } from './WallPoster'
 
 type Post = NonNullable<WallPosterProps['post']>
 
+/**
+ * The stand-in server's list: each post `post` took, newest first, as
+ * `getMyPosts` lists it (the photo from the JPEG that went up), until
+ * `deleteMyPost` removes it. Emptied before each story. The first read
+ * after a post is the authority on its card (`WallPoster`), so a server
+ * that never listed it would make the card leave at once.
+ */
+let served: MyPost[] = []
+const servedPost = (request: WallPostRequest): MyPost => ({
+  _id: `wallPost-${request.uploadId}`,
+  status: 'pending',
+  src: URL.createObjectURL(request.photo),
+  caption: request.caption || null,
+  name: request.name || null,
+  marketingConsent: request.marketingConsent,
+  submittedAt: null,
+})
+
 /** Posts this phone made earlier, as `getMyPosts` would list them. */
 const EARLIER: MyPost[] = [
   {
@@ -46,15 +64,22 @@ const meta = {
     layout: 'fullscreen',
     viewport: { defaultViewport: 'phone' },
   },
+  beforeEach: () => {
+    served = []
+  },
   args: {
     logo: { title: 'Cloud Native Days Norway' },
     deletesOn: '2026-11-26',
     ensureDevice: fn(async () => true),
-    post: fn<Post>(async () => ({ ok: true })),
-    getMyPosts: fn<WallPosterProps['getMyPosts']>(async () => []),
-    deleteMyPost: fn<WallPosterProps['deleteMyPost']>(async () => ({
-      status: 'deleted',
-    })),
+    post: fn<Post>(async (request) => {
+      served = [servedPost(request), ...served]
+      return { ok: true }
+    }),
+    getMyPosts: fn<WallPosterProps['getMyPosts']>(async () => served),
+    deleteMyPost: fn<WallPosterProps['deleteMyPost']>(async (postId) => {
+      served = served.filter((p) => p._id !== postId)
+      return { status: 'deleted' }
+    }),
     setMyPostMarketing: fn<WallPosterProps['setMyPostMarketing']>(async () => ({
       status: 'done',
     })),
