@@ -6,7 +6,7 @@ import { WALL_PAGE_PHOTO_PX, type WallPageView, type WallPost } from './wall'
 import { isPostingOpen } from './window'
 
 /** The square a polaroid shows, cut by Sanity with `rect=` (§5.1). */
-function squareSrc(post: WallPost, px: number): string {
+export function squareSrc(post: WallPost, px: number): string {
   const { x, y, size } = cropSquare(
     post.photo.width,
     post.photo.height,
