@@ -394,6 +394,8 @@ describe('ServiceWorkerRegistrar on /wall/screen', () => {
 
   it('takes no update while the screen URL does not answer, and takes it once it does', async () => {
     screenAnswers = false
+    // First an error page (a deploy in progress), then no network at all.
+    headFetch.mockResolvedValueOnce(new Response(null, { status: 503 }))
     const waiting = new FakeWorker()
     waiting.state = 'installed'
     container.controller = {}

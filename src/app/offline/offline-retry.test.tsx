@@ -14,10 +14,11 @@ import OfflinePage from './page'
 import { OFFLINE_RETRY_MS, OFFLINE_RETRY_SCRIPT } from './offline-retry'
 
 const reload = vi.fn()
-let answers = false
+/** The network is down, the server answers with an error, or the screen loads. */
+let answers: 'nothing' | 'error' | 'ok' = 'nothing'
 const headFetch = vi.fn(async () => {
-  if (!answers) throw new TypeError('Failed to fetch')
-  return new Response(null, { status: 200 })
+  if (answers === 'nothing') throw new TypeError('Failed to fetch')
+  return new Response(null, { status: answers === 'ok' ? 200 : 503 })
 })
 const original = window.location
 
@@ -37,7 +38,7 @@ function openAt(pathname: string) {
 
 beforeEach(() => {
   vi.useFakeTimers()
-  answers = false
+  answers = 'nothing'
   reload.mockClear()
   headFetch.mockClear()
   vi.stubGlobal('fetch', headFetch)
@@ -60,16 +61,20 @@ describe('the offline page on /wall/screen', () => {
       'https://2026.example.no/wall/screen',
       expect.objectContaining({ method: 'HEAD', cache: 'no-store' }),
     )
-    await vi.advanceTimersByTimeAsync(3 * OFFLINE_RETRY_MS)
+    await vi.advanceTimersByTimeAsync(2 * OFFLINE_RETRY_MS)
+    expect(headFetch).toHaveBeenCalledTimes(3)
+    // Back, but answering with an error page: a reload would land on it.
+    answers = 'error'
+    await vi.advanceTimersByTimeAsync(OFFLINE_RETRY_MS)
     expect(headFetch).toHaveBeenCalledTimes(4)
     expect(reload).not.toHaveBeenCalled()
-    answers = true
+    answers = 'ok'
     await vi.advanceTimersByTimeAsync(OFFLINE_RETRY_MS)
     expect(reload).toHaveBeenCalledTimes(1)
   })
 
   it('any other page waits for the button: no request, no reload', async () => {
-    answers = true
+    answers = 'ok'
     for (const path of ['/offline', '/program', '/wall', '/wall/screens']) {
       openAt(path)
     }
