@@ -91,6 +91,15 @@ export interface SendInit {
 export type Send = (url: string, init: SendInit) => Promise<Response>
 
 /**
+ * How long one attempt may take, upload and answer together: a 4 MiB photo
+ * (the most the composer makes, §6.5) at about 400 kbit/s, a crowded venue
+ * Wi-Fi's share, with room for the server's checks and upload to Sanity. A
+ * connection that stalls past it is a lost response: retried with the same
+ * `uploadId`, so a slow upload that did land converges on its post.
+ */
+export const ATTEMPT_TIMEOUT_MS = 90_000
+
+/**
  * The POST as an `XMLHttpRequest`: `fetch` reports no upload progress
  * (§6.5). Same origin, so the `/wall` cookie goes with it. A network error,
  * a timeout or an abort rejects, as `fetch` would: a lost response.
@@ -99,6 +108,7 @@ export const xhrSend: Send = (url, { body, onUploadProgress }) =>
   new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', url)
+    xhr.timeout = ATTEMPT_TIMEOUT_MS
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {
         onUploadProgress?.(event.loaded / event.total)

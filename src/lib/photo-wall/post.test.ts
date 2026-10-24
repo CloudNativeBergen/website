@@ -10,6 +10,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   REFUSAL_MESSAGES,
+  ATTEMPT_TIMEOUT_MS,
   RETRY_DELAYS_MS,
   SUBMIT_PATH,
   WallPostRefused,
@@ -226,6 +227,7 @@ class FakeXhr {
   method = ''
   url = ''
   sent: unknown = null
+  timeout = 0
   status = 0
   responseText = ''
   responseType = ''
@@ -243,8 +245,14 @@ class FakeXhr {
     this.method = method
     this.url = url
   }
+  /** As a browser: past a non-zero `timeout` with no answer, `ontimeout`. */
   send(body: unknown) {
     this.sent = body
+    if (this.timeout > 0) {
+      setTimeout(() => {
+        if (this.status === 0) this.ontimeout?.()
+      }, this.timeout)
+    }
   }
   getResponseHeader(name: string) {
     return name === 'content-type' ? 'application/json' : null
@@ -312,6 +320,30 @@ describe('xhrSend', () => {
       await expect(pending).rejects.toThrow(TypeError)
     },
   )
+
+  it('times a stalled attempt out, and the retry carries the same uploadId', async () => {
+    vi.useFakeTimers()
+    try {
+      const sent: FakeXhr[] = []
+      const pending = postToWall(request, { wait: async () => {} })
+      await vi.advanceTimersByTimeAsync(0)
+      sent.push(FakeXhr.last!)
+      // The first attempt never answers.
+      await vi.advanceTimersByTimeAsync(ATTEMPT_TIMEOUT_MS - 1)
+      expect(FakeXhr.last).toBe(sent[0])
+      await vi.advanceTimersByTimeAsync(1)
+      // Timed out: lost, so a second attempt went out.
+      expect(FakeXhr.last).not.toBe(sent[0])
+      sent.push(FakeXhr.last!)
+      FakeXhr.last!.answer(200, '{"ok":true}')
+      await expect(pending).resolves.toEqual({ ok: true })
+      expect(sent.map((xhr) => (xhr.sent as FormData).get('uploadId'))).toEqual(
+        [UPLOAD_ID, UPLOAD_ID],
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   it('rejects a load with status 0 (no answer) instead of throwing', async () => {
     const pending = xhrSend(SUBMIT_PATH, { body: new FormData() })
