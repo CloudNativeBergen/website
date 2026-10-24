@@ -135,8 +135,9 @@ function SetUp({
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
         Attendees scan a QR code and post a photo with a caption. You approve
         each one before it shows on the public Wall page and the venue screens.
-        The wall starts with posting paused, so nothing can be posted until you
-        open it.
+        Posting opens by itself at midnight before the conference&apos;s first
+        day and closes at the end of its last; you can pause it, or open it
+        early.
       </p>
       <button
         type="button"
@@ -155,6 +156,7 @@ function SetUp({
 }
 
 const MODES: { value: PostingMode; label: string }[] = [
+  { value: 'auto', label: 'Automatic' },
   { value: 'open', label: 'Open' },
   { value: 'paused', label: 'Paused' },
 ]
@@ -172,6 +174,14 @@ const POSTING_NOTES: Record<
   paused: {
     text: 'The posting page says the wall isn’t open for photos.',
     warn: false,
+  },
+  notYetOpen: {
+    text: 'Posting opens by itself at midnight before the conference’s first day, and closes at the end of its last.',
+    warn: false,
+  },
+  noStartDate: {
+    text: 'Posting stays closed: the conference has no start date. Set one in Settings, or switch to Open.',
+    warn: true,
   },
   ended: {
     text: 'Posting has closed: the conference’s last day is over.',

@@ -1,7 +1,12 @@
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import type { PhotoWall, PhotoWallSettingsChange } from './types'
+import {
+  POSTING_MODES,
+  type PhotoWall,
+  type PhotoWallSettingsChange,
+  type PostingMode,
+} from './types'
 
 /**
  * The Photo Wall's document in Sanity (Photo Wall spec §4.1). Every read is
@@ -34,16 +39,26 @@ export async function readPhotoWall(
   if (!row) return null
   return {
     _id: row._id,
-    // Anything but Open reads as Paused: posting never opens by accident.
-    postingMode: row.postingMode === 'open' ? 'open' : 'paused',
+    postingMode: postingModeOf(row.postingMode),
     sponsorStrip: row.sponsorStrip === true,
     closedAt: row.closedAt ?? null,
   }
 }
 
 /**
- * Set up the Photo Wall: create it Paused with the sponsor strip off, or keep
- * the one already there as it is.
+ * A missing mode is Automatic, the default (§7). Anything else the switch
+ * does not offer reads as Paused: posting never opens by accident.
+ */
+function postingModeOf(stored: string | null | undefined): PostingMode {
+  if (stored == null) return 'auto'
+  return (POSTING_MODES as readonly string[]).includes(stored)
+    ? (stored as PostingMode)
+    : 'paused'
+}
+
+/**
+ * Set up the Photo Wall: create it Automatic with the sponsor strip off, or
+ * keep the one already there as it is.
  */
 export async function setUpPhotoWall(conferenceId: string): Promise<PhotoWall> {
   await clientWrite
@@ -52,7 +67,7 @@ export async function setUpPhotoWall(conferenceId: string): Promise<PhotoWall> {
       _id: photoWallId(conferenceId),
       _type: 'photoWall',
       conference: { _type: 'reference', _ref: conferenceId },
-      postingMode: 'paused',
+      postingMode: 'auto',
       sponsorStrip: false,
     })
     .commit()

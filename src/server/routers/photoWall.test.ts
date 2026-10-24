@@ -32,6 +32,7 @@ const CONFERENCE = {
   _id: 'conf-A',
   title: 'CND 2026',
   organization: { _ref: 'org-A' },
+  startDate: '2026-10-26',
   endDate: '2026-10-27',
   domains: ['2026.example.no'],
 }
@@ -123,16 +124,38 @@ describe('photoWall.settings', () => {
     expect((await organizer().settings()).wall).toBeNull()
   })
 
-  it('reads a missing mode as Paused and a missing strip as off', async () => {
+  it('reads a missing mode as Automatic and a missing strip as off (§7)', async () => {
     store().reset([wallOf('conf-A')])
     const view = await organizer().settings()
     expect(view.wall).toEqual({
       _id: 'photoWall-conf-A',
-      postingMode: 'paused',
+      postingMode: 'auto',
       sponsorStrip: false,
       closedAt: null,
     })
+    // 2026-10-26 08:00Z is the conference's first day.
+    expect(view.posting).toBe('open')
+  })
+
+  it('reads a stored mode the switch does not offer as Paused, never open', async () => {
+    store().reset([wallOf('conf-A', { postingMode: 'always' })])
+    const view = await organizer().settings()
+    expect(view.wall?.postingMode).toBe('paused')
     expect(view.posting).toBe('paused')
+  })
+
+  it('an Automatic wall is not yet open before the first day', async () => {
+    store().reset([wallOf('conf-A', { postingMode: 'auto' })])
+    vi.setSystemTime(new Date('2026-10-25T22:59:59Z'))
+    expect((await organizer().settings()).posting).toBe('notYetOpen')
+    vi.setSystemTime(new Date('2026-10-25T23:00:00Z'))
+    expect((await organizer().settings()).posting).toBe('open')
+  })
+
+  it('an Automatic wall fails closed when the conference has no start date', async () => {
+    store().reset([wallOf('conf-A', { postingMode: 'auto' })])
+    cdn.live = { startDate: undefined }
+    expect((await organizer().settings()).posting).toBe('noStartDate')
   })
 
   it('says whether posting is open now (§7)', async () => {
@@ -194,15 +217,15 @@ describe('photoWall.settings', () => {
 })
 
 describe('photoWall.setUp (§4.1)', () => {
-  it('creates the wall paused, with the strip off', async () => {
+  it('creates the wall Automatic, with the strip off', async () => {
     const view = await organizer().setUp()
     expect(store().doc('photoWall-conf-A')).toMatchObject({
       _type: 'photoWall',
       conference: { _type: 'reference', _ref: 'conf-A' },
-      postingMode: 'paused',
+      postingMode: 'auto',
       sponsorStrip: false,
     })
-    expect(view.wall?.postingMode).toBe('paused')
+    expect(view.wall?.postingMode).toBe('auto')
     expect(h.revalidateTag).toHaveBeenCalledWith('photo-wall:conf-A', {
       expire: 0,
     })
@@ -230,12 +253,16 @@ describe('photoWall.setUp (§4.1)', () => {
 describe('photoWall.updateSettings (§10)', () => {
   beforeEach(() => store().reset([wallOf('conf-A', { postingMode: 'paused' })]))
 
-  it('opens and pauses posting', async () => {
+  it('opens and pauses posting, and hands it back to Automatic', async () => {
     await organizer().updateSettings({ postingMode: 'open' })
     expect(store().doc('photoWall-conf-A')?.postingMode).toBe('open')
     const view = await organizer().updateSettings({ postingMode: 'paused' })
     expect(store().doc('photoWall-conf-A')?.postingMode).toBe('paused')
     expect(view.wall?.postingMode).toBe('paused')
+    const auto = await organizer().updateSettings({ postingMode: 'auto' })
+    expect(store().doc('photoWall-conf-A')?.postingMode).toBe('auto')
+    expect(auto.wall?.postingMode).toBe('auto')
+    expect(auto.posting).toBe('open')
   })
 
   it('answers with the wall as stored, including a change that landed meanwhile', async () => {
@@ -293,9 +320,9 @@ describe('photoWall.updateSettings (§10)', () => {
     expect(store().doc('photoWall-conf-A')?.postingMode).toBe('open')
   })
 
-  it('refuses a mode Monday does not offer, and an empty change', async () => {
+  it('refuses a mode the switch does not offer, and an empty change', async () => {
     await expect(
-      organizer().updateSettings({ postingMode: 'auto' as 'open' }),
+      organizer().updateSettings({ postingMode: 'always' as 'open' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     await expect(organizer().updateSettings({})).rejects.toMatchObject({
       code: 'BAD_REQUEST',
