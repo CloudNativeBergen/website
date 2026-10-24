@@ -4,6 +4,8 @@ import { getProposal } from '@/lib/proposal/data/sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { Status, Format } from '@/lib/proposal/types'
 import { speakers } from '../../helpers/trpc'
+import { createNotifications } from '@/lib/notification/sanity'
+import { sendCoSpeakerRemovedEmail } from '@/lib/cospeaker/server'
 
 const { mockPatchChain, mockTransaction } = vi.hoisted(() => {
   const mockPatchChain = {
@@ -33,6 +35,13 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 vi.mock('@/lib/proposal/data/sanity')
+vi.mock('@/lib/notification/sanity', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  createNotifications: vi.fn().mockResolvedValue(1),
+}))
+vi.mock('@/server/runAfterResponse', () => ({
+  runAfterResponse: (task: () => Promise<void>) => void task(),
+}))
 vi.mock('@/lib/cospeaker/sanity')
 vi.mock('@/lib/cospeaker/server')
 vi.mock('@/lib/conference/sanity', () => ({
@@ -151,6 +160,17 @@ describe('proposal.removeCoSpeaker', () => {
     // The accepted invitation is set to canceled in the same transaction
     const invitationPatch = replayPatch('inv-1')
     expect(invitationPatch.set).toHaveBeenCalledWith({ status: 'canceled' })
+
+    // The removed co-speaker is told: hub row and email.
+    expect(createNotifications).toHaveBeenCalledWith([
+      expect.objectContaining({
+        recipientId: coSpeaker._id,
+        title: 'You are no longer a speaker on "Test Proposal"',
+      }),
+    ])
+    expect(sendCoSpeakerRemovedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ toEmail: coSpeaker.email }),
+    )
   })
 
   it('removes the speaker without invitation patches when no accepted invitation exists', async () => {
