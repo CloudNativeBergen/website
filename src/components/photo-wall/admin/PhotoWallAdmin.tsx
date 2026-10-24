@@ -183,6 +183,10 @@ const POSTING_NOTES: Record<
     text: 'Posting stays closed: the conference has no start date. Set one in Settings, or switch to Open.',
     warn: true,
   },
+  datesReversed: {
+    text: 'Posting stays closed: the conference’s last day is before its first. Fix the dates in Settings, or switch to Open.',
+    warn: true,
+  },
   ended: {
     text: 'Posting has closed: the conference’s last day is over.',
     warn: true,

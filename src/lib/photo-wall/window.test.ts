@@ -25,10 +25,21 @@ describe('isPostingOpen (Photo Wall spec §7)', () => {
     )
   })
 
-  it('is closed when Paused', () => {
+  it('is closed when Paused, on a conference day Automatic would be open', () => {
+    const days = { startDate: '2026-10-26', endDate: '2026-10-27' }
     const now = at('2026-10-26T08:00:00Z')
-    expect(isPostingOpen({ postingMode: 'paused' }, conference, now)).toBe(
-      false,
+    expect(postingState({}, days, now)).toBe('open')
+    expect(postingState({ postingMode: 'paused' }, days, now)).toBe('paused')
+  })
+
+  it('says so when the conference ends before it starts (Automatic)', () => {
+    const reversed = { startDate: '2026-10-27', endDate: '2026-10-26' }
+    for (const now of ['2026-10-20T12:00:00Z', '2026-10-26T08:00:00Z']) {
+      expect(postingState({}, reversed, at(now))).toBe('datesReversed')
+    }
+    // Open still opens early, up to the end of the (earlier) last day.
+    expect(postingState(open, reversed, at('2026-10-26T08:00:00Z'))).toBe(
+      'open',
     )
   })
 

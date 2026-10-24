@@ -42,7 +42,7 @@ function postingClosesAt(endDate: string | null | undefined): Date | null {
  * Whether posting is open, and if not, why: the wall was closed by the
  * retention cron, an organizer paused it, the conference has no usable end
  * date, its last day is over, or (Automatic) the conference has no usable
- * start date or its first day has not begun.
+ * start date, ends before it starts, or its first day has not begun.
  */
 export type PostingState =
   | 'open'
@@ -51,6 +51,7 @@ export type PostingState =
   | 'noEndDate'
   | 'ended'
   | 'noStartDate'
+  | 'datesReversed'
   | 'notYetOpen'
 
 export function postingState(
@@ -69,6 +70,9 @@ export function postingState(
   if (mode === 'open') return 'open'
   const opensAt = osloMidnight(conference.startDate)
   if (!opensAt) return 'noStartDate'
+  // Saved dates the wrong way round would never open; say so rather than
+  // promise an opening that never comes.
+  if (opensAt >= closesAt) return 'datesReversed'
   return now < opensAt ? 'notYetOpen' : 'open'
 }
 
