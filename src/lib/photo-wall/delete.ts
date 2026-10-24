@@ -86,7 +86,11 @@ export async function deleteWallPost({
     deviceKey: marked.deviceKey,
     marked: true,
   } as const
-  if (!(await deleteAsset(marked.assetId, postId))) return failed
+  if (
+    (await deleteWallAsset(marked.assetId, { except: postId })) === 'failed'
+  ) {
+    return failed
+  }
   // Step 3, guarded by the revision marked `deleting`: never a post a submit
   // created anew under the id after another Delete finished this one.
   try {
@@ -156,34 +160,47 @@ interface Marked {
   rev: string
 }
 
+/** Gone (or never there), kept for a document that holds it, or not done. */
+export type WallAssetOutcome = 'deleted' | 'held' | 'failed'
+
 /**
- * Step 2. True when the asset is gone or still held by another document.
+ * Step 2, and the retention cron's, the sweep's and a failed submit's asset
+ * step (§11.1, §11.2, §6.2): `deleted` when the asset is gone (deleted now,
+ * with its history, or never there), `held` when another document holds it.
  *
- * "Held" is checked on the latest committed documents ({@link isAssetHeld}):
- * the query view can still show a reference that is gone, this post's own
- * or another post's whose Delete unset it moments ago, and two such posts
- * would each keep the asset for the other and leave it with no `deleting`
- * marker to retry from. A refused delete is never taken at its word either
- * (Sanity answers 409 for a held asset and for a contended transaction):
- * held is checked again. Not held means the delete failed, retried once;
- * after a second failure, or when "held" can't be told, the post stays
- * `deleting` with its `deletingAssetId`.
+ * "Held" is checked on the latest committed documents ({@link isAssetHeld}),
+ * leaving out `except` (the post being deleted, if any): the query view can
+ * still show a reference that is gone, this post's own or another post's
+ * whose Delete unset it moments ago, and two such posts would each keep the
+ * asset for the other and leave it with no `deleting` marker to retry from.
+ * A refused delete is never taken at its word either (Sanity answers 409
+ * for a held asset and for a contended transaction): held is checked again.
+ * Not held means the delete failed, retried once; after a second failure,
+ * or when "held" can't be told, `failed`: the post stays `deleting` with its
+ * `deletingAssetId`, or the cron leaves the wall unpurged.
  */
-async function deleteAsset(
+export async function deleteWallAsset(
   assetId: string | null,
-  postId: string,
-): Promise<boolean> {
-  if (!assetId) return true
-  const held = () => isAssetHeld(assetId, { except: postId })
-  return atMostTwice<boolean>(
+  {
+    except,
+    signal,
+  }: {
+    except?: string
+    /** Ends every read and delete of this call (the cron's budget). */
+    signal?: AbortSignal
+  } = {},
+): Promise<WallAssetOutcome> {
+  if (!assetId) return 'deleted'
+  const held = () => isAssetHeld(assetId, { except, signal })
+  return atMostTwice<WallAssetOutcome>(
     async () => {
       const holds = await held()
       // Held by another post, or by any document of any tenant: done.
-      if (holds) return true
+      if (holds) return 'held'
       if (holds === false) {
         try {
-          await deleteWithHistory(assetId)
-          return true
+          await deleteWithHistory(assetId, { signal })
+          return 'deleted'
         } catch (error) {
           console.error(`Could not delete Wall Post asset ${assetId}`, error)
         }
@@ -191,6 +208,6 @@ async function deleteAsset(
       return AGAIN
     },
     // Refused twice: done only if a holder explains it.
-    async () => (await held()) === true,
+    async () => ((await held()) === true ? 'held' : 'failed'),
   )
 }

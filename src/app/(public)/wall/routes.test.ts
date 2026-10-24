@@ -139,5 +139,9 @@ describe('/wall/post while posting is open or not (§6.5, §7)', () => {
     h.store!.reset([{ ...wallOf('conf-A'), ...settings }])
     const page = await ComposerPage()
     expect(page.type).toBe(ComposerClosed)
+    // "This wall has closed." only once the retention cron closed it (§11.1).
+    expect(page.props).toMatchObject({
+      wallClosed: 'closedAt' in settings,
+    })
   })
 })

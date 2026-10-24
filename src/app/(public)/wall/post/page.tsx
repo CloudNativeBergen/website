@@ -18,7 +18,7 @@ export default async function ComposerPage() {
   const logo = pickConferenceLogoProps(conference)
   const deletesOn = deletionDate(conference.endDate)
   if (!deletesOn || !isPostingOpen(wall, conference, new Date())) {
-    return <ComposerClosed logo={logo} />
+    return <ComposerClosed logo={logo} wallClosed={wall.closedAt !== null} />
   }
   return (
     <WallPoster logo={logo} deletesOn={deletesOn} ensureDevice={ensureDevice} />

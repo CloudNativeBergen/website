@@ -83,6 +83,8 @@ export interface RecordedRead {
    * a remembered answer.
    */
   cache: unknown
+  /** The `signal` the read was sent with: a hook may wait on it to model a read that hangs until aborted. */
+  signal?: AbortSignal
 }
 
 export interface VersionedSanityStore {
@@ -197,7 +199,11 @@ export function createVersionedSanityStore(): VersionedSanityStore {
     async (
       query: string,
       params: Record<string, unknown> = {},
-      options: { perspective?: unknown; cache?: unknown } = {},
+      options: {
+        perspective?: unknown
+        cache?: unknown
+        signal?: AbortSignal
+      } = {},
     ) => {
       reads.push({
         client,
@@ -206,6 +212,7 @@ export function createVersionedSanityStore(): VersionedSanityStore {
         apiVersion,
         perspective: options.perspective,
         cache: options.cache,
+        ...(options.signal ? { signal: options.signal } : {}),
       })
       events.push('read')
       const read = reads[reads.length - 1]

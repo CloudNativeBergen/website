@@ -655,11 +655,15 @@ describe('submitWallPost: races and failed creates (§6.2, §14)', () => {
     expect(assets().map((d) => d._id)).toEqual([assetIdOf(other)])
   })
 
-  it('a create Sanity rejects (4xx) deletes the asset it uploaded and refuses', async () => {
+  it('a create Sanity rejects (4xx) deletes the asset it uploaded, with its history, and refuses', async () => {
     store().beforeNextCommit(rejected)
     await expect(submit()).resolves.toEqual({ ok: false, refusal: 'failed' })
     expect(posts()).toHaveLength(0)
     expect(assets()).toEqual([])
+    // The raw delete carries purge: true (§12).
+    expect(store().commits).toEqual([
+      [{ delete: { id: assetIdOf(PHOTO), purge: true } }],
+    ])
     expect(h.revalidateTag).not.toHaveBeenCalled()
   })
 
@@ -732,5 +736,75 @@ describe('submitWallPost: races and failed creates (§6.2, §14)', () => {
     expect(h.revalidateTag).toHaveBeenCalledWith('photo-wall-admin:conf-A', {
       expire: 0,
     })
+  })
+})
+
+describe('submitWallPost: the wall closes during the upload (§11.1)', () => {
+  it('re-reads the wall just before the create: refused as closed, no post, the uploaded asset deleted', async () => {
+    h.duringUpload = async () => {
+      store().put(wall({ closedAt: '2026-11-25T03:10:00Z' }))
+    }
+    await expect(submit()).resolves.toEqual({ ok: false, refusal: 'closed' })
+    expect(h.uploads).toHaveLength(1)
+    expect(posts()).toEqual([])
+    expect(assets()).toEqual([])
+    // With its history (§12): the raw delete carries purge: true.
+    expect(store().commits).toEqual([
+      [{ delete: { id: assetIdOf(PHOTO), purge: true } }],
+    ])
+    expect(h.revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('without the editHistory permission (403), the asset is still deleted, by a plain delete', async () => {
+    h.duringUpload = async () => {
+      store().put(wall({ closedAt: '2026-11-25T03:10:00Z' }))
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    store().beforeNextCommit(() => {
+      throw Object.assign(new Error('403: no editHistory (test)'), {
+        statusCode: 403,
+      })
+    })
+    await expect(submit()).resolves.toEqual({ ok: false, refusal: 'closed' })
+    expect(assets()).toEqual([])
+    // The refused purge never landed; the fallback is the plain delete.
+    expect(store().commits).toEqual([[{ delete: { id: assetIdOf(PHOTO) } }]])
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('WITHOUT history'),
+    )
+    warn.mockRestore()
+  })
+
+  it('…keeping the asset when another document (any tenant) holds the same bytes', async () => {
+    h.duringUpload = async () => {
+      store().put(wall({ closedAt: '2026-11-25T03:10:00Z' }))
+      store().put({
+        _id: 'sponsor-x',
+        _type: 'sponsor',
+        conference: { _type: 'reference', _ref: 'conf-B' },
+        logo: {
+          _type: 'image',
+          asset: { _type: 'reference', _ref: assetIdOf(PHOTO) },
+        },
+      })
+    }
+    await expect(submit()).resolves.toEqual({ ok: false, refusal: 'closed' })
+    expect(posts()).toEqual([])
+    expect(assets().map((a) => a._id)).toEqual([assetIdOf(PHOTO)])
+  })
+
+  it('the wall is read twice: before the upload, and again AFTER it and before the create', async () => {
+    // How many uploads had happened, and commits, at each wall read.
+    const at: string[] = []
+    store().beforeEachRead((read) => {
+      if (read.query.includes('"photoWall"')) {
+        at.push(
+          `uploads ${h.uploads.length}, commits ${store().commits.length}`,
+        )
+      }
+    })
+    await expect(submit()).resolves.toEqual({ ok: true })
+    expect(at).toEqual(['uploads 0, commits 0', 'uploads 1, commits 0'])
+    expect(store().commits).toHaveLength(1)
   })
 })
