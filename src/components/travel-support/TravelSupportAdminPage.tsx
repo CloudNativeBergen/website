@@ -162,7 +162,8 @@ export function TravelSupportAdminPage() {
           <div className="rounded-lg bg-white shadow ring-1 ring-brand-frosted-steel/20 dark:bg-gray-800 dark:ring-gray-700">
             <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Requests ({shownRequests?.length || 0})
+                {pendingOnly ? 'Pending requests' : 'Requests'} (
+                {shownRequests?.length || 0})
               </h2>
             </div>
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
