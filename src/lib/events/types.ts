@@ -24,7 +24,8 @@ export interface ProposalStatusChangeEvent {
     reason?: string
     /**
      * The cancel/withdraw message was posted to the proposal thread and fanned
-     * out (notifyNewMessage), so it already reached the organizers' hub.
+     * out (notifyNewMessage), so it already reached the organizers' hub. For a
+     * speaker's own withdrawal it also replaces the organizer Slack alert.
      */
     postedToThread?: boolean
     /**

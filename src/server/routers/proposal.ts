@@ -1801,9 +1801,10 @@ export const proposalRouter = router({
         // Cancel/withdraw: the thread message IS the delivery. It is always
         // posted (with a stock line when there is no comment) and fans out
         // through notifyNewMessage, so the hub + per-speaker email preference
-        // apply. The one exception is an organizer ticking "Force email": the
-        // formal email then goes out, and fanning the message out too would
-        // email the speaker twice.
+        // apply, and for a speaker-authored withdrawal the organizer paths
+        // (hub, org-contact copy, Slack). The one exception is an organizer
+        // ticking "Force email": the formal email then goes out, and fanning
+        // the message out too would email the speaker twice.
         //
         // Never-fail: the status change is already committed.
         const isRemoval = action === Action.cancel || action === Action.withdraw
@@ -1815,6 +1816,8 @@ export const proposalRouter = router({
             trimmedComment ||
             trimmedReason ||
             `Your talk "${proposal.title}" has been ${action === Action.cancel ? 'canceled' : 'withdrawn'} by the organizers.`
+        } else if (action === Action.withdraw && trimmedReason) {
+          relayBody = `Withdrawn: ${trimmedReason}`
         } else if (actsAsOrganizer && COMMENT_RELAY_ACTIONS.includes(action)) {
           relayBody = trimmedComment
         }
@@ -1848,7 +1851,10 @@ export const proposalRouter = router({
             if (fanOut) {
               const conversation = await getConversationById(conversationId)
               if (conversation) {
-                postedToThread = true
+                // An organizer-authored message skips the organizer paths
+                // (Slack, org-contact copy), so for an organizer who withdraws
+                // their own talk the status alerts must still fire.
+                postedToThread = actsAsOrganizer || !ctx.isOrgOrganizer
                 runAfterResponse(() =>
                   notifyNewMessage({
                     conversation,

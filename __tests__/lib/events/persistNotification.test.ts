@@ -355,3 +355,19 @@ describe('organizer removal posted to the thread', () => {
     expect(item.link).toBe('/cfp/proposal/prop-1#messages')
   })
 })
+
+describe('speaker self-withdraw posted to the thread', () => {
+  it('skips the organizer "Proposal withdrawn" item (the message already alerted them)', async () => {
+    organizersMock.mockResolvedValue(['org-1'])
+    await handlePersistNotification(
+      makeEvent(
+        { action: Action.withdraw, newStatus: Status.withdrawn },
+        {
+          postedToThread: true,
+          triggeredBy: { speakerId: 'actor-1', isOrganizer: false },
+        },
+      ),
+    )
+    expect(createMock).not.toHaveBeenCalled()
+  })
+})
