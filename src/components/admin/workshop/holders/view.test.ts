@@ -12,6 +12,7 @@ const STATS = {
   available: true as const,
   configured: true,
   holders: 3,
+  tickets: 3,
   confirmed: 1,
   waitlistOnly: 1,
   notSignedUp: 1,

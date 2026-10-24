@@ -36,6 +36,7 @@ const stats: ReadyTicketHolderStats = {
   available: true,
   configured: true,
   holders: 180,
+  tickets: 190,
   confirmed: 120,
   waitlistOnly: 18,
   notSignedUp: 42,
