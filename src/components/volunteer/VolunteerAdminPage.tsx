@@ -652,7 +652,7 @@ export default function VolunteerAdminPage() {
 
       {logistics.count > 0 && (
         <details className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-          <summary className="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">
+          <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-gray-900 dark:text-white">
             Logistics: approved + confirmed volunteers ({logistics.count})
           </summary>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
