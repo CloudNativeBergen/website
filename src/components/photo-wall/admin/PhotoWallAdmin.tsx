@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import {
   ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
@@ -37,6 +37,8 @@ export interface PhotoWallAdminProps {
   pending?: PhotoWallSettingsChange
   /** The last Set up or change failed. */
   failed?: boolean
+  /** The moderation queue (M4a), shown under the settings once the wall is set up. */
+  queue?: ReactNode
 }
 
 /**
@@ -52,6 +54,7 @@ export function PhotoWallAdmin({
   saving = false,
   pending,
   failed = false,
+  queue,
 }: PhotoWallAdminProps) {
   const wall = view.wall && pending ? { ...view.wall, ...pending } : view.wall
   return (
@@ -103,6 +106,7 @@ export function PhotoWallAdmin({
       ) : (
         <SetUp onSetUp={onSetUp} saving={saving} failed={failed} />
       )}
+      {wall ? queue : null}
     </div>
   )
 }

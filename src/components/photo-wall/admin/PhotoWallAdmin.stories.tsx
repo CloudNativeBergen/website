@@ -241,6 +241,10 @@ const WAIT = { timeout: 5000 }
 
 const TRPC = '/api/trpc/photoWall'
 const trpc = (data: unknown) => HttpResponse.json({ result: { data } })
+/** The queue the page polls once the wall is set up (M4a); its own stories show it filled. */
+const emptyQueue = http.get(`${TRPC}.moderationQueue`, () =>
+  trpc({ posts: [], pendingCount: 0 }),
+)
 let served: PhotoWallAdminView = view(null)
 const updates: unknown[] = []
 
@@ -257,6 +261,7 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     msw: {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
+        emptyQueue,
         http.post(`${TRPC}.setUp`, () => {
           served = view(WALL)
           return trpc(served)
@@ -329,6 +334,7 @@ export const SetUpAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
     msw: {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
+        emptyQueue,
         http.post(`${TRPC}.setUp`, () => {
           served = view(WALL)
           return HttpResponse.error()
@@ -360,6 +366,7 @@ export const ChangeAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
     msw: {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
+        emptyQueue,
         http.post(`${TRPC}.updateSettings`, async ({ request }) => {
           const change = (await request.json()) as Partial<PhotoWall>
           served = view({ ...served.wall!, ...change }, 'open')
@@ -391,6 +398,7 @@ export const ChangeFailed: StoryObj<typeof PhotoWallAdminPage> = {
     msw: {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
+        emptyQueue,
         http.post(`${TRPC}.updateSettings`, () => HttpResponse.error()),
       ],
     },
