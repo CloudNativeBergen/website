@@ -96,9 +96,14 @@ function MyPostCard({
   // Deleted (or gone): nothing to show until the list drops it.
   const [removed, setRemoved] = useState(false)
   // The consent the switch shows once a change went through, until the
-  // list is read again and carries it.
-  const [consent, setConsent] = useState<boolean | null>(null)
-  useEffect(() => setConsent(null), [post.marketingConsent])
+  // list is read again and carries it: kept only while the stored value is
+  // the one the change was made from.
+  const [changed, setChanged] = useState<{
+    from: boolean
+    to: boolean
+  } | null>(null)
+  const consent =
+    changed && changed.from === post.marketingConsent ? changed.to : null
 
   const confirmId = useId()
   const cancelRef = useRef<HTMLButtonElement>(null)
@@ -141,7 +146,8 @@ function MyPostCard({
       () => 'changed' as const,
     )
     setBusy(null)
-    if (outcome === 'done') setConsent(next)
+    if (outcome === 'done')
+      setChanged({ from: post.marketingConsent, to: next })
     else setFailed('marketing')
   }
 

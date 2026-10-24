@@ -37,7 +37,8 @@ export function useMyPosts(load: () => Promise<MyPost[]>) {
   }, [load])
 
   useEffect(() => {
-    void refresh()
+    // The first read, off the effect's own tick (no state set in its body).
+    queueMicrotask(() => void refresh())
     const tick = () => {
       if (document.visibilityState !== 'hidden') void refresh()
     }
@@ -46,11 +47,13 @@ export function useMyPosts(load: () => Promise<MyPost[]>) {
     }
     const timer = setInterval(tick, MY_POSTS_POLL_MS)
     document.addEventListener('visibilitychange', onVisibility)
+    // The counter, not a DOM node: the cleanup wants its live value.
+    const reads = latest
     return () => {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisibility)
       // A read still out answers to nobody.
-      latest.current++
+      reads.current++
     }
   }, [refresh])
 
