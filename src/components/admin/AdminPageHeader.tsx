@@ -117,7 +117,7 @@ export function AdminPageHeader({
         <div
           // Phones: one horizontal strip that bleeds to the page edge (the
           // dashboard shell pads `px-2` below `sm`). From `sm` up: the grid.
-          className={`font-inter -mx-2 mt-3 flex snap-x gap-2 overflow-x-auto px-2 pb-1 sm:mx-0 sm:mt-6 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 ${getGridCols(stats.length)} sm:gap-3`}
+          className={`font-inter -mx-2 -my-1 mt-3 flex snap-x gap-2 overflow-x-auto px-2 py-1 sm:mx-0 sm:my-0 sm:mt-6 sm:grid sm:overflow-visible sm:px-0 sm:py-0 ${getGridCols(stats.length)} sm:gap-3`}
         >
           {stats.map((stat, index) => (
             <StatCard
