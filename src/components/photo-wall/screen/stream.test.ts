@@ -525,3 +525,38 @@ describe('round-2 UI findings', () => {
     expect(featuredId(s)).toBe('wallPost-2')
   })
 })
+
+describe('round-3 adversarial findings', () => {
+  it.each([
+    ['spotlight', SPOTLIGHT_ROTATION],
+    ['mosaic', MOSAIC_TILES],
+  ] as const)(
+    '%s keeps a loaded photo on screen while the failed newer ones are tried again',
+    (look, cap) => {
+      // cap + 1 posts: the newest `cap` fail, the oldest loads.
+      let s = poll(initialStream(look), posts(cap + 1), T0)
+      for (
+        let batch = pendingStreamImages(s);
+        batch.length > 0;
+        batch = pendingStreamImages(s)
+      ) {
+        s = batch.reduce(
+          (st, p) =>
+            streamReducer(st, {
+              type: p._id === 'wallPost-1' ? 'imageLoaded' : 'imageFailed',
+              key: keyOf(p),
+              now: T0,
+            }),
+          s,
+        )
+      }
+      expect(featuredId(s)).toBe('wallPost-1')
+      s = poll(s, posts(cap + 1), T0 + IMAGE_RETRY_MS)
+      // The retries are asked for; the working photo stays meanwhile.
+      expect(pendingStreamImages(s).length).toBeGreaterThan(0)
+      expect(ids(shownPosts(s))).toEqual(['wallPost-1'])
+      expect(featuredId(s)).toBe('wallPost-1')
+      expect(streamInvitation(s)).toBe(false)
+    },
+  )
+})

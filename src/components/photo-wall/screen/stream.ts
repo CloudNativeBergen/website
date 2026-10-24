@@ -117,29 +117,41 @@ const isQueued = (state: StreamState, key: string) =>
   state.queue.some((post) => screenPostKey(post) === key)
 
 /**
- * The posts the screen means to show, newest first: let in, photo not
- * failed. Spotlight keeps every post still waiting for its turn, however
- * many arrived.
+ * How many posts the look shows. Spotlight keeps every post still waiting
+ * for its turn, however many arrived.
+ */
+const onScreen = (state: StreamState) =>
+  state.look === 'mosaic'
+    ? MOSAIC_TILES
+    : SPOTLIGHT_ROTATION + state.waiting.length
+
+/**
+ * The posts the screen means to show and asks the photos of, newest first:
+ * let in, photo not failed.
  */
 function candidates(state: StreamState): ScreenPost[] {
-  const limit =
-    state.look === 'mosaic'
-      ? MOSAIC_TILES
-      : SPOTLIGHT_ROTATION + state.waiting.length
   return state.list
     .filter((post) => {
       const key = screenPostKey(post)
       return state.images[key] !== 'failed' && !isQueued(state, key)
     })
-    .slice(0, limit)
+    .slice(0, onScreen(state))
 }
 
 const loaded = (state: StreamState, post: ScreenPost) =>
   state.images[screenPostKey(post)] === 'loaded'
 
-/** What is on screen, newest approval first: the candidates whose photo has loaded. */
+/**
+ * What is on screen, newest approval first: the newest let-in posts whose
+ * photo has loaded. An older loaded photo stays until a newer one has
+ * loaded to take its place, so retries never empty the screen.
+ */
 export function shownPosts(state: StreamState): ScreenPost[] {
-  return candidates(state).filter((post) => loaded(state, post))
+  return state.list
+    .filter(
+      (post) => loaded(state, post) && !isQueued(state, screenPostKey(post)),
+    )
+    .slice(0, onScreen(state))
 }
 
 /** The posts whose photo the screen wants fetched and has no word of yet. */
@@ -161,6 +173,7 @@ export function streamInvitation(state: StreamState): boolean {
   return (
     state.started &&
     !state.closed &&
+    shownPosts(state).length === 0 &&
     candidates(state).every(
       (post) => screenPostKey(post) in state.imageFailures,
     )
