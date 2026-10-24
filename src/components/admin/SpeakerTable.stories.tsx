@@ -457,9 +457,9 @@ export const TicketFiltersOpen: Story = {
     ...TicketStatus.args,
   },
   play: async ({ canvas, userEvent }) => {
-    // Each ticket question is its own filter chip; open one to inspect it.
+    // All ticket questions share one chip, a section per question.
     await userEvent.click(
-      await canvas.findByRole('button', { name: /monday workshops/i }),
+      await canvas.findByRole('button', { name: /ticket answers/i }),
     )
   },
 }

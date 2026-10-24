@@ -492,70 +492,79 @@ export function SpeakerTable({
   const setFlag = (key: SpeakerTypeFlag) =>
     setFilters((prev) => ({ ...prev, [key]: !prev[key] }))
 
-  const filterGroups: FilterGroup[] = [
-    {
-      key: 'status',
-      label: 'Status',
-      multi: false,
-      defaultValue: 'all',
-      selected: [filters.status],
-      options: [
-        { value: 'all', label: 'All' },
-        { value: 'confirmed', label: 'Confirmed' },
-        { value: 'accepted', label: 'Accepted' },
-      ],
-      onChange: (value) => setFilters((prev) => ({ ...prev, status: value })),
-    },
-    {
-      key: 'speakerType',
-      label: 'Speaker Type',
-      width: 'wide',
-      selected: SPEAKER_TYPE_OPTIONS.filter((o) => filters[o.value]).map(
-        (o) => o.value,
-      ),
-      options: SPEAKER_TYPE_OPTIONS,
-      onChange: (value) => setFlag(value as SpeakerTypeFlag),
-    },
-    {
-      key: 'ticket',
-      label: 'Ticket',
-      multi: false,
-      defaultValue: 'all',
-      width: 'wide',
-      selected: [filters.ticketClaimState],
-      options: [
-        { value: 'all', label: 'All states' },
-        { value: 'redeemed', label: 'Ticket Claimed' },
-        { value: 'invited', label: 'Ticket Invited (Pending)' },
-        { value: 'not-invited', label: 'Ticket Not Invited' },
-      ],
-      onChange: (value) =>
-        setFilters((prev) => ({ ...prev, ticketClaimState: value })),
-    },
-    ...discoveredQuestions
-      .filter((q) => q.type === 'choice')
-      .map((q): FilterGroup => ({
-        key: `q_${q.id}`,
-        label: q.label,
+  const choiceQuestions = discoveredQuestions.filter((q) => q.type === 'choice')
+
+  const filterGroups: FilterGroup[] = (
+    [
+      {
+        key: 'status',
+        label: 'Status',
+        multi: false,
+        defaultValue: 'all',
+        selected: [filters.status],
+        options: [
+          { value: 'all', label: 'All' },
+          { value: 'confirmed', label: 'Confirmed' },
+          { value: 'accepted', label: 'Accepted' },
+        ],
+        onChange: (value) => setFilters((prev) => ({ ...prev, status: value })),
+      },
+      {
+        key: 'speakerType',
+        label: 'Speaker Type',
+        width: 'wide',
+        selected: SPEAKER_TYPE_OPTIONS.filter((o) => filters[o.value]).map(
+          (o) => o.value,
+        ),
+        options: SPEAKER_TYPE_OPTIONS,
+        onChange: (value) => setFlag(value as SpeakerTypeFlag),
+      },
+      {
+        key: 'ticket',
+        label: 'Ticket',
         multi: false,
         defaultValue: 'all',
         width: 'wide',
-        selected: [filters.questionAnswers[q.id] || 'all'],
+        selected: [filters.ticketClaimState],
         options: [
-          { value: 'all', label: 'All' },
-          ...(q.options ?? []).map((opt) => ({
-            value: opt,
-            label: opt === 'Yes' || opt === 'No' ? `${q.label}: ${opt}` : opt,
-          })),
-          { value: '__unanswered__', label: 'Unanswered / Unclaimed' },
+          { value: 'all', label: 'All states' },
+          { value: 'redeemed', label: 'Ticket Claimed' },
+          { value: 'invited', label: 'Ticket Invited (Pending)' },
+          { value: 'not-invited', label: 'Ticket Not Invited' },
         ],
         onChange: (value) =>
+          setFilters((prev) => ({ ...prev, ticketClaimState: value })),
+      },
+      {
+        key: 'ticketAnswers',
+        label: 'Ticket answers',
+        width: 'wider',
+        // One answer per question; the value is `${questionId}\n${answer}`.
+        selected: Object.entries(filters.questionAnswers)
+          .filter(([, answer]) => answer && answer !== 'all')
+          .map(([id, answer]) => `${id}\n${answer}`),
+        options: choiceQuestions.flatMap((q) =>
+          [...(q.options ?? []), '__unanswered__'].map((opt, i) => ({
+            value: `${q.id}\n${opt}`,
+            label: opt === '__unanswered__' ? 'Unanswered / Unclaimed' : opt,
+            heading: i === 0 ? q.label : undefined,
+          })),
+        ),
+        onChange: (value) => {
+          const cut = value.indexOf('\n')
+          const id = value.slice(0, cut)
+          const answer = value.slice(cut + 1)
           setFilters((prev) => ({
             ...prev,
-            questionAnswers: { ...prev.questionAnswers, [q.id]: value },
-          })),
-      })),
-  ]
+            questionAnswers: {
+              ...prev.questionAnswers,
+              [id]: prev.questionAnswers[id] === answer ? 'all' : answer,
+            },
+          }))
+        },
+      },
+    ] satisfies FilterGroup[]
+  ).filter((g) => g.key !== 'ticketAnswers' || choiceQuestions.length > 0)
 
   const columnsDropdown = (
     <FilterDropdown
@@ -563,6 +572,7 @@ export function SpeakerTable({
       activeCount={Object.values(columnVisibility).filter(Boolean).length}
       position="right"
       width="wider"
+      size="sm"
     >
       <div className="p-1.5">
         <div className="mb-2">
@@ -911,7 +921,7 @@ export function SpeakerTable({
                     : `Copy all ${emailCountLabel}`
                 }
                 aria-label={`Copy all ${emailCountLabel}`}
-                className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-gray-600 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:text-gray-400 dark:ring-white/10 dark:hover:bg-gray-800"
+                className="inline-flex h-9 cursor-pointer items-center gap-x-1.5 rounded-lg bg-white px-2.5 text-xs text-gray-900 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-white/5 dark:text-white dark:ring-white/10 dark:hover:bg-gray-600"
               >
                 {copiedAllEmails ? (
                   <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />

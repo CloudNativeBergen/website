@@ -15,6 +15,8 @@ export interface AdminFilterOption {
   label: ReactNode
   /** Render a divider above this option (desktop dropdown only). */
   dividerBefore?: boolean
+  /** Start a titled section at this option (e.g. one per sub-question). */
+  heading?: string
 }
 
 /**
@@ -125,6 +127,14 @@ function DesktopFilterDropdown({ group }: { group: FilterGroup }) {
             {option.dividerBefore && (
               <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
             )}
+            {option.heading && (
+              <div
+                title={option.heading}
+                className="truncate border-t border-gray-100 px-4 pt-2 pb-1 text-xs font-medium text-gray-500 first:border-t-0 dark:border-gray-700 dark:text-gray-400"
+              >
+                {option.heading}
+              </div>
+            )}
             <FilterOption
               onClick={() => group.onChange(option.value)}
               checked={group.selected.includes(option.value)}
@@ -218,7 +228,9 @@ export function AdminFilterBar({
         activeFilterCount={computedActiveCount}
         extra={sheetExtra}
       />
-      {actions}
+      {actions && (
+        <div className="ml-auto flex items-center gap-1.5">{actions}</div>
+      )}
     </>
   )
 
@@ -263,7 +275,13 @@ export function AdminFilterBar({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div
+          className={clsx(
+            'flex flex-wrap items-center gap-2',
+            // Let the row grow so `ml-auto` right-aligns the actions.
+            actions && 'flex-1',
+          )}
+        >
           {filterControls}
         </div>
       </div>
