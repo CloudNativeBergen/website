@@ -16,6 +16,7 @@ import {
   EyeIcon,
   ArrowUturnLeftIcon,
   ChevronDownIcon,
+  NoSymbolIcon,
 } from '@heroicons/react/20/solid'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import clsx from 'clsx'
@@ -345,6 +346,14 @@ export function AdminActionBar({
             icon: ArrowUturnLeftIcon,
             color: 'red' as const,
             onClick: () => handleAction(Action.withdraw),
+            group: 'status' as const,
+          },
+          {
+            key: 'cancel',
+            label: 'Cancel',
+            icon: NoSymbolIcon,
+            color: 'red' as const,
+            onClick: () => handleAction(Action.cancel),
             group: 'status' as const,
           },
         ]

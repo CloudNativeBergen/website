@@ -193,6 +193,7 @@ function getProposalBadgeColor(status: Status): BadgeColor {
     case Status.rejected:
       return 'red'
     case Status.withdrawn:
+    case Status.canceled:
     default:
       return 'gray'
   }

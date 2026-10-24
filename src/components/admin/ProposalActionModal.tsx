@@ -12,6 +12,7 @@ import {
   XMarkIcon,
   BellIcon,
   ClockIcon,
+  NoSymbolIcon,
 } from '@heroicons/react/20/solid'
 import { Speaker } from '@/lib/speaker/types'
 import { TrashIcon } from '@heroicons/react/24/solid'
@@ -52,6 +53,7 @@ function colorForAction(action: Action): [string, string, string] {
       ]
     case Action.reject:
     case Action.withdraw:
+    case Action.cancel:
     case Action.delete:
       return [
         'bg-red-100 dark:bg-red-900/30',
@@ -84,6 +86,8 @@ function iconForAction(
       return ArchiveBoxXMarkIcon
     case Action.withdraw:
       return XMarkIcon
+    case Action.cancel:
+      return NoSymbolIcon
     case Action.delete:
       return TrashIcon
   }

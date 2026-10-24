@@ -173,7 +173,9 @@ export function TalkCard({
   const isConfirmed = talkData.status === Status.confirmed
 
   const isWithdrawnOrRejected =
-    talkData.status === Status.withdrawn || talkData.status === Status.rejected
+    talkData.status === Status.withdrawn ||
+    talkData.status === Status.canceled ||
+    talkData.status === Status.rejected
 
   const split = talkData.format?.split('_') || []
   const formatType = split[0]

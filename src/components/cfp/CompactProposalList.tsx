@@ -73,6 +73,8 @@ function getProposalStatusConfig(
       return { color: 'orange', icon: ClockIcon, label: 'Waitlisted' }
     case 'withdrawn':
       return { color: 'purple', icon: XCircleIcon, label: 'Withdrawn' }
+    case 'canceled':
+      return { color: 'purple', icon: XCircleIcon, label: 'Canceled' }
     case 'draft':
       return { color: 'gray', icon: DocumentTextIcon, label: 'Draft' }
     default:
@@ -109,7 +111,8 @@ export function CompactProposalList({
       draft: 5,
       rejected: 6,
       withdrawn: 7,
-      deleted: 8,
+      canceled: 8,
+      deleted: 9,
     }
     return statusOrder[a.status] - statusOrder[b.status]
   })
@@ -142,6 +145,7 @@ export function CompactProposalList({
             !isApproved &&
             (proposal.status === 'rejected' ||
               proposal.status === 'withdrawn' ||
+              proposal.status === 'canceled' ||
               proposal.status === 'submitted')
 
           const hasAttachments =
