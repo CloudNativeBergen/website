@@ -276,14 +276,14 @@ export async function updateVolunteerStatus(
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
     const now = new Date().toISOString()
-    const updates: Record<string, unknown> = {
-      status,
+    const review = {
       reviewedAt: now,
       reviewedBy: {
         _type: 'reference',
         _ref: reviewedBy,
       },
     }
+    const updates: Record<string, unknown> = { status }
     const unset: string[] = []
 
     if (reviewNotes !== undefined) {
@@ -296,8 +296,11 @@ export async function updateVolunteerStatus(
 
     let patch = clientWrite.patch(volunteerId)
     if (status === VolunteerStatus.CONFIRMED) {
+      // Confirming an approved volunteer keeps the original approver.
       updates.confirmedAt = now
+      patch = patch.setIfMissing(review)
     } else {
+      Object.assign(updates, review)
       unset.push('confirmedAt')
     }
 

@@ -8,50 +8,53 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { VolunteerStatus } from '@/lib/volunteer/types'
 
 // vi.mock factories are hoisted, so the data they close over must be too.
-const { volunteers, updateStatusMutate, mutation } = vi.hoisted(() => {
-  const volunteers = [
-    {
-      _id: 'v-confirmed',
-      name: 'Carol',
-      email: 'carol@example.com',
-      status: 'confirmed',
-    },
-    {
-      _id: 'v-approved',
-      name: 'Alice',
-      email: 'alice@example.com',
-      status: 'approved',
-    },
-    {
-      _id: 'v-rejected',
-      name: 'Rita',
-      email: 'rita@example.com',
-      status: 'rejected',
-    },
-    {
-      _id: 'v-pending',
-      name: 'Peter',
-      email: 'peter@example.com',
-      status: 'pending',
-    },
-    // Same address as Alice, different case: must be deduped when copying.
-    {
-      _id: 'v-pending-2',
-      name: 'Alice Again',
-      email: 'Alice@example.com',
-      status: 'pending',
-    },
-  ].map((v) => ({
-    ...v,
-    submittedAt: '2026-06-01T10:00:00Z',
-    preferredTasks: [],
-  }))
+const { volunteers, listState, updateStatusMutate, mutation } = vi.hoisted(
+  () => {
+    const volunteers = [
+      {
+        _id: 'v-confirmed',
+        name: 'Carol',
+        email: 'carol@example.com',
+        status: 'confirmed',
+      },
+      {
+        _id: 'v-approved',
+        name: 'Alice',
+        email: 'alice@example.com',
+        status: 'approved',
+      },
+      {
+        _id: 'v-rejected',
+        name: 'Rita',
+        email: 'rita@example.com',
+        status: 'rejected',
+      },
+      {
+        _id: 'v-pending',
+        name: 'Peter',
+        email: 'peter@example.com',
+        status: 'pending',
+      },
+      // Same address as Alice, different case: must be deduped when copying.
+      {
+        _id: 'v-pending-2',
+        name: 'Alice Again',
+        email: 'Alice@example.com',
+        status: 'pending',
+      },
+    ].map((v) => ({
+      ...v,
+      submittedAt: '2026-06-01T10:00:00Z',
+      preferredTasks: [],
+    }))
 
-  const updateStatusMutate = vi.fn().mockResolvedValue({ success: true })
+    const updateStatusMutate = vi.fn().mockResolvedValue({ success: true })
 
-  const mutation = () => ({ mutateAsync: vi.fn(), isPending: false })
-  return { volunteers, updateStatusMutate, mutation }
-})
+    const mutation = () => ({ mutateAsync: vi.fn(), isPending: false })
+    const listState = { data: volunteers }
+    return { volunteers, listState, updateStatusMutate, mutation }
+  },
+)
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
@@ -72,7 +75,11 @@ vi.mock('@/lib/trpc/client', () => ({
     volunteer: {
       admin: {
         list: {
-          useQuery: () => ({ data: volunteers, isLoading: false, error: null }),
+          useQuery: () => ({
+            data: listState.data,
+            isLoading: false,
+            error: null,
+          }),
         },
         getById: {
           useQuery: (input: { id: string }) => {
@@ -135,6 +142,7 @@ const renderPage = () =>
 afterEach(() => {
   cleanup()
   updateStatusMutate.mockClear()
+  listState.data = volunteers
 })
 
 describe('VolunteerAdminPage', () => {
@@ -181,5 +189,17 @@ describe('VolunteerAdminPage', () => {
         }),
       ),
     )
+  })
+
+  it('offers to show rejected when every application is rejected', () => {
+    listState.data = volunteers.filter(
+      (v) => v.status === VolunteerStatus.REJECTED,
+    )
+    renderPage()
+
+    expect(screen.getByText('All 1 applications are rejected.')).toBeTruthy()
+    expect(screen.queryByText('Rita')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show Rejected' }))
+    expect(screen.getByText('Rita')).toBeTruthy()
   })
 })
