@@ -293,6 +293,17 @@ function advance(state: BoardState, now: number): BoardState {
 }
 
 function onPoll(state: BoardState, view: ScreenView, now: number): BoardState {
+  // The same answer again (React Query hands back the same array for an
+  // identical answer): only the clock moves. Most polls of a quiet wall.
+  if (
+    state.started &&
+    view.posts === state.list &&
+    view.closed === state.closed &&
+    view.sponsorStrip === state.sponsorStrip &&
+    state.failures === 0
+  ) {
+    return advance(state, now)
+  }
   const listKeys = new Set(view.posts.map(screenPostKey))
   let next: BoardState = {
     ...state,
@@ -301,10 +312,12 @@ function onPoll(state: BoardState, view: ScreenView, now: number): BoardState {
     sponsorStrip: view.sponsorStrip,
     list: view.posts,
     failures: 0,
-    // Forget what the browser said of images no longer on the list.
-    images: Object.fromEntries(
+  }
+  // Forget what the browser said of images no longer on the list.
+  if (Object.keys(state.images).some((key) => !listKeys.has(key))) {
+    next.images = Object.fromEntries(
       Object.entries(state.images).filter(([key]) => listKeys.has(key)),
-    ),
+    )
   }
 
   if (!state.started) {

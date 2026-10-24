@@ -10,7 +10,16 @@ import {
   cleanup,
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ServiceWorkerRegistrar } from '@/components/pwa/ServiceWorkerRegistrar'
+
+// The registrar reads the path to tell the Photo Wall's Screen Mode apart;
+// every other test here runs on an ordinary page.
+const h = vi.hoisted(() => ({ pathname: '/' as string | null }))
+vi.mock('next/navigation', () => ({ usePathname: () => h.pathname }))
+
+import {
+  SCREEN_UPDATE_CHECK_MS,
+  ServiceWorkerRegistrar,
+} from '@/components/pwa/ServiceWorkerRegistrar'
 
 /** Minimal event-emitter shared by the service-worker mocks. */
 class Emitter {
@@ -37,6 +46,7 @@ class FakeWorker extends Emitter {
 
 class FakeRegistration extends Emitter {
   installing: FakeWorker | null = null
+  waiting: FakeWorker | null = null
   update = vi.fn().mockResolvedValue(undefined)
 }
 
@@ -51,6 +61,7 @@ let reloadMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'production')
+  h.pathname = '/'
 
   container = new FakeSWContainer()
   Object.defineProperty(navigator, 'serviceWorker', {
@@ -329,5 +340,110 @@ describe('ServiceWorkerRegistrar', () => {
     fireEvent(document, new Event('visibilitychange'))
 
     await waitFor(() => expect(registration.update).toHaveBeenCalled())
+  })
+})
+
+/**
+ * The Photo Wall's Screen Mode (Photo Wall spec §9.2, §14): a venue screen
+ * gets no click, no focus and no visibility change, so the registrar checks
+ * for updates on a timer and accepts one by itself.
+ */
+describe('ServiceWorkerRegistrar on /wall/screen', () => {
+  beforeEach(() => {
+    h.pathname = '/wall/screen'
+    vi.useFakeTimers()
+  })
+  afterEach(() => vi.useRealTimers())
+
+  /** Render and flush the async register() (microtasks are not faked). */
+  async function renderScreen() {
+    render(<ServiceWorkerRegistrar />)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(container.register).toHaveBeenCalledTimes(1)
+    return container.registration
+  }
+
+  it('finds and accepts an update untouched: a check every 10 minutes, SKIP_WAITING, then one reload', async () => {
+    const registration = await renderScreen()
+    // Nothing happens on the screen: no focus, no visibilitychange, no click.
+    expect(registration.update).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(SCREEN_UPDATE_CHECK_MS - 1)
+    })
+    expect(registration.update).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(registration.update).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      vi.advanceTimersByTime(SCREEN_UPDATE_CHECK_MS)
+    })
+    expect(registration.update).toHaveBeenCalledTimes(2)
+
+    // The check found a new worker, which installs behind an existing controller.
+    const worker = new FakeWorker()
+    act(() => {
+      container.controller = {}
+      registration.installing = worker
+      registration.dispatch('updatefound')
+      worker.setState('installed')
+    })
+    // Accepted without a click, and no banner to click.
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(reloadMock).not.toHaveBeenCalled()
+    act(() => container.dispatch('controllerchange'))
+    expect(reloadMock).toHaveBeenCalledTimes(1)
+    // The fallback must not reload a second time.
+    act(() => {
+      vi.advanceTimersByTime(4000)
+    })
+    expect(reloadMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('takes a worker already waiting when the screen opens', async () => {
+    const waiting = new FakeWorker()
+    waiting.state = 'installed'
+    container.controller = {}
+    container.registration.waiting = waiting
+    await renderScreen()
+    expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('does not reload on a first install: no controller means no update', async () => {
+    const registration = await renderScreen()
+    const worker = new FakeWorker()
+    act(() => {
+      container.controller = null
+      registration.installing = worker
+      registration.dispatch('updatefound')
+      worker.setState('installed')
+    })
+    expect(worker.postMessage).not.toHaveBeenCalled()
+    act(() => container.dispatch('controllerchange'))
+    expect(reloadMock).not.toHaveBeenCalled()
+  })
+
+  it('an ordinary page keeps the banner and runs no timer', async () => {
+    h.pathname = '/program'
+    const registration = await renderScreen()
+    await act(async () => {
+      vi.advanceTimersByTime(3 * SCREEN_UPDATE_CHECK_MS)
+    })
+    expect(registration.update).not.toHaveBeenCalled()
+    const worker = new FakeWorker()
+    act(() => {
+      container.controller = {}
+      registration.installing = worker
+      registration.dispatch('updatefound')
+      worker.setState('installed')
+    })
+    expect(worker.postMessage).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('status', { name: 'Update available' }),
+    ).toBeInTheDocument()
   })
 })

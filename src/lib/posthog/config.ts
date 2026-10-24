@@ -54,7 +54,8 @@ export function parseTenantAnalyticsConfig(
  * `/cfp` landing page is NOT excluded — it is where the `cta-cfp-*` buttons
  * send visitors. The attendee feedback page `/f/<code>` is excluded too
  * (speaker feedback spec §7.1): its URL is the Feedback Code, and §8 promises
- * it no consent prompt. Used twice: the client entry does not init on these
+ * it no consent prompt. So is the Photo Wall's Screen Mode `/wall/screen`
+ * (Photo Wall spec §9.2). Used twice: the client entry does not init on these
  * paths (`./init`), and `before_send` drops events captured on them after a
  * client-side navigation into one.
  */
@@ -63,6 +64,9 @@ const EXCLUDED_PATH_PREFIXES = [
   '/cfp/',
   '/notifications',
   '/f',
+  // The Photo Wall's Screen Mode (Photo Wall spec §9.2): a venue screen
+  // polling for days is not a visit, and must see no consent bar.
+  '/wall/screen',
 ] as const
 
 export function isAnalyticsExcludedPath(pathname: string): boolean {
