@@ -22,6 +22,25 @@ export function feedbackCodeUrl(
 export const UNKNOWN_FEEDBACK_PATH = '/f/unknown'
 
 /**
+ * The query flag of the programme's feedback sheet (§7.5): the sheet frames
+ * `/program/<talkId>/feedback?embed=1`, the route keeps the flag on its
+ * redirect, and the attendee page renders without its page chrome. Only
+ * `1` counts.
+ */
+export const FEEDBACK_EMBED_PARAM = 'embed'
+
+/**
+ * Marks the embedded attendee page's content, which the sheet measures to
+ * size its frame. Not the page root: the layout's flex body stretches that to
+ * the frame's height, so it could grow and never shrink.
+ */
+export const FEEDBACK_EMBED_ROOT = 'data-feedback-embed'
+
+export function isFeedbackEmbed(value: string | string[] | null | undefined) {
+  return value === '1'
+}
+
+/**
  * Whether speakers are shown their Feedback Code. Off until the attendee page
  * could take an answer (F1c, #1430, spec §16 R3), so no printed QR led to a
  * form that could not be answered.

@@ -10,6 +10,7 @@ import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
 import { pickConferenceLogoProps } from '@/lib/conference/logo'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { deviceCookie, resolveAttendeeState } from '@/lib/feedback/server'
+import { FEEDBACK_EMBED_PARAM, isFeedbackEmbed } from '@/lib/feedback/url'
 import { deleteFeedbackAnswer, submitFeedbackAnswer } from './actions'
 
 /**
@@ -43,10 +44,14 @@ export const metadata: Metadata = {
  */
 export default async function FeedbackCodePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ code: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { code } = await params
+  // Framed by the programme's feedback sheet (§7.5).
+  const embedded = isFeedbackEmbed((await searchParams)[FEEDBACK_EMBED_PARAM])
   const resolution = await getConferenceForCurrentDomain()
 
   // A failed read is not "no conference here" (`guard.ts`).
@@ -62,6 +67,7 @@ export default async function FeedbackCodePage({
         page={{ state: 'unavailable' }}
         submit={submit}
         remove={remove}
+        embedded={embedded}
       />
     )
   }
@@ -93,6 +99,7 @@ export default async function FeedbackCodePage({
       page={page}
       submit={submit}
       remove={remove}
+      embedded={embedded}
     />
   )
 }

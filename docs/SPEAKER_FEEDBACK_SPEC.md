@@ -368,7 +368,7 @@ Decided on [#1420](https://github.com/CloudNativeBergen/website/issues/1420),
 | State            | Shown when                                                                                          | Content                                                                                                                                                                                                                                                                  |
 | ---------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Open**         | window open, no response from this device                                                           | Talk title and speakers (if public), "How was this session?", three full-width buttons: **Loved it** (green, smiling face), **It was OK** (yellow, minus circle), **Not for me** (red, frowning face). Footer: "Anonymous. You can change your answer until <closesAt>." |
-| **Answered**     | window open, this device has a response                                                             | "Thanks! You answered <label>", **Change answer**, the comment box ("Comment for the speaker (optional)", 1,000-character counter, **Send comment** / **Update comment**), **Delete my answer**, a link back to the programme.                                           |
+| **Answered**     | window open, this device has a response                                                             | "Thanks! You answered <label>", **Change answer**, the comment box ("Comment for the speaker (optional)", 1,000-character counter, **Send comment** / **Update comment**), **Delete my answer**, a link back to the programme (not inside the programme's sheet, §7.5).  |
 | **Not yet open** | `before` or `unscheduled`                                                                           | "Feedback opens when the session starts". The start time is added only when the talk is public. If the talk is in this device's cookie list (it was answered before a move or removal): **Delete my answer** (§7.4).                                                     |
 | **Closed**       | `closed`                                                                                            | "Feedback for this session has closed", explaining that feedback closes 24 hours after a session ends. If the talk is in this device's cookie list: **Delete my answer** (§7.4).                                                                                         |
 | **Unknown**      | the code is malformed, doesn't resolve in this conference, was rotated, or the talk isn't confirmed | One generic page ("This feedback code isn't valid…") that reveals nothing.                                                                                                                                                                                               |
@@ -522,7 +522,8 @@ A second way into `/f/<code>` for attendees who miss or skip the room's QR.
 
 - **Where:** a "Give feedback" link on `TalkCard`, so every `/program` view
   (list, schedule, grid, agenda); icon-only with an accessible name on compact
-  cards. Not on the front page. A plain `<a>` in the same tab (§7.1 analytics).
+  cards. Not on the front page. A plain `<a>`, never `next/link` (§7.1
+  analytics).
 - **When:** on every confirmed talk that holds a Feedback Code, at all times;
   the attendee page explains Not yet open and Closed. No link, and no
   placeholder, for a talk without a code: organizers bulk-mint (§5) before the
@@ -534,6 +535,18 @@ A second way into `/f/<code>` for attendees who miss or skip the room's QR.
   is not confirmed, not public (§7.2), not this conference's, or holds no code
   lands on the generic Unknown page (`/f/unknown`, not a code shape), the same
   for every refusal. A failed read is a 503, never Unknown.
+- **The sheet:** a plain click opens a bottom sheet (`FeedbackSheet`) that
+  FRAMES `/program/<talkId>/feedback?embed=1`; the route keeps `embed=1` on
+  its redirect, and the attendee page then renders without its logo, its
+  full-viewport height or "Back to the programme" (which would load the
+  programme inside the sheet). A frame, not a rendering of the page: the code
+  stays out of the programme's document, URL and history, and the page keeps
+  its own cookie path, bound actions, `maxDuration` and analytics exclusions.
+  The frame is mounted per open, so Back never steps it. A frame that is not
+  an HTML page (the 503, a network failure), or that shows no attendee page
+  within 15 seconds, is replaced by a link to the full page. Any other click
+  (new tab, new window, modifier keys) and a page without JavaScript follow
+  the link as before.
 - **What this changes:** a Feedback Code is no longer for speakers only. Anyone
   can reach a public talk's code from the programme, from anywhere. The guards
   are the ones §7.4 already names (one answer per device, the window, organizer

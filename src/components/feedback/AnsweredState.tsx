@@ -53,6 +53,7 @@ export function AnsweredState({
   announce,
   submit,
   remove,
+  programmeLink,
   onOutcome,
 }: {
   level: 'h1' | 'h2'
@@ -60,6 +61,8 @@ export function AnsweredState({
   announce: boolean
   submit: SubmitAnswer
   remove: DeleteAnswer
+  /** Off inside the programme's sheet, which is already on the programme. */
+  programmeLink: boolean
   /** The page's next state; the notice only when Delete my answer led there. */
   onOutcome: (next: AttendeeFeedbackState, notice?: DeleteNotice) => void
 }) {
@@ -394,14 +397,16 @@ export function AnsweredState({
         />
       </div>
 
-      <div className="mt-8 flex justify-center border-t border-gray-300 pt-6 dark:border-gray-700">
-        <a
-          href={PROGRAMME_HREF}
-          className="inline-flex min-h-11 items-center px-2 text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
-        >
-          Back to the programme
-        </a>
-      </div>
+      {programmeLink && (
+        <div className="mt-8 flex justify-center border-t border-gray-300 pt-6 dark:border-gray-700">
+          <a
+            href={PROGRAMME_HREF}
+            className="inline-flex min-h-11 items-center px-2 text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:focus-visible:outline-white"
+          >
+            Back to the programme
+          </a>
+        </div>
+      )}
     </div>
   )
 }
