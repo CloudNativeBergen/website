@@ -33,9 +33,38 @@ export async function deleteWithHistory(
   const guard = ifRevisionId
     ? [{ patch: { id, ifRevisionID: ifRevisionId, unset: [NO_SUCH_FIELD] } }]
     : []
+  return mutateDeleting(guard, [id])
+}
+
+/**
+ * Delete several documents with their history in ONE transaction, the same
+ * raw mutation and 403 fallback as {@link deleteWithHistory}, no revision
+ * guard: the retention cron's purge (Photo Wall spec §11.1), where the
+ * documents were read moments ago from a wall closed to writes. All or
+ * nothing, as a transaction is; a missing id is a no-op within it. The
+ * caller keeps each call well under Sanity's per-transaction limits.
+ */
+export async function deleteManyWithHistory(
+  ids: readonly string[],
+): Promise<'purged' | 'historyKept'> {
+  return mutateDeleting([], ids)
+}
+
+/** The no-op patch that carries a delete's revision guard. */
+interface GuardPatch {
+  patch: { id: string; ifRevisionID: string; unset: string[] }
+}
+
+async function mutateDeleting(
+  guard: readonly GuardPatch[],
+  ids: readonly string[],
+): Promise<'purged' | 'historyKept'> {
   // Not a literal in the call: the client's `Mutation` type has no `purge`
   // (it is the typed builders' omission), and the request passes it through.
-  const purging = [...guard, { delete: { id, purge: true } }]
+  const purging = [
+    ...guard,
+    ...ids.map((id) => ({ delete: { id, purge: true } })),
+  ]
   try {
     await clientWrite.mutate(purging)
     return 'purged'
@@ -43,9 +72,9 @@ export async function deleteWithHistory(
     if (sanityStatus(error) !== 403) throw error
   }
   console.warn(
-    `Deleted ${id} WITHOUT its history: the write token lacks the editHistory permission`,
+    `Deleted ${ids.join(', ')} WITHOUT history: the write token lacks the editHistory permission`,
   )
-  await clientWrite.mutate([...guard, { delete: { id } }])
+  await clientWrite.mutate([...guard, ...ids.map((id) => ({ delete: { id } }))])
   return 'historyKept'
 }
 

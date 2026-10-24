@@ -166,6 +166,15 @@ async function createPost({
     extract: [],
   })
 
+  // Just before the create (§11.1): the retention cron may have closed the
+  // wall since step 3. The asset goes unless a document references it, as
+  // after a failed create.
+  const wall = await readPhotoWall(conferenceId)
+  if (!wall || wall.closedAt) {
+    await deleteImageAssetIfOrphaned(asset._id)
+    return refuse('closed', 'wall closed before the create')
+  }
+
   try {
     await clientWrite
       .transaction()

@@ -58,16 +58,17 @@ export async function countAssetReferences(assetId: string): Promise<number> {
 /**
  * Whether a document other than `except` (and its draft and release
  * versions) holds `assetId` NOW: true, false, or null when it can't be told.
+ * Without `except`, whether any document does.
  *
  * The query that finds the holders lags the document store, so a holder it
  * names may have let go already (a Wall Post whose Delete unset its `photo`
- * moments ago). Each is read again through the doc endpoint, the latest
- * committed version, and counts only if it still references the asset; the
- * first that does answers true.
+ * moments ago, or one the retention cron just deleted). Each is read again
+ * through the doc endpoint, the latest committed version, and counts only if
+ * it still references the asset; the first that does answers true.
  */
 export async function isAssetHeld(
   assetId: string,
-  { except }: { except: string },
+  { except }: { except?: string } = {},
 ): Promise<boolean | null> {
   const client = clientReadUncached.withConfig({
     apiVersion: COUNT_API_VERSION,
@@ -75,9 +76,12 @@ export async function isAssetHeld(
   let holders: string[]
   try {
     holders = await client.fetch<string[]>(
-      // groq-global: an asset can be held by a document of any tenant.
-      groq`*[references($assetId) && !(_id in [$except, "drafts." + $except]) && !(_id in path("versions.*." + $except))]._id`,
-      { assetId, except },
+      except === undefined
+        ? // groq-global: an asset can be held by a document of any tenant.
+          groq`*[references($assetId)]._id`
+        : // groq-global: an asset can be held by a document of any tenant.
+          groq`*[references($assetId) && !(_id in [$except, "drafts." + $except]) && !(_id in path("versions.*." + $except))]._id`,
+      except === undefined ? { assetId } : { assetId, except },
       { cache: 'no-store', perspective: 'raw' },
     )
   } catch {

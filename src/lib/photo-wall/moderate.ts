@@ -8,6 +8,7 @@ import {
   type ShownIncarnation,
   type WallPostStatus,
 } from './moderation'
+import { readPhotoWall } from './sanity'
 import {
   AGAIN,
   atMostTwice,
@@ -33,6 +34,18 @@ export type ModerationResult =
   /** No such post on this wall any more: "This photo was deleted". */
   | { status: 'gone' }
 
+/**
+ * Whether the wall is closed by the retention cron (§11.1): Approve refuses
+ * once `closedAt` is set, whatever `postingMode` says, so no post reaches a
+ * wall whose photos are about to be deleted. Read on the uncached client
+ * JUST BEFORE the final commit, past the cron's close. A missing wall
+ * counts as closed: nothing can be approved onto it.
+ */
+async function isWallClosed(conferenceId: string): Promise<boolean> {
+  const wall = await readPhotoWall(conferenceId)
+  return !wall || wall.closedAt !== null
+}
+
 function patchFor(action: ModerationAction, now: string) {
   return action === 'approve'
     ? { status: 'approved', approvedAt: now, decidedAt: now }
@@ -51,6 +64,10 @@ function patchFor(action: ModerationAction, now: string) {
  * post (not a replacement a submit created after a Delete) and the status
  * and `decidedAt` are what the first read found, so no moderation decision
  * happened in between (a marketing untick changes neither).
+ *
+ * Approve is refused as `changed` when the wall is closed (§11.1), checked
+ * just before each commit: the card refreshes, and the admin page says the
+ * wall has closed.
  */
 export async function moderateWallPost({
   conferenceId,
@@ -102,6 +119,9 @@ export async function moderateWallPost({
           return { status: 'changed' }
         }
         post = again
+      }
+      if (action === 'approve' && (await isWallClosed(conferenceId))) {
+        return { status: 'changed' }
       }
       try {
         await clientWrite
@@ -161,6 +181,10 @@ export type ShownPost = { id: string } & ShownIncarnation
  * would sink a whole batch for one conflicted post. A conflicted post is
  * skipped and stays pending; pressing again picks it up. Four at a time, and
  * none started after the 30 s budget.
+ *
+ * Nothing is approved on a wall closed by the retention cron (§11.1),
+ * checked once, after the read and before the first patch: the run is
+ * bounded by its budget, well inside the cron's settle window.
  */
 export async function approveAllPending({
   conferenceId,
@@ -193,6 +217,9 @@ export async function approveAllPending({
       (card.assetId === null || (row.assetId ?? null) === card.assetId)
     )
   })
+  if (rows.length && (await isWallClosed(conferenceId))) {
+    return { approved: 0, pending: rows.length, deviceKeys: [] }
+  }
   const set = patchFor('approve', now.toISOString())
   const deviceKeys = new Set<string>()
   let approved = 0

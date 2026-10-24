@@ -734,3 +734,47 @@ describe('submitWallPost: races and failed creates (§6.2, §14)', () => {
     })
   })
 })
+
+describe('submitWallPost: the wall closes during the upload (§11.1)', () => {
+  it('re-reads the wall just before the create: refused as closed, no post, the uploaded asset deleted', async () => {
+    h.duringUpload = async () => {
+      store().put(wall({ closedAt: '2026-11-25T03:10:00Z' }))
+    }
+    await expect(submit()).resolves.toEqual({ ok: false, refusal: 'closed' })
+    expect(h.uploads).toHaveLength(1)
+    expect(posts()).toEqual([])
+    expect(assets()).toEqual([])
+    expect(h.revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('…keeping the asset when another document (any tenant) holds the same bytes', async () => {
+    h.duringUpload = async () => {
+      store().put(wall({ closedAt: '2026-11-25T03:10:00Z' }))
+      store().put({
+        _id: 'sponsor-x',
+        _type: 'sponsor',
+        conference: { _type: 'reference', _ref: 'conf-B' },
+        logo: {
+          _type: 'image',
+          asset: { _type: 'reference', _ref: assetIdOf(PHOTO) },
+        },
+      })
+    }
+    await expect(submit()).resolves.toEqual({ ok: false, refusal: 'closed' })
+    expect(posts()).toEqual([])
+    expect(assets().map((a) => a._id)).toEqual([assetIdOf(PHOTO)])
+  })
+
+  it('the wall is read AFTER the upload, before the create (the check is of the latest state)', async () => {
+    store().reads.length = 0
+    await expect(submit()).resolves.toEqual({ ok: true })
+    const wallReads = store().reads.filter((r) =>
+      r.query.includes('"photoWall"'),
+    )
+    expect(wallReads).toHaveLength(2)
+    expect(store().events.filter((e) => e === 'commit')).toHaveLength(1)
+    // The second wall read happened after the upload: the uploaded asset
+    // was already stored when it ran.
+    expect(h.uploads).toHaveLength(1)
+  })
+})

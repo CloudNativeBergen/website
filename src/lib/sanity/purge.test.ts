@@ -26,7 +26,7 @@ vi.mock('@/lib/sanity/client', async () => {
   return { clientWrite: h.client }
 })
 
-import { deleteWithHistory } from './purge'
+import { deleteManyWithHistory, deleteWithHistory } from './purge'
 
 const MUTATE = 'https://purgetest.api.sanity.io/v2023-05-03/data/mutate/test'
 
@@ -131,5 +131,47 @@ describe('deleteWithHistory (§12)', () => {
       statusCode: 400,
     })
     expect(sent).toHaveLength(2)
+  })
+})
+
+describe('deleteManyWithHistory (§11.1)', () => {
+  it('sends ONE transaction of raw deletes, each carrying purge: true', async () => {
+    sanityAnswers(200)
+    await expect(
+      deleteManyWithHistory(['wallPost-1', 'wallPost-2', 'image-a-1x1-jpg']),
+    ).resolves.toBe('purged')
+    expect(sent).toEqual([
+      {
+        mutations: [
+          { delete: { id: 'wallPost-1', purge: true } },
+          { delete: { id: 'wallPost-2', purge: true } },
+          { delete: { id: 'image-a-1x1-jpg', purge: true } },
+        ],
+      },
+    ])
+  })
+
+  it('falls back to one transaction of plain deletes on a 403', async () => {
+    sanityAnswers(403, 200)
+    await expect(
+      deleteManyWithHistory(['wallPost-1', 'wallPost-2']),
+    ).resolves.toBe('historyKept')
+    expect(sent[1]).toEqual({
+      mutations: [
+        { delete: { id: 'wallPost-1' } },
+        { delete: { id: 'wallPost-2' } },
+      ],
+    })
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('editHistory'),
+    )
+  })
+
+  it('does not fall back on any other refusal', async () => {
+    sanityAnswers(409)
+    await expect(deleteManyWithHistory(['wallPost-1'])).rejects.toMatchObject({
+      statusCode: 409,
+    })
+    expect(sent).toHaveLength(1)
   })
 })
