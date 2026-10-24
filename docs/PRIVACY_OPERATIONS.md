@@ -162,14 +162,16 @@ requests under this SOP.
 
 ### Photo Wall removal requests
 
-A contributor who wants their post gone, or someone in another person's photo,
-asks the organizers (Photo Wall spec §12). Find the post on
-`/admin/photo-wall` from the description (photo, caption, name) and press
-**Delete now**: it removes the post and its photo asset. Posts carry no name,
-email or account, so there is no identity to verify beyond the description.
-Until **Delete now** ships (M4b), delete the `wallPost` document, then its
-image asset (`photo.asset._ref`), with `npx sanity documents delete <id>`
-(Studio shows Wall Posts read-only).
+A contributor deletes their own post from **My posts** on `/wall/post`, on
+the phone that posted it (Photo Wall spec §12); the same page has the
+Marketing switch that withdraws marketing consent. A contributor who has lost
+that phone's cookie, or someone in another person's photo, asks the
+organizers. Find the post on `/admin/photo-wall` from the description (photo,
+caption, name) and press **Delete now**: it removes the post and its photo
+asset, history included. Posts carry no name, email or account, so there is
+no identity to verify beyond the description. A withdrawal of marketing
+consent by request is the same: find the post and ask the contributor to
+untick the switch, or Delete now if they want the post gone.
 
 ---
 
