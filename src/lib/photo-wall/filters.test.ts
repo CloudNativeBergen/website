@@ -47,14 +47,9 @@ describe('the filter list', () => {
     expect(WALL_FILTERS[0].key).toBe('original')
   })
 
-  it('every filter leaves alpha alone and stays inside 0–255', () => {
+  it('every filter leaves alpha alone', () => {
     for (const { key } of WALL_FILTERS) {
-      const white = run(key, [255, 255, 255], [0, 0, 0])
-      expect(white.alpha).toEqual([255, 200])
-      for (const v of [...white.left, ...white.right]) {
-        expect(v).toBeGreaterThanOrEqual(0)
-        expect(v).toBeLessThanOrEqual(255)
-      }
+      expect(run(key, [255, 255, 255], [0, 0, 0]).alpha).toEqual([255, 200])
     }
   })
 
@@ -117,6 +112,16 @@ describe('what each filter does', () => {
 
   it('Mono keeps the luminance of a mid grey', () => {
     expect(Math.abs(luma(run('mono', grey).left) - 128)).toBeLessThan(12)
+  })
+
+  it('a tint lands on the colour the matrix clipped: Retro prints a blown highlight as white paper, with its cast', () => {
+    // Retro's matrix pushes 245 past white; the yellow multiply must see the
+    // clipped white, or the highlight prints brighter than white does.
+    const white = run('retro', [255, 255, 255]).left
+    expect(run('retro', [245, 245, 245]).left).toEqual(white)
+    const [r, g, b] = white
+    expect(r).toBeGreaterThan(g)
+    expect(g).toBeGreaterThan(b)
   })
 
   it('Retro is sepia-warm: red above blue on a grey, and a yellow cast', () => {

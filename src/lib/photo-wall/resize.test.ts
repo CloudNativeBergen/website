@@ -95,11 +95,12 @@ describe('resizeSteps: the canvases a photo is drawn through', () => {
     expect(withinCaps(first)).toBe(true)
   })
 
-  it('a first step over 16.7 M pixels is shrunk under it even when both sides fit', () => {
-    // 4100x4100 halves to 2050x2050; 4096x4100 would be 16.79 M pixels at full size.
-    const steps = resizeSteps(4096, 4100)
-    expect(steps.every(withinCaps)).toBe(true)
-    expect(steps.at(-1)).toEqual({ width: 2046, height: 2048 })
+  it('the side cap implies the pixel cap: 4096 x 4096 is exactly 16,777,216 pixels', () => {
+    // Why the steps clamp the side only: any canvas inside 4096 px on both
+    // sides is inside the pixel cap. Changing either cap breaks this.
+    expect(IOS_CANVAS_MAX_SIDE * IOS_CANVAS_MAX_SIDE).toBe(
+      IOS_CANVAS_MAX_PIXELS,
+    )
   })
 })
 

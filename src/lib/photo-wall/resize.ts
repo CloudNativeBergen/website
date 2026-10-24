@@ -40,18 +40,13 @@ export function fitLongEdge(
   return size
 }
 
-/** The largest shape of this aspect that an iOS canvas takes. */
-function insideCanvasCaps({ width, height }: Size): Size {
-  let size = fitLongEdge(width, height, IOS_CANVAS_MAX_SIDE)
-  if (size.width * size.height > IOS_CANVAS_MAX_PIXELS) {
-    size = scaled(
-      size.width,
-      size.height,
-      Math.sqrt(IOS_CANVAS_MAX_PIXELS / (size.width * size.height)),
-    )
-  }
-  return size
-}
+/**
+ * The largest shape of this aspect that an iOS canvas takes. The side cap
+ * is the only one that binds: 4096 x 4096 is exactly the pixel cap, so a
+ * canvas inside 4096 px on both sides is inside 16.7 M pixels too.
+ */
+const insideCanvasCaps = ({ width, height }: Size): Size =>
+  fitLongEdge(width, height, IOS_CANVAS_MAX_SIDE)
 
 /**
  * The canvas sizes a photo of `width` x `height` is drawn through, in order,

@@ -3,8 +3,10 @@
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { PhotoDecodeError } from '@/lib/photo-wall/photo'
+import { DECODE_FAILED_MESSAGE } from './ComposerLanding'
 import type { PolaroidEditorProps } from './PolaroidEditor'
-import { WallComposer } from './WallComposer'
+import { GENERIC_FAILURE_MESSAGE, WallComposer } from './WallComposer'
 
 const bakes = vi.hoisted(
   () =>
@@ -12,6 +14,7 @@ const bakes = vi.hoisted(
       resolve: (photo: Blob) => void
       // Whether the page already said so when the heavy bake began.
       preparingShown: boolean
+      filter: string
     }[],
 )
 
@@ -19,7 +22,10 @@ const decodes = vi.hoisted(
   () =>
     new Map<
       string,
-      { resolve: (master: HTMLCanvasElement) => void; reject: () => void }
+      {
+        resolve: (master: HTMLCanvasElement) => void
+        reject: (error?: Error) => void
+      }
     >(),
 )
 
@@ -29,16 +35,17 @@ vi.mock('@/lib/photo-wall/photo', async (importOriginal) => ({
     new Promise<HTMLCanvasElement>((resolve, reject) =>
       decodes.set(file.name, {
         resolve,
-        reject: () => reject(new Error('could not decode')),
+        reject: (error) => reject(error ?? new Error('could not decode')),
       }),
     ),
-  bakeWallPhoto: () =>
+  bakeWallPhoto: (_master: HTMLCanvasElement, filter: string) =>
     new Promise<Blob>((resolve) =>
       bakes.push({
         resolve,
         preparingShown: !!document.body.textContent?.includes(
           'Preparing your photo…',
         ),
+        filter,
       }),
     ),
 }))
@@ -48,6 +55,7 @@ vi.mock('@/lib/photo-wall/photo', async (importOriginal) => ({
 vi.mock('./PolaroidEditor', () => ({
   PolaroidEditor: ({
     master,
+    crop,
     caption,
     name,
     onCaption,
@@ -56,6 +64,9 @@ vi.mock('./PolaroidEditor', () => ({
   }: PolaroidEditorProps) => (
     <>
       <p>editing {master.dataset.photo}</p>
+      <p>
+        crop {crop.x},{crop.y}
+      </p>
       <textarea
         aria-label="Caption"
         value={caption}
@@ -73,7 +84,22 @@ vi.mock('./PolaroidEditor', () => ({
     </>
   ),
 }))
-vi.mock('./FilterStrip', () => ({ FilterStrip: () => null }))
+vi.mock('./FilterStrip', () => ({
+  FilterStrip: ({
+    value,
+    onChange,
+  }: {
+    value: string
+    onChange: (filter: 'noir') => void
+  }) => (
+    <>
+      <p>filter {value}</p>
+      <button type="button" onClick={() => onChange('noir')}>
+        pick Noir
+      </button>
+    </>
+  ),
+}))
 
 function canvasFor(photo: string): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
@@ -363,5 +389,107 @@ describe('WallComposer', () => {
         screen.getByRole('heading', { name: 'Add your photo to the wall' }),
       ).toHaveFocus(),
     )
+  })
+  it('a second tap on Post while it goes out bakes and posts once', async () => {
+    let finish = () => {}
+    const onSubmit = await compose(
+      'double',
+      vi.fn(() => new Promise<void>((done) => (finish = done))),
+    )
+    const postButton = () =>
+      screen.getByRole('button', { name: /Post to the wall|Preparing|Posting/ })
+    const settle = async () => {
+      await act(() => new Promise((done) => setTimeout(done, 50)))
+      await act(async () =>
+        bakes.forEach((b) =>
+          b.resolve(new Blob(['x'], { type: 'image/jpeg' })),
+        ),
+      )
+    }
+    fireEvent.click(postButton())
+    await waitFor(() => expect(bakes).toHaveLength(1))
+    // Again while baking, and again while sending.
+    fireEvent.click(postButton())
+    await settle()
+    fireEvent.click(postButton())
+    await settle()
+
+    expect({ bakes: bakes.length, posts: onSubmit.mock.calls.length }).toEqual({
+      bakes: 1,
+      posts: 1,
+    })
+    await act(async () => finish())
+  })
+
+  it('bakes the filter that was picked', async () => {
+    await compose('noir')
+    fireEvent.click(screen.getByRole('button', { name: 'pick Noir' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
+    await waitFor(() => expect(bakes).toHaveLength(1))
+
+    expect(bakes[0].filter).toBe('noir')
+  })
+
+  it('a new photo starts on Original, centred', async () => {
+    const onSubmit = await compose('looked')
+    fireEvent.click(screen.getByRole('button', { name: 'pick Noir' }))
+    fireEvent.click(screen.getByRole('button', { name: /nudge/ }))
+    expect(screen.getByText(/^filter /)).toHaveTextContent('filter noir')
+
+    fireEvent.click(screen.getByRole('button', { name: /Another photo/ }))
+    await waitFor(() => screen.getByLabelText('Choose from your photos'))
+    await pickAgain('looked-2')
+    fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
+    await waitFor(() => expect(bakes).toHaveLength(1))
+    await act(async () =>
+      bakes[0].resolve(new Blob(['x'], { type: 'image/jpeg' })),
+    )
+
+    expect({
+      filter: screen.getByText(/^filter /).textContent,
+      crop: screen.getByText(/^crop /).textContent,
+      baked: bakes[0].filter,
+      posted: onSubmit.mock.calls[0][0].crop,
+    }).toEqual({
+      filter: 'filter original',
+      crop: 'crop 0.5,0.5',
+      baked: 'original',
+      posted: { x: 0.5, y: 0.5 },
+    })
+  })
+
+  it('counts the caption as it will be stored: runs of spaces once, dropped characters not at all', async () => {
+    await compose('counter')
+    fireEvent.change(screen.getByLabelText('Caption'), {
+      // Nine code points typed; the stored caption is "a b", three.
+      target: { value: '  a \u{200B} b  ' },
+    })
+
+    expect(screen.getByTestId('caption-counter').textContent).toBe(
+      'Caption: 3/80',
+    )
+  })
+
+  it('says the photo could not be opened only when it could not be decoded', async () => {
+    const open = async (error: Error) => {
+      const name = `${error.name}.jpg`
+      fireEvent.change(screen.getByLabelText('Choose from your photos'), {
+        target: { files: [new File(['x'], name)] },
+      })
+      await act(async () => decodes.get(name)?.reject(error))
+      return screen.getByRole('alert').textContent
+    }
+    render(
+      <WallComposer logo={null} deletesOn="2026-11-26" onSubmit={vi.fn()} />,
+    )
+
+    expect({
+      undecodable: await open(new PhotoDecodeError('not an image')),
+      // Anything else (out of memory, no 2D context) is not the photo's fault.
+      other: await open(new RangeError('Out of memory')),
+    }).toEqual({
+      undecodable: DECODE_FAILED_MESSAGE,
+      other: GENERIC_FAILURE_MESSAGE,
+    })
   })
 })

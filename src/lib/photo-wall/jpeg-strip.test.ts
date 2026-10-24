@@ -125,6 +125,42 @@ describe('stripJpegMetadata on a synthetic JPEG with APP1, APP13 and COM', () =>
     expect(endsWithEoi(out)).toBe(true)
   })
 
+  it('drops APP2 (ICC, as Chromium writes it), APP14 (Adobe) and APP15 too', () => {
+    const app2 = segment(0xe2, [...ascii('ICC_PROFILE\0'), 1, 1, 0, 0])
+    const app14 = segment(0xee, [...ascii('Adobe'), 0, 100, 0, 0, 0, 0, 1])
+    const app15 = segment(0xef, ascii('last APPn'))
+    const out = stripJpegMetadata(
+      new Uint8Array([
+        0xff,
+        0xd8,
+        ...app0,
+        ...app2,
+        ...dqt,
+        ...app14,
+        ...sof0,
+        ...app15,
+        ...dht,
+        ...scan,
+        0xff,
+        0xd9,
+      ]),
+    )
+    expect(markersOf(out)).toEqual([0xe0, 0xdb, 0xc0, 0xc4])
+    expect(out).toEqual(
+      new Uint8Array([
+        0xff,
+        0xd8,
+        ...app0,
+        ...dqt,
+        ...sof0,
+        ...dht,
+        ...scan,
+        0xff,
+        0xd9,
+      ]),
+    )
+  })
+
   it('keeps a JPEG with nothing to strip as the same bytes', () => {
     const clean = new Uint8Array([
       0xff,
@@ -187,6 +223,14 @@ describe('stripJpegMetadata on a synthetic JPEG with APP1, APP13 and COM', () =>
     expect(stripJpegMetadata(png)).toBe(png)
     expect(listJpegSegments(png)).toEqual([])
     expect(endsWithEoi(png)).toBe(false)
+  })
+
+  it('hands back bytes without an SOI untouched, even with an APP1 where a header would start', () => {
+    // A JPEG's header walk starts at byte 2: only the SOI check keeps it
+    // from reading this as a JPEG with an APP1 to drop.
+    const notJpeg = new Uint8Array([0x00, 0x00, ...app1, ...dqt, 0xff, 0xd9])
+    expect(listJpegSegments(notJpeg)).toEqual([])
+    expect(stripJpegMetadata(notJpeg)).toBe(notJpeg)
   })
 
   it('stops at a segment whose length runs past the end instead of throwing', () => {

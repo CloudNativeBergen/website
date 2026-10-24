@@ -4,10 +4,12 @@ import {
   expect,
   fireEvent,
   fn,
+  spyOn,
   userEvent,
   waitFor,
   within,
 } from 'storybook/test'
+import { describeCrop } from '@/lib/photo-wall/crop'
 import { WALL_FILTERS, type WallFilterKey } from '@/lib/photo-wall/filters'
 import {
   endsWithEoi,
@@ -87,6 +89,90 @@ function sofSize(bytes: Uint8Array) {
     height: (bytes[o + 5] << 8) | bytes[o + 6],
     width: (bytes[o + 7] << 8) | bytes[o + 8],
   }
+}
+
+type Rgb = [number, number, number]
+
+/** Reads pixels of a posted JPEG (decoded as the server's viewers will) or of a canvas on the page. */
+async function pixelsOf(source: Blob | HTMLCanvasElement) {
+  let canvas: HTMLCanvasElement
+  if (source instanceof Blob) {
+    const bitmap = await createImageBitmap(source)
+    canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0)
+    bitmap.close()
+  } else {
+    canvas = source
+  }
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('No 2D canvas context')
+  const { width, height } = canvas
+  return {
+    width,
+    height,
+    /** The pixel at a fraction of the width and height. */
+    at: (fx: number, fy: number): Rgb => {
+      const [r, g, b] = ctx.getImageData(
+        Math.floor(fx * width),
+        Math.floor(fy * height),
+        1,
+        1,
+      ).data
+      return [r, g, b]
+    },
+  }
+}
+
+/** Places in the fixture photo, as fractions of it: four different colours. */
+const FIXTURE_SPOTS = {
+  sky: [0.5, 0.05],
+  hills: [0.1, 0.58],
+  water: [0.9, 0.7],
+  boat: [0.4, 0.83],
+} as const
+
+const spread = ([r, g, b]: Rgb) => Math.max(r, g, b) - Math.min(r, g, b)
+const luma = ([r, g, b]: Rgb) => 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+/** The fixture's spots in `pixels`, by name. */
+const fixtureSpots = (pixels: Awaited<ReturnType<typeof pixelsOf>>) =>
+  Object.fromEntries(
+    Object.entries(FIXTURE_SPOTS).map(([spot, [fx, fy]]) => [
+      spot,
+      pixels.at(fx, fy),
+    ]),
+  ) as Record<keyof typeof FIXTURE_SPOTS, Rgb>
+
+/**
+ * Noir: every spot grey (r, g and b within JPEG's chroma noise), and the
+ * photo still there: the bright sky well above the dark red boat, not one
+ * flat colour (a white fill, an empty canvas).
+ */
+async function expectNoirFixture(pixels: Awaited<ReturnType<typeof pixelsOf>>) {
+  const spots = fixtureSpots(pixels)
+  await expect(Object.values(spots).map((rgb) => spread(rgb) <= 8)).toEqual([
+    true,
+    true,
+    true,
+    true,
+  ])
+  await expect(luma(spots.sky) - luma(spots.boat)).toBeGreaterThan(80)
+  await expect(luma(spots.sky)).toBeLessThan(240)
+}
+
+/** Original: the same spots in colour (orange sky, green hills, blue water, red boat). */
+async function expectColourFixture(
+  pixels: Awaited<ReturnType<typeof pixelsOf>>,
+) {
+  const spots = fixtureSpots(pixels)
+  await expect(Object.values(spots).map((rgb) => spread(rgb) > 20)).toEqual([
+    true,
+    true,
+    true,
+    true,
+  ])
 }
 
 export const Landing: Story = {
@@ -196,6 +282,10 @@ export const Composer: Story = {
     await expect(
       canvas.getByRole('button', { name: 'Post to the wall' }),
     ).toBeVisible()
+    // The preview is the photo itself, in colour, before any filter.
+    await expectColourFixture(
+      await pixelsOf(canvas.getByTestId('photo-preview') as HTMLCanvasElement),
+    )
   },
 }
 
@@ -267,7 +357,21 @@ export const FilterFade = withFilter('fade')
 export const FilterFjord = withFilter('fjord')
 export const FilterAurora = withFilter('aurora')
 export const FilterMono = withFilter('mono')
-export const FilterNoir = withFilter('noir')
+/** Noir: the preview is the photo, drawn whole at the preview size and grey. */
+export const FilterNoir: Story = {
+  play: async (context) => {
+    await withFilter('noir').play?.(context)
+    const preview = within(context.canvasElement).getByTestId(
+      'photo-preview',
+    ) as HTMLCanvasElement
+    // The 1200x1600 fixture at the 1024 px preview long edge.
+    await expect({ width: preview.width, height: preview.height }).toEqual({
+      width: 768,
+      height: 1024,
+    })
+    await expectNoirFixture(await pixelsOf(preview))
+  },
+}
 export const FilterRetro = withFilter('retro')
 
 /** The photo window dragged to the top of a portrait photo. */
@@ -330,6 +434,89 @@ export const Posts: Story = {
     await expect(markers.filter((m) => m >= 0xe1 && m <= 0xef)).toEqual([])
     await expect(markers).not.toContain(0xfe)
     await expect(sofSize(bytes)).toEqual({ width: 1200, height: 1600 })
+    // The uploaded pixels are the photo with Noir baked in.
+    await expectNoirFixture(await pixelsOf(draft.photo))
+  },
+}
+
+/** The same photo posted on Original: the upload keeps its colour. */
+export const PostsOriginal: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = await pickFixture(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Post to the wall' }),
+    )
+    await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(1), {
+      timeout: 10_000,
+    })
+    const draft = (
+      args.onSubmit as ReturnType<typeof fn<WallComposerProps['onSubmit']>>
+    ).mock.calls[0][0] as WallPostDraft
+    await expectColourFixture(await pixelsOf(draft.photo))
+  },
+}
+
+/**
+ * A drag begun before Post and still moving after it: the window stops
+ * where Post found it, so the screen shows the crop that was posted.
+ */
+export const DragAcrossPost: Story = {
+  args: {
+    // Never answers: the screen stays locked on Posting….
+    onSubmit: fn<WallComposerProps['onSubmit']>(() => new Promise(() => {})),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = await pickFixture(canvasElement)
+    const window = canvas.getByRole('button', { name: 'Photo position' })
+    const pointer = { pointerId: 1, clientX: 100 }
+    fireEvent.pointerDown(window, { ...pointer, clientY: 100 })
+    fireEvent.pointerMove(window, { ...pointer, clientY: 140 })
+    fireEvent.click(canvas.getByRole('button', { name: 'Post to the wall' }))
+    fireEvent.pointerMove(window, { ...pointer, clientY: 300 })
+    await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(1), {
+      timeout: 10_000,
+    })
+    fireEvent.pointerMove(window, { ...pointer, clientY: 400 })
+    fireEvent.pointerUp(window, pointer)
+
+    const draft = (
+      args.onSubmit as ReturnType<typeof fn<WallComposerProps['onSubmit']>>
+    ).mock.calls[0][0] as WallPostDraft
+    // The drag before Post did move it (down the photo shows more of the top).
+    await expect(draft.crop.y).toBeLessThan(0.5)
+    await expect(canvas.getByTestId('crop-readout')).toHaveTextContent(
+      `Showing ${describeCrop(draft.crop)}`,
+    )
+  },
+}
+
+/**
+ * Picking the same file again after it failed to open tries it again: the
+ * browser only reports a change when the input's selection changes.
+ */
+export const SameFileAgain: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const decode = spyOn(window, 'createImageBitmap')
+    try {
+      const notAPhoto = new File(['not a photo'], 'IMG_0001.heic', {
+        type: 'image/heic',
+      })
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        await userEvent.upload(
+          canvas.getByLabelText('Choose from your photos'),
+          notAPhoto,
+        )
+        await waitFor(() =>
+          expect(canvas.getByRole('alert')).toHaveTextContent(
+            DECODE_FAILED_MESSAGE,
+          ),
+        )
+      }
+      await expect(decode).toHaveBeenCalledTimes(2)
+    } finally {
+      decode.mockRestore()
+    }
   },
 }
 
@@ -373,6 +560,15 @@ const transparentPhoto = (side: number): Story => ({
     readCtx.drawImage(uploaded, 0, 0)
     const [r, g, b] = readCtx.getImageData(5, 5, 1, 1).data
     await expect(Math.min(r, g, b)).toBeGreaterThan(240)
+    // The black square in the middle is still there: the white went under
+    // the photo, not over it.
+    const centre = readCtx.getImageData(
+      Math.floor(read.width / 2),
+      Math.floor(read.height / 2),
+      1,
+      1,
+    ).data
+    await expect(Math.max(centre[0], centre[1], centre[2])).toBeLessThan(30)
   },
 })
 
