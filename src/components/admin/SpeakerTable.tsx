@@ -818,6 +818,8 @@ export function SpeakerTable({
               setProposalToCancel({ ...proposal, speakers: [speaker] })
             }
             icon={NoSymbolIcon}
+            variant="danger"
+            title={`Cancel talk: ${proposal.title}`}
           >
             Cancel talk: {proposal.title}
           </ActionMenuItem>
