@@ -197,6 +197,19 @@ describe('removal: at once, on both looks', () => {
     expect(featuredId(s)).toBe('wallPost-19')
   })
 
+  it('a queued arrival that is removed does not hold up the next one', () => {
+    let s = started('mosaic', 20)
+    s = loadAll(poll(s, posts(23), T0 + 500), T0 + 500)
+    expect(featuredId(s)).toBe('wallPost-21')
+    s = poll(
+      s,
+      posts(23).filter((p) => p._id !== 'wallPost-22'),
+      T0 + 1_000,
+    )
+    s = run(s, T0 + 1_000, T0 + 500 + ARRIVAL_GAP_MS)
+    expect(featuredId(s)).toBe('wallPost-23')
+  })
+
   it('a queued arrival that is removed never shows', () => {
     let s = started('mosaic', 20)
     s = loadAll(poll(s, posts(22), T0 + 1_000), T0 + 1_000)
@@ -270,6 +283,15 @@ describe('images and flaky Wi-Fi (§9.2, §9.3)', () => {
     s = loadAll(s, T0)
     expect(ids(shownPosts(s))).toEqual(['wallPost-2', 'wallPost-1'])
     expect(featuredId(s)).toBe('wallPost-2')
+  })
+
+  it('a failed photo gives its tile to the next post', () => {
+    let s = poll(initialStream('mosaic'), posts(MOSAIC_TILES + 1), T0)
+    s = streamReducer(s, { type: 'imageFailed', key: keyOf(post(5)), now: T0 })
+    s = loadAll(s, T0)
+    expect(ids(shownPosts(s))).toHaveLength(MOSAIC_TILES)
+    expect(ids(shownPosts(s))).toContain('wallPost-1')
+    expect(ids(shownPosts(s))).not.toContain('wallPost-5')
   })
 
   it('an arrival whose photo fails is skipped', () => {
