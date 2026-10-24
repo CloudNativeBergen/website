@@ -9,11 +9,12 @@ import { NotificationProvider } from './NotificationProvider'
 const trpc = (data: unknown) => HttpResponse.json({ result: { data } })
 /** How many times the count was served in this story. */
 let served = 0
-const flaggedCount = (count: number) => [
+const flaggedCount = (count: number, pendingWallPosts = 0) => [
   http.get('/api/trpc/sessionFeedback.flaggedCount', () => {
     served++
     return trpc(count)
   }),
+  http.get('/api/trpc/photoWall.pendingCount', () => trpc(pendingWallPosts)),
   http.get('/api/trpc/notification.unreadCount', () => trpc(0)),
   http.get('/api/trpc/notification.list', () =>
     trpc({ items: [], nextCursor: null }),
@@ -51,7 +52,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The REAL admin shell with a count on a nav entry (speaker feedback spec §10.1): **Session Feedback** shows how many comments speakers flagged that wait for an organizer, from `sessionFeedback.flaggedCount`. A dot with the number on the icon in the desktop rail (its tooltip says what it counts), a pill after the name in the phone drawer, nothing at 0. Dark mode follows the global `theme` toolbar (story-level `globals`), applied to `next-themes` and the document too because the drawer is portaled.',
+          'The REAL admin shell with a count on a nav entry (speaker feedback spec §10.1): **Session Feedback** shows how many comments speakers flagged that wait for an organizer, from `sessionFeedback.flaggedCount`, and **Photo Wall** how many Wall Posts wait for approval (Photo Wall spec §10, P6), from `photoWall.pendingCount`. A dot with the number on the icon in the desktop rail (its tooltip says what it counts), a pill after the name in the phone drawer, nothing at 0. Dark mode follows the global `theme` toolbar (story-level `globals`), applied to `next-themes` and the document too because the drawer is portaled.',
       },
     },
   },
@@ -166,5 +167,79 @@ export const ManyFlagged: Story = {
       'title',
       'Session Feedback (140 flagged)',
     )
+  },
+}
+
+/** The Photo Wall entry's link, by its accessible name. */
+const photoWallLink = (count: number) =>
+  new RegExp(`^Photo Wall ${count} pending$`)
+
+/**
+ * Photo Wall (Photo Wall spec §10, P6): the Wall Posts waiting for approval,
+ * on the rail beside Session Feedback's flagged count.
+ */
+export const PhotoWallDesktop: Story = {
+  parameters: { msw: { handlers: flaggedCount(2, 7) } },
+  play: async ({ canvasElement }) => {
+    const link = await within(canvasElement).findByRole('link', {
+      name: photoWallLink(7),
+    })
+    await expect(link).toHaveAttribute('title', 'Photo Wall (7 pending)')
+    await expect(within(link).getByText('7')).toBeVisible()
+    await expect(await railLink(canvasElement)).toBeVisible()
+  },
+}
+
+export const PhotoWallDesktopDark: Story = {
+  ...PhotoWallDesktop,
+  globals: { theme: 'dark' },
+}
+
+/** Phone: the closed menu button names both counts, the drawer shows pills. */
+export const PhotoWallPhoneDrawer: Story = {
+  parameters: {
+    viewport: { defaultViewport: 'mobile1' },
+    msw: { handlers: flaggedCount(2, 7) },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      await within(canvasElement).findByRole('button', {
+        name: 'Open sidebar (Session Feedback: 2 flagged, Photo Wall: 7 pending)',
+      }),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole('link', { name: photoWallLink(7) }),
+      ).toBeVisible(),
+    )
+  },
+}
+
+export const PhotoWallPhoneDrawerDark: Story = {
+  ...PhotoWallPhoneDrawer,
+  globals: { theme: 'dark' },
+}
+
+/** The count failed: no badge, the plain name; the other count still shows. */
+export const PhotoWallCountFailed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/photoWall.pendingCount', () =>
+          HttpResponse.json(
+            { error: { message: 'Sanity is down', code: -32603 } },
+            { status: 500 },
+          ),
+        ),
+        ...flaggedCount(2),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await railLink(canvasElement)
+    await new Promise((r) => setTimeout(r, 100))
+    await expect(
+      within(canvasElement).getByRole('link', { name: 'Photo Wall' }),
+    ).toHaveAttribute('title', 'Photo Wall')
   },
 }
