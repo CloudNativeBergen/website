@@ -18,6 +18,8 @@ import {
 } from '../schemas/volunteer'
 import { requireDocumentInCurrentConference } from '../tenancy'
 import { fillVolunteerName } from '@/lib/volunteer/fillName'
+import type { VolunteerSendFailure } from '@/lib/volunteer/chunkedSend'
+import type { EmailResult } from '@/lib/email/config'
 import {
   getVolunteersByConference,
   getVolunteerById,
@@ -32,7 +34,10 @@ import {
 } from '@/lib/volunteer/sanity'
 import { verifyVolunteerConfirmToken } from '@/lib/volunteer/token'
 import { VolunteerStatus } from '@/lib/volunteer/types'
-import type { VolunteerInput } from '@/lib/volunteer/types'
+import type {
+  VolunteerInput,
+  VolunteerWithConference,
+} from '@/lib/volunteer/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendVolunteerApprovalEmail } from '@/lib/email/volunteer'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
@@ -42,6 +47,41 @@ import { getCurrentDateTime } from '@/lib/time'
 import { createNotifications } from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
+
+/** Refuse up front, before any send, when the conference has no sender address. */
+function requireSenderAddress(recipients: VolunteerWithConference[]) {
+  const conf = recipients[0]?.conference
+  if (conf && !conf.contactEmail && !conf.cfpEmail) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'The conference has no contact email set, so nothing was sent. Add one in the conference settings.',
+    })
+  }
+}
+
+/**
+ * Send to each volunteer in turn (callers cap the list at
+ * VOLUNTEER_EMAIL_CHUNK, which fits the route's time budget).
+ */
+async function sendEachVolunteer(
+  recipients: VolunteerWithConference[],
+  send: (v: VolunteerWithConference) => Promise<EmailResult<unknown>>,
+  onSent?: (v: VolunteerWithConference) => Promise<void>,
+): Promise<{ sent: number; failed: VolunteerSendFailure[] }> {
+  let sent = 0
+  const failed: VolunteerSendFailure[] = []
+  for (const v of recipients) {
+    const result = await send(v)
+    if (result.error) {
+      failed.push({ id: v._id, email: v.email, error: result.error.error })
+      continue
+    }
+    sent++
+    await onSent?.(v)
+  }
+  return { sent, failed }
+}
 
 export const volunteerRouter = router({
   create: publicProcedure
@@ -755,13 +795,10 @@ export const volunteerRouter = router({
             seen.add(key)
             return true
           })
+        requireSenderAddress(recipients)
 
-        let sent = 0
-        let failed = 0
-        // ponytail: sequential sends with retryWithBackoff inside; switch to
-        // Resend batch if the cap grows past a few hundred.
-        for (const v of recipients) {
-          const result = await sendVolunteerApprovalEmail(
+        const { sent, failed } = await sendEachVolunteer(recipients, (v) =>
+          sendVolunteerApprovalEmail(
             v,
             v.conference,
             fillVolunteerName(input.subject, v.name),
@@ -770,13 +807,16 @@ export const volunteerRouter = router({
               v.name,
               input.message.trim().startsWith('['),
             ),
-            { registrationUrl: null, slackInviteUrl: null, confirmUrl: null },
-          )
-          if (result.error) failed++
-          else sent++
-        }
+            {
+              template: 'message',
+              registrationUrl: null,
+              slackInviteUrl: null,
+              confirmUrl: null,
+            },
+          ),
+        )
         console.log(
-          `Volunteer bulk email: ${sent} sent, ${failed} failed (${conferenceId})`,
+          `Volunteer bulk email: ${sent} sent, ${failed.length} failed (${conferenceId})`,
         )
         return {
           sent,

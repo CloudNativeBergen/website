@@ -17,12 +17,13 @@ vi.mock('@/lib/email/volunteer', () => ({
 }))
 
 import { volunteerRouter } from './volunteer'
-import { VOLUNTEER_BULK_EMAIL_MAX } from '../schemas/volunteer'
+import { VOLUNTEER_EMAIL_CHUNK } from '@/lib/volunteer/chunkedSend'
 
 const ORG_ID = 'org-A'
 const conference = {
   _id: 'conf-1',
   title: 'CND',
+  contactEmail: 'hi@cnd.no',
   organization: { _ref: ORG_ID },
 }
 const vol = (id: string, email: string, name = id) => ({
@@ -74,7 +75,11 @@ describe('volunteer.admin.sendBulkEmail', () => {
       .mockResolvedValueOnce({ data: { emailId: 'e' } })
       .mockResolvedValueOnce({ error: { error: 'boom' } })
     const res = await caller().admin.sendBulkEmail(input(['v1', 'v2', 'v3']))
-    expect(res).toEqual({ sent: 1, failed: 1, skipped: 1 })
+    expect(res).toEqual({
+      sent: 1,
+      failed: [{ id: 'v3', email: 'c@x.no', error: 'boom' }],
+      skipped: 1,
+    })
     expect(sendMock).toHaveBeenCalledTimes(2)
     const [v, conf, subject, message, opts] = sendMock.mock.calls[0]
     expect(v._id).toBe('v1')
@@ -82,15 +87,53 @@ describe('volunteer.admin.sendBulkEmail', () => {
     expect(subject).toBe('Hi Ada')
     expect(message).toBe('Hello Ada')
     expect(opts).toEqual({
+      template: 'message',
       registrationUrl: null,
       slackInviteUrl: null,
       confirmUrl: null,
     })
   })
 
-  it('caps the recipient count', async () => {
+  it('fills portable text JSON with a name holding quotes, backslashes and newlines', async () => {
+    getVolunteersMock.mockResolvedValue({
+      volunteers: [vol('v1', 'a@x.no', 'Ola "O\\K"\r\nBcc: x')],
+      error: null,
+    })
+    const message = JSON.stringify([
+      {
+        _type: 'block',
+        children: [{ _type: 'span', text: 'Hello {{name}}' }],
+      },
+    ])
+    await caller().admin.sendBulkEmail({
+      volunteerIds: ['v1'],
+      subject: 'Hi {{name}}',
+      message,
+    })
+    const [, , subject, body] = sendMock.mock.calls[0]
+    expect(subject).toBe('Hi Ola "O\\K" Bcc: x')
+    expect(JSON.parse(body)[0].children[0].text).toBe('Hello Ola "O\\K" Bcc: x')
+  })
+
+  it('refuses before sending when the conference has no contact email', async () => {
+    getVolunteersMock.mockResolvedValue({
+      volunteers: [
+        {
+          ...vol('v1', 'a@x.no'),
+          conference: { ...conference, contactEmail: undefined },
+        },
+      ],
+      error: null,
+    })
+    await expect(
+      caller().admin.sendBulkEmail(input(['v1'])),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
+  it('caps the recipient count per call', async () => {
     const ids = Array.from(
-      { length: VOLUNTEER_BULK_EMAIL_MAX + 1 },
+      { length: VOLUNTEER_EMAIL_CHUNK + 1 },
       (_, i) => `v${i}`,
     )
     await expect(caller().admin.sendBulkEmail(input(ids))).rejects.toThrow()

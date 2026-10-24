@@ -286,16 +286,7 @@ export default function VolunteerAdminPage() {
     },
   })
 
-  const sendBulkEmail = api.volunteer.admin.sendBulkEmail.useMutation({
-    onSuccess: ({ sent, failed }) => {
-      setBulkEmailOpen(false)
-      notify?.showNotification({
-        type: failed ? 'warning' : 'success',
-        title: 'Volunteer email sent',
-        message: `${sent} sent${failed ? `, ${failed} failed` : ''}`,
-      })
-    },
-  })
+  const sendBulkEmail = api.volunteer.admin.sendBulkEmail.useMutation()
 
   const sendEmail = api.volunteer.admin.sendEmail.useMutation({
     onSuccess: async (data, variables) => {
@@ -1525,9 +1516,14 @@ export default function VolunteerAdminPage() {
           isOpen
           onClose={() => setBulkEmailOpen(false)}
           volunteers={filteredVolunteers}
-          onSend={async (data) => {
-            await sendBulkEmail.mutateAsync(data)
-          }}
+          onSend={(data) => sendBulkEmail.mutateAsync(data)}
+          onComplete={(sent) =>
+            notify?.showNotification({
+              type: 'success',
+              title: 'Volunteer email sent',
+              message: `Sent to ${sent} ${sent === 1 ? 'volunteer' : 'volunteers'}`,
+            })
+          }
         />
       )}
 
