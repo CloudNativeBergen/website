@@ -38,6 +38,17 @@ vi.mock('@/components/admin/ProposalActionModal', () => ({
   ),
 }))
 
+vi.mock('@/components/admin/RemoveSpeakerModal', () => ({
+  RemoveSpeakerModal: (props: {
+    proposal: { title: string }
+    speaker: { name: string }
+  }) => (
+    <div data-testid="remove-speaker-modal">
+      {props.proposal.title}|{props.speaker.name}
+    </div>
+  ),
+}))
+
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { SpeakerTable } from '@/components/admin/SpeakerTable'
 import type { Speaker } from '@/lib/speaker/types'
@@ -99,6 +110,55 @@ describe('SpeakerTable cancel talk action', () => {
 
     expect(screen.getByTestId('proposal-action-modal').textContent).toBe(
       'cancel|true|Current Talk|Ada Lovelace',
+    )
+  })
+})
+
+describe('SpeakerTable remove from talk action', () => {
+  it('offers removal only for talks with more than one speaker', () => {
+    const rows = [
+      {
+        ...speakers[0],
+        proposals: [
+          {
+            _id: 'p-shared',
+            title: 'Shared Talk',
+            status: 'accepted',
+            conference: { _id: 'conf-2026' },
+            speakers: [{ _ref: 'speaker-1' }, { _ref: 'speaker-2' }],
+          },
+          {
+            _id: 'p-solo',
+            title: 'Solo Talk',
+            status: 'confirmed',
+            conference: { _id: 'conf-2026' },
+            speakers: [{ _ref: 'speaker-1' }],
+          },
+        ],
+      },
+    ] as unknown as (Speaker & { proposals: ProposalExisting[] })[]
+    render(
+      <SpeakerTable
+        speakers={rows}
+        currentConferenceId="conf-2026"
+        onEditSpeaker={vi.fn()}
+        onPreviewSpeaker={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Actions for Ada Lovelace' })[0],
+    )
+
+    expect(screen.getAllByText(/^Cancel talk:/)).toHaveLength(2)
+    const items = screen.getAllByText(/^Remove from talk:/)
+    expect(items).toHaveLength(1)
+    expect(items[0].textContent).toBe('Remove from talk: Shared Talk')
+
+    fireEvent.click(items[0])
+
+    expect(screen.getByTestId('remove-speaker-modal').textContent).toBe(
+      'Shared Talk|Ada Lovelace',
     )
   })
 })
