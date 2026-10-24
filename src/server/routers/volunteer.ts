@@ -616,17 +616,28 @@ export const volunteerRouter = router({
           })
         }
 
-        const ids = [...new Set(input.volunteerIds)].filter(
-          (id) => byId.get(id)!.status === VolunteerStatus.PENDING,
-        )
-        const skipped = input.volunteerIds.length - ids.length
-        if (ids.length === 0) return { updated: 0, skipped }
+        const unique = [...new Set(input.volunteerIds)]
+        const pending = unique
+          .map((id) => byId.get(id)!)
+          .filter((v) => v.status === VolunteerStatus.PENDING)
+        const skipped = unique.length - pending.length
+        if (pending.length === 0) return { updated: 0, skipped }
 
         const { error: writeError } = await bulkUpdateVolunteerStatus(
-          ids,
+          pending.map(({ _id, _rev }) => ({ _id, _rev })),
           input.status,
           ctx.speaker._id,
         )
+        if (
+          (writeError as { statusCode?: unknown } | null)?.statusCode === 409
+        ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message:
+              'Someone else changed these volunteers, reload and try again',
+            cause: writeError,
+          })
+        }
         if (writeError) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -634,7 +645,7 @@ export const volunteerRouter = router({
             cause: writeError,
           })
         }
-        return { updated: ids.length, skipped }
+        return { updated: pending.length, skipped }
       }),
 
     update: adminProcedure

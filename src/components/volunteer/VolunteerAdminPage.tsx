@@ -303,8 +303,8 @@ export default function VolunteerAdminPage() {
     })
   const runBulkStatus = async (
     status: VolunteerStatus.APPROVED | VolunteerStatus.REJECTED,
+    ids: string[],
   ) => {
-    const ids = [...checkedIds]
     let updated = 0
     let skipped = 0
     try {
@@ -329,7 +329,14 @@ export default function VolunteerAdminPage() {
       notify?.showNotification({
         type: 'error',
         title: 'Failed to update volunteer status',
-        message: err instanceof Error ? err.message : undefined,
+        message: [
+          updated
+            ? `${updated} ${updated === 1 ? 'volunteer was' : 'volunteers were'} updated before the error.`
+            : '',
+          err instanceof Error ? err.message : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
       })
     } finally {
       await utils.volunteer.admin.list.invalidate()
@@ -515,6 +522,9 @@ export default function VolunteerAdminPage() {
   const visiblePendingIds = filteredVolunteers
     .filter((v) => v.status === VolunteerStatus.PENDING)
     .map((v) => v._id)
+  // Only ticked ids that are still pending and visible count; ids hidden by a
+  // filter or no longer pending after a refetch are ignored, never acted on.
+  const selectedIds = visiblePendingIds.filter((id) => checkedIds.has(id))
 
   const { copied: copiedAllEmails, copyToClipboard: copyAllEmails } =
     useCopyToClipboard({
@@ -910,7 +920,7 @@ export default function VolunteerAdminPage() {
         <div
           className={`space-y-2 lg:col-span-5 xl:col-span-4 ${
             selectedVolunteerId ? 'hidden lg:block' : 'block'
-          }`}
+          } ${selectedIds.length > 0 ? 'pb-24' : ''}`}
         >
           <div className="flex items-center justify-between pb-1">
             <h2
@@ -924,11 +934,7 @@ export default function VolunteerAdminPage() {
               {visiblePendingIds.length > 0 && (
                 <button
                   type="button"
-                  onClick={() =>
-                    setCheckedIds(
-                      (prev) => new Set([...prev, ...visiblePendingIds]),
-                    )
-                  }
+                  onClick={() => setCheckedIds(new Set(visiblePendingIds))}
                   className="-my-3 inline-flex min-h-11 cursor-pointer items-center px-1 text-xs font-medium text-brand-cloud-blue hover:underline dark:text-blue-400"
                 >
                   Select all visible pending
@@ -1058,7 +1064,7 @@ export default function VolunteerAdminPage() {
                           />
                         </label>
                       ) : (
-                        checkedIds.size > 0 && (
+                        visiblePendingIds.length > 0 && (
                           <span className="w-11 shrink-0" />
                         )
                       )}
@@ -1748,21 +1754,28 @@ export default function VolunteerAdminPage() {
         variant="danger"
       />
 
-      {checkedIds.size > 0 && (
-        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+      {selectedIds.length > 0 && (
+        // Hidden below lg while a volunteer's details cover the list.
+        <div
+          className={`fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 justify-center px-4 ${
+            selectedVolunteerId ? 'hidden lg:flex' : 'flex'
+          }`}
+        >
           <div
             role="region"
             aria-label="Bulk actions"
             className="flex w-full max-w-md items-center justify-between gap-2 rounded-full border border-gray-200 bg-white/90 p-1.5 pl-5 shadow-2xl backdrop-blur-md dark:border-gray-700 dark:bg-gray-900/90"
           >
             <span className="text-sm font-semibold text-gray-900 dark:text-white">
-              {checkedIds.size} selected
+              {selectedIds.length} selected
             </span>
             <div className="flex items-center gap-1">
               <AdminButton
                 size="sm"
                 color="green"
-                onClick={() => void runBulkStatus(VolunteerStatus.APPROVED)}
+                onClick={() =>
+                  void runBulkStatus(VolunteerStatus.APPROVED, selectedIds)
+                }
                 disabled={bulkUpdateStatus.isPending}
                 className="min-h-11"
               >
@@ -1796,14 +1809,14 @@ export default function VolunteerAdminPage() {
         onClose={() => setBulkRejectOpen(false)}
         onConfirm={async () => {
           try {
-            await runBulkStatus(VolunteerStatus.REJECTED)
+            await runBulkStatus(VolunteerStatus.REJECTED, selectedIds)
           } finally {
             setBulkRejectOpen(false)
           }
         }}
         isLoading={bulkUpdateStatus.isPending}
         title="Reject Volunteer Applications"
-        message={`Reject ${checkedIds.size} pending ${checkedIds.size === 1 ? 'application' : 'applications'}? No email is sent.`}
+        message={`Reject ${selectedIds.length} pending ${selectedIds.length === 1 ? 'application' : 'applications'}? No email is sent.`}
         confirmButtonText="Reject Applications"
         variant="danger"
       />
