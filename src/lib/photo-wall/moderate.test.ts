@@ -676,13 +676,21 @@ describe('a wall closed by the retention cron (§11.1)', () => {
 
   it('the wall is re-read just before the commit, after the post: a close that lands in between refuses the write', async () => {
     // Open when the organizer decided; closed by the time Approve reads it.
+    let postsReadFirst: string[] = []
     store().beforeEachRead((read) => {
-      if (read.query.includes('"photoWall"')) closed()
+      if (read.query.includes('"photoWall"')) {
+        postsReadFirst = [...store().docReads]
+        closed()
+      }
     })
     await expect(act('approve', 'pending')).resolves.toEqual({
       status: 'changed',
     })
-    expect(store().docReads).toEqual([P1])
+    // The wall was read once, AFTER the post, not at the start.
+    expect(postsReadFirst).toEqual([P1])
+    expect(
+      store().reads.filter((r) => r.query.includes('"photoWall"')),
+    ).toHaveLength(1)
     expect(store().commits).toEqual([])
     expect(store().doc(P1)).toMatchObject({ status: 'pending' })
   })
