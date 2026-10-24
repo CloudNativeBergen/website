@@ -6,7 +6,7 @@
  * field checks use too, so a caption the composer accepts is never refused
  * for its text.
  */
-import { isDroppedPoint, normalizeWallText } from './wall-text'
+import { MAX_TEXT_INPUT, normalizeWallText, stripDropped } from './wall-text'
 
 export { normalizeWallText }
 
@@ -40,12 +40,11 @@ export function limitWallText(text: string, max: number): string {
   // whitespace run costs one space only once a visible character follows it,
   // and the cut falls before the first character that would go over. A
   // pasted essay stays instant.
-  const points = Array.from(
-    Array.from(text)
-      .filter((point) => !isDroppedPoint(point))
-      .join('')
-      .normalize('NFC'),
-  )
+  // A paste over the server's raw cap is cut first: NFC on a long crafted
+  // run of combining marks would freeze the page.
+  const capped =
+    text.length > MAX_TEXT_INPUT ? text.slice(0, MAX_TEXT_INPUT) : text
+  const points = Array.from(stripDropped(capped).normalize('NFC'))
   let kept = 0
   let spaceOwed = false
   for (let i = 0; i < points.length; i += 1) {

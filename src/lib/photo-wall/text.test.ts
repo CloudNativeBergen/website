@@ -8,7 +8,7 @@ import {
   normalizeWallText,
   wallTextLength,
 } from './text'
-import { isDroppedPoint } from './wall-text'
+import { stripDropped } from './wall-text'
 
 /**
  * The caption and name rules (Photo Wall spec §6.4, §6.5): limits in code
@@ -124,12 +124,7 @@ describe('wallTextLength and limitWallText: the counter and the cut measure the 
   it('keeps the longest prefix whose normalised text fits, on mixed input', () => {
     // The definition, one re-count per prefix: slow, but obviously right.
     const longestFitting = (text: string, max: number) => {
-      const points = Array.from(
-        Array.from(text)
-          .filter((point) => !isDroppedPoint(point))
-          .join('')
-          .normalize('NFC'),
-      )
+      const points = Array.from(stripDropped(text).normalize('NFC'))
       let n = points.length
       while (n > 0 && wallTextLength(points.slice(0, n).join('')) > max) n -= 1
       return points.slice(0, n).join('')
@@ -159,5 +154,13 @@ describe('wallTextLength and limitWallText: the counter and the cut measure the 
         normalizeWallText(longestFitting(text, max)),
       )
     }
+  })
+
+  it('cuts a crafted paste of combining marks without freezing the page', () => {
+    const crafted = 'a' + '\u{316}\u{300}'.repeat(100_000)
+    const started = performance.now()
+    const cut = limitWallText(crafted, CAPTION_MAX)
+    expect(performance.now() - started).toBeLessThan(200)
+    expect(wallTextLength(cut)).toBeLessThanOrEqual(CAPTION_MAX)
   })
 })
