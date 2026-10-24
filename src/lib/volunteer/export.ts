@@ -15,10 +15,10 @@ const COLUMNS = [
   'T-shirt size',
   'Dietary restrictions',
   'Preferred tasks',
-  'Assigned tasks',
   'Availability',
   'Ticket status',
   'Confirmed at',
+  'Assigned tasks',
 ] as const
 
 const TICKET_LABELS: Record<VolunteerTicketStatus['state'], string> = {
@@ -62,10 +62,10 @@ export function buildVolunteersCsv(
         v.tshirtSize,
         v.dietaryRestrictions,
         v.preferredTasks?.join('; '),
-        v.assignedTasks?.join('; '),
         v.availability,
         ticket ? TICKET_LABELS[ticket.state] : '',
         v.confirmedAt,
+        v.assignedTasks?.join('; '),
       ]
     }),
   )

@@ -180,6 +180,12 @@ describe('UpdateVolunteerDetailsSchema assignedTasks', () => {
     })
     expect(ok.assignedTasks).toEqual(['Info desk'])
     expect(
+      UpdateVolunteerDetailsSchema.parse({
+        ...base,
+        assignedTasks: ['Info desk', 'info DESK', 'Bar'],
+      }).assignedTasks,
+    ).toEqual(['Info desk', 'Bar'])
+    expect(
       UpdateVolunteerDetailsSchema.safeParse({ ...base, assignedTasks: ['  '] })
         .success,
     ).toBe(false)

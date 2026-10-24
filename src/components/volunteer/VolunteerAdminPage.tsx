@@ -957,9 +957,9 @@ export default function VolunteerAdminPage() {
 
                       {(volunteer.assignedTasks?.length ?? 0) > 0 && (
                         <span className="mt-2 flex flex-wrap gap-1">
-                          {volunteer.assignedTasks!.map((task) => (
+                          {volunteer.assignedTasks!.map((task, i) => (
                             <span
-                              key={task}
+                              key={`${i}-${task}`}
                               className="rounded bg-green-50 px-1.5 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300"
                             >
                               {task}
@@ -1167,9 +1167,9 @@ export default function VolunteerAdminPage() {
                         Assigned Tasks
                       </span>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {selectedVolunteer.assignedTasks!.map((task) => (
+                        {selectedVolunteer.assignedTasks!.map((task, i) => (
                           <span
-                            key={task}
+                            key={`${i}-${task}`}
                             className="inline-flex items-center rounded-md bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-green-700/10 ring-inset dark:bg-green-900/30 dark:text-green-300 dark:ring-green-400/20"
                           >
                             {task}

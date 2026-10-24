@@ -26,13 +26,13 @@ describe('buildVolunteersCsv', () => {
     const lines = csv.replace(/^﻿/, '').trimEnd().split('\n')
     expect(lines).toHaveLength(3)
     expect(lines[0]).toBe(
-      'Name,Email,Phone,Status,Occupation,T-shirt size,Dietary restrictions,Preferred tasks,Assigned tasks,Availability,Ticket status,Confirmed at',
+      'Name,Email,Phone,Status,Occupation,T-shirt size,Dietary restrictions,Preferred tasks,Availability,Ticket status,Confirmed at,Assigned tasks',
     )
     expect(lines[1]).toBe(
-      `"Ola, ""Nordmann""",ola@example.com,'+4712345678,confirmed,student,M,Vegan no nuts,"registration; av",Info desk,Both days,Ticket claimed,2026-10-01T10:00:00Z`,
+      `"Ola, ""Nordmann""",ola@example.com,'+4712345678,confirmed,student,M,Vegan no nuts,"registration; av",Both days,Ticket claimed,2026-10-01T10:00:00Z,Info desk`,
     )
     expect(lines[2].startsWith("'=HYPERLINK()")).toBe(true)
-    expect(lines[2]).toContain(',,2026') // no ticket status known
+    expect(lines[2]).toContain(',,2026-10-01T10:00:00Z,') // no ticket status known
   })
 })
 
