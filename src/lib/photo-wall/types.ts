@@ -1,16 +1,28 @@
 import type { PostingState } from './window'
 
 /**
- * The Photo Wall's settings (Photo Wall spec §4.1). Monday offers Open and
- * Paused; Automatic is slice P2.
+ * The Photo Wall's settings (Photo Wall spec §4.1, §7). Automatic opens and
+ * closes posting with the conference days; Open and Paused override it.
  */
-export const POSTING_MODES = ['open', 'paused'] as const
+export const POSTING_MODES = ['auto', 'open', 'paused'] as const
 export type PostingMode = (typeof POSTING_MODES)[number]
+
+/**
+ * The mode a stored value means (§7): a missing one is Automatic, the
+ * default; anything the switch does not offer is Paused, so a stray value
+ * never opens posting.
+ */
+export function postingModeOf(stored: unknown): PostingMode {
+  if (stored == null) return 'auto'
+  return (POSTING_MODES as readonly unknown[]).includes(stored)
+    ? (stored as PostingMode)
+    : 'paused'
+}
 
 /** A conference's `photoWall` document as the server reads it. */
 export interface PhotoWall {
   _id: string
-  /** A missing mode reads as Paused (§4.1). */
+  /** A missing mode reads as Automatic; an unrecognised one as Paused (§7). */
   postingMode: PostingMode
   sponsorStrip: boolean
   /** Set by the retention cron (P1): closed to writes. */
