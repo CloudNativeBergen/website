@@ -13,7 +13,10 @@ import {
   type UseQueryOptions,
 } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import type { ModerationQueueData, WallPostStatus } from '@/lib/photo-wall/moderation'
+import type {
+  ModerationQueueData,
+  WallPostStatus,
+} from '@/lib/photo-wall/moderation'
 
 const h = vi.hoisted(() => ({
   flagged: vi.fn(async (): Promise<number> => 0),
