@@ -2,7 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { feedbackCodeForTalk } from '@/lib/feedback/server'
-import { UNKNOWN_FEEDBACK_PATH } from '@/lib/feedback/url'
+import {
+  FEEDBACK_EMBED_PARAM,
+  isFeedbackEmbed,
+  UNKNOWN_FEEDBACK_PATH,
+} from '@/lib/feedback/url'
 
 /**
  * GET /program/<talkId>/feedback — the programme's "Give feedback" link
@@ -38,8 +42,11 @@ export async function GET(
 
   const location = new URL(request.url)
   location.pathname = code ? `/f/${code}` : UNKNOWN_FEEDBACK_PATH
+  const embed = isFeedbackEmbed(location.searchParams.get(FEEDBACK_EMBED_PARAM))
   location.search = ''
   location.hash = ''
+  // The programme's sheet (§7.5): the attendee page drops its page chrome.
+  if (embed) location.searchParams.set(FEEDBACK_EMBED_PARAM, '1')
   // 302, never permanent: the code behind a talk can rotate.
   return feedbackLinkResponse(NextResponse.redirect(location, 302))
 }

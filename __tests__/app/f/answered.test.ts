@@ -131,6 +131,7 @@ function request(cookie?: string) {
 async function pageState(code = 'k7m2qx') {
   const element = await FeedbackCodePage({
     params: Promise.resolve({ code }),
+    searchParams: Promise.resolve({}),
   })
   return element.props.page
 }

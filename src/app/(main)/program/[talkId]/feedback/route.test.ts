@@ -28,8 +28,8 @@ const CONFERENCE = {
   programDate: '2026-08-01',
 }
 
-const get = (talkId: string) =>
-  GET(new Request(`${HOST}/program/${talkId}/feedback`) as never, {
+const get = (talkId: string, search = '') =>
+  GET(new Request(`${HOST}/program/${talkId}/feedback${search}`) as never, {
     params: Promise.resolve({ talkId }),
   })
 
@@ -67,6 +67,22 @@ describe('GET /program/<talkId>/feedback', () => {
       `${HOST}${UNKNOWN_FEEDBACK_PATH}`,
     )
     expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+
+  it("keeps the programme sheet's embed flag, and nothing else, on both targets", async () => {
+    const response = await get('talk-1', '?embed=1&utm_source=x')
+    expect(response.headers.get('location')).toBe(`${HOST}/f/k7m2qx?embed=1`)
+
+    feedbackCodeForTalk.mockResolvedValue(null)
+    const refused = await get('talk-1', '?embed=1')
+    expect(refused.headers.get('location')).toBe(
+      `${HOST}${UNKNOWN_FEEDBACK_PATH}?embed=1`,
+    )
+  })
+
+  it('drops an embed flag that is not exactly 1', async () => {
+    const response = await get('talk-1', '?embed=yes')
+    expect(response.headers.get('location')).toBe(`${HOST}/f/k7m2qx`)
   })
 
   it('lands that refusal on a path the attendee page reads as malformed (Unknown, no lookup)', () => {

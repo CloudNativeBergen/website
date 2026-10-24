@@ -38,8 +38,11 @@ import { beginRequest, presentCookie } from '../../helpers/nextHeadersJar'
 import FeedbackCodePage from '@/app/(public)/f/[code]/page'
 
 const CONFERENCE = { _id: 'conf-A', title: 'Conf A', endDate: '2026-10-27' }
-const render = (code = 'k7m2qx') =>
-  FeedbackCodePage({ params: Promise.resolve({ code }) })
+const render = (code = 'k7m2qx', search: Record<string, string> = {}) =>
+  FeedbackCodePage({
+    params: Promise.resolve({ code }),
+    searchParams: Promise.resolve(search),
+  })
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -49,6 +52,16 @@ beforeEach(() => {
 })
 
 describe('/f/[code]', () => {
+  it('renders for the programme sheet only on embed=1, on every branch', async () => {
+    expect((await render()).props.embedded).toBe(false)
+    expect((await render('k7m2qx', { embed: 'true' })).props.embedded).toBe(
+      false,
+    )
+    expect((await render('k7m2qx', { embed: '1' })).props.embedded).toBe(true)
+    h.resolution = { conference: {}, status: 'unavailable' }
+    expect((await render('k7m2qx', { embed: '1' })).props.embedded).toBe(true)
+  })
+
   it('shows Unavailable when the conference read failed, and reads no code', async () => {
     h.resolution = { conference: {}, status: 'unavailable' }
     const element = await render()

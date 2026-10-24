@@ -43,17 +43,23 @@ export type { DeleteAnswer, SubmitAnswer } from './answers'
  * confirmed. From Answered the attendee changes the colour, sends a comment,
  * or deletes the answer; Delete is also on Closed and Not yet open while the
  * cookie lists the talk.
+ *
+ * `embedded` is the programme's feedback sheet (§7.5), which frames this page:
+ * no logo, no full-viewport height, and no way back to the programme, which
+ * would load the programme inside the sheet.
  */
 export function AttendeeFeedbackPage({
   logo,
   page: initial,
   submit,
   remove,
+  embedded = false,
 }: {
   logo: ConferenceLogoData | null
   page: AttendeeFeedbackState
   submit: SubmitAnswer
   remove: DeleteAnswer
+  embedded?: boolean
 }) {
   const [page, setPage] = useState(initial)
   // Whatever an action leads to takes focus, so a screen reader announces
@@ -66,11 +72,11 @@ export function AttendeeFeedbackPage({
   return (
     <div
       data-shell-fit="viewport"
-      className="min-h-dvh bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100"
+      className={`${embedded ? '' : 'min-h-dvh'}bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100`}
     >
       {/* No logo when the conference could not be read: the platform's own
           mark on a tenant's domain would be another brand. */}
-      {logo && (
+      {logo && !embedded && (
         <header className="flex justify-center px-4 pt-8">
           <ConferenceLogo
             conference={logo}
@@ -79,7 +85,9 @@ export function AttendeeFeedbackPage({
           />
         </header>
       )}
-      <main className="mx-auto max-w-md px-4 pt-10 pb-12">
+      <main
+        className={`mx-auto max-w-md px-4 ${embedded ? 'pt-4 pb-8' : 'pt-10 pb-12'}`}
+      >
         {/* Always in the DOM, so the text set after a delete is announced;
             neutral on a refusal, whatever its reason (§7.4). */}
         <Status
@@ -96,6 +104,7 @@ export function AttendeeFeedbackPage({
           remove={remove}
           announce={afterTap}
           deletes={deletes}
+          programmeLink={!embedded}
           onOutcome={(next, afterDelete) => {
             setPage((previous) =>
               // A comment the server could not read back after a
@@ -131,6 +140,7 @@ function PageState({
   remove,
   announce,
   deletes,
+  programmeLink,
   onOutcome,
 }: {
   page: AttendeeFeedbackState
@@ -138,6 +148,7 @@ function PageState({
   remove: DeleteAnswer
   announce: boolean
   deletes: number
+  programmeLink: boolean
   onOutcome: (next: AttendeeFeedbackState, afterDelete?: DeleteNotice) => void
 }) {
   // The talk's title is the page's h1 when it is shown; the state's own
@@ -167,6 +178,7 @@ function PageState({
             announce={announce}
             submit={submit}
             remove={remove}
+            programmeLink={programmeLink}
             onOutcome={onOutcome}
           />
         </>
