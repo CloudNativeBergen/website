@@ -87,7 +87,7 @@ export function StatCard({
       aria-pressed={pressed}
       aria-label={`${label}, ${value}`}
       className={cn(
-        'w-full cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
+        'flex w-full cursor-pointer flex-col text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
         shell,
       )}
     >
