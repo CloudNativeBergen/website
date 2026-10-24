@@ -16,6 +16,9 @@ import { sweepPhotoWall } from '@/lib/photo-wall/sweep'
  * not stop the purges `cleanup-notifications` carries, and a wall with
  * hundreds of photos needs a time budget of its own. A run cut short by the
  * deadline leaves `purgedAt` unset and the next run repeats the purge.
+ * Every request of the purge and the sweep is aborted at the deadline, so
+ * the reserve only has to cover the report; the one exception is a stuck
+ * delete's finish (`deleteWallPost`), whose requests carry no signal.
  */
 export const maxDuration = 300
 const RESERVE_MS = 10_000

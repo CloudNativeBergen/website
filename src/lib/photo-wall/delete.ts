@@ -181,10 +181,17 @@ export type WallAssetOutcome = 'deleted' | 'held' | 'failed'
  */
 export async function deleteWallAsset(
   assetId: string | null,
-  { except }: { except?: string } = {},
+  {
+    except,
+    signal,
+  }: {
+    except?: string
+    /** Ends every read and delete of this call (the cron's budget). */
+    signal?: AbortSignal
+  } = {},
 ): Promise<WallAssetOutcome> {
   if (!assetId) return 'deleted'
-  const held = () => isAssetHeld(assetId, { except })
+  const held = () => isAssetHeld(assetId, { except, signal })
   return atMostTwice<WallAssetOutcome>(
     async () => {
       const holds = await held()
@@ -192,7 +199,7 @@ export async function deleteWallAsset(
       if (holds) return 'held'
       if (holds === false) {
         try {
-          await deleteWithHistory(assetId)
+          await deleteWithHistory(assetId, { signal })
           return 'deleted'
         } catch (error) {
           console.error(`Could not delete Wall Post asset ${assetId}`, error)

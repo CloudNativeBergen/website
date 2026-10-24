@@ -181,7 +181,7 @@ afterEach(() => {
 describe('orphan assets (§11.2)', () => {
   it('deletes, with history, a photo-wall asset older than an hour that nothing references, of every unpurged wall', async () => {
     const report = await run()
-    expect(report).toMatchObject({ orphans: 3, assets: 2, assetsKept: 1 })
+    expect(report).toMatchObject({ orphans: 2, assets: 2, assetsKept: 0 })
     expect(store().doc(assetId('o1'))).toBeUndefined()
     expect(store().doc(assetId('o8'))).toBeUndefined()
     expect(
@@ -199,12 +199,15 @@ describe('orphan assets (§11.2)', () => {
     }
   })
 
-  it("keeps one only another tenant's document holds, found by the check before the delete", async () => {
+  it("is never a candidate when another tenant's document holds it: not checked, not counted, not tried", async () => {
     const mutate = vi.spyOn(clientWrite as unknown as Mutator, 'mutate')
     const report = await run()
-    expect(report.assetsKept).toBe(1)
+    expect(report).toMatchObject({ orphans: 2, assetsKept: 0 })
     expect(store().doc(assetId('o4'))).toBeDefined()
-    // Not even sent: the holder check kept it, not Sanity's refusal.
+    // No holder check of it: the candidate read already left it out.
+    expect(
+      store().reads.filter((r) => r.params.assetId === assetId('o4')),
+    ).toEqual([])
     expect(
       mutate.mock.calls.flatMap(([m]) =>
         m.flatMap((x) => (x.delete ? [x.delete.id] : [])),
@@ -214,12 +217,16 @@ describe('orphan assets (§11.2)', () => {
 
   it('rechecks on the latest documents: a holder that appears after the candidate read keeps the asset, untried', async () => {
     store().beforeEachRead((read) => {
-      if (read.query.includes('references($assetId)')) {
+      // o1's own check: after the candidate read named it.
+      if (
+        read.query.includes('references($assetId)') &&
+        read.params.assetId === assetId('o1')
+      ) {
         store().put(holding('late', 'o1'))
       }
     })
     const report = await run()
-    expect(report).toMatchObject({ orphans: 3, assets: 1, assetsKept: 2 })
+    expect(report).toMatchObject({ orphans: 2, assets: 1, assetsKept: 1 })
     expect(store().doc(assetId('o1'))).toBeDefined()
     expect(deletedIds()).not.toContain(assetId('o1'))
   })
@@ -276,7 +283,26 @@ describe('stuck deletes (§11.2, §12)', () => {
 
 it('stops at the deadline, saying so', async () => {
   const report = await run(NOW)
-  // Cut at the first wall's first candidate: the second wall is not read.
-  expect(report).toEqual({ ...nothing, orphans: 2, cutShort: true })
+  // Cut at the first stuck delete: no candidate is read.
+  expect(report).toEqual({ ...nothing, stuck: 2, cutShort: true })
   expect(store().commits).toEqual([])
+})
+
+it('finishes the stuck deletes FIRST: an orphan pass past the deadline does not starve them', async () => {
+  const deadline = new Date(NOW.getTime() + 60_000)
+  // The deadline passes as the first orphan candidates are read.
+  store().beforeEachRead((read) => {
+    if (read.query.includes('"sanity.imageAsset"')) {
+      vi.setSystemTime(new Date(deadline.getTime() + 1))
+    }
+  })
+  const report = await run(deadline)
+  expect(report).toMatchObject({
+    stuck: 2,
+    finished: 2,
+    assets: 0,
+    cutShort: true,
+  })
+  for (const n of ['d1', 'd3']) expect(store().doc(postId(n))).toBeUndefined()
+  expect(store().doc(assetId('o1'))).toBeDefined()
 })

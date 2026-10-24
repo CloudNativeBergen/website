@@ -1,6 +1,6 @@
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
-import { isAssetHeld } from '@/lib/sanity/orphaned-asset'
+import { COUNT_API_VERSION, isAssetHeld } from '@/lib/sanity/orphaned-asset'
 import { deleteManyWithHistory } from '@/lib/sanity/purge'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { osloTodayDateString } from '@/lib/time'
@@ -43,6 +43,12 @@ import { deletionDate, plusDays } from './deletion'
  * and counted as done, so nothing is lost and nothing is deleted twice.
  * Closing the day before means the purge runs ON the deletion date, after
  * a day in which no write could have landed.
+ *
+ * Every Sanity request ends after {@link CALL_TIMEOUT_MS}, and at the run's
+ * deadline at the latest ({@link cronBudget}); the deadline is checked
+ * before each chunk and between holder checks. A chunk the deadline cuts
+ * leaves its posts marked and nothing of it deleted, or (an aborted delete
+ * that landed anyway) everything: either is a step boundary above.
  */
 
 /** How long after `closedAt` a wall may be purged. */
@@ -53,6 +59,36 @@ export const POST_DELETE_CHUNK = 50
 
 /** Assets checked or deleted at the same time. */
 export const ASSET_CONCURRENCY = 4
+
+/**
+ * The longest any one Sanity request of the cron may take, and never past
+ * the run's deadline ({@link cronBudget}). The client's own `timeout` does
+ * not bound a read, nor `getDocument`'s retries: only a signal does.
+ */
+export const CALL_TIMEOUT_MS = 20_000
+
+/**
+ * Release versions (`versions.*`) are seen, and written, only from this API
+ * version, with the `raw` perspective.
+ */
+const RELEASES_API = { apiVersion: COUNT_API_VERSION }
+
+/** The cron's time budget: whether there is time left, and a signal per request. */
+export interface CronBudget {
+  /** False once the deadline has passed, by the clock or by its timer. */
+  within(): boolean
+  /** A signal that ends a request after {@link CALL_TIMEOUT_MS}, or at the deadline. */
+  signal(): AbortSignal
+}
+
+/** The budget of a run that must be done by `deadline`. */
+export function cronBudget(deadline: Date): CronBudget {
+  const run = AbortSignal.timeout(Math.max(0, deadline.getTime() - Date.now()))
+  return {
+    within: () => !run.aborted && Date.now() < deadline.getTime(),
+    signal: () => AbortSignal.any([AbortSignal.timeout(CALL_TIMEOUT_MS), run]),
+  }
+}
 
 export interface RetentionReport {
   /** Walls with `purgedAt` unset whose deletion date is tomorrow or earlier. */
@@ -89,34 +125,50 @@ interface PostRow {
 }
 
 /** Every wall with `purgedAt` unset: the retention's and the sweep's. */
-export async function readUnpurgedWalls(): Promise<UnpurgedWall[]> {
+export async function readUnpurgedWalls(
+  signal: AbortSignal,
+): Promise<UnpurgedWall[]> {
   const rows = await clientReadUncached.fetch<UnpurgedWall[]>(
     // groq-global: the platform RETENTION CRON enumerates every tenant's
     // walls by design; each wall's purge below is scoped to its conference.
     `*[_type == "photoWall" && !defined(purgedAt) && !(_id in path("drafts.**"))]{ _id, closedAt, "conferenceId": conference._ref, "endDate": conference->endDate }`,
     {},
-    { cache: 'no-store' },
+    { cache: 'no-store', signal },
   )
   return rows ?? []
 }
 
-/** Every Wall Post of the conference, drafts included, with its assets. */
-function readPostsToPurge(conferenceId: string): Promise<PostRow[]> {
+/**
+ * Every Wall Post of the conference with its assets: drafts AND Content
+ * Release versions (`versions.*`), which hold a reference to the photo as
+ * the post does. The Studio offers no action on a Wall Post, but its
+ * version menu ("copy to release") is not one of them; a version left
+ * behind would keep the photo after `purgedAt`.
+ */
+function readPostsToPurge(
+  conferenceId: string,
+  signal: AbortSignal,
+): Promise<PostRow[]> {
   return scopedFetch<PostRow[]>(
-    clientReadUncached,
+    clientReadUncached.withConfig(RELEASES_API),
     { conferenceId },
     `*[_type == "wallPost"]{ _id, "assetId": photo.asset._ref, deletingAssetId, deviceKey }`,
+    {},
+    { cache: 'no-store', perspective: 'raw', signal },
   )
 }
 
 /** Every asset a submit of this conference uploaded (§5), held or not. */
-async function readWallAssets(conferenceId: string): Promise<string[]> {
+async function readWallAssets(
+  conferenceId: string,
+  signal: AbortSignal,
+): Promise<string[]> {
   const ids = await clientReadUncached.fetch<string[]>(
     // groq-global-scoped: an asset carries no `conference` reference; the
     // submit route stores the conference as `source.id` (§5), filtered here.
     `*[_type == "sanity.imageAsset" && source.name == "photo-wall" && source.id == $conferenceId]._id`,
     { conferenceId },
-    { cache: 'no-store' },
+    { cache: 'no-store', signal },
   )
   return ids ?? []
 }
@@ -146,9 +198,16 @@ async function eachAsset(
 /**
  * Steps a and b for one chunk. Throws when a transaction is refused or a
  * holder check can't be told: the wall stays unpurged, nothing is lost.
+ * Null when the deadline came between the holder checks: the posts stay
+ * marked, nothing of the chunk is deleted, and the next run repeats it.
+ * Every request ends at the deadline, so a chunk never outlives it.
  */
-async function purgeChunk(chunk: readonly PostRow[], result: Purge) {
-  const mark = clientWrite.transaction()
+async function purgeChunk(
+  chunk: readonly PostRow[],
+  result: Purge,
+  budget: CronBudget,
+): Promise<string[] | null> {
+  const mark = clientWrite.withConfig(RELEASES_API).transaction()
   for (const post of chunk) {
     mark.patch(post._id, (patch) =>
       post.assetId
@@ -158,7 +217,7 @@ async function purgeChunk(chunk: readonly PostRow[], result: Purge) {
         : patch.set({ status: 'deleting' }),
     )
   }
-  await mark.commit()
+  await mark.commit({ signal: budget.signal() })
 
   const assetIds = [
     ...new Set(
@@ -170,21 +229,27 @@ async function purgeChunk(chunk: readonly PostRow[], result: Purge) {
   ]
   const free: string[] = []
   let unknown = false
-  await eachAsset(
+  const reached = await eachAsset(
     assetIds,
-    () => !unknown,
+    () => !unknown && budget.within(),
     async (assetId) => {
       // The chunk's posts hold nothing now; the view may still show them,
       // so holders are read again through the doc endpoint.
-      const held = await isAssetHeld(assetId)
+      const held = await isAssetHeld(assetId, { signal: budget.signal() })
       if (held === null) unknown = true
       else if (held) result.assetsKept += 1
       else free.push(assetId)
     },
   )
+  // A check cut off by the deadline can't be told either: not a failure.
+  if (!budget.within()) return null
   if (unknown) throw new Error('Could not tell whether an asset is held')
+  if (!reached) return null
 
-  await deleteManyWithHistory([...free, ...chunk.map((post) => post._id)])
+  await deleteManyWithHistory([...free, ...chunk.map((post) => post._id)], {
+    signal: budget.signal(),
+    ...RELEASES_API,
+  })
   result.assets += free.length
   result.posts += chunk.length
   return assetIds
@@ -199,11 +264,11 @@ async function purgeChunk(chunk: readonly PostRow[], result: Purge) {
 async function purgeWall(
   wall: UnpurgedWall & { conferenceId: string },
   now: Date,
-  withinDeadline: () => boolean,
+  budget: CronBudget,
 ): Promise<Purge> {
   const { conferenceId } = wall
   const result: Purge = { posts: 0, assets: 0, assetsKept: 0, done: false }
-  const posts = await readPostsToPurge(conferenceId)
+  const posts = await readPostsToPurge(conferenceId, budget.signal())
   const deviceKeys = new Set(
     posts.map((p) => p.deviceKey).filter((k): k is string => !!k),
   )
@@ -211,34 +276,38 @@ async function purgeWall(
   // count a kept one twice.
   const decided = new Set<string>()
   for (let at = 0; at < posts.length; at += POST_DELETE_CHUNK) {
-    if (!withinDeadline()) return result
+    if (!budget.within()) return result
     const chunk = posts.slice(at, at + POST_DELETE_CHUNK)
-    for (const id of await purgeChunk(chunk, result)) decided.add(id)
+    const ids = await purgeChunk(chunk, result, budget)
+    if (!ids) return result
+    for (const id of ids) decided.add(id)
   }
 
   // The conference's own uploads that no post named any more: a crash
   // between a submit's upload and its create (§6.2), or a Delete's step 1
   // whose step 2 never ran.
-  const uploads = (await readWallAssets(conferenceId)).filter(
+  const uploads = (await readWallAssets(conferenceId, budget.signal())).filter(
     (id) => !decided.has(id),
   )
   let failed = false
   const reached = await eachAsset(
     uploads,
-    () => withinDeadline() && !failed,
+    () => budget.within() && !failed,
     async (assetId) => {
-      const outcome = await deleteWallAsset(assetId)
+      const outcome = await deleteWallAsset(assetId, {
+        signal: budget.signal(),
+      })
       if (outcome === 'deleted') result.assets += 1
       else if (outcome === 'held') result.assetsKept += 1
       else failed = true
     },
   )
-  if (failed || !reached) return result
+  if (failed || !reached || !budget.within()) return result
 
   await clientWrite
     .patch(wall._id)
     .set({ purgedAt: now.toISOString() })
-    .commit()
+    .commit({ signal: budget.signal() })
   result.done = true
   // The wall, the queue and the My posts of every device (§8).
   for (const key of deviceKeys.size ? deviceKeys : ['']) {
@@ -269,10 +338,10 @@ export async function runPhotoWallRetention({
     unfinished: [],
     notReached: 0,
   }
-  const withinDeadline = () => Date.now() < deadline.getTime()
+  const budget = cronBudget(deadline)
   const today = osloTodayDateString(now)
   const tomorrow = plusDays(today, 1)
-  const due = (await readUnpurgedWalls()).flatMap((wall) => {
+  const due = (await readUnpurgedWalls(budget.signal())).flatMap((wall) => {
     const deletesOn = deletionDate(wall.endDate)
     return wall.conferenceId && deletesOn && deletesOn <= tomorrow
       ? [{ ...wall, conferenceId: wall.conferenceId, deletesOn }]
@@ -281,7 +350,7 @@ export async function runPhotoWallRetention({
   report.due = due.length
 
   for (const wall of due) {
-    if (!withinDeadline()) {
+    if (!budget.within()) {
       report.notReached += 1
       continue
     }
@@ -289,7 +358,10 @@ export async function runPhotoWallRetention({
       let { closedAt } = wall
       if (!closedAt) {
         closedAt = now.toISOString()
-        await clientWrite.patch(wall._id).setIfMissing({ closedAt }).commit()
+        await clientWrite
+          .patch(wall._id)
+          .setIfMissing({ closedAt })
+          .commit({ signal: budget.signal() })
         report.closed += 1
         // The wall and the queue (§8): the closed state, and no posts.
         expireWallPost(wall.conferenceId, '', { wall: true })
@@ -297,7 +369,7 @@ export async function runPhotoWallRetention({
       const settled = now.getTime() - Date.parse(closedAt) > CLOSE_SETTLE_MS
       if (wall.deletesOn > today || !settled) continue
 
-      const purge = await purgeWall(wall, now, withinDeadline)
+      const purge = await purgeWall(wall, now, budget)
       report.posts += purge.posts
       report.assets += purge.assets
       report.assetsKept += purge.assetsKept

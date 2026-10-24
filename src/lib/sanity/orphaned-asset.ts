@@ -68,7 +68,14 @@ export async function countAssetReferences(assetId: string): Promise<number> {
  */
 export async function isAssetHeld(
   assetId: string,
-  { except }: { except?: string } = {},
+  {
+    except,
+    signal,
+  }: {
+    except?: string
+    /** Ends every request: the client's `timeout` does not bound a read. */
+    signal?: AbortSignal
+  } = {},
 ): Promise<boolean | null> {
   const client = clientReadUncached.withConfig({
     apiVersion: COUNT_API_VERSION,
@@ -82,7 +89,7 @@ export async function isAssetHeld(
         : // groq-global: an asset can be held by a document of any tenant.
           groq`*[references($assetId) && !(_id in [$except, "drafts." + $except]) && !(_id in path("versions.*." + $except))]._id`,
       except === undefined ? { assetId } : { assetId, except },
-      { cache: 'no-store', perspective: 'raw' },
+      { cache: 'no-store', perspective: 'raw', ...(signal ? { signal } : {}) },
     )
   } catch {
     return null
@@ -90,7 +97,7 @@ export async function isAssetHeld(
   for (const id of holders ?? []) {
     let doc: Record<string, unknown> | null | undefined
     try {
-      doc = await client.getDocument(id)
+      doc = await client.getDocument(id, signal ? { signal } : undefined)
     } catch {
       return null
     }
