@@ -68,7 +68,6 @@ export type ConferenceFieldsetKey =
   | 'registration'
   | 'communication'
   | 'ticketingIds'
-  | 'analytics'
   | 'localInfo'
   | 'cfpGoals'
   | 'socialLinks'
@@ -516,20 +515,6 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
       },
     ],
   },
-  analytics: {
-    title: 'Analytics',
-    subtitle: 'Your own web-analytics property',
-    fields: [
-      {
-        name: 'analyticsPirschCode',
-        label: 'Pirsch Identification Code',
-        type: 'text',
-        nullableWhenEmpty: true,
-        description:
-          'From your own pirsch.io dashboard (Settings → Identification Code). Leave blank and this site serves no analytics script at all — no visitor data is collected and nothing is sent to a third party.',
-      },
-    ],
-  },
   localInfo: {
     title: 'Local Information',
     subtitle: 'Place-specific answers shown on /info, and the event hashtag',
@@ -775,7 +760,6 @@ const MUTATION_BY_FIELDSET: Record<
   registration: 'updateRegistration',
   communication: 'updateCommunication',
   ticketingIds: 'updateTicketingIds',
-  analytics: 'updateAnalytics',
   localInfo: 'updateLocalInfo',
   cfpGoals: 'updateCfpGoals',
   socialLinks: 'updateSocialLinks',

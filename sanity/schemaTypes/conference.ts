@@ -1603,26 +1603,17 @@ export default defineType({
         list: [{ title: 'Test Feature', value: 'test_feature' }],
       },
     }),
-    // Per-tenant web analytics. ABSENT means NO analytics script is served on
-    // this conference's pages — deliberately, because the only alternative
-    // default is collecting a tenant's traffic into somebody else's property.
-    // The pattern mirrors PIRSCH_CODE_PATTERN in `src/lib/analytics.ts`; it is
-    // restated rather than imported because schema files stay import-light for
-    // the Vite Studio build.
+    // Retained for the append-only cross-app schema contract; stored values
+    // are ignored now that web analytics is configured on the organization.
     defineField({
       name: 'analyticsPirschCode',
       title: 'Pirsch Identification Code',
       type: 'string',
       fieldset: 'technical',
-      description:
-        'Your own Pirsch (pirsch.io) identification code. Leave blank to serve no analytics script at all — this site will not be tracked.',
-      validation: (Rule) =>
-        Rule.custom((value) => {
-          if (value === undefined || value === null || value === '') return true
-          return /^[A-Za-z0-9]{8,64}$/.test(String(value).trim())
-            ? true
-            : 'Enter the identification code from your Pirsch dashboard (letters and digits only).'
-        }),
+      hidden: true,
+      deprecated: {
+        reason: 'Pirsch is no longer used; this value is ignored.',
+      },
     }),
 
     // === Agent Configuration ===

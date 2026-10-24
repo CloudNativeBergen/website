@@ -435,10 +435,10 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
   and a Screen Wake Lock where the browser supports it.
 - **No analytics and no install prompt.** Leaving the site chrome out isn't
   enough: the root layout (`src/app/layout.tsx`) renders `VercelInsights`,
-  `TenantAnalytics` and the PWA `InstallPrompt` on every route. Five places, each by its own mechanism: in `VercelInsights`, **both** `<Analytics beforeSend>` and `<SpeedInsights beforeSend>` return `null` for `/wall/screen` (on `/f` Analytics only redacts);
+  `TenantAnalytics` and the PWA `InstallPrompt` on every route. Four places, each by its own mechanism: in `VercelInsights`, **both** `<Analytics beforeSend>` and `<SpeedInsights beforeSend>` return `null` for `/wall/screen` (on `/f` Analytics only redacts);
   `EXCLUDED_PATH_PREFIXES` in `src/lib/posthog/config.ts` gains
-  `/wall/screen`, which also keeps `AnalyticsConsentBar` off the screen; Pirsch
-  and `InstallPrompt` are hidden as `HiddenOnFeedbackPage` hides them on `/f`.
+  `/wall/screen`, which also keeps `AnalyticsConsentBar` off the screen;
+  `InstallPrompt` is hidden as `HiddenOnFeedbackPage` hides it on `/f`.
   Test that Screen Mode sends no analytics request.
 - **No update banner.** `ServiceWorkerRegistrar` (`src/app/layout.tsx`) shows
   `UpdateBanner` after a deploy and waits for a click, which nobody gives a

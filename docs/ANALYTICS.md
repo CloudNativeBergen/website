@@ -1,21 +1,19 @@
 # Web analytics (PostHog)
 
-Per-organization PostHog web analytics, replacing Pirsch (issue #1008; design in
+Per-organization PostHog web analytics (issue #1008; design in
 `docs/MARKETING_PLAN_SPEC.md` §6.1; consent decision in #1034).
 
-## Cutover, per organization
+## Token gate, per organization
 
-| Organization document       | Conference document       | What the site serves                  |
-| --------------------------- | ------------------------- | ------------------------------------- |
-| `analyticsPosthogToken` set | anything                  | PostHog + consent bar; Pirsch ignored |
-| no token                    | `analyticsPirschCode` set | Pirsch pageviews only (legacy)        |
-| no token                    | no code                   | nothing                               |
+| Organization document         | What the site serves  |
+| ----------------------------- | --------------------- |
+| valid `analyticsPosthogToken` | PostHog + consent bar |
+| no valid token                | no tenant analytics   |
 
-The token is edited in **Admin → Settings → Analytics** (organization half of
-the card; `organization.updateAnalytics`). One PostHog project per organization;
+The token is edited in **Admin → Settings → Analytics**
+(`organization.updateAnalytics`). One PostHog project per organization;
 the `conference` super property (the conference document `_id`) separates
-editions inside it. The Pirsch field and script are removed once every
-organization has switched.
+editions inside it.
 
 ## Client wiring
 
@@ -115,6 +113,6 @@ Three roll-up Actions are useful for the marketing report: `cta` **contains**
 ## Data declared on /privacy
 
 `src/lib/legal/subprocessors.ts` discloses PostHog (EU Cloud, Frankfurt) when
-the organization has a token and Pirsch only while it has none; with the
-organization read failing and a code stored, both are listed as _possible_.
+the organization has a token; when the organization read fails, PostHog is
+listed as _possible_.
 The privacy page's analytics wording switches with the same signal.

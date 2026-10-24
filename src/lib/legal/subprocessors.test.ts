@@ -22,7 +22,6 @@ function facts(
       explicitlySelected: false,
       registrationLink: null,
     },
-    analyticsCode: null,
     analyticsPosthogToken: null,
     slackToken: false,
     workshops: false,
@@ -138,84 +137,37 @@ describe('ticketingSignal', () => {
   })
 })
 
-describe('analytics follows the organization token, then the conference code', () => {
-  it('lists PostHog and NOT Pirsch once the organization has a token', () => {
-    // The cutover is a hard switch: token present ⇒ PostHog loads and the
-    // Pirsch script does not, even with a code still stored on the edition.
-    const list = ids(
-      facts({
-        analyticsPosthogToken:
-          'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh',
-        analyticsCode: 'abc123XYZ',
-      }),
-    )
-    expect(list).toContain('posthog')
-    expect(list).not.toContain('pirsch')
+describe('analytics follows the organization token', () => {
+  it('lists PostHog when the organization has a token', () => {
+    expect(
+      ids(
+        facts({
+          analyticsPosthogToken:
+            'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh',
+        }),
+      ),
+    ).toContain('posthog')
   })
 
-  it('lists Pirsch and NOT PostHog for a tenant that has not switched', () => {
-    const list = ids(facts({ analyticsCode: 'abc123XYZ' }))
-    expect(list).toContain('pirsch')
-    expect(list).not.toContain('posthog')
+  it('omits PostHog when there is no token', () => {
+    expect(ids(facts({ analyticsPosthogToken: '' }))).not.toContain('posthog')
   })
 
-  it('omits both when there is neither — no token, no code, no script', () => {
-    const list = ids(facts({ analyticsCode: '   ', analyticsPosthogToken: '' }))
-    expect(list).not.toContain('pirsch')
-    expect(list).not.toContain('posthog')
-  })
-
-  it('discloses a MALFORMED value rather than validating the row away', () => {
+  it('discloses a MALFORMED token rather than validating the row away', () => {
     // Deliberate over-disclosure: validating here would drop the row on a typo,
     // which is the under-report direction.
-    expect(ids(facts({ analyticsCode: 'not a valid code!' }))).toContain(
-      'pirsch',
-    )
     expect(ids(facts({ analyticsPosthogToken: 'phc_typo' }))).toContain(
       'posthog',
     )
   })
 
-  it('keeps Pirsch when the token is MALFORMED and a code is stored', () => {
-    // The layout refuses a malformed token and serves Pirsch, so the page
-    // must still name Pirsch — and PostHog too, as the over-report the
-    // typo earns.
-    const list = ids(
-      facts({ analyticsPosthogToken: 'phc_typo', analyticsCode: 'abc123XYZ' }),
-    )
-    expect(list).toContain('pirsch')
-    expect(list).toContain('posthog')
-  })
-
-  it('keeps Pirsch as POSSIBLE when the org read failed and a code is stored', () => {
-    // With the token unknowable we cannot say which script serves: both are
-    // disclosed as possible rather than one of them being dropped.
+  it('keeps PostHog as POSSIBLE when the org read failed', () => {
     const disclosure = buildSubprocessorDisclosure(
-      facts({
-        organizationReadFailed: true,
-        analyticsCode: 'abc123XYZ',
-        analyticsPosthogToken: null,
-      }),
+      facts({ organizationReadFailed: true, analyticsPosthogToken: null }),
     )
-    expect(
-      disclosure.processors.find((p) => p.id === 'pirsch')?.certainty,
-    ).toBe('possible')
     expect(
       disclosure.processors.find((p) => p.id === 'posthog')?.certainty,
     ).toBe('possible')
-  })
-
-  it('does not invent Pirsch on a failed org read when no code is stored', () => {
-    // The code lives on the CONFERENCE, which read fine: "no code" is a fact.
-    const list = ids(
-      facts({
-        organizationReadFailed: true,
-        analyticsCode: null,
-        analyticsPosthogToken: null,
-      }),
-    )
-    expect(list).not.toContain('pirsch')
-    expect(list).toContain('posthog')
   })
 
   it('names the EU region on the PostHog row', () => {
@@ -310,7 +262,6 @@ describe('a failed read must NOT shorten the list', () => {
       facts({
         tenantKnown: false,
         ticketing: null,
-        analyticsCode: null,
         analyticsPosthogToken: null,
         slackToken: null,
         workshops: null,
@@ -323,7 +274,6 @@ describe('a failed read must NOT shorten the list', () => {
       'resend',
       'checkin',
       'tito',
-      'pirsch',
       'posthog',
       'slack',
       'oauth-providers',

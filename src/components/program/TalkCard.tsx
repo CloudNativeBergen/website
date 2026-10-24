@@ -40,8 +40,8 @@ interface PortableTextChild {
  * to the talk's CURRENT code, so the programme never carries one. A plain
  * click opens it in a bottom sheet that frames the page (`FeedbackSheet`);
  * every other click follows the link. A plain `<a>`, never `next/link`: no
- * prefetch of every card's redirect, and a full page load into `/f` (its
- * analytics exclusions depend on it).
+ * prefetch of every card's redirect, and a full page load into `/f` so future
+ * history-tracking scripts cannot see the code.
  */
 function FeedbackLink({
   talkId,

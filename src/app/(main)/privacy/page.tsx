@@ -129,7 +129,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 17, 2026'
+  const lastUpdated = 'October 24, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -140,8 +140,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     : 'The organizer of this event'
 
   // The tenant's REAL subprocessor chain (#690), derived from its ticketing
-  // binding, analytics code, Slack token and workshop entitlement. An
-  // unresolvable signal DISCLOSES rather than omits — see
+  // binding, organization analytics token, Slack token and workshop entitlement.
+  // An unresolvable signal DISCLOSES rather than omits — see
   // `@/lib/legal/subprocessors` for the two rules.
   const subprocessors = await resolveSubprocessorDisclosure(conference)
   const usesWorkOS = discloses(subprocessors, 'workos')
@@ -151,9 +151,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   const signInHost =
     typeof configuredAuthOrigin === 'object' ? configuredAuthOrigin.host : null
   const overseasProcessors = internationalTransferProcessors(subprocessors)
-  // The analytics wording follows the organization's cutover (#1008, #1034):
-  // PostHog is anonymous by default with ONE optional cookie, so the old
-  // "cookie-less" promise is only true for tenants still on Pirsch (or none).
+  // PostHog is anonymous by default with ONE optional cookie. Without an
+  // organization token, only the platform's cookie-less Vercel insights run.
   const usesPostHog = discloses(subprocessors, 'posthog')
 
   return (
@@ -1269,8 +1268,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               information, approximate region
                             </li>
                             <li>
-                              • Cookie-less analytics, aggregated; no
-                              advertising profiles
+                              • Cookie-less Vercel Analytics and Speed Insights;
+                              aggregated, no advertising profiles
                             </li>
                           </>
                         )}
@@ -1423,7 +1422,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         <li>
                           {usesPostHog
                             ? '• Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it.'
-                            : '• Privacy-friendly website analytics and performance monitoring (no advertising)'}
+                            : '• Cookie-less Vercel Analytics and Speed Insights (no advertising)'}
                         </li>
                       </ul>
                     </div>
@@ -1546,7 +1545,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       <p className="text-sm text-pink-700 dark:text-pink-300">
                         {usesPostHog
                           ? 'Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it.'
-                          : 'Privacy-friendly, cookie-less analytics to understand site usage, including anonymous, aggregated counts of interactions such as button clicks (no advertising, no personal identifiers)'}
+                          : 'Cookie-less Vercel Analytics and Speed Insights to understand site usage and performance (no advertising)'}
                       </p>
                     </div>
 
@@ -2488,7 +2487,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       cookies for advertising or cross-site tracking.
                       {usesPostHog
                         ? ' Our analytics are aggregated and, unless you accept the cookie above, anonymous.'
-                        : ' Our analytics are cookie-less and aggregated.'}
+                        : ' Vercel Analytics and Speed Insights are cookie-less and aggregated.'}
                     </p>
                     {/*
                       NOT gated on `usesWorkOS`: the cookie can outlive a

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { DEFAULT_BACKGROUND_PATTERN } from '@/lib/conference/backgroundPattern'
-import { resolvePirschCode } from '@/lib/analytics'
 import {
   HOUSE_INFO_PROSE,
   HOUSE_PIRSCH_CODE,
@@ -38,11 +37,8 @@ function applyPlan(
 }
 
 describe('house values', () => {
-  it('writes a code the runtime resolver actually accepts', () => {
-    // If the shape validator and the backfilled value ever disagree, the three
-    // sites would store a code that silently renders no script — the exact
-    // failure this migration exists to prevent.
-    expect(resolvePirschCode(HOUSE_PIRSCH_CODE)).toBe(HOUSE_PIRSCH_CODE)
+  it('writes a code accepted by the historical shape validator', () => {
+    expect(/^[A-Za-z0-9]{8,64}$/.test(HOUSE_PIRSCH_CODE)).toBe(true)
   })
 
   it('is pinned as a literal, not read from the code it replaces', () => {

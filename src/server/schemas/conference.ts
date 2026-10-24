@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { HEX_COLOR_RE } from '@/lib/branding/theme'
 import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
-import { PIRSCH_CODE_MESSAGE, PIRSCH_CODE_PATTERN } from '@/lib/analytics'
 import { Format } from '@/lib/proposal/types'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
@@ -329,20 +328,6 @@ export const UpdateLocalInfoSchema = z.object({
   speakerDinnerInfo: z.string().trim().nullable().optional(),
   localRecommendations: z.string().trim().nullable().optional(),
   socialHashtag: z.string().trim().max(100).nullable().optional(),
-})
-
-// === Analytics ===
-// The tenant's OWN Pirsch identification code. `null` UNSETS it, which is the
-// documented "no analytics at all" state — there is no platform-level fallback
-// to inherit, by design (see `resolvePirschCode`). The shape is validated on the
-// write path because the value is interpolated into a `<script>` attribute.
-export const UpdateAnalyticsSchema = z.object({
-  analyticsPirschCode: z
-    .string()
-    .trim()
-    .regex(PIRSCH_CODE_PATTERN, PIRSCH_CODE_MESSAGE)
-    .nullable()
-    .optional(),
 })
 
 // === CFP & Revenue Goals ===

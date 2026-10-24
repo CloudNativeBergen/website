@@ -679,48 +679,26 @@ export default async function AdminSettings() {
               icon={ChartBarIcon}
               editUrl={editUrl}
               action={
-                <>
-                  <EditOrganizationAnalyticsCard
-                    initialToken={organization?.analyticsPosthogToken}
-                  />
-                  <EditConferenceCard
-                    fieldset="analytics"
-                    initialValues={{
-                      analyticsPirschCode: conference.analyticsPirschCode,
-                    }}
-                  />
-                </>
+                <EditOrganizationAnalyticsCard
+                  initialToken={organization?.analyticsPosthogToken}
+                />
               }
             >
-              {/* The organization's PostHog token is the switch: present, and
-                  PostHog serves every edition of this organization while the
-                  conference's Pirsch code below is ignored. */}
               <FieldRow
                 label="PostHog project token (organization)"
                 value={organization?.analyticsPosthogToken}
-              />
-              <FieldRow
-                label="Pirsch identification code (this edition)"
-                value={conference.analyticsPirschCode}
               />
               {organization?.analyticsPosthogToken ? (
                 <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
                   PostHog (EU) serves analytics on every edition run by this
                   organization. Visitors are counted anonymously until they
-                  accept the analytics cookie. The Pirsch code is no longer
-                  loaded.
+                  accept the analytics cookie.
                 </p>
-              ) : !conference.analyticsPirschCode ? (
+              ) : (
                 <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
                   No analytics script is served on this site. Add your
                   organization&apos;s PostHog project token to start collecting
                   visitor statistics into your own project.
-                </p>
-              ) : (
-                <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Pirsch serves pageviews on this edition. Add a PostHog project
-                  token to switch this organization to PostHog, which also
-                  restores conversion tracking for the marked buttons.
                 </p>
               )}
             </InfoCard>

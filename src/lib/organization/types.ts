@@ -47,8 +47,8 @@ export interface Organization {
   featureOverrides?: OrganizationFeatureOverride[]
   /**
    * The organization's PUBLIC PostHog project token (`phc_…`, issue #1008).
-   * ABSENT means no PostHog on its sites; present means PostHog loads and the
-   * legacy per-conference Pirsch code does not. See `resolvePosthogToken`.
+   * ABSENT means no tenant analytics on its sites; a valid token enables
+   * PostHog. See `resolvePosthogToken`.
    */
   analyticsPosthogToken?: string
 }

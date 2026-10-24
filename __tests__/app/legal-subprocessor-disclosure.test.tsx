@@ -76,8 +76,8 @@ const SHARED_LOGIN = 'One login for every conference on this platform'
 
 /**
  * The Cloud Native Days Norway shape, verified against the production dataset:
- * `ticketingProvider` is NULL with a full Checkin binding, an analytics code is
- * set, Slack channels are configured, and its organization IS the platform org.
+ * `ticketingProvider` is NULL with a full Checkin binding, a legacy analytics
+ * code is stored, Slack is configured, and its organization IS the platform org.
  */
 function conference(overrides: Record<string, unknown> = {}) {
   return {
@@ -229,24 +229,18 @@ describe('the ticketing vendor disclosed is the one the tenant uses', () => {
 })
 
 describe('analytics is disclosed only when the tenant configured it', () => {
-  it('discloses Pirsch when a code is set and the organization has no token', async () => {
+  it('ignores a stored legacy analytics code when the organization has no token', async () => {
     world()
     const html = await renderPrivacy()
-    expect(html).toContain(PIRSCH)
+    expect(html).not.toContain(PIRSCH)
     expect(html).not.toContain(POSTHOG)
-    // The pre-cutover promise still holds for this tenant.
-    expect(html).toContain('Our analytics are cookie-less')
+    expect(html).toContain('Vercel Analytics and Speed Insights')
+    expect(html).not.toContain('anonymous, aggregated counts of interactions')
   })
 
-  it('omits Pirsch when there is no code — no script, no processor', async () => {
-    world({ conference: conference({ analyticsPirschCode: undefined }) })
-    expect(await renderPrivacy()).not.toContain(PIRSCH)
-  })
-
-  it('switches the whole page to PostHog once the organization has a token', async () => {
-    // The hard cutover (#1008): token present ⇒ PostHog is the processor and
-    // Pirsch is gone even though the edition still stores a code — and the
-    // page stops promising "cookie-less", because Accept sets one cookie.
+  it('discloses PostHog when the organization has a token', async () => {
+    // The stored legacy code is ignored. Accepting PostHog sets one cookie,
+    // so the page must not promise that all analytics are cookie-less.
     world({
       organization: organization({ analyticsPosthogToken: POSTHOG_TOKEN }),
     })
@@ -262,28 +256,27 @@ describe('analytics is disclosed only when the tenant configured it', () => {
     expect(html).not.toContain(`${POSTHOG} • Location`)
   })
 
-  it('keeps Pirsch as POSSIBLE when the org read fails and a code is stored', async () => {
-    // With the token unknowable the page cannot tell which script serves, so
-    // it names both rather than dropping either (rule 1).
+  it('keeps PostHog as POSSIBLE when the org read fails', async () => {
+    // With the token unknowable the page keeps the possible processor (rule 1).
     world({ organizationReadFails: true })
     const html = await renderPrivacy()
-    expect(html).toContain(PIRSCH)
+    expect(html).not.toContain(PIRSCH)
     expect(html).toContain(POSTHOG)
     expect(html).toContain(UNCERTAIN)
   })
 })
 
 describe('Slack and WorkOS follow the tenant, not the platform', () => {
-  it('Cloud Native Days Norway keeps Checkin, Slack and Pirsch', async () => {
+  it('Cloud Native Days Norway keeps Checkin, Slack and WorkOS', async () => {
     // The hard constraint on this change: the platform org is also a tenant and
-    // genuinely uses all three. Verified against the production documents.
+    // uses all three. The stored legacy analytics code is ignored.
     world()
 
     const html = await renderPrivacy()
 
     expect(html).toContain(CHECKIN)
     expect(html).toContain(SLACK)
-    expect(html).toContain(PIRSCH)
+    expect(html).not.toContain(PIRSCH)
     expect(html).toContain(WORKOS)
     expect(html).not.toContain(UNCERTAIN)
   })
