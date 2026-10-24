@@ -50,4 +50,53 @@ describe('AttendeeFeedbackPage', () => {
       screen.getByRole('heading', { name: 'GitOps Best Practices' }),
     ).toBeTruthy()
   })
+
+  const notYetOpen: AttendeeFeedbackState = {
+    state: 'not-yet-open',
+    talk: answered.state === 'answered' ? answered.talk : null,
+    opensAt: '2026-10-26T08:00:00.000Z',
+    canDelete: false,
+  }
+
+  it('sends the attendee back to the programme, not a QR, before it opens', () => {
+    const { rerender } = render(
+      <AttendeeFeedbackPage
+        logo={null}
+        page={notYetOpen}
+        submit={vi.fn()}
+        remove={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(/Scan the code again then\./)).toBeTruthy()
+
+    rerender(
+      <AttendeeFeedbackPage
+        logo={null}
+        page={notYetOpen}
+        submit={vi.fn()}
+        remove={vi.fn()}
+        embedded
+      />,
+    )
+    expect(screen.getByText(/Come back to the programme then\./)).toBeTruthy()
+    expect(screen.queryByText(/scan/i)).toBeNull()
+  })
+
+  it('names no code on Unknown inside the programme sheet', () => {
+    render(
+      <AttendeeFeedbackPage
+        logo={null}
+        page={{ state: 'unknown' }}
+        submit={vi.fn()}
+        remove={vi.fn()}
+        embedded
+      />,
+    )
+    expect(
+      screen.getByRole('heading', {
+        name: "Feedback isn't available for this session",
+      }),
+    ).toBeTruthy()
+    expect(screen.queryByText(/code/i)).toBeNull()
+  })
 })

@@ -113,7 +113,7 @@ export function AttendeeFeedbackPage({
           remove={remove}
           announce={afterTap}
           deletes={deletes}
-          programmeLink={!embedded}
+          embedded={embedded}
           onOutcome={(next, afterDelete) => {
             setPage((previous) =>
               // A comment the server could not read back after a
@@ -149,7 +149,7 @@ function PageState({
   remove,
   announce,
   deletes,
-  programmeLink,
+  embedded,
   onOutcome,
 }: {
   page: AttendeeFeedbackState
@@ -157,7 +157,8 @@ function PageState({
   remove: DeleteAnswer
   announce: boolean
   deletes: number
-  programmeLink: boolean
+  /** In the programme's sheet (§7.5): the attendee came from the programme. */
+  embedded: boolean
   onOutcome: (next: AttendeeFeedbackState, afterDelete?: DeleteNotice) => void
 }) {
   // The talk's title is the page's h1 when it is shown; the state's own
@@ -187,7 +188,7 @@ function PageState({
             announce={announce}
             submit={submit}
             remove={remove}
-            programmeLink={programmeLink}
+            programmeLink={!embedded}
             onOutcome={onOutcome}
           />
         </>
@@ -203,9 +204,7 @@ function PageState({
             Icon={ClockIcon}
             title="Feedback opens when the session starts"
           >
-            {page.opensAt
-              ? `It opens on ${formatSessionInstant(page.opensAt)}. Scan the code again then.`
-              : 'Scan the code again during the session.'}
+            {notYetOpenText(page.opensAt, embedded)}
           </Notice>
           {page.canDelete && (
             <DeleteAnswerButton remove={remove} onDelete={onOutcome} />
@@ -236,10 +235,15 @@ function PageState({
           announce={announce}
           level={level}
           Icon={QuestionMarkCircleIcon}
-          title="This feedback code isn't valid"
+          title={
+            embedded
+              ? "Feedback isn't available for this session"
+              : "This feedback code isn't valid"
+          }
         >
-          Check the code on the slide or the sheet in the room and scan it
-          again.
+          {embedded
+            ? 'Try again later from the programme.'
+            : 'Check the code on the slide or the sheet in the room and scan it again.'}
         </Notice>
       )
     case 'unavailable':
@@ -254,6 +258,14 @@ function PageState({
         </Notice>
       )
   }
+}
+
+/** Where to come back from: the room's code, or the programme's sheet. */
+function notYetOpenText(opensAt: string | null, embedded: boolean): string {
+  const again = embedded ? 'Come back to the programme' : 'Scan the code again'
+  return opensAt
+    ? `It opens on ${formatSessionInstant(opensAt)}. ${again} then.`
+    : `${again} during the session.`
 }
 
 function AnswerForm({

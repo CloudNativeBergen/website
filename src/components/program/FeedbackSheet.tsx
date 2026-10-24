@@ -11,6 +11,39 @@ import { XMarkIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { FEEDBACK_EMBED_ROOT } from '@/lib/feedback/url'
 
+/** Marks the history entry an open sheet added (§7.5). */
+const SHEET_ENTRY = 'feedbackSheet'
+
+/**
+ * The sheet's open state, backed by one history entry so Back (and a mobile
+ * swipe-back) closes it instead of leaving the programme (§7.5). The entry
+ * keeps the page's URL; Next copies its own router state into it, so Back
+ * lands on an entry it knows. Closing in the sheet steps back over the entry,
+ * and the `popstate` that follows closes it, so no entry is left behind.
+ */
+export function useFeedbackSheet() {
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    const onPop = () => setOpen(false)
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [open])
+
+  return {
+    open,
+    show: () => {
+      window.history.pushState({ [SHEET_ENTRY]: true }, '')
+      setOpen(true)
+    },
+    close: () => {
+      if (window.history.state?.[SHEET_ENTRY]) window.history.back()
+      else setOpen(false)
+    },
+  }
+}
+
 /**
  * The programme's feedback sheet (speaker feedback spec §7.5): a bottom sheet
  * that FRAMES the attendee page rather than rendering it, so the code stays

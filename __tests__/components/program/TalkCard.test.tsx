@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 import { FRAME_TIMEOUT_MS } from '@/components/program/FeedbackSheet'
 import {
   act,
@@ -9,6 +9,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react'
 import { TalkCard } from '@/components/program/TalkCard'
@@ -74,6 +75,9 @@ describe('TalkCard service session vs dangling reference', () => {
  */
 describe('TalkCard feedback sheet', () => {
   afterEach(cleanup)
+  // jsdom's history outlives each test: start every test on a plain entry,
+  // not on the sheet entry an earlier test left open.
+  beforeEach(() => window.history.replaceState(null, ''))
 
   const confirmed = {
     ...baseSlot,
@@ -132,6 +136,30 @@ describe('TalkCard feedback sheet', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('closes on Back, through the one history entry it added', async () => {
+    renderCard(confirmed)
+    const before = window.history.length
+    fireEvent.click(link())
+    expect(window.history.length).toBe(before + 1)
+    expect(window.location.pathname).toBe('/')
+
+    act(() => window.history.back())
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('steps back over its entry when closed, so Back then leaves the page', async () => {
+    renderCard(confirmed)
+    fireEvent.click(link())
+    const opened = window.history.state
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+    await waitFor(() => expect(window.history.state).not.toEqual(opened))
+    // The sheet's leave transition runs before the dialog unmounts.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
   it('keeps the plain link for navigation without the sheet', () => {
