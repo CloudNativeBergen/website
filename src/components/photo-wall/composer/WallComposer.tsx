@@ -7,20 +7,22 @@ import { CENTER_CROP, type Crop } from '@/lib/photo-wall/crop'
 import type { WallFilterKey } from '@/lib/photo-wall/filters'
 import {
   PhotoDecodeError,
+  PhotoTooSmallError,
   bakeWallPhoto,
   decodeWallPhoto,
 } from '@/lib/photo-wall/photo'
 import {
   CAPTION_MAX,
-  codePointCount,
   normalizeWallText,
+  wallTextLength,
 } from '@/lib/photo-wall/text'
-import { formatConferenceDate } from '@/lib/time'
+import { formatConferenceDateEnglish } from '@/lib/time'
 import { WallChrome } from '../WallPage'
 import {
   ComposerLanding,
   DECODE_FAILED_MESSAGE,
   PRIMARY_BUTTON,
+  TOO_SMALL_MESSAGE,
 } from './ComposerLanding'
 import { FilterStrip } from './FilterStrip'
 import { PolaroidEditor } from './PolaroidEditor'
@@ -91,9 +93,11 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
       setStage({
         kind: 'landing',
         error:
-          error instanceof PhotoDecodeError
-            ? DECODE_FAILED_MESSAGE
-            : GENERIC_FAILURE_MESSAGE,
+          error instanceof PhotoTooSmallError
+            ? TOO_SMALL_MESSAGE
+            : error instanceof PhotoDecodeError
+              ? DECODE_FAILED_MESSAGE
+              : GENERIC_FAILURE_MESSAGE,
       })
     }
   }
@@ -172,7 +176,7 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
             <span>Drag the photo to move it</span>
             <span data-testid="caption-counter">
               <span className="sr-only">Caption: </span>
-              {codePointCount(caption)}/{CAPTION_MAX}
+              {wallTextLength(caption)}/{CAPTION_MAX}
             </span>
           </p>
         </div>
@@ -190,11 +194,7 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
           Your photo, caption and name are shown on the screens at the venue and
           on the public wall on this website until{' '}
           <time dateTime={deletesOn}>
-            {formatConferenceDate(deletesOn, {
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            })}
+            {formatConferenceDateEnglish(deletesOn)}
           </time>
           . Only post photos the people in them are happy with.{' '}
           <a

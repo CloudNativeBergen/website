@@ -94,8 +94,10 @@ const atkinsonHyperlegible = Atkinson_Hyperlegible({
   preload: false,
 })
 
-// The Photo Wall's handwritten face (Photo Wall spec §6.5): the caption on a
-// Wall Post's polaroid card. Only the `/wall` routes render it.
+// The Photo Wall's handwritten face (Photo Wall spec §6.5), the caption on a
+// Wall Post's polaroid card. Registered here on every route like the other
+// optional faces, with `preload: false` so no page preloads it; only the
+// `/wall` routes render text in it, and only they fetch the file.
 const caveat = Caveat({
   subsets: ['latin', 'latin-ext'],
   weight: ['500', '700'],

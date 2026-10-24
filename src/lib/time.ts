@@ -323,6 +323,20 @@ export function formatConferenceDate(
 }
 
 /**
+ * A calendar date for the English attendee-facing pages (e.g. "26 November
+ * 2026"): the Photo Wall composer's consent line (Photo Wall spec §6.5), in
+ * the `en-GB` form the feedback page's {@link formatSessionInstant} uses.
+ */
+export function formatConferenceDateEnglish(dateString: string): string {
+  return toOsloAnchoredDate(dateString).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: OSLO_TZ,
+  })
+}
+
+/**
  * Formats a date string with short format (e.g., "man. 27. okt.")
  */
 export function formatConferenceDateShort(dateString: string): string {

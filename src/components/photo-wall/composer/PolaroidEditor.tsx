@@ -2,28 +2,34 @@
 
 import {
   useEffect,
+  useId,
   useRef,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { dragCrop, type Crop } from '@/lib/photo-wall/crop'
+import {
+  describeCrop,
+  dragCrop,
+  objectPosition,
+  type Crop,
+} from '@/lib/photo-wall/crop'
 import type { WallFilterKey } from '@/lib/photo-wall/filters'
 import { PREVIEW_LONG_EDGE, filteredCopy } from '@/lib/photo-wall/photo'
-import { CAPTION_MAX, NAME_MAX, limitCodePoints } from '@/lib/photo-wall/text'
-
-/** The crop as CSS `object-position`, which is the same 0–1 mapping. */
-export const objectPosition = (crop: Crop) =>
-  `${crop.x * 100}% ${crop.y * 100}%`
+import type { Size } from '@/lib/photo-wall/resize'
+import { CAPTION_MAX, NAME_MAX, limitWallText } from '@/lib/photo-wall/text'
 
 /** One arrow key moves the window by this much of the frame. */
 const KEY_STEP_CSS_PX = 24
 
+const FIELD_FOCUS =
+  'rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue'
+
 /**
  * The square photo window (Photo Wall spec §6.5): a canvas showing the
  * filtered preview copy, cropped by CSS to the short-edge square the crop
- * places. Dragging pans it 1:1; arrow keys pan it from the keyboard. The
- * preview is redrawn only when the photo or the filter changes; a drag is
- * CSS alone.
+ * places. Dragging pans it 1:1; arrow keys pan it from the keyboard, with
+ * the position read out. The preview is redrawn only when the photo or the
+ * filter changes; a drag is CSS alone.
  */
 export function PhotoWindow({
   master,
@@ -36,9 +42,10 @@ export function PhotoWindow({
   crop: Crop
   onCrop: (crop: Crop) => void
 }) {
-  const frame = useRef<HTMLDivElement>(null)
+  const frame = useRef<HTMLButtonElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const drag = useRef<{ x: number; y: number; crop: Crop } | null>(null)
+  const hintId = useId()
 
   useEffect(() => {
     if (canvas.current) {
@@ -46,7 +53,7 @@ export function PhotoWindow({
     }
   }, [master, filter])
 
-  const photo = { width: master.width, height: master.height }
+  const photo: Size = { width: master.width, height: master.height }
   const frameWidth = () => frame.current?.getBoundingClientRect().width ?? 1
 
   const down = (e: ReactPointerEvent) => {
@@ -82,25 +89,41 @@ export function PhotoWindow({
   }
 
   return (
-    <div
-      ref={frame}
-      role="img"
-      aria-label="Your photo. Drag it, or use the arrow keys, to choose which part shows."
-      tabIndex={0}
-      className="relative aspect-square cursor-grab touch-none overflow-hidden bg-gray-200 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue active:cursor-grabbing dark:focus-visible:outline-indigo-400"
-      onPointerDown={down}
-      onPointerMove={move}
-      onPointerUp={up}
-      onPointerCancel={up}
-      onKeyDown={key}
-    >
-      <canvas
-        ref={canvas}
-        data-testid="photo-preview"
-        className="pointer-events-none block size-full object-cover"
-        style={{ objectPosition: objectPosition(crop) }}
-      />
-    </div>
+    <>
+      {/* A button: focusable and interactive by role, with "crop" as what it
+          is. Enter and Space do nothing; the arrows and the pointer pan. */}
+      <button
+        ref={frame}
+        type="button"
+        aria-roledescription="crop"
+        aria-label="Photo position"
+        aria-describedby={hintId}
+        className="relative block aspect-square w-full cursor-grab touch-none overflow-hidden bg-gray-200 p-0 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue active:cursor-grabbing"
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={up}
+        onKeyDown={key}
+      >
+        <canvas
+          ref={canvas}
+          data-testid="photo-preview"
+          className="pointer-events-none block size-full object-cover"
+          style={{ objectPosition: objectPosition(crop) }}
+        />
+      </button>
+      <p id={hintId} className="sr-only">
+        Drag the photo, or use the arrow keys, to choose which part of it shows.
+      </p>
+      <p
+        className="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+        data-testid="crop-readout"
+      >
+        Showing {describeCrop(crop)}
+      </p>
+    </>
   )
 }
 
@@ -119,7 +142,8 @@ export interface PolaroidEditorProps {
  * The polaroid card as the editor (Photo Wall spec §6.5): the photo window,
  * the caption in the card's handwritten strip and the optional name under it,
  * in Caveat. The card is a white print whatever the page's theme, as on the
- * wall. Both fields are cut at their limits in code points as you type.
+ * wall. Both fields are cut as you type where their normalised text reaches
+ * the limit in code points.
  */
 export function PolaroidEditor({
   master,
@@ -131,6 +155,7 @@ export function PolaroidEditor({
   onCaption,
   onName,
 }: PolaroidEditorProps) {
+  const nameField = useRef<HTMLInputElement>(null)
   return (
     <figure className="bg-white p-3 pb-2 text-gray-900 shadow-lg ring-1 ring-black/5">
       <PhotoWindow
@@ -143,32 +168,33 @@ export function PolaroidEditor({
         <textarea
           value={caption}
           onChange={(e) =>
-            onCaption(limitCodePoints(e.target.value, CAPTION_MAX))
+            onCaption(limitWallText(e.target.value, CAPTION_MAX))
           }
-          // One line on the wall: Enter finishes instead of breaking the line
-          // (a newline would become a space anyway, §6.4).
+          // One line on the wall: Enter moves on to the name instead of
+          // breaking the line (a newline would become a space anyway, §6.4).
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              e.currentTarget.blur()
+              nameField.current?.focus()
             }
           }}
           rows={2}
           placeholder="Write something…"
           aria-label="Caption"
           autoComplete="off"
-          enterKeyHint="done"
-          className="mt-2 block w-full resize-none bg-transparent text-2xl leading-tight font-medium outline-none placeholder:text-gray-400"
+          enterKeyHint="next"
+          className={`mt-2 block w-full resize-none bg-transparent text-2xl leading-tight font-medium placeholder:text-gray-400 ${FIELD_FOCUS}`}
         />
         <input
+          ref={nameField}
           type="text"
           value={name}
-          onChange={(e) => onName(limitCodePoints(e.target.value, NAME_MAX))}
+          onChange={(e) => onName(limitWallText(e.target.value, NAME_MAX))}
           placeholder="— your name (optional)"
           aria-label="Your name (optional)"
           autoComplete="name"
           enterKeyHint="done"
-          className="w-full bg-transparent text-right text-xl font-medium text-gray-500 outline-none placeholder:text-gray-400"
+          className={`w-full bg-transparent text-right text-xl font-medium text-gray-500 placeholder:text-gray-400 ${FIELD_FOCUS}`}
         />
       </figcaption>
     </figure>

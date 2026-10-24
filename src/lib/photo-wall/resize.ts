@@ -10,6 +10,8 @@
  */
 
 export const MAX_LONG_EDGE = 2048
+/** The server's short-edge rule (§6.4): a thinner photo is refused before encoding. */
+export const MIN_SHORT_EDGE = 320
 export const IOS_CANVAS_MAX_SIDE = 4096
 export const IOS_CANVAS_MAX_PIXELS = 16_777_216
 
@@ -53,17 +55,32 @@ function insideCanvasCaps({ width, height }: Size): Size {
 
 /**
  * The canvas sizes a photo of `width` x `height` is drawn through, in order,
- * ending at {@link fitLongEdge}. One entry when the photo is already within
- * 2x of the target (or fits as it is).
+ * ending at {@link fitLongEdge} for `max`. One entry when the photo is
+ * already within 2x of the target (or fits as it is). The same chain makes
+ * the preview copies and the strip's thumbnails from the master.
  */
-export function resizeSteps(width: number, height: number): Size[] {
-  const target = fitLongEdge(width, height)
+export function resizeSteps(
+  width: number,
+  height: number,
+  max = MAX_LONG_EDGE,
+): Size[] {
+  const target = fitLongEdge(width, height, max)
   const steps: Size[] = []
   let current: Size = { width, height }
-  while (Math.max(current.width, current.height) > 2 * MAX_LONG_EDGE) {
+  while (Math.max(current.width, current.height) > 2 * max) {
     current = insideCanvasCaps(scaled(current.width, current.height, 0.5))
     steps.push(current)
   }
   steps.push(target)
   return steps
+}
+
+/**
+ * Whether a photo of this size is too small or too narrow for the wall: its
+ * short edge, once the long edge is at most 2048 px, is under 320 px (a
+ * 4000x600 panorama becomes 2048x307; a 300x200 photo stays as it is).
+ */
+export function isTooSmallForWall(width: number, height: number): boolean {
+  const fitted = fitLongEdge(width, height)
+  return Math.min(fitted.width, fitted.height) < MIN_SHORT_EDGE
 }

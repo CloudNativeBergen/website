@@ -3,7 +3,9 @@ import {
   IOS_CANVAS_MAX_PIXELS,
   IOS_CANVAS_MAX_SIDE,
   MAX_LONG_EDGE,
+  MIN_SHORT_EDGE,
   fitLongEdge,
+  isTooSmallForWall,
   resizeSteps,
 } from './resize'
 
@@ -98,5 +100,48 @@ describe('resizeSteps: the canvases a photo is drawn through', () => {
     const steps = resizeSteps(4096, 4100)
     expect(steps.every(withinCaps)).toBe(true)
     expect(steps.at(-1)).toEqual({ width: 2046, height: 2048 })
+  })
+})
+
+describe('resizeSteps for the preview copies and thumbnails', () => {
+  it('a 128 px thumbnail of a 2048x1536 master goes through halving steps, not one draw', () => {
+    expect(resizeSteps(2048, 1536, 128)).toEqual([
+      { width: 1024, height: 768 },
+      { width: 512, height: 384 },
+      { width: 256, height: 192 },
+      { width: 128, height: 96 },
+    ])
+  })
+
+  it('the 1024 px preview of a 2048 px master is one step', () => {
+    expect(resizeSteps(2048, 1536, 1024)).toEqual([
+      { width: 1024, height: 768 },
+    ])
+  })
+})
+
+describe('isTooSmallForWall: the 320 px short edge (§6.4), judged after the resize', () => {
+  it('is 320 px', () => {
+    expect(MIN_SHORT_EDGE).toBe(320)
+  })
+
+  it('a 4000x600 panorama becomes 2048x307: too narrow', () => {
+    expect(fitLongEdge(4000, 600)).toEqual({ width: 2048, height: 307 })
+    expect(isTooSmallForWall(4000, 600)).toBe(true)
+    expect(isTooSmallForWall(600, 4000)).toBe(true)
+  })
+
+  it('a 300x200 photo is too small; 320x320 and a phone photo are fine', () => {
+    expect(isTooSmallForWall(300, 200)).toBe(true)
+    expect(isTooSmallForWall(319, 2000)).toBe(true)
+    expect(isTooSmallForWall(320, 320)).toBe(false)
+    expect(isTooSmallForWall(4032, 3024)).toBe(false)
+    expect(isTooSmallForWall(1200, 1600)).toBe(false)
+  })
+
+  it('a wide photo whose short edge only fits before the resize is refused', () => {
+    // 4096x640 is 640 short at full size, 320 after the resize: just fine; 4096x639 is not.
+    expect(isTooSmallForWall(4096, 640)).toBe(false)
+    expect(isTooSmallForWall(4096, 638)).toBe(true)
   })
 })

@@ -15,12 +15,13 @@ export interface Crop {
 
 export const CENTER_CROP: Crop = { x: 0.5, y: 0.5 }
 
-const clamp01 = (n: number) =>
+/** A coordinate in 0–1; one that is not a number becomes the centre. */
+const clampCoordinate = (n: number) =>
   Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.5
 
 /** Both coordinates in 0–1; a value that is not a number becomes the centre. */
 export function clampCrop(crop: Crop): Crop {
-  return { x: clamp01(crop.x), y: clamp01(crop.y) }
+  return { x: clampCoordinate(crop.x), y: clampCoordinate(crop.y) }
 }
 
 /** The square, in whole pixels of a photo of this size, the crop places. */
@@ -52,9 +53,17 @@ export function dragCrop(
   const size = Math.min(photo.width, photo.height)
   const pixelsPerCssPx = size / frame
   const pan = (from: number, delta: number, range: number) =>
-    range > 0 ? clamp01(from - (delta * pixelsPerCssPx) / range) : from
+    range > 0 ? clampCoordinate(from - (delta * pixelsPerCssPx) / range) : from
   return {
     x: pan(crop.x, dx, photo.width - size),
     y: pan(crop.y, dy, photo.height - size),
   }
 }
+
+/** The crop as CSS `object-position`: the same 0–1 mapping on a covered box. */
+export const objectPosition = (crop: Crop) =>
+  `${crop.x * 100}% ${crop.y * 100}%`
+
+/** The crop for a screen reader, e.g. "50% from the left, 0% from the top". */
+export const describeCrop = (crop: Crop) =>
+  `${Math.round(crop.x * 100)}% from the left, ${Math.round(crop.y * 100)}% from the top`

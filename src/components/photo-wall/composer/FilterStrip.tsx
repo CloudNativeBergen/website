@@ -1,10 +1,9 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import type { Crop } from '@/lib/photo-wall/crop'
+import { objectPosition, type Crop } from '@/lib/photo-wall/crop'
 import { WALL_FILTERS, type WallFilterKey } from '@/lib/photo-wall/filters'
 import { THUMBNAIL_LONG_EDGE, filteredCopy } from '@/lib/photo-wall/photo'
-import { objectPosition } from './PolaroidEditor'
 
 function Thumbnail({
   master,

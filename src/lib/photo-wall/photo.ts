@@ -10,13 +10,21 @@
  */
 import { encodeWallJpeg } from './encode'
 import { applyWallFilter, type WallFilterKey } from './filters'
-import { fitLongEdge, resizeSteps, type Size } from './resize'
+import { isTooSmallForWall, resizeSteps, type Size } from './resize'
 
 /** Shown as "This photo couldn't be opened. Try another one, or take a new photo." */
 export class PhotoDecodeError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
     this.name = 'PhotoDecodeError'
+  }
+}
+
+/** Shown as "This photo is too small or too narrow for the wall. …" (§6.4's 320 px rule). */
+export class PhotoTooSmallError extends Error {
+  constructor(width: number, height: number) {
+    super(`A ${width}x${height} photo is under the 320 px short edge`)
+    this.name = 'PhotoTooSmallError'
   }
 }
 
@@ -66,6 +74,9 @@ export async function decodeWallPhoto(file: Blob): Promise<HTMLCanvasElement> {
     })
   }
   try {
+    if (isTooSmallForWall(bitmap.width, bitmap.height)) {
+      throw new PhotoTooSmallError(bitmap.width, bitmap.height)
+    }
     const steps = resizeSteps(bitmap.width, bitmap.height)
     const target = steps[steps.length - 1]
     if (steps.length > 1) {
@@ -100,7 +111,9 @@ export async function decodeWallPhoto(file: Blob): Promise<HTMLCanvasElement> {
 /**
  * A copy of the master with the filter applied: at the master's size for
  * the bake, or with a long edge of `longEdge` for the preview and the strip's
- * thumbnails. Drawn into `into` when given, so a visible canvas is reused.
+ * thumbnails, drawn through the same halving chain as the resize so a 128 px
+ * thumbnail is not one 2048→128 `drawImage`. Drawn into `into` when given,
+ * so a visible canvas is reused.
  */
 export function filteredCopy(
   master: HTMLCanvasElement,
@@ -108,14 +121,17 @@ export function filteredCopy(
   longEdge?: number,
   into?: HTMLCanvasElement,
 ): HTMLCanvasElement {
-  const size = longEdge
-    ? fitLongEdge(master.width, master.height, longEdge)
-    : { width: master.width, height: master.height }
+  const steps = longEdge
+    ? resizeSteps(master.width, master.height, longEdge)
+    : [{ width: master.width, height: master.height }]
+  const size = steps[steps.length - 1]
   if (into) {
     into.width = size.width
     into.height = size.height
   }
-  const canvas = draw(master, size, into)
+  let source: CanvasImageSource = master
+  for (const step of steps.slice(0, -1)) source = draw(source, step)
+  const canvas = draw(source, size, into)
   if (filter !== 'original') {
     const ctx = contextOf(canvas)
     const image = ctx.getImageData(0, 0, size.width, size.height)

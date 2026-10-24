@@ -8,7 +8,7 @@ import {
   stripJpegMetadata,
 } from '@/lib/photo-wall/jpeg-strip'
 import { MAX_PHOTO_BYTES } from '@/lib/photo-wall/encode'
-import { DECODE_FAILED_MESSAGE } from './ComposerLanding'
+import { DECODE_FAILED_MESSAGE, TOO_SMALL_MESSAGE } from './ComposerLanding'
 import {
   GENERIC_FAILURE_MESSAGE,
   WallComposer,
@@ -122,6 +122,46 @@ export const DecodeFailed: Story = {
   },
 }
 
+/** Tab reaches the hidden file input; the ring shows on the button around it. */
+export const LandingFocus: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.tab()
+    await expect(canvas.getByLabelText('Take a photo')).toHaveFocus()
+    await userEvent.tab()
+    await expect(canvas.getByLabelText('Choose from your photos')).toHaveFocus()
+    await userEvent.tab({ shift: true })
+    await expect(canvas.getByLabelText('Take a photo')).toHaveFocus()
+  },
+}
+
+export const LandingFocusDark: Story = {
+  ...LandingFocus,
+  globals: { theme: 'dark' },
+}
+
+/** A photo whose short edge would be under 320 px: refused before encoding. */
+export const TooSmall: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const small = document.createElement('canvas')
+    small.width = 300
+    small.height = 200
+    small.getContext('2d')!.fillRect(0, 0, 300, 200)
+    const blob = await new Promise<Blob | null>((r) =>
+      small.toBlob(r, 'image/jpeg', 0.8),
+    )
+    await userEvent.upload(
+      canvas.getByLabelText('Choose from your photos'),
+      new File([blob!], 'IMG_0002.jpg', { type: 'image/jpeg' }),
+    )
+    await waitFor(() =>
+      expect(canvas.getByRole('alert')).toHaveTextContent(TOO_SMALL_MESSAGE),
+    )
+    await expect(canvas.getByLabelText('Take a photo')).toBeVisible()
+  },
+}
+
 /** The polaroid card as the editor, with the fixture photo just picked. */
 export const Composer: Story = {
   play: async ({ canvasElement }) => {
@@ -141,7 +181,7 @@ export const Composer: Story = {
       '/privacy#photo-wall',
     )
     await expect(canvas.getByText(/until/)).toHaveTextContent(
-      'until 26. november 2026',
+      'until 26 November 2026',
     )
     await expect(
       canvas.getByRole('button', { name: 'Post to the wall' }),
@@ -163,12 +203,11 @@ export const Filled: Story = {
     await userEvent.click(canvas.getByRole('radio', { name: 'Fjord' }))
     await userEvent.type(
       canvas.getByLabelText('Caption'),
-      'kubectl apply -f joy',
+      'kubectl apply -f joy{Enter}',
     )
-    await userEvent.type(
-      canvas.getByLabelText('Your name (optional)'),
-      'Ingrid',
-    )
+    // Enter in the caption moves on to the name.
+    await expect(canvas.getByLabelText('Your name (optional)')).toHaveFocus()
+    await userEvent.keyboard('Ingrid')
     await expect(canvas.getByTestId('caption-counter')).toHaveTextContent(
       '20/80',
     )
@@ -225,9 +264,13 @@ export const FilterRetro = withFilter('retro')
 export const CroppedToTop: Story = {
   play: async ({ canvasElement }) => {
     const canvas = await pickFixture(canvasElement)
-    const window = canvas.getByRole('img', { name: /Your photo/ })
+    const window = canvas.getByRole('button', { name: 'Photo position' })
+    await expect(window).toHaveAttribute('aria-roledescription', 'crop')
     window.focus()
     for (let i = 0; i < 20; i++) await userEvent.keyboard('{ArrowUp}')
+    await expect(canvas.getByTestId('crop-readout')).toHaveTextContent(
+      'Showing 50% from the left, 0% from the top',
+    )
     await expect(
       canvas.getByTestId('photo-preview').getAttribute('style'),
     ).toMatch(/object-position:\s*50% 0%/)
@@ -361,7 +404,7 @@ const markerName = (m: number) =>
               ? `SOF${m - 0xc0}`
               : `FF${m.toString(16).toUpperCase()}`
 
-function EncoderProbe() {
+function EncoderProbeView() {
   const [report, setReport] = useState<{
     ua: string
     before: string[]
@@ -451,9 +494,9 @@ function EncoderProbe() {
  * Open this story in iPhone Safari; the verdict line says whether its
  * encoder writes an APP1 and whether the strip removes it.
  */
-export const EncoderProbe_: Story = {
+export const EncoderProbe: Story = {
   name: 'Encoder probe (open on an iPhone)',
-  render: () => <EncoderProbe />,
+  render: () => <EncoderProbeView />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await waitFor(() =>

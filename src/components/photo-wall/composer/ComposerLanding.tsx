@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, type ChangeEvent } from 'react'
+import type { ChangeEvent } from 'react'
 import { CameraIcon, PhotoIcon } from '@heroicons/react/24/outline'
 
 export const PRIMARY_BUTTON =
@@ -8,9 +8,20 @@ export const PRIMARY_BUTTON =
 export const SECONDARY_BUTTON =
   'flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 text-base font-semibold text-gray-900 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800 dark:focus-visible:outline-white'
 
+/**
+ * The focus ring of a label whose sr-only input has the focus: the input is
+ * what the keyboard reaches, the label is what the eye sees.
+ */
+const LABEL_FOCUS =
+  'cursor-pointer has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-cloud-blue dark:has-[:focus-visible]:outline-indigo-400'
+
 /** The message for a file the browser cannot decode (Photo Wall spec §6.5). */
 export const DECODE_FAILED_MESSAGE =
   'This photo couldn’t be opened. Try another one, or take a new photo.'
+
+/** The message for a photo under the wall's 320 px short edge (§6.4). */
+export const TOO_SMALL_MESSAGE =
+  'This photo is too small or too narrow for the wall. Try another one, or take a new photo.'
 
 /**
  * A button that opens the camera or the photo library: a label around a
@@ -28,7 +39,6 @@ function PickPhotoButton({
   onPick: (file: File) => void
   children: React.ReactNode
 }) {
-  const input = useRef<HTMLInputElement>(null)
   const onChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     // Reset so picking the same photo again fires `change` again.
@@ -36,9 +46,8 @@ function PickPhotoButton({
     if (file) onPick(file)
   }
   return (
-    <label className={`${className} cursor-pointer`}>
+    <label className={`${className} ${LABEL_FOCUS}`}>
       <input
-        ref={input}
         type="file"
         accept="image/*"
         capture={capture ? 'environment' : undefined}
@@ -52,8 +61,9 @@ function PickPhotoButton({
 
 /**
  * The landing of `/wall/post` (Photo Wall spec §6.5): the heading and the two
- * ways in. The logo is the chrome's. `error` is the decode message after a
- * photo the browser could not open; it is announced, then read in place.
+ * ways in. The logo is the chrome's. `error` is the message after a photo
+ * the browser could not open, or one too small for the wall; it is
+ * announced, then read in place.
  */
 export function ComposerLanding({
   onPick,
