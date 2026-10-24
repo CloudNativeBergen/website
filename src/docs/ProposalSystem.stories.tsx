@@ -47,7 +47,7 @@ export const Architecture: Story = {
                 ['conference', 'Reference to conference (required)'],
                 [
                   'status',
-                  'draft → submitted → accepted → confirmed (or rejected/withdrawn/deleted)',
+                  'draft → submitted → accepted → confirmed (or rejected/withdrawn/canceled/deleted)',
                 ],
                 ['outline', 'Internal reviewer-only notes'],
                 ['attachments[]', 'File or URL attachments'],
@@ -134,6 +134,9 @@ export const Architecture: Story = {
             <span className="rounded bg-yellow-50 px-2 py-1 text-xs text-yellow-700">
               Withdrawn
             </span>
+            <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600">
+              Canceled
+            </span>
             <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-500">
               Deleted
             </span>
@@ -208,6 +211,12 @@ export const Architecture: Story = {
                   who="Organizer"
                 />
                 <TransitionRow
+                  from="Accepted"
+                  action="Cancel"
+                  to="Canceled"
+                  who="Organizer"
+                />
+                <TransitionRow
                   from="Rejected"
                   action="Accept"
                   to="Accepted"
@@ -218,6 +227,12 @@ export const Architecture: Story = {
                   action="Withdraw"
                   to="Withdrawn"
                   who="Speaker"
+                />
+                <TransitionRow
+                  from="Confirmed"
+                  action="Cancel"
+                  to="Canceled"
+                  who="Organizer"
                 />
               </tbody>
             </table>

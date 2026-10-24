@@ -160,6 +160,26 @@ export const AdminWithdraw: Story = {
   },
 }
 
+export const AdminCancel: Story = {
+  args: {
+    open: true,
+    close: fn(),
+    proposal: mockProposal,
+    action: Action.cancel,
+    adminUI: true,
+    onAction: fn(),
+    domain: 'cloudnativedays.no',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Organizer cancellation of an accepted or confirmed talk. Only available in the admin UI; the talk moves to Canceled.',
+      },
+    },
+  },
+}
+
 export const SpeakerSubmit: Story = {
   args: {
     open: true,
