@@ -2,7 +2,9 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import type { WallPostAttempt, WallPostRequest } from '@/lib/photo-wall/post'
 import { ComposerClosed } from './ComposerClosed'
-import { WallPoster } from './WallPoster'
+import { WallPoster, type WallPosterProps } from './WallPoster'
+
+type Post = NonNullable<WallPosterProps['post']>
 
 /**
  * `/wall/post` wired to Submit (Photo Wall spec §6.3, §6.5), with the server
@@ -23,7 +25,7 @@ const meta = {
     logo: { title: 'Cloud Native Days Norway' },
     deletesOn: '2026-11-26',
     ensureDevice: fn(async () => true),
-    post: fn(async (): Promise<WallPostAttempt> => ({ ok: true })),
+    post: fn<Post>(async () => ({ ok: true })),
   },
 } satisfies Meta<typeof WallPoster>
 
@@ -117,7 +119,7 @@ export const PostedTwice: Story = {
 /** A device limit: its message, and the photo and fields stay. */
 export const RefusedPendingDevice: Story = {
   args: {
-    post: fn(async (): Promise<WallPostAttempt> => ({
+    post: fn<Post>(async () => ({
       ok: false,
       refusal: 'pendingDevice',
     })),
@@ -145,7 +147,7 @@ export const RefusedPendingDeviceDark: Story = {
 /** Posting closed meanwhile: the message with See the wall. */
 export const RefusedClosed: Story = {
   args: {
-    post: fn(async (): Promise<WallPostAttempt> => ({
+    post: fn<Post>(async () => ({
       ok: false,
       refusal: 'closed',
     })),
@@ -165,7 +167,7 @@ export const RefusedClosed: Story = {
 /** Every attempt lost: the generic message; the next press retries. */
 export const Lost: Story = {
   args: {
-    post: fn(async (): Promise<WallPostAttempt> => ({ ok: false, lost: true })),
+    post: fn<Post>(async () => ({ ok: false, lost: true })),
   },
   play: async ({ canvasElement }) => {
     const canvas = await postFixture(canvasElement)
@@ -177,6 +179,31 @@ export const Lost: Story = {
       { timeout: 10_000 },
     )
   },
+}
+
+/** The post going up: Posting… keeps focus, the bar under it says how far. */
+export const Uploading: Story = {
+  args: {
+    post: fn<Post>(
+      (...[, { onProgress }]) =>
+        new Promise<WallPostAttempt>(() => onProgress?.(0.42)),
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = await postFixture(canvasElement)
+    const bar = await canvas.findByRole(
+      'progressbar',
+      { name: 'Uploading your photo' },
+      { timeout: 10_000 },
+    )
+    await expect(bar).toHaveAttribute('aria-valuenow', '42')
+    await expect(canvas.getByRole('button', { name: 'Posting…' })).toHaveFocus()
+  },
+}
+
+export const UploadingDark: Story = {
+  ...Uploading,
+  globals: { theme: 'dark' },
 }
 
 /** `ensureDevice` has not answered yet: Post to the wall waits. */
