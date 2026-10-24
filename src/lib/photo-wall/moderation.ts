@@ -85,6 +85,14 @@ export function countByTab(
   return counts
 }
 
+/**
+ * The live pending count (§10): the Pending tab's, for the page's summary
+ * and the admin nav's Photo Wall badge (P6) alike.
+ */
+export function pendingOf(queue: ModerationQueueData): number {
+  return countByTab(queue.posts).pending
+}
+
 const time = (value: string | null) => (value ? Date.parse(value) : 0)
 
 /**

@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { countByTab } from '@/lib/photo-wall'
+import { pendingOf } from '@/lib/photo-wall/moderation'
 import { formatConferenceClock } from '@/lib/time'
 import { api } from '@/lib/trpc/client'
 import { MODERATION_QUEUE_ID, revealPendingTab } from './ModerationQueue'
 import { MODERATION_POLL_MS } from './polling'
+import { usePushPendingCount } from './usePushPendingCount'
 
 /** A count older than this has missed two polls: a hung or lost read. */
 const STALE_AFTER_MS = 2 * MODERATION_POLL_MS
@@ -28,6 +29,7 @@ function useNow(): number {
  */
 export function PendingSummary() {
   const queue = api.photoWall.moderationQueue.useQuery()
+  usePushPendingCount(queue)
   const now = useNow()
   // Not current: the last read failed, is waiting for the network
   // (`paused`), or has not answered for two polls. "Nothing waiting" must
@@ -38,7 +40,7 @@ export function PendingSummary() {
     now - queue.dataUpdatedAt > STALE_AFTER_MS
   return (
     <PendingSummaryView
-      pending={queue.data ? countByTab(queue.data.posts).pending : undefined}
+      pending={queue.data ? pendingOf(queue.data) : undefined}
       staleSince={
         queue.data && notCurrent
           ? new Date(queue.dataUpdatedAt).toISOString()

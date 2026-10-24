@@ -27,9 +27,17 @@ import type {
   PhotoWallAdminView,
 } from '@/lib/photo-wall'
 
-const h = vi.hoisted(() => ({ useQuery: vi.fn() }))
+const h = vi.hoisted(() => ({
+  useQuery: vi.fn(),
+  // The nav badge push (P6), proven on the real wiring in
+  // `usePushPendingCount.test.tsx`.
+  utils: { photoWall: { pendingCount: { setData: () => {} } } },
+}))
 vi.mock('@/lib/trpc/client', () => ({
-  api: { photoWall: { moderationQueue: { useQuery: h.useQuery } } },
+  api: {
+    useUtils: () => h.utils,
+    photoWall: { moderationQueue: { useQuery: h.useQuery } },
+  },
 }))
 // The page's QR code draws on a canvas jsdom does not have.
 vi.mock('@/components/feedback/useFeedbackQrPng', () => ({

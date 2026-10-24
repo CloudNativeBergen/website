@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   countByTab,
   cropOutline,
+  pendingOf,
   postsInTab,
   tabOf,
   type ModerationPost,
@@ -135,6 +136,18 @@ describe('the tabs (§10, §12)', () => {
       notShown: 2,
     })
     expect(countByTab([])).toEqual({ pending: 0, onTheWall: 0, notShown: 0 })
+  })
+
+  it('the pending count is the Pending tab only (§10, P6)', () => {
+    const posts = [
+      post('p1', 'pending'),
+      post('a', 'approved'),
+      post('n', 'notShown'),
+      post('d', 'deleting'),
+      post('p2', 'pending'),
+    ]
+    expect(pendingOf({ posts })).toBe(2)
+    expect(pendingOf({ posts: [] })).toBe(0)
   })
 
   it('leaves the given list alone', () => {

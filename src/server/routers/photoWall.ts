@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
-  countByTab,
   postingState,
   photoWallLinks,
   POSTING_MODES,
@@ -11,6 +10,7 @@ import {
   type PhotoWallAdminView,
 } from '@/lib/photo-wall'
 import { expirePhotoWall, getModerationQueue } from '@/lib/photo-wall/cache'
+import { pendingOf } from '@/lib/photo-wall/moderation'
 import {
   readPhotoWall,
   setUpPhotoWall,
@@ -104,14 +104,13 @@ export const photoWallRouter = router({
 
   /**
    * The pending count on the admin nav's Photo Wall entry (§10, P6), read
-   * when the admin shell mounts. Counted from the polled queue's cache
-   * entry, so the badge and the page agree, and a warm cache asks Sanity
-   * for nothing.
+   * when the admin shell mounts; `/admin/photo-wall` pushes each count it
+   * polls into it. Counted from the polled queue's cache entry, so the badge
+   * and the page agree, and a warm cache asks Sanity for nothing.
    */
-  pendingCount: adminProcedure.query(async ({ ctx }) => {
-    const queue = await getModerationQueue(await polledConferenceId(ctx.orgId))
-    return countByTab(queue.posts).pending
-  }),
+  pendingCount: adminProcedure.query(async ({ ctx }) =>
+    pendingOf(await getModerationQueue(await polledConferenceId(ctx.orgId))),
+  ),
 
   /** Every Wall Post with its status, polled every 10 s (§8, §10). */
   moderationQueue: adminProcedure.query(async ({ ctx }) =>

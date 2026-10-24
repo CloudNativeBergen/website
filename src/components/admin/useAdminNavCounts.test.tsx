@@ -13,15 +13,10 @@ import {
   type UseQueryOptions,
 } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import type {
-  ModerationQueueData,
-  WallPostStatus,
-} from '@/lib/photo-wall/moderation'
 
 const h = vi.hoisted(() => ({
   flagged: vi.fn(async (): Promise<number> => 0),
   pending: vi.fn(async (): Promise<number> => 0),
-  queue: vi.fn(async (): Promise<unknown> => ({ posts: [] })),
 }))
 vi.mock('@/lib/trpc/client', async () => {
   const { useQuery } = await import('@tanstack/react-query')
@@ -35,7 +30,6 @@ vi.mock('@/lib/trpc/client', async () => {
       sessionFeedback: { flaggedCount: procedure('flagged', h.flagged) },
       photoWall: {
         pendingCount: procedure('pending', h.pending),
-        moderationQueue: procedure('queue', h.queue),
       },
     },
   }
@@ -55,21 +49,6 @@ const appQueryClient = () =>
     },
   })
 
-const queueOf = (...statuses: WallPostStatus[]): ModerationQueueData => ({
-  posts: statuses.map((status, i) => ({
-    _id: `wallPost-${i}`,
-    status,
-    photo: null,
-    crop: { x: 0.5, y: 0.5 },
-    caption: null,
-    name: null,
-    marketingConsent: false,
-    submittedAt: null,
-    approvedAt: null,
-    decidedAt: null,
-  })),
-})
-
 let client: QueryClient
 function mount() {
   const wrapper = ({ children }: { children: ReactNode }) => (
@@ -84,7 +63,6 @@ beforeEach(() => {
   client = appQueryClient()
   h.flagged.mockReset().mockResolvedValue(0)
   h.pending.mockReset().mockResolvedValue(0)
-  h.queue.mockReset().mockResolvedValue({ posts: [] })
 })
 afterEach(() => {
   cleanup()
@@ -115,7 +93,7 @@ describe('useAdminNavCounts', () => {
   })
 
   it('a slow count is missing until it answers', async () => {
-    let answer = (_n: number) => {}
+    let answer: (n: number) => void = () => {}
     h.pending.mockReturnValue(new Promise((r) => (answer = r)))
     const { result } = mount()
     await settle()
@@ -134,48 +112,5 @@ describe('useAdminNavCounts', () => {
     act(() => window.dispatchEvent(new Event('visibilitychange')))
     await settle()
     expect(result.current.pendingWallPosts).toBe(4)
-  })
-
-  it('follows the moderation page’s poll while it is open, and never fetches the queue itself', async () => {
-    h.pending.mockResolvedValue(5)
-    const { result } = mount()
-    await settle()
-    expect(result.current.pendingWallPosts).toBe(5)
-    // `/admin/photo-wall` polls the queue: two of three now pending.
-    await act(() => vi.advanceTimersByTimeAsync(1_000))
-    act(() => {
-      client.setQueryData(
-        ['queue'],
-        queueOf('pending', 'approved', 'pending', 'notShown', 'deleting'),
-      )
-    })
-    await settle()
-    expect(result.current.pendingWallPosts).toBe(2)
-    // An Approve all lands on the next poll.
-    await act(() => vi.advanceTimersByTimeAsync(10_000))
-    act(() => {
-      client.setQueryData(['queue'], queueOf('approved', 'approved'))
-    })
-    await settle()
-    expect(result.current.pendingWallPosts).toBe(0)
-    expect(h.queue).not.toHaveBeenCalled()
-  })
-
-  it('a pending count read after the last poll wins over it', async () => {
-    h.pending.mockResolvedValue(5)
-    const { result } = mount()
-    await settle()
-    await act(() => vi.advanceTimersByTimeAsync(1_000))
-    act(() => {
-      client.setQueryData(['queue'], queueOf('pending'))
-    })
-    await settle()
-    expect(result.current.pendingWallPosts).toBe(1)
-    // The organizer left the page; back on the tab later, a fresh count.
-    h.pending.mockResolvedValue(7)
-    await act(() => vi.advanceTimersByTimeAsync(61_000))
-    act(() => window.dispatchEvent(new Event('visibilitychange')))
-    await settle()
-    expect(result.current.pendingWallPosts).toBe(7)
   })
 })

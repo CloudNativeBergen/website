@@ -85,6 +85,9 @@ export interface AdminDestination extends AdminDestinationFeature {
  */
 export type AdminNavCount = 'flaggedFeedback' | 'pendingWallPosts'
 
+/** The nav counts the shell has; one not given shows no badge. */
+export type AdminNavCounts = Partial<Record<AdminNavCount, number>>
+
 /** What each count counts, for a screen reader and the rail's tooltip. */
 const NAV_COUNT_LABELS: Record<AdminNavCount, string> = {
   flaggedFeedback: 'flagged',
@@ -780,7 +783,7 @@ export function visibleNavSections(
  */
 export function withNavBadges(
   sections: readonly AdminNavSection[],
-  counts: Partial<Record<AdminNavCount, number>>,
+  counts: AdminNavCounts,
 ): AdminNavSection[] {
   return sections.map((section) => ({
     ...section,
