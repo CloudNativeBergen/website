@@ -624,6 +624,23 @@ describe("Wall Looks (§9): the wall's look, live, and a screen link's ?look=", 
     expect(screen.getAllByTestId('up-next')).toHaveLength(4)
   })
 
+  it("a switch from Mosaic to Spotlight runs Spotlight's rules: the big post walks 12, not 6", async () => {
+    mount(view(posts(20), { look: 'mosaic' }))
+    await advance(0)
+    loadImages()
+    await advance(100)
+    h.queryFn.mockResolvedValue(view(posts(20), { look: 'spotlight' }))
+    await nextPoll()
+    loadImages()
+    await advance(100)
+    expect(hero()?.getAttribute('data-post')).toBe('wallPost-20')
+    for (let turn = 0; turn < 6; turn++) {
+      await advance(SWAP_EVERY_MS)
+      loadImages()
+    }
+    expect(hero()?.getAttribute('data-post')).toBe('wallPost-14')
+  })
+
   it("keeps a screen link's ?look= whatever the wall's look", async () => {
     mount(view(posts(8), { look: 'mosaic' }), [], 'spotlight')
     await advance(0)
