@@ -50,6 +50,31 @@ describe('normalizeWallText (Photo Wall spec §6.4)', () => {
     expect(normalizeWallText('a\u{e0067}\u{e0062}\u{e007f}b')).toBe('ab')
   })
 
+  it('keeps tags only in the exact flag shape: black flag, 1 to 7 tag letters or digits, cancel tag', () => {
+    const flag = '\u{1f3f4}'
+    const cancel = '\u{e007f}'
+    const tag = (letters: string) =>
+      Array.from(letters, (c) =>
+        String.fromCodePoint(0xe0000 + c.codePointAt(0)!),
+      ).join('')
+    // No cancel tag, no tags, a tag that is not a letter or digit, eight
+    // letters, or no black flag in front: the tags all go.
+    expect(normalizeWallText(`a${flag}${tag('gb')}b`)).toBe(`a${flag}b`)
+    expect(normalizeWallText(`a${flag}${cancel}b`)).toBe(`a${flag}b`)
+    expect(normalizeWallText(`a${flag}${tag('g!')}${cancel}b`)).toBe(
+      `a${flag}b`,
+    )
+    expect(normalizeWallText(`a${flag}${tag('gbengxyz')}${cancel}b`)).toBe(
+      `a${flag}b`,
+    )
+    expect(normalizeWallText(`a\u{2691}${tag('gbeng')}${cancel}b`)).toBe(
+      'a\u{2691}b',
+    )
+    // Seven letters and digits are a flag shape.
+    const seven = `${flag}${tag('gb1234x')}${cancel}`
+    expect(normalizeWallText(`a${seven}b`)).toBe(`a${seven}b`)
+  })
+
   it('keeps a name or caption of only digits or only punctuation', () => {
     expect(normalizeWallText('2026')).toBe('2026')
     expect(normalizeWallText('!!!')).toBe('!!!')
