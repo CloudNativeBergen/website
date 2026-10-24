@@ -2,21 +2,18 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useEffect, useState } from 'react'
 import { expect, waitFor, within } from 'storybook/test'
 import type { ScreenPost, ScreenView } from '@/lib/photo-wall/screen'
+import type { WallLook } from '@/lib/photo-wall/types'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
+import { STORY_PHOTOS, storyPhoto } from '../story-photos'
 import { ScreenBoard, type ScreenPoll } from './ScreenBoard'
 import { ScreenError } from './ScreenError'
 
-/**
- * Local fixture photos (`.storybook/main.ts` staticDirs): no network. On the
- * site `src` is already Sanity's `rect=` square; here it is the whole photo,
- * which the polaroid's `object-cover` shows centred.
- */
 const PHOTOS = [
-  '/storybook-fixtures/wall-landscape.jpg',
-  '/storybook-fixtures/wall-portrait.jpg',
-  '/storybook-fixtures/wall-photo.jpg',
-  '/storybook-fixtures/wall-panorama.jpg',
-  '/storybook-fixtures/wall-tall.jpg',
+  STORY_PHOTOS.landscape,
+  STORY_PHOTOS.portrait,
+  STORY_PHOTOS.photo,
+  STORY_PHOTOS.panorama,
+  STORY_PHOTOS.tall,
 ]
 const CAPTIONS = [
   'kubectl apply -f joy',
@@ -36,7 +33,7 @@ const at = (minutes: number) =>
   new Date(Date.parse('2026-10-26T07:00:00Z') + minutes * 60_000).toISOString()
 const post = (n: number): ScreenPost => ({
   _id: `wallPost-${n}`,
-  src: PHOTOS[n % PHOTOS.length],
+  ...storyPhoto(PHOTOS[n % PHOTOS.length]),
   caption: CAPTIONS[n % CAPTIONS.length],
   name: NAMES[n % NAMES.length],
   approvedAt: at(n),
@@ -50,6 +47,7 @@ const view = (
 ): ScreenView => ({
   closed: false,
   sponsorStrip: false,
+  look: 'pinboard',
   posts: list,
   ...fields,
 })
@@ -69,10 +67,13 @@ function Scripted({
   initial,
   script = [],
   sponsors = [],
+  look,
 }: {
   initial: ScreenView
   script?: Step[]
   sponsors?: ConferenceSponsor[]
+  /** The screen link's `?look=`. */
+  look?: WallLook
 }) {
   const [poll, setPoll] = useState<ScreenPoll>(() => ({
     data: initial,
@@ -101,6 +102,7 @@ function Scripted({
         postUrl: 'https://2026.cloudnativedays.no/wall/post',
         sponsors,
       }}
+      look={look}
     />
   )
 }
@@ -114,7 +116,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Screen Mode `/wall/screen` (Photo Wall spec §9.2–§9.4), slice M5b: the Pinboard on a 1920×1080 canvas scaled to the display, always dark by its own `dark` class (the global `theme` toolbar changes nothing), the conference logo and brand accent, up to 17 tilted polaroids, the QR polaroid pointing at the Composer, the "new" mark on an arrival, the offline dot, the sponsor strip, the empty and closed states. The stories play a script of polls into the board; on the site `photoWallPublic.screen` is polled every 5 s. Capture at 1920×1080 (`pnpm shoot <id> 1920 1080`).',
+          'Screen Mode `/wall/screen` (Photo Wall spec §9.2–§9.4), slices M5b, P3 and P4: the wall\'s look (**Pinboard**, **Mosaic** or **Spotlight**, or the screen link\'s `?look=`) on a 1920×1080 canvas scaled to the display, always dark by its own `dark` class (the global `theme` toolbar changes nothing), the conference logo and brand accent, up to 17 tilted polaroids, the QR polaroid pointing at the Composer, the "new" mark on an arrival, the offline dot, the sponsor strip, the empty and closed states. The stories play a script of polls into the board; on the site `photoWallPublic.screen` is polled every 5 s. Capture at 1920×1080 (`pnpm shoot <id> 1920 1080`).',
       },
     },
   },
@@ -245,7 +247,10 @@ export const Empty: Story = {
 export const PhotosUnavailable: Story = {
   args: {
     initial: view(
-      posts(6).map((p) => ({ ...p, src: '/storybook-fixtures/missing.jpg' })),
+      posts(6).map((p) => ({
+        ...p,
+        ...storyPhoto({ ...p.whole, src: '/storybook-fixtures/missing.jpg' }),
+      })),
     ),
   },
   play: async ({ canvasElement }) => {
@@ -318,6 +323,160 @@ export const SponsorStripNoPublicTier: Story = {
   ),
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).queryByRole('marquee')).toBeNull()
+  },
+}
+
+const tilesOf = (canvas: ReturnType<typeof within>) =>
+  canvas.queryAllByTestId('mosaic-tile')
+
+/** Mosaic (P3): whole photos edge to edge, the newest in the spotlight tile with its caption. */
+export const Mosaic: Story = {
+  args: { initial: view(posts(40), { look: 'mosaic' }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await waitFor(
+      () =>
+        expect(
+          canvasElement.querySelector(
+            '[data-testid="mosaic-tile"][data-spotlight][data-post="wallPost-40"]',
+          ),
+        ).not.toBeNull(),
+      { timeout: 5_000 },
+    )
+    await expect(
+      await canvas.findByRole('img', { name: /QR code for/ }),
+    ).toBeVisible()
+    await expect(cardsOf(canvas)).toHaveLength(0)
+  },
+}
+
+/** A post approved 1 s after the screen opened: it takes the spotlight at once, "Just posted". */
+export const MosaicArrival: Story = {
+  args: {
+    initial: view(posts(40), { look: 'mosaic' }),
+    script: [
+      {
+        after: 1_000,
+        answer: view([post(41), ...posts(40)], { look: 'mosaic' }),
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () =>
+        expect(
+          canvasElement.querySelector(
+            '[data-spotlight][data-new][data-post="wallPost-41"]',
+          ),
+        ).not.toBeNull(),
+      { timeout: 5_000 },
+    )
+    await expect(within(canvasElement).getByText('Just posted')).toBeVisible()
+  },
+}
+
+/** Mosaic with the sponsor strip: the mosaic fits above it. */
+export const MosaicSponsorStrip: Story = {
+  args: { initial: view(posts(40), { look: 'mosaic', sponsorStrip: true }) },
+  loaders: SponsorStrip.loaders,
+  render: SponsorStrip.render,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('marquee')).toBeVisible()
+    await waitFor(() => expect(tilesOf(canvas).length).toBeGreaterThan(0), {
+      timeout: 5_000,
+    })
+  },
+}
+
+/** Spotlight (P4): one big post at a time over a blurred copy, with "Up next". */
+export const Spotlight: Story = {
+  args: { initial: view(posts(24), { look: 'spotlight' }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await waitFor(
+      () =>
+        expect(canvas.getByTestId('spotlight-hero')).toHaveAttribute(
+          'data-post',
+          'wallPost-24',
+        ),
+      { timeout: 5_000 },
+    )
+    await expect(canvas.getAllByTestId('up-next')).toHaveLength(4)
+    await expect(cardsOf(canvas)).toHaveLength(0)
+  },
+}
+
+/** A post approved 1 s after the screen opened: first on "Up next", marked new, big at the end of the current turn. */
+export const SpotlightArrival: Story = {
+  args: {
+    initial: view(posts(24), { look: 'spotlight' }),
+    script: [
+      {
+        after: 1_000,
+        answer: view([post(30), ...posts(24)], { look: 'spotlight' }),
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () =>
+        expect(
+          canvasElement.querySelector(
+            '[data-testid="up-next"][data-new][data-post="wallPost-30"]',
+          ),
+        ).not.toBeNull(),
+      { timeout: 5_000 },
+    )
+  },
+}
+
+/** Spotlight with the sponsor strip under it. */
+export const SpotlightSponsorStrip: Story = {
+  args: {
+    initial: view(posts(24), { look: 'spotlight', sponsorStrip: true }),
+  },
+  loaders: SponsorStrip.loaders,
+  render: SponsorStrip.render,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('marquee')).toBeVisible()
+    await expect(await canvas.findByTestId('spotlight-hero')).toBeVisible()
+  },
+}
+
+/** The wall is on Pinboard; an organizer picks Mosaic and the screen switches on its next poll. */
+export const LookSwitch: Story = {
+  args: {
+    initial: view(posts(24)),
+    script: [{ after: 1_500, answer: view(posts(24), { look: 'mosaic' }) }],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await waitFor(() => expect(tilesOf(canvas).length).toBeGreaterThan(0), {
+      timeout: 5_000,
+    })
+    await expect(cardsOf(canvas)).toHaveLength(0)
+  },
+}
+
+/** The wall is on Mosaic, but this screen's link says `?look=spotlight`. */
+export const LookOverride: Story = {
+  args: { initial: view(posts(24), { look: 'mosaic' }), look: 'spotlight' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByTestId('spotlight-hero')).toBeVisible()
+    await expect(tilesOf(canvas)).toHaveLength(0)
+  },
+}
+
+/** Spotlight on an empty wall: the same invitation as every look. */
+export const SpotlightEmpty: Story = {
+  args: { initial: view([], { look: 'spotlight' }) },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText('Be the first on the wall'),
+    ).toBeVisible()
   },
 }
 
