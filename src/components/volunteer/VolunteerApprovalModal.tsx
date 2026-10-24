@@ -314,7 +314,7 @@ export function VolunteerApprovalModal({
                     defaultTicketUrl ||
                     'Configure in Conference Settings or paste here'
                   }
-                  className={`flex-1 rounded border bg-white px-2.5 py-1 text-xs text-gray-900 placeholder-gray-400 focus:outline-none dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 ${
+                  className={`min-h-11 flex-1 rounded border bg-white px-2.5 py-2 text-base text-gray-900 placeholder-gray-400 focus:outline-none sm:text-sm dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 ${
                     ticketError
                       ? 'border-red-500 focus:border-red-500'
                       : 'border-gray-200 focus:border-brand-cloud-blue dark:border-gray-700'
@@ -345,7 +345,7 @@ export function VolunteerApprovalModal({
                     defaultSlackUrl ||
                     'Configure in Conference Settings or paste here'
                   }
-                  className={`flex-1 rounded border bg-white px-2.5 py-1 text-xs text-gray-900 placeholder-gray-400 focus:outline-none dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 ${
+                  className={`min-h-11 flex-1 rounded border bg-white px-2.5 py-2 text-base text-gray-900 placeholder-gray-400 focus:outline-none sm:text-sm dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 ${
                     slackError
                       ? 'border-red-500 focus:border-red-500'
                       : 'border-gray-200 focus:border-brand-cloud-blue dark:border-gray-700'
