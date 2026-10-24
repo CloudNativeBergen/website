@@ -159,4 +159,30 @@ describe('SpeakerTable ticket row actions', () => {
       expect(writeText).toHaveBeenCalledWith('ada@example.com')
     })
   })
+
+  it('groups every ticket question under one "Ticket answers" filter', async () => {
+    const question = (id: string, label: string) => ({
+      id,
+      source: 'additional' as const,
+      rawKey: id,
+      label,
+      type: 'choice' as const,
+      options: ['Yes', 'No'],
+    })
+    renderTable({
+      ticketQuestions: [
+        question('q1', 'Monday workshops'),
+        question('q2', 'Speaker dinner'),
+      ],
+    })
+
+    expect(
+      screen.queryByRole('button', { name: /^monday workshops/i }),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /ticket answers/i }))
+
+    // Headings inside the menu (the Columns menu is closed).
+    expect(await screen.findAllByTitle('Monday workshops')).not.toHaveLength(0)
+    expect(screen.getAllByTitle('Speaker dinner')).not.toHaveLength(0)
+  })
 })
