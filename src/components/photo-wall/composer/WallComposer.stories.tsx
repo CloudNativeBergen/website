@@ -335,15 +335,15 @@ export const Posts: Story = {
  * preview shows it: JPEG has no transparency and would otherwise turn every
  * transparent pixel black in the upload only.
  */
-export const TransparentPhoto: Story = {
+const transparentPhoto = (side: number): Story => ({
   play: async ({ canvasElement, args }) => {
     const drawn = document.createElement('canvas')
-    drawn.width = 640
-    drawn.height = 640
+    drawn.width = side
+    drawn.height = side
     const ctx = drawn.getContext('2d')
     if (!ctx) throw new Error('No 2D canvas context')
     ctx.fillStyle = '#000'
-    ctx.fillRect(220, 220, 200, 200)
+    ctx.fillRect(side / 3, side / 3, side / 3, side / 3)
     const png = await new Promise<Blob | null>((resolve) =>
       drawn.toBlob(resolve, 'image/png'),
     )
@@ -371,7 +371,11 @@ export const TransparentPhoto: Story = {
     const [r, g, b] = readCtx.getImageData(5, 5, 1, 1).data
     await expect(Math.min(r, g, b)).toBeGreaterThan(240)
   },
-}
+})
+
+export const TransparentPhoto = transparentPhoto(640)
+/** Over 2048 px: the browser-resize path (Chromium honours its options). */
+export const TransparentLargePhoto = transparentPhoto(3000)
 
 /**
  * Enter confirming an IME candidate (Japanese, Chinese) stays in the caption;
