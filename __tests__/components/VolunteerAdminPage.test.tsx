@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  *
  * List defaults (rejected hidden, pending first), the copy-all-emails button,
- * and the manual "Mark Confirmed" action on the volunteer admin page.
+ * the manual "Mark Confirmed" and "Revert to Approved" actions, the reject
+ * confirmation and the unsaved-review-notes warning on the volunteer admin page.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { VolunteerStatus } from '@/lib/volunteer/types'
@@ -51,7 +52,9 @@ const { volunteers, listState, updateStatusMutate, mutation } = vi.hoisted(
     const updateStatusMutate = vi.fn().mockResolvedValue({ success: true })
 
     const mutation = () => ({ mutateAsync: vi.fn(), isPending: false })
-    const listState = { data: volunteers }
+    const listState: { data: typeof volunteers | undefined } = {
+      data: volunteers,
+    }
     return { volunteers, listState, updateStatusMutate, mutation }
   },
 )
@@ -77,7 +80,7 @@ vi.mock('@/lib/trpc/client', () => ({
         list: {
           useQuery: () => ({
             data: listState.data,
-            isLoading: false,
+            isLoading: !listState.data,
             error: null,
           }),
         },
@@ -201,5 +204,94 @@ describe('VolunteerAdminPage', () => {
     expect(screen.queryByText('Rita')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Show Rejected' }))
     expect(screen.getByText('Rita')).toBeTruthy()
+  })
+
+  it('shows capitalized status labels in badges', () => {
+    renderPage()
+    expect(screen.getAllByText('Pending').length).toBeGreaterThan(0)
+    expect(screen.queryByText('pending')).toBeNull()
+  })
+
+  it('shows a placeholder in the stat cards while the list loads', () => {
+    listState.data = undefined
+    renderPage()
+    expect(screen.queryByText('0')).toBeNull()
+    expect(screen.getAllByText('…').length).toBeGreaterThan(0)
+  })
+
+  it('moves focus to the back button and back to the card', async () => {
+    renderPage()
+    const card = screen.getByText('Alice', { exact: true }).closest('button')!
+    expect(card.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(card)
+    const back = screen.getByRole('button', { name: /Back to applications/ })
+    await waitFor(() => expect(document.activeElement).toBe(back))
+    fireEvent.click(back)
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByText('Alice', { exact: true }).closest('button'),
+      ),
+    )
+  })
+
+  it('asks before rejecting a volunteer', async () => {
+    renderPage()
+    fireEvent.click(screen.getByText('Peter', { exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+
+    expect(updateStatusMutate).not.toHaveBeenCalled()
+    expect(
+      await screen.findByText('Reject the application from Peter?'),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Reject Application' }))
+    await waitFor(() =>
+      expect(updateStatusMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          volunteerId: 'v-pending',
+          status: VolunteerStatus.REJECTED,
+        }),
+      ),
+    )
+  })
+
+  it('lets an organizer revert a confirmed volunteer to approved', async () => {
+    renderPage()
+    fireEvent.click(screen.getByText('Carol', { exact: true }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Revert to Approved' }),
+    )
+    await waitFor(() =>
+      expect(updateStatusMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          volunteerId: 'v-confirmed',
+          status: VolunteerStatus.APPROVED,
+        }),
+      ),
+    )
+  })
+
+  it('warns before discarding unsaved review notes', async () => {
+    renderPage()
+    fireEvent.click(screen.getByText('Peter', { exact: true }))
+    const notes = screen.getByLabelText(/Review Notes/) as HTMLTextAreaElement
+    fireEvent.change(notes, { target: { value: 'Great fit' } })
+
+    fireEvent.click(screen.getByText('Alice', { exact: true }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText(/Review Notes/) as HTMLTextAreaElement).value,
+      ).toBe('Great fit'),
+    )
+
+    fireEvent.click(screen.getByText('Alice', { exact: true }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Discard Notes' }),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Mark Confirmed/ }),
+      ).toBeTruthy(),
+    )
   })
 })

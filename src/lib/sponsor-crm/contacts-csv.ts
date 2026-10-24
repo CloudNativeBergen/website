@@ -75,6 +75,23 @@ export function buildContactsCsv(
   return csvDocument(COLUMNS, rows)
 }
 
+/**
+ * Distinct contact addresses (trimmed, lowercased) in roster order, for
+ * pasting into Slack invites or other tools that take a list of emails.
+ */
+export function contactEmails(
+  sponsors: SponsorForConferenceExpanded[],
+): string[] {
+  const addresses = new Set<string>()
+  for (const sfc of sponsors) {
+    for (const contact of sfc.contactPersons ?? []) {
+      const email = contact.email?.trim().toLowerCase()
+      if (email) addresses.add(email)
+    }
+  }
+  return [...addresses]
+}
+
 /** Filename stem for the export, e.g. `sponsor-contacts-cloud-native-days-2026`. */
 export function contactsCsvFilename(conferenceTitle: string): string {
   return csvFilename('sponsor-contacts', conferenceTitle)

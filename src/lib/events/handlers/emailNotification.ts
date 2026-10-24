@@ -4,15 +4,39 @@ import { Action } from '@/lib/proposal/types'
 import { formatDate } from '@/lib/time'
 import { emailBrandColor } from '@/lib/branding/theme'
 
+/** An organizer canceled or withdrew the talk (not a speaker's own withdrawal). */
+export function isOrganizerRemoval(event: ProposalStatusChangeEvent): boolean {
+  return (
+    (event.action === Action.cancel || event.action === Action.withdraw) &&
+    event.metadata.triggeredBy.isOrganizer
+  )
+}
+
+/**
+ * Whether the speaker gets the formal decision email (and, for accept/reject/
+ * waitlist/remind, the in-app status notice). For an organizer cancel/withdraw
+ * `shouldNotify` is the organizer's "Force email" tick; a speaker who withdraws
+ * their own talk is never emailed about it.
+ */
+export function isSpeakerFacingDecision(
+  event: ProposalStatusChangeEvent,
+): boolean {
+  if (!event.metadata.shouldNotify) return false
+  if (event.action === Action.cancel || event.action === Action.withdraw) {
+    return isOrganizerRemoval(event)
+  }
+  return [
+    Action.accept,
+    Action.reject,
+    Action.waitlist,
+    Action.remind,
+  ].includes(event.action)
+}
+
 export async function handleEmailNotification(
   event: ProposalStatusChangeEvent,
 ): Promise<void> {
-  if (
-    !event.metadata.shouldNotify ||
-    ![Action.accept, Action.reject, Action.waitlist, Action.remind].includes(
-      event.action,
-    )
-  ) {
+  if (!isSpeakerFacingDecision(event)) {
     return
   }
 
@@ -27,7 +51,13 @@ export async function handleEmailNotification(
   // and the recipient can never diverge.
   const seenEmails = new Set<string>()
   const recipients: Array<{ name: string; email: string }> = []
+  // An organizer who is also a speaker on the talk they cancel/withdraw does
+  // not email themselves.
+  const skipId = isOrganizerRemoval(event)
+    ? event.metadata.triggeredBy.speakerId
+    : undefined
   for (const speaker of event.speakers) {
+    if (skipId && speaker._id === skipId) continue
     const email = speaker.email?.trim()
     if (!email) {
       continue
@@ -59,7 +89,7 @@ export async function handleEmailNotification(
           _id: event.proposal._id,
           title: event.proposal.title,
         },
-        comment: event.metadata.comment || '',
+        comment: event.metadata.comment || event.metadata.reason || '',
         event: {
           orgId: event.conference.organization?._ref,
           location: event.conference.city,

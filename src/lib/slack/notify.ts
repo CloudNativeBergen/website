@@ -2,6 +2,7 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { formatNumber } from '@/lib/format'
 import { Action } from '@/lib/proposal/types'
+import type { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { Conference } from '@/lib/conference/types'
 import { Volunteer } from '@/lib/volunteer/types'
 import {
@@ -152,6 +153,8 @@ function getActionEmoji(action: Action): string {
       return '✅'
     case Action.withdraw:
       return '🚫'
+    case Action.cancel:
+      return '🛑'
     default:
       return '📝'
   }
@@ -163,6 +166,8 @@ function getActionText(action: Action): string {
       return 'Confirmed'
     case Action.withdraw:
       return 'Withdrawn'
+    case Action.cancel:
+      return 'Canceled'
     default:
       return 'Status Changed'
   }
@@ -174,6 +179,7 @@ export async function notifyProposalStatusChange(
   conference: Conference,
   speakerNames?: string,
   reason?: string,
+  ticketCancellation?: ProposalStatusChangeEvent['metadata']['ticketCancellation'],
 ) {
   const names = speakerNames || (await resolveSpeakerNames(proposal))
   const domain = getDomainFromConference(conference)
@@ -196,6 +202,26 @@ export async function notifyProposalStatusChange(
       text: {
         type: 'mrkdwn',
         text: `*Reason:*\n${escapeMrkdwn(reason.trim())}`,
+      },
+    })
+  }
+
+  // No provider API cancels tickets, so organizers do it by hand.
+  if (ticketCancellation?.speakers.length) {
+    const list = ticketCancellation.speakers
+      .map(
+        (s) =>
+          `• ${escapeMrkdwn(s.name)}${s.email ? ` (${escapeMrkdwn(s.email)})` : ''}`,
+      )
+      .join('\n')
+    const caveat = ticketCancellation.unfiltered
+      ? '\n_Could not check for other confirmed talks: this list is unfiltered. Check by hand that each speaker has no other confirmed talk before cancelling._'
+      : ''
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*🎟️ Cancel ticket by hand in the ticket provider's dashboard for:*\n${list}${caveat}`,
       },
     })
   }

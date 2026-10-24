@@ -310,6 +310,12 @@ export const ProposalAdminUpdateSchema = ProposalInputBaseSchema.partial()
 export const ProposalActionSchema = z.object({
   action: z.nativeEnum(Action),
   notify: z.boolean().optional().default(true),
+  // Organizer cancel/withdraw only: also send the formal email, even to a
+  // speaker who turned message emails off. Those actions ignore `notify`.
+  forceEmail: z.boolean().optional().default(false),
+  // Organizer cancel/withdraw only: ask organizers (Slack) to cancel the
+  // speaker's ticket by hand. Ignored everywhere else.
+  revokeTicket: z.boolean().optional().default(false),
   comment: z.string().nullable().optional().transform(nullToUndefined),
   reason: z.string().nullable().optional().transform(nullToUndefined),
 })

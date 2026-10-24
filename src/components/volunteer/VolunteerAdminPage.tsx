@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { api } from '@/lib/trpc/client'
 import { formatDateTimeSafe } from '@/lib/time'
 import { VolunteerStatus, VolunteerWithConference } from '@/lib/volunteer/types'
@@ -22,6 +22,7 @@ import {
   ArrowTopRightOnSquareIcon,
   ClipboardIcon,
   CheckIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
 import { CheckBadgeIcon } from '@heroicons/react/24/solid'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
@@ -36,6 +37,11 @@ import { TableToolbar } from '@/components/DataTable/TableToolbar'
 import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 import type { VolunteerTicketStatus } from '@/lib/tickets/volunteerStatus'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import {
+  buildVolunteersCsv,
+  volunteerLogistics,
+  volunteersCsvFilename,
+} from '@/lib/volunteer/export'
 
 const volunteerStatusConfig: Record<
   VolunteerStatus,
@@ -84,6 +90,13 @@ const ticketStatusConfig: Record<
 }
 
 // Pending first: those are the applications that need an organizer's attention.
+const VOLUNTEER_STATUS_LABELS: Record<VolunteerStatus, string> = {
+  [VolunteerStatus.PENDING]: 'Pending',
+  [VolunteerStatus.APPROVED]: 'Approved',
+  [VolunteerStatus.CONFIRMED]: 'Confirmed',
+  [VolunteerStatus.REJECTED]: 'Rejected',
+}
+
 const STATUS_SORT_ORDER: Record<VolunteerStatus, number> = {
   [VolunteerStatus.PENDING]: 0,
   [VolunteerStatus.APPROVED]: 1,
@@ -131,10 +144,47 @@ export default function VolunteerAdminPage() {
   )
   const [editModalOpen, setEditModalOpen] = useState(false)
 
+  const backButtonRef = useRef<HTMLButtonElement>(null)
+  const cardRefs = useRef(new Map<string, HTMLButtonElement>())
+  const listHeadingRef = useRef<HTMLHeadingElement>(null)
+  // Focus target after a selection change: the back button when opening the
+  // detail view, the card again when going back. Only matters below lg, where
+  // the list and detail swap places and the focused node gets hidden.
+  const pendingFocus = useRef<string | 'back' | null>(null)
+
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
+  // Where to go once the admin agrees to drop unsaved review notes.
+  const [pendingSelection, setPendingSelection] = useState<{
+    id: string | null
+  } | null>(null)
+  // Switch only after the modal has closed, so its focus restore does not undo ours.
+  const confirmedSelection = useRef<{ id: string | null } | null>(null)
+
   const selectVolunteer = (id: string | null) => {
+    if (id !== selectedVolunteerId && reviewNotes.trim()) {
+      setPendingSelection({ id })
+      return
+    }
+    switchVolunteer(id)
+  }
+
+  const switchVolunteer = (id: string | null) => {
+    pendingFocus.current = id ? 'back' : selectedVolunteerId
     setSelectedVolunteerId(id)
     setReviewNotes('')
   }
+
+  useEffect(() => {
+    const target = pendingFocus.current
+    pendingFocus.current = null
+    if (!target) return
+    // focus() is a no-op on display:none nodes, so on desktop focus stays put.
+    ;(target === 'back'
+      ? backButtonRef.current
+      : // The card is gone after a delete, or hidden by the filter after a reject.
+        (cardRefs.current.get(target) ?? listHeadingRef.current)
+    )?.focus()
+  }, [selectedVolunteerId])
 
   const {
     data: volunteers,
@@ -222,7 +272,7 @@ export default function VolunteerAdminPage() {
       setReviewNotes('')
       notify?.showNotification({
         type: 'success',
-        title: `Volunteer application marked as ${variables.status}`,
+        title: `Volunteer application marked as ${VOLUNTEER_STATUS_LABELS[variables.status].toLowerCase()}`,
       })
     },
     onError: (err) => {
@@ -273,7 +323,7 @@ export default function VolunteerAdminPage() {
           : Promise.resolve(),
       ])
       if (selectedVolunteerId === variables.volunteerId) {
-        selectVolunteer(null)
+        switchVolunteer(null)
       }
       setDeleteVolunteerId(null)
       notify?.showNotification({
@@ -384,12 +434,12 @@ export default function VolunteerAdminPage() {
   const stats = useMemo(() => {
     if (!volunteers)
       return {
-        total: 0,
-        pending: 0,
-        approved: 0,
-        confirmed: 0,
-        rejected: 0,
-        claimed: 0,
+        total: '…',
+        pending: '…',
+        approved: '…',
+        confirmed: '…',
+        rejected: '…',
+        claimed: '…',
       }
     const claimed = volunteers.filter(
       (v) => ticketStatuses[v._id]?.state === 'redeemed',
@@ -411,6 +461,30 @@ export default function VolunteerAdminPage() {
       claimed,
     }
   }, [volunteers, ticketStatuses])
+
+  const logistics = useMemo(
+    () => volunteerLogistics(volunteers ?? []),
+    [volunteers],
+  )
+
+  // Same Blob download as SponsorContactActions' contact export.
+  const exportCsv = () => {
+    const url = URL.createObjectURL(
+      new Blob([buildVolunteersCsv(filteredVolunteers, ticketStatuses)], {
+        type: 'text/csv;charset=utf-8;',
+      }),
+    )
+    const link = document.createElement('a')
+    link.href = url
+    link.download = volunteersCsvFilename(
+      volunteers?.[0]?.conference.title ?? '',
+    )
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    // Delayed revoke: revoking synchronously can truncate the download.
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
 
   const handleStatusUpdate = async (status: VolunteerStatus) => {
     if (!selectedVolunteerId) return
@@ -524,6 +598,15 @@ export default function VolunteerAdminPage() {
         icon={<UserGroupIcon />}
         title="Volunteer Management"
         description="Review and coordinate volunteer applications for the conference"
+        actionItems={[
+          {
+            label: 'Export CSV',
+            onClick: exportCsv,
+            icon: <ArrowDownTrayIcon className="size-4" />,
+            variant: 'secondary',
+            disabled: filteredVolunteers.length === 0,
+          },
+        ]}
         stats={[
           {
             value: stats.total,
@@ -567,6 +650,60 @@ export default function VolunteerAdminPage() {
         ]}
       />
 
+      {logistics.count > 0 && (
+        <details className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+          <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-gray-900 dark:text-white">
+            Logistics: approved + confirmed volunteers ({logistics.count})
+          </summary>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <div>
+              <h3 className="text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
+                T-shirt sizes
+              </h3>
+              <dl className="mt-2 flex flex-wrap gap-2">
+                {[
+                  ...logistics.sizes,
+                  ...(logistics.noSize
+                    ? [['Not set', logistics.noSize] as const]
+                    : []),
+                ].map(([size, count]) => (
+                  <div
+                    key={size}
+                    className="rounded-md bg-gray-100 px-3 py-1.5 text-sm dark:bg-gray-700"
+                  >
+                    <dt className="inline text-gray-600 dark:text-gray-300">
+                      {size}:{' '}
+                    </dt>
+                    <dd className="inline font-semibold text-gray-900 dark:text-white">
+                      {count}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div>
+              <h3 className="text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
+                Dietary restrictions ({logistics.dietary.length})
+              </h3>
+              {logistics.dietary.length === 0 ? (
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  None reported.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                  {logistics.dietary.map((d, i) => (
+                    <li key={i}>
+                      <span className="font-medium">{d.name}:</span>{' '}
+                      {d.restriction}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </details>
+      )}
+
       <TableToolbar
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}
@@ -601,7 +738,7 @@ export default function VolunteerAdminPage() {
                 setStatusFilter(newFilter)
               }}
             >
-              {status}
+              {VOLUNTEER_STATUS_LABELS[status]}
             </FilterOption>
           ))}
         </FilterDropdown>
@@ -634,7 +771,11 @@ export default function VolunteerAdminPage() {
           }`}
         >
           <div className="flex items-center justify-between pb-1">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            <h2
+              ref={listHeadingRef}
+              tabIndex={-1}
+              className="text-base font-semibold text-gray-900 focus:outline-none dark:text-white"
+            >
               Applications
             </h2>
             <div className="flex items-center gap-1.5">
@@ -645,7 +786,7 @@ export default function VolunteerAdminPage() {
                 <button
                   type="button"
                   onClick={() => copyAllEmails(filteredEmails.join(', '))}
-                  className="cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                  className="-my-3 -mr-3.5 inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                   title={
                     copiedAllEmails
                       ? `Copied ${emailCountLabel}!`
@@ -749,29 +890,27 @@ export default function VolunteerAdminPage() {
                     : null
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={volunteer._id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => selectVolunteer(volunteer._id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          selectVolunteer(volunteer._id)
-                        }
+                      ref={(el) => {
+                        if (el) cardRefs.current.set(volunteer._id, el)
+                        else cardRefs.current.delete(volunteer._id)
                       }}
-                      className={`cursor-pointer rounded-lg border p-4 text-left transition-all ${
+                      aria-pressed={isSelected}
+                      onClick={() => selectVolunteer(volunteer._id)}
+                      className={`block w-full cursor-pointer rounded-lg border p-4 text-left transition-all ${
                         isSelected
                           ? 'border-brand-cloud-blue bg-blue-50/70 shadow-xs dark:border-blue-500 dark:bg-blue-950/30'
                           : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-2xs dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <h3 className="truncate font-semibold text-gray-900 dark:text-white">
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold text-gray-900 dark:text-white">
                             {volunteer.name}
-                          </h3>
-                          <div className="mt-1 flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400">
+                          </span>
+                          <span className="mt-1 flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400">
                             <span className="flex items-center gap-1.5 truncate">
                               <EnvelopeIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                               <span className="truncate">
@@ -786,12 +925,12 @@ export default function VolunteerAdminPage() {
                                 </span>
                               </span>
                             )}
-                          </div>
-                        </div>
+                          </span>
+                        </span>
 
-                        <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="flex shrink-0 flex-col items-end gap-1">
                           <StatusBadge
-                            label={volunteer.status}
+                            label={VOLUNTEER_STATUS_LABELS[volunteer.status]}
                             color={statusConf.color}
                             icon={statusConf.icon}
                           />
@@ -803,10 +942,10 @@ export default function VolunteerAdminPage() {
                               className={ticketConf.className}
                             />
                           )}
-                        </div>
-                      </div>
+                        </span>
+                      </span>
 
-                      <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-gray-700/50 dark:text-gray-400">
+                      <span className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-gray-700/50 dark:text-gray-400">
                         <span className="font-medium text-gray-700 capitalize dark:text-gray-300">
                           {volunteer.occupation || 'Volunteer'}
                         </span>
@@ -815,8 +954,8 @@ export default function VolunteerAdminPage() {
                             ? formatDateTimeSafe(volunteer.submittedAt)
                             : ''}
                         </span>
-                      </div>
-                    </div>
+                      </span>
+                    </button>
                   )
                 })
               )}
@@ -833,9 +972,10 @@ export default function VolunteerAdminPage() {
           {/* Mobile Back Button */}
           <div className="mb-3 flex items-center justify-between lg:hidden">
             <button
+              ref={backButtonRef}
               type="button"
               onClick={() => selectVolunteer(null)}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-cloud-blue hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              className="-ml-2 inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-brand-cloud-blue hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
               <ArrowLeftIcon className="h-4 w-4" />
               Back to applications
@@ -860,7 +1000,7 @@ export default function VolunteerAdminPage() {
                       {selectedVolunteer.name}
                     </h2>
                     <StatusBadge
-                      label={selectedVolunteer.status}
+                      label={VOLUNTEER_STATUS_LABELS[selectedVolunteer.status]}
                       color={
                         volunteerStatusConfig[selectedVolunteer.status].color
                       }
@@ -903,8 +1043,9 @@ export default function VolunteerAdminPage() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <AdminButton
+                    className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                     onClick={() => setEditModalOpen(true)}
                     variant="secondary"
                     size="sm"
@@ -913,6 +1054,7 @@ export default function VolunteerAdminPage() {
                     Edit Details
                   </AdminButton>
                   <AdminButton
+                    className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                     onClick={() => setDeleteVolunteerId(selectedVolunteer._id)}
                     variant="primary"
                     color="red"
@@ -1172,9 +1314,10 @@ export default function VolunteerAdminPage() {
                       />
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                       {/* Primary Approve Action: Opens Approval Email Dialog */}
                       <AdminButton
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                         onClick={() =>
                           handleOpenApprovalModal(selectedVolunteer)
                         }
@@ -1188,6 +1331,7 @@ export default function VolunteerAdminPage() {
 
                       {/* Secondary: Approve without sending email */}
                       <AdminButton
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                         onClick={() =>
                           handleStatusUpdate(VolunteerStatus.APPROVED)
                         }
@@ -1199,9 +1343,8 @@ export default function VolunteerAdminPage() {
 
                       {/* Reject */}
                       <AdminButton
-                        onClick={() =>
-                          handleStatusUpdate(VolunteerStatus.REJECTED)
-                        }
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
+                        onClick={() => setRejectConfirmOpen(true)}
                         disabled={updateStatus.isPending}
                         variant="primary"
                         color="red"
@@ -1214,8 +1357,9 @@ export default function VolunteerAdminPage() {
 
                 {(selectedVolunteer.status === VolunteerStatus.APPROVED ||
                   selectedVolunteer.status === VolunteerStatus.CONFIRMED) && (
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                     <AdminButton
+                      className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                       onClick={() => handleOpenApprovalModal(selectedVolunteer)}
                       variant="primary"
                       color="brand"
@@ -1229,6 +1373,7 @@ export default function VolunteerAdminPage() {
                     {/* For volunteers who confirmed in person instead of via the email link */}
                     {selectedVolunteer.status === VolunteerStatus.APPROVED && (
                       <AdminButton
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                         onClick={() =>
                           handleStatusUpdate(VolunteerStatus.CONFIRMED)
                         }
@@ -1240,10 +1385,22 @@ export default function VolunteerAdminPage() {
                       </AdminButton>
                     )}
 
+                    {selectedVolunteer.status === VolunteerStatus.CONFIRMED && (
+                      <AdminButton
+                        className="min-h-11 w-full sm:min-h-0 sm:w-auto"
+                        onClick={() =>
+                          handleStatusUpdate(VolunteerStatus.APPROVED)
+                        }
+                        disabled={updateStatus.isPending}
+                        variant="secondary"
+                      >
+                        Revert to Approved
+                      </AdminButton>
+                    )}
+
                     <AdminButton
-                      onClick={() =>
-                        handleStatusUpdate(VolunteerStatus.REJECTED)
-                      }
+                      className="min-h-11 w-full sm:min-h-0 sm:w-auto"
+                      onClick={() => setRejectConfirmOpen(true)}
                       disabled={updateStatus.isPending}
                       variant="secondary"
                     >
@@ -1253,8 +1410,9 @@ export default function VolunteerAdminPage() {
                 )}
 
                 {selectedVolunteer.status === VolunteerStatus.REJECTED && (
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                     <AdminButton
+                      className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                       onClick={() =>
                         handleStatusUpdate(VolunteerStatus.PENDING)
                       }
@@ -1264,6 +1422,7 @@ export default function VolunteerAdminPage() {
                       Reopen as Pending
                     </AdminButton>
                     <AdminButton
+                      className="min-h-11 w-full sm:min-h-0 sm:w-auto"
                       onClick={() => handleOpenApprovalModal(selectedVolunteer)}
                       disabled={updateStatus.isPending}
                       variant="primary"
@@ -1319,6 +1478,41 @@ export default function VolunteerAdminPage() {
         message="Are you sure you want to delete this volunteer application? This action cannot be undone."
         confirmButtonText="Delete Application"
         variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={rejectConfirmOpen && !!selectedVolunteer}
+        onClose={() => setRejectConfirmOpen(false)}
+        onConfirm={async () => {
+          try {
+            await handleStatusUpdate(VolunteerStatus.REJECTED)
+          } finally {
+            setRejectConfirmOpen(false)
+          }
+        }}
+        isLoading={updateStatus.isPending}
+        title="Reject Volunteer Application"
+        message={`Reject the application from ${selectedVolunteer?.name ?? 'this volunteer'}?`}
+        confirmButtonText="Reject Application"
+        variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={!!pendingSelection}
+        onClose={() => setPendingSelection(null)}
+        onConfirm={() => {
+          confirmedSelection.current = pendingSelection
+          setPendingSelection(null)
+        }}
+        afterLeave={() => {
+          const target = confirmedSelection.current
+          confirmedSelection.current = null
+          if (target) switchVolunteer(target.id)
+        }}
+        title="Discard Review Notes"
+        message="You have unsaved review notes for this volunteer. Leave and discard them?"
+        confirmButtonText="Discard Notes"
+        variant="warning"
       />
     </div>
   )

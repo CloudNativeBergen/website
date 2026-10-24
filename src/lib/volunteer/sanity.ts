@@ -273,6 +273,8 @@ export async function updateVolunteerStatus(
   status: VolunteerStatus,
   reviewedBy: string,
   reviewNotes?: string,
+  /** Keep the existing reviewer, e.g. when reverting confirmed to approved. */
+  keepReviewer = false,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
     const now = new Date().toISOString()
@@ -295,12 +297,15 @@ export async function updateVolunteerStatus(
     }
 
     let patch = clientWrite.patch(volunteerId)
-    if (status === VolunteerStatus.CONFIRMED) {
-      // Confirming an approved volunteer keeps the original approver.
-      updates.confirmedAt = now
+    // Confirming an approved volunteer, or reverting that, keeps the original approver.
+    if (status === VolunteerStatus.CONFIRMED || keepReviewer) {
       patch = patch.setIfMissing(review)
     } else {
       Object.assign(updates, review)
+    }
+    if (status === VolunteerStatus.CONFIRMED) {
+      updates.confirmedAt = now
+    } else {
       unset.push('confirmedAt')
     }
 

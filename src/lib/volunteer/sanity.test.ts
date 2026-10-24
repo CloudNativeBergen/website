@@ -50,4 +50,19 @@ describe('updateVolunteerStatus', () => {
     expect(patch.setIfMissing).not.toHaveBeenCalled()
     expect(patch.unset).toHaveBeenCalledWith(['confirmedAt'])
   })
+
+  it('keeps the reviewer when reverting confirmed to approved', async () => {
+    await updateVolunteerStatus(
+      'vol-1',
+      VolunteerStatus.APPROVED,
+      'org-2',
+      undefined,
+      true,
+    )
+
+    const set = patch.set.mock.calls[0][0]
+    expect(set).toEqual({ status: VolunteerStatus.APPROVED })
+    expect(patch.setIfMissing).toHaveBeenCalledOnce()
+    expect(patch.unset).toHaveBeenCalledWith(['confirmedAt'])
+  })
 })

@@ -23,6 +23,7 @@ import { Conference } from '@/lib/conference/types'
 import type { SponsorStatus } from '@/lib/sponsor-crm/types'
 import { ACCEPTED_SPONSOR_STATUS } from '@/lib/sponsor-crm/labels'
 import { evaluateBilling } from '@/lib/sponsor-crm/billing'
+import { contactEmails } from '@/lib/sponsor-crm/contacts-csv'
 
 /**
  * Pipeline stages offered as filters, ordered as they appear on the sponsor
@@ -84,16 +85,10 @@ export function SponsorContactsPageClient({
   // count must come from here and not from the visible rows.
   const { data: allSponsors = [] } = api.sponsor.crm.list.useQuery({})
 
-  const broadcastRecipientCount = useMemo(() => {
-    const addresses = new Set<string>()
-    for (const sfc of allSponsors) {
-      for (const contact of sfc.contactPersons ?? []) {
-        const email = contact.email?.trim().toLowerCase()
-        if (email) addresses.add(email)
-      }
-    }
-    return addresses.size
-  }, [allSponsors])
+  const broadcastRecipientCount = useMemo(
+    () => contactEmails(allSponsors).length,
+    [allSponsors],
+  )
 
   const stats = useMemo(() => {
     let contactCount = 0

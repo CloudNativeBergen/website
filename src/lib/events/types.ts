@@ -22,6 +22,22 @@ export interface ProposalStatusChangeEvent {
     comment?: string
     // Mandatory free-text reason captured on withdrawal (#212).
     reason?: string
+    /**
+     * The cancel/withdraw message was posted to the proposal thread and fanned
+     * out (notifyNewMessage), so it already reached the organizers' hub. For a
+     * speaker's own withdrawal it also replaces the organizer Slack alert.
+     */
+    postedToThread?: boolean
+    /**
+     * Speakers whose ticket an organizer asked to cancel on cancel/withdraw.
+     * There is no provider API for it, so organizers are told on Slack to do
+     * it by hand. Speakers with another confirmed talk are already left out.
+     */
+    ticketCancellation?: {
+      speakers: { name: string; email?: string }[]
+      /** The other-confirmed-talk check failed; organizers must check by hand. */
+      unfiltered: boolean
+    }
     domain: string
   }
 }
