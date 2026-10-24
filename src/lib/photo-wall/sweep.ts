@@ -3,7 +3,7 @@ import { clientReadUncached } from '@/lib/sanity/client'
 import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
 import { expireWallPost } from './cache'
 import { deleteWallAsset, deleteWallPost } from './delete'
-import { cronBudget, readUnpurgedWalls } from './retention'
+import { cronBudget } from './retention'
 
 /**
  * THE ORPHAN SWEEP (Photo Wall spec §11.2), run by the retention cron after
@@ -15,9 +15,11 @@ import { cronBudget, readUnpurgedWalls } from './retention'
  *  - image assets a submit uploaded (`source.name == 'photo-wall'`, §5),
  *    older than {@link SWEEP_AGE_MS}, that no document of ANY tenant
  *    references: what a crash between the upload and the create left behind
- *    (§6.2). Looked for wall by wall (every wall not yet purged; a purged
- *    wall's assets are gone, and no submit uploads after its close), with
- *    the query view's references as a first filter only: each candidate is
+ *    (§6.2), and a photo the purge had to keep because another document
+ *    held it (a gallery item deduplicated onto it, §11.1) once that holder
+ *    lets go, which no other cleanup notices. EVERY such asset, whatever
+ *    its conference: one with a live wall, a purged one, or none. The
+ *    query view's references are a first filter only: each candidate is
  *    checked again against every tenant's latest documents just before its
  *    delete ({@link deleteWallAsset}), since the view lags.
  *
@@ -82,9 +84,10 @@ export interface SweepReport {
   cutShort: boolean
 }
 
-// groq-global-scoped: an asset carries no `conference` reference; the
-// submit route stores the conference as `source.id` (§5), filtered here.
-const WALL_UPLOADS = `*[_type == "sanity.imageAsset" && source.name == "photo-wall" && source.id == $conferenceId && dateTime(_createdAt) < dateTime($before)]`
+// groq-global: the platform SWEEP looks for every tenant's Wall uploads by
+// design (§11.2), whether their wall is live, purged or gone; only asset ids
+// are returned, and each is deleted only when no document holds it.
+const WALL_UPLOADS = `*[_type == "sanity.imageAsset" && source.name == "photo-wall" && dateTime(_createdAt) < dateTime($before)]`
 
 // groq-global: identical bytes are ONE asset across tenants, so a holder
 // may be a document of any tenant. Only whether one exists is asked; no
@@ -92,16 +95,17 @@ const WALL_UPLOADS = `*[_type == "sanity.imageAsset" && source.name == "photo-wa
 const NO_HOLDER = `count(*[references(^._id)]) == 0`
 
 /**
- * The orphan candidates of one conference: its photo-wall assets older than
- * an hour that NO document references in the query view, of any tenant: an
- * asset only another tenant's document holds would otherwise come back,
- * be kept by the check before the delete, and come back first every day.
- * Read at the API version whose `raw` perspective sees drafts and Content
- * Release versions, so a reference only a draft holds counts as one
- * (`orphaned-asset.ts`). No cap: the deadline bounds the run instead.
+ * The orphan candidates: photo-wall assets older than an hour that NO
+ * document references in the query view, of any tenant. Held ones are left
+ * out HERE, not by the check before the delete: they would otherwise come
+ * back first every day, and an ever-growing set of photos kept by gallery
+ * items would take the run's time from the real orphans. Read at the API
+ * version whose `raw` perspective sees drafts and Content Release versions,
+ * so a reference only a draft holds counts as one (`orphaned-asset.ts`).
+ * No cap: a candidate is deleted the first run that reaches it, so the list
+ * stays short, and the deadline bounds the run.
  */
 async function readOrphanCandidates(
-  conferenceId: string,
   before: string,
   signal: AbortSignal,
 ): Promise<string[]> {
@@ -109,7 +113,7 @@ async function readOrphanCandidates(
     .withConfig({ apiVersion: COUNT_API_VERSION })
     .fetch<string[]>(
       `${WALL_UPLOADS}[${NO_HOLDER}] | order(_createdAt asc)._id`,
-      { conferenceId, before },
+      { before },
       { cache: 'no-store', perspective: 'raw', signal },
     )
   return ids ?? []
@@ -214,30 +218,23 @@ export async function sweepPhotoWall({
     }
   }
 
-  for (const wall of await readUnpurgedWalls(budget.signal())) {
-    if (!wall.conferenceId) continue
+  if (!budget.within()) {
+    report.cutShort = true
+    return report
+  }
+  const orphans = await readOrphanCandidates(before, budget.signal())
+  report.orphans = orphans.length
+  for (const assetId of orphans) {
     if (!budget.within()) {
       report.cutShort = true
       return report
     }
-    const orphans = await readOrphanCandidates(
-      wall.conferenceId,
-      before,
-      budget.signal(),
-    )
-    report.orphans += orphans.length
-    for (const assetId of orphans) {
-      if (!budget.within()) {
-        report.cutShort = true
-        return report
-      }
-      const outcome = await deleteWallAsset(assetId, {
-        signal: budget.signal(),
-      })
-      if (outcome === 'deleted') report.assets += 1
-      else if (outcome === 'held') report.assetsKept += 1
-      else report.assetsFailed += 1
-    }
+    const outcome = await deleteWallAsset(assetId, {
+      signal: budget.signal(),
+    })
+    if (outcome === 'deleted') report.assets += 1
+    else if (outcome === 'held') report.assetsKept += 1
+    else report.assetsFailed += 1
   }
   return report
 }

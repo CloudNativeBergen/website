@@ -133,7 +133,7 @@ const isVersionId = (id: string) => id.startsWith('versions.')
 /** `versions.<release>.<id>` → `<release>`. */
 const releaseOf = (id: string) => id.split('.')[1] ?? ''
 
-/** Every wall with `purgedAt` unset: the retention's and the sweep's. */
+/** Every wall with `purgedAt` unset. */
 export async function readUnpurgedWalls(
   signal: AbortSignal,
 ): Promise<UnpurgedWall[]> {
