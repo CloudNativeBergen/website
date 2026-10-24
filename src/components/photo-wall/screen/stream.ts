@@ -40,10 +40,23 @@ import {
 
 export type StreamLook = 'mosaic' | 'spotlight'
 
+interface Feature {
+  key: string
+  at: number
+  /** Set for an arrival: the walk goes on after this post, not after the arrival. */
+  resumeAfter: string | null
+}
+
 /** Tiles on Mosaic's screen: more than a 1080 px canvas shows, so it is always full. */
 export const MOSAIC_TILES = 40
 /** Mosaic's spotlight walks this many of the newest posts. */
 export const MOSAIC_ROTATION = 6
+/**
+ * Photos asked of the browser at once: the rest wait their turn, so on a
+ * slow venue link none of them runs out its load deadline queued behind the
+ * others. The Pinboard's first load asks for as many.
+ */
+export const PRELOAD_AT_ONCE = 17
 /** Spotlight's big post walks this many of the newest posts. */
 export const SPOTLIGHT_ROTATION = 12
 /** Posts on Spotlight's "Up next" rail. */
@@ -59,8 +72,12 @@ export interface StreamState extends ImageMemory {
   seen: ReadonlySet<string>
   /** Arrivals waiting their turn, in approval order. */
   queue: ScreenPost[]
-  /** The featured post's key and when it was featured; null with nothing shown. */
-  feature: { key: string; at: number } | null
+  /**
+   * The featured post's key, when it was featured, and for an arrival the
+   * post of the walk it interrupted, after which the walk resumes; null with
+   * nothing shown.
+   */
+  feature: Feature | null
   /** Spotlight: arrivals let in and waiting for their turn as the big post, in order. */
   waiting: string[]
   /** Wears the "new" mark until then, by key. */
@@ -125,18 +142,26 @@ export function shownPosts(state: StreamState): ScreenPost[] {
 
 /** The posts whose photo the screen wants fetched and has no word of yet. */
 export function pendingStreamImages(state: StreamState): ScreenPost[] {
-  return [...candidates(state), ...state.queue.slice(0, PRELOAD_AHEAD)].filter(
-    (post) => !state.images[screenPostKey(post)],
-  )
+  const unasked = (post: ScreenPost) => !state.images[screenPostKey(post)]
+  return [
+    ...state.queue.slice(0, PRELOAD_AHEAD).filter(unasked),
+    ...candidates(state).filter(unasked),
+  ].slice(0, PRELOAD_AT_ONCE)
 }
 
-/** Nothing to show once the first load is over, and nothing on its way. */
+/**
+ * Nothing to show once the first load is over: an empty wall, or one whose
+ * every photo has failed, also while those are tried again (the screen
+ * shows the QR invitation, not an empty body, until one loads).
+ */
 export function streamInvitation(state: StreamState): boolean {
   return (
     state.started &&
     !state.closed &&
-    candidates(state).length === 0 &&
-    state.queue.length === 0
+    state.queue.length === 0 &&
+    candidates(state).every(
+      (post) => screenPostKey(post) in state.imageFailures,
+    )
   )
 }
 
@@ -171,13 +196,27 @@ function nextInRotation(
   return walk[(at + 1) % walk.length]
 }
 
+/** An arrival featured at `now`, remembering where the walk it interrupted was. */
+function arrivalFeature(
+  current: Feature | null,
+  key: string,
+  now: number,
+): Feature {
+  return {
+    key,
+    at: now,
+    resumeAfter: current?.resumeAfter ?? current?.key ?? null,
+  }
+}
+
 /** Spotlight's "Up next": the posts waiting their turn, then the rotation after the big post. */
 export function upNext(state: StreamState): ScreenPost[] {
   const shown = shownPosts(state)
   const byKey = new Map(shown.map((post) => [screenPostKey(post), post]))
   const current = state.feature?.key
   const walk = rotation(state, shown)
-  const at = walk.findIndex((post) => screenPostKey(post) === current)
+  const from = state.feature?.resumeAfter ?? current
+  const at = walk.findIndex((post) => screenPostKey(post) === from)
   const after = [...walk.slice(at + 1), ...walk.slice(0, Math.max(at, 0))]
   const out: ScreenPost[] = []
   for (const key of state.waiting) {
@@ -222,7 +261,7 @@ function advance(state: StreamState, now: number): StreamState {
         ? // Mosaic: the spotlight at once.
           {
             ...next,
-            feature: { key, at: now },
+            feature: arrivalFeature(next.feature, key, now),
             marks: { ...next.marks, [key]: now + NEW_MARK_MS },
           }
         : // Spotlight: next in line.
@@ -254,14 +293,24 @@ function advance(state: StreamState, now: number): StreamState {
       next = {
         ...next,
         waiting: rest,
-        feature: { key: first, at: now },
+        feature: arrivalFeature(current, first, now),
         marks: { ...next.marks, [first]: now + NEW_MARK_MS },
       }
     } else {
-      const post = nextInRotation(next, shown, current?.key)
+      // After an arrival, on from the post it interrupted.
+      let post = nextInRotation(
+        next,
+        shown,
+        current?.resumeAfter ?? current?.key,
+      )
+      if (post && current && screenPostKey(post) === current.key) {
+        post = nextInRotation(next, shown, current.key)
+      }
       next = {
         ...next,
-        feature: post ? { key: screenPostKey(post), at: now } : null,
+        feature: post
+          ? { key: screenPostKey(post), at: now, resumeAfter: null }
+          : null,
       }
     }
   }

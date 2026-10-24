@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import type { ScreenPost, ScreenView } from '@/lib/photo-wall/screen'
 import {
   ARRIVAL_GAP_MS,
+  IMAGE_RETRY_MS,
   NEW_MARK_MS,
   OFFLINE_AFTER_FAILURES,
   SWAP_EVERY_MS,
@@ -15,6 +16,7 @@ import {
 import {
   MOSAIC_ROTATION,
   MOSAIC_TILES,
+  PRELOAD_AT_ONCE,
   SPOTLIGHT_ROTATION,
   featured,
   initialStream,
@@ -61,12 +63,21 @@ const poll = (s: StreamState, list: ScreenPost[], now: number, f = {}) =>
   streamReducer(s, { type: 'poll', view: view(list, f), now })
 const tick = (s: StreamState, now: number) =>
   streamReducer(s, { type: 'tick', now })
-const loadAll = (s: StreamState, now: number) =>
-  pendingStreamImages(s).reduce(
-    (state, p) =>
-      streamReducer(state, { type: 'imageLoaded', key: keyOf(p), now }),
-    s,
-  )
+/** Every photo the screen asks for loads, a batch at a time, as a browser with them cached would. */
+const loadAll = (s: StreamState, now: number) => {
+  let state = s
+  for (
+    let batch = pendingStreamImages(state);
+    batch.length > 0;
+    batch = pendingStreamImages(state)
+  ) {
+    state = batch.reduce(
+      (st, p) => streamReducer(st, { type: 'imageLoaded', key: keyOf(p), now }),
+      state,
+    )
+  }
+  return state
+}
 /** Ticks every 100 ms from `from` (exclusive) to `to` (inclusive), loading what is asked for. */
 const run = (s: StreamState, from: number, to: number) => {
   let state = s
@@ -86,8 +97,9 @@ describe('first load', () => {
   it('Mosaic shows the newest tiles once their photos load, the newest in the spotlight, none marked new', () => {
     let s = poll(initialStream('mosaic'), posts(60), T0)
     expect(shownPosts(s)).toEqual([])
+    // The newest first, a few at a time.
     expect(ids(pendingStreamImages(s))).toEqual(
-      ids(posts(60).slice(0, MOSAIC_TILES)),
+      ids(posts(60).slice(0, PRELOAD_AT_ONCE)),
     )
     s = loadAll(s, T0)
     expect(ids(shownPosts(s))).toEqual(ids(posts(60).slice(0, MOSAIC_TILES)))
@@ -133,7 +145,8 @@ describe('Mosaic spotlight', () => {
     expect(isMarkedNew(s, post(21))).toBe(true)
     s = run(s, T0 + 3_000 + NEW_MARK_MS - 100, T0 + 3_000 + NEW_MARK_MS)
     expect(isMarkedNew(s, post(21))).toBe(false)
-    expect(featuredId(s)).toBe('wallPost-20')
+    // On from the post it interrupted, not from the top.
+    expect(featuredId(s)).toBe('wallPost-19')
   })
 
   it('lets a burst in one post every 2.5 s, in approval order, each taking the spotlight', () => {
@@ -259,8 +272,8 @@ describe('Spotlight', () => {
     expect(isMarkedNew(s, post(21))).toBe(true)
     s = run(s, T0 + 2 * SWAP_EVERY_MS - 100, T0 + 2 * SWAP_EVERY_MS)
     expect(isMarkedNew(s, post(21))).toBe(false)
-    // Then the walk goes on from the newest.
-    expect(featuredId(s)).toBe('wallPost-20')
+    // Then the walk goes on after the post it followed, not from the top.
+    expect(featuredId(s)).toBe('wallPost-19')
   })
 
   it('a burst waits its turns in approval order', () => {
@@ -336,5 +349,51 @@ describe('empty and closed', () => {
     const s = poll(initialStream('spotlight'), [], T0, { closed: true })
     expect(s.closed).toBe(true)
     expect(streamInvitation(s)).toBe(false)
+  })
+})
+
+describe('round-1 adversarial findings', () => {
+  const failAll = (s: StreamState, now: number) =>
+    pendingStreamImages(s).reduce(
+      (state, p) =>
+        streamReducer(state, { type: 'imageFailed', key: keyOf(p), now }),
+      s,
+    )
+
+  it.each(['mosaic', 'spotlight'] as const)(
+    '%s keeps the invitation while photos that all failed are tried again',
+    (look) => {
+      let s = failAll(poll(initialStream(look), posts(5), T0), T0)
+      expect(streamInvitation(s)).toBe(true)
+      s = poll(s, posts(5), T0 + IMAGE_RETRY_MS)
+      // Asked for again, nothing loaded yet: still the invitation.
+      expect(pendingStreamImages(s)).toHaveLength(5)
+      expect(streamInvitation(s)).toBe(true)
+      s = loadAll(s, T0 + IMAGE_RETRY_MS)
+      expect(streamInvitation(s)).toBe(false)
+    },
+  )
+
+  it('Spotlight: a steady trickle of approvals does not starve the rest of the walk', () => {
+    let s = started('spotlight', 30)
+    const featuredIds = new Set<string>()
+    let now = T0
+    let newest = 30
+    // One approval every 12 s for 5 minutes.
+    for (let step = 0; step < 25; step++) {
+      newest += 1
+      s = loadAll(poll(s, posts(newest), now), now)
+      s = run(s, now, now + 12_000)
+      now += 12_000
+      featuredIds.add(featuredId(s)!)
+    }
+    // Older posts got turns between the arrivals, not just the one it interrupted.
+    const old = [...featuredIds].filter((id) => Number(id.split('-')[1]) <= 30)
+    expect(old.length).toBeGreaterThan(3)
+  })
+
+  it('asks the browser for at most a few photos at once', () => {
+    const s = poll(initialStream('mosaic'), posts(60), T0)
+    expect(pendingStreamImages(s)).toHaveLength(PRELOAD_AT_ONCE)
   })
 })

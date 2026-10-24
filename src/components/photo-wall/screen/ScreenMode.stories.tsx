@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useEffect, useState } from 'react'
 import { expect, waitFor, within } from 'storybook/test'
+import type { ConferenceLogoData } from '@/lib/conference/logo'
 import type { ScreenPost, ScreenView } from '@/lib/photo-wall/screen'
 import type { WallLook } from '@/lib/photo-wall/types'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
@@ -68,12 +69,14 @@ function Scripted({
   script = [],
   sponsors = [],
   look,
+  logo = { title: 'Cloud Native Days Norway' },
 }: {
   initial: ScreenView
   script?: Step[]
   sponsors?: ConferenceSponsor[]
   /** The screen link's `?look=`. */
   look?: WallLook
+  logo?: ConferenceLogoData
 }) {
   const [poll, setPoll] = useState<ScreenPoll>(() => ({
     data: initial,
@@ -98,7 +101,7 @@ function Scripted({
     <ScreenBoard
       poll={poll}
       conference={{
-        logo: { title: 'Cloud Native Days Norway' },
+        logo,
         postUrl: 'https://2026.cloudnativedays.no/wall/post',
         sponsors,
       }}
@@ -475,6 +478,25 @@ export const LookOverride: Story = {
       { timeout: 5_000 },
     )
     await expect(tilesOf(canvas)).toHaveLength(0)
+  },
+}
+
+/** A tenant with an 8:1 wordmark: the logo shrinks to fit the 480 px rail, "Photo Wall" stays whole. */
+export const SpotlightWideLogo: Story = {
+  args: {
+    initial: view(posts(24), { look: 'spotlight' }),
+    logo: {
+      title: 'Wide',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 100"><rect width="800" height="100" fill="#f59e0b"/><text x="400" y="70" font-size="70" text-anchor="middle" fill="#000">WIDE TENANT LOGO</text></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const words = within(canvasElement).getByText('Photo Wall')
+    const rail = words.closest('aside')!
+    await expect(words.getBoundingClientRect().right).toBeLessThanOrEqual(
+      rail.getBoundingClientRect().right + 0.5,
+    )
   },
 }
 
