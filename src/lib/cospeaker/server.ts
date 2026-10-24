@@ -508,6 +508,7 @@ export async function sendCoSpeakerAddedEmail(params: {
   toEmail: string
   toName: string
   organizerName: string
+  proposalId: string
   proposalTitle: string
   /**
    * Which seat they were put in. `proposal.admin.create` uses this for a
@@ -562,7 +563,7 @@ export async function sendCoSpeakerAddedEmail(params: {
         organizerName: params.organizerName,
         contactEmail,
         proposalTitle: params.proposalTitle,
-        dashboardUrl: `${protocol}${domain}/cfp/list`,
+        dashboardUrl: `${protocol}${domain}/cfp/proposal/${params.proposalId}`,
         eventName,
         eventLocation,
         eventDate,
