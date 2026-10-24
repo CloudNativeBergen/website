@@ -9,6 +9,8 @@ import type { ModerationQueueData } from './moderation'
 import { readModerationQueue } from './queue'
 import { readPhotoWall } from './sanity'
 import type { PhotoWall } from './types'
+import type { WallData } from './wall'
+import { readWallPosts } from './wall-read'
 
 /**
  * The conference's wall as the public `/wall` routes read it (Photo Wall spec
@@ -23,6 +25,23 @@ export async function getPhotoWall(
   cacheLife('default')
   cacheTag(photoWallTag(conferenceId))
   return readPhotoWall(conferenceId)
+}
+
+/**
+ * The public wall (§8): the settings and the newest 200 approved posts,
+ * newest approval first, or null when the conference has no wall. Cached
+ * per conference under {@link photoWallTag}, which Approve, a Reject, Remove
+ * or Delete of an approved post, every settings change and the retention
+ * cron expire. `'use cache: remote'` over the uncached client, `default`
+ * life: freshness comes from the tag. The Wall page and Screen Mode poll it.
+ */
+export async function getWall(conferenceId: string): Promise<WallData | null> {
+  'use cache: remote'
+  cacheLife('default')
+  cacheTag(photoWallTag(conferenceId))
+  const wall = await readPhotoWall(conferenceId)
+  if (!wall) return null
+  return { wall, posts: await readWallPosts(conferenceId) }
 }
 
 /**
