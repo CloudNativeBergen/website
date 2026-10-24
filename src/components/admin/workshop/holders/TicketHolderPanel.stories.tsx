@@ -112,12 +112,12 @@ const fitsItsWidth: Story['play'] = async ({ canvasElement }) => {
   }
 }
 
-/** THE NUMBERS. Holders = confirmed + waitlist only + not signed up. */
+/** THE NUMBERS. Holders (in Signed up's subtitle) = signed up + not signed up. */
 export const Statistics: Story = {
   args: { view: { state: 'ready', stats: STATS } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByText('212')).toBeVisible()
+    await expect(canvas.getByText(/of 212 holders/)).toBeVisible()
     await expect(
       canvas.getByRole('button', { name: 'Flagged, 2' }),
     ).toBeVisible()
