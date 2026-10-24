@@ -55,13 +55,20 @@ const post = (
 ): WallPagePost => ({
   _id,
   src: sanity(_id),
+  whole: {
+    src: `https://cdn.sanity.io/images/p/d/${_id}-1600x1000.jpg?w=1000&h=1000&fit=max&auto=format`,
+    width: 1600,
+    height: 1000,
+  },
   caption: null,
   name: null,
+  approvedAt: '2026-10-26T07:40:00Z',
   ...fields,
 })
 const view = (fields: Partial<WallPageView> = {}): WallPageView => ({
   closed: false,
   postingOpen: true,
+  look: 'pinboard',
   posts: [],
   ...fields,
 })

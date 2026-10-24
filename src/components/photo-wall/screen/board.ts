@@ -56,23 +56,27 @@ interface Queued {
   initial: boolean
 }
 
-export interface BoardState {
+/** What a screen remembers of the images it asked the browser to fetch. */
+export interface ImageMemory {
+  /** The latest successful answer, newest approval first. */
+  list: ScreenPost[]
+  /** What the browser reported of an image it was asked to fetch. */
+  images: Readonly<Record<string, 'loaded' | 'failed'>>
+  /** When each image last failed and how often in a row: when to try it again. */
+  imageFailures: Readonly<Record<string, { at: number; count: number }>>
+}
+
+export interface BoardState extends ImageMemory {
   /** False until the first successful poll. */
   started: boolean
   closed: boolean
   sponsorStrip: boolean
-  /** The latest successful answer, newest approval first (§9.3: kept through failures). */
-  list: ScreenPost[]
   /** The 17 places on the board, by position; null is an empty slot. */
   slots: (ScreenCard | null)[]
   /** Every `(id, approvedAt)` this screen has met: not new a second time. */
   seen: ReadonlySet<string>
   /** Arrivals waiting their turn, in approval order. */
   queue: Queued[]
-  /** What the browser reported of an image it was asked to fetch. */
-  images: Readonly<Record<string, 'loaded' | 'failed'>>
-  /** When each image last failed and how often in a row: when to try it again. */
-  imageFailures: Readonly<Record<string, { at: number; count: number }>>
   /** Where the idle swap is in the rest of the list. */
   cursor: number
   lastArrivalAt: number
@@ -330,7 +334,10 @@ export function imageRetryDelay(count: number): number {
  * wait is over, so those images are asked for again. The failure count
  * stays until one loads.
  */
-function retryFailedImages(state: BoardState, now: number): BoardState {
+export function retryFailedImages<S extends ImageMemory>(
+  state: S,
+  now: number,
+): S {
   const due = Object.entries(state.imageFailures)
     .filter(
       ([key, { at, count }]) =>
@@ -344,7 +351,7 @@ function retryFailedImages(state: BoardState, now: number): BoardState {
 }
 
 /** Only what is said of the posts still on the list. */
-function onList<T>(record: Readonly<Record<string, T>>, keys: Set<string>) {
+export function onList<T>(record: Readonly<Record<string, T>>, keys: Set<string>) {
   return Object.keys(record).some((key) => !keys.has(key))
     ? Object.fromEntries(
         Object.entries(record).filter(([key]) => keys.has(key)),
@@ -441,6 +448,33 @@ function onPoll(
   return advance(next, now)
 }
 
+/**
+ * What the browser said of an image, for a post still on the list; the
+ * same state back when it changes nothing. A load forgets the failures, a
+ * failure counts one more.
+ */
+export function recordImage<S extends ImageMemory>(
+  state: S,
+  action: { type: 'imageLoaded' | 'imageFailed'; key: string; now: number },
+): S {
+  const known = state.list.some((p) => screenPostKey(p) === action.key)
+  if (!known) return state
+  const result = action.type === 'imageLoaded' ? 'loaded' : 'failed'
+  if (state.images[action.key] === result) return state
+  const imageFailures = { ...state.imageFailures }
+  if (result === 'loaded') {
+    delete imageFailures[action.key]
+  } else {
+    const count = (imageFailures[action.key]?.count ?? 0) + 1
+    imageFailures[action.key] = { at: action.now, count }
+  }
+  return {
+    ...state,
+    images: { ...state.images, [action.key]: result },
+    imageFailures,
+  }
+}
+
 export function boardReducer(
   state: BoardState,
   action: BoardAction,
@@ -452,25 +486,8 @@ export function boardReducer(
       return advance({ ...state, failures: state.failures + 1 }, action.now)
     case 'imageLoaded':
     case 'imageFailed': {
-      const known = state.list.some((p) => screenPostKey(p) === action.key)
-      if (!known) return state
-      const result = action.type === 'imageLoaded' ? 'loaded' : 'failed'
-      if (state.images[action.key] === result) return state
-      const imageFailures = { ...state.imageFailures }
-      if (result === 'loaded') {
-        delete imageFailures[action.key]
-      } else {
-        const count = (imageFailures[action.key]?.count ?? 0) + 1
-        imageFailures[action.key] = { at: action.now, count }
-      }
-      return advance(
-        {
-          ...state,
-          images: { ...state.images, [action.key]: result },
-          imageFailures,
-        },
-        action.now,
-      )
+      const next = recordImage(state, action)
+      return next === state ? state : advance(next, action.now)
     }
     case 'tick':
       return advance(state, action.now)

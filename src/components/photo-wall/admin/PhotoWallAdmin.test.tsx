@@ -23,6 +23,7 @@ const view = (posting: PostingState): PhotoWallAdminView => ({
     _id: 'photoWall-conf-A',
     postingMode: 'auto',
     sponsorStrip: false,
+    look: 'pinboard',
     closedAt: null,
   },
   posting,

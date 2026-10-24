@@ -23,3 +23,16 @@ export function squareSrc(photo: StoredPhoto, crop: Crop, px: number): string {
     .auto('format')
     .url()
 }
+
+/**
+ * The whole photo, as Mosaic and Spotlight show it (§9), scaled by Sanity to
+ * fit `px` on its long edge, never up.
+ */
+export function wholeSrc(photo: StoredPhoto, px: number): string {
+  return sanityImage(photo.url)
+    .width(px)
+    .height(px)
+    .fit('max')
+    .auto('format')
+    .url()
+}

@@ -19,6 +19,7 @@ const WALL: PhotoWall = {
   _id: 'photoWall-conf-A',
   postingMode: 'paused',
   sponsorStrip: false,
+  look: 'pinboard',
   closedAt: null,
 }
 const view = (

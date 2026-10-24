@@ -496,6 +496,7 @@ describe('the live pending count at the top of the page (§10)', () => {
       _id: 'photoWall-conf-A',
       postingMode: 'open',
       sponsorStrip: false,
+      look: 'pinboard',
       closedAt: null,
     },
     posting: 'open',
