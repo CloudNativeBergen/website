@@ -150,9 +150,9 @@ export default async function AdminBadgePage() {
         }}
         stats={[
           {
-            value: `${stats.speakerBadges} / ${stats.organizerBadges}`,
-            label: 'Badges',
-            subtitle: 'speaker / organizer',
+            value: stats.speakerBadges + stats.organizerBadges,
+            label: 'Badges issued',
+            subtitle: `${stats.speakerBadges} speaker · ${stats.organizerBadges} organizer`,
             color: 'blue' as const,
           },
           // Not a filter: the list below has none for email state.
