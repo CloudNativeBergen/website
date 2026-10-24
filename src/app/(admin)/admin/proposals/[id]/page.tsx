@@ -131,7 +131,11 @@ export default async function ProposalDetailPage({
                   </div>
                 </div>
               </div>
-              <AdminActionBar proposal={proposal} conference={conference} />
+              <AdminActionBar
+                proposal={proposal}
+                conference={conference}
+                domain={domain}
+              />
             </div>
 
             <ProposalDetail proposal={proposal} />
@@ -149,7 +153,6 @@ export default async function ProposalDetailPage({
               proposalId={proposal._id}
               initialReviews={proposal.reviews || []}
               currentUser={session?.speaker}
-              domain={domain}
             />
             <ProposalPublishedContent
               proposalId={proposal._id}

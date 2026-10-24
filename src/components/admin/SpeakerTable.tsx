@@ -4,6 +4,7 @@ import { Speaker, Flags } from '@/lib/speaker/types'
 import {
   ProposalExisting,
   Status,
+  Action,
   Format,
   languages,
   formats,
@@ -17,6 +18,7 @@ import {
   ArrowRightCircleIcon,
   StarIcon,
   DocumentTextIcon,
+  NoSymbolIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
@@ -33,7 +35,11 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { invitationLetterHref } from '@/lib/invitation-letter/prefill'
-import { hasConfirmedTalkAtConference } from '@/lib/invitation-letter/sessions'
+import {
+  hasConfirmedTalkAtConference,
+  proposalConferenceId,
+} from '@/lib/invitation-letter/sessions'
+import { ProposalActionModal } from '@/components/admin/ProposalActionModal'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { api } from '@/lib/trpc/client'
@@ -193,6 +199,7 @@ function getProposalBadgeColor(status: Status): BadgeColor {
     case Status.rejected:
       return 'red'
     case Status.withdrawn:
+    case Status.canceled:
     default:
       return 'gray'
   }
@@ -289,6 +296,8 @@ export function SpeakerTable({
   }, [ticketQuestions, ticketStatuses])
 
   const router = useRouter()
+  const [proposalToCancel, setProposalToCancel] =
+    useState<ProposalExisting | null>(null)
   const addFeaturedSpeaker = api.featured.admin.addSpeaker.useMutation()
   const removeFeaturedSpeaker = api.featured.admin.removeSpeaker.useMutation()
 
@@ -656,6 +665,25 @@ export function SpeakerTable({
           Issue Invitation Letter
         </ActionMenuItem>
       )}
+      {speaker.proposals
+        .filter(
+          (proposal) =>
+            (proposal.status === Status.accepted ||
+              proposal.status === Status.confirmed) &&
+            proposalConferenceId(proposal) === currentConferenceId,
+        )
+        .map((proposal) => (
+          <ActionMenuItem
+            key={proposal._id}
+            // The table's proposals carry no speakers; name the row's speaker.
+            onClick={() =>
+              setProposalToCancel({ ...proposal, speakers: [speaker] })
+            }
+            icon={NoSymbolIcon}
+          >
+            Cancel talk: {proposal.title}
+          </ActionMenuItem>
+        ))}
       {AppEnvironment.isDevelopment && (
         <>
           <ActionMenuDivider />
@@ -1347,6 +1375,20 @@ export function SpeakerTable({
           </TableBody>
         </table>
       </TableContainer>
+
+      {proposalToCancel && (
+        <ProposalActionModal
+          open={!!proposalToCancel}
+          close={() => setProposalToCancel(null)}
+          proposal={proposalToCancel}
+          action={Action.cancel}
+          adminUI={true}
+          onAction={() => {
+            setProposalToCancel(null)
+            router.refresh()
+          }}
+        />
+      )}
     </div>
   )
 }

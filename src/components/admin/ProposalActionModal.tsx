@@ -12,6 +12,7 @@ import {
   XMarkIcon,
   BellIcon,
   ClockIcon,
+  NoSymbolIcon,
 } from '@heroicons/react/20/solid'
 import { Speaker } from '@/lib/speaker/types'
 import { TrashIcon } from '@heroicons/react/24/solid'
@@ -52,6 +53,7 @@ function colorForAction(action: Action): [string, string, string] {
       ]
     case Action.reject:
     case Action.withdraw:
+    case Action.cancel:
     case Action.delete:
       return [
         'bg-red-100 dark:bg-red-900/30',
@@ -84,6 +86,8 @@ function iconForAction(
       return ArchiveBoxXMarkIcon
     case Action.withdraw:
       return XMarkIcon
+    case Action.cancel:
+      return NoSymbolIcon
     case Action.delete:
       return TrashIcon
   }
@@ -113,6 +117,10 @@ export function ProposalActionModal({
   const [comment, setComment] = useState<string>('')
 
   const isWithdraw = action === Action.withdraw
+  // Cancel sends no email and stores no comment yet, so the modal offers neither.
+  const isCancel = action === Action.cancel
+  // "Cancel" alone would read like the dismiss button beside it.
+  const actionLabel = isCancel ? 'Cancel talk' : capitalizeFirstLetter(action)
   // A withdrawal must always record a mandatory, non-empty reason (#212).
   const withdrawReasonMissing = isWithdraw && !comment.trim()
 
@@ -220,39 +228,43 @@ export function ProposalActionModal({
                 </span>
                 ?
               </p>
-              <div className="mt-4">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={notify}
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
-                    onChange={() => setNotify(!notify)}
-                  />
-                  <span className="ml-2 text-sm/6 text-gray-700 dark:text-gray-300">
-                    Notify the speaker via email
-                  </span>
-                </label>
-              </div>
-              <div className="mt-4">
-                <Textarea
-                  name="action-comment"
-                  label={isWithdraw ? 'Reason for withdrawal' : 'Comment'}
-                  rows={3}
-                  value={comment}
-                  setValue={setComment}
-                  placeholder={
-                    isWithdraw
-                      ? 'Why is this proposal being withdrawn?'
-                      : 'Add a comment...'
-                  }
-                  required={isWithdraw}
-                />
-                <HelpText>
-                  {isWithdraw
-                    ? 'A reason is required and will be recorded on the proposal.'
-                    : 'Your comment will be included in the email to the speaker.'}
-                </HelpText>
-              </div>
+              {!isCancel && (
+                <>
+                  <div className="mt-4">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={notify}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
+                        onChange={() => setNotify(!notify)}
+                      />
+                      <span className="ml-2 text-sm/6 text-gray-700 dark:text-gray-300">
+                        Notify the speaker via email
+                      </span>
+                    </label>
+                  </div>
+                  <div className="mt-4">
+                    <Textarea
+                      name="action-comment"
+                      label={isWithdraw ? 'Reason for withdrawal' : 'Comment'}
+                      rows={3}
+                      value={comment}
+                      setValue={setComment}
+                      placeholder={
+                        isWithdraw
+                          ? 'Why is this proposal being withdrawn?'
+                          : 'Add a comment...'
+                      }
+                      required={isWithdraw}
+                    />
+                    <HelpText>
+                      {isWithdraw
+                        ? 'A reason is required and will be recorded on the proposal.'
+                        : 'Your comment will be included in the email to the speaker.'}
+                    </HelpText>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="mt-2">
@@ -293,9 +305,7 @@ export function ProposalActionModal({
           )}
           onClick={() => submitHandler()}
         >
-          {actionMutation.isPending
-            ? `${capitalizeFirstLetter(action)}...`
-            : capitalizeFirstLetter(action)}
+          {actionMutation.isPending ? `${actionLabel}...` : actionLabel}
         </button>
         <button
           type="button"

@@ -1,32 +1,24 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Review } from '@/lib/review/types'
 import { Speaker } from '@/lib/speaker/types'
-import { ProposalExisting, Action } from '@/lib/proposal/types'
 import { ProposalReviewSummary } from './ProposalReviewSummary'
 import { ProposalReviewForm } from './ProposalReviewForm'
 import { ProposalReviewList } from './ProposalReviewList'
-import { ProposalActionModal } from './ProposalActionModal'
 
 interface ProposalReviewPanelProps {
   proposalId: string
   initialReviews: Review[]
   currentUser?: Speaker
-  domain?: string
 }
 
 export function ProposalReviewPanel({
   proposalId,
   initialReviews,
   currentUser,
-  domain,
 }: ProposalReviewPanelProps) {
   const [reviews, setReviews] = useState<Review[]>(initialReviews || [])
-  const [actionModalOpen, setActionModalOpen] = useState(false)
-  const [selectedAction, setSelectedAction] = useState<Action>(Action.accept)
-  const [proposalForAction, setProposalForAction] =
-    useState<ProposalExisting | null>(null)
 
   const currentUserReview = currentUser
     ? reviews.find(
@@ -70,29 +62,6 @@ export function ProposalReviewPanel({
     })
   }
 
-  const handleActionComplete = () => {
-    window.location.reload()
-  }
-
-  useEffect(() => {
-    const handleProposalAction = (event: CustomEvent) => {
-      if (event.detail.proposal._id === proposalId) {
-        setSelectedAction(event.detail.action)
-        setProposalForAction(event.detail.proposal)
-        setActionModalOpen(true)
-      }
-    }
-
-    window.addEventListener(
-      'proposalAction',
-      handleProposalAction as EventListener,
-    )
-    return () =>
-      window.removeEventListener(
-        'proposalAction',
-        handleProposalAction as EventListener,
-      )
-  }, [proposalId])
   return (
     <>
       <div className="space-y-4">
@@ -111,18 +80,6 @@ export function ProposalReviewPanel({
           currentUserId={currentUser?._id}
         />
       </div>
-
-      {proposalForAction && (
-        <ProposalActionModal
-          open={actionModalOpen}
-          close={() => setActionModalOpen(false)}
-          proposal={proposalForAction}
-          action={selectedAction}
-          adminUI={true}
-          onAction={handleActionComplete}
-          domain={domain}
-        />
-      )}
     </>
   )
 }

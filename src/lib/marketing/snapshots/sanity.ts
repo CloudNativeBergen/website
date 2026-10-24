@@ -247,6 +247,7 @@ const SUBMITTED_STATUSES = [
   'confirmed',
   'rejected',
   'withdrawn',
+  'canceled',
 ] as const
 
 /** The edition's SUBMITTED proposals with their first-touch UTM (§6.3). */
