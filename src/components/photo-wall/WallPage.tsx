@@ -2,9 +2,10 @@ import { ConferenceLogo } from '@/components/ConferenceLogo'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
 
 /**
- * The minimal chrome of the Wall page and the Composer (Photo Wall spec §2):
- * no site navigation, the conference logo on top, the visitor's light or
- * dark setting. Screen Mode has none of it (`ScreenPlaceholder`).
+ * The minimal chrome of the Composer (Photo Wall spec §2): no site
+ * navigation, the conference logo on top, the visitor's light or dark
+ * setting. The Wall page draws its own board (`WallBoardView`); Screen Mode
+ * has no chrome (`ScreenPlaceholder`).
  */
 export function WallChrome({
   logo,
@@ -31,20 +32,6 @@ export function WallChrome({
         {children}
       </main>
     </div>
-  )
-}
-
-/** `/wall` until slice M5a fills it. */
-export function WallPagePlaceholder({
-  logo,
-}: {
-  logo: ConferenceLogoData | null
-}) {
-  return (
-    <WallChrome logo={logo}>
-      <h1 className="font-display text-2xl font-semibold">Photo Wall</h1>
-      <p className="mt-3 text-gray-600 dark:text-gray-400">No photos yet.</p>
-    </WallChrome>
   )
 }
 

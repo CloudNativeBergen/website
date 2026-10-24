@@ -1,10 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, within } from 'storybook/test'
-import {
-  ComposerPlaceholder,
-  ScreenPlaceholder,
-  WallPagePlaceholder,
-} from './WallPage'
+import { ComposerPlaceholder, ScreenPlaceholder } from './WallPage'
 
 /**
  * The three `/wall` routes as slice M1 leaves them (Photo Wall spec §2,
@@ -28,22 +24,6 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 const logo = { title: 'Cloud Native Days Norway' }
-
-export const Wall: Story = {
-  render: () => <WallPagePlaceholder logo={logo} />,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    await expect(
-      canvas.getByRole('heading', { name: 'Photo Wall' }),
-    ).toBeVisible()
-    // No site navigation.
-    await expect(canvas.queryByRole('navigation')).toBeNull()
-  },
-}
-export const WallDark: Story = {
-  render: () => <WallPagePlaceholder logo={logo} />,
-  globals: { theme: 'dark' },
-}
 
 export const Composer: Story = {
   render: () => <ComposerPlaceholder logo={logo} />,

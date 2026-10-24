@@ -1,7 +1,3 @@
-export {
-  ComposerPlaceholder,
-  ScreenPlaceholder,
-  WallChrome,
-  WallPagePlaceholder,
-} from './WallPage'
+export { ComposerPlaceholder, ScreenPlaceholder, WallChrome } from './WallPage'
 export * from './composer'
+export * from './wall'
