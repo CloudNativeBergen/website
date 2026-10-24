@@ -230,11 +230,12 @@ export function formatSessionInstant(value: string): string {
 }
 
 /**
- * When an attendee's feedback comment arrived, for its speakers (speaker
- * feedback spec §9.3), e.g. "Tue 27 Oct, 10:52": the conference's time zone,
- * a 24-hour clock like the programme, no year.
+ * A moment on a conference day, e.g. "Tue 27 Oct, 10:52": the conference's
+ * time zone, a 24-hour clock like the programme, no year. When a feedback
+ * comment arrived (speaker feedback spec §9.3), when a Wall Post was
+ * submitted (Photo Wall spec §10).
  */
-export function formatFeedbackCommentTime(value: string): string {
+export function formatConferenceDayTime(value: string): string {
   return new Date(value).toLocaleString('en-GB', {
     weekday: 'short',
     day: 'numeric',
@@ -248,7 +249,7 @@ export function formatFeedbackCommentTime(value: string): string {
 
 /**
  * A clock time in the conference's time zone, e.g. "10:50": the end of a
- * range whose start {@link formatFeedbackCommentTime} gave the day of.
+ * range whose start {@link formatConferenceDayTime} gave the day of.
  */
 export function formatConferenceClock(value: string): string {
   return new Date(value).toLocaleTimeString('en-GB', {

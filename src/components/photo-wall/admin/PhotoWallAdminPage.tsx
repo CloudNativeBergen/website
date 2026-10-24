@@ -3,6 +3,8 @@
 import { AdminPageLoading } from '@/components/admin/PageLoadingSkeleton'
 import type { PhotoWall, PhotoWallSettingsChange } from '@/lib/photo-wall'
 import { api } from '@/lib/trpc/client'
+import { ModerationQueue } from './ModerationQueue'
+import { PendingSummary } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 
 /**
@@ -58,6 +60,9 @@ export function PhotoWallAdminPage({
         (setUp.isError && !wall) ||
         (update.isError && !landed(update.variables, wall))
       }
+      // Mounted, and so polled, only once the wall is set up.
+      queue={<ModerationQueue />}
+      summary={<PendingSummary />}
     />
   )
 }

@@ -324,6 +324,10 @@ const WAIT = { timeout: 5000 }
 
 const TRPC = '/api/trpc/photoWall'
 const trpc = (data: unknown) => HttpResponse.json({ result: { data } })
+/** The queue the page polls once the wall is set up (M4a); its own stories show it filled. */
+const emptyQueue = http.get(`${TRPC}.moderationQueue`, () =>
+  trpc({ posts: [] }),
+)
 let served: PhotoWallAdminView = view(null)
 const updates: unknown[] = []
 /** What Set up creates: an Automatic wall (the rest as WALL). */
@@ -346,6 +350,7 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     msw: {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
+        emptyQueue,
         http.post(`${TRPC}.setUp`, () => {
           served = view(AUTO_WALL, postingOf({ ...WALL, ...AUTO_WALL }))
           return trpc(served)
@@ -373,6 +378,17 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     await expect(
       canvas.getByText(/Posting opens by itself at 00:00/),
     ).toBeVisible()
+    // Once set up, the page mounts the polled queue and the live count (M4a).
+    await expect(
+      await canvas.findByRole('region', { name: 'Posts' }, WAIT),
+    ).toBeVisible()
+    await waitFor(
+      () =>
+        expect(canvas.getByTestId('pending-summary')).toHaveTextContent(
+          'Nothing waiting for approval',
+        ),
+      WAIT,
+    )
     await userEvent.click(canvas.getByRole('radio', { name: 'Open' }))
     // The pressed value shows while the answer is still on its way, and the
     // note says so rather than giving the old mode's reason.
@@ -423,6 +439,7 @@ export const SetUpAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
     msw: {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
+        emptyQueue,
         http.post(`${TRPC}.setUp`, () => {
           served = view(AUTO_WALL, postingOf({ ...WALL, ...AUTO_WALL }))
           return HttpResponse.error()
@@ -454,6 +471,7 @@ export const ChangeAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
     msw: {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
+        emptyQueue,
         http.post(`${TRPC}.updateSettings`, async ({ request }) => {
           const change = (await request.json()) as Partial<PhotoWall>
           served = view({ ...served.wall!, ...change }, 'open')
@@ -485,6 +503,7 @@ export const ChangeFailed: StoryObj<typeof PhotoWallAdminPage> = {
     msw: {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
+        emptyQueue,
         http.post(`${TRPC}.updateSettings`, () => HttpResponse.error()),
       ],
     },

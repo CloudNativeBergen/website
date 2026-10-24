@@ -16,7 +16,7 @@ import type { FeedbackWindow } from '@/lib/feedback/window'
 import { plural } from '@/lib/text/display'
 import {
   formatConferenceClock,
-  formatFeedbackCommentTime,
+  formatConferenceDayTime,
   osloTodayDateString,
 } from '@/lib/time'
 import { ANSWERS } from '../answers'
@@ -37,7 +37,7 @@ const spanOf = (buckets: readonly ResponseBucket[], range: BucketRange) => {
   // The end's day too when the range crosses midnight in Oslo.
   const sameDay =
     osloTodayDateString(new Date(start)) === osloTodayDateString(new Date(end))
-  return `${formatFeedbackCommentTime(start)}–${sameDay ? formatConferenceClock(end) : formatFeedbackCommentTime(end)}`
+  return `${formatConferenceDayTime(start)}–${sameDay ? formatConferenceClock(end) : formatConferenceDayTime(end)}`
 }
 
 /** A bucket's least width, so a finger or a pointer can hit it. */
@@ -403,7 +403,7 @@ export function ResponsesOverTime({
                     id={`${optionId}-${i}`}
                     role="option"
                     aria-selected={selected(i)}
-                    aria-label={`${formatFeedbackCommentTime(b.start)}–${formatConferenceClock(b.end)}: ${plural(b.ids.length, 'response', 'responses')}`}
+                    aria-label={`${formatConferenceDayTime(b.start)}–${formatConferenceClock(b.end)}: ${plural(b.ids.length, 'response', 'responses')}`}
                     className={`flex h-full min-w-0 flex-1 flex-col justify-end ${selected(i) ? 'bg-brand-sky-mist dark:bg-blue-900/50' : range ? 'opacity-35' : ''} ${focused && i === active ? 'outline-1 -outline-offset-1 outline-brand-cloud-blue dark:outline-blue-300' : ''}`}
                   >
                     {b.ids.length > 0 && (
@@ -447,18 +447,18 @@ export function ResponsesOverTime({
             <time dateTime={buckets[view.first].start}>
               {/* No break between an arrow and its time. */}
               {view.before && <span aria-hidden="true">{'‹\u00a0'}</span>}
-              {formatFeedbackCommentTime(buckets[view.first].start)}
+              {formatConferenceDayTime(buckets[view.first].start)}
             </time>
             <time dateTime={buckets[view.last].end} className="text-right">
-              {formatFeedbackCommentTime(buckets[view.last].end)}
+              {formatConferenceDayTime(buckets[view.last].end)}
               {view.after && <span aria-hidden="true">{'\u00a0›'}</span>}
             </time>
           </div>
           {(view.before || view.after) && (
             <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
               Scroll sideways for the rest of the window,{' '}
-              {formatFeedbackCommentTime(buckets[0].start)} to{' '}
-              {formatFeedbackCommentTime(buckets[last].end)}.
+              {formatConferenceDayTime(buckets[0].start)} to{' '}
+              {formatConferenceDayTime(buckets[last].end)}.
             </p>
           )}
 

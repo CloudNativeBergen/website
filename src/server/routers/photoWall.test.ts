@@ -15,18 +15,35 @@ vi.mock('@/lib/auth', () => ({
 const h = vi.hoisted(() => ({
   store: null as null | VersionedSanityStore,
   revalidateTag: vi.fn(),
+  cacheTag: vi.fn(),
+  cacheLife: vi.fn(),
 }))
 vi.mock('next/cache', () => ({
   revalidateTag: h.revalidateTag,
   updateTag: vi.fn(),
-  cacheLife: vi.fn(),
-  cacheTag: vi.fn(),
+  cacheLife: h.cacheLife,
+  cacheTag: h.cacheTag,
 }))
 vi.mock('@/lib/sanity/client', async () => {
   const { createVersionedSanityStore } =
     await import('../../../__tests__/helpers/versionedSanityStore')
+  // The REAL URL builder, past the suite-wide alias (as
+  // `src/lib/social/__tests__/rendition.test.ts` does): the queue's photo
+  // URLs are what the installed library makes of a stored asset, not a
+  // mock's canned string.
+  const { createRequire } = await import('node:module')
+  const { pathToFileURL } = await import('node:url')
+  const { createImageUrlBuilder } = (await import(
+    pathToFileURL(createRequire(import.meta.url).resolve('@sanity/image-url'))
+      .href
+  )) as typeof import('@sanity/image-url')
   h.store = createVersionedSanityStore()
-  return h.store.clients
+  const builder = createImageUrlBuilder({ projectId: 'test', dataset: 'test' })
+  return {
+    ...h.store.clients,
+    sanityImage: (source: Parameters<typeof builder.image>[0]) =>
+      builder.image(source),
+  }
 })
 const CONFERENCE = {
   _id: 'conf-A',
@@ -41,17 +58,32 @@ const cdn = vi.hoisted(() => ({
   conference: null as null | Record<string, unknown>,
   /** What the live read answers, when it differs from CONFERENCE. */
   live: null as null | Record<string, unknown>,
+  /** After this many cached reads, the cached read names org-B. */
+  movedAfter: null as null | number,
+  cachedReads: 0,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: async (opts?: { uncached?: boolean }) => ({
-    conference: opts?.uncached
-      ? { ...CONFERENCE, ...cdn.live }
-      : { ...CONFERENCE, ...cdn.conference },
-    error: null,
-  }),
+  getConferenceForCurrentDomain: vi.fn(
+    async (opts?: { uncached?: boolean }) => {
+      if (opts?.uncached) {
+        return { conference: { ...CONFERENCE, ...cdn.live }, error: null }
+      }
+      cdn.cachedReads += 1
+      const moved = cdn.movedAfter !== null && cdn.cachedReads > cdn.movedAfter
+      return {
+        conference: {
+          ...CONFERENCE,
+          ...cdn.conference,
+          ...(moved && { organization: { _ref: 'org-B' } }),
+        },
+        error: null,
+      }
+    },
+  ),
 }))
 
 import { initTRPC } from '@trpc/server'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { Context } from '@/server/trpc'
 import { photoWallRouter } from './photoWall'
 
@@ -96,8 +128,13 @@ const LINKS = {
 beforeEach(() => {
   cdn.conference = null
   cdn.live = null
+  cdn.movedAfter = null
+  cdn.cachedReads = 0
+  vi.mocked(getConferenceForCurrentDomain).mockClear()
   store().reset()
   h.revalidateTag.mockClear()
+  h.cacheTag.mockClear()
+  h.cacheLife.mockClear()
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-10-26T08:00:00Z'))
 })
@@ -388,7 +425,12 @@ describe('photoWall.updateSettings (§10)', () => {
 })
 
 describe('organizers of the conference organization only (§10)', () => {
-  beforeEach(() => store().reset([wallOf('conf-A', { postingMode: 'paused' })]))
+  beforeEach(() =>
+    store().reset([
+      wallOf('conf-A', { postingMode: 'paused' }),
+      ...withPhoto(postOf('conf-A', 'p1', { status: 'pending' })),
+    ]),
+  )
 
   it.each([
     ['a speaker', () => caller('sp-ada')],
@@ -399,7 +441,275 @@ describe('organizers of the conference organization only (§10)', () => {
       as().updateSettings({ postingMode: 'open' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     await expect(as().settings()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    // Before any read: a refused caller learns nothing, not even a count.
+    await expect(as().moderationQueue()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(store().reads).toEqual([])
     expect(store().commits).toEqual([])
     expect(store().doc('photoWall-conf-A')?.postingMode).toBe('paused')
+  })
+})
+
+/** A stored Wall Post (§4.2) with its photo on `asset`. */
+const postOf = (
+  conferenceId: string,
+  uploadId: string,
+  fields: Record<string, unknown> = {},
+) =>
+  ({
+    _id: `wallPost-${uploadId}`,
+    _type: 'wallPost',
+    _rev: `rev-${uploadId}`,
+    conference: ref(conferenceId),
+    status: 'pending',
+    photo: {
+      _type: 'image',
+      asset: ref(`image-sha${uploadId}-1600x1000-jpg`),
+    },
+    crop: { x: 0.5, y: 0.5 },
+    marketingConsent: false,
+    deviceKey: 'device-hash',
+    submittedAt: '2026-10-26T07:30:00Z',
+    ...fields,
+  }) as Doc
+
+/** The post and the `sanity.imageAsset` its photo references. */
+const withPhoto = (post: Doc, width = 1600, height = 1000): Doc[] => {
+  const asset = (post.photo as { asset: { _ref: string } } | undefined)?.asset
+  if (!asset) return [post]
+  const sha = asset._ref.replace(/^image-/, '').replace(/-\d+x\d+-\w+$/, '')
+  return [
+    post,
+    {
+      _id: asset._ref,
+      _type: 'sanity.imageAsset',
+      url: `https://cdn.sanity.io/images/test/test/${sha}-${width}x${height}.jpg`,
+      metadata: { dimensions: { width, height, aspectRatio: width / height } },
+    },
+  ]
+}
+
+describe('photoWall.moderationQueue (§8, §10)', () => {
+  it('answers every post of the conference, with the photo as the card shows it', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(
+        postOf('conf-A', 'a1', {
+          caption: 'Keynote crowd',
+          name: 'Ada',
+          marketingConsent: true,
+          crop: { x: 0.2, y: 0.5 },
+        }),
+      ),
+      ...withPhoto(
+        postOf('conf-A', 'a2', {
+          status: 'approved',
+          approvedAt: '2026-10-26T07:40:00Z',
+          decidedAt: '2026-10-26T07:40:00Z',
+        }),
+        1200,
+        1600,
+      ),
+    ])
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts).toHaveLength(2)
+    expect(queue.posts.find((p) => p._id === 'wallPost-a1')).toEqual({
+      _id: 'wallPost-a1',
+      status: 'pending',
+      photo: {
+        url: 'https://cdn.sanity.io/images/test/test/shaa1-1600x1000.jpg?w=1200&fit=max&auto=format',
+        width: 1600,
+        height: 1000,
+      },
+      crop: { x: 0.2, y: 0.5 },
+      caption: 'Keynote crowd',
+      name: 'Ada',
+      marketingConsent: true,
+      submittedAt: '2026-10-26T07:30:00Z',
+      approvedAt: null,
+      decidedAt: null,
+    })
+    const a2 = queue.posts.find((p) => p._id === 'wallPost-a2')
+    expect(a2).toMatchObject({
+      status: 'approved',
+      caption: null,
+      name: null,
+      marketingConsent: false,
+      approvedAt: '2026-10-26T07:40:00Z',
+      photo: { width: 1200, height: 1600 },
+    })
+    // The device key never reaches the browser.
+    expect(a2).not.toHaveProperty('deviceKey')
+  })
+
+  it("never shows another conference's post", async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'a1')),
+      ...withPhoto(postOf('conf-B', 'b1')),
+      ...withPhoto(postOf('conf-B', 'b2', { status: 'approved' })),
+    ])
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts.map((p) => p._id)).toEqual(['wallPost-a1'])
+  })
+
+  it('a deleting post has no photo (§12)', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      postOf('conf-A', 'd1', {
+        status: 'deleting',
+        photo: undefined,
+        deletingAssetId: 'image-shad1-1600x1000-jpg',
+        caption: 'Gone soon',
+      }),
+    ])
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts).toEqual([
+      expect.objectContaining({
+        _id: 'wallPost-d1',
+        status: 'deleting',
+        photo: null,
+        caption: 'Gone soon',
+      }),
+    ])
+    expect(queue.posts[0]).not.toHaveProperty('deletingAssetId')
+  })
+
+  it('reads a post without consent or crop as no consent, centred (§4.2)', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(
+        postOf('conf-A', 'n1', {
+          marketingConsent: undefined,
+          crop: undefined,
+        }),
+      ),
+      ...withPhoto(postOf('conf-A', 'n2', { crop: { x: 0.1 } })),
+    ])
+    const queue = await organizer().moderationQueue()
+    const byId = Object.fromEntries(queue.posts.map((p) => [p._id, p]))
+    expect(byId['wallPost-n1']).toMatchObject({
+      marketingConsent: false,
+      crop: { x: 0.5, y: 0.5 },
+    })
+    expect(byId['wallPost-n2'].crop).toEqual({ x: 0.1, y: 0.5 })
+  })
+
+  it('never answers a draft, even one of this conference (§8)', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'a1')),
+      {
+        ...postOf('conf-A', 'a1'),
+        _id: 'drafts.wallPost-a1',
+        caption: 'Draft',
+      },
+      { ...postOf('conf-A', 'a2'), _id: 'drafts.wallPost-a2' },
+    ])
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts.map((p) => [p._id, p.caption])).toEqual([
+      ['wallPost-a1', null],
+    ])
+  })
+
+  it('a deleting post shows no photo even while its asset is still referenced (§12)', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'd2', { status: 'deleting' })),
+    ])
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts).toEqual([
+      expect.objectContaining({
+        _id: 'wallPost-d2',
+        status: 'deleting',
+        photo: null,
+      }),
+    ])
+  })
+
+  it('answers every status, the deleting post too', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'p1')),
+      ...withPhoto(postOf('conf-A', 'p2')),
+      ...withPhoto(postOf('conf-A', 'p3', { status: 'approved' })),
+      ...withPhoto(postOf('conf-A', 'p4', { status: 'notShown' })),
+      postOf('conf-A', 'p5', { status: 'deleting', photo: undefined }),
+    ])
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts.map((p) => [p._id, p.status])).toEqual(
+      expect.arrayContaining([
+        ['wallPost-p1', 'pending'],
+        ['wallPost-p2', 'pending'],
+        ['wallPost-p3', 'approved'],
+        ['wallPost-p4', 'notShown'],
+        ['wallPost-p5', 'deleting'],
+      ]),
+    )
+    expect(queue.posts).toHaveLength(5)
+  })
+
+  it('is empty before any post', async () => {
+    store().reset([wallOf('conf-A')])
+    await expect(organizer().moderationQueue()).resolves.toEqual({
+      posts: [],
+    })
+  })
+
+  it('is cached per conference under the admin tag, default life (§8)', async () => {
+    store().reset([wallOf('conf-A')])
+    await organizer().moderationQueue()
+    expect(h.cacheTag).toHaveBeenCalledWith('photo-wall-admin:conf-A')
+    expect(h.cacheLife).toHaveBeenCalledWith('default')
+  })
+
+  it('reads on the non-CDN client (§8)', async () => {
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    await organizer().moderationQueue()
+    const reads = store().reads.filter((r) => r.query.includes('wallPost'))
+    expect(reads.length).toBeGreaterThan(0)
+    expect(reads.every((r) => r.client === 'uncached')).toBe(true)
+  })
+
+  it('polls without a live conference read: the cached tenant read only (§8)', async () => {
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    // A live read that differs: a poll must not ask for it at all.
+    cdn.live = { organization: { _ref: 'org-B' } }
+    for (let poll = 0; poll < 3; poll++) {
+      const queue = await organizer().moderationQueue()
+      expect(queue.posts.map((p) => p._id)).toEqual(['wallPost-p1'])
+    }
+    const calls = vi.mocked(getConferenceForCurrentDomain).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls.filter(([opts]) => opts?.uncached === true)).toEqual([])
+  })
+
+  it("answers the cached tenant's posts, not another conference's", async () => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'a1')),
+      ...withPhoto(postOf('conf-Z', 'z1')),
+    ])
+    cdn.conference = { _id: 'conf-Z' }
+    const queue = await organizer().moderationQueue()
+    expect(queue.posts.map((p) => p._id)).toEqual(['wallPost-z1'])
+  })
+
+  it("refuses, reading no post, when the tenant read no longer names the waist's organization", async () => {
+    // The authz waist resolved org-A; by the queue's own read the cached
+    // conference belongs to org-B (it moved, and the cache caught up between
+    // the two reads).
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
+    cdn.movedAfter = 1
+    await expect(organizer().moderationQueue()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve conference from domain',
+    })
+    // The waist's read and the queue's: the refusal is the queue's own check.
+    expect(cdn.cachedReads).toBe(2)
+    expect(store().reads.filter((r) => r.query.includes('wallPost'))).toEqual(
+      [],
+    )
   })
 })

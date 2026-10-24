@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import {
   ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
@@ -37,6 +37,10 @@ export interface PhotoWallAdminProps {
   pending?: PhotoWallSettingsChange
   /** The last Set up or change failed. */
   failed?: boolean
+  /** The moderation queue (M4a), shown under the settings once the wall is set up. */
+  queue?: ReactNode
+  /** The live pending count (M4a), under the page header once the wall is set up. */
+  summary?: ReactNode
 }
 
 /**
@@ -52,6 +56,8 @@ export function PhotoWallAdmin({
   saving = false,
   pending,
   failed = false,
+  queue,
+  summary,
 }: PhotoWallAdminProps) {
   const wall = view.wall && pending ? { ...view.wall, ...pending } : view.wall
   return (
@@ -62,6 +68,7 @@ export function PhotoWallAdmin({
         description="Attendees post photos from their phones. Nothing appears until an organizer approves it."
         contextHighlight={conferenceTitle}
       />
+      {wall ? summary : null}
       {wall ? (
         <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
           <section aria-labelledby="photo-wall-settings" className={CARD}>
@@ -103,6 +110,7 @@ export function PhotoWallAdmin({
       ) : (
         <SetUp onSetUp={onSetUp} saving={saving} failed={failed} />
       )}
+      {wall ? queue : null}
     </div>
   )
 }

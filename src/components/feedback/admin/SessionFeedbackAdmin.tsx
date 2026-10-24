@@ -24,7 +24,7 @@ import type {
 } from '@/lib/feedback/admin'
 import type { RemoveRequest, RemovedCounts } from '@/lib/feedback/bulk-remove'
 import { formats } from '@/lib/proposal/types'
-import { formatFeedbackCommentTime } from '@/lib/time'
+import { formatConferenceDayTime } from '@/lib/time'
 import { ANSWERS } from '../answers'
 import { ColourBar, FEEDBACK_TONE } from '../tone'
 import {
@@ -573,7 +573,7 @@ function SessionRow({
   const meta = [
     session.speakers.join(', '),
     session.format ? formats.get(session.format) : null,
-    session.slotAt ? formatFeedbackCommentTime(session.slotAt) : null,
+    session.slotAt ? formatConferenceDayTime(session.slotAt) : null,
   ].filter(Boolean)
 
   return (
