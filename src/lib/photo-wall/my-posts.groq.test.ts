@@ -105,10 +105,10 @@ beforeEach(() => {
       status: 'notShown',
       submittedAt: '2026-10-26T08:00:00Z',
     }),
-    // A Delete that did not finish: no photo any more.
+    // A Delete that did not finish, as the query view can still show it:
+    // the photo not yet unset there (it lags the document store, §12).
     post('ddd', 'conf-A', DEVICE, {
       status: 'deleting',
-      photo: undefined,
       deletingAssetId: 'image-ddd-1600x1000-jpg',
       submittedAt: '2026-10-26T07:00:00Z',
     }),
