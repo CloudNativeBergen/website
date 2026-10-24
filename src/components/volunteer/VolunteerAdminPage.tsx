@@ -22,6 +22,7 @@ import {
   ArrowTopRightOnSquareIcon,
   ClipboardIcon,
   CheckIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
 import { CheckBadgeIcon } from '@heroicons/react/24/solid'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
@@ -36,6 +37,11 @@ import { TableToolbar } from '@/components/DataTable/TableToolbar'
 import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 import type { VolunteerTicketStatus } from '@/lib/tickets/volunteerStatus'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import {
+  buildVolunteersCsv,
+  volunteerLogistics,
+  volunteersCsvFilename,
+} from '@/lib/volunteer/export'
 
 const volunteerStatusConfig: Record<
   VolunteerStatus,
@@ -456,6 +462,30 @@ export default function VolunteerAdminPage() {
     }
   }, [volunteers, ticketStatuses])
 
+  const logistics = useMemo(
+    () => volunteerLogistics(volunteers ?? []),
+    [volunteers],
+  )
+
+  // Same Blob download as SponsorContactActions' contact export.
+  const exportCsv = () => {
+    const url = URL.createObjectURL(
+      new Blob([buildVolunteersCsv(filteredVolunteers, ticketStatuses)], {
+        type: 'text/csv;charset=utf-8;',
+      }),
+    )
+    const link = document.createElement('a')
+    link.href = url
+    link.download = volunteersCsvFilename(
+      volunteers?.[0]?.conference.title ?? '',
+    )
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    // Delayed revoke: revoking synchronously can truncate the download.
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   const handleStatusUpdate = async (status: VolunteerStatus) => {
     if (!selectedVolunteerId) return
     await updateStatus.mutateAsync({
@@ -568,6 +598,15 @@ export default function VolunteerAdminPage() {
         icon={<UserGroupIcon />}
         title="Volunteer Management"
         description="Review and coordinate volunteer applications for the conference"
+        actionItems={[
+          {
+            label: 'Export CSV',
+            onClick: exportCsv,
+            icon: <ArrowDownTrayIcon className="size-4" />,
+            variant: 'secondary',
+            disabled: filteredVolunteers.length === 0,
+          },
+        ]}
         stats={[
           {
             value: stats.total,
@@ -610,6 +649,60 @@ export default function VolunteerAdminPage() {
           },
         ]}
       />
+
+      {logistics.count > 0 && (
+        <details className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+          <summary className="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">
+            Logistics: approved + confirmed volunteers ({logistics.count})
+          </summary>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <div>
+              <h3 className="text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
+                T-shirt sizes
+              </h3>
+              <dl className="mt-2 flex flex-wrap gap-2">
+                {[
+                  ...logistics.sizes,
+                  ...(logistics.noSize
+                    ? [['Not set', logistics.noSize] as const]
+                    : []),
+                ].map(([size, count]) => (
+                  <div
+                    key={size}
+                    className="rounded-md bg-gray-100 px-3 py-1.5 text-sm dark:bg-gray-700"
+                  >
+                    <dt className="inline text-gray-600 dark:text-gray-300">
+                      {size}:{' '}
+                    </dt>
+                    <dd className="inline font-semibold text-gray-900 dark:text-white">
+                      {count}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div>
+              <h3 className="text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
+                Dietary restrictions ({logistics.dietary.length})
+              </h3>
+              {logistics.dietary.length === 0 ? (
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  None reported.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                  {logistics.dietary.map((d, i) => (
+                    <li key={i}>
+                      <span className="font-medium">{d.name}:</span>{' '}
+                      {d.restriction}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </details>
+      )}
 
       <TableToolbar
         searchValue={searchQuery}
