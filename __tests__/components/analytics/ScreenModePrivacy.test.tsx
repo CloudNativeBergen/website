@@ -6,7 +6,7 @@
  * root layout renders the analytics on every route and cannot see the path,
  * so the exclusion is enforced in five places, each by its own mechanism —
  * the two Vercel `beforeSend`s, PostHog's excluded paths (which also keep
- * the consent bar off), and the gate around Pirsch and `InstallPrompt`.
+ * the consent bar off), and the gate around `InstallPrompt`.
  */
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -189,7 +189,7 @@ describe('PostHog on /wall/screen', () => {
   })
 })
 
-describe('Pirsch and the install prompt on /wall/screen', () => {
+describe('the install prompt on /wall/screen', () => {
   async function gate() {
     vi.resetModules()
     return (await import('@/components/analytics/HiddenOnFeedbackPage'))
@@ -200,8 +200,8 @@ describe('Pirsch and the install prompt on /wall/screen', () => {
     for (const path of ['/wall/screen', '/wall/screen/', '/WALL/SCREEN']) {
       const Gate = await gate()
       h.pathname = path
-      render(<Gate>pirsch and install prompt</Gate>)
-      expect(screen.queryByText('pirsch and install prompt')).toBeNull()
+      render(<Gate>install prompt</Gate>)
+      expect(screen.queryByText('install prompt')).toBeNull()
       cleanup()
     }
   })
