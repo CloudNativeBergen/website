@@ -362,6 +362,10 @@ checked in §14):
   conference's `startDate` to 23:59:59 on its `endDate`, Europe/Oslo
   (`CONFERENCE_TIME_ZONE` in `src/lib/time.ts`). Open and Paused remain as overrides ("open early" and "pause"); the end-of-last-day close applies to every mode. P2 also makes a missing `postingMode`
   read as `auto`.
+- _Refinement (spec, P2):_ an Automatic wall whose conference has no usable
+  `startDate` never opens (`noStartDate`), as one with no usable `endDate`
+  never does; and a stored `postingMode` the switch does not offer reads as
+  Paused, so a stray value never opens posting.
 - The submit route uses one function, `isPostingOpen(wall, conference, now)`. _Implementation detail._
 - Viewing is never gated by the window: the Wall page and Screen Mode show the
   wall until it closes (§11.1).

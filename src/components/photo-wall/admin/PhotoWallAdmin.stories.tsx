@@ -1,10 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { delay, http, HttpResponse } from 'msw'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
-import type {
-  PhotoWall,
-  PhotoWallAdminView,
-  PostingState,
+import {
+  postingState,
+  type PhotoWall,
+  type PhotoWallAdminView,
+  type PostingState,
 } from '@/lib/photo-wall'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 import { PhotoWallAdminPage } from './PhotoWallAdminPage'
@@ -37,7 +38,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The organizers’ Photo Wall page, `/admin/photo-wall` (Photo Wall spec §10), slice M1: before setup a short explanation and **Set up the Photo Wall**; after it the **Posting** (Open / Paused) and **Sponsor strip** switches, and the links: the posting link with its QR and PNG download, the Wall page and Screen Mode, each with Copy. One column on a phone, side by side on a wide screen. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The organizers’ Photo Wall page, `/admin/photo-wall` (Photo Wall spec §10), slice M1: before setup a short explanation and **Set up the Photo Wall**; after it the **Posting** (Automatic / Open / Paused, P2) and **Sponsor strip** switches, and the links: the posting link with its QR and PNG download, the Wall page and Screen Mode, each with Copy. One column on a phone, side by side on a wide screen. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
@@ -186,6 +187,88 @@ export const OpenPhoneDark: Story = {
   globals: { theme: 'dark' },
 }
 
+/** Automatic during the conference: open, closing by itself after the last day (§7, P2). */
+export const Automatic: Story = {
+  args: { view: view({ postingMode: 'auto' }, 'open') },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const posting = canvas.getByRole('radiogroup', { name: 'Posting' })
+    await expect(
+      within(posting).getByRole('radio', { name: 'Automatic' }),
+    ).toBeChecked()
+    await expect(canvas.getByText(/Attendees can post/)).toBeVisible()
+    // Pause overrides Automatic.
+    await userEvent.click(
+      within(posting).getByRole('radio', { name: 'Paused' }),
+    )
+    await expect(args.onChange).toHaveBeenCalledWith({ postingMode: 'paused' })
+  },
+}
+export const AutomaticDark: Story = {
+  args: Automatic.args,
+  globals: { theme: 'dark' },
+}
+export const AutomaticPhone: Story = {
+  args: Automatic.args,
+  parameters: PHONE,
+}
+export const AutomaticPhoneDark: Story = {
+  args: Automatic.args,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+
+/** Automatic before the first day: closed, and says when it opens (§7, P2). */
+export const AutomaticBeforeTheConference: Story = {
+  args: { view: view({ postingMode: 'auto' }, 'notYetOpen') },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('radio', { name: 'Automatic' })).toBeChecked()
+    await expect(
+      canvas.getByText(/Posting opens by itself at 00:00/),
+    ).toBeVisible()
+  },
+}
+export const AutomaticBeforeTheConferencePhoneDark: Story = {
+  args: AutomaticBeforeTheConference.args,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+
+/** Automatic, but the conference has no start date: fail closed (§7, P2). */
+export const NoStartDate: Story = {
+  args: { view: view({ postingMode: 'auto' }, 'noStartDate') },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText(/the conference has no start date/),
+    ).toBeVisible()
+  },
+}
+export const NoStartDatePhoneDark: Story = {
+  args: NoStartDate.args,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+
+/** Automatic, but the conference's dates are the wrong way round (§7, P2). */
+export const DatesReversed: Story = {
+  args: { view: view({ postingMode: 'auto' }, 'datesReversed') },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText(/last day is before its first/),
+    ).toBeVisible()
+  },
+}
+export const DatesReversedPhone: Story = {
+  args: DatesReversed.args,
+  parameters: PHONE,
+}
+export const DatesReversedPhoneDark: Story = {
+  args: DatesReversed.args,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+
 /** Switched Open, but the conference's last day is over (§7). */
 export const ClosedAfterTheConference: Story = {
   args: { view: view({ postingMode: 'open' }, 'ended') },
@@ -243,6 +326,12 @@ const TRPC = '/api/trpc/photoWall'
 const trpc = (data: unknown) => HttpResponse.json({ result: { data } })
 let served: PhotoWallAdminView = view(null)
 const updates: unknown[] = []
+/** What Set up creates: an Automatic wall (the rest as WALL). */
+const AUTO_WALL: Partial<PhotoWall> = { postingMode: 'auto' }
+/** The mocked server's window: the real rule, a week before the first day. */
+const CONFERENCE_DAYS = { startDate: '2026-10-26', endDate: '2026-10-27' }
+const postingOf = (wall: PhotoWall): PostingState =>
+  postingState(wall, CONFERENCE_DAYS, new Date('2026-10-19T12:00:00Z'))
 
 /** The page as `/admin/photo-wall` renders it, its procedures mocked. */
 export const Page: StoryObj<typeof PhotoWallAdminPage> = {
@@ -258,7 +347,7 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
         http.post(`${TRPC}.setUp`, () => {
-          served = view(WALL)
+          served = view(AUTO_WALL, postingOf({ ...WALL, ...AUTO_WALL }))
           return trpc(served)
         }),
         http.post(`${TRPC}.updateSettings`, async ({ request }) => {
@@ -266,7 +355,7 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
           updates.push(change)
           await delay(600)
           const wall = { ...served.wall!, ...change }
-          served = view(wall, wall.postingMode === 'open' ? 'open' : 'paused')
+          served = view(wall, postingOf(wall))
           return trpc(served)
         }),
       ],
@@ -277,8 +366,13 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     await userEvent.click(
       await canvas.findByRole('button', { name: 'Set up the Photo Wall' }),
     )
-    const paused = await canvas.findByRole('radio', { name: 'Paused' })
-    await expect(paused).toBeChecked()
+    // Set up creates the wall Automatic (§7, P2); before the first day it
+    // is not yet open.
+    const auto = await canvas.findByRole('radio', { name: 'Automatic' })
+    await expect(auto).toBeChecked()
+    await expect(
+      canvas.getByText(/Posting opens by itself at 00:00/),
+    ).toBeVisible()
     await userEvent.click(canvas.getByRole('radio', { name: 'Open' }))
     // The pressed value shows while the answer is still on its way, and the
     // note says so rather than giving the old mode's reason.
@@ -330,7 +424,7 @@ export const SetUpAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
         http.post(`${TRPC}.setUp`, () => {
-          served = view(WALL)
+          served = view(AUTO_WALL, postingOf({ ...WALL, ...AUTO_WALL }))
           return HttpResponse.error()
         }),
       ],
@@ -342,7 +436,7 @@ export const SetUpAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
       await canvas.findByRole('button', { name: 'Set up the Photo Wall' }),
     )
     await expect(
-      await canvas.findByRole('radio', { name: 'Paused' }),
+      await canvas.findByRole('radio', { name: 'Automatic' }),
     ).toBeChecked()
     await expect(canvas.queryByRole('alert')).toBeNull()
   },
