@@ -11,12 +11,18 @@ interface SponsorBannerProps {
   sponsors: ConferenceSponsor[]
   className?: string
   speed?: number
+  /**
+   * `strip`: the low band along the bottom of the Photo Wall's Screen Mode
+   * (spec §9.4), on a 1920×1080 canvas with no responsive steps.
+   */
+  variant?: 'default' | 'strip'
 }
 
 export function SponsorBanner({
   sponsors,
   className,
   speed = 30,
+  variant = 'default',
 }: SponsorBannerProps) {
   const [scrollWidth, setScrollWidth] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -54,7 +60,7 @@ export function SponsorBanner({
       className={clsx(
         'overflow-hidden bg-white/95 backdrop-blur-sm dark:bg-gray-900/95',
         'rounded-lg border-2 border-brand-cloud-blue/20 shadow-xl',
-        'py-12',
+        variant === 'strip' ? 'py-4' : 'py-12',
         className,
       )}
       aria-label="Sponsor banner"
@@ -76,7 +82,16 @@ export function SponsorBanner({
         {duplicatedSponsors.map((sponsor, index) => (
           <div
             key={`${sponsor.sponsor._id}-${index}`}
-            className="shrink-0 px-12"
+            className={clsx(
+              'shrink-0',
+              variant === 'strip' ? 'px-8' : 'px-12',
+              // The strip is dark: a sponsor with no bright logo gets its
+              // dark one on a white tile, so it still reads (spec §9.4).
+              variant === 'strip' &&
+                sponsor.sponsor.logo &&
+                !sponsor.sponsor.logoBright &&
+                '[&>a]:rounded-md [&>a]:bg-white [&>a]:px-3 [&>a]:py-2',
+            )}
           >
             <a
               href={sponsor.sponsor.website}
@@ -89,7 +104,11 @@ export function SponsorBanner({
                 logo={sponsor.sponsor.logo}
                 logoBright={sponsor.sponsor.logoBright}
                 name={sponsor.sponsor.name}
-                className="h-20 w-auto max-w-[400px] object-contain sm:h-24 lg:h-28"
+                className={
+                  variant === 'strip'
+                    ? 'h-14 w-auto max-w-[260px] object-contain'
+                    : 'h-20 w-auto max-w-[400px] object-contain sm:h-24 lg:h-28'
+                }
               />
             </a>
           </div>

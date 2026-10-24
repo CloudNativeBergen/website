@@ -152,35 +152,58 @@ self.addEventListener('message', (event) => {
 
 // --- Fetch strategies ------------------------------------------------------
 
+// The Photo Wall's Screen Mode, `/wall/screen` (Photo Wall spec §9.2). Mirror
+// of SCREEN_PATH in src/lib/photo-wall/screen.ts (asserted by a test).
+const SCREEN_MODE_PATTERN = /^\/wall\/screen(\/|$)/i
+
 /**
- * Network-first for navigations. Never caches the (possibly authed) HTML; on
- * network failure serves the precached `/offline` page.
+ * The precached `/offline` page, as the answer to a navigation.
  *
  * The offline page is shown at the URL that failed. For the attendee feedback
  * page, `/f/<code>`, that URL is the Feedback Code, and the fallback has
  * neither that route's Referrer-Policy header nor its referrer meta, so it
  * never sends a referrer itself.
  */
-async function handleNavigate(request) {
-  try {
-    return await fetch(request)
-  } catch (e) {
-    const cache = await caches.open(PRECACHE)
-    const offline = await cache.match(OFFLINE_URL)
-    if (!offline) {
-      return new Response('You are offline.', {
-        status: 503,
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      })
-    }
-    const headers = new Headers(offline.headers)
-    headers.set('Referrer-Policy', 'no-referrer')
-    return new Response(offline.body, {
-      status: offline.status,
-      statusText: offline.statusText,
-      headers,
+async function offlineFallback() {
+  const cache = await caches.open(PRECACHE)
+  const offline = await cache.match(OFFLINE_URL)
+  if (!offline) {
+    return new Response('You are offline.', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     })
   }
+  const headers = new Headers(offline.headers)
+  headers.set('Referrer-Policy', 'no-referrer')
+  return new Response(offline.body, {
+    status: offline.status,
+    statusText: offline.statusText,
+    headers,
+  })
+}
+
+/**
+ * Network-first for navigations. Never caches the (possibly authed) HTML; on
+ * network failure serves the precached `/offline` page.
+ *
+ * On Screen Mode a server error (a deploy, a cold function) gets the offline
+ * page too: a venue screen has nobody to reload an error page, and there the
+ * offline page retries by itself. Every other page gets the server's answer.
+ */
+async function handleNavigate(request) {
+  let response
+  try {
+    response = await fetch(request)
+  } catch (e) {
+    return offlineFallback()
+  }
+  if (
+    response.status >= 500 &&
+    SCREEN_MODE_PATTERN.test(new URL(request.url).pathname)
+  ) {
+    return offlineFallback()
+  }
+  return response
 }
 
 /**

@@ -377,3 +377,116 @@ describe('photoWallPublic.get (§8, §9.1)', () => {
     ).toEqual([])
   })
 })
+
+describe('photoWallPublic.screen (§8, §9.2)', () => {
+  it('answers the posts with their approval time, the square photo, the switch and the closed flag', async () => {
+    store().reset([
+      wallOf('conf-A', { sponsorStrip: true }),
+      ...withPhoto(
+        postOf('conf-A', 'a1', {
+          caption: 'Keynote crowd',
+          name: 'Ada',
+          crop: { x: 0.2, y: 0.5 },
+          approvedAt: at(5),
+        }),
+      ),
+      ...withPhoto(postOf('conf-A', 'a2', { approvedAt: at(9) })),
+    ])
+    await expect(visitor().screen()).resolves.toEqual({
+      closed: false,
+      sponsorStrip: true,
+      posts: [
+        {
+          _id: 'wallPost-a2',
+          src: 'https://cdn.sanity.io/images/test/test/shaa2-1600x1000.jpg?rect=300,0,1000,1000&w=600&h=600&auto=format',
+          caption: null,
+          name: null,
+          approvedAt: '2026-10-26T07:09:00.000Z',
+        },
+        {
+          _id: 'wallPost-a1',
+          src: 'https://cdn.sanity.io/images/test/test/shaa1-1600x1000.jpg?rect=120,0,1000,1000&w=600&h=600&auto=format',
+          caption: 'Keynote crowd',
+          name: 'Ada',
+          approvedAt: '2026-10-26T07:05:00.000Z',
+        },
+      ],
+    })
+  })
+
+  it('reads the Sponsor strip switch as off when unset (§9.4)', async () => {
+    store().reset([wallOf('conf-A')])
+    expect(await visitor().screen()).toMatchObject({ sponsorStrip: false })
+  })
+
+  it("never answers another conference's post, nor one that isn't approved", async () => {
+    store().reset([
+      wallOf('conf-A'),
+      wallOf('conf-B'),
+      ...withPhoto(postOf('conf-A', 'a1', { approvedAt: at(1) })),
+      ...withPhoto(postOf('conf-A', 'p', { status: 'pending' })),
+      ...withPhoto(
+        postOf('conf-B', 'conf-A-b1', {
+          approvedAt: at(30),
+          caption: 'conf-A',
+        }),
+      ),
+    ])
+    const { posts } = await visitor().screen()
+    expect(posts.map((p) => p._id)).toEqual(['wallPost-a1'])
+  })
+
+  it('answers no post once the wall has closed, and says so (§9.2, §11.1)', async () => {
+    store().reset([
+      wallOf('conf-A', {
+        closedAt: '2026-11-26T03:00:00Z',
+        sponsorStrip: true,
+      }),
+      ...withPhoto(postOf('conf-A', 'a1')),
+    ])
+    await expect(visitor().screen()).resolves.toEqual({
+      closed: true,
+      sponsorStrip: true,
+      posts: [],
+    })
+  })
+
+  it('is NOT_FOUND for a conference without a Photo Wall, and when the host names none (§4.1)', async () => {
+    store().reset([wallOf('conf-B'), ...withPhoto(postOf('conf-A', 'a1'))])
+    await expect(visitor().screen()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+    tenant.error = new Error('unknown host')
+    store().reset([wallOf('conf-A')])
+    await expect(visitor().screen()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+  })
+
+  it('takes the conference from the host, never from the client', async () => {
+    store().reset([
+      wallOf('conf-A'),
+      wallOf('conf-B'),
+      ...withPhoto(postOf('conf-A', 'a1')),
+      ...withPhoto(postOf('conf-B', 'b1')),
+    ])
+    const screen = visitor().screen as unknown as (
+      input: unknown,
+    ) => Promise<{ posts: { _id: string }[] }>
+    const { posts } = await screen({ conferenceId: 'conf-B' })
+    expect(posts.map((p) => p._id)).toEqual(['wallPost-a1'])
+  })
+
+  it('is cached under the public wall tag on the non-CDN client, with no live conference read (§8)', async () => {
+    store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'a1'))])
+    for (let poll = 0; poll < 3; poll++) await visitor().screen()
+    expect(h.cacheTag).toHaveBeenCalledWith('photo-wall:conf-A')
+    const reads = store().reads.filter((r) => r.query.includes('wallPost'))
+    expect(reads.length).toBeGreaterThan(0)
+    expect(reads.every((r) => r.client === 'uncached')).toBe(true)
+    const calls = vi.mocked(getConferenceForCurrentDomain).mock.calls
+    expect(
+      calls.filter(([opts]) => (opts as { uncached?: boolean })?.uncached),
+    ).toEqual([])
+  })
+})

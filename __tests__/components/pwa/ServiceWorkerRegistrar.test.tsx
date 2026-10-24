@@ -10,7 +10,29 @@ import {
   cleanup,
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ServiceWorkerRegistrar } from '@/components/pwa/ServiceWorkerRegistrar'
+
+// The registrar reads the browser's path at mount to tell the Photo Wall's
+// Screen Mode apart; every other test here runs on an ordinary page.
+const h = {
+  // `window.location` is replaced below by a plain copy (for `reload`), so
+  // the path is set on whatever object the registrar will read.
+  set pathname(path: string) {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, pathname: path },
+    })
+  },
+}
+
+import {
+  SCREEN_UPDATE_CHECK_MS,
+  ServiceWorkerRegistrar,
+} from '@/components/pwa/ServiceWorkerRegistrar'
+import {
+  SCREEN_PROBE_TIMEOUT_MS,
+  SCREEN_UPDATE_RETRY_MS,
+  markScreenMode,
+} from '@/components/pwa/screen-update'
 
 /** Minimal event-emitter shared by the service-worker mocks. */
 class Emitter {
@@ -37,6 +59,7 @@ class FakeWorker extends Emitter {
 
 class FakeRegistration extends Emitter {
   installing: FakeWorker | null = null
+  waiting: FakeWorker | null = null
   update = vi.fn().mockResolvedValue(undefined)
 }
 
@@ -51,6 +74,7 @@ let reloadMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'production')
+  h.pathname = '/'
 
   container = new FakeSWContainer()
   Object.defineProperty(navigator, 'serviceWorker', {
@@ -329,5 +353,254 @@ describe('ServiceWorkerRegistrar', () => {
     fireEvent(document, new Event('visibilitychange'))
 
     await waitFor(() => expect(registration.update).toHaveBeenCalled())
+  })
+})
+
+/**
+ * The Photo Wall's Screen Mode (Photo Wall spec §9.2, §14): a venue screen
+ * gets no click, no focus and no visibility change, so the registrar checks
+ * for updates on a timer and accepts one by itself.
+ */
+describe('ServiceWorkerRegistrar on /wall/screen', () => {
+  /** The screen's own URL, asked for before an update reloads it. */
+  let screenAnswers = true
+  const headFetch = vi.fn(async (_url: string, _init?: RequestInit) => {
+    if (!screenAnswers) throw new TypeError('Failed to fetch')
+    return new Response(null, { status: 200 })
+  })
+  beforeEach(() => {
+    h.pathname = '/wall/screen'
+    vi.useFakeTimers()
+    screenAnswers = true
+    headFetch.mockClear()
+    vi.stubGlobal('fetch', headFetch)
+    window.sessionStorage.clear()
+    markScreenMode(null)
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  /** Render and flush the async register() (microtasks are not faked). */
+  async function renderScreen() {
+    const before = container.register.mock.calls.length
+    render(<ServiceWorkerRegistrar />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(container.register).toHaveBeenCalledTimes(before + 1)
+    return container.registration
+  }
+  const wait = (ms: number) =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(ms)
+    })
+
+  it('takes no update while the screen URL does not answer, and takes it once it does', async () => {
+    screenAnswers = false
+    // First an error page (a deploy in progress), then no network at all.
+    headFetch.mockResolvedValueOnce(new Response(null, { status: 503 }))
+    const waiting = new FakeWorker()
+    waiting.state = 'installed'
+    container.controller = {}
+    container.registration.waiting = waiting
+    await renderScreen()
+    expect(headFetch).toHaveBeenCalledWith(
+      window.location.href,
+      expect.objectContaining({ method: 'HEAD', cache: 'no-store' }),
+    )
+    // A reload now would land on the offline page: wait.
+    expect(waiting.postMessage).not.toHaveBeenCalled()
+    await wait(SCREEN_UPDATE_RETRY_MS)
+    expect(headFetch).toHaveBeenCalledTimes(2)
+    expect(waiting.postMessage).not.toHaveBeenCalled()
+    screenAnswers = true
+    await wait(2 * SCREEN_UPDATE_RETRY_MS)
+    expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+  })
+
+  it('gives up a probe that never answers and tries again after the wait', async () => {
+    // A stalled connection: the request is taken and never answered.
+    headFetch.mockImplementationOnce(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(init.signal?.reason),
+          )
+        }),
+    )
+    const waiting = new FakeWorker()
+    waiting.state = 'installed'
+    container.controller = {}
+    container.registration.waiting = waiting
+    await renderScreen()
+    expect(headFetch).toHaveBeenCalledTimes(1)
+    await wait(SCREEN_PROBE_TIMEOUT_MS)
+    expect(headFetch.mock.calls[0][1]?.signal?.aborted).toBe(true)
+    expect(waiting.postMessage).not.toHaveBeenCalled()
+    // Counted as a failed attempt: the next probe after the backoff answers.
+    await wait(SCREEN_UPDATE_RETRY_MS)
+    expect(headFetch).toHaveBeenCalledTimes(2)
+    expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+  })
+
+  it('a client-side navigation into Screen Mode starts the checks and takes updates by itself', async () => {
+    h.pathname = '/program'
+    const registration = await renderScreen()
+    await wait(SCREEN_UPDATE_CHECK_MS)
+    expect(registration.update).not.toHaveBeenCalled()
+    // The screen page mounts after a client-side navigation.
+    act(() => {
+      h.pathname = '/wall/screen'
+      markScreenMode(true)
+    })
+    await wait(SCREEN_UPDATE_CHECK_MS)
+    expect(registration.update).toHaveBeenCalledTimes(1)
+    const worker = new FakeWorker()
+    act(() => {
+      container.controller = {}
+      registration.installing = worker
+      registration.dispatch('updatefound')
+      worker.setState('installed')
+    })
+    await wait(0)
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('a client-side navigation out of Screen Mode stops the checks and shows the banner again', async () => {
+    const registration = await renderScreen()
+    act(() => {
+      h.pathname = '/program'
+      markScreenMode(false)
+    })
+    await wait(3 * SCREEN_UPDATE_CHECK_MS)
+    expect(registration.update).not.toHaveBeenCalled()
+    const worker = new FakeWorker()
+    act(() => {
+      container.controller = {}
+      registration.installing = worker
+      registration.dispatch('updatefound')
+      worker.setState('installed')
+    })
+    await wait(0)
+    expect(worker.postMessage).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('status', { name: 'Update available' }),
+    ).toBeInTheDocument()
+  })
+
+  it('backs off a worker that stays waiting across reloads instead of reloading every few seconds', async () => {
+    // A wedged worker: SKIP_WAITING never activates it.
+    const waiting = new FakeWorker()
+    waiting.state = 'installed'
+    container.controller = {}
+    container.registration.waiting = waiting
+    await renderScreen()
+    expect(waiting.postMessage).toHaveBeenCalledTimes(1)
+    await wait(4000)
+    expect(reloadMock).toHaveBeenCalledTimes(1)
+    // The reloaded screen finds the same worker still waiting.
+    cleanup()
+    await renderScreen()
+    await wait(10_000)
+    expect(waiting.postMessage).toHaveBeenCalledTimes(1)
+    expect(reloadMock).toHaveBeenCalledTimes(1)
+    await wait(SCREEN_UPDATE_RETRY_MS - 4000 - 10_000)
+    expect(waiting.postMessage).toHaveBeenCalledTimes(2)
+    await wait(4000)
+    expect(reloadMock).toHaveBeenCalledTimes(2)
+    // And twice as long before the third.
+    cleanup()
+    await renderScreen()
+    await wait(2 * SCREEN_UPDATE_RETRY_MS - 4000 - 1)
+    expect(waiting.postMessage).toHaveBeenCalledTimes(2)
+    await wait(1)
+    expect(waiting.postMessage).toHaveBeenCalledTimes(3)
+  })
+
+  it('finds and accepts an update untouched: a check every 10 minutes, SKIP_WAITING, then one reload', async () => {
+    const registration = await renderScreen()
+    // Nothing happens on the screen: no focus, no visibilitychange, no click.
+    expect(registration.update).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(SCREEN_UPDATE_CHECK_MS - 1)
+    })
+    expect(registration.update).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(registration.update).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      vi.advanceTimersByTime(SCREEN_UPDATE_CHECK_MS)
+    })
+    expect(registration.update).toHaveBeenCalledTimes(2)
+
+    // The check found a new worker, which installs behind an existing controller.
+    const worker = new FakeWorker()
+    act(() => {
+      container.controller = {}
+      registration.installing = worker
+      registration.dispatch('updatefound')
+      worker.setState('installed')
+    })
+    // Once the screen's URL has answered...
+    await wait(0)
+    // ...accepted without a click, and no banner to click.
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(reloadMock).not.toHaveBeenCalled()
+    act(() => container.dispatch('controllerchange'))
+    expect(reloadMock).toHaveBeenCalledTimes(1)
+    // The fallback must not reload a second time.
+    act(() => {
+      vi.advanceTimersByTime(4000)
+    })
+    expect(reloadMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('takes a worker already waiting when the screen opens', async () => {
+    const waiting = new FakeWorker()
+    waiting.state = 'installed'
+    container.controller = {}
+    container.registration.waiting = waiting
+    await renderScreen()
+    expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('does not reload on a first install: no controller means no update', async () => {
+    const registration = await renderScreen()
+    const worker = new FakeWorker()
+    act(() => {
+      container.controller = null
+      registration.installing = worker
+      registration.dispatch('updatefound')
+      worker.setState('installed')
+    })
+    expect(worker.postMessage).not.toHaveBeenCalled()
+    act(() => container.dispatch('controllerchange'))
+    expect(reloadMock).not.toHaveBeenCalled()
+  })
+
+  it('an ordinary page keeps the banner and runs no timer', async () => {
+    h.pathname = '/program'
+    const registration = await renderScreen()
+    await act(async () => {
+      vi.advanceTimersByTime(3 * SCREEN_UPDATE_CHECK_MS)
+    })
+    expect(registration.update).not.toHaveBeenCalled()
+    const worker = new FakeWorker()
+    act(() => {
+      container.controller = {}
+      registration.installing = worker
+      registration.dispatch('updatefound')
+      worker.setState('installed')
+    })
+    expect(worker.postMessage).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('status', { name: 'Update available' }),
+    ).toBeInTheDocument()
   })
 })
