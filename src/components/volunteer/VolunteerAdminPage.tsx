@@ -348,7 +348,14 @@ export default function VolunteerAdminPage() {
   }, [volunteers, statusFilter, ticketFilter, ticketStatuses, searchQuery])
 
   const { copied: copiedAllEmails, copyToClipboard: copyAllEmails } =
-    useCopyToClipboard()
+    useCopyToClipboard({
+      onError: () =>
+        notify?.showNotification({
+          type: 'error',
+          title: 'Copy failed',
+          message: 'Could not copy the email addresses to the clipboard.',
+        }),
+    })
 
   const filteredEmails = useMemo(() => {
     const seen = new Set<string>()
@@ -568,7 +575,10 @@ export default function VolunteerAdminPage() {
         totalCount={volunteers?.length}
         resultLabel="applications"
       >
-        <FilterDropdown label="Status" activeCount={statusFilter.size}>
+        <FilterDropdown
+          label="Status"
+          activeCount={statusFilterIsDefault ? 0 : statusFilter.size}
+        >
           {Object.values(VolunteerStatus).map((status) => (
             <FilterOption
               key={status}
@@ -1198,7 +1208,7 @@ export default function VolunteerAdminPage() {
                         variant="secondary"
                       >
                         <CheckBadgeIcon className="h-4 w-4" />
-                        Mark confirmed
+                        Mark Confirmed
                       </AdminButton>
                     )}
 

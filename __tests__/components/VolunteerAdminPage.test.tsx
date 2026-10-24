@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  *
  * List defaults (rejected hidden, pending first), the copy-all-emails button,
- * and the manual "Mark confirmed" action on the volunteer admin page.
+ * and the manual "Mark Confirmed" action on the volunteer admin page.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { VolunteerStatus } from '@/lib/volunteer/types'
@@ -171,7 +171,7 @@ describe('VolunteerAdminPage', () => {
     fireEvent.click(screen.getByText('Alice', { exact: true }))
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /Mark confirmed/ }),
+      await screen.findByRole('button', { name: /Mark Confirmed/ }),
     )
     await waitFor(() =>
       expect(updateStatusMutate).toHaveBeenCalledWith(
