@@ -424,7 +424,7 @@ export const TicketStatusLoading: Story = {
   },
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(
-      await canvas.findByRole('button', { name: /filters/i }),
+      await canvas.findByRole('button', { name: /speaker type/i }),
     )
     // The filter panel is portalled out of the canvas root (it has to escape
     // the table's `overflow-hidden`), so query the document for its options.
@@ -442,11 +442,10 @@ export const TicketQuestionsUnrolled: Story = {
     // Open Columns dropdown and toggle Monday workshops and Speaker dinner
     const columnsBtn = await canvas.findByRole('button', { name: /columns/i })
     await userEvent.click(columnsBtn)
-    const workshopCol = await within(document.body).findByText(
-      'Monday workshops',
-    )
-    await userEvent.click(workshopCol)
-    const dinnerCol = await within(document.body).findByText('Speaker dinner')
+    // Question labels also name filter chips, so scope to the open menu.
+    const menu = within(await within(document.body).findByRole('menu'))
+    await userEvent.click(await menu.findByText('Monday workshops'))
+    const dinnerCol = await menu.findByText('Speaker dinner')
     await userEvent.click(dinnerCol)
     // Close dropdown to inspect table
     await userEvent.click(columnsBtn)
@@ -458,8 +457,9 @@ export const TicketFiltersOpen: Story = {
     ...TicketStatus.args,
   },
   play: async ({ canvas, userEvent }) => {
-    // Open Filters dropdown to inspect dynamic question filters
-    const filtersBtn = await canvas.findByRole('button', { name: /filters/i })
-    await userEvent.click(filtersBtn)
+    // Each ticket question is its own filter chip; open one to inspect it.
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /monday workshops/i }),
+    )
   },
 }
