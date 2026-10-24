@@ -10,8 +10,8 @@ import {
   MAX_NAME_POINTS,
   checkWallFields,
   isUploadId,
-  normaliseWallText,
 } from './fields'
+import { normalizeWallText } from './wall-text'
 
 const UPLOAD_ID = '9b2b6f1e-7f3a-4c2d-8e1f-0a1b2c3d4e5f'
 const photo = () =>
@@ -75,6 +75,17 @@ describe('checkWallFields', () => {
       ok: true,
       fields: { caption: 'Café time on the wall', name: 'A. B' },
     })
+  })
+
+  it('stores a name with nothing visible as absent, and an invisible-padded one without the padding', () => {
+    expect(
+      checkWallFields(
+        body({ name: '\u3164\u200b\u2800', caption: '\u061c\u202e' }),
+      ),
+    ).toMatchObject({ ok: true, fields: { name: null, caption: null } })
+    expect(
+      checkWallFields(body({ name: '\u200bKari\u{e0041}' })),
+    ).toMatchObject({ ok: true, fields: { name: 'Kari' } })
   })
 
   it('counts the limits in code points, not UTF-16 units', () => {
@@ -220,33 +231,33 @@ describe('checkWallFields', () => {
   })
 })
 
-describe('normaliseWallText', () => {
+describe('normalizeWallText', () => {
   it('removes control characters, DEL and C1 included; tab and newline become a space instead', () => {
-    expect(normaliseWallText('a\u007fb\u0085c\u009fd')).toBe('abcd')
-    expect(normaliseWallText('a\u0000b\u001bc')).toBe('abc')
-    expect(normaliseWallText('a\tb\nc\r\nd\u000be')).toBe('a b c d e')
+    expect(normalizeWallText('a\u007fb\u0085c\u009fd')).toBe('abcd')
+    expect(normalizeWallText('a\u0000b\u001bc')).toBe('abc')
+    expect(normalizeWallText('a\tb\nc\r\nd\u000be')).toBe('a b c d e')
   })
 
   it('drops a control inside a run of spaces and leaves one space', () => {
-    expect(normaliseWallText('a \u0001 b')).toBe('a b')
+    expect(normalizeWallText('a \u0001 b')).toBe('a b')
   })
 
   it('folds the whitespace controls (tab, newline, VT, FF, CR) into a space instead of dropping them', () => {
-    expect(normaliseWallText('a\nb')).toBe('a b')
-    expect(normaliseWallText('a\tb')).toBe('a b')
-    expect(normaliseWallText('a\u000bb\u000cc\rd')).toBe('a b c d')
+    expect(normalizeWallText('a\nb')).toBe('a b')
+    expect(normalizeWallText('a\tb')).toBe('a b')
+    expect(normalizeWallText('a\u000bb\u000cc\rd')).toBe('a b c d')
   })
 
   it('removes bidi formatting characters: overrides, embeddings, isolates and marks', () => {
-    expect(normaliseWallText('\u202eabc')).toBe('abc')
-    expect(normaliseWallText('a\u202a\u202b\u202c\u202dz')).toBe('az')
-    expect(normaliseWallText('a\u2066\u2067\u2068\u2069z')).toBe('az')
-    expect(normaliseWallText('a\u200e\u200fz')).toBe('az')
+    expect(normalizeWallText('\u202eabc')).toBe('abc')
+    expect(normalizeWallText('a\u202a\u202b\u202c\u202dz')).toBe('az')
+    expect(normalizeWallText('a\u2066\u2067\u2068\u2069z')).toBe('az')
+    expect(normalizeWallText('a\u200e\u200fz')).toBe('az')
   })
 
   it('keeps the zero-width joiner, so an emoji family stays one and counts its code points', () => {
     const family = '👨\u200d👩\u200d👧' // 5 code points: 3 emoji, 2 ZWJ
-    expect(normaliseWallText(family)).toBe(family)
+    expect(normalizeWallText(family)).toBe(family)
     expect([...family]).toHaveLength(5)
     const sixteen = family.repeat(16) // 80 code points
     expect(checkWallFields(body({ caption: sixteen }))).toMatchObject({
@@ -260,7 +271,7 @@ describe('normaliseWallText', () => {
   })
 
   it('keeps letters of every script and emoji', () => {
-    expect(normaliseWallText('Ærlig talt, Ås 😀 日本語')).toBe(
+    expect(normalizeWallText('Ærlig talt, Ås 😀 日本語')).toBe(
       'Ærlig talt, Ås 😀 日本語',
     )
   })

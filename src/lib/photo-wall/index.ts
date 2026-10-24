@@ -15,8 +15,8 @@ export {
   MAX_NAME_POINTS,
   checkWallFields,
   isUploadId,
-  normaliseWallText,
   type WallField,
   type WallFieldsCheck,
   type WallPostFields,
 } from './fields'
+export { normalizeWallText } from './wall-text'
