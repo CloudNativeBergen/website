@@ -59,6 +59,10 @@
     {
       "path": "/api/cron/feedback-fold",
       "schedule": "40 4 * * *"
+    },
+    {
+      "path": "/api/cron/photo-wall-retention",
+      "schedule": "10 3 * * *"
     }
   ]
 }
