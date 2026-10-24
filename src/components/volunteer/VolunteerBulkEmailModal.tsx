@@ -143,6 +143,7 @@ export function VolunteerBulkEmailModal({
         const already = total - pending.length
         const body = JSON.stringify(message)
         const failedIds = new Set<string>()
+        setProgress(`Sent ${already} of ${total}`)
         const result = await sendInChunks(
           pending,
           async (volunteerIds) => {

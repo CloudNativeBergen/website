@@ -105,4 +105,28 @@ describe('VolunteerBulkEmailModal', () => {
     )
     expect(onComplete).not.toHaveBeenCalled()
   })
+
+  it('shows progress before the first chunk returns', async () => {
+    let release: () => void = () => {}
+    const onSend = vi.fn(
+      () =>
+        new Promise<{ failed: never[] }>((r) => {
+          release = () => r({ failed: [] })
+        }),
+    )
+    render(
+      <VolunteerBulkEmailModal
+        isOpen
+        onClose={() => {}}
+        onSend={onSend}
+        volunteers={[v('a'), v('b')]}
+      />,
+    )
+    await act(async () =>
+      fireEvent.click(screen.getByText('Send to 2 volunteers')),
+    )
+    expect(screen.getByText('Sent 0 of 2')).toBeTruthy()
+    await act(async () => release())
+    expect(screen.getByText('Sent 2 of 2')).toBeTruthy()
+  })
 })

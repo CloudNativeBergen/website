@@ -1516,7 +1516,14 @@ export default function VolunteerAdminPage() {
           isOpen
           onClose={() => setBulkEmailOpen(false)}
           volunteers={filteredVolunteers}
-          onSend={(data) => sendBulkEmail.mutateAsync(data)}
+          onSend={(data) =>
+            sendBulkEmail.mutateAsync(data).catch(async (e: unknown) => {
+              // A deleted volunteer fails the whole chunk; the refetch drops it
+              // from the list so a retry goes through.
+              await utils.volunteer.admin.list.invalidate()
+              throw e
+            })
+          }
           onComplete={(sent) =>
             notify?.showNotification({
               type: 'success',
