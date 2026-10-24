@@ -24,6 +24,7 @@ export async function getVolunteersByConference(
       occupation,
       availability,
       preferredTasks,
+      assignedTasks,
       tshirtSize,
       dietaryRestrictions,
       otherInfo,
@@ -90,6 +91,7 @@ export async function getVolunteerById(
       occupation,
       availability,
       preferredTasks,
+      assignedTasks,
       tshirtSize,
       dietaryRestrictions,
       otherInfo,
@@ -332,6 +334,7 @@ export interface VolunteerDetailsUpdate {
   occupation: string
   availability?: string | null
   preferredTasks?: string[] | null
+  assignedTasks?: string[] | null
   tshirtSize?: string | null
   dietaryRestrictions?: string | null
   otherInfo?: string | null
@@ -360,6 +363,7 @@ export async function updateVolunteerDetails(
     const optional: Array<keyof VolunteerDetailsUpdate> = [
       'availability',
       'preferredTasks',
+      'assignedTasks',
       'tshirtSize',
       'dietaryRestrictions',
       'otherInfo',

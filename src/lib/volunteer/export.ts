@@ -15,6 +15,7 @@ const COLUMNS = [
   'T-shirt size',
   'Dietary restrictions',
   'Preferred tasks',
+  'Assigned tasks',
   'Availability',
   'Ticket status',
   'Confirmed at',
@@ -38,6 +39,7 @@ type Exportable = Pick<
   | 'tshirtSize'
   | 'dietaryRestrictions'
   | 'preferredTasks'
+  | 'assignedTasks'
   | 'availability'
   | 'confirmedAt'
 >
@@ -60,6 +62,7 @@ export function buildVolunteersCsv(
         v.tshirtSize,
         v.dietaryRestrictions,
         v.preferredTasks?.join('; '),
+        v.assignedTasks?.join('; '),
         v.availability,
         ticket ? TICKET_LABELS[ticket.state] : '',
         v.confirmedAt,

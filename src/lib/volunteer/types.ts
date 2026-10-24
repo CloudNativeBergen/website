@@ -41,6 +41,8 @@ export interface VolunteerInput {
   occupation: Occupation
   availability?: string
   preferredTasks?: string[]
+  /** Organizer-assigned task names (interim until the shift model, #1524). */
+  assignedTasks?: string[]
   tshirtSize?: TShirtSize
   dietaryRestrictions?: string
   otherInfo?: string

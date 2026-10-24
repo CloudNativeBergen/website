@@ -54,6 +54,15 @@ export default defineType({
       description: 'What tasks would you like to help with?',
     }),
     defineField({
+      name: 'assignedTasks',
+      title: 'Assigned Tasks',
+      type: 'array',
+      of: [{ type: 'string' }],
+      options: { layout: 'tags' },
+      description:
+        'Tasks organizers have assigned to this volunteer (interim, until shifts land in #1524).',
+    }),
+    defineField({
       name: 'tshirtSize',
       title: 'T-Shirt Size',
       type: 'string',
