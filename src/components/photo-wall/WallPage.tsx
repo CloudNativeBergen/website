@@ -2,10 +2,36 @@ import { ConferenceLogo } from '@/components/ConferenceLogo'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
 
 /**
+ * The top of the Wall page and the Composer: the conference logo, centred,
+ * with what the page puts under it. Nothing without either.
+ */
+export function WallHeader({
+  logo,
+  children,
+}: {
+  logo: ConferenceLogoData | null
+  children?: React.ReactNode
+}) {
+  if (!logo && !children) return null
+  return (
+    <header className="flex flex-col items-center gap-3 px-4 pt-8 text-center">
+      {logo && (
+        <ConferenceLogo
+          conference={logo}
+          variant="horizontal"
+          className="h-10 w-auto max-w-full text-brand-slate-gray dark:text-white"
+        />
+      )}
+      {children}
+    </header>
+  )
+}
+
+/**
  * The minimal chrome of the Composer (Photo Wall spec §2): no site
  * navigation, the conference logo on top, the visitor's light or dark
- * setting. The Wall page draws its own board (`WallBoardView`); Screen Mode
- * has no chrome (`ScreenPlaceholder`).
+ * setting. The Wall page shares {@link WallHeader} on its own board
+ * (`WallBoardView`); Screen Mode has no chrome (`ScreenPlaceholder`).
  */
 export function WallChrome({
   logo,
@@ -19,15 +45,7 @@ export function WallChrome({
       data-shell-fit="viewport"
       className="min-h-dvh bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100"
     >
-      {logo && (
-        <header className="flex justify-center px-4 pt-8">
-          <ConferenceLogo
-            conference={logo}
-            variant="horizontal"
-            className="h-10 w-auto max-w-full text-brand-slate-gray dark:text-white"
-          />
-        </header>
-      )}
+      <WallHeader logo={logo} />
       <main className="mx-auto max-w-md px-4 pt-10 pb-12 text-center">
         {children}
       </main>

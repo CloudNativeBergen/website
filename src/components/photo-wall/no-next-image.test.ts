@@ -11,7 +11,7 @@ import path from 'node:path'
 import { ESLint } from 'eslint'
 import { describe, expect, it } from 'vitest'
 
-const root = path.resolve(__dirname, '..')
+const root = path.resolve(__dirname, '../../..')
 const eslint = new ESLint({ cwd: root })
 
 /** The `no-restricted-imports` messages ESLint reports for `code` at `file`. */

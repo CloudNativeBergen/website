@@ -33,22 +33,17 @@ export interface WallData {
 /** One polaroid on the Wall page (§9.1). */
 export interface WallPagePost {
   _id: string
-  /** The square, from Sanity's `rect=` (§5.1). */
+  /** The square, already cut by Sanity's `rect=` from the crop (§5.1). */
   src: string
-  /** Where the square sits on the whole photo; `src` is already cut to it. */
-  crop: WallPostCrop
   caption: string | null
   name: string | null
-  approvedAt: string
 }
 
-/** What the public `wall.get` query answers and the Wall page polls. */
+/** What the public `photoWallPublic.get` query answers and the Wall page polls. */
 export interface WallPageView {
   /** Closed by the retention cron: the page says so and shows nothing (§11.1). */
   closed: boolean
   /** Whether **Add your photo** shows (§7, §9.1). */
   postingOpen: boolean
-  /** Screen Mode's sponsor strip switch, arriving with every poll (§9.4). */
-  sponsorStrip: boolean
   posts: WallPagePost[]
 }

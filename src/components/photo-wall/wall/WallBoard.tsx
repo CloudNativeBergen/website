@@ -1,15 +1,14 @@
 'use client'
 
 import { PlusIcon } from '@heroicons/react/24/solid'
-import { ConferenceLogo } from '@/components/ConferenceLogo'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
-import { objectPosition } from '@/lib/photo-wall/crop'
 import {
   WALL_POST_LIMIT,
   type WallPagePost,
   type WallPageView,
 } from '@/lib/photo-wall/wall'
 import { api } from '@/lib/trpc/client'
+import { WallHeader } from '../WallPage'
 import { wallPolling } from './polling'
 
 /** Above the fold on a phone: loaded at once, the rest as they scroll in. */
@@ -32,8 +31,7 @@ function tiltOf(id: string): number {
 /**
  * A Pinboard polaroid (§9): the square as a plain `<img>` of its Sanity URL,
  * never `next/image`, whose optimizer would keep serving a removed photo
- * for hours (§5.1). The URL is already cut to the square; `object-position`
- * places the same square should an image arrive uncut.
+ * for hours (§5.1). The URL is already cut to the square.
  */
 function Polaroid({ post, eager }: { post: WallPagePost; eager: boolean }) {
   return (
@@ -49,7 +47,6 @@ function Polaroid({ post, eager }: { post: WallPagePost; eager: boolean }) {
         loading={eager ? 'eager' : 'lazy'}
         decoding="async"
         className="block aspect-square w-full bg-gray-200 object-cover"
-        style={{ objectPosition: objectPosition(post.crop) }}
       />
       <figcaption className="font-caveat min-h-6 pt-1.5 leading-tight break-words">
         {post.caption && (
@@ -67,7 +64,8 @@ function Polaroid({ post, eager }: { post: WallPagePost; eager: boolean }) {
   )
 }
 
-interface WallBoardProps {
+/** What the Wall page shows of its conference. */
+export interface WallConference {
   logo: ConferenceLogoData | null
   /** The conference's name, under the heading. */
   title: string
@@ -76,7 +74,7 @@ interface WallBoardProps {
 }
 
 /**
- * The Wall page (Photo Wall spec §9.1) for a given answer of `wall.get`: the
+ * The Wall page (Photo Wall spec §9.1) for a given answer of `photoWallPublic.get`: the
  * conference on top, the approved posts as tilted polaroids on a board,
  * newest approval first, **Add your photo** while posting is open, and who
  * to ask to have a photo removed. Follows the visitor's light or dark
@@ -84,10 +82,11 @@ interface WallBoardProps {
  */
 export function WallBoardView({
   view,
-  logo,
-  title,
-  contactEmail,
-}: WallBoardProps & { view: WallPageView }) {
+  conference: { logo, title, contactEmail },
+}: {
+  view: WallPageView
+  conference: WallConference
+}) {
   const { posts } = view
   const canAdd = view.postingOpen && !view.closed
   return (
@@ -95,14 +94,7 @@ export function WallBoardView({
       data-shell-fit="viewport"
       className="min-h-dvh overflow-x-clip bg-stone-200 text-gray-900 dark:bg-stone-900 dark:text-gray-100"
     >
-      <header className="flex flex-col items-center gap-3 px-4 pt-8 text-center">
-        {logo && (
-          <ConferenceLogo
-            conference={logo}
-            variant="horizontal"
-            className="h-10 w-auto max-w-full text-brand-slate-gray dark:text-white"
-          />
-        )}
+      <WallHeader logo={logo}>
         <div>
           <h1 className="font-display text-2xl font-semibold">Photo Wall</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
@@ -115,7 +107,7 @@ export function WallBoardView({
             )}
           </p>
         </div>
-      </header>
+      </WallHeader>
 
       {view.closed ? (
         <main className="px-4 pt-16 pb-16 text-center">
@@ -168,7 +160,7 @@ export function WallBoardView({
             </footer>
           </main>
           {canAdd && (
-            <div className="fixed inset-x-0 bottom-0 z-10 bg-gradient-to-t from-stone-200 via-stone-200/80 to-transparent px-4 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] dark:from-stone-900 dark:via-stone-900/80">
+            <div className="fixed inset-x-0 bottom-0 z-10 bg-linear-to-t from-stone-200 via-stone-200/80 to-transparent px-4 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] dark:from-stone-900 dark:via-stone-900/80">
               <a href="/wall/post" className={`mx-auto max-w-md ${ADD_PHOTO}`}>
                 <PlusIcon className="size-5" aria-hidden="true" />
                 Add your photo
@@ -182,17 +174,20 @@ export function WallBoardView({
 }
 
 /**
- * The Wall page, live: starts from the server's answer and polls `wall.get`
- * every 10 s while visible, with no idle stop (§8). A failed poll keeps the
- * last answer on screen.
+ * The Wall page, live: starts from the server's answer and polls
+ * `photoWallPublic.get` every 10 s while visible, with no idle stop (§8). A
+ * failed poll keeps the last answer on screen.
  */
 export function WallBoard({
   initial,
-  ...props
-}: WallBoardProps & { initial: WallPageView }) {
-  const { data } = api.wall.get.useQuery(undefined, {
+  conference,
+}: {
+  initial: WallPageView
+  conference: WallConference
+}) {
+  const { data } = api.photoWallPublic.get.useQuery(undefined, {
     ...wallPolling,
     initialData: initial,
   })
-  return <WallBoardView view={data ?? initial} {...props} />
+  return <WallBoardView view={data ?? initial} conference={conference} />
 }

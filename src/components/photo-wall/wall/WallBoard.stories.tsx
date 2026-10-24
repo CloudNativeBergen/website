@@ -5,8 +5,8 @@ import { WallBoardView } from './WallBoard'
 
 /**
  * Local fixture photos (`.storybook/main.ts` staticDirs): no network. On the
- * site `src` is Sanity's `rect=` square; here it is the whole photo, and the
- * polaroid's `object-position` shows the same square of it.
+ * site `src` is already Sanity's `rect=` square; here it is the whole photo,
+ * which the polaroid's `object-cover` shows centred.
  */
 const LANDSCAPE = '/storybook-fixtures/wall-landscape.jpg'
 const PORTRAIT = '/storybook-fixtures/wall-portrait.jpg'
@@ -17,33 +17,30 @@ let n = 0
 const post = (fields: Partial<WallPagePost>): WallPagePost => ({
   _id: `wallPost-${++n}`,
   src: LANDSCAPE,
-  crop: { x: 0.5, y: 0.5 },
   caption: null,
   name: null,
-  approvedAt: '2026-10-26T07:40:00Z',
   ...fields,
 })
 
 const POSTS: WallPagePost[] = [
   post({ caption: 'Keynote crowd, first morning', name: 'Ada' }),
-  post({ src: PORTRAIT, crop: { x: 0.5, y: 0 }, caption: 'Doors open' }),
+  post({ src: PORTRAIT, caption: 'Doors open' }),
   post({ src: PHOTO, name: 'Platform team' }),
-  post({ crop: { x: 0, y: 0.5 } }),
+  post({}),
   post({
     src: PANORAMA,
     caption:
       'Fjord views between talks, and the longest caption a phone allows',
     name: 'Bo',
   }),
-  post({ src: PORTRAIT, crop: { x: 0.5, y: 1 }, caption: 'Waffles > YAML' }),
+  post({ src: PORTRAIT, caption: 'Waffles > YAML' }),
   post({ src: PHOTO, caption: 'Hallway track', name: 'Cy' }),
-  post({ crop: { x: 1, y: 0.5 }, name: 'Di' }),
+  post({ name: 'Di' }),
 ]
 
 const view = (fields: Partial<WallPageView> = {}): WallPageView => ({
   closed: false,
   postingOpen: true,
-  sponsorStrip: false,
   posts: POSTS,
   ...fields,
 })
@@ -57,15 +54,17 @@ const meta = {
     docs: {
       description: {
         component:
-          'The public Wall page `/wall` (Photo Wall spec §9.1), slice M5a: the conference on top, the approved Wall Posts as tilted Pinboard polaroids in two columns on a phone (three and four on wider screens), newest approval first, with the handwritten caption and name; **Add your photo** while posting is open; the removal-contact footer; the empty and closed states. The page polls `wall.get` every 10 s while visible (§8). Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The public Wall page `/wall` (Photo Wall spec §9.1), slice M5a: the conference on top, the approved Wall Posts as tilted Pinboard polaroids in two columns on a phone (three and four on wider screens), newest approval first, with the handwritten caption and name; **Add your photo** while posting is open; the removal-contact footer; the empty and closed states. The page polls `photoWallPublic.get` every 10 s while visible (§8). Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
   args: {
     view: view(),
-    logo: { title: 'Cloud Native Days Norway' },
-    title: 'Cloud Native Days Norway 2026',
-    contactEmail: 'hello@cloudnativedays.no',
+    conference: {
+      logo: { title: 'Cloud Native Days Norway' },
+      title: 'Cloud Native Days Norway 2026',
+      contactEmail: 'hello@cloudnativedays.no',
+    },
   },
 } satisfies Meta<typeof WallBoardView>
 

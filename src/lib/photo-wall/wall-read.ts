@@ -1,15 +1,7 @@
 import 'server-only'
-import { clientReadUncached, sanityImage } from '@/lib/sanity/client'
+import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { cropSquare } from './crop'
-import { isPostingOpen } from './window'
-import {
-  WALL_PAGE_PHOTO_PX,
-  WALL_POST_LIMIT,
-  type WallData,
-  type WallPageView,
-  type WallPost,
-} from './wall'
+import { WALL_POST_LIMIT, type WallPost } from './wall'
 
 /**
  * The wall's posts (Photo Wall spec §8) on the NON-CDN client, so the cached
@@ -70,46 +62,4 @@ export async function readWallPosts(conferenceId: string): Promise<WallPost[]> {
     })
   }
   return posts
-}
-
-/** The square a polaroid shows, cut by Sanity with `rect=` (§5.1). */
-function squareSrc(post: WallPost, px: number): string {
-  const { x, y, size } = cropSquare(
-    post.photo.width,
-    post.photo.height,
-    post.crop,
-  )
-  return sanityImage(post.photo.url)
-    .rect(x, y, size, size)
-    .width(px)
-    .height(px)
-    .auto('format')
-    .url()
-}
-
-/**
- * The Wall page's view of the cached wall at `now`. A closed wall shows
- * nothing but that it closed (§9.1).
- */
-export function wallPageView(
-  { wall, posts }: WallData,
-  conference: { startDate?: string | null; endDate?: string | null },
-  now: Date,
-): WallPageView {
-  const closed = wall.closedAt !== null
-  return {
-    closed,
-    postingOpen: isPostingOpen(wall, conference, now),
-    sponsorStrip: wall.sponsorStrip,
-    posts: closed
-      ? []
-      : posts.map((post) => ({
-          _id: post._id,
-          src: squareSrc(post, WALL_PAGE_PHOTO_PX),
-          crop: post.crop,
-          caption: post.caption,
-          name: post.name,
-          approvedAt: post.approvedAt,
-        })),
-  }
 }

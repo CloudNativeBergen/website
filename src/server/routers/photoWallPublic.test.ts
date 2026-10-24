@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  *
- * The public `wall` router (Photo Wall spec §8, §9.1) through the tRPC
+ * The public `photoWallPublic` router (Photo Wall spec §8, §9.1) through the tRPC
  * caller, with no session, on the versioned in-memory store: GROQ is
  * EXECUTED with groq-js and the photo URLs come from the REAL
  * `@sanity/image-url`. Only the cache directives are replaced.
@@ -69,7 +69,7 @@ vi.mock('@/lib/conference/sanity', () => ({
 import { initTRPC } from '@trpc/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { Context } from '@/server/trpc'
-import { wallRouter } from './wall'
+import { photoWallPublicRouter } from './photoWallPublic'
 
 type Doc = Record<string, unknown> & { _id: string }
 const store = () => h.store!
@@ -77,7 +77,7 @@ const store = () => h.store!
 const t = initTRPC.context<Context>().create()
 /** An anonymous visitor: the Wall page has no sign-in. */
 const visitor = () =>
-  t.createCallerFactory(wallRouter)({
+  t.createCallerFactory(photoWallPublicRouter)({
     req: { headers: new Headers(), url: 'http://localhost:3000' },
     session: null,
     speaker: null,
@@ -154,7 +154,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 
-describe('wall.get (§8, §9.1)', () => {
+describe('photoWallPublic.get (§8, §9.1)', () => {
   it('answers an approved post with its square photo, caption and name, and nothing private', async () => {
     store().reset([
       wallOf('conf-A'),
@@ -169,17 +169,14 @@ describe('wall.get (§8, §9.1)', () => {
     await expect(visitor().get()).resolves.toEqual({
       closed: false,
       postingOpen: true,
-      sponsorStrip: false,
       posts: [
         {
           _id: 'wallPost-a1',
           // The short-edge square (1000 px) 20% of the way along the
           // 600 px of slack: x = 120. About 600 px wide on a phone (§5.1).
           src: 'https://cdn.sanity.io/images/test/test/shaa1-1600x1000.jpg?rect=120,0,1000,1000&w=600&h=600&auto=format',
-          crop: { x: 0.2, y: 0.5 },
           caption: 'Keynote crowd',
           name: 'Ada',
-          approvedAt: '2026-10-26T07:40:00Z',
         },
       ],
     })
@@ -206,7 +203,6 @@ describe('wall.get (§8, §9.1)', () => {
       ...withPhoto(postOf('conf-A', 'c1', { crop: undefined })),
     ])
     const { posts } = await visitor().get()
-    expect(posts[0].crop).toEqual({ x: 0.5, y: 0.5 })
     expect(posts[0].src).toContain('rect=300,0,1000,1000')
   })
 
@@ -315,11 +311,6 @@ describe('wall.get (§8, §9.1)', () => {
     expect(await visitor().get()).toMatchObject({ postingOpen: false })
   })
 
-  it('carries the sponsor strip switch to the screens (§9.4)', async () => {
-    store().reset([wallOf('conf-A', { sponsorStrip: true })])
-    expect(await visitor().get()).toMatchObject({ sponsorStrip: true })
-  })
-
   it('answers no post once the wall has closed (§9.1, §11.1)', async () => {
     store().reset([
       wallOf('conf-A', { closedAt: '2026-11-26T03:00:00Z' }),
@@ -328,7 +319,6 @@ describe('wall.get (§8, §9.1)', () => {
     await expect(visitor().get()).resolves.toEqual({
       closed: true,
       postingOpen: false,
-      sponsorStrip: false,
       posts: [],
     })
   })

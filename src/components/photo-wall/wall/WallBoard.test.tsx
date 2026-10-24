@@ -18,7 +18,7 @@ import type { WallPagePost, WallPageView } from '@/lib/photo-wall/wall'
 
 const h = vi.hoisted(() => ({ useQuery: vi.fn() }))
 vi.mock('@/lib/trpc/client', () => ({
-  api: { wall: { get: { useQuery: h.useQuery } } },
+  api: { photoWallPublic: { get: { useQuery: h.useQuery } } },
 }))
 
 import { WallBoard, WallBoardView } from './WallBoard'
@@ -55,16 +55,13 @@ const post = (
 ): WallPagePost => ({
   _id,
   src: sanity(_id),
-  crop: { x: 0.5, y: 0.5 },
   caption: null,
   name: null,
-  approvedAt: '2026-10-26T07:40:00Z',
   ...fields,
 })
 const view = (fields: Partial<WallPageView> = {}): WallPageView => ({
   closed: false,
   postingOpen: true,
-  sponsorStrip: false,
   posts: [],
   ...fields,
 })
@@ -172,9 +169,11 @@ const renderView = (v: WallPageView, contactEmail = 'hello@example.no') =>
   render(
     <WallBoardView
       view={v}
-      logo={LOGO}
-      title="Cloud Native Days Norway 2026"
-      contactEmail={contactEmail}
+      conference={{
+        logo: LOGO,
+        title: 'Cloud Native Days Norway 2026',
+        contactEmail,
+      }}
     />,
   )
 const addLink = () => screen.queryByRole('link', { name: /Add your photo/ })
@@ -275,16 +274,18 @@ describe('WallBoardView (§9.1)', () => {
 })
 
 describe('WallBoard, connected', () => {
-  it('polls wall.get from the server’s first answer, visible-only and with no idle stop', () => {
+  it('polls photoWallPublic.get from the server’s first answer, visible-only and with no idle stop', () => {
     const initial = view({ posts: [post('wallPost-1')] })
     const polled = view({ posts: [post('wallPost-2'), post('wallPost-1')] })
     h.useQuery.mockReturnValue({ data: polled })
     render(
       <WallBoard
         initial={initial}
-        logo={LOGO}
-        title="CND"
-        contactEmail="hello@example.no"
+        conference={{
+          logo: LOGO,
+          title: 'CND',
+          contactEmail: 'hello@example.no',
+        }}
       />,
     )
     expect(h.useQuery).toHaveBeenCalledWith(undefined, {

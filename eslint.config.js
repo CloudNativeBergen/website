@@ -197,7 +197,7 @@ const eslintConfig = [
 
   // A Wall Post photo is a plain `<img>` of its Sanity URL (Photo Wall spec
   // §5.1, §14): `next/image` would keep serving a removed or deleted photo
-  // from `/_next/image` for hours. `eslint-rules/photo-wall-no-next-image.test.ts`
+  // from `/_next/image` for hours. `src/components/photo-wall/no-next-image.test.ts`
   // proves the rule against this config.
   {
     files: ['src/components/photo-wall/**', 'src/app/(public)/wall/**'],

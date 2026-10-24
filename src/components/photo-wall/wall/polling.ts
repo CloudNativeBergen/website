@@ -4,13 +4,13 @@
  *
  * NOT `useIdlePolling()`: that hook stops after five minutes without a
  * pointer, key or scroll event, and a phone left open on the wall makes
- * none. What keeps this affordable: `wall.get` reads the CACHED tenant and
+ * none. What keeps this affordable: `photoWallPublic.get` reads the CACHED tenant and
  * the cached wall, so a poll on a warm cache asks Sanity for nothing.
  */
 
 export const WALL_POLL_MS = 10_000
 
-/** React Query options for `api.wall.get.useQuery`. */
+/** React Query options for `api.photoWallPublic.get.useQuery`. */
 export const wallPolling = {
   // A plain number: React Query skips each tick while the page is hidden
   // (`refetchIntervalInBackground` is off by default) and the timer keeps
