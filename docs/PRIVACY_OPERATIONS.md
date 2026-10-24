@@ -167,8 +167,9 @@ asks the organizers (Photo Wall spec §12). Find the post on
 `/admin/photo-wall` from the description (photo, caption, name) and press
 **Delete now**: it removes the post and its photo asset. Posts carry no name,
 email or account, so there is no identity to verify beyond the description.
-Until **Delete now** ships (M4b), delete the `wallPost` document and then its
-image asset in Sanity Studio.
+Until **Delete now** ships (M4b), delete the `wallPost` document, then its
+image asset (`photo.asset._ref`), with `npx sanity documents delete <id>`
+(Studio shows Wall Posts read-only).
 
 ---
 
