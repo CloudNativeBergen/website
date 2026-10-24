@@ -43,7 +43,8 @@ export async function getWall(conferenceId: string): Promise<WallData | null> {
   cacheTag(photoWallTag(conferenceId))
   const wall = await readPhotoWall(conferenceId)
   if (!wall) return null
-  return { wall, posts: await readWallPosts(conferenceId) }
+  // Closed by the retention cron (§11.1): no posts, and no read of them.
+  return { wall, posts: wall.closedAt ? [] : await readWallPosts(conferenceId) }
 }
 
 /**

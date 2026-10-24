@@ -30,7 +30,7 @@ export default async function ComposerPage() {
   const actions = { getMyPosts, deleteMyPost, setMyPostMarketing }
   if (!deletesOn || !isPostingOpen(wall, conference, new Date())) {
     return (
-      <ComposerClosed logo={logo}>
+      <ComposerClosed logo={logo} wallClosed={wall.closedAt !== null}>
         <MyPostsPanel {...actions} />
       </ComposerClosed>
     )

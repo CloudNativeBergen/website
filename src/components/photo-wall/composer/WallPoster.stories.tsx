@@ -351,3 +351,23 @@ export const ClosedWithMyPostsDark: Story = {
   ...ClosedWithMyPosts,
   globals: { theme: 'dark' },
 }
+
+/** Closed by the retention cron (§11.1): "This wall has closed." */
+export const WallClosed: Story = {
+  render: (args) => <ComposerClosed logo={args.logo} wallClosed />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText('This wall has closed.')).toBeVisible()
+    await expect(
+      canvas.queryByText('The wall isn’t open for photos right now.'),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.getByRole('link', { name: 'See the wall' }),
+    ).toHaveAttribute('href', '/wall')
+  },
+}
+
+export const WallClosedDark: Story = {
+  ...WallClosed,
+  globals: { theme: 'dark' },
+}
