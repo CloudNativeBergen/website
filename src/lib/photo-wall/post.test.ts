@@ -3,7 +3,9 @@
  *
  * The phone's side of Submit (Photo Wall spec §6.3, §6.5): how each answer is
  * read, and the retry of a lost response with the same `uploadId`. `send`
- * stands in for `fetch`; the request it receives is real `FormData`.
+ * stands in for the request; what it receives is real `FormData`. `xhrSend`,
+ * the real `send`, is tested last on a stand-in `XMLHttpRequest` that fires
+ * the events a browser does.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -12,6 +14,9 @@ import {
   SUBMIT_PATH,
   WallPostRefused,
   postToWall,
+  xhrSend,
+  type Send,
+  type SendInit,
   type WallPostRequest,
 } from './post'
 
@@ -41,15 +46,15 @@ const html = (status: number) =>
 
 /** A `send` answering each call with the next of `answers` (a throw is a network error). */
 function sendAnswering(...answers: (Response | Error)[]) {
-  const calls: { url: string; init: RequestInit }[] = []
-  const send = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
-    calls.push({ url: String(url), init: init ?? {} })
+  const calls: { url: string; init: SendInit }[] = []
+  const send: Send = vi.fn(async (url: string, init: SendInit) => {
+    calls.push({ url, init })
     const answer = answers.shift()
     if (!answer) throw new Error('no more answers')
     if (answer instanceof Error) throw answer
     return answer
   })
-  return { send: send as unknown as typeof fetch, calls }
+  return { send, calls }
 }
 
 const waits: number[] = []
@@ -70,7 +75,6 @@ describe('postToWall', () => {
     expect(calls).toHaveLength(1)
     const [{ url, init }] = calls
     expect(url).toBe(SUBMIT_PATH)
-    expect(init.method).toBe('POST')
     const body = init.body as FormData
     expect(
       Object.fromEntries(
@@ -192,5 +196,126 @@ describe('WallPostRefused', () => {
     expect(REFUSAL_MESSAGES.failed).toBe(
       'Something went wrong. Your photo wasn’t posted. Try again.',
     )
+  })
+})
+
+describe('postToWall: upload progress', () => {
+  it('reports each attempt’s upload progress, from 0 again on a retry', async () => {
+    const seen: number[] = []
+    let attempt = 0
+    const send: Send = async (_url, { onUploadProgress }) => {
+      attempt++
+      onUploadProgress?.(0.5)
+      if (attempt === 1) throw new TypeError('Failed to fetch')
+      onUploadProgress?.(1)
+      return json(200, { ok: true })
+    }
+    await expect(
+      postToWall(request, { send, wait, onProgress: (f) => seen.push(f) }),
+    ).resolves.toEqual({ ok: true })
+    expect(seen).toEqual([0, 0.5, 0, 0.5, 1])
+  })
+})
+
+/**
+ * A stand-in `XMLHttpRequest`: the test plays the browser, firing upload
+ * progress, then `load` with a status and body, or `error`.
+ */
+class FakeXhr {
+  static last: FakeXhr | null = null
+  method = ''
+  url = ''
+  sent: unknown = null
+  status = 0
+  responseText = ''
+  responseType = ''
+  upload: { onprogress: ((e: ProgressEvent) => void) | null } = {
+    onprogress: null,
+  }
+  onload: (() => void) | null = null
+  onerror: (() => void) | null = null
+  ontimeout: (() => void) | null = null
+  onabort: (() => void) | null = null
+  constructor() {
+    FakeXhr.last = this
+  }
+  open(method: string, url: string) {
+    this.method = method
+    this.url = url
+  }
+  send(body: unknown) {
+    this.sent = body
+  }
+  getResponseHeader(name: string) {
+    return name === 'content-type' ? 'application/json' : null
+  }
+  progress(loaded: number, total: number, lengthComputable = true) {
+    this.upload.onprogress?.({
+      loaded,
+      total,
+      lengthComputable,
+    } as ProgressEvent)
+  }
+  answer(status: number, text: string) {
+    this.status = status
+    this.responseText = text
+    this.onload?.()
+  }
+}
+
+describe('xhrSend', () => {
+  beforeEach(() => {
+    vi.stubGlobal('XMLHttpRequest', FakeXhr)
+    return () => vi.unstubAllGlobals()
+  })
+
+  it('POSTs the body and reports upload progress as a fraction', async () => {
+    const seen: number[] = []
+    const body = new FormData()
+    const pending = xhrSend(SUBMIT_PATH, {
+      body,
+      onUploadProgress: (f) => seen.push(f),
+    })
+    const xhr = FakeXhr.last!
+    expect([xhr.method, xhr.url]).toEqual(['POST', SUBMIT_PATH])
+    expect(xhr.sent).toBe(body)
+    xhr.progress(1_000, 4_000)
+    xhr.progress(5, 0, false)
+    xhr.progress(4_000, 4_000)
+    xhr.answer(200, '{"ok":true}')
+    const response = await pending
+    expect(seen).toEqual([0.25, 1])
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ ok: true })
+  })
+
+  it('answers a 413 and a 429 as responses, with their status and body', async () => {
+    const tooLarge = xhrSend(SUBMIT_PATH, { body: new FormData() })
+    FakeXhr.last!.answer(413, 'Request Entity Too Large')
+    expect((await tooLarge).status).toBe(413)
+
+    const limit = xhrSend(SUBMIT_PATH, { body: new FormData() })
+    FakeXhr.last!.answer(429, '{"ok":false,"refusal":"hourly"}')
+    const response = await limit
+    expect(response.status).toBe(429)
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      refusal: 'hourly',
+    })
+  })
+
+  it.each(['onerror', 'ontimeout', 'onabort'] as const)(
+    'rejects on %s, as a lost response',
+    async (event) => {
+      const pending = xhrSend(SUBMIT_PATH, { body: new FormData() })
+      FakeXhr.last![event]?.()
+      await expect(pending).rejects.toThrow(TypeError)
+    },
+  )
+
+  it('rejects a load with status 0 (no answer) instead of throwing', async () => {
+    const pending = xhrSend(SUBMIT_PATH, { body: new FormData() })
+    FakeXhr.last!.answer(0, '')
+    await expect(pending).rejects.toThrow(/status 0/)
   })
 })

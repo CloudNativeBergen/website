@@ -2,7 +2,8 @@
  * THE PHONE'S SIDE OF SUBMIT (Photo Wall spec §6.2, §6.3, §6.5).
  * Client-safe.
  *
- * One multipart request to `POST /wall/post/submit`. How an answer is read:
+ * One multipart request to `POST /wall/post/submit`, as an `XMLHttpRequest`
+ * for its upload progress. How an answer is read:
  *
  * - `200 { ok: true }`: the post is in.
  * - any `413`, Vercel's own included: a refusal, never a lost response.
@@ -79,17 +80,64 @@ async function jsonOf(response: Response): Promise<unknown> {
   }
 }
 
+/** What one attempt sends: the multipart body, and who hears its upload. */
+export interface SendInit {
+  body: FormData
+  /** The share of the body uploaded so far, 0–1. */
+  onUploadProgress?: (fraction: number) => void
+}
+
+/** One POST; resolves with the answer, rejects when there is none. */
+export type Send = (url: string, init: SendInit) => Promise<Response>
+
+/**
+ * The POST as an `XMLHttpRequest`: `fetch` reports no upload progress
+ * (§6.5). Same origin, so the `/wall` cookie goes with it. A network error,
+ * a timeout or an abort rejects, as `fetch` would: a lost response.
+ */
+export const xhrSend: Send = (url, { body, onUploadProgress }) =>
+  new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onUploadProgress?.(event.loaded / event.total)
+      }
+    }
+    xhr.onload = () => {
+      try {
+        resolve(
+          new Response(xhr.responseText, {
+            status: xhr.status,
+            headers: {
+              'content-type': xhr.getResponseHeader('content-type') ?? '',
+            },
+          }),
+        )
+      } catch {
+        // A status `Response` can't carry (0 and the like): no answer.
+        reject(new TypeError(`Unusable answer (status ${xhr.status})`))
+      }
+    }
+    xhr.onerror =
+      xhr.ontimeout =
+      xhr.onabort =
+        () => reject(new TypeError('Network error'))
+    xhr.send(body)
+  })
+
 /** One request, and what its answer means. */
 async function sendOnce(
   post: WallPostRequest,
-  send: typeof fetch,
+  send: Send,
+  onProgress?: (fraction: number) => void,
 ): Promise<WallPostAttempt> {
   let response: Response
   try {
+    onProgress?.(0)
     response = await send(SUBMIT_PATH, {
-      method: 'POST',
       body: submitBody(post),
-      credentials: 'same-origin',
+      onUploadProgress: onProgress,
     })
   } catch {
     return LOST
@@ -117,22 +165,26 @@ const sleep = (ms: number) =>
 /** Waits before the 2nd and 3rd attempt: venue Wi-Fi drops for seconds. */
 export const RETRY_DELAYS_MS = [1_000, 3_000]
 
+export interface PostOptions {
+  /** The upload's progress, 0–1, from 0 again on each attempt. */
+  onProgress?: (fraction: number) => void
+  send?: Send
+  wait?: (ms: number) => Promise<void>
+}
+
 /**
  * Post, retrying a lost response with the same `uploadId` (§6.5). Answers
  * the first success or refusal, or `lost` when every attempt was lost.
  */
 export async function postToWall(
   post: WallPostRequest,
-  {
-    send = (...args) => fetch(...args),
-    wait = sleep,
-  }: { send?: typeof fetch; wait?: (ms: number) => Promise<void> } = {},
+  { onProgress, send = xhrSend, wait = sleep }: PostOptions = {},
 ): Promise<WallPostAttempt> {
-  let attempt = await sendOnce(post, send)
+  let attempt = await sendOnce(post, send, onProgress)
   for (const delay of RETRY_DELAYS_MS) {
     if (!('lost' in attempt)) break
     await wait(delay)
-    attempt = await sendOnce(post, send)
+    attempt = await sendOnce(post, send, onProgress)
   }
   return attempt
 }
