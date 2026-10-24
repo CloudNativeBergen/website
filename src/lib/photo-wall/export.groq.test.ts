@@ -157,6 +157,12 @@ describe('stillExportable: the re-check before each photo', () => {
     expect([...live].sort()).toEqual(['wallPost-a1', 'wallPost-a2'])
   })
 
+  it('answers for the ids asked about only', async () => {
+    expect([...(await stillExportable('conf-A', ['wallPost-a1']))]).toEqual([
+      'wallPost-a1',
+    ])
+  })
+
   it('sees a consent unticked since the list was read', async () => {
     const listed = (await readConsentedPhotos('conf-A')).map((p) => p._id)
     const a1 = h.dataset.find((d) => d._id === 'wallPost-a1')!

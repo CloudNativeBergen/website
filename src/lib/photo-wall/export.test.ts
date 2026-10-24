@@ -44,10 +44,20 @@ describe('isOurPhotoOriginal', () => {
   })
 
   it.each([
-    ['project id', 'NEXT_PUBLIC_SANITY_PROJECT_ID'],
-    ['dataset', 'NEXT_PUBLIC_SANITY_DATASET'],
-  ])('refuses everything without a configured %s', (_, name) => {
+    // The URL an empty project id or dataset would otherwise let through.
+    [
+      'project id',
+      'NEXT_PUBLIC_SANITY_PROJECT_ID',
+      OURS.replace('/proj/', '//'),
+    ],
+    [
+      'dataset',
+      'NEXT_PUBLIC_SANITY_DATASET',
+      OURS.replace('/production/', '//'),
+    ],
+  ])('refuses everything without a configured %s', (_, name, url) => {
     vi.stubEnv(name, '')
+    expect(isOurPhotoOriginal(url)).toBe(false)
     expect(isOurPhotoOriginal(OURS)).toBe(false)
   })
 })
