@@ -148,7 +148,7 @@ export function ModerationQueueView({
               tabIndex={selected ? 0 : -1}
               onClick={() => setTab(t)}
               onKeyDown={onKeyDown}
-              className={`inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-semibold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:focus-visible:outline-indigo-400 ${
+              className={`inline-flex min-h-10 flex-1 items-center justify-center gap-1 rounded-md px-2 text-xs font-semibold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue sm:gap-1.5 sm:px-3 sm:text-sm dark:focus-visible:outline-indigo-400 ${
                 selected
                   ? 'bg-white text-gray-900 shadow-xs ring-1 ring-gray-300 dark:bg-gray-700 dark:text-white dark:ring-gray-500'
                   : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
@@ -176,7 +176,7 @@ export function ModerationQueueView({
             {EMPTY[tab]}
           </p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {posts.map((post) => (
               <WallPostCard key={post._id} post={post} />
             ))}
