@@ -18,6 +18,7 @@ import {
 import {
   QueryClient,
   QueryClientProvider,
+  onlineManager,
   useQuery,
 } from '@tanstack/react-query'
 import type {
@@ -43,6 +44,7 @@ import { MODERATION_POLL_MS, moderationQueuePolling } from './polling'
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  onlineManager.setOnline(true)
 })
 
 /**
@@ -492,5 +494,143 @@ describe('the live pending count at the top of the page (§10)', () => {
     )
     await act(() => vi.advanceTimersByTimeAsync(6 * MODERATION_POLL_MS))
     expect(queryFn).toHaveBeenCalledTimes(1 + 6)
+  })
+})
+
+describe('the count says when it is not current (§10)', () => {
+  /**
+   * Both connected components over the real React Query with the app's
+   * defaults; `queryFn` answers each read in turn. The first read lands at
+   * 07:30Z, 08:30 in Oslo.
+   */
+  const mountPage = (queryFn: () => Promise<ModerationQueueData>) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-26T07:30:00Z'))
+    h.useQuery.mockImplementation((_input: undefined, options?: object) =>
+      useQuery({ queryKey: ['moderationQueue'], queryFn, ...options }),
+    )
+    render(
+      <QueryClientProvider client={appQueryClient()}>
+        <PendingSummary />
+        <ModerationQueue />
+      </QueryClientProvider>,
+    )
+  }
+  const live = () =>
+    screen.getByTestId('pending-summary').querySelector('[aria-live]')!
+
+  it('is current while the reads answer', async () => {
+    mountPage(async () => QUEUE)
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    await act(() => vi.advanceTimersByTimeAsync(5 * MODERATION_POLL_MS))
+    expect(live()).toHaveTextContent(/^1 photo waiting$/)
+  })
+
+  it('offline: the paused read says since when the count is old', async () => {
+    mountPage(async () => QUEUE)
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(live()).toHaveTextContent(/^1 photo waiting$/)
+    act(() => onlineManager.setOnline(false))
+    await act(() => vi.advanceTimersByTimeAsync(MODERATION_POLL_MS))
+    expect(live()).toHaveTextContent(/^1 photo waitingNot updated since 08:30$/)
+    act(() => onlineManager.setOnline(true))
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(live()).toHaveTextContent(/^1 photo waiting$/)
+  })
+
+  it('a failed read says so at the top, not only in the queue below', async () => {
+    let reads = 0
+    mountPage(async () => {
+      reads += 1
+      if (reads > 1) throw new Error('down')
+      return { posts: [] }
+    })
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(live()).toHaveTextContent(/^Nothing waiting for approval$/)
+    // The tick, its retry, and the error.
+    await act(() => vi.advanceTimersByTimeAsync(MODERATION_POLL_MS + 2_000))
+    expect(live()).toHaveTextContent(
+      /^Nothing waiting for approvalNot updated since 08:30$/,
+    )
+  })
+
+  it('a read that never answers: stale after two missed polls', async () => {
+    let reads = 0
+    mountPage(() => {
+      reads += 1
+      return reads > 1 ? new Promise<never>(() => {}) : Promise.resolve(QUEUE)
+    })
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    await act(() => vi.advanceTimersByTimeAsync(2 * MODERATION_POLL_MS))
+    expect(live()).toHaveTextContent(/^1 photo waiting$/)
+    await act(() => vi.advanceTimersByTimeAsync(MODERATION_POLL_MS))
+    expect(live()).toHaveTextContent(/^1 photo waitingNot updated since 08:30$/)
+  })
+
+  it('no count at all when the first read fails', async () => {
+    mountPage(async () => {
+      throw new Error('down')
+    })
+    await act(() => vi.advanceTimersByTimeAsync(5_000))
+    expect(live()).toHaveTextContent(
+      /^Couldn’t load the count\. Trying again…$/,
+    )
+  })
+})
+
+describe('a failed first load shows no zeros as real (§10)', () => {
+  it('no counts on the tabs and no empty-tab text without data', () => {
+    render(<ModerationQueueView failed />)
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Pending',
+      'On the wall',
+      'Not shown',
+    ])
+    expect(tab(/Pending/)).toHaveAccessibleName('Pending')
+    expect(screen.getByRole('tabpanel')).toHaveTextContent(/^$/)
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Couldn’t load the posts. Trying again…',
+    )
+  })
+})
+
+describe('the card (§10)', () => {
+  it('caps a tall photo at 70vh and keeps the outline on the photo box', () => {
+    render(
+      <ModerationQueueView
+        queue={{
+          posts: [
+            post({
+              _id: 'wallPost-tall',
+              photo: photo(
+                'https://cdn.sanity.io/images/p/d/t-320x2048.jpg',
+                320,
+                2048,
+              ),
+              crop: { x: 0.5, y: 1 },
+            }),
+          ],
+        }}
+      />,
+    )
+    const box = screen.getByTestId('photo-box')
+    expect(box.style.width).toMatch(/^min\(100%, 70vh ?\* ?0\.15625\)$/)
+    expect(box.style.aspectRatio).toBe('320 / 2048')
+    // The outline and the photo are inside the capped box, not its frame.
+    expect(box).toContainElement(screen.getByTestId('crop-outline'))
+    expect(box).toContainElement(screen.getByRole('img'))
+    expect(screen.getByTestId('crop-outline').style.top).toBe('84.375%')
+  })
+
+  it('lets a caption and a name in any script set their own direction', () => {
+    render(
+      <ModerationQueueView
+        queue={{
+          posts: [post({ _id: 'wallPost-rtl', caption: 'شكرا', name: 'سارة' })],
+        }}
+      />,
+    )
+    expect(screen.getByText('شكرا')).toHaveAttribute('dir', 'auto')
+    expect(screen.getByText('سارة')).toHaveAttribute('dir', 'auto')
   })
 })

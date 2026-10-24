@@ -22,6 +22,17 @@ const PORTRAIT = {
   width: 1200,
   height: 1600,
 }
+/** The extremes a phone can send: 1:6.4 and 6.4:1. */
+const TALL = {
+  url: '/storybook-fixtures/wall-tall.jpg',
+  width: 320,
+  height: 2048,
+}
+const PANORAMA = {
+  url: '/storybook-fixtures/wall-panorama.jpg',
+  width: 2048,
+  height: 320,
+}
 
 let n = 0
 const post = (fields: Partial<ModerationPost>): ModerationPost => ({
@@ -217,6 +228,50 @@ export const LongText: Story = {
   parameters: PHONE,
 }
 
+/**
+ * A 320×2048 photo stays within 70 % of the viewport's height, and a
+ * 2048×320 panorama sits centred in its frame; each outline stays on its
+ * photo.
+ */
+export const ExtremeShapes: Story = {
+  args: {
+    queue: {
+      posts: [
+        post({
+          photo: TALL,
+          crop: { x: 0.5, y: 0.2 },
+          caption: 'Tall one',
+          submittedAt: '2026-10-26T07:31:00Z',
+        }),
+        post({
+          photo: PANORAMA,
+          crop: { x: 0.8, y: 0.5 },
+          caption: 'Panorama',
+          submittedAt: '2026-10-26T07:32:00Z',
+        }),
+      ],
+    },
+  },
+  parameters: PHONE,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const tall = within(canvas.getByRole('article', { name: 'Tall one' }))
+    const box = tall.getByTestId('photo-box').getBoundingClientRect()
+    await expect(box.height).toBeLessThanOrEqual(window.innerHeight * 0.7 + 1)
+    // The rendered photo is the box: the outline is placed on the photo.
+    const img = tall.getByRole('img').getBoundingClientRect()
+    await expect(Math.abs(img.width - box.width)).toBeLessThan(1)
+    await expect(Math.abs(img.height - box.height)).toBeLessThan(1)
+    const outline = tall.getByTestId('crop-outline').getBoundingClientRect()
+    await expect(Math.abs(outline.width - box.width)).toBeLessThan(1)
+    await expect(Math.abs(outline.height - box.width)).toBeLessThan(1)
+  },
+}
+export const ExtremeShapesDark: Story = {
+  ...ExtremeShapes,
+  globals: { theme: 'dark' },
+}
+
 export const Empty: Story = {
   args: { queue: EMPTY },
   play: async ({ canvasElement }) => {
@@ -367,5 +422,48 @@ export const Polled: StoryObj<typeof ModerationQueue> = {
       await canvas.findByText('3 photos waiting', {}, { timeout: 5000 }),
     ).toBeVisible()
     await expect(canvas.getAllByRole('article')).toHaveLength(3)
+  },
+}
+
+/** The last read failed or the phone is offline: the count says since when. */
+export const InThePageNotCurrent: StoryObj<typeof PhotoWallAdmin> = {
+  render: (args) => <PhotoWallAdmin {...args} />,
+  args: {
+    view: VIEW,
+    conferenceTitle: 'Cloud Native Days Norway 2026',
+    onSetUp: fn(),
+    onChange: fn(),
+    summary: (
+      <PendingSummaryView pending={0} staleSince="2026-10-26T09:42:00Z" />
+    ),
+    queue: <ModerationQueueView queue={EMPTY} failed />,
+  },
+  parameters: PHONE,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByTestId('pending-summary')).toHaveTextContent(
+      'Nothing waiting for approvalNot updated since 10:42',
+    )
+  },
+}
+export const InThePageNotCurrentDark: StoryObj<typeof PhotoWallAdmin> = {
+  ...InThePageNotCurrent,
+  globals: { theme: 'dark' },
+}
+/** The first read failed: no count, and no zeros in the tabs. */
+export const InThePageFirstLoadFailed: StoryObj<typeof PhotoWallAdmin> = {
+  ...InThePageNotCurrent,
+  args: {
+    ...InThePageNotCurrent.args!,
+    summary: <PendingSummaryView failed />,
+    queue: <ModerationQueueView failed />,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByTestId('pending-summary')).toHaveTextContent(
+      'Couldn’t load the count. Trying again…',
+    )
+    await expect(canvas.getByRole('tab', { name: 'Pending' })).toBeVisible()
+    await expect(canvas.getByRole('tabpanel')).toHaveTextContent(/^$/)
   },
 }

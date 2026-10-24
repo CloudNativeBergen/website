@@ -36,13 +36,19 @@ export function WallPostCard({ post }: { post: ModerationPost }) {
           </p>
         )}
         {post.caption && (
-          <p className="text-sm wrap-anywhere text-gray-900 dark:text-white">
+          <p
+            dir="auto"
+            className="text-sm wrap-anywhere text-gray-900 dark:text-white"
+          >
             {post.caption}
           </p>
         )}
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
           {post.name && (
-            <span className="font-medium wrap-anywhere text-gray-900 dark:text-gray-200">
+            <span
+              dir="auto"
+              className="font-medium wrap-anywhere text-gray-900 dark:text-gray-200"
+            >
               {post.name}
             </span>
           )}
@@ -65,11 +71,17 @@ export function WallPostCard({ post }: { post: ModerationPost }) {
 
 const pct = (fraction: number) => `${fraction * 100}%`
 
+/** A tall photo is shown no taller than this share of the viewport. */
+const MAX_PHOTO_VH = 70
+
 /**
  * The whole photo as a plain `<img>` of its Sanity URL (§5.1): never
- * `next/image`, whose optimizer would keep serving a deleted photo. The box
- * reserves the photo's aspect ratio before it loads, so the outline, placed
- * in percentages of the box, sits right from the first paint.
+ * `next/image`, whose optimizer would keep serving a deleted photo. The inner
+ * box IS the rendered photo: its aspect ratio reserved before the photo
+ * loads, its width capped so a tall portrait stays within
+ * {@link MAX_PHOTO_VH}vh. The outline, in percentages of that box, sits on
+ * the photo whatever its shape; a thin panorama sits centred in a frame of
+ * at least 8rem.
  */
 function Photo({
   photo,
@@ -82,31 +94,37 @@ function Photo({
 }) {
   const box = cropOutline(photo, crop)
   return (
-    <div
-      className="relative overflow-hidden bg-gray-100 dark:bg-gray-900"
-      style={{ aspectRatio: `${photo.width} / ${photo.height}` }}
-    >
-      <img
-        src={photo.url}
-        alt={name ? `Photo by ${name}` : 'Posted photo'}
-        width={photo.width}
-        height={photo.height}
-        loading="lazy"
-        decoding="async"
-        className="block size-full object-contain"
-      />
-      {/* The square the wall shows; what lies outside it is dimmed. */}
+    <div className="flex min-h-32 items-center justify-center bg-gray-100 dark:bg-gray-900">
       <div
-        data-testid="crop-outline"
-        aria-hidden="true"
-        className="pointer-events-none absolute shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] outline-2 -outline-offset-2 outline-white/90"
+        data-testid="photo-box"
+        className="relative overflow-hidden"
         style={{
-          left: pct(box.left),
-          top: pct(box.top),
-          width: pct(box.width),
-          height: pct(box.height),
+          aspectRatio: `${photo.width} / ${photo.height}`,
+          width: `min(100%, ${MAX_PHOTO_VH}vh * ${photo.width / photo.height})`,
         }}
-      />
+      >
+        <img
+          src={photo.url}
+          alt={name ? `Photo by ${name}` : 'Posted photo'}
+          width={photo.width}
+          height={photo.height}
+          loading="lazy"
+          decoding="async"
+          className="block size-full object-contain"
+        />
+        {/* The square the wall shows; what lies outside it is dimmed. */}
+        <div
+          data-testid="crop-outline"
+          aria-hidden="true"
+          className="pointer-events-none absolute shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] outline-2 -outline-offset-2 outline-white/90"
+          style={{
+            left: pct(box.left),
+            top: pct(box.top),
+            width: pct(box.width),
+            height: pct(box.height),
+          }}
+        />
+      </div>
     </div>
   )
 }

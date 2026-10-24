@@ -138,7 +138,12 @@ export function ModerationQueueView({
               id={tabId(t)}
               aria-selected={selected}
               aria-controls={panelId}
-              aria-label={`${MODERATION_TAB_LABELS[t]} (${counts[t]})`}
+              // No counts without data: a failed first load is not zero.
+              aria-label={
+                queue
+                  ? `${MODERATION_TAB_LABELS[t]} (${counts[t]})`
+                  : MODERATION_TAB_LABELS[t]
+              }
               tabIndex={selected ? 0 : -1}
               onClick={() => setTab(t)}
               onKeyDown={onKeyDown}
@@ -149,22 +154,26 @@ export function ModerationQueueView({
               }`}
             >
               {MODERATION_TAB_LABELS[t]}
-              <span
-                className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${
-                  selected
-                    ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
-                    : 'bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                }`}
-              >
-                {counts[t]}
-              </span>
+              {queue && (
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${
+                    selected
+                      ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
+                      : 'bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                  }`}
+                >
+                  {counts[t]}
+                </span>
+              )}
             </button>
           )
         })}
       </div>
       <div role="tabpanel" id={panelId} aria-labelledby={tabId(tab)}>
-        {!queue && loading ? (
-          <Skeleton />
+        {!queue ? (
+          // No data: the skeleton while the first read is on its way, else
+          // nothing (the alert above says why); never an empty-tab text.
+          loading && <Skeleton />
         ) : posts.length === 0 ? (
           <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600 dark:border-gray-600 dark:text-gray-400">
             {EMPTY[tab]}
