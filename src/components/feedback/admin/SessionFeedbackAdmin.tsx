@@ -320,7 +320,12 @@ export function SessionFeedbackAdmin({
         description="What attendees thought of each session: scanned answers and Card Counts together."
         contextHighlight={conferenceTitle}
         stats={[
-          { value: totals.total, label: 'Responses', color: 'blue' },
+          {
+            value: totals.total,
+            label: 'Responses',
+            color: 'blue',
+            subtitle: `${overview.comments} comments`,
+          },
           {
             value:
               totals.lovedItPercent === null
