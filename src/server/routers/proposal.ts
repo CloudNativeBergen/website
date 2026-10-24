@@ -1,3 +1,5 @@
+import { revalidateTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { expireFeedbackCodeIndex } from '@/lib/feedback/server'
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
@@ -1715,6 +1717,10 @@ export const proposalRouter = router({
           proposal.status === Status.confirmed || status === Status.confirmed
         if (talkConferenceId && touchesConfirmed) {
           expireFeedbackCodeIndex(talkConferenceId)
+        }
+        // Cached speaker lists (e.g. /admin/speakers) show talk status.
+        if (talkConferenceId) {
+          revalidateTag(conferenceTag(talkConferenceId), 'default')
         }
 
         // Publish status change event for notifications

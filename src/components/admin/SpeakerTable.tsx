@@ -657,7 +657,10 @@ export function SpeakerTable({
         .map((proposal) => (
           <ActionMenuItem
             key={proposal._id}
-            onClick={() => setProposalToCancel(proposal)}
+            // The table's proposals carry no speakers; name the row's speaker.
+            onClick={() =>
+              setProposalToCancel({ ...proposal, speakers: [speaker] })
+            }
             icon={NoSymbolIcon}
           >
             Cancel talk: {proposal.title}
