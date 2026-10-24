@@ -9,7 +9,7 @@ import {
   type PhotoWall,
   type PhotoWallAdminView,
 } from '@/lib/photo-wall'
-import { expirePhotoWall } from '@/lib/photo-wall/cache'
+import { expirePhotoWall, getModerationQueue } from '@/lib/photo-wall/cache'
 import {
   readPhotoWall,
   setUpPhotoWall,
@@ -75,6 +75,12 @@ export const photoWallRouter = router({
   settings: adminProcedure.query(async ({ ctx }) => {
     const conference = await requestConference(ctx.orgId)
     return adminView(conference, await readPhotoWall(conference._id))
+  }),
+
+  /** Every Wall Post with its status and the pending count, polled (§8, §10). */
+  moderationQueue: adminProcedure.query(async ({ ctx }) => {
+    const conference = await requestConference(ctx.orgId)
+    return getModerationQueue(conference._id)
   }),
 
   setUp: adminProcedure.mutation(async ({ ctx }) => {

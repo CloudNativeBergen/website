@@ -247,6 +247,15 @@ export function formatFeedbackCommentTime(value: string): string {
 }
 
 /**
+ * When a Wall Post was submitted, for the organizers' moderation card (Photo
+ * Wall spec §10), e.g. "Mon 26 Oct, 10:52": the conference's time zone, a
+ * 24-hour clock, no year. The same shape as a feedback comment's time.
+ */
+export function formatWallPostTime(value: string): string {
+  return formatFeedbackCommentTime(value)
+}
+
+/**
  * A clock time in the conference's time zone, e.g. "10:50": the end of a
  * range whose start {@link formatFeedbackCommentTime} gave the day of.
  */

@@ -117,3 +117,13 @@ export function feedbackResponseTag(responseId: string): string {
 export function photoWallTag(conferenceId: string): string {
   return `photo-wall:${conferenceId}`
 }
+
+/**
+ * A conference's moderation queue as `/admin/photo-wall` polls it (Photo
+ * Wall spec §8): every Wall Post with its status and the pending count.
+ * Expire it with `{ expire: 0 }` on Submit, every moderation action, a
+ * contributor's Delete or marketing change, and the retention cron.
+ */
+export function photoWallAdminTag(conferenceId: string): string {
+  return `photo-wall-admin:${conferenceId}`
+}
