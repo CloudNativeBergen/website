@@ -1,6 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useEffect, useState } from 'react'
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
+import {
+  expect,
+  fireEvent,
+  fn,
+  userEvent,
+  waitFor,
+  within,
+} from 'storybook/test'
 import { WALL_FILTERS, type WallFilterKey } from '@/lib/photo-wall/filters'
 import {
   endsWithEoi,
@@ -320,6 +327,67 @@ export const Posts: Story = {
     await expect(markers.filter((m) => m >= 0xe1 && m <= 0xef)).toEqual([])
     await expect(markers).not.toContain(0xfe)
     await expect(sofSize(bytes)).toEqual({ width: 1200, height: 1600 })
+  },
+}
+
+/**
+ * A transparent PNG (a screenshot, a sticker) comes out on white, as the
+ * preview shows it: JPEG has no transparency and would otherwise turn every
+ * transparent pixel black in the upload only.
+ */
+export const TransparentPhoto: Story = {
+  play: async ({ canvasElement, args }) => {
+    const drawn = document.createElement('canvas')
+    drawn.width = 640
+    drawn.height = 640
+    const ctx = drawn.getContext('2d')
+    if (!ctx) throw new Error('No 2D canvas context')
+    ctx.fillStyle = '#000'
+    ctx.fillRect(220, 220, 200, 200)
+    const png = await new Promise<Blob | null>((resolve) =>
+      drawn.toBlob(resolve, 'image/png'),
+    )
+    if (!png) throw new Error('No PNG')
+    const canvas = await pickPhoto(
+      canvasElement,
+      new File([png], 'sticker.png', { type: 'image/png' }),
+    )
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Post to the wall' }),
+    )
+    await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(1), {
+      timeout: 10_000,
+    })
+    const draft = (
+      args.onSubmit as ReturnType<typeof fn<WallComposerProps['onSubmit']>>
+    ).mock.calls[0][0] as WallPostDraft
+    const uploaded = await createImageBitmap(draft.photo)
+    const read = document.createElement('canvas')
+    read.width = uploaded.width
+    read.height = uploaded.height
+    const readCtx = read.getContext('2d')
+    if (!readCtx) throw new Error('No 2D canvas context')
+    readCtx.drawImage(uploaded, 0, 0)
+    const [r, g, b] = readCtx.getImageData(5, 5, 1, 1).data
+    await expect(Math.min(r, g, b)).toBeGreaterThan(240)
+  },
+}
+
+/**
+ * Enter confirming an IME candidate (Japanese, Chinese) stays in the caption;
+ * only a plain Enter moves on to the name.
+ */
+export const CaptionImeEnter: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = await pickFixture(canvasElement)
+    const caption = canvas.getByLabelText('Caption')
+    caption.focus()
+    fireEvent.keyDown(caption, { key: 'Enter', isComposing: true })
+    await expect(caption).toHaveFocus()
+    fireEvent.keyDown(caption, { key: 'Enter', keyCode: 229 })
+    await expect(caption).toHaveFocus()
+    fireEvent.keyDown(caption, { key: 'Enter' })
+    await expect(canvas.getByLabelText('Your name (optional)')).toHaveFocus()
   },
 }
 
