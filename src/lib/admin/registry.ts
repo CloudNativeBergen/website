@@ -83,11 +83,12 @@ export interface AdminDestination extends AdminDestinationFeature {
  * A count an admin nav entry can show, fetched by the admin shell
  * (`AdminLayout`) and placed by {@link withNavBadges}.
  */
-export type AdminNavCount = 'flaggedFeedback'
+export type AdminNavCount = 'flaggedFeedback' | 'pendingWallPosts'
 
 /** What each count counts, for a screen reader and the rail's tooltip. */
 const NAV_COUNT_LABELS: Record<AdminNavCount, string> = {
   flaggedFeedback: 'flagged',
+  pendingWallPosts: 'pending',
 }
 
 interface AdminNavEntry extends NavigationItem, AdminDestinationFeature {
@@ -188,11 +189,12 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         keywords: ['partners', 'companies', 'sponsorship'],
       },
       {
-        // No badge yet: the pending count on it is slice P6 (Photo Wall
+        // With the count of Wall Posts waiting for approval (Photo Wall
         // spec §10).
         name: 'Photo Wall',
         href: '/admin/photo-wall',
         icon: PhotoIcon,
+        count: 'pendingWallPosts',
         keywords: ['photos', 'wall', 'screen', 'attendees', 'qr', 'moderation'],
       },
       {

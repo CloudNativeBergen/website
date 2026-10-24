@@ -323,3 +323,47 @@ describe('nav badges (speaker feedback spec §10.1)', () => {
     expect(feedbackEntry(ADMIN_NAV_SECTIONS)?.badge).toBeUndefined()
   })
 })
+
+describe('Photo Wall nav badge (Photo Wall spec §10, P6)', () => {
+  const entry = (sections: ReturnType<typeof withNavBadges>, href: string) =>
+    sections.flatMap((s) => s.items).find((item) => item.href === href)
+
+  it('puts the pending count on Photo Wall, labelled for a screen reader', () => {
+    const sections = withNavBadges(visibleNavSections([]), {
+      pendingWallPosts: 4,
+    })
+    expect(entry(sections, '/admin/photo-wall')?.badge).toEqual({
+      count: 4,
+      label: 'pending',
+    })
+    expect(
+      sections.flatMap((s) => s.items).filter((item) => item.badge),
+    ).toHaveLength(1)
+  })
+
+  it('keeps each count on its own entry', () => {
+    const sections = withNavBadges(visibleNavSections([]), {
+      flaggedFeedback: 3,
+      pendingWallPosts: 4,
+    })
+    expect(entry(sections, '/admin/feedback')?.badge).toEqual({
+      count: 3,
+      label: 'flagged',
+    })
+    expect(entry(sections, '/admin/photo-wall')?.badge).toEqual({
+      count: 4,
+      label: 'pending',
+    })
+  })
+
+  it('shows no badge for 0 or a count that did not arrive', () => {
+    for (const counts of [{ pendingWallPosts: 0 }, {}]) {
+      expect(
+        entry(
+          withNavBadges(visibleNavSections([]), counts),
+          '/admin/photo-wall',
+        )?.badge,
+      ).toBeUndefined()
+    }
+  })
+})
