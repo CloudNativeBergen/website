@@ -84,6 +84,7 @@ const mockInvitation = {
   _id: 'inv-1',
   invitedEmail: 'invited@test.com',
   status: 'pending',
+  conference: { _id: 'conf-1' },
   proposal: {
     _id: 'proposal-1',
     title: 'Test Proposal',
@@ -463,7 +464,12 @@ describe('proposal.invitation router', () => {
     })
 
     it('sends the inviter an in-app decline notification', async () => {
-      vi.mocked(getInvitationByToken).mockResolvedValue(mockInvitation as any)
+      // A prior edition on the same domain: the row follows the invitation's
+      // conference, not the request host's.
+      vi.mocked(getInvitationByToken).mockResolvedValue({
+        ...mockInvitation,
+        conference: { _id: 'conf-previous-edition' },
+      } as any)
 
       const caller = createCaller(invitedSpeaker)
       await caller.proposal.invitation.respond({
@@ -476,6 +482,7 @@ describe('proposal.invitation router', () => {
       const notifyItems = vi.mocked(createNotifications).mock.calls[0][0]
       expect(notifyItems[0]).toMatchObject({
         recipientId: regularSpeaker._id,
+        conferenceId: 'conf-previous-edition',
         notificationType: 'cospeaker_response',
         title: `${invitedSpeaker.name} declined your co-speaker invitation for "Test Proposal"`,
         actorId: invitedSpeaker._id,
