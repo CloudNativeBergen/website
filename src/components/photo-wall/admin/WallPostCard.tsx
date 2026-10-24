@@ -8,7 +8,7 @@ import {
   type ModerationPost,
   type WallPostCrop,
 } from '@/lib/photo-wall'
-import { formatWallPostTime } from '@/lib/time'
+import { formatConferenceDayTime } from '@/lib/time'
 
 /**
  * One Wall Post on `/admin/photo-wall` (Photo Wall spec §10): the whole
@@ -17,11 +17,11 @@ import { formatWallPostTime } from '@/lib/time'
  * and says the delete did not finish (§12). No actions yet: slice M4b.
  */
 export function WallPostCard({ post }: { post: ModerationPost }) {
-  const label =
-    post.caption ?? (post.name ? `Photo by ${post.name}` : 'Wall Post')
   return (
+    // Named by its caption; without one the photo's "Photo by …" says who,
+    // and the card does not repeat it.
     <article
-      aria-label={label}
+      aria-label={post.caption ?? undefined}
       className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
     >
       {post.photo ? (
@@ -36,19 +36,19 @@ export function WallPostCard({ post }: { post: ModerationPost }) {
           </p>
         )}
         {post.caption && (
-          <p className="text-sm [overflow-wrap:anywhere] text-gray-900 dark:text-white">
+          <p className="text-sm wrap-anywhere text-gray-900 dark:text-white">
             {post.caption}
           </p>
         )}
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
           {post.name && (
-            <span className="font-medium [overflow-wrap:anywhere] text-gray-900 dark:text-gray-200">
+            <span className="font-medium wrap-anywhere text-gray-900 dark:text-gray-200">
               {post.name}
             </span>
           )}
           {post.submittedAt && (
             <time dateTime={post.submittedAt}>
-              {formatWallPostTime(post.submittedAt)}
+              {formatConferenceDayTime(post.submittedAt)}
             </time>
           )}
           {post.marketingConsent && (
@@ -113,7 +113,7 @@ function Photo({
 
 function NoPhoto() {
   return (
-    <div className="flex aspect-[4/3] items-center justify-center bg-gray-100 text-gray-400 dark:bg-gray-900 dark:text-gray-600">
+    <div className="flex aspect-4/3 items-center justify-center bg-gray-100 text-gray-400 dark:bg-gray-900 dark:text-gray-600">
       <PhotoIcon className="size-10" aria-hidden="true" />
       <span className="sr-only">No photo</span>
     </div>

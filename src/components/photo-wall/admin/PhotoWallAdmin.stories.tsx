@@ -243,7 +243,7 @@ const TRPC = '/api/trpc/photoWall'
 const trpc = (data: unknown) => HttpResponse.json({ result: { data } })
 /** The queue the page polls once the wall is set up (M4a); its own stories show it filled. */
 const emptyQueue = http.get(`${TRPC}.moderationQueue`, () =>
-  trpc({ posts: [], pendingCount: 0 }),
+  trpc({ posts: [] }),
 )
 let served: PhotoWallAdminView = view(null)
 const updates: unknown[] = []

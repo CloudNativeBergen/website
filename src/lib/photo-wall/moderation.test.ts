@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  countByTab,
   cropOutline,
   postsInTab,
   tabOf,
@@ -35,13 +36,7 @@ describe('cropOutline: the square crop on the whole photo (§4.2)', () => {
     ).toEqual({ left: 0, top: 0, width: 1, height: 1 })
   })
 
-  it('a missing crop reads as centred, and a value out of 0–1 is clamped', () => {
-    expect(cropOutline({ width: 1600, height: 1000 }, null)).toEqual({
-      left: 0.1875,
-      top: 0,
-      width: 0.625,
-      height: 1,
-    })
+  it('a value out of 0–1 is clamped', () => {
     expect(cropOutline({ width: 1600, height: 1000 }, { x: 7, y: -3 })).toEqual(
       { left: 0.375, top: 0, width: 0.625, height: 1 },
     )
@@ -122,6 +117,22 @@ describe('the tabs (§10, §12)', () => {
       'old-decision',
       'deleting',
     ])
+  })
+
+  it('counts each tab, a deleting post in Not shown and never Pending', () => {
+    const posts = [
+      post('p1', 'pending'),
+      post('p2', 'pending'),
+      post('a', 'approved'),
+      post('n', 'notShown'),
+      post('d', 'deleting'),
+    ]
+    expect(countByTab(posts)).toEqual({
+      pending: 2,
+      onTheWall: 1,
+      notShown: 2,
+    })
+    expect(countByTab([])).toEqual({ pending: 0, onTheWall: 0, notShown: 0 })
   })
 
   it('leaves the given list alone', () => {

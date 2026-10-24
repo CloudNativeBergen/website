@@ -4,7 +4,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import {
   WALL_POST_STATUSES,
   type ModerationPost,
-  type ModerationQueue,
+  type ModerationQueueData,
   type WallPostStatus,
 } from './moderation'
 
@@ -56,7 +56,7 @@ function photoOf(row: PostRow): ModerationPost['photo'] {
 /** Every Wall Post of the conference, newest submission first. */
 export async function readModerationQueue(
   conferenceId: string,
-): Promise<ModerationQueue> {
+): Promise<ModerationQueueData> {
   const rows = await scopedFetch<PostRow[]>(
     clientReadUncached,
     { conferenceId },
@@ -89,6 +89,7 @@ export async function readModerationQueue(
       _id: row._id,
       status: row.status,
       photo: photoOf(row),
+      // A missing crop is centred, here and only here.
       crop: { x: row.crop?.x ?? 0.5, y: row.crop?.y ?? 0.5 },
       caption: row.caption ?? null,
       name: row.name ?? null,
@@ -98,8 +99,5 @@ export async function readModerationQueue(
       decidedAt: row.decidedAt ?? null,
     })
   }
-  return {
-    posts,
-    pendingCount: posts.filter((p) => p.status === 'pending').length,
-  }
+  return { posts }
 }

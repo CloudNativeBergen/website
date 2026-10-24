@@ -1,12 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { expect, fn, userEvent, within } from 'storybook/test'
-import type {
-  ModerationPost,
-  ModerationQueue as Queue,
-  PhotoWallAdminView,
+import {
+  countByTab,
+  type ModerationPost,
+  type ModerationQueueData,
+  type PhotoWallAdminView,
 } from '@/lib/photo-wall'
 import { ModerationQueue, ModerationQueueView } from './ModerationQueue'
+import { PendingSummary, PendingSummaryView } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 
 /** Local fixture photos (`.storybook/main.ts` staticDirs): no network. */
@@ -93,11 +95,8 @@ const POSTS: ModerationPost[] = [
     submittedAt: '2026-10-26T07:20:00Z',
   }),
 ]
-const QUEUE: Queue = {
-  posts: POSTS,
-  pendingCount: POSTS.filter((p) => p.status === 'pending').length,
-}
-const EMPTY: Queue = { posts: [], pendingCount: 0 }
+const QUEUE: ModerationQueueData = { posts: POSTS }
+const EMPTY: ModerationQueueData = { posts: [] }
 
 const meta = {
   title: 'Systems/PhotoWall/ModerationQueue',
@@ -107,7 +106,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The moderation queue on `/admin/photo-wall` (Photo Wall spec §8, §10), slice M4a: the live pending count, the tabs **Pending**, **On the wall** and **Not shown**, and a card per Wall Post with the whole photo, the square crop the wall shows outlined, caption, name, submitted time and the Marketing OK mark. A `deleting` post sits in Not shown with no image and "Couldn’t delete. Try again." (§12). No actions yet (M4b). Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). One column on a phone, a grid on desktop. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The moderation queue on `/admin/photo-wall` (Photo Wall spec §8, §10), slice M4a: the tabs **Pending**, **On the wall** and **Not shown**, and a card per Wall Post with the whole photo, the square crop the wall shows outlined, caption, name, submitted time and the Marketing OK mark. A `deleting` post sits in Not shown with no image and "Couldn’t delete. Try again." (§12). No actions yet (M4b). Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). One column on a phone, a grid on desktop. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
@@ -122,9 +121,6 @@ const PHONE = { viewport: { defaultViewport: 'mobile1' } }
 export const Pending: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByTestId('queue-status')).toHaveTextContent(
-      '3 waiting for approval',
-    )
     await expect(
       canvas.getByRole('tab', { name: 'Pending (3)' }),
     ).toHaveAttribute('aria-selected', 'true')
@@ -216,7 +212,6 @@ export const LongText: Story = {
           crop: { x: 0.5, y: 0.3 },
         }),
       ],
-      pendingCount: 1,
     },
   },
   parameters: PHONE,
@@ -226,9 +221,6 @@ export const Empty: Story = {
   args: { queue: EMPTY },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByTestId('queue-status')).toHaveTextContent(
-      'Nothing waiting for approval',
-    )
     await expect(canvas.getByRole('tabpanel')).toHaveTextContent(
       /Nothing waiting/,
     )
@@ -272,7 +264,11 @@ const VIEW: PhotoWallAdminView = {
   links: LINKS,
 }
 
-/** The whole admin page with the queue under the settings and links. */
+/**
+ * The whole admin page: the live pending count under the header, the queue
+ * under the settings and links. Review selects the Pending tab and moves
+ * focus to it.
+ */
 export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
   render: (args) => <PhotoWallAdmin {...args} />,
   args: {
@@ -280,17 +276,51 @@ export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
     conferenceTitle: 'Cloud Native Days Norway 2026',
     onSetUp: fn(),
     onChange: fn(),
+    summary: <PendingSummaryView pending={countByTab(POSTS).pending} />,
     queue: <ModerationQueueView queue={QUEUE} />,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getByRole('region', { name: 'Settings' })).toBeVisible()
     await expect(canvas.getByRole('region', { name: 'Posts' })).toBeVisible()
+    const summary = canvas.getByTestId('pending-summary')
+    await expect(summary).toHaveTextContent('3 photos waiting')
+    await userEvent.click(canvas.getByRole('tab', { name: 'Not shown (2)' }))
+    await userEvent.click(within(summary).getByRole('link', { name: 'Review' }))
+    const pending = canvas.getByRole('tab', { name: 'Pending (3)' })
+    await expect(pending).toHaveAttribute('aria-selected', 'true')
+    await expect(pending).toHaveFocus()
   },
+}
+export const InThePageDark: StoryObj<typeof PhotoWallAdmin> = {
+  ...InThePage,
+  globals: { theme: 'dark' },
 }
 export const InThePagePhone: StoryObj<typeof PhotoWallAdmin> = {
   ...InThePage,
   parameters: PHONE,
+}
+export const InThePagePhoneDark: StoryObj<typeof PhotoWallAdmin> = {
+  ...InThePage,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+/** Nothing waiting: the count says so quietly, with no Review link. */
+export const InThePageNothingWaiting: StoryObj<typeof PhotoWallAdmin> = {
+  ...InThePage,
+  args: {
+    ...InThePage.args!,
+    summary: <PendingSummaryView pending={0} />,
+    queue: <ModerationQueueView queue={EMPTY} />,
+  },
+  parameters: PHONE,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByTestId('pending-summary')).toHaveTextContent(
+      'Nothing waiting for approval',
+    )
+    await expect(canvas.queryByRole('link', { name: 'Review' })).toBeNull()
+  },
 }
 /** Before Set up there is no queue to show. */
 export const InThePageNotSetUp: StoryObj<typeof PhotoWallAdmin> = {
@@ -300,12 +330,21 @@ export const InThePageNotSetUp: StoryObj<typeof PhotoWallAdmin> = {
     const canvas = within(canvasElement)
     await expect(canvas.queryByRole('region', { name: 'Posts' })).toBeNull()
     await expect(canvas.queryByRole('tablist')).toBeNull()
+    await expect(canvas.queryByTestId('pending-summary')).toBeNull()
   },
 }
 
-/** Connected: `photoWall.moderationQueue` mocked, polled by the real client. */
+/**
+ * Connected: `photoWall.moderationQueue` mocked, polled by the real client;
+ * the count and the queue read the one query.
+ */
 export const Polled: StoryObj<typeof ModerationQueue> = {
-  render: () => <ModerationQueue />,
+  render: () => (
+    <div className="space-y-6">
+      <PendingSummary />
+      <ModerationQueue />
+    </div>
+  ),
   parameters: {
     msw: {
       handlers: [
@@ -317,11 +356,9 @@ export const Polled: StoryObj<typeof ModerationQueue> = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByTestId('queue-status')).toHaveTextContent(
-      'Loading posts…',
-    )
+    await expect(canvas.getByText('Loading posts…')).toBeVisible()
     await expect(
-      await canvas.findByText('3 waiting for approval', {}, { timeout: 5000 }),
+      await canvas.findByText('3 photos waiting', {}, { timeout: 5000 }),
     ).toBeVisible()
     await expect(canvas.getAllByRole('article')).toHaveLength(3)
   },

@@ -1,16 +1,16 @@
 'use client'
 
-import { useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import {
   MODERATION_TABS,
   MODERATION_TAB_LABELS,
+  countByTab,
   postsInTab,
-  tabOf,
-  type ModerationQueue as Queue,
+  type ModerationQueueData,
   type ModerationTab,
 } from '@/lib/photo-wall'
 import { api } from '@/lib/trpc/client'
-import { moderationQueuePolling } from './polling'
+import { MODERATION_POLL_MS, moderationQueuePolling } from './polling'
 import { WallPostCard } from './WallPostCard'
 
 /**
@@ -33,8 +33,26 @@ export function ModerationQueue() {
   )
 }
 
+/** The queue's section; the page has one, so its ids are fixed. */
+export const MODERATION_QUEUE_ID = 'photo-wall-posts'
+const tabId = (tab: ModerationTab) => `${MODERATION_QUEUE_ID}-tab-${tab}`
+const panelId = `${MODERATION_QUEUE_ID}-panel`
+
+/**
+ * The pending count's Review link (§10): scroll to the queue and select and
+ * focus its Pending tab, as a press on that tab would.
+ */
+export function revealPendingTab() {
+  document
+    .getElementById(MODERATION_QUEUE_ID)
+    ?.scrollIntoView({ block: 'start' })
+  const pending = document.getElementById(tabId('pending'))
+  pending?.click()
+  pending?.focus({ preventScroll: true })
+}
+
 export interface ModerationQueueViewProps {
-  queue?: Queue
+  queue?: ModerationQueueData
   /** The first read is on its way. */
   loading?: boolean
   /** The last read failed; with `queue`, the one before it is still shown. */
@@ -42,8 +60,7 @@ export interface ModerationQueueViewProps {
 }
 
 const EMPTY: Record<ModerationTab, string> = {
-  pending:
-    'Nothing waiting. New posts show up here within about ten seconds of being posted.',
+  pending: `Nothing waiting. New posts show up here within about ${MODERATION_POLL_MS / 1000} seconds of being posted.`,
   onTheWall: 'Nothing on the wall yet. Approve a pending post to show it.',
   notShown: 'Nothing here. Rejected and removed posts end up here.',
 }
@@ -54,71 +71,44 @@ export function ModerationQueueView({
   failed = false,
 }: ModerationQueueViewProps) {
   const [tab, setTab] = useState<ModerationTab>('pending')
-  const base = useId()
-  const tabId = (t: ModerationTab) => `${base}-tab-${t}`
-  const panelId = `${base}-panel`
   const tabRefs = useRef<Partial<Record<ModerationTab, HTMLButtonElement>>>({})
 
-  const counts = Object.fromEntries(
-    MODERATION_TABS.map((t) => [t, 0]),
-  ) as Record<ModerationTab, number>
-  for (const post of queue?.posts ?? []) counts[tabOf(post.status)] += 1
+  const counts = countByTab(queue?.posts ?? [])
   const posts = queue ? postsInTab(queue.posts, tab) : []
 
   /** Arrow keys, Home and End move between the tabs and select (WAI-ARIA). */
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    const at = MODERATION_TABS.indexOf(tab)
-    const last = MODERATION_TABS.length - 1
-    const next =
-      event.key === 'ArrowRight'
-        ? at === last
-          ? 0
-          : at + 1
-        : event.key === 'ArrowLeft'
-          ? at === 0
-            ? last
-            : at - 1
-          : event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? last
-              : null
-    if (next === null) return
+    const move = KEY_MOVES[event.key]
+    if (!move) return
     event.preventDefault()
-    const target = MODERATION_TABS[next]
+    const target =
+      MODERATION_TABS[
+        move(MODERATION_TABS.indexOf(tab), MODERATION_TABS.length - 1)
+      ]
     setTab(target)
     tabRefs.current[target]?.focus()
   }
 
-  const status = queue
-    ? queue.pendingCount === 0
-      ? 'Nothing waiting for approval'
-      : `${queue.pendingCount} waiting for approval`
-    : loading
-      ? 'Loading posts…'
-      : ''
-
   return (
-    <section aria-labelledby={`${base}-title`} className="space-y-4">
+    <section
+      id={MODERATION_QUEUE_ID}
+      aria-labelledby={`${MODERATION_QUEUE_ID}-title`}
+      className="scroll-mt-20 space-y-4"
+    >
+      {/* The live pending count is at the top of the page (`PendingSummary`),
+          the page's one live region for it; the Pending tab shows it here. */}
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2
-          id={`${base}-title`}
+          id={`${MODERATION_QUEUE_ID}-title`}
           className="text-base font-semibold text-gray-900 dark:text-white"
         >
           Posts
         </h2>
-        {/* The live pending count (§10): a polite live region, so each poll
-            that changes it is announced without interrupting. Not
-            `role="status"`: the Settings card's "Saving…" is one, and the
-            page must keep exactly one of those for its tests and readers. */}
-        <p
-          data-testid="queue-status"
-          aria-live="polite"
-          aria-atomic="true"
-          className="text-sm font-medium text-gray-700 dark:text-gray-300"
-        >
-          {status}
-        </p>
+        {!queue && loading && (
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Loading posts…
+          </p>
+        )}
       </div>
       {failed && (
         <p
@@ -191,6 +181,15 @@ export function ModerationQueueView({
   )
 }
 
+/** Each key's next tab index, from the current one and the last (WAI-ARIA). */
+const KEY_MOVES: Partial<Record<string, (at: number, last: number) => number>> =
+  {
+    ArrowRight: (at, last) => (at === last ? 0 : at + 1),
+    ArrowLeft: (at, last) => (at === 0 ? last : at - 1),
+    Home: () => 0,
+    End: (_, last) => last,
+  }
+
 function Skeleton() {
   return (
     <div
@@ -200,7 +199,7 @@ function Skeleton() {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="aspect-[4/3] animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800"
+          className="aspect-4/3 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800"
         />
       ))}
     </div>

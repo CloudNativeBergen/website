@@ -44,9 +44,9 @@ export interface ModerationPost {
   decidedAt: string | null
 }
 
-export interface ModerationQueue {
+/** What `photoWall.moderationQueue` answers: every post of the conference. */
+export interface ModerationQueueData {
   posts: ModerationPost[]
-  pendingCount: number
 }
 
 /** The admin page's tabs (§10). */
@@ -70,6 +70,19 @@ export function tabOf(status: WallPostStatus): ModerationTab {
     case 'deleting':
       return 'notShown'
   }
+}
+
+/** How many posts each tab holds; the Pending one is the live pending count. */
+export function countByTab(
+  posts: readonly ModerationPost[],
+): Record<ModerationTab, number> {
+  const counts: Record<ModerationTab, number> = {
+    pending: 0,
+    onTheWall: 0,
+    notShown: 0,
+  }
+  for (const post of posts) counts[tabOf(post.status)] += 1
+  return counts
 }
 
 const time = (value: string | null) => (value ? Date.parse(value) : 0)
@@ -114,16 +127,16 @@ const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
 /**
  * Where the square crop sits on the whole photo (§4.2): its side is the
  * photo's short edge, and `crop` places it along the long edge as CSS
- * `object-position` would. A missing crop is centred.
+ * `object-position` would. The queue read has already centred a missing crop.
  */
 export function cropOutline(
   photo: { width: number; height: number },
-  crop: WallPostCrop | null | undefined,
+  crop: WallPostCrop,
 ): CropOutline {
   const { width, height } = photo
   const side = Math.min(width, height)
-  const x = clamp01(crop?.x ?? 0.5)
-  const y = clamp01(crop?.y ?? 0.5)
+  const x = clamp01(crop.x)
+  const y = clamp01(crop.y)
   return {
     left: (x * (width - side)) / width,
     top: (y * (height - side)) / height,

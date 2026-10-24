@@ -412,7 +412,6 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
       ),
     ])
     const queue = await organizer().moderationQueue()
-    expect(queue.pendingCount).toBe(1)
     expect(queue.posts).toHaveLength(2)
     expect(queue.posts.find((p) => p._id === 'wallPost-a1')).toEqual({
       _id: 'wallPost-a1',
@@ -443,7 +442,7 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
     expect(a2).not.toHaveProperty('deviceKey')
   })
 
-  it("neither shows nor counts another conference's post", async () => {
+  it("never shows another conference's post", async () => {
     store().reset([
       wallOf('conf-A'),
       ...withPhoto(postOf('conf-A', 'a1')),
@@ -452,10 +451,9 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
     ])
     const queue = await organizer().moderationQueue()
     expect(queue.posts.map((p) => p._id)).toEqual(['wallPost-a1'])
-    expect(queue.pendingCount).toBe(1)
   })
 
-  it('a deleting post has no photo and still counts for nothing (§12)', async () => {
+  it('a deleting post has no photo (§12)', async () => {
     store().reset([
       wallOf('conf-A'),
       postOf('conf-A', 'd1', {
@@ -474,11 +472,10 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
         caption: 'Gone soon',
       }),
     ])
-    expect(queue.pendingCount).toBe(0)
     expect(queue.posts[0]).not.toHaveProperty('deletingAssetId')
   })
 
-  it('counts the pending posts, not the others', async () => {
+  it('answers every status, the deleting post too', async () => {
     store().reset([
       wallOf('conf-A'),
       ...withPhoto(postOf('conf-A', 'p1')),
@@ -488,15 +485,22 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
       postOf('conf-A', 'p5', { status: 'deleting', photo: undefined }),
     ])
     const queue = await organizer().moderationQueue()
+    expect(queue.posts.map((p) => [p._id, p.status])).toEqual(
+      expect.arrayContaining([
+        ['wallPost-p1', 'pending'],
+        ['wallPost-p2', 'pending'],
+        ['wallPost-p3', 'approved'],
+        ['wallPost-p4', 'notShown'],
+        ['wallPost-p5', 'deleting'],
+      ]),
+    )
     expect(queue.posts).toHaveLength(5)
-    expect(queue.pendingCount).toBe(2)
   })
 
-  it('is empty, with a zero count, before any post', async () => {
+  it('is empty before any post', async () => {
     store().reset([wallOf('conf-A')])
     await expect(organizer().moderationQueue()).resolves.toEqual({
       posts: [],
-      pendingCount: 0,
     })
   })
 

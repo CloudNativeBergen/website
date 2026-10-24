@@ -1,7 +1,7 @@
 import 'server-only'
 import { cacheLife, cacheTag, revalidateTag } from 'next/cache'
 import { photoWallAdminTag, photoWallTag } from '@/lib/cache/tags'
-import type { ModerationQueue } from './moderation'
+import type { ModerationQueueData } from './moderation'
 import { readModerationQueue } from './queue'
 import { readPhotoWall } from './sanity'
 import type { PhotoWall } from './types'
@@ -23,13 +23,15 @@ export async function getPhotoWall(
 
 /**
  * The moderation queue as `/admin/photo-wall` polls it (§8), cached per
- * conference under {@link photoWallAdminTag}. Default life: freshness comes
- * from the tag, which Submit, every moderation action, a contributor's Delete
- * or marketing change, and the retention cron expire (M3b, M4b, M6, P1).
+ * conference under {@link photoWallAdminTag}. Default life: freshness is to
+ * come from the tag, but NO write expires it yet. Submit (M3b), the
+ * moderation actions (M4b), a contributor's Delete or marketing change (M6)
+ * and the retention cron (P1) add that; until then the queue refreshes on
+ * the `default` life alone.
  */
 export async function getModerationQueue(
   conferenceId: string,
-): Promise<ModerationQueue> {
+): Promise<ModerationQueueData> {
   'use cache: remote'
   cacheLife('default')
   cacheTag(photoWallAdminTag(conferenceId))

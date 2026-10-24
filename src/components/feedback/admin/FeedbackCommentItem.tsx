@@ -15,7 +15,7 @@ import type {
 } from '@/lib/feedback/admin'
 import type { RemovedCounts } from '@/lib/feedback/bulk-remove'
 import { plural } from '@/lib/text/display'
-import { formatFeedbackCommentTime } from '@/lib/time'
+import { formatConferenceDayTime } from '@/lib/time'
 import { ANSWERS } from '../answers'
 import { FEEDBACK_TONE } from '../tone'
 
@@ -310,7 +310,7 @@ export function CommentItem({
           </span>
           {comment.submittedAt && (
             <time dateTime={comment.submittedAt}>
-              {formatFeedbackCommentTime(comment.submittedAt)}
+              {formatConferenceDayTime(comment.submittedAt)}
             </time>
           )}
           {comment.hidden && (

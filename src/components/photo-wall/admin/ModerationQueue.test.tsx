@@ -20,14 +20,24 @@ import {
   QueryClientProvider,
   useQuery,
 } from '@tanstack/react-query'
-import type { ModerationPost, ModerationQueue as Queue } from '@/lib/photo-wall'
+import type {
+  ModerationPost,
+  ModerationQueueData,
+  PhotoWallAdminView,
+} from '@/lib/photo-wall'
 
 const h = vi.hoisted(() => ({ useQuery: vi.fn() }))
 vi.mock('@/lib/trpc/client', () => ({
   api: { photoWall: { moderationQueue: { useQuery: h.useQuery } } },
 }))
+// The page's QR code draws on a canvas jsdom does not have.
+vi.mock('@/components/feedback/useFeedbackQrPng', () => ({
+  useFeedbackQrPng: () => ({ failed: false }),
+}))
 
 import { ModerationQueue, ModerationQueueView } from './ModerationQueue'
+import { PendingSummary, PendingSummaryView } from './PendingSummary'
+import { PhotoWallAdmin } from './PhotoWallAdmin'
 import { MODERATION_POLL_MS, moderationQueuePolling } from './polling'
 
 afterEach(() => {
@@ -168,7 +178,7 @@ const post = (
   decidedAt: null,
   ...fields,
 })
-const QUEUE: Queue = {
+const QUEUE: ModerationQueueData = {
   posts: [
     post({
       _id: 'wallPost-1',
@@ -207,19 +217,11 @@ const QUEUE: Queue = {
       name: 'Bo',
     }),
   ],
-  pendingCount: 1,
 }
 
 const tab = (name: RegExp) => screen.getByRole('tab', { name })
 
 describe('ModerationQueueView (§10)', () => {
-  it('shows the live pending count at the top', () => {
-    render(<ModerationQueueView queue={QUEUE} />)
-    expect(screen.getByTestId('queue-status')).toHaveTextContent(
-      '1 waiting for approval',
-    )
-  })
-
   it('has the three tabs with their counts, Pending first', () => {
     render(<ModerationQueueView queue={QUEUE} />)
     const tabs = screen.getAllByRole('tab')
@@ -308,12 +310,9 @@ describe('ModerationQueueView (§10)', () => {
   })
 
   it('says what an empty tab means', () => {
-    render(<ModerationQueueView queue={{ posts: [], pendingCount: 0 }} />)
-    expect(screen.getByTestId('queue-status')).toHaveTextContent(
-      'Nothing waiting for approval',
-    )
+    render(<ModerationQueueView queue={{ posts: [] }} />)
     expect(screen.getByRole('tabpanel')).toHaveTextContent(
-      /Nothing waiting\. New posts show up here/,
+      'Nothing waiting. New posts show up here within about 10 seconds of being posted.',
     )
     fireEvent.click(tab(/On the wall/))
     expect(screen.getByRole('tabpanel')).toHaveTextContent(
@@ -340,18 +339,13 @@ describe('ModerationQueueView (§10)', () => {
 
   it('shows the loading and the failed states', () => {
     const { rerender } = render(<ModerationQueueView loading />)
-    expect(screen.getByTestId('queue-status')).toHaveTextContent(
-      'Loading posts…',
-    )
+    expect(screen.getByText('Loading posts…')).toBeInTheDocument()
     rerender(<ModerationQueueView failed />)
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Couldn’t load the posts. Trying again…',
     )
     // Stale data stays on screen while a refresh fails.
     rerender(<ModerationQueueView queue={QUEUE} failed />)
-    expect(screen.getByTestId('queue-status')).toHaveTextContent(
-      '1 waiting for approval',
-    )
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Couldn’t refresh. Trying again…',
     )
@@ -373,9 +367,7 @@ describe('ModerationQueue, connected', () => {
         refetchInterval: moderationQueuePolling.refetchInterval,
       }),
     )
-    expect(screen.getByTestId('queue-status')).toHaveTextContent(
-      '1 waiting for approval',
-    )
+    expect(tab(/Pending/)).toHaveAccessibleName('Pending (1)')
   })
 
   it('shows the loading state, then the failure', () => {
@@ -385,9 +377,7 @@ describe('ModerationQueue, connected', () => {
       isError: false,
     })
     const { rerender } = render(<ModerationQueue />)
-    expect(screen.getByTestId('queue-status')).toHaveTextContent(
-      'Loading posts…',
-    )
+    expect(screen.getByText('Loading posts…')).toBeInTheDocument()
     h.useQuery.mockReturnValue({
       data: undefined,
       isPending: false,
@@ -397,5 +387,110 @@ describe('ModerationQueue, connected', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Couldn’t load the posts',
     )
+  })
+})
+
+describe('the live pending count at the top of the page (§10)', () => {
+  const VIEW: PhotoWallAdminView = {
+    wall: {
+      _id: 'photoWall-conf-A',
+      postingMode: 'open',
+      sponsorStrip: false,
+      closedAt: null,
+    },
+    posting: 'open',
+    links: {
+      post: 'https://example.test/wall/post',
+      wall: 'https://example.test/wall',
+      screen: 'https://example.test/wall/screen',
+    },
+  }
+  const pending = (n: number): ModerationQueueData => ({
+    posts: Array.from({ length: n }, (_, i) => post({ _id: `wallPost-p${i}` })),
+  })
+  const page = (view: PhotoWallAdminView, queue: ModerationQueueData) => (
+    <PhotoWallAdmin
+      view={view}
+      onSetUp={() => {}}
+      onChange={() => {}}
+      summary={<PendingSummaryView pending={queue.posts.length} />}
+      queue={<ModerationQueueView queue={queue} />}
+    />
+  )
+
+  it('says how many photos wait, in words for one, many and none', () => {
+    const { rerender } = render(<PendingSummaryView pending={3} />)
+    const summary = screen.getByTestId('pending-summary')
+    const count = () => summary.querySelector('[aria-live]')
+    expect(count()).toHaveTextContent(/^3 photos waiting$/)
+    expect(screen.getByRole('link', { name: 'Review' })).toBeInTheDocument()
+    rerender(<PendingSummaryView pending={1} />)
+    expect(count()).toHaveTextContent(/^1 photo waiting$/)
+    rerender(<PendingSummaryView pending={0} />)
+    expect(summary).toHaveTextContent(/^Nothing waiting for approval$/)
+    expect(screen.queryByRole('link', { name: 'Review' })).toBeNull()
+    rerender(<PendingSummaryView />)
+    expect(summary).toHaveTextContent(/^$/)
+  })
+
+  it("sits under the page header, above Settings, as the page's one live count", () => {
+    const { container } = render(page(VIEW, pending(3)))
+    const summary = screen.getByTestId('pending-summary')
+    const settings = screen.getByRole('region', { name: 'Settings' })
+    expect(
+      summary.compareDocumentPosition(settings) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    // Every live region on the page that says anything about the count.
+    const live = [
+      ...container.querySelectorAll('[aria-live], [role="status"]'),
+    ].filter((el) => /waiting/.test(el.textContent ?? ''))
+    expect(live).toHaveLength(1)
+    expect(live[0]).toHaveTextContent(/^3 photos waiting$/)
+    expect(summary).toContainElement(live[0] as HTMLElement)
+  })
+
+  it('is not there before the wall is set up', () => {
+    render(page({ ...VIEW, wall: null }, pending(3)))
+    expect(screen.queryByTestId('pending-summary')).toBeNull()
+  })
+
+  it('Review selects and focuses the Pending tab of the queue', () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    render(page(VIEW, QUEUE))
+    fireEvent.click(tab(/Not shown/))
+    expect(tab(/Pending/)).toHaveAttribute('aria-selected', 'false')
+    const review = screen.getByRole('link', { name: 'Review' })
+    expect(review).toHaveAttribute('href', '#photo-wall-posts')
+    fireEvent.click(review)
+    expect(tab(/Pending/)).toHaveAttribute('aria-selected', 'true')
+    expect(tab(/Pending/)).toHaveFocus()
+    expect(scrollIntoView.mock.contexts[0]).toBe(
+      screen.getByRole('region', { name: 'Posts' }),
+    )
+  })
+
+  it("reads the queue's own query: one read per tick with both on the page", async () => {
+    vi.useFakeTimers()
+    const queryFn = vi.fn(async () => QUEUE)
+    // The connected components over the real React Query: the tRPC hook
+    // becomes a plain useQuery under one key, as tRPC's would be.
+    h.useQuery.mockImplementation((_input: undefined, options?: object) =>
+      useQuery({ queryKey: ['moderationQueue'], queryFn, ...options }),
+    )
+    render(
+      <QueryClientProvider client={appQueryClient()}>
+        <PendingSummary />
+        <ModerationQueue />
+      </QueryClientProvider>,
+    )
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(queryFn).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('pending-summary')).toHaveTextContent(
+      '1 photo waiting',
+    )
+    await act(() => vi.advanceTimersByTimeAsync(6 * MODERATION_POLL_MS))
+    expect(queryFn).toHaveBeenCalledTimes(1 + 6)
   })
 })

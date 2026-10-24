@@ -6,7 +6,7 @@ import { FlagIcon as FlagSolidIcon } from '@heroicons/react/24/solid'
 import type { SpeakerComment } from '@/lib/feedback/results'
 import { sharePercent, type FeedbackTotals } from '@/lib/feedback/totals'
 import { plural } from '@/lib/text/display'
-import { formatFeedbackCommentTime } from '@/lib/time'
+import { formatConferenceDayTime } from '@/lib/time'
 import { ANSWERS } from './answers'
 import { ColourBar, FEEDBACK_TONE } from './tone'
 
@@ -204,7 +204,7 @@ function CommentItem({
         </span>
         {comment.submittedAt && (
           <time dateTime={comment.submittedAt}>
-            {formatFeedbackCommentTime(comment.submittedAt)}
+            {formatConferenceDayTime(comment.submittedAt)}
           </time>
         )}
         {/* Always rendered: a screen reader announces text set in a live
