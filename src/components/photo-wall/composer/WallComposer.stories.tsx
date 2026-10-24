@@ -53,9 +53,13 @@ async function fixturePhoto(): Promise<File> {
 async function pickPhoto(canvasElement: HTMLElement, file: File) {
   const canvas = within(canvasElement)
   await userEvent.upload(canvas.getByLabelText('Choose from your photos'), file)
-  await waitFor(() => expect(canvas.getByLabelText('Caption')).toBeVisible(), {
-    timeout: 10_000,
-  })
+  // The composer takes focus on its heading once it has rendered; wait for
+  // that so a story's own focus move is not undone by it.
+  await waitFor(
+    () =>
+      expect(canvas.getByRole('heading', { name: 'Your photo' })).toHaveFocus(),
+    { timeout: 10_000 },
+  )
   return canvas
 }
 
@@ -189,7 +193,7 @@ export const CaptionAtLimit: Story = {
     await expect(canvas.getByTestId('caption-counter')).toHaveTextContent(
       '80/80',
     )
-    const value = (caption as HTMLInputElement).value
+    const value = (caption as HTMLTextAreaElement).value
     await expect(Array.from(value)).toHaveLength(80)
     await expect(value.endsWith('🎉🎉🎉')).toBe(true)
     // The name has its own limit, 40.
@@ -224,9 +228,9 @@ export const CroppedToTop: Story = {
     const window = canvas.getByRole('img', { name: /Your photo/ })
     window.focus()
     for (let i = 0; i < 20; i++) await userEvent.keyboard('{ArrowUp}')
-    await expect(canvas.getByTestId('photo-preview')).toHaveStyle({
-      objectPosition: '50% 0%',
-    })
+    await expect(
+      canvas.getByTestId('photo-preview').getAttribute('style'),
+    ).toMatch(/object-position:\s*50% 0%/)
   },
 }
 

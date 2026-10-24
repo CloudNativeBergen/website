@@ -140,17 +140,25 @@ export function PolaroidEditor({
         onCrop={onCrop}
       />
       <figcaption className="font-caveat">
-        <input
-          type="text"
+        <textarea
           value={caption}
           onChange={(e) =>
             onCaption(limitCodePoints(e.target.value, CAPTION_MAX))
           }
+          // One line on the wall: Enter finishes instead of breaking the line
+          // (a newline would become a space anyway, §6.4).
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              e.currentTarget.blur()
+            }
+          }}
+          rows={2}
           placeholder="Write something…"
           aria-label="Caption"
           autoComplete="off"
           enterKeyHint="done"
-          className="mt-2 w-full bg-transparent text-2xl leading-tight font-medium outline-none placeholder:text-gray-400"
+          className="mt-2 block w-full resize-none bg-transparent text-2xl leading-tight font-medium outline-none placeholder:text-gray-400"
         />
         <input
           type="text"

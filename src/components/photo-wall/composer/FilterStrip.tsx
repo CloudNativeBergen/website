@@ -57,7 +57,10 @@ export function FilterStrip({
           return (
             <label
               key={f.key}
-              className="flex shrink-0 cursor-pointer flex-col items-center gap-1"
+              // `relative`: the sr-only radio is absolutely positioned, and
+              // without a positioned label it would sit outside the strip's
+              // scroll clip and widen the whole page.
+              className="relative flex shrink-0 cursor-pointer flex-col items-center gap-1"
             >
               <input
                 type="radio"

@@ -153,11 +153,7 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
           <ArrowLeftIcon className="size-4" aria-hidden="true" />
           Another photo
         </button>
-        <h1
-          ref={heading}
-          tabIndex={-1}
-          className="sr-only focus:not-sr-only focus:mt-3 focus:block focus:text-sm focus:text-gray-600"
-        >
+        <h1 ref={heading} tabIndex={-1} className="sr-only">
           Your photo
         </h1>
 
