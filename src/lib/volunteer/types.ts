@@ -72,6 +72,8 @@ export interface Volunteer extends VolunteerInput {
     _ref: string
   }
   confirmedAt?: string
+  /** Last "register your ticket" reminder. */
+  ticketReminderSentAt?: string
 }
 
 export interface VolunteerWithConference extends Omit<

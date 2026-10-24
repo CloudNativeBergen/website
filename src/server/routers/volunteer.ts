@@ -11,6 +11,7 @@ import {
   UpdateVolunteerDetailsSchema,
   SendVolunteerEmailSchema,
   SendVolunteerBulkEmailSchema,
+  SendVolunteerTicketReminderSchema,
   DeleteVolunteerSchema,
   ConfirmVolunteerAttendanceSchema,
   DeclineVolunteerAttendanceSchema,
@@ -29,6 +30,7 @@ import {
   createVolunteer,
   hasActiveVolunteerByEmail,
   recordVolunteerApprovalEmailSent,
+  recordVolunteerTicketReminderSent,
   confirmVolunteerAttendance,
   declineVolunteerAttendance,
 } from '@/lib/volunteer/sanity'
@@ -40,6 +42,10 @@ import type {
 } from '@/lib/volunteer/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendVolunteerApprovalEmail } from '@/lib/email/volunteer'
+import {
+  fetchRedeemedVolunteerEmails,
+  joinVolunteerTicketStatus,
+} from '@/lib/tickets/volunteerStatus'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
 import { notifyNewVolunteer } from '@/lib/slack/notify'
 import { runAfterResponse } from '@/server/runAfterResponse'
@@ -822,6 +828,130 @@ export const volunteerRouter = router({
           sent,
           failed,
           skipped: input.volunteerIds.length - recipients.length,
+        }
+      }),
+
+    /**
+     * Remind approved/confirmed volunteers who have not redeemed their
+     * volunteer ticket to register it. Eligibility is computed here from the
+     * ticket provider, never taken from the client; ids only narrow it. The
+     * client sends at most VOLUNTEER_EMAIL_CHUNK ids per call.
+     * Anyone reminded in the last day is skipped, so a double press or two
+     * organizers at once do not mail twice.
+     */
+    sendTicketReminder: adminProcedure
+      .input(SendVolunteerTicketReminderSchema)
+      .mutation(async ({ input }) => {
+        // TENANCY: the conference resolveConferenceId() resolves, and the
+        // domain's document must be that conference.
+        const conferenceId = await resolveConferenceId()
+        const { conference } = await getConferenceForCurrentDomain({
+          includeVolunteerRegistrationLink: true,
+        })
+        if (conference?._id !== conferenceId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Conference not found',
+          })
+        }
+        const { volunteers, error } =
+          await getVolunteersByConference(conferenceId)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch volunteers',
+            cause: error,
+          })
+        }
+        const byId = new Map(volunteers.map((v) => [v._id, v]))
+        if (input.volunteerIds.some((id) => !byId.has(id))) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more volunteers were not found',
+          })
+        }
+
+        const redeemed = await fetchRedeemedVolunteerEmails(conference)
+        if (!redeemed) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Ticket status could not be read, so nothing was sent. Try again in a few minutes.',
+          })
+        }
+
+        const candidates = input.volunteerIds.map((id) => byId.get(id)!)
+        const unredeemed = new Set(
+          joinVolunteerTicketStatus(candidates, redeemed)
+            .filter((s) => s.state !== 'redeemed')
+            .map((s) => s.volunteerId),
+        )
+        const now = Date.now()
+        const recentCutoff = now - 24 * 60 * 60 * 1000
+        const seen = new Set<string>()
+        const recipients = candidates.filter((v) => {
+          if (
+            v.status !== VolunteerStatus.APPROVED &&
+            v.status !== VolunteerStatus.CONFIRMED
+          )
+            return false
+          if (!unredeemed.has(v._id)) return false
+          if (
+            v.ticketReminderSentAt &&
+            Date.parse(v.ticketReminderSentAt) > recentCutoff
+          )
+            return false
+          const key = v.email?.trim().toLowerCase()
+          if (!key || seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        if (recipients.length && !conference.volunteerRegistrationLink) {
+          // Without a link the reminder has nothing to ask them to open.
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'No volunteer ticket registration link is set, so nothing was sent.',
+          })
+        }
+
+        requireSenderAddress(recipients)
+
+        const sentAt = new Date(now).toISOString()
+        const { sent, failed } = await sendEachVolunteer(
+          recipients,
+          (v) =>
+            sendVolunteerApprovalEmail(
+              v,
+              v.conference,
+              `Reminder: register your volunteer ticket for ${v.conference.title}`,
+              'Our records show you have not registered your volunteer ticket yet. Please use the button below to register it, so we have you on the list at the door.\n\nIf you have already registered, you can ignore this email.',
+              {
+                template: 'message',
+                title: `Reminder: register your volunteer ticket for ${v.conference.title}`,
+                registrationUrl: conference.volunteerRegistrationLink,
+                slackInviteUrl: null,
+                confirmUrl: null,
+              },
+            ),
+          async (v) => {
+            const recorded = await recordVolunteerTicketReminderSent(
+              v._id,
+              sentAt,
+            )
+            if (!recorded.success) {
+              console.error(
+                'Failed to record volunteer ticket reminder:',
+                recorded.error,
+              )
+            }
+          },
+        )
+        return {
+          sent,
+          failed,
+          skipped: candidates.length - recipients.length,
+          sentAt,
         }
       }),
 

@@ -85,7 +85,8 @@ export function ConfirmationModal({
   return (
     <ModalShell
       isOpen={isOpen}
-      onClose={onClose}
+      // Escape and backdrop are ignored while the action runs, like Cancel.
+      onClose={isLoading ? () => {} : onClose}
       afterLeave={afterLeave}
       size="md"
       className="border border-brand-frosted-steel bg-brand-glacier-white dark:border-gray-700"

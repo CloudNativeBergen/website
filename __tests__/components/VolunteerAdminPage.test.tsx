@@ -9,55 +9,71 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { VolunteerStatus } from '@/lib/volunteer/types'
 
 // vi.mock factories are hoisted, so the data they close over must be too.
-const { volunteers, listState, updateStatusMutate, mutation } = vi.hoisted(
-  () => {
-    const volunteers = [
-      {
-        _id: 'v-confirmed',
-        name: 'Carol',
-        email: 'carol@example.com',
-        status: 'confirmed',
-      },
-      {
-        _id: 'v-approved',
-        name: 'Alice',
-        email: 'alice@example.com',
-        status: 'approved',
-      },
-      {
-        _id: 'v-rejected',
-        name: 'Rita',
-        email: 'rita@example.com',
-        status: 'rejected',
-      },
-      {
-        _id: 'v-pending',
-        name: 'Peter',
-        email: 'peter@example.com',
-        status: 'pending',
-      },
-      // Same address as Alice, different case: must be deduped when copying.
-      {
-        _id: 'v-pending-2',
-        name: 'Alice Again',
-        email: 'Alice@example.com',
-        status: 'pending',
-      },
-    ].map((v) => ({
-      ...v,
-      submittedAt: '2026-06-01T10:00:00Z',
-      preferredTasks: [],
-    }))
+const {
+  volunteers,
+  listState,
+  updateStatusMutate,
+  mutation,
+  ticketState,
+  reminderMutate,
+} = vi.hoisted(() => {
+  const volunteers = [
+    {
+      _id: 'v-confirmed',
+      name: 'Carol',
+      email: 'carol@example.com',
+      status: 'confirmed',
+    },
+    {
+      _id: 'v-approved',
+      name: 'Alice',
+      email: 'alice@example.com',
+      status: 'approved',
+    },
+    {
+      _id: 'v-rejected',
+      name: 'Rita',
+      email: 'rita@example.com',
+      status: 'rejected',
+    },
+    {
+      _id: 'v-pending',
+      name: 'Peter',
+      email: 'peter@example.com',
+      status: 'pending',
+    },
+    // Same address as Alice, different case: must be deduped when copying.
+    {
+      _id: 'v-pending-2',
+      name: 'Alice Again',
+      email: 'Alice@example.com',
+      status: 'pending',
+    },
+  ].map((v) => ({
+    ...v,
+    submittedAt: '2026-06-01T10:00:00Z',
+    preferredTasks: [],
+  }))
 
-    const updateStatusMutate = vi.fn().mockResolvedValue({ success: true })
+  const updateStatusMutate = vi.fn().mockResolvedValue({ success: true })
 
-    const mutation = () => ({ mutateAsync: vi.fn(), isPending: false })
-    const listState: { data: typeof volunteers | undefined } = {
-      data: volunteers,
-    }
-    return { volunteers, listState, updateStatusMutate, mutation }
-  },
-)
+  const mutation = () => ({ mutateAsync: vi.fn(), isPending: false })
+  const listState: { data: typeof volunteers | undefined } = {
+    data: volunteers,
+  }
+  const ticketState: {
+    data: { available: boolean; statuses: unknown[] } | undefined
+  } = { data: undefined }
+  const reminderMutate = vi.fn().mockResolvedValue({ sent: 1, failed: [] })
+  return {
+    volunteers,
+    listState,
+    updateStatusMutate,
+    mutation,
+    ticketState,
+    reminderMutate,
+  }
+})
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
@@ -101,6 +117,12 @@ vi.mock('@/lib/trpc/client', () => ({
         },
         sendEmail: { useMutation: mutation },
         sendBulkEmail: { useMutation: mutation },
+        sendTicketReminder: {
+          useMutation: () => ({
+            mutateAsync: reminderMutate,
+            isPending: false,
+          }),
+        },
         delete: { useMutation: mutation },
         update: { useMutation: mutation },
       },
@@ -109,7 +131,7 @@ vi.mock('@/lib/trpc/client', () => ({
       admin: {
         volunteerTicketStatus: {
           useQuery: () => ({
-            data: undefined,
+            data: ticketState.data,
             isLoading: false,
             isError: false,
           }),
@@ -147,6 +169,8 @@ afterEach(() => {
   cleanup()
   updateStatusMutate.mockClear()
   listState.data = volunteers
+  ticketState.data = undefined
+  reminderMutate.mockClear()
 })
 
 describe('VolunteerAdminPage', () => {
@@ -293,6 +317,33 @@ describe('VolunteerAdminPage', () => {
       expect(
         screen.getByRole('button', { name: /Mark Confirmed/ }),
       ).toBeTruthy(),
+    )
+  })
+
+  it('counts unregistered volunteers and confirms before reminding them', async () => {
+    ticketState.data = {
+      available: true,
+      statuses: [
+        { volunteerId: 'v-approved', state: 'invited' },
+        { volunteerId: 'v-confirmed', state: 'redeemed' },
+        { volunteerId: 'v-pending', state: 'not-invited' },
+      ],
+    }
+    renderPage()
+
+    fireEvent.click(
+      screen.getAllByRole('button', {
+        name: /Remind to Register Ticket \(1\)/,
+      })[0],
+    )
+    expect(reminderMutate).not.toHaveBeenCalled()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Send Reminder' }),
+    )
+    await waitFor(() =>
+      expect(reminderMutate).toHaveBeenCalledWith({
+        volunteerIds: ['v-approved'],
+      }),
     )
   })
 })
