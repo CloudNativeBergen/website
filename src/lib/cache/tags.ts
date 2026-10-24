@@ -127,3 +127,12 @@ export function photoWallTag(conferenceId: string): string {
 export function photoWallAdminTag(conferenceId: string): string {
   return `photo-wall-admin:${conferenceId}`
 }
+
+/**
+ * One device's Wall Posts as its My posts list reads them (Photo Wall spec
+ * §8). Expire it with `{ expire: 0 }` on Submit, every moderation action, a
+ * contributor's Delete or marketing change, and the retention cron.
+ */
+export function photoWallDeviceTag(deviceKey: string): string {
+  return `photo-wall-device:${deviceKey}`
+}

@@ -341,10 +341,13 @@ describe('WallComposer', () => {
     const postOnce = async () => {
       const calls = onSubmit.mock.calls.length
       fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
-      await waitFor(() => expect(bakes.length).toBeGreaterThan(calls))
-      await act(async () =>
-        bakes[calls].resolve(new Blob([], { type: 'image/jpeg' })),
-      )
+      // Only the first press bakes: the same photo and filter reuse it.
+      if (calls === 0) {
+        await waitFor(() => expect(bakes).toHaveLength(1))
+        await act(async () =>
+          bakes[0].resolve(new Blob([], { type: 'image/jpeg' })),
+        )
+      }
       await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(calls + 1))
     }
     await postOnce()
@@ -372,13 +375,46 @@ describe('WallComposer', () => {
     const length = window.history.length
     for (let n = 0; n < 2; n += 1) {
       fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
-      await waitFor(() => expect(bakes).toHaveLength(n + 1))
-      await act(async () =>
-        bakes[n].resolve(new Blob([], { type: 'image/jpeg' })),
-      )
+      if (n === 0) {
+        await waitFor(() => expect(bakes).toHaveLength(1))
+        await act(async () =>
+          bakes[0].resolve(new Blob([], { type: 'image/jpeg' })),
+        )
+      }
       await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(n + 1))
     }
     expect(window.history.length).toBe(length)
+  })
+
+  it('posts the same baked photo again while the photo and filter stay, and bakes again for a new filter', async () => {
+    const onSubmit = await compose(
+      'reuse',
+      vi.fn().mockRejectedValue(new Error('lost')),
+    )
+    const press = async (calls: number) => {
+      fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(calls))
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: 'Post to the wall' }),
+        ).toHaveAttribute('aria-disabled', 'false'),
+      )
+    }
+    const first = new Blob(['a'], { type: 'image/jpeg' })
+    fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
+    await waitFor(() => expect(bakes).toHaveLength(1))
+    await act(async () => bakes[0].resolve(first))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+
+    await press(2)
+    expect(bakes).toHaveLength(1)
+    expect(onSubmit.mock.calls[1][0].photo).toBe(first)
+
+    fireEvent.click(screen.getByRole('button', { name: 'pick Noir' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
+    await waitFor(() => expect(bakes).toHaveLength(2))
+    expect(bakes[1].filter).toBe('noir')
   })
 
   it('moves focus to the landing heading when the composer closes', async () => {

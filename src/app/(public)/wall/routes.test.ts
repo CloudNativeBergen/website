@@ -6,7 +6,7 @@
  * store: a conference without a `photoWall` has no Photo Wall, and another
  * conference's wall doesn't give it one.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VersionedSanityStore } from '../../../../__tests__/helpers/versionedSanityStore'
 
 const h = vi.hoisted(() => ({
@@ -24,10 +24,16 @@ vi.mock('@/lib/sanity/client', async () => {
   h.store = createVersionedSanityStore()
   return h.store.clients
 })
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  connection: async () => {},
+}))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: async () => h.resolution,
 }))
 
+import { ComposerClosed, WallPoster } from '@/components/photo-wall'
+import { ensureDevice } from './post/actions'
 import WallPage from './page'
 import ComposerPage from './post/page'
 import ScreenPage from './screen/page'
@@ -94,5 +100,44 @@ describe.each(ROUTES)('%s', (_path, Page) => {
       message: 'Could not read the conference for this Photo Wall',
     })
     expect(error).not.toMatchObject(NOT_FOUND)
+  })
+})
+
+describe('/wall/post while posting is open or not (§6.5, §7)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-26T10:00:00.000Z'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('shows the composer, wired to ensureDevice, while posting is open', async () => {
+    h.store!.reset([{ ...wallOf('conf-A'), postingMode: 'open' }])
+    const page = await ComposerPage()
+    expect(page.type).toBe(WallPoster)
+    expect(page.props).toMatchObject({
+      deletesOn: '2026-11-26',
+      ensureDevice,
+    })
+  })
+
+  it.each([
+    ['paused', { postingMode: 'paused' }, '2026-10-26T10:00:00.000Z'],
+    [
+      'open, after the last day',
+      { postingMode: 'open' },
+      '2026-10-27T23:00:00.000Z',
+    ],
+    [
+      'closed by the cron',
+      { postingMode: 'open', closedAt: '2026-11-27T00:00:00Z' },
+      '2026-10-26T10:00:00.000Z',
+    ],
+  ])('shows the closed page when %s', async (_name, settings, now) => {
+    vi.setSystemTime(new Date(now))
+    h.store!.reset([{ ...wallOf('conf-A'), ...settings }])
+    const page = await ComposerPage()
+    expect(page.type).toBe(ComposerClosed)
   })
 })
