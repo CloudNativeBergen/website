@@ -3,10 +3,9 @@ import { DELETION_DAYS } from '@/lib/photo-wall/deletion'
 
 /**
  * The Photo Wall on /privacy (Photo Wall spec §12), for EVERY tenant: any
- * conference can set one up. The copy is the spec's draft, as far as it is
- * true for what ships. Two lines change with later slices: My posts (M6)
- * adds deleting a post yourself and unticking marketing on the same phone;
- * until then both go through the organizers. `/wall/post` links here as
+ * conference can set one up. The copy is the spec's: a post is deleted, and
+ * marketing consent withdrawn, from My posts on the phone that posted it
+ * (M6), or through the organizers. `/wall/post` links here as
  * `/privacy#photo-wall`.
  */
 export function PhotoWallPrivacy() {
@@ -38,10 +37,10 @@ export function PhotoWallPrivacy() {
         </li>
         <li>
           <strong>Purpose and legal basis:</strong> we show your photo because
-          you chose to post it (consent), and you can withdraw that by having it
-          deleted. If you tick the marketing box, the organizers may also use
-          your photo in their own marketing (separate consent); you can withdraw
-          it at any time by contacting the organizers.
+          you chose to post it (consent), and you can withdraw that by deleting
+          it. If you tick the marketing box, the organizers may also use your
+          photo in their own marketing (separate consent); untick it at any
+          time.
         </li>
         <li>
           <strong>Retention:</strong> we delete every Photo Wall post{' '}
@@ -51,9 +50,11 @@ export function PhotoWallPrivacy() {
           was deleted are theirs and aren&apos;t covered by that deletion.
         </li>
         <li>
-          <strong>Your rights:</strong> to have a post deleted, contact the
-          organizers and describe the photo. If you are in someone else&apos;s
-          photo and want it removed, contact the organizers.
+          <strong>Your rights:</strong> To delete a post, open the wall&rsquo;s
+          posting page on the same phone and use My posts, or contact the
+          organizers. The same page has the Marketing switch. If you are in
+          someone else&rsquo;s photo and want it removed, contact the
+          organizers.
         </li>
         <li>
           <strong>Processors:</strong> photos are stored with our content
@@ -69,12 +70,13 @@ export function PhotoWallCookieNote() {
   return (
     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
       <strong>Photo Wall:</strong> If you open a conference&apos;s Photo Wall
-      posting page, this site sets one strictly necessary cookie, sent only to
-      the wall&apos;s pages. It holds a random identifier for your phone and the
-      time it was set; nothing about you. It recognises your phone, so your
-      posts and their limits stay yours, and it expires at the end of the day
-      the wall&apos;s posts are deleted, {DELETION_DAYS} days after the
-      conference. Clearing this site&apos;s cookies removes it.
+      posting page, this site sets one strictly necessary cookie,{' '}
+      <code>konf_wall</code>, sent only to the wall&apos;s pages. It holds a
+      random identifier for your phone and the time it was set; nothing about
+      you. It recognises your phone, so your posts and their limits stay yours
+      and My posts can show, delete and change them, and it expires at the end
+      of the day the wall&apos;s posts are deleted, {DELETION_DAYS} days after
+      the conference. Clearing this site&apos;s cookies removes it.
     </p>
   )
 }
