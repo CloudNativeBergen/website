@@ -78,10 +78,10 @@ describe('Screen Mode error boundary', () => {
   })
 
   it('the same error on another page does not reload by itself', async () => {
+    // Each stays mounted, its boundary up, while the time passes.
     for (const path of ['/wall', '/wall/post', '/program']) {
       at(path)
       fail()
-      cleanup()
     }
     await act(() => vi.advanceTimersByTimeAsync(60 * SCREEN_ERROR_RETRY_MS))
     expect(reload).not.toHaveBeenCalled()
