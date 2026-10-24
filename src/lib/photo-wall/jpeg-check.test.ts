@@ -163,6 +163,20 @@ describe('checkWallPhoto refuses', () => {
     const bytes = fixture('canvas-chromium.jpg').slice()
     bytes[4] = 0xff // APP0's length high byte
     expect(checkWallPhoto(bytes)).toEqual({ ok: false, reason: 'truncated' })
+    // The same on a metadata segment: cut short is the answer, not the
+    // segment it never finished reading.
+    const exif = fixture('camera-exif.jpg').slice()
+    const app1 = exif.findIndex((b, i) => b === 0xff && exif[i + 1] === 0xe1)
+    expect(app1).toBeGreaterThan(0)
+    exif[app1 + 2] = 0xff
+    expect(checkWallPhoto(exif)).toEqual({ ok: false, reason: 'truncated' })
+  })
+
+  it('a JPEG with no frame header at all (SOI straight to EOI)', () => {
+    expect(checkWallPhoto(Uint8Array.of(0xff, 0xd8, 0xff, 0xd9))).toEqual({
+      ok: false,
+      reason: 'malformed',
+    })
   })
 
   it('a JPEG with no frame header before its scan', () => {

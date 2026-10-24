@@ -7,6 +7,7 @@
  * options object. The expected device key is a fixed literal of SHA-256 over
  * the token (`printf 'tok' | shasum -a 256`), not recomputed.
  */
+import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { deletionDateEnd } from './deletion'
@@ -126,6 +127,30 @@ describe('reading the cookie back', () => {
     ]) {
       expect(readWallDevice(bad)).toBeNull()
     }
+  })
+
+  it('reads a correctly signed cookie with the wrong payload shape as absent', () => {
+    // Signed as the server signs, so only the shape check can refuse it.
+    const signedAs = (data: string) =>
+      `${Buffer.from(data).toString('base64url')}.${crypto
+        .createHmac('sha256', process.env.INVITATION_TOKEN_SECRET!)
+        .update(`konf.wall-device.v1.${data}`)
+        .digest('base64url')}`
+    for (const data of [
+      '{"at":1}',
+      '{"t":"","at":1}',
+      '{"t":7,"at":1}',
+      '{"t":"tok"}',
+      '{"t":"tok","at":"1"}',
+      '[]',
+      'null',
+      'not json',
+    ]) {
+      expect(readWallDevice(signedAs(data))).toBeNull()
+    }
+    expect(readWallDevice(signedAs('{"t":"tok","at":1}'))?.key).toBe(
+      wallDeviceKey('tok'),
+    )
   })
 
   it('does not accept a feedback device cookie, signed with the same secret under its own label', async () => {

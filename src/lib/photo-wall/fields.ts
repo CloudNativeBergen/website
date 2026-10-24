@@ -65,7 +65,8 @@ function text(
 function cropCoordinate(value: FormDataEntryValue | null): number | undefined {
   if (typeof value !== 'string' || !DECIMAL.test(value)) return undefined
   const n = Number(value)
-  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : undefined
+  // The regex admits no sign, so `n` is already ≥ 0.
+  return Number.isFinite(n) && n <= 1 ? n : undefined
 }
 
 export function checkWallFields(form: FormData): WallFieldsCheck {
