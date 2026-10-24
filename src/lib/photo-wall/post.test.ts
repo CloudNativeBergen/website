@@ -158,6 +158,18 @@ describe('postToWall', () => {
     },
   )
 
+  it('marks a refusal that follows a lost attempt: the lost one may still land', async () => {
+    const { send } = sendAnswering(
+      new TypeError('Failed to fetch'),
+      json(403, { ok: false, refusal: 'closed' }),
+    )
+    await expect(postToWall(request, { send, wait })).resolves.toEqual({
+      ok: false,
+      refusal: 'closed',
+      earlierLost: true,
+    })
+  })
+
   it('reads any 413 as a refusal, Vercel’s own HTML one included', async () => {
     const { send, calls } = sendAnswering(
       new Response('Request Entity Too Large', { status: 413 }),

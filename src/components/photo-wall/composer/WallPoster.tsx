@@ -67,8 +67,9 @@ const sameDraft = (a: WallPostDraft, b: WallPostDraft) =>
  * asks once more, and shows the generic message if that fails too.
  *
  * `uploadId` (§6.2, §6.5): one per post. A press after a lost response sends
- * the same one, so the route can answer success if the post did go in; a
- * refusal or a success ends it, and the next press picks a new one.
+ * the same one, so the route can answer success if the post did go in. A
+ * success ends it; so does a refusal, unless an earlier attempt of the same
+ * draft was lost. Editing the draft always picks a new one.
  */
 export function WallPoster({
   logo,
@@ -82,8 +83,16 @@ export function WallPoster({
   const [posted, setPosted] = useState<PostedPhoto[]>([])
   const [composing, setComposing] = useState(true)
   const [progress, setProgress] = useState<number | null>(null)
-  /** The post a lost response left open, to be retried as itself. */
-  const open = useRef<{ uploadId: string; draft: WallPostDraft } | null>(null)
+  /**
+   * The post being sent and its `uploadId`, kept for the next press of the
+   * same draft. `ambiguous` once any attempt of it was lost: it may still
+   * land, so from then on even a refusal keeps the id.
+   */
+  const open = useRef<{
+    uploadId: string
+    draft: WallPostDraft
+    ambiguous: boolean
+  } | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const urls = useRef<string[]>([])
 
@@ -114,7 +123,7 @@ export function WallPoster({
       setDevice('ready')
     }
     if (!open.current || !sameDraft(open.current.draft, draft)) {
-      open.current = { uploadId: crypto.randomUUID(), draft }
+      open.current = { uploadId: crypto.randomUUID(), draft, ambiguous: false }
     }
     const { uploadId } = open.current
     // Whole percents only: a re-render per progress event is wasted work.
@@ -124,9 +133,19 @@ export function WallPoster({
       () => setProgress(null),
     )
     // Lost: keep the uploadId for the next press; the generic message.
-    if ('lost' in result) throw new Error('No answer from the wall')
+    if ('lost' in result) {
+      open.current.ambiguous = true
+      throw new Error('No answer from the wall')
+    }
+    if (!result.ok) {
+      // A refusal proves only that THIS attempt made no post. After a lost
+      // one, the same draft keeps its id: that post may still land, and the
+      // next press must converge on it rather than post it twice.
+      if (result.earlierLost) open.current.ambiguous = true
+      if (!open.current.ambiguous) open.current = null
+      throw new WallPostRefused(result.refusal)
+    }
     open.current = null
-    if (!result.ok) throw new WallPostRefused(result.refusal)
 
     const url = URL.createObjectURL(draft.photo)
     urls.current.push(url)

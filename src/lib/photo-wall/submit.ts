@@ -194,21 +194,23 @@ async function createPost({
     // after this read, so it is not a refusal (the phone would post again
     // under a new id): it throws, and the phone retries with this one.
     const stored = await readPost(uploadId)
+    const status = sanityStatus(error)
+    const rejected = typeof status === 'number' && status >= 400 && status < 500
+    if (!stored && !rejected) {
+      // The asset stays: a late create references it, and the retry
+      // uploads the same bytes, which Sanity names as the same asset.
+      // One nothing ever references is the orphan sweep's (§11.2).
+      throw new Error('Photo Wall submit: the create’s outcome is unknown', {
+        cause: error,
+      })
+    }
+    // This request's asset goes unless a document references it: the
+    // stored post (this create landed, or the winner sent the same bytes;
+    // Sanity names assets by their bytes) or any other, in any tenant. Also
+    // when the stored post is this device's: a concurrent request with
+    // other bytes may have won.
+    await deleteImageAssetIfOrphaned(asset._id)
     if (!isOwnPost(stored, conferenceId, deviceKey)) {
-      const status = sanityStatus(error)
-      const rejected =
-        typeof status === 'number' && status >= 400 && status < 500
-      if (!stored && !rejected) {
-        // The asset stays: a late create references it, and the retry
-        // uploads the same bytes, which Sanity names as the same asset.
-        // One nothing ever references is the orphan sweep's (§11.2).
-        throw new Error('Photo Wall submit: the create’s outcome is unknown', {
-          cause: error,
-        })
-      }
-      // Gone unless a document references it: Sanity names assets by their
-      // bytes, across tenants, so it may be the winner's photo too.
-      await deleteImageAssetIfOrphaned(asset._id)
       console.error('Photo Wall submit: the create failed', error)
       return refuse('failed', stored ? 'uploadId taken at create' : 'create')
     }

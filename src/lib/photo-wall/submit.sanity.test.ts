@@ -605,11 +605,11 @@ describe('submitWallPost: races and failed creates (§6.2, §14)', () => {
    * Device B's whole submit runs while A's upload is under way: both have
    * found no post with the id, B creates it first, A's create then conflicts.
    */
-  async function race(bPhoto: Buffer) {
+  async function race(bPhoto: Buffer, bDevice = OTHER_DEVICE) {
     let b: unknown
     h.duringUpload = async () => {
       b = await submit({
-        device: OTHER_DEVICE,
+        device: bDevice,
         form: form({ photo: bPhoto }),
       })
     }
@@ -643,6 +643,17 @@ describe('submitWallPost: races and failed creates (§6.2, §14)', () => {
   const rejected = () => {
     throw Object.assign(new Error('400: rejected (test)'), { statusCode: 400 })
   }
+
+  it('one device, one uploadId, two requests with different bytes: one post, both succeed, the losing asset deleted', async () => {
+    const other = fixture('progressive.jpg')
+    const { a, b } = await race(other, DEVICE)
+    expect(b).toEqual({ ok: true })
+    expect(a).toEqual({ ok: true })
+    expect(posts()).toHaveLength(1)
+    expect(h.uploads).toHaveLength(2)
+    // B's create won; A's asset is referenced by nothing and goes.
+    expect(assets().map((d) => d._id)).toEqual([assetIdOf(other)])
+  })
 
   it('a create Sanity rejects (4xx) deletes the asset it uploaded and refuses', async () => {
     store().beforeNextCommit(rejected)

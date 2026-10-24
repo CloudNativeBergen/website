@@ -54,7 +54,15 @@ export interface WallPostRequest {
 
 export type WallPostAttempt =
   | { ok: true }
-  | { ok: false; refusal: WallSubmitRefusal }
+  | {
+      ok: false
+      refusal: WallSubmitRefusal
+      /**
+       * An earlier attempt of this post was lost: it may still land, so the
+       * refusal proves nothing about it, and the `uploadId` must be kept.
+       */
+      earlierLost?: true
+    }
   /** No answer to go by: the post may be in. Retry with the same `uploadId`. */
   | { ok: false; lost: true }
 
@@ -191,10 +199,15 @@ export async function postToWall(
   { onProgress, send = xhrSend, wait = sleep }: PostOptions = {},
 ): Promise<WallPostAttempt> {
   let attempt = await sendOnce(post, send, onProgress)
+  let earlierLost = false
   for (const delay of RETRY_DELAYS_MS) {
     if (!('lost' in attempt)) break
+    earlierLost = true
     await wait(delay)
     attempt = await sendOnce(post, send, onProgress)
+  }
+  if (earlierLost && 'refusal' in attempt) {
+    return { ...attempt, earlierLost: true }
   }
   return attempt
 }

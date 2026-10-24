@@ -273,6 +273,38 @@ describe('WallPoster', () => {
     expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
   })
 
+  it('after a lost response, a refusal keeps the uploadId for the same post: the lost one may still land', async () => {
+    const post = postAnswering(
+      { ok: false, lost: true },
+      { ok: false, refusal: 'closed' },
+      { ok: true },
+    )
+    renderPoster(post)
+    await pick('ambiguous')
+    await press()
+    await press()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The wall isn’t open for photos right now.',
+    )
+    await press()
+    const [first, second, third] = uploadIds(post)
+    expect([second, third]).toEqual([first, first])
+    expect(screen.getAllByText('Waiting for approval')).toHaveLength(1)
+  })
+
+  it('a refusal after a lost attempt in the same press keeps the uploadId too', async () => {
+    const post = postAnswering(
+      { ok: false, refusal: 'pendingWall', earlierLost: true },
+      { ok: true },
+    )
+    renderPoster(post)
+    await pick('earlier-lost')
+    await press()
+    await press()
+    const [first, second] = uploadIds(post)
+    expect(second).toBe(first)
+  })
+
   it('after a lost response, a changed post gets a new uploadId', async () => {
     const post = postAnswering({ ok: false, lost: true }, { ok: true })
     renderPoster(post)
