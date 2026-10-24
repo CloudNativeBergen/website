@@ -164,6 +164,11 @@ export const RefusedClosed: Story = {
   },
 }
 
+export const RefusedClosedDark: Story = {
+  ...RefusedClosed,
+  globals: { theme: 'dark' },
+}
+
 /** Every attempt lost: the generic message; the next press retries. */
 export const Lost: Story = {
   args: {
