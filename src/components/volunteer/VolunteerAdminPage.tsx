@@ -616,7 +616,7 @@ export default function VolunteerAdminPage() {
         ]}
         stats={[
           // Doubles as a status filter; hidden when nothing is pending.
-          ...(stats.pending !== 0
+          ...(stats.pending !== 0 || pendingOnly
             ? [
                 {
                   value: stats.pending,
