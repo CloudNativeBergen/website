@@ -80,7 +80,6 @@ export function ProposalReviewPanel({
           currentUserId={currentUser?._id}
         />
       </div>
-
     </>
   )
 }
