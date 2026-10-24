@@ -1,18 +1,45 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
+import type { MyPost } from '@/lib/photo-wall/my-posts'
 import type { WallPostAttempt, WallPostRequest } from '@/lib/photo-wall/post'
 import { ComposerClosed } from './ComposerClosed'
+import { MyPostsPanel } from './MyPostsPanel'
 import { WallPoster, type WallPosterProps } from './WallPoster'
 
 type Post = NonNullable<WallPosterProps['post']>
 
+/** Posts this phone made earlier, as `getMyPosts` would list them. */
+const EARLIER: MyPost[] = [
+  {
+    _id: 'wallPost-earlier-1',
+    status: 'approved',
+    src: '/storybook-fixtures/wall-landscape.jpg',
+    caption: 'Keynote crowd, first morning',
+    name: 'Ada',
+    marketingConsent: true,
+    submittedAt: '2026-10-26T08:00:00Z',
+    incarnation: { createdAt: '2026-10-26T08:00:00.000Z', assetId: 'image-1' },
+  },
+  {
+    _id: 'wallPost-earlier-2',
+    status: 'notShown',
+    src: '/storybook-fixtures/wall-portrait.jpg',
+    caption: null,
+    name: null,
+    marketingConsent: false,
+    submittedAt: '2026-10-26T07:30:00Z',
+    incarnation: { createdAt: '2026-10-26T07:30:00.000Z', assetId: 'image-2' },
+  },
+]
+
 /**
- * `/wall/post` wired to Submit (Photo Wall spec §6.3, §6.5), with the server
- * stood in for: `ensureDevice` and `post` are mocks answering as the route
- * would. The photo is the drawn fjord fixture, picked through the real file
- * input, so the real decode, filter and bake run. Dark mode follows the
- * global `theme` toolbar (story-level `globals`), the mechanism
- * `.storybook/preview.tsx` reads; this file has no decorator of its own.
+ * `/wall/post` wired to Submit (Photo Wall spec §6.3, §6.5, §12), with the
+ * server stood in for: `ensureDevice`, `post` and the My posts actions are
+ * mocks answering as the server would. The photo is the drawn fjord
+ * fixture, picked through the real file input, so the real decode, filter
+ * and bake run. Dark mode follows the global `theme` toolbar (story-level
+ * `globals`), the mechanism `.storybook/preview.tsx` reads; this file has
+ * no decorator of its own.
  */
 const meta = {
   title: 'Systems/PhotoWall/Poster',
@@ -26,6 +53,13 @@ const meta = {
     deletesOn: '2026-11-26',
     ensureDevice: fn(async () => true),
     post: fn<Post>(async () => ({ ok: true })),
+    getMyPosts: fn<WallPosterProps['getMyPosts']>(async () => []),
+    deleteMyPost: fn<WallPosterProps['deleteMyPost']>(async () => ({
+      status: 'deleted',
+    })),
+    setMyPostMarketing: fn<WallPosterProps['setMyPostMarketing']>(async () => ({
+      status: 'done',
+    })),
   },
 } satisfies Meta<typeof WallPoster>
 
@@ -225,6 +259,27 @@ export const GettingReady: Story = {
   },
 }
 
+/** This phone posted before (§6.5): My posts sits under the landing. */
+export const LandingWithMyPosts: Story = {
+  args: {
+    getMyPosts: fn<WallPosterProps['getMyPosts']>(async () => EARLIER),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByRole('heading', { level: 2, name: 'My posts' }),
+    ).toBeVisible()
+    await expect(canvas.getByText('On the wall')).toBeVisible()
+    await expect(canvas.getByText('Not shown')).toBeVisible()
+    await expect(canvas.getByLabelText('Take a photo')).toBeVisible()
+  },
+}
+
+export const LandingWithMyPostsDark: Story = {
+  ...LandingWithMyPosts,
+  globals: { theme: 'dark' },
+}
+
 /** Outside the Posting Window (§6.5): only the closed line and See the wall. */
 export const Closed: Story = {
   render: (args) => <ComposerClosed logo={args.logo} />,
@@ -241,5 +296,35 @@ export const Closed: Story = {
 
 export const ClosedDark: Story = {
   ...Closed,
+  globals: { theme: 'dark' },
+}
+
+/** Closed, with this phone's posts under See the wall: Delete still works (§12). */
+export const ClosedWithMyPosts: Story = {
+  args: {
+    getMyPosts: fn<WallPosterProps['getMyPosts']>(async () => EARLIER),
+  },
+  render: (args) => (
+    <ComposerClosed logo={args.logo}>
+      <MyPostsPanel
+        getMyPosts={args.getMyPosts}
+        deleteMyPost={args.deleteMyPost}
+        setMyPostMarketing={args.setMyPostMarketing}
+      />
+    </ComposerClosed>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByRole('heading', { level: 2, name: 'My posts' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getAllByRole('button', { name: 'Delete' }),
+    ).toHaveLength(2)
+  },
+}
+
+export const ClosedWithMyPostsDark: Story = {
+  ...ClosedWithMyPosts,
   globals: { theme: 'dark' },
 }

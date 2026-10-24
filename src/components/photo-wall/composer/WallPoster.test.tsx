@@ -10,9 +10,14 @@
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MyPost } from '@/lib/photo-wall/my-posts'
 import type { WallPostAttempt, WallPostRequest } from '@/lib/photo-wall/post'
 import type { PolaroidEditorProps } from './PolaroidEditor'
-import { ENSURE_DEVICE_TIMEOUT_MS, WallPoster } from './WallPoster'
+import {
+  ENSURE_DEVICE_TIMEOUT_MS,
+  WallPoster,
+  type WallPosterProps,
+} from './WallPoster'
 
 const decodes = vi.hoisted(
   () => new Map<string, (master: HTMLCanvasElement) => void>(),
@@ -45,10 +50,32 @@ vi.mock('./FilterStrip', () => ({ FilterStrip: () => null }))
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
+/** The My posts Server Actions, each answering as the server would. */
+const mine = {
+  getMyPosts: vi.fn<WallPosterProps['getMyPosts']>(),
+  deleteMyPost: vi.fn<WallPosterProps['deleteMyPost']>(),
+  setMyPostMarketing: vi.fn<WallPosterProps['setMyPostMarketing']>(),
+}
+
+const myPost = (fields: Partial<MyPost> = {}): MyPost => ({
+  _id: 'wallPost-earlier',
+  status: 'approved',
+  src: 'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
+  caption: 'Earlier today',
+  name: 'Ada',
+  marketingConsent: false,
+  submittedAt: '2026-10-26T08:00:00Z',
+  incarnation: { createdAt: '2026-10-26T08:00:00.000Z', assetId: 'image-e' },
+  ...fields,
+})
+
 let objectUrls = 0
 beforeEach(() => {
   decodes.clear()
   objectUrls = 0
+  mine.getMyPosts.mockReset().mockResolvedValue([])
+  mine.deleteMyPost.mockReset().mockResolvedValue({ status: 'deleted' })
+  mine.setMyPostMarketing.mockReset().mockResolvedValue({ status: 'done' })
   URL.createObjectURL = vi.fn(() => `blob:photo-${++objectUrls}`)
   URL.revokeObjectURL = vi.fn()
   window.history.pushState(null, '')
@@ -75,6 +102,7 @@ function renderPoster(
       deletesOn="2026-11-26"
       ensureDevice={ensureDevice}
       post={post}
+      {...mine}
     />,
   )
 }
@@ -395,6 +423,7 @@ describe('WallPoster', () => {
         deletesOn="2026-11-26"
         ensureDevice={async () => true}
         post={post}
+        {...mine}
       />,
     )
     await pick('progress')
@@ -408,5 +437,102 @@ describe('WallPoster', () => {
     expect(postButton()).toHaveTextContent('Posting…')
     await act(async () => finish({ ok: true }))
     expect(screen.queryByRole('progressbar')).toBeNull()
+  })
+
+  describe('My posts (§6.5, §12)', () => {
+    it('is read on load and shows nothing under the landing while this phone has no posts', async () => {
+      renderPoster(postAnswering())
+      await act(async () => {})
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(1)
+      expect(screen.queryByRole('heading', { name: 'My posts' })).toBeNull()
+    })
+
+    it('sits under the landing when this phone has posts', async () => {
+      mine.getMyPosts.mockResolvedValue([myPost()])
+      renderPoster(postAnswering())
+      await waitFor(() =>
+        expect(
+          screen.getByRole('heading', { level: 2, name: 'My posts' }),
+        ).toBeInTheDocument(),
+      )
+      expect(screen.getByText('On the wall')).toBeInTheDocument()
+      expect(
+        screen.getByRole('img', { name: 'Your photo: Earlier today' }),
+      ).toHaveAttribute(
+        'src',
+        'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
+      )
+      // The landing's own buttons are still there, above it.
+      expect(screen.getByLabelText('Take a photo')).toBeInTheDocument()
+    })
+
+    it('reads the list again after a post, and shows the sent JPEG on top until the server lists the post', async () => {
+      mine.getMyPosts.mockResolvedValue([myPost()])
+      const post = postAnswering({ ok: true })
+      renderPoster(post)
+      await pick('fresh')
+      await press()
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
+      const [[request]] = post.mock.calls
+
+      expect(
+        screen.getAllByRole('img').map((img) => img.getAttribute('src')),
+      ).toEqual([
+        'blob:photo-1',
+        'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
+      ])
+      expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+
+      // The server lists it now, under the id the submit gave it.
+      mine.getMyPosts.mockResolvedValue([
+        myPost({
+          _id: `wallPost-${request.uploadId}`,
+          status: 'pending',
+          src: 'https://cdn.sanity.io/images/p/d/fresh.jpg?rect=0,0,10,10',
+          caption: null,
+        }),
+        myPost(),
+      ])
+      // The next read (here: the page shown again) swaps the card for it.
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(3)
+      await waitFor(() =>
+        expect(
+          screen.getAllByRole('img').map((img) => img.getAttribute('src')),
+        ).toEqual([
+          'https://cdn.sanity.io/images/p/d/fresh.jpg?rect=0,0,10,10',
+          'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
+        ]),
+      )
+    })
+
+    it('Delete and the Marketing switch call the actions with the post’s id, then read the list again', async () => {
+      mine.getMyPosts.mockResolvedValue([myPost()])
+      renderPoster(postAnswering())
+      const marketing = await screen.findByRole('switch', { name: 'Marketing' })
+      await act(async () => {
+        fireEvent.click(marketing)
+      })
+      expect(mine.setMyPostMarketing).toHaveBeenCalledWith(
+        'wallPost-earlier',
+        true,
+      )
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(2)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      mine.getMyPosts.mockResolvedValue([])
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Delete this photo' }),
+        )
+      })
+      expect(mine.deleteMyPost).toHaveBeenCalledWith('wallPost-earlier')
+      expect(mine.getMyPosts).toHaveBeenCalledTimes(3)
+      await waitFor(() =>
+        expect(screen.queryByRole('heading', { name: 'My posts' })).toBeNull(),
+      )
+    })
   })
 })

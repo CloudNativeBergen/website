@@ -30,6 +30,7 @@ describe('Photo Wall photos are never next/image (§5.1, §14)', () => {
   it.each([
     'src/components/photo-wall/wall/WallBoard.tsx',
     'src/components/photo-wall/admin/WallPostCard.tsx',
+    'src/components/photo-wall/composer/MyPosts.tsx',
     'src/components/photo-wall/screen/Pinboard.tsx',
     'src/app/(public)/wall/page.tsx',
     'src/app/(public)/wall/screen/page.tsx',

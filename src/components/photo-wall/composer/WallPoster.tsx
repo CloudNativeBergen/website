@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
+import { objectPosition, type Crop } from '@/lib/photo-wall/crop'
 import {
   WallPostRefused,
   postToWall,
@@ -10,10 +11,29 @@ import {
 } from '@/lib/photo-wall/post'
 import { WallChrome } from '../WallPage'
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './ComposerLanding'
-import { WaitingCard, type PostedPhoto } from './WaitingCard'
+import { MyPosts, type MyPostView } from './MyPosts'
+import { myPostsActions, type MyPostsActions } from './MyPostsPanel'
+import { useMyPosts } from './useMyPosts'
 import { WallComposer, type WallPostDraft } from './WallComposer'
 
-export interface WallPosterProps {
+/**
+ * A post this phone just sent, shown from the JPEG it sent until the
+ * server's list carries it: the query view can lag the submit for a moment.
+ */
+interface PostedPhoto {
+  uploadId: string
+  /** An object URL of the JPEG that was sent. */
+  url: string
+  crop: Crop
+  caption: string
+  name: string
+  marketingConsent: boolean
+}
+
+/** The id the submit route gives the post (§4.2): `wallPost-<uploadId>`. */
+const postIdOf = (uploadId: string) => `wallPost-${uploadId}`
+
+export interface WallPosterProps extends MyPostsActions {
   logo: ConferenceLogoData | null
   /** The wall's deletion date, `YYYY-MM-DD`, for the consent line. */
   deletesOn: string
@@ -58,8 +78,11 @@ const sameDraft = (a: WallPostDraft, b: WallPostDraft) =>
 
 /**
  * `/wall/post` while posting is open (Photo Wall spec §6.5): the composer,
- * wired to the submit route, then the posts sent from this page, each
- * "Waiting for approval".
+ * wired to the submit route, with My posts under the landing if this phone
+ * has any, and My posts with the new card on top, Waiting for approval, once
+ * a post is in (§12). My posts is `getMyPosts` polled ({@link useMyPosts})
+ * and read again after each action; a post just sent is shown from the JPEG
+ * that went up until the server's list carries it.
  *
  * The device cookie first: `ensureDevice()` runs on load and Post to the
  * wall waits for its answer (§6.1), for at most
@@ -75,6 +98,9 @@ export function WallPoster({
   logo,
   deletesOn,
   ensureDevice,
+  getMyPosts,
+  deleteMyPost,
+  setMyPostMarketing,
   post = postToWall,
 }: WallPosterProps) {
   const [device, setDevice] = useState<'pending' | 'ready' | 'failed'>(
@@ -95,6 +121,11 @@ export function WallPoster({
   } | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const urls = useRef<string[]>([])
+  const mine = useMyPosts(getMyPosts)
+  const actions = myPostsActions(
+    { deleteMyPost, setMyPostMarketing },
+    mine.refresh,
+  )
 
   useEffect(() => {
     let live = true
@@ -158,11 +189,38 @@ export function WallPoster({
         crop: draft.crop,
         caption: draft.caption,
         name: draft.name,
+        marketingConsent: draft.marketingConsent,
       },
       ...before,
     ])
     setComposing(false)
+    // The submit expired the device's tag: the list now carries the post,
+    // unless the query view still lags it (then the local card stands in).
+    void mine.refresh()
   }
+
+  // The server's list, with the posts it does not carry yet on top, as the
+  // JPEGs this phone sent (its crop by `object-position`: not Sanity's
+  // square yet). The server's card replaces the local one under its id.
+  const listed = mine.posts ?? []
+  const myPosts: MyPostView[] = [
+    ...posted
+      .filter(
+        (photo) => !listed.some((p) => p._id === postIdOf(photo.uploadId)),
+      )
+      .map((photo) => ({
+        _id: postIdOf(photo.uploadId),
+        status: 'pending' as const,
+        src: photo.url,
+        objectPosition: objectPosition(photo.crop),
+        caption: photo.caption || null,
+        name: photo.name || null,
+        marketingConsent: photo.marketingConsent,
+        submittedAt: null,
+        incarnation: { createdAt: null, assetId: null },
+      })),
+    ...listed,
+  ]
 
   if (composing) {
     return (
@@ -172,6 +230,21 @@ export function WallPoster({
         onSubmit={submit}
         canPost={device !== 'pending'}
         uploadProgress={progress}
+        below={
+          myPosts.length > 0 && (
+            <section aria-labelledby="my-posts" className="mt-10">
+              <h2
+                id="my-posts"
+                className="font-display text-xl font-semibold text-gray-900 dark:text-gray-100"
+              >
+                My posts
+              </h2>
+              <div className="mt-6">
+                <MyPosts posts={myPosts} {...actions} />
+              </div>
+            </section>
+          )
+        }
       />
     )
   }
@@ -188,13 +261,9 @@ export function WallPoster({
       <p className="mt-3 text-gray-600 dark:text-gray-400">
         An organizer looks at every photo before it appears on the wall.
       </p>
-      <ul className="mx-auto mt-8 max-w-xs space-y-8">
-        {posted.map((photo) => (
-          <li key={photo.uploadId}>
-            <WaitingCard post={photo} />
-          </li>
-        ))}
-      </ul>
+      <div className="mt-8">
+        <MyPosts posts={myPosts} {...actions} />
+      </div>
       <div className="mt-10 space-y-3">
         <button
           type="button"

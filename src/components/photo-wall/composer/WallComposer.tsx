@@ -64,6 +64,8 @@ export interface WallComposerProps {
    * null when that isn't known.
    */
   uploadProgress?: number | null
+  /** Under the landing: My posts, if this phone has any (§6.5). */
+  below?: React.ReactNode
 }
 
 /**
@@ -97,6 +99,7 @@ export function WallComposer({
   onSubmit,
   canPost = true,
   uploadProgress = null,
+  below,
 }: WallComposerProps) {
   const [stage, setStage] = useState<Stage>({ kind: 'landing', error: null })
   const [filter, setFilter] = useState<WallFilterKey>('original')
@@ -235,6 +238,7 @@ export function WallComposer({
             </p>
           )}
         </div>
+        {below}
       </WallChrome>
     )
   }
