@@ -1,3 +1,4 @@
+export { PhotoWallCookieNote, PhotoWallPrivacy } from './PhotoWallPrivacy'
 export {
   SessionFeedbackCookieNote,
   SessionFeedbackPrivacy,
