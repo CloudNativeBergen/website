@@ -313,6 +313,18 @@ describe('ModerationQueueView (§10)', () => {
     expect(within(rejected).getByRole('img')).toBeInTheDocument()
   })
 
+  it('a card without a caption has no name of its own; its photo says who', () => {
+    render(
+      <ModerationQueueView
+        queue={{ posts: [post({ _id: 'wallPost-n', name: 'Ada' })] }}
+      />,
+    )
+    const card = within(screen.getByRole('tabpanel')).getByRole('article')
+    expect(card).not.toHaveAttribute('aria-label')
+    expect(card).toHaveAccessibleName('')
+    expect(within(card).getByRole('img')).toHaveAccessibleName('Photo by Ada')
+  })
+
   it('only a deleting card says the delete did not finish (§12)', () => {
     render(<ModerationQueueView queue={QUEUE} />)
     const notes = () =>
@@ -387,6 +399,11 @@ describe('ModerationQueueView (§10)', () => {
   it('shows the loading and the failed states', () => {
     const { rerender } = render(<ModerationQueueView loading />)
     expect(screen.getByText('Loading posts…')).toBeInTheDocument()
+    // The skeleton's three placeholder cards, hidden from readers.
+    const skeleton = screen
+      .getByRole('tabpanel')
+      .querySelector('[aria-hidden="true"]')
+    expect(skeleton?.children).toHaveLength(3)
     rerender(<ModerationQueueView failed />)
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Couldn’t load the posts. Trying again…',
@@ -501,9 +518,13 @@ describe('the live pending count at the top of the page (§10)', () => {
     expect(summary).toContainElement(live[0] as HTMLElement)
   })
 
-  it('is not there before the wall is set up', () => {
+  it('is not there before the wall is set up, nor is the queue', () => {
     render(page({ ...VIEW, wall: null }, pending(3)))
+    expect(
+      screen.getByRole('button', { name: 'Set up the Photo Wall' }),
+    ).toBeInTheDocument()
     expect(screen.queryByTestId('pending-summary')).toBeNull()
+    expect(screen.queryAllByRole('tab')).toHaveLength(0)
   })
 
   it('Review selects and focuses the Pending tab of the queue', () => {
