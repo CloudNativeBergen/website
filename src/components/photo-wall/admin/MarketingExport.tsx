@@ -71,7 +71,7 @@ export function MarketingExportView({ count }: MarketingExportViewProps) {
         </div>
       )}
       <p id={noteId} className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-        Downloaded copies are the organizers’. The 30-day deletion doesn’t
+        Downloaded copies belong to the organizers. The 30-day deletion doesn’t
         remove them, and neither does a contributor deleting a photo or
         unticking marketing later.
       </p>

@@ -86,7 +86,7 @@ export const CountNotLoaded: Story = {
     await expect(
       canvas.getByRole('link', { name: 'Download ZIP' }),
     ).toBeVisible()
-    await expect(canvas.queryByText(/photos?$/)).toBeNull()
+    await expect(canvas.queryByText(/^\d+ photos?$/)).toBeNull()
   },
 }
 

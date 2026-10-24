@@ -145,6 +145,8 @@ describe('the consented ZIP export route (Photo Wall P5)', () => {
     it('a request without a session', async () => {
       h.session.mockResolvedValue(null)
       await expectRefused(await get())
+      // Not even the tenant read: an anonymous request reads nothing.
+      expect(h.conference).not.toHaveBeenCalled()
     })
 
     it('a signed-in speaker who organizes nothing', async () => {

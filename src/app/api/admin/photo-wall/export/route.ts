@@ -28,13 +28,15 @@ const refused = () => NextResponse.json({ error: 'Not found' }, { status: 404 })
 async function organizerConferenceId(): Promise<string | null> {
   try {
     const session = await getAuthSession()
+    // Signed out: refused before even the tenant read.
+    if (!session?.speaker?._id) return null
     const { conference: tenant } = await getConferenceForCurrentDomain()
     const orgId = tenant?.organization?._ref ?? null
     if (!tenant?._id || !isOrganizerForOrg(session?.speaker, orgId)) return null
-    const { conference: live, error } = await getConferenceForCurrentDomain({
+    const { conference: live } = await getConferenceForCurrentDomain({
       uncached: true,
     })
-    if (error || live?._id !== tenant._id || live.organization?._ref !== orgId)
+    if (live?._id !== tenant._id || live.organization?._ref !== orgId)
       return null
     return tenant._id
   } catch {
