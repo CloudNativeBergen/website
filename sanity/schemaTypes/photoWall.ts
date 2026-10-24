@@ -1,4 +1,12 @@
 import { defineField, defineType } from 'sanity'
+import type { PostingMode } from '@/lib/photo-wall/types'
+
+/** The switch's labels; a missing mode is Automatic (§7). */
+const POSTING_LABELS: Record<PostingMode, string> = {
+  auto: 'Automatic',
+  open: 'Open',
+  paused: 'Paused',
+}
 
 /**
  * A conference's Photo Wall (Photo Wall spec §4.1), one per conference with
@@ -23,7 +31,7 @@ export default defineType({
       name: 'postingMode',
       title: 'Posting',
       description:
-        'Automatic opens posting on the conference’s first day and closes it at the end of its last. A missing value reads as Automatic.',
+        'Automatic opens posting at 00:00 on the conference’s first day and closes it at the end of its last (Oslo time). A missing value reads as Automatic.',
       type: 'string',
       options: {
         list: [
@@ -70,12 +78,7 @@ export default defineType({
     select: { title: 'conference.title', mode: 'postingMode' },
     prepare: ({ title, mode }) => ({
       title: title ? `Photo Wall: ${title}` : 'Photo Wall',
-      subtitle:
-        mode == null || mode === 'auto'
-          ? 'Automatic'
-          : mode === 'open'
-            ? 'Open'
-            : 'Paused',
+      subtitle: POSTING_LABELS[(mode ?? 'auto') as PostingMode] ?? 'Paused',
     }),
   },
 })

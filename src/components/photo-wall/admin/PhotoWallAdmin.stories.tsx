@@ -1,10 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { delay, http, HttpResponse } from 'msw'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
-import type {
-  PhotoWall,
-  PhotoWallAdminView,
-  PostingState,
+import {
+  postingState,
+  type PhotoWall,
+  type PhotoWallAdminView,
+  type PostingState,
 } from '@/lib/photo-wall'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 import { PhotoWallAdminPage } from './PhotoWallAdminPage'
@@ -224,7 +225,7 @@ export const AutomaticBeforeTheConference: Story = {
     const canvas = within(canvasElement)
     await expect(canvas.getByRole('radio', { name: 'Automatic' })).toBeChecked()
     await expect(
-      canvas.getByText(/Posting opens by itself at midnight/),
+      canvas.getByText(/Posting opens by itself at 00:00/),
     ).toBeVisible()
   },
 }
@@ -306,15 +307,12 @@ const TRPC = '/api/trpc/photoWall'
 const trpc = (data: unknown) => HttpResponse.json({ result: { data } })
 let served: PhotoWallAdminView = view(null)
 const updates: unknown[] = []
-/** What Set up creates: Automatic, the strip off. */
+/** What Set up creates: an Automatic wall (the rest as WALL). */
 const AUTO_WALL: Partial<PhotoWall> = { postingMode: 'auto' }
-/** The mocked server's window, before the conference's first day. */
+/** The mocked server's window: the real rule, a week before the first day. */
+const CONFERENCE_DAYS = { startDate: '2026-10-26', endDate: '2026-10-27' }
 const postingOf = (wall: PhotoWall): PostingState =>
-  wall.postingMode === 'open'
-    ? 'open'
-    : wall.postingMode === 'auto'
-      ? 'notYetOpen'
-      : 'paused'
+  postingState(wall, CONFERENCE_DAYS, new Date('2026-10-19T12:00:00Z'))
 
 /** The page as `/admin/photo-wall` renders it, its procedures mocked. */
 export const Page: StoryObj<typeof PhotoWallAdminPage> = {
@@ -330,7 +328,7 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
         http.post(`${TRPC}.setUp`, () => {
-          served = view(AUTO_WALL, 'notYetOpen')
+          served = view(AUTO_WALL, postingOf({ ...WALL, ...AUTO_WALL }))
           return trpc(served)
         }),
         http.post(`${TRPC}.updateSettings`, async ({ request }) => {
@@ -354,7 +352,7 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     const auto = await canvas.findByRole('radio', { name: 'Automatic' })
     await expect(auto).toBeChecked()
     await expect(
-      canvas.getByText(/Posting opens by itself at midnight/),
+      canvas.getByText(/Posting opens by itself at 00:00/),
     ).toBeVisible()
     await userEvent.click(canvas.getByRole('radio', { name: 'Open' }))
     // The pressed value shows while the answer is still on its way, and the
@@ -407,7 +405,7 @@ export const SetUpAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
       handlers: [
         http.get(`${TRPC}.settings`, () => trpc(served)),
         http.post(`${TRPC}.setUp`, () => {
-          served = view(AUTO_WALL, 'notYetOpen')
+          served = view(AUTO_WALL, postingOf({ ...WALL, ...AUTO_WALL }))
           return HttpResponse.error()
         }),
       ],

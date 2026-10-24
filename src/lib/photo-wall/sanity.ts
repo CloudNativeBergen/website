@@ -2,10 +2,9 @@ import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import {
-  POSTING_MODES,
+  postingModeOf,
   type PhotoWall,
   type PhotoWallSettingsChange,
-  type PostingMode,
 } from './types'
 
 /**
@@ -43,17 +42,6 @@ export async function readPhotoWall(
     sponsorStrip: row.sponsorStrip === true,
     closedAt: row.closedAt ?? null,
   }
-}
-
-/**
- * A missing mode is Automatic, the default (§7). Anything else the switch
- * does not offer reads as Paused: posting never opens by accident.
- */
-function postingModeOf(stored: string | null | undefined): PostingMode {
-  if (stored == null) return 'auto'
-  return (POSTING_MODES as readonly string[]).includes(stored)
-    ? (stored as PostingMode)
-    : 'paused'
 }
 
 /**

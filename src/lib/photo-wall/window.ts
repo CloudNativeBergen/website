@@ -11,7 +11,7 @@
  * has no day to open on.
  */
 import { isCalendarDate, osloLocalInputToIso } from '@/lib/time'
-import { POSTING_MODES, type PostingMode } from './types'
+import type { PostingMode } from './types'
 
 interface WallSettings {
   postingMode?: PostingMode | null
@@ -28,11 +28,6 @@ function osloMidnight(date: string | null | undefined): Date | null {
   if (!date || !isCalendarDate(date)) return null
   const iso = osloLocalInputToIso(`${date}T00:00`)
   return iso ? new Date(iso) : null
-}
-
-/** The first instant of the conference's first day, Oslo midnight. */
-function postingOpensAt(startDate: string | null | undefined): Date | null {
-  return osloMidnight(startDate)
 }
 
 /** The first instant after the conference's last day, Oslo midnight. */
@@ -58,30 +53,21 @@ export type PostingState =
   | 'noStartDate'
   | 'notYetOpen'
 
-/**
- * The mode the window runs on. A missing mode is Automatic (§7); anything the
- * switch does not offer is Paused, so a stray stored value never opens
- * posting.
- */
-function modeOf(wall: WallSettings): PostingMode {
-  const mode = wall.postingMode
-  if (mode == null) return 'auto'
-  return (POSTING_MODES as readonly string[]).includes(mode) ? mode : 'paused'
-}
-
 export function postingState(
   wall: WallSettings,
   conference: ConferenceDays,
   now: Date,
 ): PostingState {
   if (wall.closedAt) return 'closed'
-  const mode = modeOf(wall)
+  // A missing mode is Automatic (§7); `readPhotoWall` has already turned a
+  // stray stored value into Paused.
+  const mode = wall.postingMode ?? 'auto'
   if (mode === 'paused') return 'paused'
   const closesAt = postingClosesAt(conference.endDate)
   if (!closesAt) return 'noEndDate'
   if (now >= closesAt) return 'ended'
   if (mode === 'open') return 'open'
-  const opensAt = postingOpensAt(conference.startDate)
+  const opensAt = osloMidnight(conference.startDate)
   if (!opensAt) return 'noStartDate'
   return now < opensAt ? 'notYetOpen' : 'open'
 }

@@ -175,11 +175,6 @@ describe('Automatic (§7, P2): open from the first day to the end of the last', 
     ).toBe('noEndDate')
   })
 
-  it('a stored mode the switch does not offer is Paused, never open', () => {
-    const stray = { postingMode: 'always' as unknown as 'open' }
-    expect(postingState(stray, cndn, at('2026-10-26T08:00:00Z'))).toBe('paused')
-  })
-
   it('Open opens early and Paused pauses, both still closing after the last day', () => {
     const before = at('2026-10-20T12:00:00Z')
     expect(postingState({ postingMode: 'open' }, cndn, before)).toBe('open')

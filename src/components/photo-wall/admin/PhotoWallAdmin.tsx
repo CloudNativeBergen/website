@@ -135,8 +135,9 @@ function SetUp({
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
         Attendees scan a QR code and post a photo with a caption. You approve
         each one before it shows on the public Wall page and the venue screens.
-        Posting opens by itself at midnight before the conference’s first day
-        and closes at the end of its last; you can pause it, or open it early.
+        Posting opens by itself at 00:00 on the conference’s first day and
+        closes at the end of its last (Oslo time); you can pause it, or open it
+        early.
       </p>
       <button
         type="button"
@@ -175,7 +176,7 @@ const POSTING_NOTES: Record<
     warn: false,
   },
   notYetOpen: {
-    text: 'Posting opens by itself at midnight before the conference’s first day, and closes at the end of its last.',
+    text: 'Posting opens by itself at 00:00 on the conference’s first day, and closes at the end of its last (Oslo time).',
     warn: false,
   },
   noStartDate: {

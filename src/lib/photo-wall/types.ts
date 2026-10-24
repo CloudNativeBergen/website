@@ -7,6 +7,18 @@ import type { PostingState } from './window'
 export const POSTING_MODES = ['auto', 'open', 'paused'] as const
 export type PostingMode = (typeof POSTING_MODES)[number]
 
+/**
+ * The mode a stored value means (§7): a missing one is Automatic, the
+ * default; anything the switch does not offer is Paused, so a stray value
+ * never opens posting.
+ */
+export function postingModeOf(stored: unknown): PostingMode {
+  if (stored == null) return 'auto'
+  return (POSTING_MODES as readonly unknown[]).includes(stored)
+    ? (stored as PostingMode)
+    : 'paused'
+}
+
 /** A conference's `photoWall` document as the server reads it. */
 export interface PhotoWall {
   _id: string
