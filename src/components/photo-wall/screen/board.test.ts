@@ -31,7 +31,11 @@ const at = (minutes: number) =>
 const post = (n: number, fields: Partial<ScreenPost> = {}): ScreenPost => ({
   _id: `wallPost-${n}`,
   src: `https://cdn.sanity.io/images/p/d/${n}.jpg`,
-  whole: { src: `https://cdn.sanity.io/images/p/d/${n}.jpg?w=1400`, width: 1600, height: 1000 },
+  whole: {
+    src: `https://cdn.sanity.io/images/p/d/${n}.jpg?w=1400`,
+    width: 1600,
+    height: 1000,
+  },
   caption: null,
   name: null,
   approvedAt: at(n),

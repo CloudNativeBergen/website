@@ -73,14 +73,18 @@ import {
   NEW_MARK_MS,
   SWAP_EVERY_MS,
 } from './board'
-import { IMAGE_LOAD_DEADLINE_MS } from './ScreenLayout'
+import { IMAGE_LOAD_DEADLINE_MS } from './ScreenShell'
 
 const at = (minutes: number) =>
   new Date(Date.parse('2026-10-26T07:00:00Z') + minutes * 60_000).toISOString()
 const post = (n: number, fields: Partial<ScreenPost> = {}): ScreenPost => ({
   _id: `wallPost-${n}`,
   src: `https://cdn.sanity.io/images/p/d/${n}-1600x1000.jpg?rect=300,0,1000,1000&w=600&h=600&auto=format`,
-  whole: { src: `https://cdn.sanity.io/images/p/d/${n}.jpg?w=1400`, width: 1600, height: 1000 },
+  whole: {
+    src: `https://cdn.sanity.io/images/p/d/${n}.jpg?w=1400`,
+    width: 1600,
+    height: 1000,
+  },
   caption: n % 3 === 0 ? `Caption ${n}` : null,
   name: n % 2 === 0 ? `Name ${n}` : null,
   approvedAt: at(n),

@@ -259,7 +259,10 @@ function advance(state: StreamState, now: number): StreamState {
       }
     } else {
       const post = nextInRotation(next, shown, current?.key)
-      next = { ...next, feature: post && { key: screenPostKey(post), at: now } }
+      next = {
+        ...next,
+        feature: post ? { key: screenPostKey(post), at: now } : null,
+      }
     }
   }
 
@@ -305,7 +308,9 @@ function onPoll(
   }
 
   // New (id, approvedAt) pairs join the queue in approval order.
-  const fresh = view.posts.filter((post) => !state.seen.has(screenPostKey(post)))
+  const fresh = view.posts.filter(
+    (post) => !state.seen.has(screenPostKey(post)),
+  )
   if (fresh.length > 0) {
     fresh.sort(
       (a, b) =>

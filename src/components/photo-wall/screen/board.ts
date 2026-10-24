@@ -351,7 +351,10 @@ export function retryFailedImages<S extends ImageMemory>(
 }
 
 /** Only what is said of the posts still on the list. */
-export function onList<T>(record: Readonly<Record<string, T>>, keys: Set<string>) {
+export function onList<T>(
+  record: Readonly<Record<string, T>>,
+  keys: Set<string>,
+) {
   return Object.keys(record).some((key) => !keys.has(key))
     ? Object.fromEntries(
         Object.entries(record).filter(([key]) => keys.has(key)),

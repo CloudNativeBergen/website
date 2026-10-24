@@ -3,7 +3,7 @@
  * the shapes `photoWallPublic.screen` answers every 5 s. Pure, safe to
  * import on the client.
  */
-import type { WallLook } from './types'
+import { isWallLook, type WallLook } from './types'
 import type { WholePhoto } from './wall'
 
 /** The path of Screen Mode, which no analytics may count (§9.2). */
@@ -25,6 +25,16 @@ export function isScreenModeUrl(url: string): boolean {
   } catch {
     return isScreenModePath(url)
   }
+}
+
+/** The query parameter a screen's own link overrides the wall's look with (§9). */
+export const SCREEN_LOOK_PARAM = 'look'
+
+/** The look a screen link asks for, when it names exactly one known look. */
+export function screenLookOverride(
+  value: string | string[] | undefined,
+): WallLook | undefined {
+  return isWallLook(value) ? value : undefined
 }
 
 /** One approved Wall Post as the screen shows it (§9.2). */

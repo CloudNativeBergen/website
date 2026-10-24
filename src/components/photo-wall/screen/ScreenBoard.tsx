@@ -3,9 +3,14 @@
 import { useCallback, useEffect, useReducer, useState } from 'react'
 import { markScreenMode } from '@/components/pwa/screen-update'
 import type { ScreenView } from '@/lib/photo-wall/screen'
-import { boardReducer, initialBoard } from './board'
+import type { WallLook } from '@/lib/photo-wall/types'
+import { boardReducer, initialBoard, type BoardAction } from './board'
+import { MosaicScreen } from './MosaicScreen'
 import { useScreenPoll } from './polling'
-import { ScreenLayout, type ScreenConference } from './ScreenLayout'
+import { ScreenLayout } from './ScreenLayout'
+import type { ScreenConference } from './ScreenShell'
+import { SpotlightScreen } from './SpotlightScreen'
+import { initialStream, streamReducer, type StreamLook } from './stream'
 
 /** How often the board's clock runs: the resolution of every timed rule. */
 const TICK_MS = 100
@@ -20,24 +25,22 @@ export interface ScreenPoll {
 }
 
 /**
- * The pinboard, live: the board's state machine driven by the polls, the
- * images the browser reports loaded or failed, and a heartbeat tick. What
- * the connected `ScreenMode` and the stories render.
+ * A look's state machine, live: driven by the polls, the images the browser
+ * reports loaded or failed, and a heartbeat tick.
  */
-export function ScreenBoard({
-  poll: { data, dataUpdatedAt, errorUpdatedAt },
-  conference,
-}: {
-  poll: ScreenPoll
-  conference: ScreenConference
-}) {
-  const [board, dispatch] = useReducer(boardReducer, undefined, initialBoard)
+function useLiveBoard<S>(
+  reducer: (state: S, action: BoardAction) => S,
+  init: () => S,
+  { data, dataUpdatedAt, errorUpdatedAt }: ScreenPoll,
+) {
+  const [state, dispatch] = useReducer(reducer, undefined, init)
 
   // A poll reaches the board DURING the render it arrives in (the "adjust
   // state when a prop changes" pattern), stamped with the poll's own time,
   // not from an effect after the commit: a dispatch from an effect on every
   // poll, with the tick alongside, trips React's nested-update limit on a
-  // screen left open for hours.
+  // screen left open for hours. A look mounted later (switched to) takes
+  // the latest answer as its first load.
   const [seen, setSeen] = useState({ dataAt: 0, errorAt: 0 })
   if (seen.dataAt !== dataUpdatedAt || seen.errorAt !== errorUpdatedAt) {
     setSeen({ dataAt: dataUpdatedAt, errorAt: errorUpdatedAt })
@@ -64,13 +67,46 @@ export function ScreenBoard({
     (key: string) => dispatch({ type: 'imageFailed', key, now: Date.now() }),
     [],
   )
-  return (
-    <ScreenLayout
-      board={board}
-      conference={conference}
-      onImageLoaded={onImageLoaded}
-      onImageFailed={onImageFailed}
-    />
+  return { state, onImageLoaded, onImageFailed }
+}
+
+interface LookProps {
+  poll: ScreenPoll
+  conference: ScreenConference
+}
+
+function PinboardBoard({ poll, conference }: LookProps) {
+  const { state, ...images } = useLiveBoard(boardReducer, initialBoard, poll)
+  return <ScreenLayout board={state} conference={conference} {...images} />
+}
+
+function StreamBoard({
+  look,
+  poll,
+  conference,
+}: LookProps & { look: StreamLook }) {
+  const init = useCallback(() => initialStream(look), [look])
+  const { state, ...images } = useLiveBoard(streamReducer, init, poll)
+  const Screen = look === 'mosaic' ? MosaicScreen : SpotlightScreen
+  return <Screen state={state} conference={conference} {...images} />
+}
+
+/**
+ * Screen Mode in the wall's look, or in `look` when the screen's own link
+ * asks for one (`?look=`, Photo Wall spec §9). A look switched on the admin
+ * page arrives with the next poll; the screen starts that look afresh from
+ * the latest answer, with nothing marked new.
+ */
+export function ScreenBoard({
+  poll,
+  conference,
+  look,
+}: LookProps & { look?: WallLook }) {
+  const shown = look ?? poll.data?.look ?? 'pinboard'
+  return shown === 'pinboard' ? (
+    <PinboardBoard key={shown} poll={poll} conference={conference} />
+  ) : (
+    <StreamBoard key={shown} look={shown} poll={poll} conference={conference} />
   )
 }
 
@@ -81,9 +117,12 @@ export function ScreenBoard({
 export function ScreenMode({
   initial,
   conference,
+  look,
 }: {
   initial: ScreenView
   conference: ScreenConference
+  /** The screen link's `?look=`, overriding the wall's look. */
+  look?: WallLook
 }) {
   const { data, dataUpdatedAt, errorUpdatedAt } = useScreenPoll(initial)
   // Tells the service worker registrar this is a venue screen, also when it
@@ -96,6 +135,7 @@ export function ScreenMode({
     <ScreenBoard
       poll={{ data, dataUpdatedAt, errorUpdatedAt }}
       conference={conference}
+      look={look}
     />
   )
 }

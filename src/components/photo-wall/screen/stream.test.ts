@@ -158,7 +158,11 @@ describe('Mosaic spotlight', () => {
   it('a post removed and approved again is new again', () => {
     let s = started('mosaic', 5)
     const again = post(3, { approvedAt: at(99) })
-    s = poll(s, [again, ...posts(5).filter((p) => p._id !== 'wallPost-3')], T0 + 1_000)
+    s = poll(
+      s,
+      [again, ...posts(5).filter((p) => p._id !== 'wallPost-3')],
+      T0 + 1_000,
+    )
     s = loadAll(s, T0 + 1_000)
     expect(featuredId(s)).toBe('wallPost-3')
     expect(isMarkedNew(s, again)).toBe(true)
