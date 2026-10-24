@@ -172,8 +172,14 @@ export function PolaroidEditor({
           }
           // One line on the wall: Enter moves on to the name instead of
           // breaking the line (a newline would become a space anyway, §6.4).
+          // Not while an IME is composing: that Enter confirms a candidate
+          // (Safari reports it as keyCode 229 rather than isComposing).
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (
+              e.key === 'Enter' &&
+              !e.nativeEvent.isComposing &&
+              e.keyCode !== 229
+            ) {
               e.preventDefault()
               nameField.current?.focus()
             }

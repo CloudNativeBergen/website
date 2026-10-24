@@ -59,6 +59,20 @@ const draw = (
 }
 
 /**
+ * JPEG has no transparency: a transparent pixel (a screenshot, a sticker)
+ * would show the page through it in the preview but turn black in the upload.
+ * The master is flattened onto white once, so both read the same pixels.
+ */
+const flattened = (canvas: HTMLCanvasElement): HTMLCanvasElement => {
+  const ctx = contextOf(canvas)
+  ctx.globalCompositeOperation = 'destination-over'
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.globalCompositeOperation = 'source-over'
+  return canvas
+}
+
+/**
  * The photo as the browser decodes it, oriented, drawn onto a canvas with a
  * long edge of at most 2048 px and no filter: the master the preview copies
  * and the bake read from. Rejects with {@link PhotoDecodeError} for a file
@@ -89,7 +103,7 @@ export async function decodeWallPhoto(file: Blob): Promise<HTMLCanvasElement> {
       })
       if (resized.width === target.width && resized.height === target.height) {
         try {
-          return draw(resized, target)
+          return flattened(draw(resized, target))
         } finally {
           resized.close()
         }
@@ -102,7 +116,7 @@ export async function decodeWallPhoto(file: Blob): Promise<HTMLCanvasElement> {
       canvas = draw(source, step)
       source = canvas
     }
-    return canvas ?? draw(bitmap, target)
+    return flattened(canvas ?? draw(bitmap, target))
   } finally {
     bitmap.close()
   }
