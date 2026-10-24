@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ProposalAcceptTemplate } from '@/components/email/ProposalAcceptTemplate'
 import { ProposalRejectTemplate } from '@/components/email/ProposalRejectTemplate'
+import { ProposalCancelTemplate } from '@/components/email/ProposalCancelTemplate'
 import { ProposalWaitlistTemplate } from '@/components/email/ProposalWaitlistTemplate'
 import { ContractSigningTemplate } from '@/components/email/ContractSigningTemplate'
 import { ContractSignedTemplate } from '@/components/email/ContractSignedTemplate'
@@ -179,6 +180,37 @@ export const EmailTemplates: Story = {
               eventDate="June 15-16, 2026"
               eventUrl="https://cloudnativedays.no"
               comment="While we loved the topic, we received many similar introductory submissions this year. Consider focusing on a more specific use case or advanced pattern for next time!"
+              socialLinks={[
+                'https://twitter.com/cloudnativeno',
+                'https://linkedin.com/company/cloudnativeno',
+              ]}
+            />
+          </EmailPreviewFrame>
+        </section>
+
+        {/* Live Cancel Email */}
+        <section className="mb-16">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
+            Talk Canceled Email
+          </h2>
+          <p className="font-inter mb-6 text-gray-600 dark:text-gray-400">
+            Sent when an organizer cancels or withdraws a talk and chooses to
+            notify the speaker.
+          </p>
+          <EmailPreviewFrame
+            from="Cloud Native Days Norway <hello@cloudnativedays.no>"
+            to="bob.smith@example.com"
+            subject="Your talk at Cloud Native Days Norway 2026 has been canceled"
+            time="Just now"
+          >
+            <ProposalCancelTemplate
+              speakerName="Bob Smith"
+              proposalTitle="Introduction to Container Orchestration"
+              eventName="Cloud Native Days Norway 2026"
+              eventLocation="Oslo, Norway"
+              eventDate="June 15-16, 2026"
+              eventUrl="https://cloudnativedays.no"
+              comment="We had to shorten the program and could not keep this slot. Sorry for the late change."
               socialLinks={[
                 'https://twitter.com/cloudnativeno',
                 'https://linkedin.com/company/cloudnativeno',
