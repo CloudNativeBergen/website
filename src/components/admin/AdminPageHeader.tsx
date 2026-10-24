@@ -117,11 +117,16 @@ export function AdminPageHeader({
         <div
           // Phones: one horizontal strip that bleeds to the page edge (the
           // dashboard shell pads `px-2` below `sm`). From `sm` up: the grid.
-          className={`font-inter -mx-2 -my-1 mt-3 flex snap-x gap-2 overflow-x-auto px-2 py-1 sm:mx-0 sm:my-0 sm:mt-6 sm:grid sm:overflow-visible sm:px-0 sm:py-0 ${getGridCols(stats.length)} sm:gap-3`}
+          // Focusable so keyboard users can scroll the strip (Safari does not
+          // focus scroll containers on its own).
+          role="region"
+          aria-label="Statistics"
+          tabIndex={0}
+          className={`font-inter -mx-2 -my-1 mt-3 flex snap-x gap-2 overflow-x-auto px-2 py-1 focus-visible:outline-2 focus-visible:outline-brand-cloud-blue sm:mx-0 sm:my-0 sm:mt-6 sm:grid sm:overflow-visible sm:px-0 sm:py-0 ${getGridCols(stats.length)} sm:gap-3`}
         >
-          {stats.map((stat, index) => (
+          {stats.map((stat) => (
             <StatCard
-              key={`${stat.label}-${index}`}
+              key={stat.label}
               value={stat.value}
               label={stat.label}
               subtitle={stat.subtitle}
