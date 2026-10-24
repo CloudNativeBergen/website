@@ -264,11 +264,7 @@ const VIEW: PhotoWallAdminView = {
   links: LINKS,
 }
 
-/**
- * The whole admin page: the live pending count under the header, the queue
- * under the settings and links. Review selects the Pending tab and moves
- * focus to it.
- */
+/** The whole admin page: the live pending count under the header, the queue under the settings and links. */
 export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
   render: (args) => <PhotoWallAdmin {...args} />,
   args: {
@@ -283,8 +279,18 @@ export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
     const canvas = within(canvasElement)
     await expect(canvas.getByRole('region', { name: 'Settings' })).toBeVisible()
     await expect(canvas.getByRole('region', { name: 'Posts' })).toBeVisible()
+    await expect(canvas.getByTestId('pending-summary')).toHaveTextContent(
+      '3 photos waiting',
+    )
+  },
+}
+/** Review, pressed with Not shown open: back to Pending, focused, scrolled to. */
+export const InThePageReview: StoryObj<typeof PhotoWallAdmin> = {
+  ...InThePage,
+  parameters: PHONE,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
     const summary = canvas.getByTestId('pending-summary')
-    await expect(summary).toHaveTextContent('3 photos waiting')
     await userEvent.click(canvas.getByRole('tab', { name: 'Not shown (2)' }))
     await userEvent.click(within(summary).getByRole('link', { name: 'Review' }))
     const pending = canvas.getByRole('tab', { name: 'Pending (3)' })
