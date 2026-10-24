@@ -11,15 +11,14 @@
 
 export const MODERATION_POLL_MS = 10_000
 
-const pageVisible = () =>
-  typeof document === 'undefined' || document.visibilityState === 'visible'
-
 /** React Query options for `api.photoWall.moderationQueue.useQuery`. */
 export const moderationQueuePolling = {
-  // The function form: React Query already skips a tick while the tab is
-  // hidden, and this says so where the reader looks for it. Back from
-  // hidden, the focus refetch reads at once and the interval starts again.
-  refetchInterval: () => (pageVisible() ? MODERATION_POLL_MS : false),
-  refetchIntervalInBackground: false,
+  // A plain number: React Query skips each tick while the page is hidden
+  // (`refetchIntervalInBackground` is off by default) and the timer keeps
+  // running. A function answering `false` while hidden would CLEAR the timer
+  // when a read resolves in the background, and nothing would restart it.
+  refetchInterval: MODERATION_POLL_MS,
+  // The app turns the focus refetch off; back after more than the 60 s stale
+  // time, read at once instead of at the next tick.
   refetchOnWindowFocus: true,
 } as const

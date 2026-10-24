@@ -35,6 +35,23 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+/**
+ * A QueryClient with the app's defaults (`src/components/providers/
+ * TRPCProvider.tsx`): the 60 s stale time and the focus refetch turned off
+ * are what the polling has to work against.
+ */
+const appQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 60 * 1000,
+        gcTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+        retry: 1,
+      },
+    },
+  })
+
 describe('polling (§8): every 10 s while visible, with no idle stop', () => {
   function Poller({ queryFn }: { queryFn: () => Promise<unknown> }) {
     useQuery({ queryKey: ['queue'], queryFn, ...moderationQueuePolling })
@@ -54,13 +71,11 @@ describe('polling (§8): every 10 s while visible, with no idle stop', () => {
     vi.useFakeTimers()
   })
 
-  const mount = () => {
-    const queryFn = vi.fn(async () => ({ posts: [], pendingCount: 0 }))
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    })
+  const mount = (
+    queryFn = vi.fn(async (): Promise<unknown> => ({ posts: [] })),
+  ) => {
     render(
-      <QueryClientProvider client={client}>
+      <QueryClientProvider client={appQueryClient()}>
         <Poller queryFn={queryFn} />
       </QueryClientProvider>,
     )
@@ -98,6 +113,35 @@ describe('polling (§8): every 10 s while visible, with no idle stop', () => {
     expect(queryFn.mock.calls.length).toBe(whenHidden + 1)
     await act(() => vi.advanceTimersByTimeAsync(3 * MODERATION_POLL_MS))
     expect(queryFn.mock.calls.length).toBe(whenHidden + 4)
+  })
+
+  it('resumes after the page was hidden while a read was in flight', async () => {
+    // A read that resolves while the page is hidden must not end the
+    // polling: back within the 60 s stale time, the focus refetch is skipped
+    // and nothing re-renders, so only the interval can bring the next read.
+    let hold = false
+    let release = () => {}
+    const queryFn = vi.fn((): Promise<unknown> =>
+      hold
+        ? new Promise((resolve) => {
+            release = () => resolve({ posts: [] })
+          })
+        : Promise.resolve({ posts: [] }),
+    )
+    mount(queryFn)
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(queryFn).toHaveBeenCalledTimes(1)
+    hold = true
+    await act(() => vi.advanceTimersByTimeAsync(MODERATION_POLL_MS))
+    expect(queryFn).toHaveBeenCalledTimes(2)
+    hold = false
+    act(() => setVisibility('hidden'))
+    await act(async () => release())
+    await act(() => vi.advanceTimersByTimeAsync(5_000))
+    expect(queryFn).toHaveBeenCalledTimes(2)
+    act(() => setVisibility('visible'))
+    await act(() => vi.advanceTimersByTimeAsync(3 * MODERATION_POLL_MS))
+    expect(queryFn).toHaveBeenCalledTimes(2 + 3)
   })
 })
 
