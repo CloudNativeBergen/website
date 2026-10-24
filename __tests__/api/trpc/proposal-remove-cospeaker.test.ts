@@ -63,6 +63,7 @@ const coSpeaker = {
 
 const mockProposal = {
   _id: 'proposal-1',
+  _rev: 'rev-1',
   title: 'Test Proposal',
   status: Status.submitted,
   format: Format.presentation_45,
@@ -88,6 +89,7 @@ function replayPatch(documentId: string) {
   const call = mockTransaction.patch.mock.calls.find((c) => c[0] === documentId)
   expect(call).toBeDefined()
   const builder = {
+    ifRevisionId: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
     setIfMissing: vi.fn().mockReturnThis(),
     unset: vi.fn().mockReturnThis(),
@@ -171,6 +173,25 @@ describe('proposal.removeCoSpeaker', () => {
       expect.any(Function),
     )
     expect(mockTransaction.commit).toHaveBeenCalled()
+  })
+
+  it('gates the removal on the revision it checked', async () => {
+    vi.mocked(getProposal).mockResolvedValue({
+      proposal: mockProposal as any,
+      proposalError: null,
+    })
+    mockTransaction.commit.mockRejectedValueOnce(
+      Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
+    )
+
+    const caller = createCaller(regularSpeaker)
+    await expect(
+      caller.proposal.removeCoSpeaker({
+        proposalId: 'proposal-1',
+        speakerId: coSpeaker._id,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(replayPatch('proposal-1').ifRevisionId).toHaveBeenCalledWith('rev-1')
   })
 
   it('allows an organizer to remove a speaker from any proposal', async () => {

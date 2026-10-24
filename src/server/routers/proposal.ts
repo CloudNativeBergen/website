@@ -498,22 +498,36 @@ async function reconcileRemovedCoSpeakers({
  * REMAINING speakers (G2a snapshot sync), so the removed speaker does not
  * linger as a thread member. `speakers[0]` is the primary speaker; unsetting
  * it makes the next speaker primary. Callers check access and refuse removing
- * the last speaker.
+ * the last speaker; the write is gated on the revision they checked
+ * (`rev`), so two concurrent removals cannot both pass that guard and leave
+ * the talk with no speakers. A lost race answers CONFLICT.
  */
 async function dropSpeakerFromProposal(
   proposalId: string,
   speakerId: string,
   speakerIds: string[],
+  rev: string,
 ): Promise<void> {
   const transaction = clientWrite.transaction()
   transaction.patch(proposalId, (patch) =>
-    patch.unset([`speakers[_ref=="${speakerId}"]`]),
+    patch.ifRevisionId(rev).unset([`speakers[_ref=="${speakerId}"]`]),
   )
-  await reconcileRemovedCoSpeakers({
-    proposalId,
-    removedSpeakerIds: [speakerId],
-    transaction,
-  })
+  try {
+    await reconcileRemovedCoSpeakers({
+      proposalId,
+      removedSpeakerIds: [speakerId],
+      transaction,
+    })
+  } catch (error) {
+    if ((error as { statusCode?: number }).statusCode === 409) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This talk was just updated. Refresh and try again.',
+        cause: error,
+      })
+    }
+    throw error
+  }
   await syncProposalConversationParticipants(
     proposalId,
     speakerIds.filter((id) => id !== speakerId),
@@ -1533,6 +1547,7 @@ export const proposalRouter = router({
           input.proposalId,
           input.speakerId,
           speakerIds,
+          proposal._rev,
         )
 
         return { success: true }
@@ -1993,18 +2008,38 @@ export const proposalRouter = router({
             message: 'Failed to get current conference',
           })
         }
-        const { proposal } = await getProposal({
+        const { proposal, proposalError } = await getProposal({
           id: proposalId,
           speakerId: ctx.speaker._id,
           isOrganizer: true,
           organizerOrgId: ctx.orgId,
         })
+        if (proposalError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch proposal',
+            cause: proposalError,
+          })
+        }
         // Org arm only, like admin.getById: a foreign-tenant proposal the
         // caller owns reads as not found here.
         if (!proposal?._id || proposal._organizationId !== ctx.orgId) {
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Proposal not found',
+          })
+        }
+        const talkConference = proposal.conference
+        const talkConferenceId =
+          talkConference && '_ref' in talkConference
+            ? talkConference._ref
+            : talkConference?._id
+        // The thread and ticket rules are per conference; another edition's
+        // talk is out of scope here.
+        if (talkConferenceId !== conference._id) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This talk belongs to another conference edition.',
           })
         }
         const speakers = ((proposal.speakers ?? []) as Speaker[]).filter(
@@ -2026,18 +2061,16 @@ export const proposalRouter = router({
           })
         }
 
-        await dropSpeakerFromProposal(proposalId, speakerId, speakerIds)
+        await dropSpeakerFromProposal(
+          proposalId,
+          speakerId,
+          speakerIds,
+          proposal._rev,
+        )
 
-        const talkConference = proposal.conference
-        const talkConferenceId =
-          talkConference && '_ref' in talkConference
-            ? talkConference._ref
-            : talkConference?._id
-        if (talkConferenceId) {
-          revalidateTag(conferenceTag(talkConferenceId), 'default')
-          if (proposal.status === Status.confirmed) {
-            expireFeedbackCodeIndex(talkConferenceId)
-          }
+        revalidateTag(conferenceTag(talkConferenceId), 'default')
+        if (proposal.status === Status.confirmed) {
+          expireFeedbackCodeIndex(talkConferenceId)
         }
 
         // Never-fail from here: the removal is committed.
@@ -2053,34 +2086,32 @@ export const proposalRouter = router({
               )
             : undefined
 
-        if (talkConferenceId === conference._id) {
-          try {
-            const conversationId = await ensureProposalConversation({
-              conferenceId: conference._id,
-              proposalId,
-              proposalTitle: proposal.title ?? 'Proposal',
-              createdById: ctx.speaker._id,
-              proposalSpeakerIds: remaining.map((s) => s._id),
-            })
-            const message = await addMessage({
-              conversationId,
-              authorId: ctx.speaker._id,
-              body: `${removedName} is no longer a speaker on this talk.${comment ? `\n\n${comment}` : ''}`,
-            })
-            const conversation = await getConversationById(conversationId)
-            if (conversation) {
-              runAfterResponse(() =>
-                notifyNewMessage({
-                  conversation,
-                  message,
-                  authorId: ctx.speaker._id,
-                  conference,
-                }),
-              )
-            }
-          } catch (error) {
-            console.error('Failed to post speaker removal to thread:', error)
+        try {
+          const conversationId = await ensureProposalConversation({
+            conferenceId: conference._id,
+            proposalId,
+            proposalTitle: proposal.title ?? 'Proposal',
+            createdById: ctx.speaker._id,
+            proposalSpeakerIds: remaining.map((s) => s._id),
+          })
+          const message = await addMessage({
+            conversationId,
+            authorId: ctx.speaker._id,
+            body: `${removedName} is no longer a speaker on this talk.${comment ? `\n\n${comment}` : ''}`,
+          })
+          const conversation = await getConversationById(conversationId)
+          if (conversation) {
+            runAfterResponse(() =>
+              notifyNewMessage({
+                conversation,
+                message,
+                authorId: ctx.speaker._id,
+                conference,
+              }),
+            )
           }
+        } catch (error) {
+          console.error('Failed to post speaker removal to thread:', error)
         }
 
         if (!isSelf) {

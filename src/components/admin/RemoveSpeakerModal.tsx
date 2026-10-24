@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { DialogTitle } from '@headlessui/react'
 import { UserMinusIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { ModalShell } from '@/components/ModalShell'
@@ -28,6 +29,9 @@ export function RemoveSpeakerModal({
   const [comment, setComment] = useState('')
   const [revokeTicket, setRevokeTicket] = useState(false)
   const [error, setError] = useState('')
+  // Removing yourself sends you no email or notice.
+  const { data: session } = useSession()
+  const isSelf = session?.speaker?._id === speaker._id
   // Speaker tickets are only issued on confirm.
   const offersTicketCancel = proposal.status === Status.confirmed
 
@@ -81,10 +85,12 @@ export function RemoveSpeakerModal({
             <span className="font-semibold">{proposal.title}</span>? The talk
             keeps its other speakers.
           </p>
-          <p className="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">
-            {speaker.name} gets an email and an in-app notice. The other
-            speakers and organizers see a message on the talk.
-          </p>
+          {!isSelf && (
+            <p className="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">
+              {speaker.name} gets an email and an in-app notice. The other
+              speakers and organizers see a message on the talk.
+            </p>
+          )}
           {offersTicketCancel && (
             <div className="mt-4">
               <label className="flex items-center">

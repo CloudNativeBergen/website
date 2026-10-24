@@ -63,6 +63,7 @@ const coSpeaker = { _id: 'cospeaker-1', name: 'Co Speaker', email: 'co@x.no' }
 
 const proposal = (overrides: Record<string, unknown> = {}) => ({
   _id: 'proposal-1',
+  _rev: 'rev-1',
   title: 'Test Talk',
   status: Status.confirmed,
   format: Format.presentation_45,
@@ -131,18 +132,43 @@ describe('proposal.admin.removeSpeaker', () => {
     expect(mockTransaction.commit).not.toHaveBeenCalled()
   })
 
-  it('removes the primary speaker by unsetting its ref, promoting the next', async () => {
+  it('removes the primary speaker by unsetting its ref in place', async () => {
     await remove(organizerSpeaker, { speakerId: regularSpeaker._id })
     const call = mockTransaction.patch.mock.calls.find(
       (c) => c[0] === 'proposal-1',
     )!
-    const builder = { unset: vi.fn().mockReturnThis() }
+    const builder = {
+      ifRevisionId: vi.fn().mockReturnThis(),
+      unset: vi.fn().mockReturnThis(),
+    }
     call[1](builder)
     // Unsetting speakers[0] in place leaves the next speaker first.
     expect(builder.unset).toHaveBeenCalledWith([
       `speakers[_ref=="${regularSpeaker._id}"]`,
     ])
+    expect(builder.ifRevisionId).toHaveBeenCalledWith('rev-1')
     expect(mockTransaction.commit).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers CONFLICT when the talk changed since it was read', async () => {
+    mockTransaction.commit.mockRejectedValueOnce(
+      Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
+    )
+    await expect(remove(organizerSpeaker)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    })
+    expect(addMessage).not.toHaveBeenCalled()
+  })
+
+  it('refuses a talk from another conference edition', async () => {
+    vi.mocked(getProposal).mockResolvedValue({
+      proposal: proposal({ conference: { _id: 'conf-old' } }) as any,
+      proposalError: null,
+    })
+    await expect(remove(organizerSpeaker)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+    expect(mockTransaction.commit).not.toHaveBeenCalled()
   })
 
   it('posts to the thread and tells the removed speaker and Slack', async () => {
