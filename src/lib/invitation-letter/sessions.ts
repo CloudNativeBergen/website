@@ -109,7 +109,9 @@ export function hasConfirmedTalkAtConference(
 }
 
 /** The conference a proposal belongs to, whether expanded or left as a ref. */
-function proposalConferenceId(proposal: ProposalExisting): string | null {
+export function proposalConferenceId(
+  proposal: ProposalExisting,
+): string | null {
   const conference = proposal.conference
   if (typeof conference === 'string') return conference
   if (conference && typeof conference === 'object') {
