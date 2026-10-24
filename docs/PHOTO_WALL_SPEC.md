@@ -313,9 +313,13 @@ capture="environment">`) and **Choose from your photos** (no `capture`).
   matching the prototype's look. Baked into the uploaded JPEG.
 - **Consent:** a passive line above the button, no checkbox and no gate:
 
-  > Your photo, caption and name are shown on the screens at the venue and on
-  > the public wall on this website until <deletion date>. Only post photos
-  > the people in them are happy with. [Privacy](/privacy#photo-wall)
+  > Your whole photo, caption and name are shown on the screens at the venue
+  > and on the public wall on this website until <deletion date>; the square
+  > you choose is only how the polaroids frame it. Only post photos the
+  > people in them are happy with. [Privacy](/privacy#photo-wall)
+
+  _Decided by the user (2026-10-25, P3):_ the "whole photo" wording, since
+  Mosaic and Spotlight show the whole photo (§9), not the square.
 
 - **Marketing:** an optional checkbox, **unticked by default**: "The
   organizers may also use my photo in their own marketing."
