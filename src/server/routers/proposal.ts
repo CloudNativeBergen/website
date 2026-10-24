@@ -3359,17 +3359,15 @@ export const proposalRouter = router({
             '_id' in invitation.invitedBy
               ? invitation.invitedBy._id
               : undefined
-          // The invitation projection carries no conference ref (neither does
-          // its nested proposal), so resolve it from the current domain — the
-          // respond endpoint is always hit on the conference's own domain.
-          let notifyConferenceId: string | undefined
-          try {
-            const { conference: currentConference } =
-              await getConferenceForCurrentDomain()
-            notifyConferenceId = currentConference?._id
-          } catch {
-            notifyConferenceId = undefined
-          }
+          // The invitation's own conference (set from the proposal at invite
+          // time), not the request host's: a prior edition on the same domain
+          // must not file the row under the current one.
+          const notifyConferenceId =
+            typeof invitation.conference === 'object' &&
+            invitation.conference !== null &&
+            '_id' in invitation.conference
+              ? invitation.conference._id
+              : undefined
           if (inviterId && notifyConferenceId) {
             const respondentName = ctx.speaker.name || ctx.speaker.email
             const proposalTitle =
