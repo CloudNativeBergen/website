@@ -441,7 +441,11 @@ export const SpotlightSponsorStrip: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getByRole('marquee')).toBeVisible()
-    await expect(await canvas.findByTestId('spotlight-hero')).toBeVisible()
+    // Past the big post's fade-in.
+    await waitFor(
+      () => expect(canvas.getByTestId('spotlight-hero')).toBeVisible(),
+      { timeout: 5_000 },
+    )
   },
 }
 
@@ -465,7 +469,11 @@ export const LookOverride: Story = {
   args: { initial: view(posts(24), { look: 'mosaic' }), look: 'spotlight' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(await canvas.findByTestId('spotlight-hero')).toBeVisible()
+    // Past the big post's fade-in.
+    await waitFor(
+      () => expect(canvas.getByTestId('spotlight-hero')).toBeVisible(),
+      { timeout: 5_000 },
+    )
     await expect(tilesOf(canvas)).toHaveLength(0)
   },
 }
