@@ -17,6 +17,7 @@ import {
   ORGANIZER_INVITATION_VALID_DAYS,
   type OrganizerInvitationFull,
 } from './types'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 /** Where an invitee lands to accept. Public route; the token is its capability. */
 export const ORGANIZER_INVITE_ACCEPT_PATH = '/organizer-invitation/accept'
@@ -161,7 +162,7 @@ export async function sendOrganizerInvitationEmail(params: {
     const result = await sendEmail({
       to: invitation.invitedEmail,
       subject: `You've been invited to organize ${conference.title || PLATFORM_NAME}`,
-      from: `${conference.organizer} <${conference.contactEmail}>`,
+      from: resolveConferenceFrom(conference),
       orgId: conference.organization?._ref,
       component: OrganizerInvitationTemplate,
       props: {
