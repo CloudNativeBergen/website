@@ -122,7 +122,7 @@ const PHONE = { viewport: { defaultViewport: 'mobile1' } }
 export const Pending: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByRole('status')).toHaveTextContent(
+    await expect(canvas.getByTestId('queue-status')).toHaveTextContent(
       '3 waiting for approval',
     )
     await expect(
@@ -226,7 +226,7 @@ export const Empty: Story = {
   args: { queue: EMPTY },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByRole('status')).toHaveTextContent(
+    await expect(canvas.getByTestId('queue-status')).toHaveTextContent(
       'Nothing waiting for approval',
     )
     await expect(canvas.getByRole('tabpanel')).toHaveTextContent(
@@ -317,7 +317,9 @@ export const Polled: StoryObj<typeof ModerationQueue> = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByRole('status')).toHaveTextContent('Loading posts…')
+    await expect(canvas.getByTestId('queue-status')).toHaveTextContent(
+      'Loading posts…',
+    )
     await expect(
       await canvas.findByText('3 waiting for approval', {}, { timeout: 5000 }),
     ).toBeVisible()

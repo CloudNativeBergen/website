@@ -107,10 +107,14 @@ export function ModerationQueueView({
         >
           Posts
         </h2>
-        {/* The live pending count (§10): polite, so each poll that changes
-            it is announced without interrupting. */}
+        {/* The live pending count (§10): a polite live region, so each poll
+            that changes it is announced without interrupting. Not
+            `role="status"`: the Settings card's "Saving…" is one, and the
+            page must keep exactly one of those for its tests and readers. */}
         <p
-          role="status"
+          data-testid="queue-status"
+          aria-live="polite"
+          aria-atomic="true"
           className="text-sm font-medium text-gray-700 dark:text-gray-300"
         >
           {status}

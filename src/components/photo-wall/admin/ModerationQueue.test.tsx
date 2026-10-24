@@ -171,7 +171,7 @@ const tab = (name: RegExp) => screen.getByRole('tab', { name })
 describe('ModerationQueueView (§10)', () => {
   it('shows the live pending count at the top', () => {
     render(<ModerationQueueView queue={QUEUE} />)
-    expect(screen.getByRole('status')).toHaveTextContent(
+    expect(screen.getByTestId('queue-status')).toHaveTextContent(
       '1 waiting for approval',
     )
   })
@@ -265,7 +265,7 @@ describe('ModerationQueueView (§10)', () => {
 
   it('says what an empty tab means', () => {
     render(<ModerationQueueView queue={{ posts: [], pendingCount: 0 }} />)
-    expect(screen.getByRole('status')).toHaveTextContent(
+    expect(screen.getByTestId('queue-status')).toHaveTextContent(
       'Nothing waiting for approval',
     )
     expect(screen.getByRole('tabpanel')).toHaveTextContent(
@@ -296,14 +296,16 @@ describe('ModerationQueueView (§10)', () => {
 
   it('shows the loading and the failed states', () => {
     const { rerender } = render(<ModerationQueueView loading />)
-    expect(screen.getByRole('status')).toHaveTextContent('Loading posts…')
+    expect(screen.getByTestId('queue-status')).toHaveTextContent(
+      'Loading posts…',
+    )
     rerender(<ModerationQueueView failed />)
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Couldn’t load the posts. Trying again…',
     )
     // Stale data stays on screen while a refresh fails.
     rerender(<ModerationQueueView queue={QUEUE} failed />)
-    expect(screen.getByRole('status')).toHaveTextContent(
+    expect(screen.getByTestId('queue-status')).toHaveTextContent(
       '1 waiting for approval',
     )
     expect(screen.getByRole('alert')).toHaveTextContent(
@@ -327,7 +329,7 @@ describe('ModerationQueue, connected', () => {
         refetchInterval: moderationQueuePolling.refetchInterval,
       }),
     )
-    expect(screen.getByRole('status')).toHaveTextContent(
+    expect(screen.getByTestId('queue-status')).toHaveTextContent(
       '1 waiting for approval',
     )
   })
@@ -339,7 +341,9 @@ describe('ModerationQueue, connected', () => {
       isError: false,
     })
     const { rerender } = render(<ModerationQueue />)
-    expect(screen.getByRole('status')).toHaveTextContent('Loading posts…')
+    expect(screen.getByTestId('queue-status')).toHaveTextContent(
+      'Loading posts…',
+    )
     h.useQuery.mockReturnValue({
       data: undefined,
       isPending: false,
