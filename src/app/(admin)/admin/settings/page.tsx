@@ -696,7 +696,8 @@ export default async function AdminSettings() {
                 </p>
               ) : (
                 <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
-                  No analytics script is served on this site. Add your
+                  No analytics of your own is served on this site; only the
+                  platform&apos;s cookie-less Vercel Analytics runs. Add your
                   organization&apos;s PostHog project token to start collecting
                   visitor statistics into your own project.
                 </p>
