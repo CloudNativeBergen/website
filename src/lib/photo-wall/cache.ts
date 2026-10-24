@@ -75,24 +75,42 @@ export function expirePhotoWall(conferenceId: string): void {
 }
 
 /**
- * Expire what a Wall Post write changes (§8): the moderation queue, the
- * contributor's My posts and, with `wall`, the public wall. Same
- * `{ expire: 0 }` and never-fail rule as {@link expirePhotoWall}.
+ * The tags a Wall Post write changes (§8): the moderation queue, the
+ * contributor's My posts and, with `wall`, the public wall.
  */
-export function expireWallPost(
+function wallPostTags(
   conferenceId: string,
   deviceKey: string,
   { wall }: { wall: boolean },
-): void {
+): string[] {
   const tags = [photoWallAdminTag(conferenceId), photoWallDeviceTag(deviceKey)]
   if (wall) tags.push(photoWallTag(conferenceId))
+  return tags
+}
+
+/** Expire each tag with `expire`, never failing the write it rides on. */
+function expireEach(tags: string[], expire: (tag: string) => void): void {
   for (const tag of tags) {
     try {
-      revalidateTag(tag, { expire: 0 })
+      expire(tag)
     } catch (error) {
       console.error(`Could not expire the Photo Wall cache tag ${tag}`, error)
     }
   }
+}
+
+/**
+ * Expire what a Wall Post write changes (§8) from a Route Handler or a tRPC
+ * mutation: `revalidateTag` with `{ expire: 0 }`, as {@link expirePhotoWall}.
+ */
+export function expireWallPost(
+  conferenceId: string,
+  deviceKey: string,
+  options: { wall: boolean },
+): void {
+  expireEach(wallPostTags(conferenceId, deviceKey, options), (tag) =>
+    revalidateTag(tag, { expire: 0 }),
+  )
 }
 
 /**
@@ -122,15 +140,7 @@ export async function getMyPosts(
 export function updateWallPostTags(
   conferenceId: string,
   deviceKey: string,
-  { wall }: { wall: boolean },
+  options: { wall: boolean },
 ): void {
-  const tags = [photoWallAdminTag(conferenceId), photoWallDeviceTag(deviceKey)]
-  if (wall) tags.push(photoWallTag(conferenceId))
-  for (const tag of tags) {
-    try {
-      updateTag(tag)
-    } catch (error) {
-      console.error(`Could not update the Photo Wall cache tag ${tag}`, error)
-    }
-  }
+  expireEach(wallPostTags(conferenceId, deviceKey, options), updateTag)
 }

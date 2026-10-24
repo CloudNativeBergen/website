@@ -20,7 +20,6 @@ const post = (fields: Partial<MyPost> = {}): MyPost => ({
   name: 'Ada',
   marketingConsent: false,
   submittedAt: '2026-10-26T09:00:00Z',
-  incarnation: { createdAt: '2026-10-26T09:00:00.000Z', assetId: 'image-a' },
   ...fields,
 })
 
@@ -198,6 +197,31 @@ describe('MyPosts', () => {
       expect.objectContaining({ caption: 'No' }),
       true,
     )
+  })
+
+  it('shows the changed consent until the list carries it, then follows the list again (another tab may change it)', async () => {
+    const at = (marketingConsent: boolean) => (
+      <MyPosts
+        posts={[post({ _id: 'wallPost-x', caption: 'Tabs', marketingConsent })]}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+      />
+    )
+    const { rerender } = render(at(true))
+    const toggle = () => card('Tabs').getByRole('switch', { name: 'Marketing' })
+    await act(async () => {
+      fireEvent.click(toggle())
+    })
+    expect(toggle()).toHaveAttribute('aria-checked', 'false')
+    // The next poll still carries the old value: the change stays shown.
+    rerender(at(true))
+    expect(toggle()).toHaveAttribute('aria-checked', 'false')
+    // The list carries it: acknowledged.
+    rerender(at(false))
+    expect(toggle()).toHaveAttribute('aria-checked', 'false')
+    // Another tab of the same phone ticks it again: the list wins.
+    rerender(at(true))
+    expect(toggle()).toHaveAttribute('aria-checked', 'true')
   })
 
   it('a Marketing change that did not go through says so and keeps the stored value', async () => {

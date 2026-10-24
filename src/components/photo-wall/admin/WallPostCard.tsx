@@ -11,7 +11,7 @@ import {
   type WallPostCrop,
 } from '@/lib/photo-wall'
 import { formatConferenceDayTime } from '@/lib/time'
-import { focusIsWith } from './focus'
+import { focusIsWith } from '../focus'
 
 /** What an organizer can do to a post from its card (§10). */
 export type PostAction = 'approve' | 'reject' | 'remove' | 'delete'

@@ -18,7 +18,6 @@ const post = (fields: Partial<MyPost>): MyPost => ({
   name: null,
   marketingConsent: false,
   submittedAt: '2026-10-26T09:00:00Z',
-  incarnation: { createdAt: '2026-10-26T09:00:00.000Z', assetId: 'image-1' },
   ...fields,
 })
 

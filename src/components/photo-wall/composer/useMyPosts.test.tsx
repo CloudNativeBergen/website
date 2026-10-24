@@ -19,7 +19,6 @@ const post = (status: MyPost['status']): MyPost => ({
   name: 'Ada',
   marketingConsent: false,
   submittedAt: '2026-10-26T09:00:00Z',
-  incarnation: { createdAt: '2026-10-26T09:00:00.000Z', assetId: 'image-a' },
 })
 
 function Probe({ load }: { load: () => Promise<MyPost[]> }) {

@@ -6,9 +6,14 @@ import {
   ClockIcon,
   EyeSlashIcon,
 } from '@heroicons/react/24/outline'
-import { MY_POST_STATUS_LABELS, type MyPost } from '@/lib/photo-wall/my-posts'
+import {
+  MY_POST_STATUS_LABELS,
+  type MyPost,
+  type MyPostDeletionStatus,
+  type MyPostMarketingStatus,
+} from '@/lib/photo-wall/my-posts'
 import type { WallPostStatus } from '@/lib/photo-wall/moderation'
-import { focusIsWith } from '../admin/focus'
+import { focusIsWith } from '../focus'
 
 /** One of this phone's posts as the list shows it. */
 export interface MyPostView extends MyPost {
@@ -23,12 +28,12 @@ export interface MyPostView extends MyPost {
 export interface MyPostsProps {
   posts: MyPostView[]
   /** Delete, after the confirm: the `deleteMyPost` Server Action's answer. */
-  onDelete: (post: MyPost) => Promise<'deleted' | 'failed' | 'gone'>
+  onDelete: (post: MyPost) => Promise<MyPostDeletionStatus>
   /** The Marketing switch: the `setMyPostMarketing` Server Action's answer. */
   onMarketing: (
     post: MyPost,
     consent: boolean,
-  ) => Promise<'done' | 'changed' | 'gone'>
+  ) => Promise<MyPostMarketingStatus>
 }
 
 /** The inline confirm's question (Photo Wall spec §12). */
@@ -82,7 +87,28 @@ const DANGER = `${BUTTON} bg-red-700 text-white hover:bg-red-800`
 const DANGER_QUIET = `${BUTTON} bg-white text-red-700 ring-1 ring-red-300 ring-inset hover:bg-red-50`
 const SECONDARY = `${BUTTON} bg-white text-gray-900 ring-1 ring-gray-300 ring-inset hover:bg-gray-50`
 
-type Busy = 'delete' | 'marketing' | null
+/**
+ * My posts as a section of its own: the heading and the list. The open
+ * composer puts it under the landing; the closed page under See the wall.
+ */
+export function MyPostsSection(props: MyPostsProps) {
+  return (
+    <section aria-labelledby="my-posts" className="mt-10">
+      <h2
+        id="my-posts"
+        className="font-display text-xl font-semibold text-gray-900 dark:text-gray-100"
+      >
+        My posts
+      </h2>
+      <div className="mt-6">
+        <MyPosts {...props} />
+      </div>
+    </section>
+  )
+}
+
+/** What a card can be doing, or have failed at. */
+type CardAction = 'delete' | 'marketing'
 
 function MyPostCard({
   post,
@@ -90,20 +116,22 @@ function MyPostCard({
   onMarketing,
 }: { post: MyPostView } & Pick<MyPostsProps, 'onDelete' | 'onMarketing'>) {
   const { src, objectPosition, caption, name, status } = post
-  const [busy, setBusy] = useState<Busy>(null)
-  const [failed, setFailed] = useState<Busy>(null)
+  const [busy, setBusy] = useState<CardAction | null>(null)
+  const [failed, setFailed] = useState<CardAction | null>(null)
   const [confirming, setConfirming] = useState(false)
   // Deleted (or gone): nothing to show until the list drops it.
   const [removed, setRemoved] = useState(false)
-  // The consent the switch shows once a change went through, until the
-  // list is read again and carries it: kept only while the stored value is
-  // the one the change was made from.
-  const [changed, setChanged] = useState<{
-    from: boolean
-    to: boolean
-  } | null>(null)
-  const consent =
-    changed && changed.from === post.marketingConsent ? changed.to : null
+  // The consent a change just wrote, shown until the list carries a change
+  // of its own (the acknowledgement, or another tab's change): the list is
+  // the authority again from then on. State adjusted during render, on the
+  // stored value moving, never in an effect.
+  const [changed, setChanged] = useState<boolean | null>(null)
+  const [stored, setStored] = useState(post.marketingConsent)
+  if (stored !== post.marketingConsent) {
+    setStored(post.marketingConsent)
+    setChanged(null)
+  }
+  const consent = changed
 
   const confirmId = useId()
   const cancelRef = useRef<HTMLButtonElement>(null)
@@ -146,8 +174,7 @@ function MyPostCard({
       () => 'changed' as const,
     )
     setBusy(null)
-    if (outcome === 'done')
-      setChanged({ from: post.marketingConsent, to: next })
+    if (outcome === 'done') setChanged(next)
     else setFailed('marketing')
   }
 

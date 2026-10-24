@@ -11,7 +11,9 @@
  */
 import { evaluate, parse } from 'groq-js'
 // The REAL builder by its path: `vitest.config.ts` aliases `@sanity/image-url`
-// to a mock that answers one fixed URL, and the `rect=` square is the point.
+// to a mock that answers one fixed URL, and `vi.importActual` resolves through
+// that alias too, so only the file path reaches the real module. The `rect=`
+// square is the point of this test.
 import { createImageUrlBuilder } from '../../../node_modules/@sanity/image-url/lib/index.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -144,10 +146,6 @@ describe('readMyPosts', () => {
       name: 'Ada',
       marketingConsent: false,
       submittedAt: '2026-10-26T09:00:00Z',
-      incarnation: {
-        createdAt: '2026-10-26T09:00:00.000Z',
-        assetId: 'image-aaa-1600x1000-jpg',
-      },
     })
     expect(approved).toMatchObject({
       _id: 'wallPost-bbb',
@@ -160,7 +158,7 @@ describe('readMyPosts', () => {
     })
   })
 
-  it('shows no photo for a deleting post, and hides the asset it still has to remove', async () => {
+  it('shows no photo for a deleting post, and no asset id for any post', async () => {
     const posts = await readMyPosts('conf-A', DEVICE)
     expect(posts[3]).toEqual({
       _id: 'wallPost-ddd',
@@ -170,8 +168,10 @@ describe('readMyPosts', () => {
       name: 'Ada',
       marketingConsent: false,
       submittedAt: '2026-10-26T07:00:00Z',
-      incarnation: { createdAt: '2026-10-26T09:00:00.000Z', assetId: null },
     })
+    for (const post of posts) {
+      expect(JSON.stringify(post)).not.toMatch(/image-[a-z]{3}-1600x1000-jpg"/)
+    }
   })
 
   it("sees this device's post on the other conference when asked for that conference", async () => {

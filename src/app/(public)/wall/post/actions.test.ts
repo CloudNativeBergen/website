@@ -233,32 +233,51 @@ describe('deleteMyPost', () => {
     ])
   })
 
-  it("is gone, writing nothing, for another device's post", async () => {
+  it("is gone, writing nothing and expiring nothing, for another device's post", async () => {
     await phoneWithPost()
     await expect(deleteMyPost(OTHER_POST)).resolves.toEqual({ status: 'gone' })
     expect(h.store!.commits).toEqual([])
     expect(h.store!.doc(OTHER_POST)).toMatchObject({ status: 'approved' })
+    // Nothing was written, so no screen or admin poll is made to refill:
+    // a phone looping Delete on ids it does not own must cost nothing.
+    expect(expired()).toEqual([])
   })
 
-  it('is gone, writing nothing, for a missing post', async () => {
+  it('is gone, writing nothing and expiring nothing, for a missing post', async () => {
     await phoneWithPost()
     await expect(deleteMyPost('wallPost-nope')).resolves.toEqual({
       status: 'gone',
     })
     expect(h.store!.commits).toEqual([])
+    expect(expired()).toEqual([])
   })
 
-  it('is gone, reading and writing nothing, without a cookie: never a Delete of any post', async () => {
+  it('is gone, reading, writing and expiring nothing, without a cookie: never a Delete of any post', async () => {
     await phoneWithPost()
     h.jar.delete('konf_wall')
     await expect(deleteMyPost(DEVICE_POST)).resolves.toEqual({ status: 'gone' })
     expect(h.store!.docReads).toEqual([])
     expect(h.store!.commits).toEqual([])
     expect(h.store!.doc(DEVICE_POST)).toMatchObject({ status: 'approved' })
+    expect(expired()).toEqual([])
+  })
+
+  it('a mark that committed but whose answer was lost expires the tags: the post left the wall', async () => {
+    const key = await phoneWithPost()
+    h.store!.afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+    await expect(deleteMyPost(DEVICE_POST)).rejects.toThrow('socket hang up')
+    expect(h.store!.doc(DEVICE_POST)).toMatchObject({ status: 'deleting' })
+    expect(expired().sort()).toEqual([
+      'photo-wall-admin:conf-A',
+      `photo-wall-device:${key}`,
+      'photo-wall:conf-A',
+    ])
   })
 
   it('a failed asset delete answers failed and leaves the post deleting; pressing again finishes it', async () => {
-    await phoneWithPost()
+    const key = await phoneWithPost()
     const writer = clientWrite as unknown as {
       mutate: (m: { delete: { id: string } }[]) => Promise<unknown>
     }
@@ -276,8 +295,13 @@ describe('deleteMyPost', () => {
       status: 'deleting',
       deletingAssetId: ASSET,
     })
-    // Expired on a failure too: the card must show the deleting state.
-    expect(expired()).toContain('photo-wall-admin:conf-A')
+    // The mark was written: the post left the wall and the card must show
+    // the deleting state, so every tag is expired.
+    expect(expired().sort()).toEqual([
+      'photo-wall-admin:conf-A',
+      `photo-wall-device:${key}`,
+      'photo-wall:conf-A',
+    ])
     refuse.mockRestore()
 
     await expect(deleteMyPost(DEVICE_POST)).resolves.toEqual({
@@ -313,16 +337,17 @@ describe('setMyPostMarketing', () => {
     expect(mine.marketingConsent).toBe(false)
   })
 
-  it("is gone, writing nothing, for another device's post", async () => {
+  it("is gone, writing and expiring nothing, for another device's post", async () => {
     await phoneWithPost()
     await expect(setMyPostMarketing(OTHER_POST, false)).resolves.toEqual({
       status: 'gone',
     })
     expect(h.store!.commits).toEqual([])
     expect(h.store!.doc(OTHER_POST)).toMatchObject({ marketingConsent: true })
+    expect(expired()).toEqual([])
   })
 
-  it('is gone, reading and writing nothing, without a cookie', async () => {
+  it('is gone, reading, writing and expiring nothing, without a cookie', async () => {
     await phoneWithPost()
     h.jar.delete('konf_wall')
     await expect(setMyPostMarketing(DEVICE_POST, false)).resolves.toEqual({
@@ -330,6 +355,21 @@ describe('setMyPostMarketing', () => {
     })
     expect(h.store!.docReads).toEqual([])
     expect(h.store!.commits).toEqual([])
+    expect(expired()).toEqual([])
+  })
+
+  it('conflicted twice: changed, nothing written, nothing expired', async () => {
+    await phoneWithPost()
+    for (const rev of ['rev-second', 'rev-third']) {
+      h.store!.beforeNextCommit(() =>
+        h.store!.put({ ...h.store!.doc(DEVICE_POST)!, _rev: rev }),
+      )
+    }
+    await expect(setMyPostMarketing(DEVICE_POST, false)).resolves.toEqual({
+      status: 'changed',
+    })
+    expect(h.store!.commits).toEqual([])
+    expect(expired()).toEqual([])
   })
 
   it('refuses a value that is not a boolean, and an id that is not a Wall Post id, before any read', async () => {

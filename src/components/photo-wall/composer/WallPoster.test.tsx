@@ -65,7 +65,6 @@ const myPost = (fields: Partial<MyPost> = {}): MyPost => ({
   name: 'Ada',
   marketingConsent: false,
   submittedAt: '2026-10-26T08:00:00Z',
-  incarnation: { createdAt: '2026-10-26T08:00:00.000Z', assetId: 'image-e' },
   ...fields,
 })
 
@@ -506,6 +505,54 @@ describe('WallPoster', () => {
           'https://cdn.sanity.io/images/p/d/earlier.jpg?rect=0,0,10,10',
         ]),
       )
+    })
+
+    it('a post deleted from the posted screen does not come back as Waiting on the landing', async () => {
+      const post = postAnswering({ ok: true })
+      renderPoster(post)
+      await pick('doomed')
+      await press()
+      expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Delete this photo' }),
+        )
+      })
+      const [[request]] = post.mock.calls
+      expect(mine.deleteMyPost).toHaveBeenCalledWith(
+        `wallPost-${request.uploadId}`,
+      )
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Post another photo' }),
+      )
+      await act(async () => {})
+      expect(screen.queryByText('Waiting for approval')).toBeNull()
+      expect(screen.queryByRole('heading', { name: 'My posts' })).toBeNull()
+    })
+
+    it('a post the server listed once and then dropped (an organizer’s Delete now) does not come back as Waiting', async () => {
+      const post = postAnswering({ ok: true })
+      renderPoster(post)
+      await pick('removed')
+      await press()
+      const [[request]] = post.mock.calls
+      const id = `wallPost-${request.uploadId}`
+      mine.getMyPosts.mockResolvedValue([
+        myPost({ _id: id, status: 'pending', caption: 'removed' }),
+      ])
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
+
+      mine.getMyPosts.mockResolvedValue([])
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      expect(screen.queryByText('Waiting for approval')).toBeNull()
+      expect(screen.queryByRole('img')).toBeNull()
     })
 
     it('Delete and the Marketing switch call the actions with the post’s id, then read the list again', async () => {

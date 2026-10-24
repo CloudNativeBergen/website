@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
 import { objectPosition, type Crop } from '@/lib/photo-wall/crop'
 import {
@@ -11,14 +11,16 @@ import {
 } from '@/lib/photo-wall/post'
 import { WallChrome } from '../WallPage'
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './ComposerLanding'
-import { MyPosts, type MyPostView } from './MyPosts'
+import { MyPosts, MyPostsSection, type MyPostView } from './MyPosts'
 import { myPostsActions, type MyPostsActions } from './MyPostsPanel'
 import { useMyPosts } from './useMyPosts'
 import { WallComposer, type WallPostDraft } from './WallComposer'
 
 /**
  * A post this phone just sent, shown from the JPEG it sent until the
- * server's list carries it: the query view can lag the submit for a moment.
+ * server's list carries it (the query view can lag the submit for a moment)
+ * or it is deleted. Retired then: a later absence from the list is a
+ * deletion (the contributor's, or an organizer's Delete now), never lag.
  */
 interface PostedPhoto {
   uploadId: string
@@ -121,10 +123,25 @@ export function WallPoster({
   } | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const urls = useRef<string[]>([])
-  const mine = useMyPosts(getMyPosts)
+  // Every list the server answers retires the local cards it carries.
+  const load = useCallback(async () => {
+    const list = await getMyPosts()
+    setPosted((before) =>
+      before.filter(
+        (photo) => !list.some((p) => p._id === postIdOf(photo.uploadId)),
+      ),
+    )
+    return list
+  }, [getMyPosts])
+  const mine = useMyPosts(load)
   const actions = myPostsActions(
     { deleteMyPost, setMyPostMarketing },
     mine.refresh,
+    // Deleted (or gone): the local card goes with it.
+    (postId) =>
+      setPosted((before) =>
+        before.filter((photo) => postIdOf(photo.uploadId) !== postId),
+      ),
   )
 
   useEffect(() => {
@@ -199,26 +216,22 @@ export function WallPoster({
     void mine.refresh()
   }
 
-  // The server's list, with the posts it does not carry yet on top, as the
+  // The server's list, with the posts it has not carried yet on top, as the
   // JPEGs this phone sent (its crop by `object-position`: not Sanity's
-  // square yet). The server's card replaces the local one under its id.
+  // square yet). A list that carries one retires it (`load`), so the two
+  // never show together.
   const listed = mine.posts ?? []
   const myPosts: MyPostView[] = [
-    ...posted
-      .filter(
-        (photo) => !listed.some((p) => p._id === postIdOf(photo.uploadId)),
-      )
-      .map((photo) => ({
-        _id: postIdOf(photo.uploadId),
-        status: 'pending' as const,
-        src: photo.url,
-        objectPosition: objectPosition(photo.crop),
-        caption: photo.caption || null,
-        name: photo.name || null,
-        marketingConsent: photo.marketingConsent,
-        submittedAt: null,
-        incarnation: { createdAt: null, assetId: null },
-      })),
+    ...posted.map((photo) => ({
+      _id: postIdOf(photo.uploadId),
+      status: 'pending' as const,
+      src: photo.url,
+      objectPosition: objectPosition(photo.crop),
+      caption: photo.caption || null,
+      name: photo.name || null,
+      marketingConsent: photo.marketingConsent,
+      submittedAt: null,
+    })),
     ...listed,
   ]
 
@@ -231,19 +244,7 @@ export function WallPoster({
         canPost={device !== 'pending'}
         uploadProgress={progress}
         below={
-          myPosts.length > 0 && (
-            <section aria-labelledby="my-posts" className="mt-10">
-              <h2
-                id="my-posts"
-                className="font-display text-xl font-semibold text-gray-900 dark:text-gray-100"
-              >
-                My posts
-              </h2>
-              <div className="mt-6">
-                <MyPosts posts={myPosts} {...actions} />
-              </div>
-            </section>
-          )
+          myPosts.length > 0 && <MyPostsSection posts={myPosts} {...actions} />
         }
       />
     )
