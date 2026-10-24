@@ -497,6 +497,47 @@ describe('steps 3 and 4: the purge on the deletion date (§11.1, §12)', () => {
     expect(deletes()).toContainEqual({ id: version, purge: true })
   })
 
+  it('a version a locked (scheduled) release keeps is refused alone: every other post and asset is purged, purgedAt stays unset, and the next run retries only the version', async () => {
+    const version = `versions.rLocked.${A('1')}`
+    store().put({ ...post('a1', 'conf-A', assetId('s1')), _id: version })
+    // A version in a locked release refuses every write.
+    store().failPatchesOf(version)
+    const first = await run(clock(at(DELETION_DAY)))
+    expect(first).toMatchObject({
+      purged: 0,
+      posts: 6,
+      unfinished: ['photoWall-conf-A'],
+    })
+    for (const id of [A('1'), A('2'), A('3'), A('4'), A('5')]) {
+      expect(store().doc(id)).toBeUndefined()
+    }
+    for (const id of ['s4', 's5', 's6', 's7']) {
+      expect(store().doc(assetId(id))).toBeUndefined()
+    }
+    // s1 is the version's: held, kept, and the version untouched.
+    expect(store().doc(assetId('s1'))).toBeDefined()
+    expect(store().doc(version)).toMatchObject({
+      photo: { asset: ref(assetId('s1')) },
+    })
+    expect(store().doc('photoWall-conf-A')).not.toHaveProperty('purgedAt')
+    // Said loudly, with the release.
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('rLocked'),
+      expect.anything(),
+    )
+
+    store().allowPatchesOf(version)
+    store().commits.length = 0
+    const second = await run(clock(at('2026-11-27')))
+    expect(second).toMatchObject({ purged: 1, posts: 1 })
+    expect(deletedIds().filter((id) => !id.startsWith('image-'))).toEqual([
+      version,
+    ])
+    expect(store().doc(version)).toBeUndefined()
+    expect(store().doc(assetId('s1'))).toBeUndefined()
+    expect(store().doc('photoWall-conf-A')).toHaveProperty('purgedAt')
+  })
+
   it('a purged wall is not read again the next day', async () => {
     await run(clock(at(DELETION_DAY)))
     store().reads.length = 0

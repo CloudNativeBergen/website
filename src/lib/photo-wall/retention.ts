@@ -31,6 +31,11 @@ import { deletionDate, plusDays } from './deletion'
  *     An asset a later chunk's post still holds is left to that chunk; one
  *     another tenant's document holds is kept.
  *
+ * Content Release versions (`versions.*`) of the posts are left out of the
+ * chunks and go after them, each in a chunk of its own: one in a locked
+ * (scheduled) release refuses every write, which is logged with its release
+ * and keeps `purgedAt` unset, but holds back no other post.
+ *
  * Then every `photo-wall` asset uploaded under the conference
  * (`source.id`) that nothing holds, and only then `purgedAt`.
  *
@@ -123,6 +128,10 @@ interface PostRow {
   deletingAssetId: string | null
   deviceKey: string | null
 }
+
+const isVersionId = (id: string) => id.startsWith('versions.')
+/** `versions.<release>.<id>` → `<release>`. */
+const releaseOf = (id: string) => id.split('.')[1] ?? ''
 
 /** Every wall with `purgedAt` unset: the retention's and the sweep's. */
 export async function readUnpurgedWalls(
@@ -272,15 +281,38 @@ async function purgeWall(
   const deviceKeys = new Set(
     posts.map((p) => p.deviceKey).filter((k): k is string => !!k),
   )
+  // Content Release versions apart: one in a locked (scheduled) release
+  // refuses every write, and in a chunk it would roll the chunk back.
+  const versions = posts.filter((p) => isVersionId(p._id))
+  const published = posts.filter((p) => !isVersionId(p._id))
   // Every asset a chunk decided on, so the sweep of uploads below does not
   // count a kept one twice.
   const decided = new Set<string>()
-  for (let at = 0; at < posts.length; at += POST_DELETE_CHUNK) {
+  for (let at = 0; at < published.length; at += POST_DELETE_CHUNK) {
     if (!budget.within()) return result
-    const chunk = posts.slice(at, at + POST_DELETE_CHUNK)
+    const chunk = published.slice(at, at + POST_DELETE_CHUNK)
     const ids = await purgeChunk(chunk, result, budget)
     if (!ids) return result
     for (const id of ids) decided.add(id)
+  }
+
+  // Each version on its own (steps a and b for a chunk of one). A refusal
+  // blocks nothing else; its asset stays held by it, and the wall stays
+  // unpurged until a run deletes it.
+  let versionRefused = false
+  for (const version of versions) {
+    if (!budget.within()) return result
+    try {
+      const ids = await purgeChunk([version], result, budget)
+      if (!ids) return result
+      for (const id of ids) decided.add(id)
+    } catch (error) {
+      versionRefused = true
+      console.error(
+        `Photo Wall retention: ${version._id} (release ${releaseOf(version._id)}) of ${wall._id} could not be deleted; the wall stays unpurged until it is`,
+        error,
+      )
+    }
   }
 
   // The conference's own uploads that no post named any more: a crash
@@ -302,7 +334,7 @@ async function purgeWall(
       else failed = true
     },
   )
-  if (failed || !reached || !budget.within()) return result
+  if (failed || versionRefused || !reached || !budget.within()) return result
 
   await clientWrite
     .patch(wall._id)
