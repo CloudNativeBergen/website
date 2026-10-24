@@ -31,6 +31,36 @@ import { cronBudget, readUnpurgedWalls } from './retention'
 /** How old an orphan asset or a stuck `deleting` post must be. */
 export const SWEEP_AGE_MS = 60 * 60_000
 
+/**
+ * The longest one stuck delete's finish may take. `deleteWallPost` takes no
+ * signal, so the sweep bounds each call from outside: it is not started
+ * with less than this left, and is given up on after it.
+ */
+export const STUCK_FINISH_MS = 30_000
+
+const CUT_OFF = Symbol('cut off')
+
+/**
+ * `work`, or {@link CUT_OFF} once `ms` have passed. The call itself is not
+ * stopped (nothing can stop it): a stuck delete resumes from its
+ * `deletingAssetId`, so one still running, or cut off half done, is
+ * finished by a later sweep.
+ */
+async function within<T>(
+  work: Promise<T>,
+  ms: number,
+): Promise<T | typeof CUT_OFF> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const cutOff = new Promise<typeof CUT_OFF>((resolve) => {
+    timer = setTimeout(() => resolve(CUT_OFF), ms)
+  })
+  try {
+    return await Promise.race([work, cutOff])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export interface SweepReport {
   /** Orphan assets the query found. */
   orphans: number
@@ -46,6 +76,8 @@ export interface SweepReport {
   finished: number
   /** …not finished; tried again next run. */
   finishFailed: number
+  /** …given up on after {@link STUCK_FINISH_MS}: unknown, tried again next run. */
+  finishCutOff: number
   /** True when the deadline cut the sweep short. */
   cutShort: boolean
 }
@@ -126,6 +158,7 @@ export async function sweepPhotoWall({
     stuck: 0,
     finished: 0,
     finishFailed: 0,
+    finishCutOff: 0,
     cutShort: false,
   }
   const budget = cronBudget(deadline)
@@ -134,7 +167,9 @@ export async function sweepPhotoWall({
   const stuck = await readStuckDeletes(before, budget.signal())
   report.stuck = stuck.length
   for (const post of stuck) {
-    if (!budget.within()) {
+    // Not started without the time to finish it: a call cut off by the
+    // function's end would leave nothing to report.
+    if (!budget.within() || deadline.getTime() - Date.now() < STUCK_FINISH_MS) {
       report.cutShort = true
       return report
     }
@@ -144,14 +179,22 @@ export async function sweepPhotoWall({
     }
     let deviceKey: string | null = null
     try {
-      const result = await deleteWallPost({
-        conferenceId: post.conferenceId,
-        postId: post._id,
-        onRead: (key) => {
-          deviceKey = key
-        },
-      })
-      if (result.status === 'failed') report.finishFailed += 1
+      const result = await within(
+        deleteWallPost({
+          conferenceId: post.conferenceId,
+          postId: post._id,
+          onRead: (key) => {
+            deviceKey = key
+          },
+        }),
+        STUCK_FINISH_MS,
+      )
+      if (result === CUT_OFF) {
+        console.error(
+          `Photo Wall sweep: finishing ${post._id} took over ${STUCK_FINISH_MS} ms; tried again next run`,
+        )
+        report.finishCutOff += 1
+      } else if (result.status === 'failed') report.finishFailed += 1
       else report.finished += 1
     } catch (error) {
       console.error(`Photo Wall sweep: could not finish ${post._id}`, error)

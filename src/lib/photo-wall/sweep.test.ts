@@ -33,7 +33,12 @@ vi.mock('@/lib/sanity/client', async () => {
 })
 
 import { clientWrite } from '@/lib/sanity/client'
-import { SWEEP_AGE_MS, sweepPhotoWall, type SweepReport } from './sweep'
+import {
+  STUCK_FINISH_MS,
+  SWEEP_AGE_MS,
+  sweepPhotoWall,
+  type SweepReport,
+} from './sweep'
 
 type Doc = Record<string, unknown> & { _id: string }
 const store = () => h.store!
@@ -161,6 +166,7 @@ const nothing: SweepReport = {
   stuck: 0,
   finished: 0,
   finishFailed: 0,
+  finishCutOff: 0,
   cutShort: false,
 }
 
@@ -305,4 +311,38 @@ it('finishes the stuck deletes FIRST: an orphan pass past the deadline does not 
   })
   for (const n of ['d1', 'd3']) expect(store().doc(postId(n))).toBeUndefined()
   expect(store().doc(assetId('o1'))).toBeDefined()
+})
+
+describe('a stuck delete that hangs (§11.2): bounded from the sweep', () => {
+  it('is cut off after STUCK_FINISH_MS, counted as cut off (tried again tomorrow), and the sweep goes on', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(NOW)
+    // d1's finish never gets an answer to its holder check of x1.
+    store().beforeEachRead((read) =>
+      read.params.assetId === assetId('x1') ? new Promise(() => {}) : undefined,
+    )
+    const sweeping = run()
+    await vi.advanceTimersByTimeAsync(STUCK_FINISH_MS)
+    const report = await sweeping
+    expect(report).toMatchObject({
+      stuck: 2,
+      finished: 1,
+      finishFailed: 0,
+      finishCutOff: 1,
+      // The orphan pass still ran.
+      assets: 2,
+    })
+    expect(store().doc(postId('d3'))).toBeUndefined()
+    // Resumable: still deleting, its asset id kept.
+    expect(store().doc(postId('d1'))).toMatchObject({
+      status: 'deleting',
+      deletingAssetId: assetId('x1'),
+    })
+  })
+
+  it('is not started when less than STUCK_FINISH_MS is left before the deadline', async () => {
+    const report = await run(new Date(NOW.getTime() + STUCK_FINISH_MS - 1))
+    expect(report).toEqual({ ...nothing, stuck: 2, cutShort: true })
+    expect(store().commits).toEqual([])
+  })
 })
