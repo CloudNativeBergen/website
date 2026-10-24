@@ -36,7 +36,13 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/admin/speakers',
 }))
 
-import { render, screen, cleanup } from '@testing-library/react'
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from '@testing-library/react'
 import { SpeakerTable } from '@/components/admin/SpeakerTable'
 import type { Speaker } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
@@ -94,5 +100,60 @@ describe('SpeakerTable ticket row actions', () => {
     })
 
     expect(buttons.every((b) => !b.hasAttribute('disabled'))).toBe(true)
+  })
+
+  it('copies all filtered speaker emails from the Email column header', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    render(
+      <SpeakerTable
+        speakers={
+          [
+            {
+              _id: 'speaker-1',
+              name: 'Ada Lovelace',
+              email: 'ada@example.com',
+              flags: [],
+              links: [],
+              proposals: [],
+            },
+            {
+              _id: 'speaker-2',
+              name: 'Grace Hopper',
+              email: 'grace@example.com',
+              flags: [],
+              links: [],
+              proposals: [],
+            },
+          ] as unknown as (Speaker & { proposals: ProposalExisting[] })[]
+        }
+        onEditSpeaker={vi.fn()}
+        onPreviewSpeaker={vi.fn()}
+      />,
+    )
+
+    const copyBtn = screen.getByRole('button', { name: 'Copy all 2 emails' })
+    fireEvent.click(copyBtn)
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        'ada@example.com, grace@example.com',
+      )
+    })
+
+    writeText.mockClear()
+    fireEvent.change(screen.getByPlaceholderText('Search speakers...'), {
+      target: { value: 'Ada' },
+    })
+
+    const filteredCopyBtn = screen.getByRole('button', {
+      name: 'Copy all 1 email',
+    })
+    fireEvent.click(filteredCopyBtn)
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('ada@example.com')
+    })
   })
 })

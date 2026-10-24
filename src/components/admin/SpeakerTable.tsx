@@ -402,6 +402,24 @@ export function SpeakerTable({
     discoveredQuestions,
   ])
 
+  const { copied: copiedAllEmails, copyToClipboard: copyAllEmails } =
+    useCopyToClipboard()
+
+  const filteredEmails = useMemo(() => {
+    const seen = new Set<string>()
+    const emails: string[] = []
+    for (const speaker of filteredSpeakers) {
+      const email = speaker.email?.trim()
+      if (!email) continue
+      const key = email.toLowerCase()
+      if (!seen.has(key)) {
+        seen.add(key)
+        emails.push(email)
+      }
+    }
+    return emails
+  }, [filteredSpeakers])
+
   const toggleColumnVisibility = (column: string) => {
     setColumnVisibility((prev) => ({
       ...prev,
@@ -1138,7 +1156,32 @@ export function SpeakerTable({
                 </Th>
               )}
               {columnVisibility.ticket && <Th width="9rem">Ticket</Th>}
-              {columnVisibility.email && <Th width="12rem">Email</Th>}
+              {columnVisibility.email && (
+                <Th width="12rem">
+                  <div className="flex items-center gap-1.5">
+                    <span>Email</span>
+                    {filteredEmails.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => copyAllEmails(filteredEmails.join(', '))}
+                        className="cursor-pointer rounded p-0.5 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                        title={
+                          copiedAllEmails
+                            ? `Copied ${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}!`
+                            : `Copy all ${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}`
+                        }
+                        aria-label={`Copy all ${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}`}
+                      >
+                        {copiedAllEmails ? (
+                          <CheckIcon className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                        ) : (
+                          <ClipboardIcon className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </Th>
+              )}
               {columnVisibility.linkedin && <Th width="8rem">LinkedIn</Th>}
               {columnVisibility.bluesky && <Th width="8rem">Bluesky</Th>}
               {columnVisibility.talks && <Th>Talks</Th>}
