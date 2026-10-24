@@ -153,9 +153,13 @@ function Card({ card, slot }: { card: ScreenCard; slot: number }) {
       data-leaving={leaving || undefined}
       className={clsx(
         'pw-card absolute transition-opacity ease-out',
-        isNew
-          ? 'animate-[pw-drop_900ms_cubic-bezier(.2,.8,.2,1.1)]'
-          : 'animate-[pw-fade_600ms_ease-out]',
+        // From what never changes for a card (an arrival stacks above 0), so
+        // the animation does not restart when the new mark comes off; none
+        // while leaving, so a running fade-in cannot hold the fade-out.
+        !leaving &&
+          (card.z > 0
+            ? 'animate-[pw-drop_900ms_cubic-bezier(.2,.8,.2,1.1)]'
+            : 'animate-[pw-fade_600ms_ease-out]'),
         leaving ? 'opacity-0' : 'opacity-100',
       )}
       style={{
@@ -434,10 +438,17 @@ export function ScreenLayout({
                   boardScale === 1 ? undefined : `scale(${boardScale})`,
               }}
             >
-              {board.slots.map(
-                (card, slot) =>
-                  card && <Card key={card.key} card={card} slot={slot} />,
-              )}
+              {/* Its own stacking context: an arrival's z-index grows all
+                  day and must never climb over the header or the QR. */}
+              <div
+                data-testid="screen-cards"
+                className="absolute inset-0 isolate"
+              >
+                {board.slots.map(
+                  (card, slot) =>
+                    card && <Card key={card.key} card={card} slot={slot} />,
+                )}
+              </div>
               <div className="absolute right-12 bottom-10 z-500">
                 <QrPolaroid url={postUrl} />
               </div>

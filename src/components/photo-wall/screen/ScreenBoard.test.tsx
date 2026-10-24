@@ -234,6 +234,38 @@ describe('ScreenMode, untouched for hours (§8, §9.2)', () => {
     expect(shown()).toContain('wallPost-30')
   })
 
+  it('an arrival keeps its drop when the new mark comes off, and a leaving card runs no animation', async () => {
+    mount(view(posts(17)))
+    await advance(0)
+    loadImages()
+    await advance(100)
+    h.queryFn.mockResolvedValue(view([post(30), ...posts(17)]))
+    await nextPoll()
+    loadImages()
+    await advance(100)
+    const card = (id: string) =>
+      cards().find((c) => c.getAttribute('data-post') === id)!
+    expect(card('wallPost-30').className).toContain('pw-drop')
+    await advance(NEW_MARK_MS)
+    expect(fresh()).toEqual([])
+    // A changed animation-name restarts it: the card would blink.
+    expect(card('wallPost-30').className).toContain('pw-drop')
+    expect(card('wallPost-30').className).not.toContain('pw-fade')
+    // Removed while its fade-in may still run: only the fade-out applies.
+    h.queryFn.mockResolvedValue(view(posts(17)))
+    // Up to the poll that removes it, and not past its 300 ms fade.
+    for (let i = 0; i < 60 && !card('wallPost-30').dataset.leaving; i++) {
+      await advance(100)
+    }
+    expect(card('wallPost-30')).toHaveAttribute('data-leaving')
+    expect(card('wallPost-30').className).not.toMatch(/animate-/)
+    // The cards sit in their own stacking context, under the header and QR.
+    expect(screen.getByTestId('screen-cards')).toHaveClass('isolate')
+    expect(screen.getByTestId('screen-cards')).toContainElement(
+      card('wallPost-30'),
+    )
+  })
+
   it('a removed and re-approved post arrives again, as new', async () => {
     mount(view(posts(17)))
     await advance(0)

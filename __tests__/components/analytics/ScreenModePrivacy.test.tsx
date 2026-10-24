@@ -206,6 +206,16 @@ describe('Pirsch and the install prompt on /wall/screen', () => {
     }
   })
 
+  it('shows it again after a client-side exit from Screen Mode (no latch, unlike /f)', async () => {
+    const Gate = await gate()
+    h.pathname = '/wall/screen'
+    const { rerender } = render(<Gate>wrapped</Gate>)
+    expect(screen.queryByText('wrapped')).toBeNull()
+    h.pathname = '/wall'
+    rerender(<Gate>wrapped</Gate>)
+    expect(screen.getByText('wrapped')).toBeInTheDocument()
+  })
+
   it('still renders it on the other wall pages', async () => {
     const Gate = await gate()
     for (const path of ['/wall', '/wall/post']) {
