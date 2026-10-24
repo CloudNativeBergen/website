@@ -29,7 +29,7 @@ describe('buildVolunteersCsv', () => {
       'Name,Email,Phone,Status,Occupation,T-shirt size,Dietary restrictions,Preferred tasks,Availability,Ticket status,Confirmed at,Assigned tasks',
     )
     expect(lines[1]).toBe(
-      `"Ola, ""Nordmann""",ola@example.com,'+4712345678,confirmed,student,M,Vegan no nuts,"registration; av",Both days,Ticket claimed,2026-10-01T10:00:00Z,Info desk`,
+      `"Ola, ""Nordmann""",ola@example.com,+4712345678,confirmed,student,M,Vegan no nuts,"registration; av",Both days,Ticket claimed,2026-10-01T10:00:00Z,Info desk`,
     )
     expect(lines[2].startsWith("'=HYPERLINK()")).toBe(true)
     expect(lines[2]).toContain(',,2026-10-01T10:00:00Z,') // no ticket status known
