@@ -1,6 +1,6 @@
 'use client'
 
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, Ref } from 'react'
 import { CameraIcon, PhotoIcon } from '@heroicons/react/24/outline'
 
 export const PRIMARY_BUTTON =
@@ -68,13 +68,20 @@ function PickPhotoButton({
 export function ComposerLanding({
   onPick,
   error,
+  headingRef,
 }: {
   onPick: (file: File) => void
   error?: string | null
+  /** Focused when the composer closes, so a screen reader lands here. */
+  headingRef?: Ref<HTMLHeadingElement>
 }) {
   return (
     <div className="text-center">
-      <h1 className="font-display text-2xl font-semibold">
+      <h1
+        ref={headingRef}
+        tabIndex={-1}
+        className="font-display text-2xl font-semibold focus:outline-none"
+      >
         Add your photo to the wall
       </h1>
       <p className="mt-3 text-gray-600 dark:text-gray-400">

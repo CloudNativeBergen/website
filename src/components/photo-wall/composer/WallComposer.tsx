@@ -89,14 +89,22 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
   const [posting, setPosting] = useState<'idle' | 'baking' | 'sending'>('idle')
   const [failure, setFailure] = useState<string | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
+  const landingHeading = useRef<HTMLHeadingElement>(null)
+  const previousKind = useRef(stage.kind)
   // Only the photo picked last may land: a large one picked first can finish
   // opening after it.
   const latestPick = useRef(0)
   const busy = posting !== 'idle'
 
-  // A new screen takes focus, so a screen reader lands on it.
+  // A new screen takes focus, so a screen reader lands on it: the composer
+  // when it opens, the landing when the composer closes (the button that
+  // closed it is gone).
   useEffect(() => {
     if (stage.kind === 'composing') heading.current?.focus()
+    else if (stage.kind === 'landing' && previousKind.current === 'composing') {
+      landingHeading.current?.focus()
+    }
+    previousKind.current = stage.kind
   }, [stage.kind])
 
   // The composer is a screen of its own: it pushes a history entry, so the
@@ -179,6 +187,7 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
       <WallChrome logo={logo}>
         <div aria-busy={stage.kind === 'decoding'}>
           <ComposerLanding
+            headingRef={landingHeading}
             onPick={pick}
             error={stage.kind === 'landing' ? stage.error : null}
           />
