@@ -733,6 +733,7 @@ describe('the volunteer procedure surface is pinned (#858)', () => {
       'admin.list',
       'admin.sendBulkEmail',
       'admin.sendEmail',
+      'admin.sendTicketReminder',
       'admin.update',
       'admin.updateStatus',
       'confirmAttendance',
