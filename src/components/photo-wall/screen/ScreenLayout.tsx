@@ -13,6 +13,7 @@ import {
 } from './board'
 import {
   CANVAS,
+  NewMark,
   QrPolaroid,
   STRIP_HEIGHT,
   ScreenShell,
@@ -64,7 +65,7 @@ function Polaroid({
       {caption && (
         <figcaption className="font-caveat h-[76px] overflow-hidden pt-1.5 leading-tight break-words">
           {post.caption && (
-            <span className="line-clamp-2 block text-xl leading-tight font-medium">
+            <span className="line-clamp-2 text-xl leading-tight font-medium">
               {post.caption}
             </span>
           )}
@@ -113,8 +114,8 @@ function Card({ card, slot }: { card: ScreenCard; slot: number }) {
     >
       <Polaroid post={card.post} tilt={jitter(card.key, 4) * 6} />
       {isNew && (
-        <span className="absolute -top-3 -right-3 animate-[pw-pop_400ms_ease-out] rounded-full bg-(--screen-accent) px-3 py-1 text-sm font-bold text-white shadow-lg">
-          New
+        <span className="absolute -top-3 -right-3">
+          <NewMark />
         </span>
       )}
     </div>

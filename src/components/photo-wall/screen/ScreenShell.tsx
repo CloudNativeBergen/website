@@ -108,25 +108,31 @@ function ScreenFit({ children }: { children: ReactNode }) {
 
 /**
  * The conference logo and "Photo Wall": handwritten for the Pinboard and
- * the empty and closed screens, `plain` for Mosaic and Spotlight.
+ * the empty and closed screens, `plain` for Mosaic and Spotlight; `narrow`
+ * fits Spotlight's 480 px rail, so a wide logo never pushes the words out.
  */
 export function ScreenHeader({
   logo,
   plain = false,
+  narrow = false,
 }: {
   logo: ConferenceLogoData | null
   plain?: boolean
+  narrow?: boolean
 }) {
   return (
-    <header className="flex items-center gap-5">
+    <header className="flex min-w-0 items-center gap-5">
       <ConferenceLogo
         conference={logo}
         variant="horizontal"
-        className="h-14 w-auto max-w-[520px] text-white"
+        className={clsx(
+          'h-14 w-auto min-w-0 text-white',
+          narrow ? 'max-w-[240px]' : 'max-w-[520px]',
+        )}
       />
       <span
         className={clsx(
-          'border-l border-white/30 pl-5 leading-none',
+          'shrink-0 border-l border-white/30 pl-5 leading-none',
           plain
             ? 'font-display text-3xl font-semibold text-white'
             : 'font-caveat text-4xl text-white/80',

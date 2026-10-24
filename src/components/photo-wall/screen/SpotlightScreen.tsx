@@ -131,7 +131,9 @@ export function SpotlightScreen({
                   )}
                   <p className="mt-2 truncate text-2xl text-white/65">
                     {hero.name ?? 'Anonymous'} ·{' '}
-                    {formatConferenceClock(hero.approvedAt)}
+                    <time dateTime={hero.approvedAt}>
+                      {formatConferenceClock(hero.approvedAt)}
+                    </time>
                   </p>
                 </div>
                 {isMarkedNew(state, hero) && (
@@ -152,7 +154,7 @@ export function SpotlightScreen({
             <div />
           )}
           <aside className="flex min-h-0 flex-col gap-8">
-            <ScreenHeader logo={conference.logo} plain />
+            <ScreenHeader logo={conference.logo} plain narrow />
             <QrCard url={conference.postUrl} />
             {next.length > 0 && (
               <section className="min-h-0">

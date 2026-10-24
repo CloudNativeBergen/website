@@ -106,9 +106,9 @@ function MosaicGrid({ posts }: { posts: WallPagePost[] }) {
                   className="absolute inset-0 size-full object-contain"
                 />
                 {(post.caption || post.name) && (
-                  <figcaption className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/35 to-transparent p-2 pt-8 text-white">
+                  <figcaption className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/85 from-30% via-black/55 to-transparent p-2 pt-8 text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
                     {post.caption && (
-                      <span className="line-clamp-2 block text-xs leading-snug font-semibold break-words">
+                      <span className="line-clamp-2 text-xs leading-snug font-semibold break-words">
                         {post.caption}
                       </span>
                     )}
