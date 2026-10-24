@@ -52,9 +52,9 @@ export function PhotoWallPrivacy() {
         <li>
           <strong>Your rights:</strong> To delete a post, open the wall&rsquo;s
           posting page on the same phone and use My posts, or contact the
-          organizers. The same page has the Marketing switch. If you are in
-          someone else&rsquo;s photo and want it removed, contact the
-          organizers.
+          organizers. The same page has the Marketing switch, and the organizers
+          can also withdraw marketing consent for you. If you are in someone
+          else&rsquo;s photo and want it removed, contact the organizers.
         </li>
         <li>
           <strong>Processors:</strong> photos are stored with our content
