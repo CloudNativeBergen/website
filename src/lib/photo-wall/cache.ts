@@ -1,11 +1,13 @@
 import 'server-only'
-import { cacheLife, cacheTag, revalidateTag } from 'next/cache'
+import { cacheLife, cacheTag, revalidateTag, updateTag } from 'next/cache'
 import {
   photoWallAdminTag,
   photoWallDeviceTag,
   photoWallTag,
 } from '@/lib/cache/tags'
 import type { ModerationQueueData } from './moderation'
+import type { MyPost } from './my-posts'
+import { readMyPosts } from './my-posts-read'
 import { readModerationQueue } from './queue'
 import { readPhotoWall } from './sanity'
 import type { PhotoWall } from './types'
@@ -89,6 +91,46 @@ export function expireWallPost(
       revalidateTag(tag, { expire: 0 })
     } catch (error) {
       console.error(`Could not expire the Photo Wall cache tag ${tag}`, error)
+    }
+  }
+}
+
+/**
+ * One device's posts as My posts polls them (§8), cached per conference and
+ * device under {@link photoWallDeviceTag}, which Submit, the device's own
+ * Delete and marketing change, and every moderation of one of its posts
+ * expire. `'use cache: remote'` over the uncached client, `default` life:
+ * freshness comes from the tag. The device key comes from the cookie, read
+ * OUTSIDE this scope by the Server Action that calls it.
+ */
+export async function getMyPosts(
+  conferenceId: string,
+  deviceKey: string,
+): Promise<MyPost[]> {
+  'use cache: remote'
+  cacheLife('default')
+  cacheTag(photoWallDeviceTag(deviceKey))
+  return readMyPosts(conferenceId, deviceKey)
+}
+
+/**
+ * {@link expireWallPost} for a Server Action (§8): `updateTag`, so the
+ * action's own next read of My posts waits for the fresh list instead of
+ * serving the one the write just outdated. Same never-fail rule: a missed
+ * expiry is recovered by the next poll after the tag's own life.
+ */
+export function updateWallPostTags(
+  conferenceId: string,
+  deviceKey: string,
+  { wall }: { wall: boolean },
+): void {
+  const tags = [photoWallAdminTag(conferenceId), photoWallDeviceTag(deviceKey)]
+  if (wall) tags.push(photoWallTag(conferenceId))
+  for (const tag of tags) {
+    try {
+      updateTag(tag)
+    } catch (error) {
+      console.error(`Could not update the Photo Wall cache tag ${tag}`, error)
     }
   }
 }
