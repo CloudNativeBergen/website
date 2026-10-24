@@ -31,7 +31,7 @@ export function WallHeader({
  * The minimal chrome of the Composer (Photo Wall spec §2): no site
  * navigation, the conference logo on top, the visitor's light or dark
  * setting. The Wall page shares {@link WallHeader} on its own board
- * (`WallBoardView`); Screen Mode has no chrome (`ScreenPlaceholder`).
+ * (`WallBoardView`); Screen Mode has no chrome (`ScreenLayout`).
  */
 export function WallChrome({
   logo,
@@ -68,27 +68,5 @@ export function ComposerPlaceholder({
         The wall isn’t open for photos right now.
       </p>
     </WallChrome>
-  )
-}
-
-/** `/wall/screen` until slice M5b fills it: always dark, no chrome. */
-export function ScreenPlaceholder({
-  logo,
-}: {
-  logo: ConferenceLogoData | null
-}) {
-  return (
-    // `dark` on the root: the site's dark variant applies inside, whatever
-    // the visitor's setting.
-    <div className="dark flex min-h-dvh flex-col items-center justify-center gap-8 bg-gray-950 px-8 text-white">
-      {logo && (
-        <ConferenceLogo
-          conference={logo}
-          variant="horizontal"
-          className="h-20 w-auto max-w-full text-white"
-        />
-      )}
-      <p className="font-display text-4xl font-semibold">Photo Wall</p>
-    </div>
   )
 }

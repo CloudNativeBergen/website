@@ -2,6 +2,7 @@
 
 import { BrandWordmark } from '@/components/BrandWordmark'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
+import { OFFLINE_RETRY_SCRIPT } from './offline-retry'
 
 /**
  * Offline fallback page.
@@ -13,6 +14,8 @@ import { PLATFORM_NAME } from '@/lib/branding/platform'
  *    it carries no per-user content and is safe to cache and serve to anyone.
  *  - Fully static and self-contained (no `headers()`, no data fetching), so it
  *    prerenders to cacheable HTML that never goes stale in a harmful way.
+ *  - Self-retrying on the Photo Wall's Screen Mode only (`./offline-retry`):
+ *    a venue screen has nobody to press "Try again".
  *
  * `metadata` is intentionally omitted here so the route inherits the root
  * layout's title template.
@@ -41,6 +44,7 @@ export default function OfflinePage() {
       >
         Try again
       </button>
+      <script dangerouslySetInnerHTML={{ __html: OFFLINE_RETRY_SCRIPT }} />
     </div>
   )
 }
