@@ -291,6 +291,51 @@ export default function VolunteerAdminPage() {
 
   const sendBulkEmail = api.volunteer.admin.sendBulkEmail.useMutation()
 
+  // Pending volunteers ticked for a bulk approve/reject.
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set())
+  const [bulkRejectOpen, setBulkRejectOpen] = useState(false)
+  const bulkUpdateStatus = api.volunteer.admin.bulkUpdateStatus.useMutation()
+  const toggleChecked = (id: string) =>
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  const runBulkStatus = async (
+    status: VolunteerStatus.APPROVED | VolunteerStatus.REJECTED,
+  ) => {
+    const ids = [...checkedIds]
+    let updated = 0
+    let skipped = 0
+    try {
+      // The server takes at most 50 ids per call.
+      for (let i = 0; i < ids.length; i += 50) {
+        const res = await bulkUpdateStatus.mutateAsync({
+          volunteerIds: ids.slice(i, i + 50),
+          status,
+        })
+        updated += res.updated
+        skipped += res.skipped
+      }
+      setCheckedIds(new Set())
+      notify?.showNotification({
+        type: 'success',
+        title: `${updated} ${updated === 1 ? 'volunteer' : 'volunteers'} marked as ${VOLUNTEER_STATUS_LABELS[status].toLowerCase()}`,
+        message: skipped
+          ? `${skipped} skipped because they were no longer pending.`
+          : undefined,
+      })
+    } catch (err) {
+      notify?.showNotification({
+        type: 'error',
+        title: 'Failed to update volunteer status',
+        message: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      await utils.volunteer.admin.list.invalidate()
+    }
+  }
+
   const sendTicketReminder =
     api.volunteer.admin.sendTicketReminder.useMutation()
   // "Sent 25 of 80" while the reminder chunks go out; null when idle.
@@ -466,6 +511,10 @@ export default function VolunteerAdminPage() {
       (a, b) => STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status],
     )
   }, [volunteers, statusFilter, ticketFilter, ticketStatuses, searchQuery])
+
+  const visiblePendingIds = filteredVolunteers
+    .filter((v) => v.status === VolunteerStatus.PENDING)
+    .map((v) => v._id)
 
   const { copied: copiedAllEmails, copyToClipboard: copyAllEmails } =
     useCopyToClipboard({
@@ -872,6 +921,19 @@ export default function VolunteerAdminPage() {
               Applications
             </h2>
             <div className="flex items-center gap-1.5">
+              {visiblePendingIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCheckedIds(
+                      (prev) => new Set([...prev, ...visiblePendingIds]),
+                    )
+                  }
+                  className="-my-3 inline-flex min-h-11 cursor-pointer items-center px-1 text-xs font-medium text-brand-cloud-blue hover:underline dark:text-blue-400"
+                >
+                  Select all visible pending
+                </button>
+              )}
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                 {filteredVolunteers.length} showing
               </span>
@@ -982,85 +1044,102 @@ export default function VolunteerAdminPage() {
                     ? ticketStatusConfig[ticketStatus.state]
                     : null
 
+                  const isPending = volunteer.status === VolunteerStatus.PENDING
                   return (
-                    <button
-                      type="button"
-                      key={volunteer._id}
-                      ref={(el) => {
-                        if (el) cardRefs.current.set(volunteer._id, el)
-                        else cardRefs.current.delete(volunteer._id)
-                      }}
-                      aria-pressed={isSelected}
-                      onClick={() => selectVolunteer(volunteer._id)}
-                      className={`block w-full cursor-pointer rounded-lg border p-4 text-left transition-all ${
-                        isSelected
-                          ? 'border-brand-cloud-blue bg-blue-50/70 shadow-xs dark:border-blue-500 dark:bg-blue-950/30'
-                          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-2xs dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600'
-                      }`}
-                    >
-                      <span className="flex items-start justify-between gap-2">
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-semibold text-gray-900 dark:text-white">
-                            {volunteer.name}
-                          </span>
-                          <span className="mt-1 flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400">
-                            <span className="flex items-center gap-1.5 truncate">
-                              <EnvelopeIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                              <span className="truncate">
-                                {volunteer.email}
-                              </span>
+                    <div key={volunteer._id} className="flex items-start gap-1">
+                      {isPending ? (
+                        <label className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={checkedIds.has(volunteer._id)}
+                            onChange={() => toggleChecked(volunteer._id)}
+                            aria-label={`Select ${volunteer.name}`}
+                            className="h-4 w-4 rounded border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue dark:border-gray-600"
+                          />
+                        </label>
+                      ) : (
+                        checkedIds.size > 0 && (
+                          <span className="w-11 shrink-0" />
+                        )
+                      )}
+                      <button
+                        type="button"
+                        ref={(el) => {
+                          if (el) cardRefs.current.set(volunteer._id, el)
+                          else cardRefs.current.delete(volunteer._id)
+                        }}
+                        aria-pressed={isSelected}
+                        onClick={() => selectVolunteer(volunteer._id)}
+                        className={`block w-full cursor-pointer rounded-lg border p-4 text-left transition-all ${
+                          isSelected
+                            ? 'border-brand-cloud-blue bg-blue-50/70 shadow-xs dark:border-blue-500 dark:bg-blue-950/30'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-2xs dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600'
+                        }`}
+                      >
+                        <span className="flex items-start justify-between gap-2">
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold text-gray-900 dark:text-white">
+                              {volunteer.name}
                             </span>
-                            {volunteer.phone && (
+                            <span className="mt-1 flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400">
                               <span className="flex items-center gap-1.5 truncate">
-                                <PhoneIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                                <EnvelopeIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                                 <span className="truncate">
-                                  {volunteer.phone}
+                                  {volunteer.email}
                                 </span>
                               </span>
+                              {volunteer.phone && (
+                                <span className="flex items-center gap-1.5 truncate">
+                                  <PhoneIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                                  <span className="truncate">
+                                    {volunteer.phone}
+                                  </span>
+                                </span>
+                              )}
+                            </span>
+                          </span>
+
+                          <span className="flex shrink-0 flex-col items-end gap-1">
+                            <StatusBadge
+                              label={VOLUNTEER_STATUS_LABELS[volunteer.status]}
+                              color={statusConf.color}
+                              icon={statusConf.icon}
+                            />
+                            {ticketConf && (
+                              <StatusBadge
+                                label={ticketConf.label}
+                                color={ticketConf.color}
+                                icon={ticketConf.icon}
+                                className={ticketConf.className}
+                              />
                             )}
                           </span>
                         </span>
 
-                        <span className="flex shrink-0 flex-col items-end gap-1">
-                          <StatusBadge
-                            label={VOLUNTEER_STATUS_LABELS[volunteer.status]}
-                            color={statusConf.color}
-                            icon={statusConf.icon}
-                          />
-                          {ticketConf && (
-                            <StatusBadge
-                              label={ticketConf.label}
-                              color={ticketConf.color}
-                              icon={ticketConf.icon}
-                              className={ticketConf.className}
-                            />
-                          )}
+                        {(volunteer.assignedTasks?.length ?? 0) > 0 && (
+                          <span className="mt-2 flex flex-wrap gap-1">
+                            {volunteer.assignedTasks!.map((task, i) => (
+                              <span
+                                key={`${i}-${task}`}
+                                className="rounded bg-green-50 px-1.5 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                              >
+                                {task}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                        <span className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-gray-700/50 dark:text-gray-400">
+                          <span className="font-medium text-gray-700 capitalize dark:text-gray-300">
+                            {volunteer.occupation || 'Volunteer'}
+                          </span>
+                          <span>
+                            {volunteer.submittedAt
+                              ? formatDateTimeSafe(volunteer.submittedAt)
+                              : ''}
+                          </span>
                         </span>
-                      </span>
-
-                      {(volunteer.assignedTasks?.length ?? 0) > 0 && (
-                        <span className="mt-2 flex flex-wrap gap-1">
-                          {volunteer.assignedTasks!.map((task, i) => (
-                            <span
-                              key={`${i}-${task}`}
-                              className="rounded bg-green-50 px-1.5 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                            >
-                              {task}
-                            </span>
-                          ))}
-                        </span>
-                      )}
-                      <span className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-gray-700/50 dark:text-gray-400">
-                        <span className="font-medium text-gray-700 capitalize dark:text-gray-300">
-                          {volunteer.occupation || 'Volunteer'}
-                        </span>
-                        <span>
-                          {volunteer.submittedAt
-                            ? formatDateTimeSafe(volunteer.submittedAt)
-                            : ''}
-                        </span>
-                      </span>
-                    </button>
+                      </button>
+                    </div>
                   )
                 })
               )}
@@ -1666,6 +1745,66 @@ export default function VolunteerAdminPage() {
         title="Reject Volunteer Application"
         message={`Reject the application from ${selectedVolunteer?.name ?? 'this volunteer'}?`}
         confirmButtonText="Reject Application"
+        variant="danger"
+      />
+
+      {checkedIds.size > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+          <div
+            role="region"
+            aria-label="Bulk actions"
+            className="flex w-full max-w-md items-center justify-between gap-2 rounded-full border border-gray-200 bg-white/90 p-1.5 pl-5 shadow-2xl backdrop-blur-md dark:border-gray-700 dark:bg-gray-900/90"
+          >
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">
+              {checkedIds.size} selected
+            </span>
+            <div className="flex items-center gap-1">
+              <AdminButton
+                size="sm"
+                color="green"
+                onClick={() => void runBulkStatus(VolunteerStatus.APPROVED)}
+                disabled={bulkUpdateStatus.isPending}
+                className="min-h-11"
+              >
+                Approve
+              </AdminButton>
+              <AdminButton
+                size="sm"
+                color="red"
+                onClick={() => setBulkRejectOpen(true)}
+                disabled={bulkUpdateStatus.isPending}
+                className="min-h-11"
+              >
+                Reject
+              </AdminButton>
+              <AdminButton
+                size="sm"
+                variant="secondary"
+                onClick={() => setCheckedIds(new Set())}
+                disabled={bulkUpdateStatus.isPending}
+                className="min-h-11"
+              >
+                Clear
+              </AdminButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmationModal
+        isOpen={bulkRejectOpen}
+        onClose={() => setBulkRejectOpen(false)}
+        onConfirm={async () => {
+          try {
+            await runBulkStatus(VolunteerStatus.REJECTED)
+          } finally {
+            setBulkRejectOpen(false)
+          }
+        }}
+        isLoading={bulkUpdateStatus.isPending}
+        title="Reject Volunteer Applications"
+        message={`Reject ${checkedIds.size} pending ${checkedIds.size === 1 ? 'application' : 'applications'}? No email is sent.`}
+        confirmButtonText="Reject Applications"
         variant="danger"
       />
 
