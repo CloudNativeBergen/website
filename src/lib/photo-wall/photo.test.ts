@@ -115,6 +115,22 @@ describe('the resize on decode', () => {
     expect(drawn).toEqual(halvingChain)
     expect([master.width, master.height]).toEqual([2048, 1536])
   })
+
+  it('a browser that refuses the resize goes through the halving chain instead of failing', async () => {
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn((_source: ImageBitmapSource, options?: ImageBitmapOptions) =>
+        options?.resizeWidth
+          ? Promise.reject(
+              new DOMException('Out of memory', 'InvalidStateError'),
+            )
+          : Promise.resolve(bitmap(8000, 6000)),
+      ),
+    )
+    const master = await decodeWallPhoto(photo)
+    expect(drawn).toEqual(halvingChain)
+    expect([master.width, master.height]).toEqual([2048, 1536])
+  })
 })
 
 describe('filteredCopy', () => {

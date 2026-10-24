@@ -112,20 +112,20 @@ export async function decodeWallPhoto(file: Blob): Promise<HTMLCanvasElement> {
     if (steps.length > 1) {
       // Let the browser resize in one go (Chrome, and Safari since 15); the
       // size it hands back is checked, and the stepped canvases are the
-      // fallback for one that ignores the options.
+      // fallback for one that ignores the options or refuses the call.
       const resized = await createImageBitmap(bitmap, {
         resizeWidth: target.width,
         resizeHeight: target.height,
         resizeQuality: 'high',
-      })
-      if (resized.width === target.width && resized.height === target.height) {
+      }).catch(() => null)
+      if (resized?.width === target.width && resized.height === target.height) {
         try {
           return flattened(draw(resized, target))
         } finally {
           resized.close()
         }
       }
-      resized.close()
+      resized?.close()
     }
     let source: CanvasImageSource = bitmap
     let canvas: HTMLCanvasElement | null = null
