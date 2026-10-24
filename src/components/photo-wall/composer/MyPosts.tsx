@@ -25,15 +25,27 @@ export interface MyPostView extends MyPost {
   objectPosition?: string
 }
 
+/**
+ * An action's answer, and how many My posts reads had started when it came.
+ * A list from a later read ({@link MyPostsProps.listRead} above it) was
+ * read after the action and is the authority on the card again.
+ */
+export interface CardAnswer<Status> {
+  status: Status
+  readsBefore: number
+}
+
 export interface MyPostsProps {
   posts: MyPostView[]
+  /** Which My posts read `posts` came from: reads are numbered from 1. */
+  listRead: number
   /** Delete, after the confirm: the `deleteMyPost` Server Action's answer. */
-  onDelete: (post: MyPost) => Promise<MyPostDeletionStatus>
+  onDelete: (post: MyPost) => Promise<CardAnswer<MyPostDeletionStatus>>
   /** The Marketing switch: the `setMyPostMarketing` Server Action's answer. */
   onMarketing: (
     post: MyPost,
     consent: boolean,
-  ) => Promise<MyPostMarketingStatus>
+  ) => Promise<CardAnswer<MyPostMarketingStatus>>
 }
 
 /** The inline confirm's question (Photo Wall spec §12). */
@@ -51,13 +63,19 @@ const MARKETING_FAILED_MESSAGE = 'Couldn’t change. Try again.'
  * offered. Photos are plain `<img>` elements of their Sanity URLs, never
  * `next/image` (§5.1). The caller reads the list again after each action.
  */
-export function MyPosts({ posts, onDelete, onMarketing }: MyPostsProps) {
+export function MyPosts({
+  posts,
+  listRead,
+  onDelete,
+  onMarketing,
+}: MyPostsProps) {
   return (
     <ul className="mx-auto max-w-xs space-y-8">
       {posts.map((post) => (
         <MyPostCard
           key={post._id}
           post={post}
+          listRead={listRead}
           onDelete={onDelete}
           onMarketing={onMarketing}
         />
@@ -112,26 +130,25 @@ type CardAction = 'delete' | 'marketing'
 
 function MyPostCard({
   post,
+  listRead,
   onDelete,
   onMarketing,
-}: { post: MyPostView } & Pick<MyPostsProps, 'onDelete' | 'onMarketing'>) {
+}: { post: MyPostView } & Omit<MyPostsProps, 'posts'>) {
   const { src, objectPosition, caption, name, status } = post
   const [busy, setBusy] = useState<CardAction | null>(null)
   const [failed, setFailed] = useState<CardAction | null>(null)
   const [confirming, setConfirming] = useState(false)
-  // Deleted (or gone): nothing to show until the list drops it.
-  const [removed, setRemoved] = useState(false)
-  // The consent a change just wrote, shown until the list carries a change
-  // of its own (the acknowledgement, or another tab's change): the list is
-  // the authority again from then on. State adjusted during render, on the
-  // stored value moving, never in an effect.
-  const [changed, setChanged] = useState<boolean | null>(null)
-  const [stored, setStored] = useState(post.marketingConsent)
-  if (stored !== post.marketingConsent) {
-    setStored(post.marketingConsent)
-    setChanged(null)
-  }
-  const consent = changed
+  // What an action answered, each shown until a list read AFTER that answer
+  // comes in: from then on the list is the authority (a later read that
+  // still lists a "deleted" post shows it again; another tab may have
+  // changed the consent). By read, never by value: a value can come back.
+  const [removed, setRemoved] = useState<number | null>(null)
+  const [changed, setChanged] = useState<{
+    consent: boolean
+    readsBefore: number
+  } | null>(null)
+  const consent =
+    changed && listRead <= changed.readsBefore ? changed.consent : null
 
   const confirmId = useId()
   const cancelRef = useRef<HTMLButtonElement>(null)
@@ -155,13 +172,16 @@ function MyPostCard({
     if (busy) return
     setBusy('delete')
     setFailed(null)
-    const outcome = await onDelete(post).catch(() => 'failed' as const)
+    const answer = await onDelete(post).catch(() => null)
     setBusy(null)
-    if (outcome === 'failed') {
+    if (!answer || answer.status === 'failed') {
       setFailed('delete')
       confirm(false, focusIsWith(groupRef.current))
     } else {
-      setRemoved(true)
+      setRemoved(answer.readsBefore)
+      // Closed without a hand-back: should a later list show it again, it
+      // shows as it was before the confirm.
+      confirm(false, false)
     }
   }
 
@@ -170,15 +190,16 @@ function MyPostCard({
     const next = !(consent ?? post.marketingConsent)
     setBusy('marketing')
     setFailed(null)
-    const outcome = await onMarketing(post, next).catch(
-      () => 'changed' as const,
-    )
+    const answer = await onMarketing(post, next).catch(() => null)
     setBusy(null)
-    if (outcome === 'done') setChanged(next)
-    else setFailed('marketing')
+    if (answer?.status === 'done') {
+      setChanged({ consent: next, readsBefore: answer.readsBefore })
+    } else {
+      setFailed('marketing')
+    }
   }
 
-  if (removed) return null
+  if (removed !== null && listRead <= removed) return null
   const deleting = status === 'deleting'
   const Icon = deleting ? null : STATUS_ICONS[status]
 

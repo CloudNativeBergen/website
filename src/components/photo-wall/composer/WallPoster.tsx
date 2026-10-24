@@ -147,7 +147,7 @@ export function WallPoster({
   const mine = useMyPosts(load)
   const actions = myPostsActions(
     { deleteMyPost, setMyPostMarketing },
-    mine.refresh,
+    mine,
     // Deleted (or gone): the local card goes with it.
     (postId) =>
       setPosted((before) =>
@@ -256,7 +256,13 @@ export function WallPoster({
         canPost={device !== 'pending'}
         uploadProgress={progress}
         below={
-          myPosts.length > 0 && <MyPostsSection posts={myPosts} {...actions} />
+          myPosts.length > 0 && (
+            <MyPostsSection
+              posts={myPosts}
+              listRead={mine.listRead}
+              {...actions}
+            />
+          )
         }
       />
     )
@@ -275,7 +281,7 @@ export function WallPoster({
         An organizer looks at every photo before it appears on the wall.
       </p>
       <div className="mt-8">
-        <MyPosts posts={myPosts} {...actions} />
+        <MyPosts posts={myPosts} listRead={mine.listRead} {...actions} />
       </div>
       <div className="mt-10 space-y-3">
         <button

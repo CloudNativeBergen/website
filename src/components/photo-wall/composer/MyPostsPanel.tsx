@@ -6,7 +6,7 @@ import type {
   MyPostMarketingStatus,
 } from '@/lib/photo-wall/my-posts'
 import { MyPostsSection, type MyPostsProps } from './MyPosts'
-import { useMyPosts } from './useMyPosts'
+import { useMyPosts, type MyPostsReads } from './useMyPosts'
 
 /** The three Server Actions of `/wall/post` My posts runs on (§8, §12). */
 export interface MyPostsActions {
@@ -32,21 +32,25 @@ export function MyPostsPanel({
   deleteMyPost,
   setMyPostMarketing,
 }: MyPostsPanelProps) {
-  const { posts, refresh } = useMyPosts(getMyPosts)
-  const actions = myPostsActions({ deleteMyPost, setMyPostMarketing }, refresh)
-  if (!posts?.length) return null
-  return <MyPostsSection posts={posts} {...actions} />
+  const mine = useMyPosts(getMyPosts)
+  const actions = myPostsActions({ deleteMyPost, setMyPostMarketing }, mine)
+  if (!mine.posts?.length) return null
+  return (
+    <MyPostsSection posts={mine.posts} listRead={mine.listRead} {...actions} />
+  )
 }
 
 /**
  * The list's callbacks from the Server Actions: each runs the action and
  * reads the list again whatever the answer, so the card leaves or shows its
- * new state (§8: "after each action"). `onDeleted` is told of a post that
- * is gone, before the list is read again.
+ * new state (§8: "after each action"). Each answer carries the reads started
+ * before that read (`CardAnswer`): the card keeps what the action did only
+ * until a list read after it comes in. `onDeleted` is told of a post that is
+ * gone, before the list is read again.
  */
 export function myPostsActions(
   { deleteMyPost, setMyPostMarketing }: Omit<MyPostsActions, 'getMyPosts'>,
-  refresh: () => Promise<void>,
+  { refresh, readsStarted }: Pick<MyPostsReads, 'refresh' | 'readsStarted'>,
   onDeleted?: (postId: string) => void,
 ): Pick<MyPostsProps, 'onDelete' | 'onMarketing'> {
   return {
@@ -54,14 +58,15 @@ export function myPostsActions(
       try {
         const { status } = await deleteMyPost(post._id)
         if (status !== 'failed') onDeleted?.(post._id)
-        return status
+        return { status, readsBefore: readsStarted() }
       } finally {
         void refresh()
       }
     },
     onMarketing: async (post, consent) => {
       try {
-        return (await setMyPostMarketing(post._id, consent)).status
+        const { status } = await setMyPostMarketing(post._id, consent)
+        return { status, readsBefore: readsStarted() }
       } finally {
         void refresh()
       }

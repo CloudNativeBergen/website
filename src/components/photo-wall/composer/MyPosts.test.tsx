@@ -23,13 +23,19 @@ const post = (fields: Partial<MyPost> = {}): MyPost => ({
   ...fields,
 })
 
+/** An action's answer, the list having come from read 1 (`listRead`). */
+const answer = <S extends string>(status: S, readsBefore = 1) => ({
+  status,
+  readsBefore,
+})
+
 const onDelete = vi.fn<MyPostsProps['onDelete']>()
 const onMarketing = vi.fn<MyPostsProps['onMarketing']>()
 
 beforeEach(() => {
   n = 0
-  onDelete.mockReset().mockResolvedValue('deleted')
-  onMarketing.mockReset().mockResolvedValue('done')
+  onDelete.mockReset().mockResolvedValue(answer('deleted'))
+  onMarketing.mockReset().mockResolvedValue(answer('done'))
 })
 
 const card = (caption: string) =>
@@ -46,6 +52,7 @@ describe('MyPosts', () => {
         ]}
         onDelete={onDelete}
         onMarketing={onMarketing}
+        listRead={1}
       />,
     )
     expect(card('Waiting').getByText('Waiting for approval')).toBeVisible()
@@ -69,6 +76,7 @@ describe('MyPosts', () => {
         posts={[post({ caption: 'Stuck', status: 'deleting', src: null })]}
         onDelete={onDelete}
         onMarketing={onMarketing}
+        listRead={1}
       />,
     )
     const stuck = card('Stuck')
@@ -84,6 +92,7 @@ describe('MyPosts', () => {
         posts={[post({ caption: 'Keep' })]}
         onDelete={onDelete}
         onMarketing={onMarketing}
+        listRead={1}
       />,
     )
     const keep = card('Keep')
@@ -103,13 +112,21 @@ describe('MyPosts', () => {
   })
 
   it('confirming deletes that post, saying Deleting… meanwhile', async () => {
-    let finish: (status: 'deleted') => void = () => {}
+    let finish: (a: {
+      status: 'deleted'
+      readsBefore: number
+    }) => void = () => {}
     onDelete.mockImplementation(
       () => new Promise((resolve) => (finish = resolve)),
     )
     const posts = [post({ caption: 'Gone' }), post({ caption: 'Stays' })]
     render(
-      <MyPosts posts={posts} onDelete={onDelete} onMarketing={onMarketing} />,
+      <MyPosts
+        posts={posts}
+        listRead={1}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+      />,
     )
     const gone = card('Gone')
     fireEvent.click(gone.getByRole('button', { name: 'Delete' }))
@@ -122,17 +139,20 @@ describe('MyPosts', () => {
     // A second press while it goes out does nothing.
     fireEvent.click(gone.getByRole('button', { name: 'Deleting…' }))
     expect(onDelete).toHaveBeenCalledTimes(1)
-    await act(async () => finish('deleted'))
+    await act(async () => finish(answer('deleted')))
     expect(card('Stays').getByRole('button', { name: 'Delete' })).toBeVisible()
   })
 
   it('a failed delete says so on the card, with Delete offered again; the next press asks again', async () => {
-    onDelete.mockResolvedValueOnce('failed').mockResolvedValueOnce('deleted')
+    onDelete
+      .mockResolvedValueOnce(answer('failed'))
+      .mockResolvedValueOnce(answer('deleted'))
     render(
       <MyPosts
         posts={[post({ caption: 'Flaky' })]}
         onDelete={onDelete}
         onMarketing={onMarketing}
+        listRead={1}
       />,
     )
     const flaky = card('Flaky')
@@ -156,6 +176,7 @@ describe('MyPosts', () => {
         posts={[post({ caption: 'Offline' })]}
         onDelete={onDelete}
         onMarketing={onMarketing}
+        listRead={1}
       />,
     )
     const offline = card('Offline')
@@ -177,6 +198,7 @@ describe('MyPosts', () => {
         ]}
         onDelete={onDelete}
         onMarketing={onMarketing}
+        listRead={1}
       />,
     )
     const yes = card('Yes').getByRole('switch', { name: 'Marketing' })
@@ -199,38 +221,75 @@ describe('MyPosts', () => {
     )
   })
 
-  it('shows the changed consent until the list carries it, then follows the list again (another tab may change it)', async () => {
-    const at = (marketingConsent: boolean) => (
+  it('shows the changed consent until a list read after the change comes in, then the list, whatever its value', async () => {
+    const at = (listRead: number, marketingConsent: boolean) => (
       <MyPosts
         posts={[post({ _id: 'wallPost-x', caption: 'Tabs', marketingConsent })]}
+        listRead={listRead}
         onDelete={onDelete}
         onMarketing={onMarketing}
       />
     )
-    const { rerender } = render(at(true))
+    // Ticked; this tab unticks it while one read had started.
+    const { rerender } = render(at(1, true))
     const toggle = () => card('Tabs').getByRole('switch', { name: 'Marketing' })
     await act(async () => {
       fireEvent.click(toggle())
     })
     expect(toggle()).toHaveAttribute('aria-checked', 'false')
-    // The next poll still carries the old value: the change stays shown.
-    rerender(at(true))
+    // A list from that read (or one older) still says ticked: the change
+    // stays shown.
+    rerender(at(1, true))
     expect(toggle()).toHaveAttribute('aria-checked', 'false')
-    // The list carries it: acknowledged.
-    rerender(at(false))
-    expect(toggle()).toHaveAttribute('aria-checked', 'false')
-    // Another tab of the same phone ticks it again: the list wins.
-    rerender(at(true))
+    // The refresh after it failed, and another tab ticked it again: the next
+    // list read after the change says ticked, the very value it had before.
+    // The list wins; never "until the value moves".
+    rerender(at(3, true))
     expect(toggle()).toHaveAttribute('aria-checked', 'true')
+    rerender(at(4, false))
+    expect(toggle()).toHaveAttribute('aria-checked', 'false')
   })
 
+  it.each(['deleted', 'gone'] as const)(
+    'a card %s leaves, and comes back if a list read after the answer still lists the post',
+    async (status) => {
+      onDelete.mockResolvedValueOnce(answer(status))
+      // One post, one id, across the lists.
+      const back = post({ caption: 'Back' })
+      const at = (listRead: number) => (
+        <MyPosts
+          posts={[back]}
+          listRead={listRead}
+          onDelete={onDelete}
+          onMarketing={onMarketing}
+        />
+      )
+      const { rerender } = render(at(1))
+      fireEvent.click(card('Back').getByRole('button', { name: 'Delete' }))
+      await act(async () => {
+        fireEvent.click(
+          card('Back').getByRole('button', { name: 'Delete this photo' }),
+        )
+      })
+      expect(screen.queryByRole('listitem', { name: 'Back' })).toBeNull()
+      rerender(at(1))
+      expect(screen.queryByRole('listitem', { name: 'Back' })).toBeNull()
+      // The server still lists it after the answer: it is still there, and
+      // Delete can be pressed again.
+      rerender(at(2))
+      expect(card('Back').getByRole('button', { name: 'Delete' })).toBeVisible()
+      expect(card('Back').queryByText(/Delete this photo\?/)).toBeNull()
+    },
+  )
+
   it('a Marketing change that did not go through says so and keeps the stored value', async () => {
-    onMarketing.mockResolvedValueOnce('changed')
+    onMarketing.mockResolvedValueOnce(answer('changed'))
     render(
       <MyPosts
         posts={[post({ caption: 'Raced', marketingConsent: true })]}
         onDelete={onDelete}
         onMarketing={onMarketing}
+        listRead={1}
       />,
     )
     const raced = card('Raced')

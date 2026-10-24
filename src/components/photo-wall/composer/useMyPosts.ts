@@ -19,15 +19,21 @@ export const MY_POSTS_POLL_MS = 15_000
  * nothing restarts it. A plain interval that skips its tick while hidden
  * cannot be cleared by a read.
  *
- * `posts` is null until the first read answers. A failed read keeps the last
+ * `posts` is null until the first read answers; `listRead` numbers the read
+ * it came from (reads are numbered from 1, 0 before any). A failed read keeps the last
  * list. Reads may overlap (one slower than the interval is still out at the
  * next tick): each answer newer than the last one shown is shown, and an
  * older one that answers after it is ignored. Never "only the latest read":
  * with reads slower than the interval, every answer would be outdated by
  * the time it came and the list would never change.
  */
+export type MyPostsReads = ReturnType<typeof useMyPosts>
+
 export function useMyPosts(load: () => Promise<MyPost[]>) {
-  const [posts, setPosts] = useState<MyPost[] | null>(null)
+  // The list shown and the read it came from (`MyPostsProps.listRead`).
+  const [list, setList] = useState<{ posts: MyPost[]; read: number } | null>(
+    null,
+  )
   /** The last read started, and the newest one whose answer is shown. */
   const started = useRef(0)
   const shown = useRef(0)
@@ -38,7 +44,7 @@ export function useMyPosts(load: () => Promise<MyPost[]>) {
       const next = await load()
       if (read > shown.current) {
         shown.current = read
-        setPosts(next)
+        setList({ posts: next, read })
       }
     } catch (error) {
       console.error('Could not read My posts', error)
@@ -66,5 +72,13 @@ export function useMyPosts(load: () => Promise<MyPost[]>) {
     }
   }, [refresh])
 
-  return { posts, refresh }
+  /** How many reads have started: an action's answer carries it. */
+  const readsStarted = useCallback(() => started.current, [])
+
+  return {
+    posts: list?.posts ?? null,
+    listRead: list?.read ?? 0,
+    refresh,
+    readsStarted,
+  }
 }
