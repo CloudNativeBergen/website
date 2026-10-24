@@ -1461,3 +1461,32 @@ export const ChangingLargeTextDark: Story = {
   ...ChangingLargeText,
   globals: { theme: 'dark' },
 }
+
+/**
+ * Inside the programme's feedback sheet (§7.5), which frames this page: no
+ * logo, no full-viewport height, and no way back to the programme.
+ */
+export const Embedded: Story = {
+  args: { embedded: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.queryByLabelText('Conference logo')).toBeNull()
+    await expect(
+      canvas.getByRole('heading', { level: 1, name: talk.title }),
+    ).toBeInTheDocument()
+  },
+}
+
+/** Answered inside the sheet: everything but the way back to the programme. */
+export const EmbeddedAnswered: Story = {
+  args: { embedded: true, page: answeredPage },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('button', { name: 'Change answer' }),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('link', { name: 'Back to the programme' }),
+    ).toBeNull()
+  },
+}
