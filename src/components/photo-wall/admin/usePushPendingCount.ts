@@ -24,6 +24,16 @@ export function usePushPendingCount(queue: {
   const atMount = useRef(dataUpdatedAt)
   useEffect(() => {
     if (!data || dataUpdatedAt === atMount.current) return
-    utils.photoWall.pendingCount.setData(undefined, pendingOf(data))
+    const count = pendingOf(data)
+    let superseded = false
+    // A shell read still in flight is older than this poll: cancelled
+    // first, its answer cannot land over the push. A newer poll (or leaving
+    // the page) before the cancel settles supersedes this push.
+    void utils.photoWall.pendingCount.cancel().then(() => {
+      if (!superseded) utils.photoWall.pendingCount.setData(undefined, count)
+    })
+    return () => {
+      superseded = true
+    }
   }, [data, dataUpdatedAt, utils])
 }

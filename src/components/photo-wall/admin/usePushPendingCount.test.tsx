@@ -186,4 +186,27 @@ describe('the Photo Wall badge follows /admin/photo-wall (P6)', () => {
     await settle()
     expect(badge()).toBe('3')
   })
+
+  it("an older count still in flight does not overwrite the page's push", async () => {
+    // The shell's read is out when the page's poll answers.
+    let answerCount: (n: number) => void = () => {}
+    h.answers['photoWall.pendingCount'] = () =>
+      new Promise((resolve) => (answerCount = resolve))
+    h.answers['photoWall.moderationQueue'] = async () =>
+      queueOf('pending', 'pending')
+    mount(true)
+    await settle()
+    expect(badge()).toBe('2')
+
+    // The older read answers after the push: it must not land.
+    await act(async () => answerCount(5))
+    await settle()
+    expect(badge()).toBe('2')
+
+    // Nor once the organizer leaves the page.
+    mount(false)
+    await settle()
+    expect(badge()).toBe('2')
+    expect(countReads()).toBe(1)
+  })
 })

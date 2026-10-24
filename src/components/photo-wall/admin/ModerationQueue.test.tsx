@@ -31,7 +31,11 @@ const h = vi.hoisted(() => ({
   useQuery: vi.fn(),
   // The nav badge push (P6), proven on the real wiring in
   // `usePushPendingCount.test.tsx`.
-  utils: { photoWall: { pendingCount: { setData: () => {} } } },
+  utils: {
+    photoWall: {
+      pendingCount: { cancel: async () => {}, setData: () => {} },
+    },
+  },
 }))
 vi.mock('@/lib/trpc/client', () => ({
   api: {
