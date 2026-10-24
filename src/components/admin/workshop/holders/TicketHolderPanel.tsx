@@ -227,7 +227,7 @@ function SignedUpCard({
       subtitle={
         share === null
           ? 'No holders yet'
-          : `${share}% of ${holders} holders · ${ticketCount(tickets)}`
+          : `${share}% of ${holders} holder${holders === 1 ? '' : 's'} · ${ticketCount(tickets)}`
       }
     />
   )

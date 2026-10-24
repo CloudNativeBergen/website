@@ -85,7 +85,9 @@ export function StatCard({
       type="button"
       onClick={onClick}
       aria-pressed={pressed}
-      aria-label={`${label}, ${value}`}
+      aria-label={[label, value, typeof subtitle === 'string' ? subtitle : null]
+        .filter((part) => part !== null && part !== undefined && part !== '')
+        .join(', ')}
       className={cn(
         'flex w-full cursor-pointer flex-col text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
         shell,

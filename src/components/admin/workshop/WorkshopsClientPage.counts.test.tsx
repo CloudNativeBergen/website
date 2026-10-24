@@ -578,7 +578,9 @@ describe('the ticket holders (#1333)', () => {
     server.flaggedIds = ['signup-bob']
     renderPage()
     fireEvent.click(
-      await within(await panel()).findByRole('button', { name: 'Flagged, 1' }),
+      await within(await panel()).findByRole('button', {
+        name: 'Flagged, 1, No workshop ticket · Review',
+      }),
     )
     const list = await screen.findByRole('dialog', { name: 'Flagged sign-ups' })
     const move = () =>

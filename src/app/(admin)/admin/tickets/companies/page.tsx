@@ -305,7 +305,7 @@ export default async function CompaniesAdminPage() {
           {
             label: 'Total Attendees',
             value: totalAttendees.toString(),
-            subtitle: `from ${companyBreakdown.length} companies`,
+            subtitle: `from ${companyBreakdown.length} ${companyBreakdown.length === 1 ? 'company' : 'companies'}`,
           },
         ]}
       />
