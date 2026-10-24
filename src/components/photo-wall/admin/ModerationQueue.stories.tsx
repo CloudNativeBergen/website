@@ -119,7 +119,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The moderation queue on `/admin/photo-wall` (Photo Wall spec §8, §10), slices M4a and M4b: the tabs **Pending**, **On the wall** and **Not shown**, and a card per Wall Post with the whole photo, the square crop the wall shows outlined, caption, name, submitted time and the Marketing OK mark. Each card offers the actions of its status: Pending **Approve**, **Reject**; On the wall **Remove**; Not shown **Approve**; every tab **Delete now** with an inline confirm. A `deleting` post sits in Not shown with no image, "Couldn’t delete. Try again." and only **Try again** (§12). The Pending tab has **Approve all pending (N)** with an inline confirm. What an action did is said once, politely, above the tabs. Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). One column on a phone, a grid on desktop. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The moderation queue on `/admin/photo-wall` (Photo Wall spec §8, §10), slices M4a and M4b: the tabs **Pending**, **On the wall** and **Not shown**, and a card per Wall Post with the whole photo, the square crop the wall shows outlined, caption, name, submitted time and the Marketing OK mark. Each card offers the actions of its status: Pending **Approve**, **Reject**; On the wall **Remove**; Not shown **Approve**; a card with the Marketing OK mark **Withdraw marketing OK** (unticks it only, never ticks: for a contributor who lost the phone’s cookie, §12); every tab **Delete now**; both with an inline confirm. A `deleting` post sits in Not shown with no image, "Couldn’t delete. Try again." and only **Try again** (§12). The Pending tab has **Approve all pending (N)** with an inline confirm. What an action did is said once, politely, above the tabs. Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). One column on a phone, a grid on desktop. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
@@ -445,6 +445,9 @@ export const Polled: StoryObj<typeof ModerationQueue> = {
             HttpResponse.json({ result: { data: { status: 'done' } } }),
           ),
         ),
+        http.post('/api/trpc/photoWall.withdrawMarketing', () =>
+          HttpResponse.json({ result: { data: { status: 'done' } } }),
+        ),
         http.post('/api/trpc/photoWall.deletePost', () =>
           HttpResponse.json({ result: { data: { status: 'deleted' } } }),
         ),
@@ -546,6 +549,43 @@ export const DeleteConfirmPhoneDark: Story = {
   ...DeleteConfirm,
   parameters: PHONE,
   globals: { theme: 'dark' },
+}
+
+/**
+ * Withdraw marketing OK asks first, inline (§12): only on a card with the
+ * mark, and it can only untick; focus goes to Cancel.
+ */
+export const WithdrawMarketingConfirm: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const [first, second, third] = canvas.getAllByRole('article')
+    // Only the first Pending card has the mark.
+    await expect(
+      within(second).queryByRole('button', { name: 'Withdraw marketing OK' }),
+    ).toBeNull()
+    await expect(
+      within(third).queryByRole('button', { name: 'Withdraw marketing OK' }),
+    ).toBeNull()
+    await userEvent.click(
+      within(first).getByRole('button', { name: 'Withdraw marketing OK' }),
+    )
+    const confirm = within(first).getByRole('group', {
+      name: 'Withdraw marketing OK? The photo leaves the marketing export. Only the contributor can give it again.',
+    })
+    await expect(confirm).toBeVisible()
+    await expect(
+      within(confirm).getByRole('button', { name: 'Cancel' }),
+    ).toHaveFocus()
+    await expect(args.onAction).not.toHaveBeenCalled()
+  },
+}
+export const WithdrawMarketingConfirmDark: Story = {
+  ...WithdrawMarketingConfirm,
+  globals: { theme: 'dark' },
+}
+export const WithdrawMarketingConfirmPhone: Story = {
+  ...WithdrawMarketingConfirm,
+  parameters: PHONE,
 }
 
 /** Approve all pending (3), confirmed, then the count it reports. */

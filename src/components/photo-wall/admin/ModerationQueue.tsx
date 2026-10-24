@@ -38,6 +38,7 @@ export function ModerationQueue() {
   const reject = api.photoWall.reject.useMutation()
   const remove = api.photoWall.remove.useMutation()
   const deletePost = api.photoWall.deletePost.useMutation()
+  const withdrawMarketing = api.photoWall.withdrawMarketing.useMutation()
   const approveAll = api.photoWall.approveAllPending.useMutation()
 
   const refresh = () => void utils.photoWall.moderationQueue.invalidate()
@@ -62,6 +63,8 @@ export function ModerationQueue() {
           return (await reject.mutateAsync({ id, shown })).status
         case 'remove':
           return (await remove.mutateAsync({ id, shown })).status
+        case 'withdrawMarketing':
+          return (await withdrawMarketing.mutateAsync({ id, shown })).status
         case 'delete': {
           const { status } = await deletePost.mutateAsync({ id, shown })
           return status === 'deleted' ? 'done' : status
@@ -173,6 +176,8 @@ const DONE: Record<PostAction, string> = {
   approve: 'Approved. It shows on the wall within a few seconds.',
   reject: 'Rejected. It’s in Not shown.',
   remove: 'Removed from the wall. It’s in Not shown.',
+  withdrawMarketing:
+    'Marketing OK withdrawn. The photo is left out of the marketing export.',
   delete: 'Deleted for good.',
 }
 const NOTICES: Record<Exclude<PostActionOutcome, 'done' | 'failed'>, string> = {

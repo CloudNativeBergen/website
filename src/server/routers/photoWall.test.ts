@@ -1033,6 +1033,107 @@ describe('the moderation actions (§8, §10, §12)', () => {
     },
   )
 
+  describe('withdrawMarketing (§10, §12): only ever withdraws', () => {
+    const consenting = (fields: Record<string, unknown> = {}) => [
+      wallOf('conf-A'),
+      ...withPhoto(
+        postOf('conf-A', 'p1', {
+          status: 'approved',
+          marketingConsent: true,
+          deviceKey: 'device-9',
+          ...fields,
+        }),
+      ),
+    ]
+
+    it("unticks it on any device's post, and expires the queue and that device, never the wall", async () => {
+      store().reset(consenting())
+      await expect(
+        organizer().withdrawMarketing({ id: P, shown: SHOWN }),
+      ).resolves.toEqual({ status: 'done' })
+      expect(store().doc(P)).toMatchObject({
+        status: 'approved',
+        marketingConsent: false,
+      })
+      expect(store().commits).toHaveLength(1)
+      expect(expired()).toEqual(tags('device-9', false))
+    })
+
+    it('takes no consent: an input that names one is refused, writing nothing', async () => {
+      store().reset(consenting({ marketingConsent: false }))
+      for (const consent of [true, false]) {
+        await expect(
+          organizer().withdrawMarketing({
+            id: P,
+            shown: SHOWN,
+            consent,
+          } as never),
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      }
+      expect(store().docReads).toEqual([])
+      expect(store().commits).toEqual([])
+      expect(store().doc(P)).toMatchObject({ marketingConsent: false })
+    })
+
+    it("answers gone for another conference's post, reading it but writing and expiring nothing", async () => {
+      store().reset([
+        wallOf('conf-A'),
+        ...withPhoto(
+          postOf('conf-B', 'p1', {
+            marketingConsent: true,
+            deviceKey: 'conf-A',
+          }),
+        ),
+      ])
+      await expect(
+        organizer().withdrawMarketing({ id: P, shown: SHOWN }),
+      ).resolves.toEqual({ status: 'gone' })
+      expect(store().commits).toEqual([])
+      expect(store().doc(P)).toMatchObject({ marketingConsent: true })
+      expect(expired()).toEqual([])
+    })
+
+    it('answers gone for a deleting post and for a replacement the card did not show, writing nothing', async () => {
+      store().reset(consenting({ status: 'deleting' }))
+      await expect(
+        organizer().withdrawMarketing({ id: P, shown: SHOWN }),
+      ).resolves.toEqual({ status: 'gone' })
+      store().reset(consenting({ _createdAt: '2026-10-26T08:59:00Z' }))
+      await expect(
+        organizer().withdrawMarketing({ id: P, shown: SHOWN }),
+      ).resolves.toEqual({ status: 'gone' })
+      expect(store().commits).toEqual([])
+      expect(store().doc(P)).toMatchObject({ marketingConsent: true })
+      expect(expired()).toEqual([])
+    })
+
+    it('a patch that committed while its answer was lost: the error surfaces, and the queue and device are expired', async () => {
+      store().reset(consenting())
+      store().afterNextCommit(() => {
+        throw new Error('socket hang up')
+      })
+      await expect(
+        organizer().withdrawMarketing({ id: P, shown: SHOWN }),
+      ).rejects.toThrow('socket hang up')
+      expect(store().doc(P)).toMatchObject({ marketingConsent: false })
+      expect(expired()).toEqual(tags('device-9', false))
+    })
+
+    it('two conflicts: changed, nothing written, nothing expired', async () => {
+      store().reset(consenting())
+      for (const rev of ['rev-2', 'rev-3']) {
+        store().beforeNextCommit(() =>
+          store().put({ ...store().doc(P)!, _rev: rev }),
+        )
+      }
+      await expect(
+        organizer().withdrawMarketing({ id: P, shown: SHOWN }),
+      ).resolves.toEqual({ status: 'changed' })
+      expect(store().commits).toEqual([])
+      expect(expired()).toEqual([])
+    })
+  })
+
   it('refuses an id that is not a Wall Post id, reading nothing', async () => {
     for (const id of ['wallPost-p1,wallPost-p2', 'drafts.wallPost-p1', 'x']) {
       await expect(
@@ -1148,6 +1249,7 @@ describe('the moderation actions (§8, §10, §12)', () => {
       () => as().reject({ id: P, shown: SHOWN }),
       () => as().remove({ id: P, shown: SHOWN }),
       () => as().deletePost({ id: P, shown: SHOWN }),
+      () => as().withdrawMarketing({ id: P, shown: SHOWN }),
       () => as().approveAllPending({ shown: shownAll([P]) }),
     ]
 
@@ -1191,6 +1293,10 @@ describe('the moderation actions (§8, §10, §12)', () => {
       ['remove', () => organizer().remove({ id: P, shown: SHOWN })],
       ['deletePost', () => organizer().deletePost({ id: P, shown: SHOWN })],
       [
+        'withdrawMarketing',
+        () => organizer().withdrawMarketing({ id: P, shown: SHOWN }),
+      ],
+      [
         'approveAllPending',
         () => organizer().approveAllPending({ shown: shownAll([P]) }),
       ],
@@ -1225,6 +1331,7 @@ describe('the moderation actions (§8, §10, §12)', () => {
         "remove",
         "setUp",
         "updateSettings",
+        "withdrawMarketing",
       ]
     `)
   })

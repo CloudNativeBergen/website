@@ -34,6 +34,7 @@ const h = vi.hoisted(() => ({
   reject: vi.fn(),
   remove: vi.fn(),
   deletePost: vi.fn(),
+  withdrawMarketing: vi.fn(),
   approveAllPending: vi.fn(),
 }))
 vi.mock('@/lib/trpc/client', () => {
@@ -56,6 +57,7 @@ vi.mock('@/lib/trpc/client', () => {
         reject: mutation(h.reject),
         remove: mutation(h.remove),
         deletePost: mutation(h.deletePost),
+        withdrawMarketing: mutation(h.withdrawMarketing),
         approveAllPending: mutation(h.approveAllPending),
       },
     },
@@ -760,6 +762,7 @@ describe('the actions (§10)', () => {
       h.reject,
       h.remove,
       h.deletePost,
+      h.withdrawMarketing,
       h.approveAllPending,
     ]) {
       fn.mockReset()
@@ -780,9 +783,11 @@ describe('the actions (§10)', () => {
 
   it('each status offers its own actions; a deleting card only Try again', () => {
     render(<ModerationQueue />)
+    // Withdraw marketing OK only on a card with the mark.
     expect(buttons(card('Keynote crowd'))).toEqual([
       'Approve',
       'Reject',
+      'Withdraw marketing OK',
       'Delete now',
     ])
     fireEvent.click(tab(/^On the wall/))
@@ -794,6 +799,97 @@ describe('the actions (§10)', () => {
     expect(buttons(card('Blurry'))).toEqual(['Approve', 'Delete now'])
     expect(buttons(card('Gone soon'))).toEqual(['Try again'])
   })
+
+  it('a deleting card with the mark still offers only Try again', () => {
+    render(
+      <ModerationQueueView
+        queue={{
+          posts: [
+            post({
+              _id: 'wallPost-9',
+              status: 'deleting',
+              photo: null,
+              caption: 'Half gone',
+              marketingConsent: true,
+            }),
+          ],
+        }}
+        onAction={async () => 'done'}
+      />,
+    )
+    fireEvent.click(tab(/^Not shown/))
+    expect(buttons(card('Half gone'))).toEqual(['Try again'])
+  })
+
+  it('Withdraw marketing OK asks first; Cancel withdraws nothing and gives focus back', async () => {
+    render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('Keynote crowd')).getByRole('button', {
+        name: 'Withdraw marketing OK',
+      }),
+    )
+    const confirm = within(card('Keynote crowd')).getByRole('group', {
+      name: 'Withdraw marketing OK? The photo leaves the marketing export. Only the contributor can give it again.',
+    })
+    await vi.waitFor(() =>
+      expect(
+        within(confirm).getByRole('button', { name: 'Cancel' }),
+      ).toHaveFocus(),
+    )
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    await vi.waitFor(() =>
+      expect(
+        within(card('Keynote crowd')).getByRole('button', {
+          name: 'Withdraw marketing OK',
+        }),
+      ).toHaveFocus(),
+    )
+    expect(h.withdrawMarketing).not.toHaveBeenCalled()
+  })
+
+  it('Withdraw marketing OK, confirmed, sends the post the card showed, says so, and reads the queue again', async () => {
+    h.withdrawMarketing.mockResolvedValue({ status: 'done' })
+    render(<ModerationQueue />)
+    fireEvent.click(
+      within(card('Keynote crowd')).getByRole('button', {
+        name: 'Withdraw marketing OK',
+      }),
+    )
+    fireEvent.click(
+      within(card('Keynote crowd')).getByRole('button', { name: 'Withdraw' }),
+    )
+    await screen.findByText(
+      'Marketing OK withdrawn. The photo is left out of the marketing export.',
+    )
+    // The id and the post shown: nothing that could give consent.
+    expect(h.withdrawMarketing).toHaveBeenCalledWith({
+      id: 'wallPost-1',
+      shown: NO_PHOTO_ID,
+    })
+    expect(h.invalidate).toHaveBeenCalledTimes(1)
+    expect(h.deletePost).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['gone', { status: 'gone' }, 'This photo was deleted.'],
+    ['failed', null, 'Couldn’t withdraw marketing OK. Try again.'],
+  ] as const)(
+    'Withdraw marketing OK %s says so',
+    async (_name, answer, said) => {
+      if (answer) h.withdrawMarketing.mockResolvedValue(answer)
+      else h.withdrawMarketing.mockRejectedValue(new Error('offline'))
+      render(<ModerationQueue />)
+      fireEvent.click(
+        within(card('Keynote crowd')).getByRole('button', {
+          name: 'Withdraw marketing OK',
+        }),
+      )
+      fireEvent.click(
+        within(card('Keynote crowd')).getByRole('button', { name: 'Withdraw' }),
+      )
+      await screen.findByText(said)
+    },
+  )
 
   it('a card without onAction has no actions (read only)', () => {
     render(<ModerationQueueView queue={QUEUE} />)
