@@ -96,6 +96,10 @@ vi.mock('@/lib/messaging/notify', () => ({
   notifyNewMessage: vi.fn(),
 }))
 
+vi.mock('@/lib/slack/notify', () => ({
+  notifyNewProposal: vi.fn().mockResolvedValue(undefined),
+}))
+
 // The status-change event is handed to `runAfterResponse` (Next `after()` /
 // Vercel `waitUntil`) instead of being left as a floating promise. Stand in for
 // the runtime by running the task, so the existing publish assertions still
@@ -128,6 +132,7 @@ import {
 import { getProposalSanity, updateProposalStatus } from '@/lib/proposal/server'
 import { eventBus } from '@/lib/events/bus'
 import { runAfterResponse } from '@/server/runAfterResponse'
+import { notifyNewProposal } from '@/lib/slack/notify'
 import {
   hasSubmittableFormats,
   isCfpOpen,
@@ -433,12 +438,15 @@ describe('proposal router', () => {
         err: null,
       })
 
+      vi.mocked(notifyNewProposal).mockClear()
+
       const caller = createAuthenticatedCaller(regularSpeaker._id)
       const result = await caller.proposal.create({
         data: { title: 'Draft talk' },
         status: Status.draft,
       })
       expect(result.status).toBe(Status.draft)
+      expect(notifyNewProposal).not.toHaveBeenCalled()
     })
 
     it('should create a submitted proposal with valid data', async () => {
@@ -463,6 +471,11 @@ describe('proposal router', () => {
         regularSpeaker._id,
         mockConference._id,
         Status.submitted,
+      )
+      // A direct submit posts the same Slack alert as draft -> submitted.
+      expect(notifyNewProposal).toHaveBeenCalledWith(
+        mockProposal,
+        expect.objectContaining({ _id: mockConference._id }),
       )
     })
 

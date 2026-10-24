@@ -106,6 +106,7 @@ import {
 import { normalizeEmail, canonicalEmail } from '@/lib/speaker/email'
 import { eventBus } from '@/lib/events/bus'
 import { runAfterResponse } from '@/server/runAfterResponse'
+import { notifyNewProposal } from '@/lib/slack/notify'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import {
   updateProposalStatus,
@@ -963,18 +964,20 @@ export const proposalRouter = router({
         }
 
         // Notify organizers of a genuinely NEW submission (not a saved draft).
-        // INTENTIONAL ASYMMETRY: this create path does not publish a
-        // `proposal.status.changed` bus event, so the `persistNotification`
-        // bus handler never fires here — we fan out directly instead. We do
-        // NOT publish a bus event on purpose: that would also trigger the
-        // Slack/email handlers and change existing create behaviour (out of
-        // scope for the notification hub).
+        // This create path does not publish a `proposal.status.changed` bus
+        // event, so it fans out the hub rows and the Slack alert directly,
+        // matching what a draft -> submitted `proposal.action` sends.
         if (initialStatus === Status.submitted) {
           // The whole notify block shares createNotifications' never-fail
           // contract: the proposal is already created at this point, so a
           // failure here (e.g. the organizer-id fetch) must not surface as a
           // create error to the submitting speaker.
           try {
+            runAfterResponse(() =>
+              notifyNewProposal(proposal, conference).catch((error) => {
+                console.error('Failed to post new proposal to Slack:', error)
+              }),
+            )
             // TEAMS-2: proposal events route to the `cfp` team (all organizers
             // when it is not configured — the shared fallback contract).
             const organizerIds = await resolveRoutedOrganizerIds({
