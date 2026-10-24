@@ -408,6 +408,7 @@ async function createProposalWithNewPrimarySpeaker({
     toEmail: newSpeaker.email,
     toName: newSpeaker.name,
     organizerName: organizerName || 'The organizers',
+    proposalId: proposalDocument._id,
     proposalTitle: proposalDocument.title,
     role: 'speaker',
   }).catch((emailError) => {
@@ -1438,6 +1439,7 @@ export const proposalRouter = router({
           toEmail: input.email,
           toName: input.name,
           organizerName: ctx.user?.name || 'The organizers',
+          proposalId: input.proposalId,
           proposalTitle: proposal.title,
         }).catch((emailError) => {
           console.error(
