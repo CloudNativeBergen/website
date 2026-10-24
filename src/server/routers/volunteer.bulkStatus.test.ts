@@ -31,9 +31,9 @@ beforeEach(() => {
   getConferenceMock.mockResolvedValue({ conference, error: null })
   getVolunteersMock.mockResolvedValue({
     volunteers: [
-      { _id: 'v1', status: 'pending' },
-      { _id: 'v2', status: 'pending' },
-      { _id: 'v3', status: 'approved' },
+      { _id: 'v1', _rev: 'r1', status: 'pending' },
+      { _id: 'v2', _rev: 'r2', status: 'pending' },
+      { _id: 'v3', _rev: 'r3', status: 'approved' },
     ],
     error: null,
   })
@@ -60,7 +60,10 @@ describe('volunteer.admin.bulkUpdateStatus', () => {
     expect(res).toEqual({ updated: 2, skipped: 1 })
     expect(bulkUpdateMock).toHaveBeenCalledOnce()
     expect(bulkUpdateMock).toHaveBeenCalledWith(
-      ['v1', 'v2'],
+      [
+        { _id: 'v1', _rev: 'r1' },
+        { _id: 'v2', _rev: 'r2' },
+      ],
       'rejected',
       'sp-1',
     )
@@ -73,6 +76,30 @@ describe('volunteer.admin.bulkUpdateStatus', () => {
     })
     expect(res).toEqual({ updated: 0, skipped: 1 })
     expect(bulkUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it('dedupes ids before counting skipped', async () => {
+    const res = await caller().admin.bulkUpdateStatus({
+      volunteerIds: ['v1', 'v1', 'v3', 'v3'],
+      status: 'approved' as never,
+    })
+    expect(res).toEqual({ updated: 1, skipped: 1 })
+  })
+
+  it('reports a revision conflict as CONFLICT', async () => {
+    bulkUpdateMock.mockResolvedValue({
+      success: false,
+      error: Object.assign(new Error('rev mismatch'), { statusCode: 409 }),
+    })
+    await expect(
+      caller().admin.bulkUpdateStatus({
+        volunteerIds: ['v1'],
+        status: 'approved' as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Someone else changed these volunteers, reload and try again',
+    })
   })
 
   it('rejects more than 50 ids', async () => {

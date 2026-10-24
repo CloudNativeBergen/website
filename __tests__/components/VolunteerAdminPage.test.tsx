@@ -205,6 +205,44 @@ describe('VolunteerAdminPage', () => {
     await waitFor(() => expect(screen.queryByText('2 selected')).toBeNull())
   })
 
+  it('drops a volunteer approved on its own card from the selection', () => {
+    const { rerender } = renderPage()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select all visible pending' }),
+    )
+    expect(screen.getByText('2 selected')).toBeTruthy()
+
+    // The refetch after a single-card approve shows Peter as approved.
+    listState.data = volunteers.map((v) =>
+      v._id === 'v-pending' ? { ...v, status: 'approved' } : v,
+    )
+    rerender(
+      <NotificationProvider>
+        <VolunteerAdminPage />
+      </NotificationProvider>,
+    )
+    expect(screen.getByText('1 selected')).toBeTruthy()
+  })
+
+  it('ignores selected volunteers hidden by a filter', async () => {
+    renderPage()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select all visible pending' }),
+    )
+    fireEvent.change(
+      screen.getByPlaceholderText('Search volunteers by name, email, task...'),
+      { target: { value: 'Peter' } },
+    )
+    expect(await screen.findByText('1 selected')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+    await waitFor(() =>
+      expect(bulkStatusMutate).toHaveBeenCalledWith({
+        volunteerIds: ['v-pending'],
+        status: VolunteerStatus.APPROVED,
+      }),
+    )
+  })
+
   it('asks before bulk-rejecting', async () => {
     renderPage()
     fireEvent.click(screen.getByLabelText('Select Peter'))
