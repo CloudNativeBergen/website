@@ -12,7 +12,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WallPostAttempt, WallPostRequest } from '@/lib/photo-wall/post'
 import type { PolaroidEditorProps } from './PolaroidEditor'
-import { WallPoster } from './WallPoster'
+import { ENSURE_DEVICE_TIMEOUT_MS, WallPoster } from './WallPoster'
 
 const decodes = vi.hoisted(
   () => new Map<string, (master: HTMLCanvasElement) => void>(),
@@ -284,5 +284,94 @@ describe('WallPoster', () => {
     await press()
     const [first, second] = uploadIds(post)
     expect(second).not.toBe(first)
+  })
+
+  it('enables Post once ensureDevice has hung for the timeout; the press asks again and shows the message when that hangs too', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout'],
+      shouldAdvanceTime: true,
+    })
+    try {
+      const ensureDevice = vi.fn(() => new Promise<boolean>(() => {}))
+      const post = postAnswering({ ok: true })
+      renderPoster(post, ensureDevice)
+      await pick('hung')
+      expect(postButton()).toHaveAttribute('aria-disabled', 'true')
+
+      await act(async () => {
+        vi.advanceTimersByTime(ENSURE_DEVICE_TIMEOUT_MS - 1)
+      })
+      expect(postButton()).toHaveAttribute('aria-disabled', 'true')
+      await act(async () => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(postButton()).toHaveAttribute('aria-disabled', 'false')
+
+      fireEvent.click(postButton())
+      await waitFor(() => expect(ensureDevice).toHaveBeenCalledTimes(2))
+      await act(async () => {
+        vi.advanceTimersByTime(ENSURE_DEVICE_TIMEOUT_MS)
+      })
+      await waitFor(() =>
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          'Something went wrong. Your photo wasn’t posted. Try again.',
+        ),
+      )
+      expect(post).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('after a lost response, another photo of the same size gets a new uploadId', async () => {
+    const post = postAnswering({ ok: false, lost: true }, { ok: true })
+    renderPoster(post)
+    await pick('aaaa')
+    await press()
+    fireEvent.click(screen.getByRole('button', { name: /Another photo/ }))
+    await waitFor(() =>
+      expect(screen.queryByText(/^editing /)).not.toBeInTheDocument(),
+    )
+    await pick('bbbb')
+    await press()
+    const [first, second] = post.mock.calls.map(([request]) => request)
+    expect(first.photo.size).toBe(second.photo.size)
+    expect(second.uploadId).not.toBe(first.uploadId)
+  })
+
+  it('shows the upload’s progress while the post goes up', async () => {
+    let report: (fraction: number) => void = () => {}
+    let finish: (attempt: WallPostAttempt) => void = () => {}
+    const post = vi.fn(
+      (
+        ...[, { onProgress }]: [
+          WallPostRequest,
+          { onProgress?: (fraction: number) => void },
+        ]
+      ) =>
+        new Promise<WallPostAttempt>((resolve) => {
+          report = (f) => onProgress?.(f)
+          finish = resolve
+        }),
+    )
+    render(
+      <WallPoster
+        logo={null}
+        deletesOn="2026-11-26"
+        ensureDevice={async () => true}
+        post={post}
+      />,
+    )
+    await pick('progress')
+    fireEvent.click(postButton())
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+    await act(async () => report(0.423))
+    const bar = screen.getByRole('progressbar', {
+      name: 'Uploading your photo',
+    })
+    expect(bar).toHaveAttribute('aria-valuenow', '42')
+    expect(postButton()).toHaveTextContent('Posting…')
+    await act(async () => finish({ ok: true }))
+    expect(screen.queryByRole('progressbar')).toBeNull()
   })
 })

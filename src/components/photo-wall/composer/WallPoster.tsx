@@ -5,6 +5,7 @@ import type { ConferenceLogoData } from '@/lib/conference/logo'
 import {
   WallPostRefused,
   postToWall,
+  type PostOptions,
   type WallPostRequest,
 } from '@/lib/photo-wall/post'
 import { WallChrome } from '../WallPage'
@@ -19,12 +20,36 @@ export interface WallPosterProps {
   /** The `/wall/post` Server Action that sets the device cookie (§6.1). */
   ensureDevice: () => Promise<boolean>
   /** The submit; `postToWall` unless a story stands in for the server. */
-  post?: (request: WallPostRequest) => ReturnType<typeof postToWall>
+  post?: (
+    request: WallPostRequest,
+    options: Pick<PostOptions, 'onProgress'>,
+  ) => ReturnType<typeof postToWall>
 }
 
-/** Whether a press posts what the lost attempt carried: then it is a retry. */
+/**
+ * How long `ensureDevice()` may take before Post to the wall is enabled
+ * anyway: the press then asks again, and says so if that fails too.
+ */
+export const ENSURE_DEVICE_TIMEOUT_MS = 10_000
+
+/** `ensureDevice()`'s answer, or false once it failed or took too long. */
+function deviceWithin(ensureDevice: () => Promise<boolean>): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    ensureDevice().catch(() => false),
+    new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), ENSURE_DEVICE_TIMEOUT_MS)
+    }),
+  ]).finally(() => clearTimeout(timer))
+}
+
+/**
+ * Whether a press posts what the lost attempt carried: then it is a retry.
+ * The photo by identity: the composer hands over the same baked Blob while
+ * the photo and filter stay.
+ */
 const sameDraft = (a: WallPostDraft, b: WallPostDraft) =>
-  a.photo.size === b.photo.size &&
+  a.photo === b.photo &&
   a.caption === b.caption &&
   a.name === b.name &&
   a.crop.x === b.crop.x &&
@@ -37,7 +62,9 @@ const sameDraft = (a: WallPostDraft, b: WallPostDraft) =>
  * "Waiting for approval".
  *
  * The device cookie first: `ensureDevice()` runs on load and Post to the
- * wall waits for its answer (§6.1). If it failed, the press asks once more.
+ * wall waits for its answer (§6.1), for at most
+ * {@link ENSURE_DEVICE_TIMEOUT_MS}. If it failed or took too long, the press
+ * asks once more, and shows the generic message if that fails too.
  *
  * `uploadId` (§6.2, §6.5): one per post. A press after a lost response sends
  * the same one, so the route can answer success if the post did go in; a
@@ -54,6 +81,7 @@ export function WallPoster({
   )
   const [posted, setPosted] = useState<PostedPhoto[]>([])
   const [composing, setComposing] = useState(true)
+  const [progress, setProgress] = useState<number | null>(null)
   /** The post a lost response left open, to be retried as itself. */
   const open = useRef<{ uploadId: string; draft: WallPostDraft } | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
@@ -61,9 +89,8 @@ export function WallPoster({
 
   useEffect(() => {
     let live = true
-    ensureDevice().then(
+    deviceWithin(ensureDevice).then(
       (ok) => live && setDevice(ok ? 'ready' : 'failed'),
-      () => live && setDevice('failed'),
     )
     return () => {
       live = false
@@ -81,15 +108,21 @@ export function WallPoster({
 
   const submit = async (draft: WallPostDraft) => {
     if (device !== 'ready') {
-      const ok = await ensureDevice().catch(() => false)
-      if (!ok) throw new Error('No device cookie')
+      if (!(await deviceWithin(ensureDevice))) {
+        throw new Error('No device cookie')
+      }
       setDevice('ready')
     }
     if (!open.current || !sameDraft(open.current.draft, draft)) {
       open.current = { uploadId: crypto.randomUUID(), draft }
     }
     const { uploadId } = open.current
-    const result = await post({ uploadId, ...draft })
+    // Whole percents only: a re-render per progress event is wasted work.
+    const onProgress = (fraction: number) =>
+      setProgress(Math.round(fraction * 100) / 100)
+    const result = await post({ uploadId, ...draft }, { onProgress }).finally(
+      () => setProgress(null),
+    )
     // Lost: keep the uploadId for the next press; the generic message.
     if ('lost' in result) throw new Error('No answer from the wall')
     open.current = null
@@ -119,6 +152,7 @@ export function WallPoster({
         deletesOn={deletesOn}
         onSubmit={submit}
         canPost={device !== 'pending'}
+        uploadProgress={progress}
       />
     )
   }
