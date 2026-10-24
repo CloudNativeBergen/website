@@ -283,4 +283,85 @@ describe('WallComposer', () => {
     )
     expect(window.history.state).toMatchObject({ wallComposer: true })
   })
+
+  it('bakes only after two frames, so the status has painted first', async () => {
+    const frames: FrameRequestCallback[] = []
+    const raf = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => frames.push(callback))
+    try {
+      await compose('paint')
+      fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
+      await waitFor(() => expect(frames).toHaveLength(1))
+      await act(async () => frames.shift()?.(0))
+      expect(bakes).toHaveLength(0)
+      await waitFor(() => expect(frames).toHaveLength(1))
+      await act(async () => frames.shift()?.(0))
+      await waitFor(() => expect(bakes).toHaveLength(1))
+    } finally {
+      raf.mockRestore()
+    }
+  })
+
+  it('clears the failure when a retry goes through, or a new photo is picked', async () => {
+    const onSubmit = await compose(
+      'retry',
+      vi
+        .fn()
+        .mockRejectedValueOnce(new Error('lost'))
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('lost again')),
+    )
+    const postOnce = async () => {
+      const calls = onSubmit.mock.calls.length
+      fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
+      await waitFor(() => expect(bakes.length).toBeGreaterThan(calls))
+      await act(async () =>
+        bakes[calls].resolve(new Blob([], { type: 'image/jpeg' })),
+      )
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(calls + 1))
+    }
+    await postOnce()
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+    await postOnce()
+    await waitFor(() =>
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
+    )
+
+    await postOnce()
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Another photo/ }))
+    await waitFor(() =>
+      expect(screen.queryByText(/^editing /)).not.toBeInTheDocument(),
+    )
+    await pickAgain('retry-2')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('adds no history entries when posting, however often', async () => {
+    const onSubmit = await compose(
+      'history',
+      vi.fn().mockResolvedValue(undefined),
+    )
+    const length = window.history.length
+    for (let n = 0; n < 2; n += 1) {
+      fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
+      await waitFor(() => expect(bakes).toHaveLength(n + 1))
+      await act(async () =>
+        bakes[n].resolve(new Blob([], { type: 'image/jpeg' })),
+      )
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(n + 1))
+    }
+    expect(window.history.length).toBe(length)
+  })
+
+  it('moves focus to the landing heading when the composer closes', async () => {
+    await compose('focus')
+    fireEvent.click(screen.getByRole('button', { name: /Another photo/ }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Add your photo to the wall' }),
+      ).toHaveFocus(),
+    )
+  })
 })
