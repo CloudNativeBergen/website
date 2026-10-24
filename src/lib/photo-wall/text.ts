@@ -2,9 +2,13 @@
  * THE CAPTION AND NAME (Photo Wall spec §6.4, §6.5). Client-safe and pure.
  *
  * Limits are in code points of the NORMALISED text, the measure the server
- * refuses on. The normalisation here is the server's rule in the server's
- * order, so a caption the composer accepts is never refused for its text.
+ * refuses on. The rule itself lives in `wall-text.ts`, which the server's
+ * field checks use too, so a caption the composer accepts is never refused
+ * for its text.
  */
+import { isDroppedPoint, normalizeWallText } from './wall-text'
+
+export { normalizeWallText }
 
 export const CAPTION_MAX = 80
 export const NAME_MAX = 40
@@ -19,48 +23,33 @@ export function limitCodePoints(text: string, max: number): string {
   return Array.from(text.normalize('NFC')).slice(0, max).join('')
 }
 
-/**
- * What goes: control characters (but not the whitespace ones, which the next
- * step folds into spaces: the spec's "newlines included") and the bidi
- * formatting characters (U+200E, U+200F, U+202A–U+202E, U+2066–U+2069),
- * which could flip a caption's reading order. The zero-width joiner stays,
- * so a family emoji survives.
- */
-const REMOVED =
-  /(?![\t\n\v\f\r])[\p{Cc}\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu
-const IS_REMOVED = new RegExp(REMOVED.source, 'u')
-
-/**
- * What the server stores (§6.4), in its order: NFC; control and bidi
- * formatting characters removed; any run of whitespace, newlines included,
- * becomes one space; trimmed. Empty stays empty, the server's "absent".
- */
-export function normalizeWallText(text: string): string {
-  return text.normalize('NFC').replace(REMOVED, '').replace(/\s+/gu, ' ').trim()
-}
-
 /** What the counter shows: the code points the server will measure. */
 export function wallTextLength(text: string): number {
   return codePointCount(normalizeWallText(text))
 }
 
 /**
- * The typed text, NFC, cut so that its NORMALISED form has at most `max`
- * code points: a double space or a trailing space costs nothing, a pasted
- * essay is cut where the server would start refusing.
+ * The typed text without the characters the server drops, NFC, cut so that
+ * its NORMALISED form has at most `max` code points: a double space or a
+ * trailing space costs nothing, a pasted essay is cut where the server would
+ * start refusing.
  */
 export function limitWallText(text: string, max: number): string {
-  // One pass, counting what the normalisation would keep: a removed
-  // character costs nothing, a whitespace run costs one space only once a
-  // visible character follows it, and the cut falls before the first visible
-  // character that would go over. A pasted essay stays instant.
-  const points = Array.from(text.normalize('NFC'))
+  // The dropped characters are invisible, so they leave the field at once;
+  // what remains is NFC, and one pass counts what the normalisation keeps: a
+  // whitespace run costs one space only once a visible character follows it,
+  // and the cut falls before the first character that would go over. A
+  // pasted essay stays instant.
+  const points = Array.from(
+    Array.from(text)
+      .filter((point) => !isDroppedPoint(point))
+      .join('')
+      .normalize('NFC'),
+  )
   let kept = 0
   let spaceOwed = false
   for (let i = 0; i < points.length; i += 1) {
-    const point = points[i]
-    if (IS_REMOVED.test(point)) continue
-    if (/\s/u.test(point)) {
+    if (/\s/u.test(points[i])) {
       spaceOwed = kept > 0
       continue
     }

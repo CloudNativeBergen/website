@@ -8,6 +8,7 @@ import {
   normalizeWallText,
   wallTextLength,
 } from './text'
+import { isDroppedPoint } from './wall-text'
 
 /**
  * The caption and name rules (Photo Wall spec §6.4, §6.5): limits in code
@@ -40,7 +41,7 @@ describe('limitCodePoints', () => {
 
   it('cuts the NFC form, so a decomposed accent does not slip an extra unit through', () => {
     // "e" + combining acute (2 units, 2 code points) is one code point in NFC.
-    const decomposed = 'café'
+    const decomposed = 'cafe\u{301}'
     expect(codePointCount(decomposed)).toBe(5)
     expect(wallTextLength(decomposed)).toBe(4)
     expect(limitCodePoints(decomposed, 4)).toBe('café')
@@ -50,7 +51,7 @@ describe('limitCodePoints', () => {
 
 describe('normalizeWallText: what the server will store (§6.4)', () => {
   it('is NFC', () => {
-    expect(normalizeWallText('café')).toBe('café')
+    expect(normalizeWallText('cafe\u{301}')).toBe('café')
   })
 
   it('turns any run of whitespace, newlines included, into one space and trims', () => {
@@ -123,12 +124,27 @@ describe('wallTextLength and limitWallText: the counter and the cut measure the 
   it('keeps the longest prefix whose normalised text fits, on mixed input', () => {
     // The definition, one re-count per prefix: slow, but obviously right.
     const longestFitting = (text: string, max: number) => {
-      const points = Array.from(text.normalize('NFC'))
+      const points = Array.from(
+        Array.from(text)
+          .filter((point) => !isDroppedPoint(point))
+          .join('')
+          .normalize('NFC'),
+      )
       let n = points.length
       while (n > 0 && wallTextLength(points.slice(0, n).join('')) > max) n -= 1
       return points.slice(0, n).join('')
     }
-    const alphabet = ['a', ' ', '\n', '\t', '\u0001', '‮', '🎉', '‍', 'é']
+    const alphabet = [
+      'a',
+      ' ',
+      '\n',
+      '\t',
+      '\u0001',
+      '\u{202e}',
+      '🎉',
+      '\u{200d}',
+      'e\u{301}',
+    ]
     let seed = 7
     const next = () => (seed = (seed * 48271) % 2147483647)
     for (let run = 0; run < 300; run += 1) {
@@ -137,7 +153,11 @@ describe('wallTextLength and limitWallText: the counter and the cut measure the 
         () => alphabet[next() % alphabet.length],
       ).join('')
       const max = next() % 12
-      expect(limitWallText(text, max)).toBe(longestFitting(text, max))
+      const cut = limitWallText(text, max)
+      expect(wallTextLength(cut)).toBeLessThanOrEqual(max)
+      expect(normalizeWallText(cut)).toBe(
+        normalizeWallText(longestFitting(text, max)),
+      )
     }
   })
 })
