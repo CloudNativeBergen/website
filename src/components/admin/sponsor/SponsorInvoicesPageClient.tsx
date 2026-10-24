@@ -190,32 +190,41 @@ export function SponsorInvoicesPageClient({
         title="Sponsor Invoicing"
         description="Everything needed to raise sponsor invoices for"
         contextHighlight={conference.title}
+        // Alert cards double as the readiness filter. Hidden at 0 unless the
+        // filter is on, so the active filter can always be switched off.
         stats={[
-          { value: rows.length, label: 'Invoices shown', color: 'slate' },
-          {
-            value: summary.readyCount,
-            label: 'Ready to invoice',
-            color: 'green',
-          },
-          {
-            value: summary.blockedCount,
-            label: 'Blocked',
-            color: summary.blockedCount > 0 ? 'red' : 'slate',
-          },
-          {
-            value: readyAmount,
-            label: 'Ready, ex VAT',
-            color: 'blue',
-            subtitle:
-              summary.readyTotals.length > 1
-                ? `+ ${summary.readyTotals
-                    .slice(1)
-                    .map((total) =>
-                      formatCurrency(total.amount, total.currency),
-                    )
-                    .join(', ')}`
-                : undefined,
-          },
+          ...(summary.readyCount > 0 || readyFilter === 'yes'
+            ? [
+                {
+                  value: summary.readyCount,
+                  label: 'Ready to invoice',
+                  color: 'green' as const,
+                  subtitle: `${[
+                    readyAmount,
+                    ...summary.readyTotals
+                      .slice(1)
+                      .map((total) =>
+                        formatCurrency(total.amount, total.currency),
+                      ),
+                  ].join(' + ')} ex VAT`,
+                  onClick: () =>
+                    setReadyFilter(readyFilter === 'yes' ? '' : 'yes'),
+                  pressed: readyFilter === 'yes',
+                },
+              ]
+            : []),
+          ...(summary.blockedCount > 0 || readyFilter === 'no'
+            ? [
+                {
+                  value: summary.blockedCount,
+                  label: 'Blocked',
+                  color: 'red' as const,
+                  onClick: () =>
+                    setReadyFilter(readyFilter === 'no' ? '' : 'no'),
+                  pressed: readyFilter === 'no',
+                },
+              ]
+            : []),
         ]}
         actions={
           <AdminHeaderActions

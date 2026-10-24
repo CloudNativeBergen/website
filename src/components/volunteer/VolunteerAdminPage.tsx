@@ -132,6 +132,8 @@ export default function VolunteerAdminPage() {
   const [statusFilter, setStatusFilter] = useState<Set<VolunteerStatus>>(
     () => new Set(DEFAULT_STATUS_FILTER),
   )
+  const pendingOnly =
+    statusFilter.size === 1 && statusFilter.has(VolunteerStatus.PENDING)
   const [ticketFilter, setTicketFilter] = useState<TicketFilterState>('all')
   const [emailModalOpen, setEmailModalOpen] = useState(false)
   const [emailModalVolunteer, setEmailModalVolunteer] =
@@ -444,18 +446,15 @@ export default function VolunteerAdminPage() {
   const stats = useMemo(() => {
     if (!volunteers)
       return {
-        total: '…',
         pending: '…',
         approved: '…',
         confirmed: '…',
-        rejected: '…',
         claimed: '…',
       }
     const claimed = volunteers.filter(
       (v) => ticketStatuses[v._id]?.state === 'redeemed',
     ).length
     return {
-      total: volunteers.length,
       pending: volunteers.filter((v) => v.status === VolunteerStatus.PENDING)
         .length,
       approved: volunteers.filter(
@@ -466,8 +465,6 @@ export default function VolunteerAdminPage() {
       confirmed: volunteers.filter(
         (v) => v.status === VolunteerStatus.CONFIRMED,
       ).length,
-      rejected: volunteers.filter((v) => v.status === VolunteerStatus.REJECTED)
-        .length,
       claimed,
     }
   }, [volunteers, ticketStatuses])
@@ -618,16 +615,25 @@ export default function VolunteerAdminPage() {
           },
         ]}
         stats={[
-          {
-            value: stats.total,
-            label: 'Total Applications',
-            color: 'slate',
-          },
-          {
-            value: stats.pending,
-            label: 'Pending Review',
-            color: 'yellow',
-          },
+          // Doubles as a status filter; hidden when nothing is pending.
+          ...(stats.pending !== 0 || pendingOnly
+            ? [
+                {
+                  value: stats.pending,
+                  label: 'Pending Review',
+                  color: 'yellow' as const,
+                  pressed: pendingOnly,
+                  onClick: () =>
+                    setStatusFilter(
+                      new Set(
+                        pendingOnly
+                          ? DEFAULT_STATUS_FILTER
+                          : [VolunteerStatus.PENDING],
+                      ),
+                    ),
+                },
+              ]
+            : []),
           {
             value: stats.approved,
             label: 'Approved',
@@ -651,11 +657,6 @@ export default function VolunteerAdminPage() {
                 : stats.claimed,
             label: 'Tickets Claimed',
             color: 'blue',
-          },
-          {
-            value: stats.rejected,
-            label: 'Rejected',
-            color: 'red',
           },
         ]}
       />

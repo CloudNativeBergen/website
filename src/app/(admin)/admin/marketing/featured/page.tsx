@@ -41,21 +41,13 @@ export default function AdminFeaturedPage() {
                     value: summary.featuredSpeakersCount,
                     label: 'Featured speakers',
                     color: 'green',
+                    subtitle: `of ${summary.availableSpeakersCount} available`,
                   },
                   {
                     value: summary.featuredTalksCount,
                     label: 'Featured talks',
                     color: 'blue',
-                  },
-                  {
-                    value: summary.availableSpeakersCount,
-                    label: 'Available speakers',
-                    color: 'blue',
-                  },
-                  {
-                    value: summary.availableTalksCount,
-                    label: 'Available talks',
-                    color: 'purple',
+                    subtitle: `of ${summary.availableTalksCount} available`,
                   },
                 ]
               : []
@@ -64,8 +56,8 @@ export default function AdminFeaturedPage() {
         {summaryLoading && (
           <div className="font-inter mt-4">
             <div className="animate-pulse">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {[...Array(4)].map((_, i) => (
+              <div className="grid grid-cols-2 gap-3">
+                {[...Array(2)].map((_, i) => (
                   <div
                     key={i}
                     className="h-16 rounded bg-gray-200 dark:bg-gray-700"

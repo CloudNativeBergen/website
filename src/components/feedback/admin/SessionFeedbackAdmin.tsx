@@ -320,7 +320,12 @@ export function SessionFeedbackAdmin({
         description="What attendees thought of each session: scanned answers and Card Counts together."
         contextHighlight={conferenceTitle}
         stats={[
-          { value: totals.total, label: 'Responses', color: 'blue' },
+          {
+            value: totals.total,
+            label: 'Responses',
+            color: 'blue',
+            subtitle: `${overview.comments} comments`,
+          },
           {
             value:
               totals.lovedItPercent === null
@@ -329,12 +334,16 @@ export function SessionFeedbackAdmin({
             label: 'Loved it',
             color: 'green',
           },
-          { value: overview.comments, label: 'Comments', color: 'slate' },
-          {
-            value: overview.flagged,
-            label: 'Flagged',
-            color: overview.flagged > 0 ? 'red' : 'slate',
-          },
+          // No filter: the flagged box below already lists every flag.
+          ...(overview.flagged > 0
+            ? [
+                {
+                  value: overview.flagged,
+                  label: 'Flagged',
+                  color: 'red' as const,
+                },
+              ]
+            : []),
         ]}
       />
 

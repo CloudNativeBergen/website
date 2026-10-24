@@ -352,11 +352,6 @@ export default function SpeakersPageClient({
           }
           stats={[
             {
-              value: stats.totalSpeakers,
-              label: 'Total speakers',
-              color: 'slate' as const,
-            },
-            {
               value: `${stats.confirmedSpeakers} (${
                 stats.totalSpeakers > 0
                   ? Math.round(
@@ -366,6 +361,7 @@ export default function SpeakersPageClient({
               }%)`,
               label: 'Confirmed',
               color: 'green' as const,
+              subtitle: `of ${stats.totalSpeakers} speakers`,
             },
             {
               value: `${stats.newSpeakers} (${

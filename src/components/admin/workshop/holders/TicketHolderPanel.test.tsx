@@ -83,7 +83,7 @@ const valueOf = (label: string) =>
 describe('TicketHolderPanel', () => {
   it('shows each number on its value', () => {
     renderPanel(READY)
-    expect(valueOf('Holders')).toBe('41')
+    expect(screen.getByText(/of 41 holders/)).toBeTruthy()
     expect(valueOf('Signed up')).toBe('28')
     expect(valueOf('Not signed up')).toBe('13')
     expect(valueOf('Flagged')).toBe('1')
@@ -91,31 +91,32 @@ describe('TicketHolderPanel', () => {
 
   it('counts the workshop tickets beside the people holding them', () => {
     renderPanel(READY)
-    expect(screen.getByText('44 workshop tickets')).toBeTruthy()
+    expect(screen.getByText(/44 workshop tickets$/)).toBeTruthy()
     cleanup()
     renderPanel(ready({ holders: 1, tickets: 1, notSignedUp: 1 }))
-    expect(screen.getByText('1 workshop ticket')).toBeTruthy()
+    expect(screen.getByText(/ 1 workshop ticket$/)).toBeTruthy()
+    expect(screen.getByText(/of 1 holder ·/)).toBeTruthy()
   })
 
   it('gives the share of holders with a sign-up, a waitlist place included', () => {
     // 28 of 41 have a sign-up: 68.3%.
     renderPanel(READY)
-    expect(screen.getByText('68% of holders')).toBeTruthy()
+    expect(screen.getByText(/^68% of /)).toBeTruthy()
   })
 
   it('says 100% only when every holder has signed up', () => {
     // 299 of 300 is 99.7%: rounding to nearest would claim everybody.
     renderPanel(ready({ holders: 300, notSignedUp: 1 }))
-    expect(screen.getByText('99% of holders')).toBeTruthy()
+    expect(screen.getByText(/^99% of /)).toBeTruthy()
     cleanup()
     renderPanel(ready({ holders: 300, notSignedUp: 0 }))
-    expect(screen.getByText('100% of holders')).toBeTruthy()
+    expect(screen.getByText(/^100% of /)).toBeTruthy()
   })
 
   it('rounds an exact share down to itself, not a point below', () => {
     // 29 of 50 is exactly 58%; 29 / 50 * 100 in floats is 57.99999999999999.
     renderPanel(ready({ holders: 50, notSignedUp: 21 }))
-    expect(screen.getByText('58% of holders')).toBeTruthy()
+    expect(screen.getByText(/^58% of /)).toBeTruthy()
   })
 
   it('with no holders, gives no share rather than dividing by zero', () => {
@@ -136,7 +137,7 @@ describe('TicketHolderPanel', () => {
     const panel = screen.getByRole('region', { name: 'Ticket holders' })
     expect(panel.textContent).toMatch(/unavailable/i)
     expect(panel.textContent).not.toMatch(/\d/)
-    expect(screen.queryByText('Holders', { selector: 'span' })).toBeNull()
+    expect(screen.queryByText('Signed up', { selector: 'span' })).toBeNull()
     fireEvent.click(within(panel).getByRole('button', { name: 'Try again' }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
@@ -163,7 +164,11 @@ describe('TicketHolderPanel', () => {
 
   it('the flagged list names each person and their workshops', () => {
     renderPanel(READY)
-    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Flagged, 1, No workshop ticket · Review',
+      }),
+    )
     const list = screen.getByRole('dialog', { name: 'Flagged sign-ups' })
     expect(within(list).getAllByText('Eve Example').length).toBeGreaterThan(0)
     expect(within(list).getAllByText('eve@x.test').length).toBeGreaterThan(0)
@@ -178,7 +183,11 @@ describe('TicketHolderPanel', () => {
   it('"Move to waitlist" asks first, then moves the confirmed sign-up', () => {
     vi.useFakeTimers()
     const { onMoveToWaitlist } = renderPanel(READY)
-    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Flagged, 1, No workshop ticket · Review',
+      }),
+    )
     const list = screen.getByRole('dialog', { name: 'Flagged sign-ups' })
     // Only the confirmed sign-up can be moved.
     // The table; the phone cards repeat each control.
@@ -204,7 +213,11 @@ describe('TicketHolderPanel', () => {
   it('"Delete participant" asks "Delete signup", then deletes that sign-up', () => {
     vi.useFakeTimers()
     const { onDeleteSignup } = renderPanel(READY)
-    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Flagged, 1, No workshop ticket · Review',
+      }),
+    )
     const list = screen.getByRole('dialog', { name: 'Flagged sign-ups' })
     const table = within(list).getByRole('table')
     const deletes = within(table).getAllByTitle('Delete participant')
@@ -231,7 +244,11 @@ describe('TicketHolderPanel', () => {
       onDeleteSignup: vi.fn(),
     }
     const { rerender } = render(<TicketHolderPanel view={READY} {...actions} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Flagged, 1, No workshop ticket · Review',
+      }),
+    )
     screen.getByRole('dialog', { name: 'Flagged sign-ups' })
 
     rerender(<TicketHolderPanel view={ready({ flagged: [] })} {...actions} />)
@@ -251,7 +268,11 @@ describe('TicketHolderPanel', () => {
       onDeleteSignup: vi.fn(),
     }
     const { rerender } = render(<TicketHolderPanel view={READY} {...actions} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Flagged, 1, No workshop ticket · Review',
+      }),
+    )
     screen.getByRole('dialog', { name: 'Flagged sign-ups' })
 
     rerender(
@@ -266,7 +287,11 @@ describe('TicketHolderPanel', () => {
 
     rerender(<TicketHolderPanel view={READY} {...actions} />)
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Flagged, 1' })).toBeTruthy()
+    expect(
+      screen.getByRole('button', {
+        name: 'Flagged, 1, No workshop ticket · Review',
+      }),
+    ).toBeTruthy()
   })
 
   // After a move or a delete the list still shows the sign-up until the
@@ -282,7 +307,11 @@ describe('TicketHolderPanel', () => {
         onDeleteSignup={vi.fn()}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Flagged, 1, No workshop ticket · Review',
+      }),
+    )
     const table = within(
       screen.getByRole('dialog', { name: 'Flagged sign-ups' }),
     ).getByRole('table')
@@ -305,7 +334,11 @@ describe('TicketHolderPanel', () => {
       onDeleteSignup: vi.fn(),
     }
     const { rerender } = render(<TicketHolderPanel view={READY} {...actions} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Flagged, 1, No workshop ticket · Review',
+      }),
+    )
     const table = within(
       screen.getByRole('dialog', { name: 'Flagged sign-ups' }),
     ).getByRole('table')
@@ -331,7 +364,11 @@ describe('TicketHolderPanel', () => {
     rerender(
       <TicketHolderPanel view={ready({ flagged: [other] })} {...actions} />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Flagged, 1' }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Flagged, 1, No workshop ticket · Review',
+      }),
+    )
     await screen.findByRole('dialog', { name: 'Flagged sign-ups' })
     expect(screen.queryByRole('dialog', { name: 'Delete signup' })).toBeNull()
     expect(screen.queryByText(/Eve Example/)).toBeNull()

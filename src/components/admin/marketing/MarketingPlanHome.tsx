@@ -15,7 +15,6 @@ import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { EmptyState } from '@/components/EmptyState'
 import { api } from '@/lib/trpc/client'
-import { MILESTONES } from '@/lib/marketing/milestones'
 import type { PlanView } from '@/lib/marketing/types'
 import { MarketingPlanTimeline } from './MarketingPlanTimeline'
 import { CreatePlanDialog } from './CreatePlanDialog'
@@ -300,15 +299,7 @@ function summarize(view: PlanView | null) {
     byId,
     viewerId: view.viewerId,
   })
-  const provisional = MILESTONES.filter(
-    (m) => view.milestones[m]?.provisional,
-  ).length
   return [
-    {
-      value: view.campaigns.length,
-      label: 'Campaigns',
-      color: 'slate' as const,
-    },
     {
       value: `${complete}/${view.tasks.length}`,
       label: 'Tasks done',
@@ -326,11 +317,6 @@ function summarize(view: PlanView | null) {
       label: 'Waiting',
       color: 'slate' as const,
       flag: 'waiting' as const,
-    },
-    {
-      value: provisional,
-      label: 'Provisional milestones',
-      color: provisional ? ('yellow' as const) : ('slate' as const),
     },
   ]
 }

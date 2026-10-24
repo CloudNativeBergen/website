@@ -17,6 +17,7 @@ import { ErrorBoundary } from './ErrorBoundary'
 import { CurrencyDollarIcon, PaperClipIcon } from '@heroicons/react/24/outline'
 import { SkeletonCard } from '@/components/admin/LoadingSkeleton'
 import { AdminPageHeader } from '@/components/admin'
+import type { StatCardProps } from '@/components/admin/stats'
 import { useExchangeRates } from '@/hooks/useExchangeRates'
 import { ReceiptViewer } from './ReceiptViewer'
 
@@ -29,6 +30,8 @@ export function TravelSupportAdminPage() {
     searchParams.get('request'),
   )
   const { data: session } = useSession()
+  const { convertCurrency, isLoading: ratesLoading } = useExchangeRates()
+  const [pendingOnly, setPendingOnly] = useState(false)
 
   const {
     data: allRequests,
@@ -41,6 +44,9 @@ export function TravelSupportAdminPage() {
   const requests = allRequests?.filter(
     (r) => r.status !== TravelSupportStatus.DRAFT,
   )
+  const shownRequests = pendingOnly
+    ? requests?.filter((r) => r.status === TravelSupportStatus.SUBMITTED)
+    : requests
 
   const { data: selectedRequestDetails, isLoading: isLoadingDetails } =
     api.travelSupport.admin.getById.useQuery(
@@ -140,13 +146,14 @@ export function TravelSupportAdminPage() {
         icon={<CurrencyDollarIcon />}
         title="Travel Support Administration"
         description="Review and approve travel support requests from speakers"
-      >
-        {requests && (
-          <div className="font-inter mt-4">
-            <SummaryStats requests={requests} />
-          </div>
-        )}
-      </AdminPageHeader>
+        stats={
+          requests &&
+          summaryStats(requests, convertCurrency, ratesLoading, {
+            pressed: pendingOnly,
+            onClick: () => setPendingOnly((on) => !on),
+          })
+        }
+      />
 
       <SpeakersRequiringSupport />
 
@@ -155,11 +162,12 @@ export function TravelSupportAdminPage() {
           <div className="rounded-lg bg-white shadow ring-1 ring-brand-frosted-steel/20 dark:bg-gray-800 dark:ring-gray-700">
             <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Requests ({requests?.length || 0})
+                {pendingOnly ? 'Pending requests' : 'Requests'} (
+                {shownRequests?.length || 0})
               </h2>
             </div>
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {requests?.map((request) => (
+              {shownRequests?.map((request) => (
                 <RequestCard
                   key={request._id}
                   request={request}
@@ -222,21 +230,25 @@ export function TravelSupportAdminPage() {
   )
 }
 
-function SummaryStats({
-  requests,
-}: {
-  requests: (TravelSupportWithSpeaker & { expenses?: TravelExpense[] })[]
-}) {
-  const { convertCurrency, isLoading } = useExchangeRates()
-
-  const stats = {
-    total: requests.length,
-    pending: requests.filter((r) => r.status === TravelSupportStatus.SUBMITTED)
-      .length,
-    approved: requests.filter((r) => r.status === TravelSupportStatus.APPROVED)
-      .length,
-    paid: requests.filter((r) => r.status === TravelSupportStatus.PAID).length,
-  }
+/**
+ * The header stats. "Pending Review" doubles as the list filter and is hidden
+ * at 0 unless it is the active filter.
+ */
+function summaryStats(
+  requests: (TravelSupportWithSpeaker & { expenses?: TravelExpense[] })[],
+  convertCurrency: ReturnType<typeof useExchangeRates>['convertCurrency'],
+  isLoading: boolean,
+  pendingFilter: { pressed: boolean; onClick: () => void },
+): StatCardProps[] {
+  const pending = requests.filter(
+    (r) => r.status === TravelSupportStatus.SUBMITTED,
+  ).length
+  const approved = requests.filter(
+    (r) => r.status === TravelSupportStatus.APPROVED,
+  ).length
+  const paid = requests.filter(
+    (r) => r.status === TravelSupportStatus.PAID,
+  ).length
 
   // Calculate total requested by summing all expenses and converting to NOK
   const totalRequested = requests.reduce((sum, r) => {
@@ -297,80 +309,28 @@ function SummaryStats({
     }).format(amount)
   }
 
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
-        <StatCard label="Total Requests" value={stats.total} />
-        <StatCard label="Pending Review" value={stats.pending} color="yellow" />
-        <StatCard label="Approved" value={stats.approved} color="green" />
-        <StatCard label="Paid" value={stats.paid} color="purple" />
-        <div className="rounded-lg p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:ring-gray-700">
-          <div className="h-6 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-        </div>
-        <div className="rounded-lg p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:ring-gray-700">
-          <div className="h-6 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
-      <StatCard label="Total Requests" value={stats.total} />
-      <StatCard label="Pending Review" value={stats.pending} color="yellow" />
-      <StatCard label="Approved" value={stats.approved} color="green" />
-      <StatCard label="Paid" value={stats.paid} color="purple" />
-      <StatCard
-        label="Total Requested"
-        value={formatNOK(totalRequested)}
-        color="blue"
-        isAmount={true}
-      />
-      <StatCard
-        label="Total Approved"
-        value={formatNOK(totalApproved)}
-        color="green"
-        isAmount={true}
-      />
-    </div>
-  )
-}
-
-function StatCard({
-  label,
-  value,
-  color = 'gray',
-  isAmount = false,
-}: {
-  label: string
-  value: number | string
-  color?: 'gray' | 'yellow' | 'green' | 'purple' | 'blue'
-  isAmount?: boolean
-}) {
-  const colors = {
-    gray: 'bg-white dark:bg-gray-800 text-brand-slate-gray dark:text-white',
-    yellow: 'bg-white dark:bg-gray-800 text-yellow-600 dark:text-yellow-400',
-    green:
-      'bg-white dark:bg-gray-800 text-brand-fresh-green dark:text-green-400',
-    purple: 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400',
-    blue: 'bg-white dark:bg-gray-800 text-brand-cloud-blue dark:text-blue-400',
-  }
-
-  return (
-    <div
-      className={`rounded-lg p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:ring-gray-700 ${colors[color]}`}
-    >
-      <div className={`${isAmount ? 'text-lg' : 'text-xl'} font-bold`}>
-        {value}
-        {typeof value === 'number' && !isAmount && value > 0 && (
-          <span className="text-sm font-normal text-brand-slate-gray/60 dark:text-gray-400"></span>
-        )}
-      </div>
-      <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-        {label}
-      </div>
-    </div>
-  )
+  return [
+    ...(pending > 0 || pendingFilter.pressed
+      ? [
+          {
+            label: 'Pending Review',
+            value: pending,
+            color: 'yellow' as const,
+            ...pendingFilter,
+          },
+        ]
+      : []),
+    { label: 'Approved', value: approved, color: 'green' },
+    { label: 'Paid', value: paid, color: 'purple' },
+    {
+      label: 'Total Approved',
+      value: isLoading ? '…' : formatNOK(totalApproved),
+      color: 'green',
+      subtitle: isLoading
+        ? undefined
+        : `of ${formatNOK(totalRequested)} requested`,
+    },
+  ]
 }
 
 function RequestCard({
