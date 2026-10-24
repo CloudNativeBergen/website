@@ -392,6 +392,19 @@ describe('round-1 adversarial findings', () => {
     expect(old.length).toBeGreaterThan(3)
   })
 
+  it('Spotlight: after a burst, the walk resumes after the post the burst interrupted', () => {
+    // 20 is big; 21 and 22 arrive and wait their turns.
+    let s = started('spotlight', 20)
+    s = loadAll(poll(s, posts(22), T0 + 500), T0 + 500)
+    s = run(s, T0 + 500, T0 + SWAP_EVERY_MS)
+    expect(featuredId(s)).toBe('wallPost-21')
+    s = run(s, T0 + SWAP_EVERY_MS, T0 + 2 * SWAP_EVERY_MS)
+    expect(featuredId(s)).toBe('wallPost-22')
+    // Not 20 again: on to the post after it.
+    s = run(s, T0 + 2 * SWAP_EVERY_MS, T0 + 3 * SWAP_EVERY_MS)
+    expect(featuredId(s)).toBe('wallPost-19')
+  })
+
   it('asks the browser for at most a few photos at once', () => {
     const s = poll(initialStream('mosaic'), posts(60), T0)
     expect(pendingStreamImages(s)).toHaveLength(PRELOAD_AT_ONCE)
