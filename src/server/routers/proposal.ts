@@ -76,6 +76,7 @@ import {
   getConferenceById,
   getConferenceForCurrentDomain,
 } from '@/lib/conference/sanity'
+import type { Conference } from '@/lib/conference/types'
 import {
   assertMayBecomeSubmitted,
   topicIdsOf,
@@ -426,6 +427,23 @@ async function createProposalWithNewPrimarySpeaker({
   return proposalDocument
 }
 
+/** Name and email of speakers who were just on an org-proved talk. */
+async function speakerContacts(
+  ids: string[],
+): Promise<{ _id: string; name?: string; email?: string }[]> {
+  try {
+    return await clientWrite.fetch(
+      // groq-global-scoped: the ids were read off a talk the caller has
+      // ALREADY been proved to own by `requireDocumentInCurrentOrg`.
+      `*[_type == "speaker" && _id in $ids]{ _id, name, email }`,
+      { ids },
+    )
+  } catch (error) {
+    console.error('Failed to read removed speakers:', error)
+    return []
+  }
+}
+
 async function talkSpeakerIds(talkId: string): Promise<string[]> {
   const refs = await clientWrite.fetch<(string | null)[] | null>(
     // groq-global-scoped: keyed by an id the caller has ALREADY been proved to
@@ -537,6 +555,59 @@ async function dropSpeakerFromProposal(
     proposalId,
     speakerIds.filter((id) => id !== speakerId),
   )
+}
+
+/**
+ * Tell speakers they were taken off a talk: a hub row and an email. Skips the
+ * actor (removing yourself needs no notice). Never throws: the removal is
+ * already committed.
+ */
+async function notifyRemovedSpeakers({
+  removed,
+  proposalTitle,
+  comment,
+  conference,
+  domain,
+  actorId,
+}: {
+  removed: { _id: string; name?: string; email?: string }[]
+  proposalTitle: string
+  comment?: string
+  conference: Conference
+  domain?: string | null
+  actorId: string
+}): Promise<void> {
+  const others = removed.filter((s) => s._id !== actorId)
+  if (others.length === 0) return
+  try {
+    await createNotifications(
+      others.map((s) => ({
+        recipientId: s._id,
+        conferenceId: conference._id,
+        notificationType: 'proposal_status_changed' as const,
+        title: `You are no longer a speaker on "${proposalTitle}"`,
+        message: comment,
+        actorId,
+        link: '/cfp/list',
+      })),
+    )
+  } catch (error) {
+    console.error('Failed to notify removed speakers:', error)
+  }
+  for (const s of others) {
+    const email = s.email
+    if (!email || !domain) continue
+    runAfterResponse(async () => {
+      await sendCoSpeakerRemovedEmail({
+        toEmail: email,
+        toName: s.name || 'Speaker',
+        proposalTitle,
+        comment,
+        conference,
+        domain,
+      })
+    })
+  }
 }
 
 /**
@@ -1558,6 +1629,27 @@ export const proposalRouter = router({
           proposal._rev,
         )
 
+        // Only for a talk of the host conference: the notice carries its
+        // branding, and the owner arm admits a talk of another tenant.
+        const { conference, domain } = await getConferenceForCurrentDomain()
+        const talkConference = proposal.conference
+        const talkConferenceId =
+          talkConference && '_ref' in talkConference
+            ? talkConference._ref
+            : talkConference?._id
+        const removed = ((proposal.speakers ?? []) as Speaker[]).find(
+          (s) => s?._id === input.speakerId,
+        )
+        if (conference && removed && talkConferenceId === conference._id) {
+          await notifyRemovedSpeakers({
+            removed: [removed],
+            proposalTitle: proposal.title ?? 'Proposal',
+            conference,
+            domain,
+            actorId: ctx.speaker._id,
+          })
+        }
+
         return { success: true }
       } catch (error) {
         if (error instanceof TRPCError) throw error
@@ -2147,32 +2239,14 @@ export const proposalRouter = router({
           console.error('Failed to post speaker removal to thread:', error)
         }
 
-        if (!isSelf) {
-          await createNotifications([
-            {
-              recipientId: speakerId,
-              conferenceId: conference._id,
-              notificationType: 'proposal_status_changed',
-              title: `You are no longer a speaker on "${proposal.title}"`,
-              message: comment,
-              actorId: ctx.speaker._id,
-              link: '/cfp/list',
-            },
-          ])
-          const email = removed.email
-          if (email && domain) {
-            runAfterResponse(async () => {
-              await sendCoSpeakerRemovedEmail({
-                toEmail: email,
-                toName: removedName,
-                proposalTitle: proposal.title ?? 'Proposal',
-                comment,
-                conference,
-                domain,
-              })
-            })
-          }
-        }
+        await notifyRemovedSpeakers({
+          removed: [{ ...removed, name: removedName }],
+          proposalTitle: proposal.title ?? 'Proposal',
+          comment,
+          conference,
+          domain,
+          actorId: ctx.speaker._id,
+        })
 
         runAfterResponse(async () => {
           try {
@@ -2327,7 +2401,7 @@ export const proposalRouter = router({
     // Update proposal (admin)
     update: adminProcedure
       .input(IdParamSchema.extend({ data: ProposalAdminUpdateSchema }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         try {
           // OWNERSHIP (#730): `input.id` is client input and `updateProposal` is
           // a bare patch. The speaker-facing `proposal.update` above is gated by
@@ -2412,6 +2486,22 @@ export const proposalRouter = router({
                 proposalId: input.id,
                 removedSpeakerIds,
               })
+              const { conference, domain } =
+                await getConferenceForCurrentDomain()
+              const talkConference = proposal.conference
+              const talkConferenceId =
+                talkConference && '_ref' in talkConference
+                  ? talkConference._ref
+                  : talkConference?._id
+              if (conference && talkConferenceId === conference._id) {
+                await notifyRemovedSpeakers({
+                  removed: await speakerContacts(removedSpeakerIds),
+                  proposalTitle: proposal.title ?? 'Proposal',
+                  conference,
+                  domain,
+                  actorId: ctx.speaker._id,
+                })
+              }
             }
           }
 
