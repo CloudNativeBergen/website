@@ -1,5 +1,6 @@
 import React from 'react'
 import Link from 'next/link'
+import clsx from 'clsx'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 import { AdminHeaderActions, type ActionItem } from './AdminHeaderActions'
 import { StatCard, type StatCardProps } from './stats'
@@ -114,17 +115,28 @@ export function AdminPageHeader({
 
       {stats && stats.length > 0 && (
         <div
-          className={`font-inter mt-4 grid sm:mt-6 ${getGridCols(stats.length)} gap-3`}
+          // Phones: one horizontal strip that bleeds to the page edge (the
+          // dashboard shell pads `px-2` below `sm`). From `sm` up: the grid.
+          // Focusable so keyboard users can scroll the strip (Safari does not
+          // focus scroll containers on its own).
+          role="region"
+          aria-label="Statistics"
+          tabIndex={0}
+          className={`font-inter -mx-2 -my-1 mt-3 flex snap-x gap-2 overflow-x-auto px-2 py-1 focus-visible:outline-2 focus-visible:outline-brand-cloud-blue sm:mx-0 sm:my-0 sm:mt-6 sm:grid sm:overflow-visible sm:px-0 sm:py-0 ${getGridCols(stats.length)} sm:gap-3`}
         >
-          {stats.map((stat, index) => (
+          {stats.map((stat) => (
             <StatCard
-              key={`${stat.label}-${index}`}
+              key={stat.label}
               value={stat.value}
               label={stat.label}
               subtitle={stat.subtitle}
               color={stat.color}
               onClick={stat.onClick}
               pressed={stat.pressed}
+              className={clsx(
+                'w-auto min-w-[8.5rem] shrink-0 snap-start px-3 py-2 sm:w-full sm:min-w-0 sm:px-4 sm:py-3',
+                stat.className,
+              )}
             />
           ))}
         </div>

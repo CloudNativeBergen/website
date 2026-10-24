@@ -16,7 +16,7 @@ const HEADING_ID = 'ticket-holders-heading'
 /** The anchor "Needs attention" links to. */
 export const TICKET_HOLDERS_ANCHOR = 'ticket-holders'
 
-const LABELS = ['Holders', 'Signed up', 'Not signed up', 'Flagged'] as const
+const LABELS = ['Signed up', 'Not signed up', 'Flagged'] as const
 
 /**
  * The share of holders with a sign-up, rounded DOWN: "100%" only when every
@@ -102,7 +102,7 @@ export function TicketHolderPanel({
           </p>
           <div
             aria-hidden
-            className="mt-4 grid animate-pulse grid-cols-2 gap-3 sm:grid-cols-4"
+            className="mt-4 grid animate-pulse grid-cols-2 gap-3 sm:grid-cols-3"
           >
             {LABELS.map((label) => (
               <div
@@ -144,22 +144,22 @@ export function TicketHolderPanel({
 
       {view.state === 'ready' && (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard
-              label="Holders"
-              value={view.stats.holders}
-              subtitle={ticketCount(view.stats.tickets)}
-            />
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             <SignedUpCard
               holders={view.stats.holders}
               notSignedUp={view.stats.notSignedUp}
+              tickets={view.stats.tickets}
             />
-            <StatCard
-              label="Not signed up"
-              value={view.stats.notSignedUp}
-              color="yellow"
-              subtitle="No sign-up yet"
-            />
+            {/* No list behind it to open (only a count is read), so unlike
+                Flagged it is not clickable; hidden when there is nothing. */}
+            {view.stats.notSignedUp > 0 && (
+              <StatCard
+                label="Not signed up"
+                value={view.stats.notSignedUp}
+                color="yellow"
+                subtitle="No sign-up yet"
+              />
+            )}
             <StatCard
               label="Flagged"
               value={view.stats.flagged.length}
@@ -205,14 +205,17 @@ export function TicketHolderPanel({
 
 /**
  * Holders with at least one sign-up, confirmed or on a waitlist: the rest of
- * the holders are "Not signed up", so the two always add up to "Holders".
+ * the holders are "Not signed up". The holder and ticket totals ride in the
+ * subtitle.
  */
 function SignedUpCard({
   holders,
   notSignedUp,
+  tickets,
 }: {
   holders: number
   notSignedUp: number
+  tickets: number
 }) {
   const signedUp = holders - notSignedUp
   const share = signedUpShare(signedUp, holders)
@@ -221,7 +224,11 @@ function SignedUpCard({
       label="Signed up"
       value={signedUp}
       color="green"
-      subtitle={share === null ? 'No holders yet' : `${share}% of holders`}
+      subtitle={
+        share === null
+          ? 'No holders yet'
+          : `${share}% of ${holders} holder${holders === 1 ? '' : 's'} · ${ticketCount(tickets)}`
+      }
     />
   )
 }

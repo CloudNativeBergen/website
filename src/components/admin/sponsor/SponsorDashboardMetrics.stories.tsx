@@ -82,7 +82,7 @@ export const Metrics: Story = {
         <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Live Example
         </h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard
             title="Total Revenue"
             value="80 000 kr"
