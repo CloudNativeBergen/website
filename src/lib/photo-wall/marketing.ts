@@ -1,6 +1,7 @@
 import 'server-only'
 import { clientWrite } from '@/lib/sanity/client'
 import { sanityStatus } from '@/lib/sanity/status'
+import type { MyPostMarketingStatus } from './my-posts'
 import {
   AGAIN,
   atMostTwice,
@@ -20,12 +21,8 @@ import {
  * Server Action does, per §8.
  */
 
-export type MarketingResult =
-  | { status: 'done' }
-  /** Conflicted twice; nothing written. The card refreshes. */
-  | { status: 'changed' }
-  /** No such post of this device on this wall (or a Delete in progress). */
-  | { status: 'gone' }
+/** `done` written; `changed` conflicted twice, nothing written; `gone` no such post of this device (or a Delete in progress). */
+export type MarketingResult = { status: MyPostMarketingStatus }
 
 /**
  * The post must be this device's (the ownership check is on the doc

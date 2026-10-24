@@ -18,7 +18,6 @@ const EARLIER: MyPost[] = [
     name: 'Ada',
     marketingConsent: true,
     submittedAt: '2026-10-26T08:00:00Z',
-    incarnation: { createdAt: '2026-10-26T08:00:00.000Z', assetId: 'image-1' },
   },
   {
     _id: 'wallPost-earlier-2',
@@ -28,7 +27,6 @@ const EARLIER: MyPost[] = [
     name: null,
     marketingConsent: false,
     submittedAt: '2026-10-26T07:30:00Z',
-    incarnation: { createdAt: '2026-10-26T07:30:00.000Z', assetId: 'image-2' },
   },
 ]
 

@@ -3,7 +3,7 @@
  * §12). Pure: the shape `getMyPosts` caches and the composer polls, and the
  * words each status is shown with. Safe to import on the client.
  */
-import type { ShownIncarnation, WallPostStatus } from './moderation'
+import type { WallPostStatus } from './moderation'
 
 /** The My posts square, in px: about 600 wide on a phone (§5.1). */
 export const MY_POSTS_PHOTO_PX = 600
@@ -21,9 +21,20 @@ export interface MyPost {
   name: string | null
   marketingConsent: boolean
   submittedAt: string | null
-  /** Which post the card shows: a Delete refuses a replacement under the id. */
-  incarnation: ShownIncarnation
 }
+
+/**
+ * How the contributor's Delete ended (§12): the post and its asset are gone;
+ * not finished, the post left `deleting` (press again); or no such post of
+ * this device on this wall.
+ */
+export type MyPostDeletionStatus = 'deleted' | 'failed' | 'gone'
+
+/**
+ * How the Marketing switch ended (§12): written; conflicted twice, nothing
+ * written (the card refreshes); or no such post of this device on this wall.
+ */
+export type MyPostMarketingStatus = 'done' | 'changed' | 'gone'
 
 /** What the card says of each status (§12). */
 export const MY_POST_STATUS_LABELS: Record<WallPostStatus, string> = {

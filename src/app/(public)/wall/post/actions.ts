@@ -10,7 +10,11 @@ import { deleteWallPost } from '@/lib/photo-wall/delete'
 import { deletionDateEnd } from '@/lib/photo-wall/deletion'
 import { issueWallDevice, wallDeviceCookie } from '@/lib/photo-wall/device'
 import { setWallPostMarketing } from '@/lib/photo-wall/marketing'
-import type { MyPost } from '@/lib/photo-wall/my-posts'
+import type {
+  MyPost,
+  MyPostDeletionStatus,
+  MyPostMarketingStatus,
+} from '@/lib/photo-wall/my-posts'
 import { readDeviceCookie, wallConference } from '@/lib/photo-wall/request'
 import { isWallPostId } from '@/lib/photo-wall/wall-post'
 
@@ -67,7 +71,7 @@ export async function getMyPosts(): Promise<MyPost[]> {
   return readCachedMyPosts(device.conferenceId, device.deviceKey)
 }
 
-export type MyPostDeletion = { status: 'deleted' | 'failed' | 'gone' }
+export type MyPostDeletion = { status: MyPostDeletionStatus }
 
 /**
  * Delete one of this device's posts (§12), with `deleteWallPost`, which
@@ -76,29 +80,39 @@ export type MyPostDeletion = { status: 'deleted' | 'failed' | 'gone' }
  * `gone`. Without a cookie nothing is read: there is no device to own a
  * post. `failed` leaves the post `deleting`; pressing again finishes it.
  *
- * Expires the wall, the queue and the device on EVERY outcome (the admin's
- * rule, §8): a write can commit and still throw, and over-expiring is cheap.
+ * Expires the wall, the queue and the device ONLY when something was
+ * written (§8): `deleted`, `failed` once the `deleting` mark landed, or a
+ * throw (the mark may have committed with its answer lost). Never on
+ * `gone`: a phone looping Delete on ids it does not own must not make every
+ * screen's and the admin's poll refill from Sanity. The wall on any write,
+ * not only an approved post's: this read does not say which it was, and a
+ * `deleting` post has left the wall either way.
  */
 export async function deleteMyPost(postId: string): Promise<MyPostDeletion> {
   const device = await thisDevice()
   if (!device || !isWallPostId(postId)) return { status: 'gone' }
   const { conferenceId, deviceKey } = device
+  let written = true
   try {
     const result = await deleteWallPost({ conferenceId, postId, deviceKey })
+    written =
+      result.status === 'deleted' ||
+      (result.status === 'failed' && result.marked)
     return { status: result.status }
   } finally {
-    updateWallPostTags(conferenceId, deviceKey, { wall: true })
+    if (written) updateWallPostTags(conferenceId, deviceKey, { wall: true })
   }
 }
 
-export type MyPostMarketing = { status: 'done' | 'changed' | 'gone' }
+export type MyPostMarketing = { status: MyPostMarketingStatus }
 
 /**
  * The Marketing switch (§12) on one of this device's posts: a
  * revision-guarded patch of `marketingConsent`, by `setWallPostMarketing`,
  * which refuses a post that is not this device's before any write. Expires
- * the queue (its Marketing OK mark) and the device, never the wall: consent
- * changes nothing the wall shows.
+ * the queue (its Marketing OK mark) and the device once written, never the
+ * wall: consent changes nothing the wall shows. Nothing on `gone` or
+ * `changed`: nothing was written.
  */
 export async function setMyPostMarketing(
   postId: string,
@@ -109,14 +123,14 @@ export async function setMyPostMarketing(
     return { status: 'gone' }
   }
   const { conferenceId, deviceKey } = device
-  try {
-    return await setWallPostMarketing({
-      conferenceId,
-      postId,
-      deviceKey,
-      consent,
-    })
-  } finally {
+  const result = await setWallPostMarketing({
+    conferenceId,
+    postId,
+    deviceKey,
+    consent,
+  })
+  if (result.status === 'done') {
     updateWallPostTags(conferenceId, deviceKey, { wall: false })
   }
+  return result
 }

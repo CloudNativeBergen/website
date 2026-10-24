@@ -13,7 +13,7 @@ import {
   type ModerationTab,
 } from '@/lib/photo-wall'
 import { api } from '@/lib/trpc/client'
-import { focusIsWith } from './focus'
+import { focusIsWith } from '../focus'
 import { MODERATION_POLL_MS, moderationQueuePolling } from './polling'
 import {
   WallPostCard,

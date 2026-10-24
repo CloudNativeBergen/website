@@ -14,8 +14,6 @@ import { squareSrc } from './square'
 
 interface MyPostRow {
   _id: string
-  _createdAt: string | null
-  assetId: string | null
   status: string | null
   photo: {
     url: string | null
@@ -52,13 +50,12 @@ export async function readMyPosts(
   const rows = await scopedFetch<MyPostRow[]>(
     clientReadUncached,
     { conferenceId },
-    // The projection names what the phone gets: never the asset id a Delete
-    // still has to remove. Published posts only: a draft is never a Wall
-    // Post. The device key is a parameter, never spliced into the text.
+    // The projection names what the phone gets: never an asset id (a
+    // Delete acts on the id and the device, not on the asset). Published
+    // posts only: a draft is never a Wall Post. The device key is a
+    // parameter, never spliced into the text.
     `*[_type == "wallPost" && deviceKey == $deviceKey && !(_id in path("drafts.**"))] | order(submittedAt desc) {
       _id,
-      _createdAt,
-      "assetId": photo.asset._ref,
       status,
       "photo": photo.asset->{
         url,
@@ -87,11 +84,6 @@ export async function readMyPosts(
       name: row.name ?? null,
       marketingConsent: row.marketingConsent === true,
       submittedAt: row.submittedAt ?? null,
-      incarnation: {
-        createdAt: row._createdAt ?? null,
-        // A `deleting` post shows no photo, and its asset id stays hidden.
-        assetId: row.status === 'deleting' ? null : (row.assetId ?? null),
-      },
     })
   }
   return posts
