@@ -19,13 +19,17 @@ export const MY_POSTS_POLL_MS = 15_000
  * nothing restarts it. A plain interval that skips its tick while hidden
  * cannot be cleared by a read.
  *
+ * ONE READ AT A TIME. The Next client runs Server Actions one after another
+ * in call order, so a poll started while a read is out would only queue
+ * behind it: with reads slower than the interval the queue would grow
+ * without bound, and a Delete would wait minutes behind it. So a tick or a
+ * visibility change while a read is out starts nothing, and `refresh()`
+ * while one is out asks for ONE follow-up read once it is in (an action's
+ * effect is read after it, never by a read that started before it).
+ *
  * `posts` is null until the first read answers; `listRead` numbers the read
- * it came from (reads are numbered from 1, 0 before any). A failed read keeps the last
- * list. Reads may overlap (one slower than the interval is still out at the
- * next tick): each answer newer than the last one shown is shown, and an
- * older one that answers after it is ignored. Never "only the latest read":
- * with reads slower than the interval, every answer would be outdated by
- * the time it came and the list would never change.
+ * it came from (reads are numbered from 1, 0 before any). A failed read
+ * keeps the last list.
  */
 export type MyPostsReads = ReturnType<typeof useMyPosts>
 
@@ -34,43 +38,65 @@ export function useMyPosts(load: () => Promise<MyPost[]>) {
   const [list, setList] = useState<{ posts: MyPost[]; read: number } | null>(
     null,
   )
-  /** The last read started, and the newest one whose answer is shown. */
+  /** The reads started; and the reads that may no longer be shown. */
   const started = useRef(0)
-  const shown = useRef(0)
+  const stale = useRef(0)
+  /** A read is out; a refresh asked for one more after it. */
+  const reading = useRef(false)
+  const again = useRef(false)
 
-  const refresh = useCallback(async () => {
+  const readOnce = useCallback(async () => {
     const read = ++started.current
     try {
       const next = await load()
-      if (read > shown.current) {
-        shown.current = read
-        setList({ posts: next, read })
-      }
+      if (read > stale.current) setList({ posts: next, read })
     } catch (error) {
       console.error('Could not read My posts', error)
     }
   }, [load])
 
+  /** Read now, unless a read is out: then once more after it, if `followUp`. */
+  const read = useCallback(
+    async (followUp: boolean) => {
+      if (reading.current) {
+        if (followUp) again.current = true
+        return
+      }
+      reading.current = true
+      try {
+        do {
+          again.current = false
+          await readOnce()
+        } while (again.current)
+      } finally {
+        reading.current = false
+      }
+    },
+    [readOnce],
+  )
+
+  const refresh = useCallback(() => read(true), [read])
+
   useEffect(() => {
     // The first read, off the effect's own tick (no state set in its body).
-    queueMicrotask(() => void refresh())
+    queueMicrotask(() => void read(false))
     const tick = () => {
-      if (document.visibilityState !== 'hidden') void refresh()
+      if (document.visibilityState !== 'hidden') void read(false)
     }
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void refresh()
+      if (document.visibilityState === 'visible') void read(false)
     }
     const timer = setInterval(tick, MY_POSTS_POLL_MS)
     document.addEventListener('visibilitychange', onVisibility)
     // The counters, not a DOM node: the cleanup wants their live values.
-    const [all, last] = [started, shown]
+    const [all, old] = [started, stale]
     return () => {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisibility)
       // A read still out answers to nobody; one a remount starts still can.
-      last.current = all.current
+      old.current = all.current
     }
-  }, [refresh])
+  }, [read])
 
   /** How many reads have started: an action's answer carries it. */
   const readsStarted = useCallback(() => started.current, [])

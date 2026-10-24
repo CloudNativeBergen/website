@@ -577,22 +577,27 @@ describe('WallPoster', () => {
         document.dispatchEvent(new Event('visibilitychange'))
       })
       await press()
-      // …and answers, without the post, only after it went in.
-      expect(answers).toHaveLength(2)
+      // One read at a time: the read after the post waits for it…
+      expect(answers).toHaveLength(1)
+      // …which answers, without the post, only after it went in.
       await act(async () => answers[0]([]))
       expect(screen.getByText('Waiting for approval')).toBeInTheDocument()
       expect(screen.getByRole('img')).toHaveAttribute('src', 'blob:photo-1')
+      // Then the read after the post goes out: it is the authority.
+      expect(answers).toHaveLength(2)
+      await act(async () => answers[1]([]))
+      expect(screen.queryByText('Waiting for approval')).toBeNull()
     })
 
     it('a post deleted from the posted screen does not come back as Waiting on the landing', async () => {
       const post = postAnswering({ ok: true })
       renderPoster(post)
       await pick('doomed')
-      // No list answers in between: the read after the post never comes
-      // back, and the one after the Delete fails. Only the Delete's own
-      // answer can retire the JPEG.
+      // No list answers in between: the read after the post and the one
+      // after the Delete both fail. Only the Delete's own answer can retire
+      // the JPEG.
       mine.getMyPosts
-        .mockImplementationOnce(() => new Promise(() => {}))
+        .mockRejectedValueOnce(new Error('offline'))
         .mockRejectedValueOnce(new Error('offline'))
       vi.spyOn(console, 'error').mockImplementation(() => {})
       await press()
