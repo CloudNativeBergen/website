@@ -217,6 +217,11 @@ export type TicketHolderStats =
       available: true
       configured: boolean
       holders: number
+      /**
+       * Workshop tickets across the holders. More than `holders` when one
+       * address holds several (a buyer registering colleagues under their own).
+       */
+      tickets: number
       confirmed: number
       waitlistOnly: number
       notSignedUp: number
@@ -241,6 +246,7 @@ export function ticketHolderStats(
     available: true,
     configured: join.configured,
     holders: join.holders.length,
+    tickets: join.holders.reduce((sum, h) => sum + h.tickets.length, 0),
     confirmed: join.confirmed.length,
     waitlistOnly: join.waitlistOnly.length,
     notSignedUp: join.notSignedUp.length,

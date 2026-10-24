@@ -806,6 +806,7 @@ describe('workshop.admin.ticketHolders (#1333)', () => {
       available: true,
       configured: false,
       holders: 3,
+      tickets: 4,
       confirmed: 1,
       waitlistOnly: 1,
       notSignedUp: 1,

@@ -21,9 +21,9 @@ import type {
   PostingState,
 } from '@/lib/photo-wall'
 
-const CARD =
+export const CARD =
   'rounded-lg border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-700 dark:bg-gray-800'
-const BUTTON =
+export const BUTTON =
   'inline-flex min-h-9 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:focus:outline-indigo-400 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
 
 export interface PhotoWallAdminProps {
@@ -41,6 +41,8 @@ export interface PhotoWallAdminProps {
   queue?: ReactNode
   /** The live pending count (M4a), under the page header once the wall is set up. */
   summary?: ReactNode
+  /** The consented ZIP export (P5), under the queue once the wall is set up. */
+  marketingExport?: ReactNode
 }
 
 /**
@@ -58,6 +60,7 @@ export function PhotoWallAdmin({
   failed = false,
   queue,
   summary,
+  marketingExport,
 }: PhotoWallAdminProps) {
   const wall = view.wall && pending ? { ...view.wall, ...pending } : view.wall
   return (
@@ -111,6 +114,7 @@ export function PhotoWallAdmin({
         <SetUp onSetUp={onSetUp} saving={saving} failed={failed} />
       )}
       {wall ? queue : null}
+      {wall ? marketingExport : null}
     </div>
   )
 }

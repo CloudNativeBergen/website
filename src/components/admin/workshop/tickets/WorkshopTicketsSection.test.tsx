@@ -315,6 +315,7 @@ describe('a configured list', () => {
         available: true,
         configured: true,
         holders: 9,
+        tickets: 9,
         confirmed: 1,
         waitlistOnly: 1,
         notSignedUp: 7,

@@ -160,6 +160,17 @@ Attendee, workshop-signup and volunteer records are keyed on different
 identities and are **not** covered by that runbook; handle them as separate
 requests under this SOP.
 
+### Photo Wall removal requests
+
+A contributor who wants their post gone, or someone in another person's photo,
+asks the organizers (Photo Wall spec §12). Find the post on
+`/admin/photo-wall` from the description (photo, caption, name) and press
+**Delete now**: it removes the post and its photo asset. Posts carry no name,
+email or account, so there is no identity to verify beyond the description.
+Until **Delete now** ships (M4b), delete the `wallPost` document, then its
+image asset (`photo.asset._ref`), with `npx sanity documents delete <id>`
+(Studio shows Wall Posts read-only).
+
 ---
 
 ## 6) Subprocessor register (examples)

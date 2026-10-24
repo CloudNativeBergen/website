@@ -80,6 +80,7 @@ const holders = (flagged: number) =>
       available: true,
       configured: true,
       holders: 84,
+      tickets: 90,
       confirmed: 58,
       waitlistOnly: 3,
       notSignedUp: 23,

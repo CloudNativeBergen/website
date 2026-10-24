@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
 import { CENTER_CROP, postedCrop, type Crop } from '@/lib/photo-wall/crop'
+import { REFUSAL_MESSAGES, WallPostRefused } from '@/lib/photo-wall/post'
 import type { WallFilterKey } from '@/lib/photo-wall/filters'
 import {
   PhotoDecodeError,
@@ -38,9 +39,8 @@ export interface WallPostDraft {
   marketingConsent: boolean
 }
 
-/** The generic failure line (§6.3); a submit's own refusals are M3b's. */
-export const GENERIC_FAILURE_MESSAGE =
-  'Something went wrong. Your photo wasn’t posted. Try again.'
+/** The generic failure line (§6.3). */
+export const GENERIC_FAILURE_MESSAGE = REFUSAL_MESSAGES.failed
 
 export interface WallComposerProps {
   logo: ConferenceLogoData | null
@@ -48,10 +48,22 @@ export interface WallComposerProps {
   deletesOn: string
   /**
    * Post to the wall. Resolves when the post is in; rejects for a refusal or
-   * a failure, which keeps the photo and fields on screen with the generic
-   * message (§6.5). The submit itself is slice M3b's.
+   * a failure, which keeps the photo and fields on screen with the message:
+   * a {@link WallPostRefused}'s own (§6.3), the generic one for anything
+   * else. A caller that shows something else once the post is in swaps its
+   * view BEFORE resolving: a resolved submit leaves this screen as it was.
    */
   onSubmit: (post: WallPostDraft) => Promise<void> | void
+  /**
+   * Whether Post to the wall may send yet: false until the device cookie is
+   * set (§6.1). The button stays visible, `aria-disabled`, meanwhile.
+   */
+  canPost?: boolean
+  /**
+   * How much of the post has gone up, 0–1, while it is being sent (§6.5), or
+   * null when that isn't known.
+   */
+  uploadProgress?: number | null
 }
 
 /**
@@ -79,7 +91,13 @@ type Stage =
  * card is the editor. It decodes, resizes, filters and encodes the photo on
  * the phone and hands the result to `onSubmit`; it makes no request itself.
  */
-export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
+export function WallComposer({
+  logo,
+  deletesOn,
+  onSubmit,
+  canPost = true,
+  uploadProgress = null,
+}: WallComposerProps) {
   const [stage, setStage] = useState<Stage>({ kind: 'landing', error: null })
   const [filter, setFilter] = useState<WallFilterKey>('original')
   const [crop, setCrop] = useState<Crop>(CENTER_CROP)
@@ -87,13 +105,21 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
   const [name, setName] = useState('')
   const [marketingConsent, setMarketingConsent] = useState(false)
   const [posting, setPosting] = useState<'idle' | 'baking' | 'sending'>('idle')
-  const [failure, setFailure] = useState<string | null>(null)
+  const [failure, setFailure] = useState<Error | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const landingHeading = useRef<HTMLHeadingElement>(null)
   const previousKind = useRef(stage.kind)
   // Only the photo picked last may land: a large one picked first can finish
   // opening after it.
   const latestPick = useRef(0)
+  // The last bake, reused while the photo and filter stay: the press after a
+  // lost response then sends the very same photo, which is how the caller
+  // tells a retry from a new post.
+  const baked = useRef<{
+    master: HTMLCanvasElement
+    filter: WallFilterKey
+    photo: Blob
+  } | null>(null)
   const busy = posting !== 'idle'
 
   // A new screen takes focus, so a screen reader lands on it: the composer
@@ -159,14 +185,19 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
   }
 
   const post = async (master: HTMLCanvasElement) => {
-    if (posting !== 'idle') return
+    if (posting !== 'idle' || !canPost) return
     setFailure(null)
     setPosting('baking')
     try {
-      // The bake blocks the main thread for a moment (more on a phone): let
-      // "Preparing your photo…" paint first.
-      await afterPaint()
-      const photo = await bakeWallPhoto(master, filter)
+      let photo = baked.current?.photo
+      if (baked.current?.master !== master || baked.current.filter !== filter) {
+        // The bake blocks the main thread for a moment (more on a phone):
+        // let "Preparing your photo…" paint first.
+        await afterPaint()
+        photo = await bakeWallPhoto(master, filter)
+        baked.current = { master, filter, photo }
+      }
+      if (!photo) throw new Error('No photo to post')
       setPosting('sending')
       await onSubmit({
         photo,
@@ -175,8 +206,12 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
         crop: postedCrop(crop),
         marketingConsent,
       })
-    } catch {
-      setFailure(GENERIC_FAILURE_MESSAGE)
+    } catch (error) {
+      setFailure(
+        error instanceof WallPostRefused
+          ? error
+          : new Error(GENERIC_FAILURE_MESSAGE),
+      )
     } finally {
       setPosting('idle')
     }
@@ -288,14 +323,26 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
             role="alert"
             className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-100"
           >
-            {failure}
+            {failure.message}
+            {failure instanceof WallPostRefused &&
+              failure.refusal === 'closed' && (
+                <>
+                  {' '}
+                  <a
+                    href="/wall"
+                    className="rounded-sm font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800 dark:focus-visible:outline-red-100"
+                  >
+                    See the wall
+                  </a>
+                </>
+              )}
           </p>
         )}
 
         <button
           type="button"
           onClick={() => post(master)}
-          aria-disabled={busy}
+          aria-disabled={busy || !canPost}
           className={`${PRIMARY_BUTTON} mt-4`}
         >
           {posting === 'baking'
@@ -304,7 +351,42 @@ export function WallComposer({ logo, deletesOn, onSubmit }: WallComposerProps) {
               ? 'Posting…'
               : 'Post to the wall'}
         </button>
+        {posting === 'sending' && uploadProgress !== null && (
+          <UploadProgress fraction={uploadProgress} />
+        )}
       </div>
     </WallChrome>
+  )
+}
+
+/**
+ * How much of the post has gone up (§6.5): a progress bar under the button.
+ * The button keeps saying Posting… and keeps focus, so a screen reader isn't
+ * read a new label at every step; the bar carries the value.
+ */
+function UploadProgress({ fraction }: { fraction: number }) {
+  const percent = Math.round(Math.min(1, Math.max(0, fraction)) * 100)
+  return (
+    <div className="mt-3 flex items-center gap-3">
+      <div
+        role="progressbar"
+        aria-label="Uploading your photo"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800"
+      >
+        <div
+          className="h-full rounded-full bg-brand-cloud-blue transition-[width] dark:bg-indigo-400"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <span
+        aria-hidden="true"
+        className="w-10 text-right text-xs text-gray-600 tabular-nums dark:text-gray-400"
+      >
+        {percent}%
+      </span>
+    </div>
   )
 }
