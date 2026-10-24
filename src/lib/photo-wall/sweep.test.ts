@@ -32,7 +32,7 @@ vi.mock('@/lib/sanity/client', async () => {
   return h.store.clients
 })
 
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import {
   STUCK_FINISH_MS,
   SWEEP_AGE_MS,
@@ -84,6 +84,7 @@ const post = (
   status: 'pending',
   deviceKey: `device-${n}`,
   submittedAt: ago(3 * HOUR),
+  _createdAt: ago(3 * HOUR),
   _updatedAt: ago(3 * HOUR),
   ...fields,
 })
@@ -311,6 +312,43 @@ it('finishes the stuck deletes FIRST: an orphan pass past the deadline does not 
   })
   for (const n of ['d1', 'd3']) expect(store().doc(postId(n))).toBeUndefined()
   expect(store().doc(assetId('o1'))).toBeDefined()
+})
+
+describe('a stuck delete replaced under its id (§6.2, §12)', () => {
+  it('a new post a retried submit created under the same id, after the candidate read, is left alone with its asset', async () => {
+    const reader = clientReadUncached as unknown as {
+      getDocument: (id: string) => Promise<unknown>
+    }
+    const getDocument = reader.getDocument.bind(reader)
+    let replaced = false
+    vi.spyOn(reader, 'getDocument').mockImplementation(async (id) => {
+      if (id === postId('d3') && !replaced) {
+        replaced = true
+        // An organizer finished d3's delete; the contributor's retry, its
+        // first answer lost, created the post anew under the same id.
+        store().remove(postId('d3'))
+        store().remove(assetId('x3'))
+        store().put(
+          asset('y3', ago(1000), { name: 'photo-wall', id: 'conf-B' }),
+        )
+        store().put({
+          ...holding('d3', 'y3', 'conf-B'),
+          _createdAt: ago(1000),
+          _updatedAt: ago(1000),
+        })
+      }
+      return getDocument(id)
+    })
+    await run()
+    expect(replaced).toBe(true)
+    expect(store().doc(postId('d3'))).toMatchObject({
+      status: 'pending',
+      photo: { asset: ref(assetId('y3')) },
+    })
+    expect(store().doc(assetId('y3'))).toBeDefined()
+    expect(deletedIds()).not.toContain(postId('d3'))
+    expect(deletedIds()).not.toContain(assetId('y3'))
+  })
 })
 
 describe('a stuck delete that hangs (§11.2): bounded from the sweep', () => {

@@ -118,6 +118,9 @@ async function readOrphanCandidates(
 interface StuckRow {
   _id: string
   conferenceId: string | null
+  /** Which post this was: a post created anew under the id is not it. */
+  createdAt: string | null
+  deletingAssetId: string | null
 }
 
 /**
@@ -132,7 +135,7 @@ async function readStuckDeletes(
   const rows = await clientReadUncached.fetch<StuckRow[]>(
     // groq-global: the platform SWEEP finishes every tenant's stuck deletes
     // by design; each is deleted through its own conference.
-    `*[_type == "wallPost" && status == "deleting" && dateTime(_updatedAt) < dateTime($before) && !(_id in path("drafts.**"))] | order(_updatedAt asc){ _id, "conferenceId": conference._ref }`,
+    `*[_type == "wallPost" && status == "deleting" && dateTime(_updatedAt) < dateTime($before) && !(_id in path("drafts.**"))] | order(_updatedAt asc){ _id, "conferenceId": conference._ref, "createdAt": _createdAt, deletingAssetId }`,
     { before },
     { cache: 'no-store', signal },
   )
@@ -183,6 +186,12 @@ export async function sweepPhotoWall({
         deleteWallPost({
           conferenceId: post.conferenceId,
           postId: post._id,
+          // The post the query found, and no other: a submit retried under
+          // the same id after another Delete finished this one is `gone`.
+          shown: {
+            createdAt: post.createdAt,
+            assetId: post.deletingAssetId,
+          },
           onRead: (key) => {
             deviceKey = key
           },
