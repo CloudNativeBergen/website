@@ -4,6 +4,7 @@
  * speaker and `speakerInfo` version keeps a retry or a second click from
  * sending the same version twice.
  */
+import { createHash } from 'node:crypto'
 import React from 'react'
 import { render } from '@react-email/render'
 import { SpeakerBriefingTemplate } from '@/components/email/SpeakerBriefingTemplate'
@@ -15,6 +16,7 @@ import { Status, type ProposalExisting } from '@/lib/proposal/types'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
 import { getSpeakerBriefing } from '@/lib/speaker/briefing'
+import { createNotifications } from '@/lib/notification/sanity'
 import { formatConferenceDateLong } from '@/lib/time'
 import {
   EMAIL_CONFIG,
@@ -30,6 +32,7 @@ export type BriefingConference = Pick<
   | 'title'
   | 'organizer'
   | 'cfpEmail'
+  | 'contactEmail'
   | 'domains'
   | 'theme'
   | 'organization'
@@ -55,17 +58,37 @@ export interface BriefingSpeaker {
 /** The marker key, on the shared `scheduledReminderLog` type. */
 export const BRIEFING_LOG_KEY = 'speaker-briefing'
 
-/** The version a send is for: when the speaker info was last saved. */
-export const briefingVersion = (conference: BriefingConference) =>
-  conference.speakerInfo?.updatedAt ?? 'unversioned'
+/** JSON with sorted keys, so the same content always hashes the same. */
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_k, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.keys(v)
+            .sort()
+            .map((k) => [k, v[k]]),
+        )
+      : v,
+  )
+}
 
-/** Deterministic marker id; Sanity ids take no `:`, so the ISO is folded. */
+/**
+ * The version a send is for: a hash of the SHARED briefing content, not
+ * `speakerInfo.updatedAt`, so a save that changes nothing a speaker reads
+ * does not mark everyone out of date.
+ */
+export const briefingVersion = (conference: BriefingConference) =>
+  createHash('sha256')
+    .update(stableStringify(getSpeakerBriefing(conference)))
+    .digest('hex')
+    .slice(0, 16)
+
+/** Deterministic marker id: one per conference, speaker and version. */
 export function briefingLogId(
   conferenceId: string,
   speakerId: string,
   version: string,
 ): string {
-  return `briefing.${conferenceId}.${speakerId}.${version.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+  return `briefing.${conferenceId}.${speakerId}.${version}`
 }
 
 /**
@@ -145,7 +168,14 @@ async function sendOne(
   await retryWithBackoff(
     async () => {
       const { error } = await sender.client.emails.send(
-        { from: sender.from, to, subject: briefingSubject(conference), html },
+        {
+          from: sender.from,
+          to,
+          // "Changed your plans? Reply to this email." lands with the team.
+          replyTo: conference.cfpEmail || conference.contactEmail || undefined,
+          subject: briefingSubject(conference),
+          html,
+        },
         idempotencyKey ? { idempotencyKey } : undefined,
       )
       if (error) {
@@ -193,15 +223,17 @@ export async function sendSpeakerBriefings(
 ): Promise<BriefingSendResult> {
   const version = briefingVersion(conference)
   const ids = speakers.map((s) => briefingLogId(conference._id, s._id, version))
-  const done = new Set(
-    ids.length
-      ? await clientReadUncached.fetch<string[]>(
-          `*[_type == "scheduledReminderLog" && _id in $ids]._id`,
-          { ids },
-          { cache: 'no-store' },
-        )
-      : [],
+  const markers = await clientReadUncached.fetch<
+    { _id: string; speakerId?: string }[]
+  >(
+    `*[_type == "scheduledReminderLog" && key == $key && conference._ref == $conferenceId]{ _id, "speakerId": speaker._ref }`,
+    { key: BRIEFING_LOG_KEY, conferenceId: conference._id },
+    { cache: 'no-store' },
   )
+  const done = new Set((markers ?? []).map((m) => m._id))
+  // A speaker with any marker not for this version had an older one.
+  const hadEarlier = new Set((markers ?? []).map((m) => m.speakerId))
+  const updated: string[] = []
   const result: BriefingSendResult = { sent: 0, skipped: 0, failed: [] }
   for (const [i, speaker] of speakers.entries()) {
     const id = ids[i]
@@ -226,6 +258,7 @@ export async function sendSpeakerBriefings(
         lastSentAt: now.toISOString(),
       })
       result.sent++
+      if (hadEarlier.has(speaker._id)) updated.push(speaker._id)
     } catch (error) {
       result.failed.push({
         speakerId: speaker._id,
@@ -234,6 +267,17 @@ export async function sendSpeakerBriefings(
       })
     }
   }
+  // Only on an update: a first send needs no "updated" nudge in the hub.
+  await createNotifications(
+    updated.map((recipientId) => ({
+      recipientId,
+      conferenceId: conference._id,
+      notificationType: 'system' as const,
+      title: 'Speaker info updated',
+      message: `The speaker info for ${conference.title} has changed.`,
+      link: '/cfp/list#briefing',
+    })),
+  )
   return result
 }
 

@@ -102,5 +102,12 @@ describe('SpeakerBriefingTemplate', () => {
     expect(html).toContain('Grieghallen')
     expect(html).toContain('Light rail')
     expect(html.indexOf('RSVP on your')).toBeLessThan(html.indexOf('18:00'))
+    expect(html).toContain('(local time)')
+    expect(html).toContain('Changed your plans? Reply to this email.')
+    // The shared order: to-dos before talks, venue last.
+    expect(html.indexOf('Still to do')).toBeLessThan(html.indexOf('Your talk'))
+    expect(html.indexOf('Good to know')).toBeLessThan(
+      html.indexOf('Venue and travel'),
+    )
   })
 })

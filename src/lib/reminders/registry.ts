@@ -187,7 +187,7 @@ const logistics: Reminder = {
     return {
       title: `See you soon at ${confName(conference.title)}!`,
       message: `${confName(conference.title)} is almost here. You'll find everything you need on your speaker dashboard: your talk times, the venue, check-in and the speaker dinner.`,
-      link: '/cfp/list',
+      link: '/cfp/list#briefing',
     }
   },
 }
