@@ -360,6 +360,32 @@ describe('held-out gate rows', () => {
     expect(report).not.toContain('```json')
   })
 
+  it('are withheld while any item has no answer: a failed call is a miss', () => {
+    const items = loadData('feedback-comment').slice(0, 2)
+    const results = items.map((item, index) => ({
+      id: item.id,
+      repeat: 1,
+      model: 'typesafe/jev-1.14-20261014',
+      latencyMs: 1,
+      cost: 0,
+      ...(index === 0
+        ? { answers: null, error: 'http_500' }
+        : {
+            answers: Object.fromEntries(
+              moderationKeys.map((key) => [key, { type: 'noul', noul: 0 }]),
+            ),
+          }),
+    })) as RawResult[]
+    const report = buildReport(
+      [{ surface: 'feedback-comment', items, results }],
+      'typesafe/jev-1.14',
+      1,
+      { heldOut: true },
+    )
+    expect(report).toContain('1 item(s) have no answer')
+    expect(report).not.toContain('```json')
+  })
+
   it('never stamp one build on a run answered by two', async () => {
     const { parseGateFile } =
       await import('../../src/lib/content-judgement/gates')

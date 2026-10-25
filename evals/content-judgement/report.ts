@@ -225,6 +225,11 @@ function gateRows(
     return `${heading}\n\nNone: ${run.surface} is not the request production sends, so it is not evidence for a gate.`
   if (repeats !== 1)
     return `${heading}\n\nNone: production judges each comment once, so gate rows need \`--repeats 1\`.`
+  // Production treats a failed call as no advice: a miss. Rates over the
+  // answered items alone would overstate recall.
+  const unanswered = run.items.length - scores.length
+  if (unanswered)
+    return `${heading}\n\nNone: ${unanswered} item(s) have no answer, and production treats a failed call as a miss. Rerun until every item is answered.`
   const builds = [
     ...new Set(
       run.results

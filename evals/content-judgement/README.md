@@ -56,7 +56,7 @@ A held-out text set written by people (spec §11.2) is never committed. Lay it o
 OPENROUTER_API_KEY=... pnpm tsx evals/content-judgement/run.ts --data ~/jev-held-out --surface feedback-comment
 ```
 
-The runner refuses a directory inside the repository. The raw results, which carry item ids, are written next to the data; only `report.md`, which holds numbers alone, goes to `--out` (default `results/<model>-<date>-held-out/`). The report ends with **Gate rows at 0.9 (unrounded)**: JSON rows in the format of [gates.json](../../src/lib/content-judgement/gates.json), with exact rates, the returned build and the question set. Copy a row only if every bar holds on those exact values; never copy a rounded percentage from the tables. Rows are emitted only for `feedback-comment` run with `--repeats 1`: production judges each comment once, and a caption-only run is not the Wall Post request production sends.
+The runner refuses a directory inside the repository. The raw results, which carry item ids, are written next to the data; only `report.md`, which holds numbers alone, goes to `--out` (default `results/<model>-<date>-held-out/`). The report ends with **Gate rows at 0.9 (unrounded)**: JSON rows in the format of [gates.json](../../src/lib/content-judgement/gates.json), with exact rates, the returned build and the question set. Copy a row only if every bar holds on those exact values; never copy a rounded percentage from the tables. Rows are emitted only for `feedback-comment` run with `--repeats 1` and with every item answered (a failed call is a miss in production): production judges each comment once, and a caption-only run is not the Wall Post request production sends.
 
 ## This is a development set
 
