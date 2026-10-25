@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { z } from 'zod'
 import {
   categories,
@@ -139,11 +140,24 @@ export type ModerationItem = z.infer<typeof feedbackCommentSchema>
 export type ConversationItem = z.infer<typeof conversationOpeningSchema>
 export type DataItem = ModerationItem | ConversationItem | WallPhotoItem
 
-export function loadData(surface: ModerationSurface): ModerationItem[]
-export function loadData(surface: 'conversation-opening'): ConversationItem[]
-export function loadData(surface: 'wall-photo'): WallPhotoItem[]
-export function loadData(surface: Surface): DataItem[]
-export function loadData(surface: Surface): DataItem[] {
+/**
+ * The public set in `data/`, or with `directory` a private set laid out the
+ * same way (`<directory>/<surface>.jsonl`), validated by the same schemas.
+ */
+export function loadData(
+  surface: ModerationSurface,
+  directory?: string,
+): ModerationItem[]
+export function loadData(
+  surface: 'conversation-opening',
+  directory?: string,
+): ConversationItem[]
+export function loadData(
+  surface: 'wall-photo',
+  directory?: string,
+): WallPhotoItem[]
+export function loadData(surface: Surface, directory?: string): DataItem[]
+export function loadData(surface: Surface, directory?: string): DataItem[] {
   const schema =
     surface === 'wall-caption'
       ? wallCaptionSchema
@@ -153,7 +167,9 @@ export function loadData(surface: Surface): DataItem[] {
           ? feedbackCommentSchema
           : conversationOpeningSchema
   const lines = readFileSync(
-    new URL(`./data/${surface}.jsonl`, import.meta.url),
+    directory
+      ? join(directory, `${surface}.jsonl`)
+      : new URL(`./data/${surface}.jsonl`, import.meta.url),
     'utf8',
   )
     .trim()

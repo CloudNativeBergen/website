@@ -451,6 +451,7 @@ export function buildReport(
   runs: SurfaceRun[],
   model: string,
   repeats: number,
+  { heldOut = false }: { heldOut?: boolean } = {},
 ): string {
   const results = runs.flatMap((run) => run.results)
   const failed = results.filter((result) => result.answers === null)
@@ -460,6 +461,11 @@ export function buildReport(
   return (
     [
       '# Jev offline evaluation',
+      ...(heldOut
+        ? [
+            'Data: a private held-out set, read from a local path. Only these numbers are committed; the items and raw results stay outside the repository.',
+          ]
+        : []),
       `Question sets: ${runs.map((run) => `${run.surface} ${SURFACE_QUESTION_SET[run.surface]}`).join(', ') || 'none'}. Requested model: ${JSON.stringify(model)}. Repeats: ${repeats}. Created: ${new Date().toISOString()}.`,
       `Calls: ${calls.length}; successful: ${calls.length - failed.length}; failed: ${failed.length}. Known returned cost: $${calls.reduce((total, result) => total + (result.cost ?? 0), 0).toFixed(6)}. Cost missing for ${calls.filter((result) => result.cost === null).length} calls; failed/retried requests may incur additional unreported charges.`,
       `End-to-end request latency (includes retries/backoff and failed calls): p50 ${percentile(
@@ -500,7 +506,9 @@ export function buildReport(
             ? wallPhotoReport(run, repeats)
             : moderationReport(run, repeats),
       ),
-      'These deliberately sampled public cases are not representative prevalence estimates or a guarantee of safe deployment. Use held-out examples and human review for deployment decisions.',
+      heldOut
+        ? 'A held-out set is evidence for exactly the model build and question sets above. Copy its numbers to src/lib/content-judgement/gates.json only for those.'
+        : 'These deliberately sampled public cases are not representative prevalence estimates or a guarantee of safe deployment. Use held-out examples and human review for deployment decisions.',
     ].join('\n\n') + '\n'
   )
 }

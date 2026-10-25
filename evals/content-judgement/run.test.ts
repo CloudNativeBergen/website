@@ -1,8 +1,14 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { main } from './run'
+import { main, parseOptions } from './run'
 
 const savedExitCode = process.exitCode
 const directories: string[] = []
@@ -489,5 +495,98 @@ describe('wall-photo runner integration', () => {
     ).rejects.toThrow()
     // Only the text-only calibration call went out; no photo was sent.
     expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('a private held-out text set (--data)', () => {
+  const MARKER = 'private held-out wording'
+  const item = (n: number, abusive: boolean) =>
+    JSON.stringify({
+      id: `fc-${String(n).padStart(3, '0')}`,
+      text: `${MARKER} ${n}`,
+      lang: 'en',
+      labels: { abusive, sexual: false, spam: false, personal_info: false },
+      tags: [abusive ? 'abusive' : 'benign'],
+    })
+  const privateSet = () => {
+    const directory = mkdtempSync(join(tmpdir(), 'jev-held-out-'))
+    directories.push(directory)
+    writeFileSync(
+      join(directory, 'feedback-comment.jsonl'),
+      [item(1, true), item(2, false)].join('\n') + '\n',
+    )
+    return directory
+  }
+
+  it.each([['all'], ['wall-photo']])(
+    'needs one text surface, not %s',
+    (surface) => {
+      expect(() =>
+        parseOptions(['--data', tmpdir(), '--surface', surface]),
+      ).toThrow('--data needs --surface')
+    },
+  )
+
+  it.each([
+    ['the repository root', '.'],
+    ['the public data directory', 'evals/content-judgement/data'],
+  ])('refuses %s', (_name, path) => {
+    expect(() =>
+      parseOptions(['--data', path, '--surface', 'feedback-comment']),
+    ).toThrow('outside this repository')
+  })
+
+  it('accepts a directory outside the repository', () => {
+    const directory = privateSet()
+    expect(
+      parseOptions(['--data', directory, '--surface', 'feedback-comment']).data,
+    ).toBe(directory)
+  })
+
+  it('scores the private items, keeps raw results next to them, and writes only numbers to --out', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'synthetic-test-key')
+    const data = privateSet()
+    const out = mkdtempSync(join(tmpdir(), 'jev-held-out-out-'))
+    directories.push(out)
+    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+      const { state } = JSON.parse(String(options?.body)) as {
+        state: { comment: string }
+      }
+      const abusive = state.comment.endsWith(' 1') ? 0.95 : 0.01
+      return Response.json({
+        model: 'typesafe/jev-1.14-20261014',
+        usage: { cost: 0 },
+        answers: {
+          abusive: { type: 'noul', noul: abusive },
+          sexual: { type: 'noul', noul: 0 },
+          spam: { type: 'noul', noul: 0 },
+          personal_info: { type: 'noul', noul: 0 },
+        },
+      })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main([
+      '--data',
+      data,
+      '--surface',
+      'feedback-comment',
+      '--repeats',
+      '1',
+      '--out',
+      out,
+    ])
+    // The private items were the ones sent, not the public set.
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(readdirSync(out)).toEqual(['report.md'])
+    expect(readdirSync(data).sort()).toEqual([
+      'feedback-comment.jsonl',
+      'raw-feedback-comment.jsonl',
+    ])
+    const report = readFileSync(join(out, 'report.md'), 'utf8')
+    expect(report).toContain('private held-out set')
+    expect(report).toContain('Scored 2/2 items')
+    expect(report).not.toContain(MARKER)
+    expect(report).not.toMatch(/fc-00\d/)
   })
 })
