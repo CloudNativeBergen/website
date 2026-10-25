@@ -287,9 +287,7 @@ describe('SendSpeakerInfoDialog', () => {
     })
     await waitFor(() =>
       expect(
-        screen.getByText(
-          /Send again to continue this run; speakers already reached are skipped\./,
-        ),
+        screen.getByText(/Still sending, or the connection timed out\./),
       ).toBeTruthy(),
     )
     await act(async () => {
@@ -353,6 +351,41 @@ describe('SendSpeakerInfoDialog', () => {
       (screen.getByLabelText('Speakers Slack Channel') as HTMLInputElement)
         .value,
     ).toBe('#new')
+  })
+})
+
+describe('a stopped email loop', () => {
+  async function stopWith(error: unknown) {
+    m.send.mockRejectedValueOnce(error)
+    dialog()
+    fireEvent.click(screen.getByLabelText(/Post to #/))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Email 2 speakers' }))
+    })
+  }
+
+  it('treats a timeout as still sending, not as a failure', async () => {
+    await stopWith(new TypeError('Failed to fetch'))
+    const line = await screen.findByText(
+      'Still sending, or the connection timed out. Press Send again to continue; nobody gets it twice.',
+    )
+    const status = line.closest('ul')!
+    expect(status.getAttribute('role')).toBe('status')
+    expect(status.className).not.toContain('text-red')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(m.invalidate).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Send again' })).toBeTruthy()
+  })
+
+  it('shows a server error as a failure', async () => {
+    await stopWith(
+      Object.assign(new Error('Could not resolve conference from domain'), {
+        data: { code: 'NOT_FOUND' },
+      }),
+    )
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Stopped after sending 0 of 2.')
+    expect(alert.className).toContain('text-red')
   })
 })
 

@@ -85,6 +85,7 @@ vi.mock('@/lib/notification/sanity', () => ({
 import {
   briefingLogId,
   briefingVersion,
+  BRIEFING_EMAIL_ESTIMATE_MS,
   BRIEFING_TIME_BUDGET_MS,
   loadBriefingSpeakers,
   renderSpeakerBriefing,
@@ -250,6 +251,22 @@ describe('sendSpeakerBriefings', () => {
       'sp-2@example.com',
       'sp-3@example.com',
     ])
+  })
+
+  it('does not start a speaker the per-email estimate would push past the budget', async () => {
+    let clock = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => clock)
+    h.send.mockImplementation(async () => {
+      // Inside the budget, but not with room for another email.
+      clock = BRIEFING_TIME_BUDGET_MS - BRIEFING_EMAIL_ESTIMATE_MS + 1
+      return { data: { id: 'x' }, error: null }
+    })
+    const result = await sendSpeakerBriefings(
+      conference,
+      ['sp-1', 'sp-2', 'sp-3'].map(speaker),
+    )
+    expect(clock).toBeLessThan(BRIEFING_TIME_BUDGET_MS)
+    expect(result).toMatchObject({ sent: 1, remaining: 2 })
   })
 
   it('renders the same output twice in a row', async () => {

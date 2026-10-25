@@ -235,6 +235,26 @@ export async function renderSpeakerBriefing(
 }
 
 /** One email, retried on a transient failure; throws when it is not sent. */
+/**
+ * One attempt may take this long before it counts as timed out and is
+ * retried under the same idempotency key. With 3 attempts and the backoff
+ * (0.5 s + 1 s) one speaker takes at most ~7.5 s.
+ */
+export const BRIEFING_ATTEMPT_TIMEOUT_MS = 2_000
+
+class AttemptTimeout extends Error {}
+
+function withTimeout<T>(attempt: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new AttemptTimeout('Resend send timed out')),
+      BRIEFING_ATTEMPT_TIMEOUT_MS,
+    )
+  })
+  return Promise.race([attempt, timeout]).finally(() => clearTimeout(timer))
+}
+
 async function sendOne(
   conference: BriefingConference,
   sender: FeedbackSummarySender,
@@ -245,16 +265,19 @@ async function sendOne(
 ): Promise<void> {
   await retryWithBackoff(
     async () => {
-      const { error } = await sender.client.emails.send(
-        {
-          from: sender.from,
-          to,
-          // "Changed your plans? Reply to this email." lands with the team.
-          replyTo: conference.cfpEmail || conference.contactEmail || undefined,
-          subject,
-          html,
-        },
-        idempotencyKey ? { idempotencyKey } : undefined,
+      const { error } = await withTimeout(
+        sender.client.emails.send(
+          {
+            from: sender.from,
+            to,
+            // "Changed your plans? Reply to this email." lands with the team.
+            replyTo:
+              conference.cfpEmail || conference.contactEmail || undefined,
+            subject,
+            html,
+          },
+          idempotencyKey ? { idempotencyKey } : undefined,
+        ),
       )
       if (error) {
         const wrapped = new Error(
@@ -266,7 +289,7 @@ async function sendOne(
       }
     },
     undefined,
-    isTransientError,
+    (e) => e instanceof AttemptTimeout || isTransientError(e),
   )
 }
 
@@ -297,11 +320,16 @@ export interface BriefingSendResult {
 }
 
 /**
- * No new send starts after this much time since the call began, so a call
- * ends well inside the tRPC route's 60 s `maxDuration` (a send that starts
- * just inside it can still run on through its retries).
+ * A call stops starting sends once the elapsed time plus
+ * {@link BRIEFING_EMAIL_ESTIMATE_MS} would pass this, so it ends well inside
+ * the tRPC route's 60 s `maxDuration`. 40 s, checked only before each email,
+ * let slow Resend calls and retries run past the limit in production: the
+ * client saw a timeout while the server was still sending.
  */
-export const BRIEFING_TIME_BUDGET_MS = 40_000
+export const BRIEFING_TIME_BUDGET_MS = 25_000
+
+/** A conservative time for one speaker: render, send with retries, marker. */
+export const BRIEFING_EMAIL_ESTIMATE_MS = 5_000
 
 async function writeMarker(
   doc: { _id: string; _type: string } & Record<string, unknown>,
@@ -380,7 +408,10 @@ export async function sendSpeakerBriefings(
   if (due.length === 0) return result
   const sender = await resolveFeedbackSummarySender(conference)
   for (const [n, speaker] of due.entries()) {
-    if (Date.now() - started >= BRIEFING_TIME_BUDGET_MS) {
+    if (
+      Date.now() - started + BRIEFING_EMAIL_ESTIMATE_MS >
+      BRIEFING_TIME_BUDGET_MS
+    ) {
       result.remaining = due.length - n
       break
     }

@@ -12,6 +12,14 @@ const NOTE_MAX = 1000
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
+/**
+ * A failed request with no tRPC error code: a network drop or the function
+ * timing out. The server may still be sending, so it is not a failure.
+ */
+function isTransportError(e: unknown): boolean {
+  return !(e as { data?: { code?: string } } | null)?.data?.code
+}
+
 /** The value, settled for `ms`: previews refetch once typing pauses. */
 function useDebounced<T>(value: T, ms = 400): T {
   const [settled, setSettled] = useState(value)
@@ -149,6 +157,7 @@ export function SendSpeakerInfoDialog({
    */
   const runId = useRef<string | null>(null)
   const [incomplete, setIncomplete] = useState(false)
+  const [stopped, setStopped] = useState(false)
 
   const settledNote = useDebounced(note).trim() || undefined
   const preview = api.conference.previewBriefing.useQuery(
@@ -243,6 +252,13 @@ export function SendSpeakerInfoDialog({
       ].filter((l): l is string => !!l)
     } catch (e) {
       setIncomplete(true)
+      if (isTransportError(e)) {
+        // The request died, not the send: the server may still be working.
+        return [
+          'Still sending, or the connection timed out. Press Send again to continue; nobody gets it twice.',
+        ]
+      }
+      setStopped(true)
       return [
         `Stopped after sending ${sent} of ${of}. ${(e as Error).message} ${
           everyone
@@ -257,6 +273,7 @@ export function SendSpeakerInfoDialog({
 
   async function finishWithEmail(lines: string[]) {
     setPhase('sending')
+    setStopped(false)
     setSummary([...lines, ...(await runEmail())])
     setPhase('done')
   }
@@ -500,8 +517,8 @@ export function SendSpeakerInfoDialog({
       {phase === 'done' && (
         <div className="space-y-4">
           <ul
-            role="status"
-            className="space-y-1 text-sm text-gray-700 dark:text-gray-300"
+            role={stopped ? 'alert' : 'status'}
+            className={`space-y-1 text-sm ${stopped ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}
           >
             {summary.map((line) => (
               <li key={line}>{line}</li>
