@@ -95,6 +95,27 @@ describe('organization.updateContentJudgement', () => {
     })
   })
 
+  it('creates the parent in an earlier patch than the dotted set', async () => {
+    // Within ONE patch Sanity runs `set` before `setIfMissing`, which the
+    // in-memory store (mutator) cannot model. So the shape is pinned: the
+    // parent is created by its own, earlier patch in the same transaction.
+    await organizer().updateContentJudgement({ enabled: true })
+    const [commit] = store().commits.slice(-1)
+    const patches = commit.map(
+      (m) => (m as { patch?: Record<string, unknown> }).patch ?? {},
+    )
+    expect(patches).toHaveLength(2)
+    expect(patches[0]).toMatchObject({
+      id: 'org-A',
+      setIfMissing: { contentJudgement: {} },
+    })
+    expect(patches[0]).not.toHaveProperty('set')
+    expect(patches[1]).toMatchObject({
+      id: 'org-A',
+      set: { 'contentJudgement.enabled': true },
+    })
+  })
+
   it('turns it off again and keeps the other content judgement fields', async () => {
     store().reset([
       org('org-A', {

@@ -1,6 +1,5 @@
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
-import type { Patch } from '@sanity/client'
 import { router, adminProcedure } from '../trpc'
 import { clientWrite } from '@/lib/sanity/client'
 import { organizationTag } from '@/lib/cache/tags'
@@ -18,14 +17,14 @@ import {
  */
 
 /**
- * Patch the request's organization, then bust the cached org read that the
+ * Write the request's organization (`write` commits), then bust the cached org read that the
  * root layout's analytics gate, the settings page and the /privacy
  * disclosure all run through. `'default'` serves the stale page once while
  * it refreshes; `{ expire: 0 }` makes the next request wait for fresh data.
  */
 async function patchCurrentOrganization(
   orgId: string | null | undefined,
-  build: (patch: Patch) => Patch,
+  write: (orgId: string) => Promise<unknown>,
   failure: string,
   expiry: 'default' | { expire: 0 } = 'default',
 ): Promise<{ success: true }> {
@@ -36,7 +35,7 @@ async function patchCurrentOrganization(
     })
   }
   try {
-    await build(clientWrite.patch(orgId)).commit()
+    await write(orgId)
   } catch (error) {
     throw new TRPCError({
       code: 'INTERNAL_SERVER_ERROR',
@@ -60,10 +59,13 @@ export const organizationRouter = router({
     .mutation(({ ctx, input }) =>
       patchCurrentOrganization(
         ctx.orgId,
-        (patch) =>
+        (orgId) =>
           input.analyticsPosthogToken === null
-            ? patch.unset(['analyticsPosthogToken'])
-            : patch.set({ analyticsPosthogToken: input.analyticsPosthogToken }),
+            ? clientWrite.patch(orgId).unset(['analyticsPosthogToken']).commit()
+            : clientWrite
+                .patch(orgId)
+                .set({ analyticsPosthogToken: input.analyticsPosthogToken })
+                .commit(),
         'Failed to update organization analytics',
       ),
     ),
@@ -80,16 +82,25 @@ export const organizationRouter = router({
     .mutation(({ ctx, input }) =>
       patchCurrentOrganization(
         ctx.orgId,
-        (patch) =>
-          patch.setIfMissing({ contentJudgement: {} }).set({
-            'contentJudgement.enabled': input.enabled,
-            'contentJudgement.changedAt': new Date().toISOString(),
-            'contentJudgement.changedBy': {
-              _type: 'reference',
-              _ref: ctx.speaker._id,
-              _weak: true,
-            },
-          }),
+        // Two patches in one transaction, applied in order: within ONE
+        // patch Sanity runs `set` before `setIfMissing`, so the parent
+        // object must exist before the dotted paths are set.
+        (orgId) =>
+          clientWrite
+            .transaction()
+            .patch(orgId, (p) => p.setIfMissing({ contentJudgement: {} }))
+            .patch(orgId, (p) =>
+              p.set({
+                'contentJudgement.enabled': input.enabled,
+                'contentJudgement.changedAt': new Date().toISOString(),
+                'contentJudgement.changedBy': {
+                  _type: 'reference',
+                  _ref: ctx.speaker._id,
+                  _weak: true,
+                },
+              }),
+            )
+            .commit(),
         'Failed to update content judgement',
         // Never a stale /privacy: once it is on, content can be sent, so the
         // next view must already list OpenRouter (spec §13.1). A tRPC route
