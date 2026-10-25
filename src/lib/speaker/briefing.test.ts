@@ -2,7 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { getSpeakerBriefing } from './briefing'
 import { Status, type ProposalExisting } from '@/lib/proposal/types'
 
-const block = { _type: 'block', _key: 'b1', children: [] }
+const block = {
+  _type: 'block',
+  _key: 'b1',
+  children: [{ _type: 'span', text: 'Bring an HDMI adapter' }],
+}
+const blankBlock = {
+  _type: 'block',
+  _key: 'b0',
+  children: [{ _type: 'span', text: ' ' }],
+}
 
 const proposal = (over: Partial<ProposalExisting>) =>
   ({
@@ -49,6 +58,25 @@ describe('getSpeakerBriefing', () => {
         { _key: 'b', departsNote: 'After the workshops' },
       ],
     })
+  })
+
+  it('keeps a route without a _key, and a dinner with routes only', () => {
+    const b = getSpeakerBriefing({
+      speakerDinnerInfo: 'fallback',
+      speakerInfo: { dinner: { routes: [{ label: 'Walk' }] } },
+    })
+    expect(b.dinner).toEqual({ routes: [{ label: 'Walk' }] })
+  })
+
+  it('treats a lone blank paragraph as empty', () => {
+    expect(
+      getSpeakerBriefing({
+        speakerInfo: {
+          checkIn: [blankBlock],
+          dinner: { description: [blankBlock] },
+        },
+      }),
+    ).toEqual({})
   })
 
   it('omits empty sections entirely', () => {

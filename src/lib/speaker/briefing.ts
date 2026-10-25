@@ -8,6 +8,10 @@
 import type { TypedObject } from 'sanity'
 import type { Conference, SpeakerInfoRoute } from '@/lib/conference/types'
 import { Status, type ProposalExisting } from '@/lib/proposal/types'
+import {
+  isRichTextContentEmpty,
+  type RichTextContentBlock,
+} from '@/lib/homepage/richText'
 
 export interface SpeakerBriefingTalk {
   proposalId: string
@@ -59,7 +63,11 @@ type Briefable = Pick<
 >
 
 const text = (s?: string) => s?.trim() || undefined
-const blocks = (b?: TypedObject[]) => (b && b.length > 0 ? b : undefined)
+// A lone blank paragraph (an emptied editor) counts as empty.
+const blocks = (b?: TypedObject[]) =>
+  b && !isRichTextContentEmpty(b as unknown as RichTextContentBlock[])
+    ? b
+    : undefined
 
 /** Drop undefined keys; an object with none left becomes undefined. */
 function compact<T extends object>(o: T): T | undefined {
@@ -86,7 +94,10 @@ export function getSpeakerBriefing(
       }),
     )
     // A row with only a `_key` is an empty route.
-    .filter((r): r is SpeakerInfoRoute => !!r && Object.keys(r).length > 1)
+    .filter(
+      (r): r is SpeakerInfoRoute =>
+        !!r && Object.keys(r).some((k) => k !== '_key'),
+    )
   const dinner =
     compact<NonNullable<SpeakerBriefing['dinner']>>({
       startsAt: text(d?.startsAt),
