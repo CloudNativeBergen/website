@@ -12,6 +12,7 @@ import {
 import {
   PhotoWallCookieNote,
   PhotoWallPrivacy,
+  ContentJudgementPrivacy,
   SessionFeedbackCookieNote,
   SessionFeedbackPrivacy,
   SharedWorkshopLoginNotice,
@@ -129,7 +130,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 24, 2026'
+  const lastUpdated = 'October 25, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -154,6 +155,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   // PostHog is anonymous by default with ONE optional cookie. Without an
   // organization token, only the platform's cookie-less Vercel insights run.
   const usesPostHog = discloses(subprocessors, 'posthog')
+  // Content judgement (spec §13.2): the section shows exactly when OpenRouter
+  // is disclosed, while the organization has it on or still stores any
+  // Judgement, and as possible when that could not be read.
+  const usesContentJudgement = discloses(subprocessors, 'openrouter')
 
   return (
     <>
@@ -1239,6 +1244,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
 
                     {/* Photo Wall (Photo Wall spec §12) */}
                     <PhotoWallPrivacy />
+
+                    {/* Automatic checks (Content judgement spec §13.2) */}
+                    {usesContentJudgement ? <ContentJudgementPrivacy /> : null}
 
                     {/* Website Usage (Analytics) */}
                     <div className="rounded-lg border border-teal-200 bg-teal-50 p-6 dark:border-teal-800 dark:bg-teal-900/20">

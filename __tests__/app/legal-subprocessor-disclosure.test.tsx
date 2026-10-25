@@ -121,6 +121,8 @@ interface World {
    * `organizationReadFails` takes it down with the rest.
    */
   secretEnvSlugs?: { _id: string; secretEnvSlug: string }[]
+  /** Whether any Judgement is stored for the organization; `'fails'` rejects. */
+  storedJudgements?: boolean | 'fails'
 }
 
 /**
@@ -135,8 +137,16 @@ function world({
   conferenceReadFails = false,
   organizationReadFails = false,
   secretEnvSlugs = [],
+  storedJudgements = false,
 }: World = {}) {
   sanityFetch.mockImplementation(async (query: string) => {
+    // The stored-Judgement read (Content judgement §13.1). Matched first: its
+    // subquery names `_type == "conference"` too.
+    if (query.includes('_type == "contentJudgement"')) {
+      if (storedJudgements === 'fails')
+        throw new Error('ECONNREFUSED sanity.io')
+      return storedJudgements
+    }
     if (query.includes('_type == "conference"')) {
       if (conferenceReadFails) throw new Error('ECONNREFUSED sanity.io')
       return conf
@@ -740,5 +750,47 @@ describe('/terms names only the sign-in routes this tenant has', () => {
 
     expect(html).not.toContain('Konf')
     expect(html).toContain('could not be confirmed right now')
+  })
+})
+
+describe('content judgement: OpenRouter and the Automatic checks section (§13)', () => {
+  const OPENROUTER = 'OpenRouter'
+  const SECTION = 'Automatic checks on what you write'
+
+  it('a tenant that never turned it on shows neither', async () => {
+    world()
+    const html = await renderPrivacy()
+    expect(html).toContain('Sanity.io')
+    expect(html).not.toContain(OPENROUTER)
+    expect(html).not.toContain(SECTION)
+  })
+
+  it('turned on: OpenRouter is listed, as a US transfer, and the section shows', async () => {
+    world({
+      organization: organization({ contentJudgement: { enabled: true } }),
+    })
+    const html = await renderPrivacy()
+    expect(html).toContain(SECTION)
+    expect(html).toContain(OPENROUTER)
+    expect(html).toContain('TypeSafe')
+    expect(html).not.toContain(UNCERTAIN)
+  })
+
+  it('turned off with a Judgement still stored: both stay', async () => {
+    world({
+      organization: organization({ contentJudgement: { enabled: false } }),
+      storedJudgements: true,
+    })
+    const html = await renderPrivacy()
+    expect(html).toContain(SECTION)
+    expect(html).toContain(OPENROUTER)
+  })
+
+  it('a failed stored-Judgement read shows both, marked as possibly not applying', async () => {
+    world({ storedJudgements: 'fails' })
+    const html = await renderPrivacy()
+    expect(html).toContain(SECTION)
+    expect(html).toContain(OPENROUTER)
+    expect(html).toContain(UNCERTAIN)
   })
 })

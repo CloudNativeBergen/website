@@ -1,3 +1,4 @@
+export { ContentJudgementPrivacy } from './ContentJudgementPrivacy'
 export { PhotoWallCookieNote, PhotoWallPrivacy } from './PhotoWallPrivacy'
 export {
   SessionFeedbackCookieNote,
