@@ -151,15 +151,20 @@ const BRIEFING_SLACK_LOG_KEY = 'speaker-briefing-slack'
 const briefingSlackLogId = (conferenceId: string) =>
   `briefing-slack.${conferenceId}`
 
+/** "Note from the organizers": plain text for one send, never versioned. */
+const BriefingNote = z.string().trim().max(1000).optional()
+
 /** The briefing as one Slack message, from the SHARED part only. */
 function briefingSlackMessage(
   conference: Awaited<ReturnType<typeof briefingConference>>,
   mentionChannel: boolean,
+  note?: string,
 ) {
   return buildBriefingSlackMessage(getSpeakerBriefing(conference), {
     title: `Speaker info for ${conference.title}`,
     dashboardUrl: `${conferenceBaseUrl(conference)}/cfp/list#briefing`,
     mentionChannel,
+    note,
   })
 }
 
@@ -479,6 +484,20 @@ export const conferenceRouter = router({
     }),
 
   /**
+   * Just the Speakers Slack Channel, from the speaker info page (#1592).
+   * `updateCommunication` requires the three emails, so it cannot save this
+   * one field; the validation is the same field of its schema. Empty unsets.
+   */
+  updateSpeakerSlackChannel: adminProcedure
+    .input(UpdateCommunicationSchema.pick({ speakerSlackChannel: true }))
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, {
+        speakerSlackChannel: input.speakerSlackChannel || null,
+      })
+    }),
+
+  /**
    * SAFEGUARDED. See {@link ticketingBindingIsClaimed}: these ids are the tenancy
    * anchor every `tickets.*` procedure derives its provider event from, and the
    * provider credential is shared platform-wide, so an unguarded write here
@@ -662,15 +681,26 @@ export const conferenceRouter = router({
   }),
 
   previewBriefing: adminProcedure
-    .input(z.object({ speakerId: z.string().optional() }))
+    .input(z.object({ speakerId: z.string().optional(), note: BriefingNote }))
     .query(async ({ input }) => {
       const conference = await briefingConference()
       const speaker = await pickBriefingSpeaker(conference, input.speakerId)
-      return { html: await renderSpeakerBriefing(conference, speaker) }
+      return {
+        html: await renderSpeakerBriefing(
+          conference,
+          speaker,
+          false,
+          input.note,
+        ),
+      }
     }),
 
   sendBriefingTest: adminProcedure
-    .input(z.object({ speakerId: z.string().optional() }).optional())
+    .input(
+      z
+        .object({ speakerId: z.string().optional(), note: BriefingNote })
+        .optional(),
+    )
     .mutation(async ({ ctx, input }) => {
       const conference = await briefingConference()
       const to = ctx.speaker.email
@@ -685,21 +715,49 @@ export const conferenceRouter = router({
         conference,
         to,
         await pickBriefingSpeaker(conference, input?.speakerId),
+        input?.note,
       )
       return { to }
     }),
 
-  sendBriefing: adminProcedure.mutation(async () => {
-    const conference = await briefingConference()
-    const speakers = await loadBriefingSpeakers(conference)
-    return sendSpeakerBriefings(conference, speakers)
-  }),
+  /**
+   * `force` sends to every confirmed speaker, also those with the current
+   * version; `runId` (one per run, from the client) lets a continuation
+   * skip whoever this run already reached.
+   */
+  sendBriefing: adminProcedure
+    .input(
+      z
+        .object({
+          note: BriefingNote,
+          force: z.literal(true).optional(),
+          runId: z
+            .string()
+            .regex(/^[A-Za-z0-9_-]{8,64}$/)
+            .optional(),
+        })
+        .refine((v) => !v.force || v.runId, 'force needs a runId')
+        .optional(),
+    )
+    .mutation(async ({ input }) => {
+      const conference = await briefingConference()
+      const speakers = await loadBriefingSpeakers(conference)
+      return sendSpeakerBriefings(conference, speakers, undefined, {
+        note: input?.note,
+        force: input?.force && input.runId ? { runId: input.runId } : undefined,
+      })
+    }),
 
   previewBriefingSlack: adminProcedure
-    .input(z.object({ mentionChannel: z.boolean().default(false) }))
+    .input(
+      z.object({
+        mentionChannel: z.boolean().default(false),
+        note: BriefingNote,
+      }),
+    )
     .query(async ({ input }) => {
       const conference = await briefingConference()
-      return briefingSlackMessage(conference, input.mentionChannel)
+      return briefingSlackMessage(conference, input.mentionChannel, input.note)
     }),
 
   /**
@@ -707,7 +765,12 @@ export const conferenceRouter = router({
    * through the one token gate. Slack's refusals come back readable.
    */
   postBriefingToSlack: adminProcedure
-    .input(z.object({ mentionChannel: z.boolean().default(false) }))
+    .input(
+      z.object({
+        mentionChannel: z.boolean().default(false),
+        note: BriefingNote,
+      }),
+    )
     .mutation(async ({ input }) => {
       const conference = await briefingConference()
       const channel = conference.speakerSlackChannel?.trim()
@@ -729,7 +792,7 @@ export const conferenceRouter = router({
       const name = channel.replace(/^#/, '')
       try {
         await postSlackMessage(
-          briefingSlackMessage(conference, input.mentionChannel),
+          briefingSlackMessage(conference, input.mentionChannel, input.note),
           { channel: name, botToken, forceSlack: true },
         )
       } catch (error) {
