@@ -2,7 +2,7 @@ import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import NextTalkDisplay from '@/components/stream/NextTalkDisplay'
-import { SponsorBanner } from '@/components/stream/SponsorBanner'
+import { StreamSponsors } from '@/components/stream/StreamSponsors'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import BlueskyAuthorFeedLooping from '@/components/stream/BlueskyAuthorFeedLooping'
 import { AutoRefreshWrapper } from '@/components/stream/AutoRefreshWrapper'
@@ -87,7 +87,8 @@ export default async function StreamRoomPage({ params }: Props) {
           <Container className="relative">
             <div className={STREAM_CONFIG.layout.containerPadding}>
               {conference.sponsors && conference.sponsors.length > 0 && (
-                <SponsorBanner
+                <StreamSponsors
+                  track={matchedTrack}
                   sponsors={conference.sponsors as ConferenceSponsor[]}
                   className={STREAM_CONFIG.sponsorBanner.className}
                   speed={STREAM_CONFIG.sponsorBanner.speed}
