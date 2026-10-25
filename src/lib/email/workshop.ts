@@ -1,4 +1,6 @@
+import React from 'react'
 import { escapeHtml } from '@/lib/html/escape'
+import { WorkshopCanceledTemplate } from '@/components/email/WorkshopCanceledTemplate'
 import { formatRegistrationInstant } from '@/lib/time'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
@@ -573,6 +575,59 @@ export async function sendWorkshopAnnouncementEmail({
     console.error('Error sending workshop announcement email:', error)
     return {
       error: createEmailError('Failed to send announcement email', 500),
+    }
+  }
+}
+
+export interface WorkshopCanceledEmailRequest {
+  userEmail: string
+  userName: string
+  status: 'confirmed' | 'waitlist'
+  conference?: Conference
+  workshopTitle: string
+  /** The organizer's message, plain text. */
+  message: string
+}
+
+/**
+ * Tell ONE person signed up for a canceled workshop. Sent only when an
+ * organizer asks (`workshop.admin.notifyCanceled`). Never throws.
+ */
+export async function sendWorkshopCanceledEmail({
+  userEmail,
+  userName,
+  status,
+  conference,
+  workshopTitle,
+  message,
+}: WorkshopCanceledEmailRequest): Promise<EmailResult<{ emailId: string }>> {
+  try {
+    const { client } = await resolveEmailSender(conference?.organization?._ref)
+    const emailResult = await retryWithBackoff(async () => {
+      const result = await client.emails.send({
+        from: resolveConferenceFrom(conference),
+        to: [userEmail],
+        subject: `Workshop canceled: ${workshopTitle}`,
+        react: React.createElement(WorkshopCanceledTemplate, {
+          userName,
+          workshopTitle,
+          status,
+          message,
+          organizer: conference?.organizer || PLATFORM_NAME,
+          contactEmail: resolveConferenceContact(conference),
+          brandColor: emailBrandColor(conference?.theme),
+        }),
+      })
+      if (result.error) {
+        throw new Error(`Failed to send email: ${result.error.message}`)
+      }
+      return result
+    })
+    return { data: { emailId: emailResult.data?.id || '' } }
+  } catch (error) {
+    console.error('Error sending workshop canceled email:', error)
+    return {
+      error: createEmailError('Failed to send workshop canceled email', 500),
     }
   }
 }

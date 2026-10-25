@@ -249,22 +249,32 @@ export async function sendAnnouncementToConfirmedParticipants(input: {
   recipients: AnnouncementRecipient[]
 }): Promise<FanOutResult> {
   const { conference, workshopTitle, authorName, body, recipients } = input
+  return fanOutEmails(recipients, (recipient) =>
+    sendWorkshopAnnouncementEmail({
+      userEmail: recipient.userEmail,
+      userName: recipient.userName,
+      conference,
+      workshopTitle,
+      authorName,
+      body,
+    }),
+  )
+}
+
+/**
+ * One email per item, {@link EMAIL_CONCURRENCY} at a time. A send that throws
+ * or answers an error is counted as failed; the batch goes on.
+ */
+export async function fanOutEmails<T>(
+  items: T[],
+  send: (item: T) => Promise<{ error?: unknown }>,
+): Promise<FanOutResult> {
   let sent = 0
   let failed = 0
 
-  for (let i = 0; i < recipients.length; i += EMAIL_CONCURRENCY) {
-    const chunk = recipients.slice(i, i + EMAIL_CONCURRENCY)
+  for (let i = 0; i < items.length; i += EMAIL_CONCURRENCY) {
     const results = await Promise.allSettled(
-      chunk.map((recipient) =>
-        sendWorkshopAnnouncementEmail({
-          userEmail: recipient.userEmail,
-          userName: recipient.userName,
-          conference,
-          workshopTitle,
-          authorName,
-          body,
-        }),
-      ),
+      items.slice(i, i + EMAIL_CONCURRENCY).map(send),
     )
 
     for (const result of results) {
