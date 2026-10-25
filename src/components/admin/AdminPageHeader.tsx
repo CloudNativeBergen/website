@@ -122,7 +122,7 @@ export function AdminPageHeader({
           role="region"
           aria-label="Statistics"
           tabIndex={0}
-          className={`font-inter -mx-2 -my-1 mt-3 flex snap-x gap-2 overflow-x-auto px-2 py-1 focus-visible:outline-2 focus-visible:outline-brand-cloud-blue sm:mx-0 sm:my-0 sm:mt-6 sm:grid sm:overflow-visible sm:px-0 sm:py-0 ${getGridCols(stats.length)} sm:gap-3`}
+          className={`font-inter -mx-2 -my-1 mt-3 flex snap-x scroll-px-2 gap-2 overflow-x-auto px-2 py-1 focus-visible:outline-2 focus-visible:outline-brand-cloud-blue sm:mx-0 sm:my-0 sm:mt-6 sm:grid sm:overflow-visible sm:px-0 sm:py-0 ${getGridCols(stats.length)} sm:gap-3`}
         >
           {stats.map((stat) => (
             <StatCard
