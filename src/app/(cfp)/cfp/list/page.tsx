@@ -22,8 +22,10 @@ import { ProposalConfirmationHandler } from '@/components/cfp/ProposalConfirmati
 import { NotSeeingTalksPrompt } from '@/components/cfp/NotSeeingTalksPrompt'
 import { MessagesIntroCard } from '@/components/cfp/MessagesIntroCard'
 import { startProviderLink } from '@/app/(cfp)/cfp/profile/link-actions'
-import { getSpeakerBriefing } from '@/lib/speaker/briefing'
-import { osloTodayDateString } from '@/lib/time'
+import {
+  loadDashboardBriefing,
+  type BriefingFields,
+} from '@/lib/speaker/dashboardBriefing'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
@@ -203,16 +205,17 @@ export default async function SpeakerDashboard() {
             })
           : {}
 
-      // The briefing (#1592) shows on this host's edition only, for a speaker
-      // with a confirmed talk, until the conference is over.
-      const showBriefing =
-        conference._id === currentConference?._id &&
-        !isOver &&
-        (proposals ?? []).some((p) => p.status === 'confirmed')
-      // Read live, not through the 300 s cache: a last-minute change (a hike
-      // called off for weather) must show at once.
-      const briefingFields = showBriefing
-        ? await clientReadUncached.fetch<Partial<Conference> | null>(
+      const briefing = await loadDashboardBriefing({
+        conference,
+        currentConferenceId: currentConference?._id,
+        isOver,
+        proposals: proposals ?? [],
+        speakerId,
+        travelSupport,
+        // Live, not through the 300 s cache: a last-minute change (a hike
+        // called off for weather) must show at once.
+        fetchFields: (id) =>
+          clientReadUncached.fetch<BriefingFields | null>(
             // groq-global-scoped: `$id` is the current domain's conference.
             groq`*[_type == "conference" && _id == $id][0]{
               speakerInfo,
@@ -221,32 +224,9 @@ export default async function SpeakerDashboard() {
               venueAddress,
               venueTravelInfo
             }`,
-            { id: conference._id },
-          )
-        : null
-      const now = new Date()
-      const today = osloTodayDateString(now)
-      const isConferenceDay =
-        today >= conference.startDate && today <= conference.endDate
-      const briefing = showBriefing
-        ? getSpeakerBriefing(
-            { ...conference, ...briefingFields },
-            {
-              proposals,
-              speakerId,
-              // ponytail: no `ticketState` — the redeemed set is one ~10 s
-              // full-event provider fetch, memoized only 30 s per instance.
-              travelSupport: travelSupport ?? undefined,
-            },
-          )
-        : undefined
-      // Pin the dinner from the start of its day until it begins; without a
-      // start time, on the conference days.
-      const dinnerAt = briefing?.dinner?.startsAt
-      const pinDinner = dinnerAt
-        ? today >= osloTodayDateString(new Date(dinnerAt)) &&
-          now < new Date(dinnerAt)
-        : isConferenceDay
+            { id },
+          ),
+      })
 
       return {
         conference,
@@ -264,11 +244,7 @@ export default async function SpeakerDashboard() {
         badges: badges || [],
         isOver,
         canEditProposals,
-        ...(briefing && {
-          briefing,
-          conferenceDay: isConferenceDay ? today : undefined,
-          pinDinner,
-        }),
+        ...briefing,
       } as ConferenceWithSpeakerData
     } catch (error) {
       console.error(
