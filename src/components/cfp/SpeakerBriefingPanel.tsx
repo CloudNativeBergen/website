@@ -27,6 +27,8 @@ interface SpeakerBriefingPanelProps {
    * when unanswered. Leave it out to hide the route picker.
    */
   dinnerChoice?: string | null
+  /** Shown to an organizer of the edition, who may have no talk. */
+  asOrganizer?: boolean
 }
 
 // Map links open off-site, so http(s) only — no site paths.
@@ -88,6 +90,7 @@ export function SpeakerBriefingPanel({
   pinDinner,
   changesEmail,
   dinnerChoice,
+  asOrganizer,
 }: SpeakerBriefingPanelProps) {
   const todayTalks = conferenceDay
     ? (b.talks ?? []).filter((t) => t.date === conferenceDay)
@@ -320,6 +323,15 @@ export function SpeakerBriefingPanel({
       >
         Speaker info
       </h4>
+      {asOrganizer && (
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          You see this as an organizer. Speakers also see their own talks and
+          to-dos.{' '}
+          <Link href="/admin/speakers/info" className={linkClass}>
+            Edit speaker info
+          </Link>
+        </p>
+      )}
       {pinned ? (
         <>
           {pinTalks && talkList(talksHeading(todayTalks, true), todayTalks)}

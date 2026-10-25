@@ -12,6 +12,7 @@ import {
 } from '@/lib/speaker/briefing'
 import { osloTodayDateString } from '@/lib/time'
 import { resolveDinnerChoice } from '@/lib/speaker/dinnerChoice'
+import { isOrganizerForOrg, type OrganizerSpeaker } from '@/lib/authz/organizer'
 
 export type BriefingFields = Partial<
   Pick<
@@ -30,6 +31,7 @@ export async function loadDashboardBriefing({
   isOver,
   proposals,
   speakerId,
+  organizer,
   travelSupport,
   fetchFields,
   fetchDinnerChoice,
@@ -40,6 +42,8 @@ export async function loadDashboardBriefing({
   isOver: boolean
   proposals: ProposalExisting[]
   speakerId: string
+  /** The signed-in speaker; an organizer of the edition's org sees it too. */
+  organizer?: OrganizerSpeaker | null
   travelSupport?: SpeakerBriefingData['travelSupport'] | null
   /** The live (uncached) read of the conference's speaker fields. */
   fetchFields: (conferenceId: string) => Promise<BriefingFields | null>
@@ -52,15 +56,21 @@ export async function loadDashboardBriefing({
       conferenceDay?: string
       pinDinner: boolean
       dinnerChoice?: string | null
+      /** Shown because the speaker organizes the edition, not for a talk. */
+      asOrganizer?: boolean
     }
   | undefined
 > {
-  // This host's edition only, for a speaker with a confirmed talk, until the
-  // conference is over.
+  // This host's edition only, for a speaker with a confirmed talk or an
+  // organizer of its org, until the conference is over.
+  const hasTalk = proposals.some((p) => p.status === 'confirmed')
+  const asOrganizer =
+    !hasTalk &&
+    isOrganizerForOrg(organizer, conference.organization?._ref ?? null)
   if (
     conference._id !== currentConferenceId ||
     isOver ||
-    !proposals.some((p) => p.status === 'confirmed')
+    (!hasTalk && !asOrganizer)
   ) {
     return undefined
   }
@@ -68,15 +78,18 @@ export async function loadDashboardBriefing({
     console.error(`Could not read speaker info for ${conference._id}`, error)
     return null
   })
+  // An organizer without a talk gets the shared sections only.
   const briefing = getSpeakerBriefing(
     { ...conference, ...fields },
-    {
-      proposals,
-      speakerId,
-      // ponytail: no `ticketState` — the redeemed set is one ~10 s full-event
-      // provider fetch, memoized only 30 s per instance.
-      travelSupport: travelSupport ?? undefined,
-    },
+    asOrganizer
+      ? undefined
+      : {
+          proposals,
+          speakerId,
+          // ponytail: no `ticketState` — the redeemed set is one ~10 s full-event
+          // provider fetch, memoized only 30 s per instance.
+          travelSupport: travelSupport ?? undefined,
+        },
   )
   const today = osloTodayDateString(now)
   const isConferenceDay =
@@ -87,11 +100,12 @@ export async function loadDashboardBriefing({
   const pinDinner = Number.isNaN(dinnerAt)
     ? isConferenceDay
     : today === osloTodayDateString(new Date(dinnerAt))
-  // Only with routes to choose from. A failed read hides the picker rather
+  // Only with routes to choose from, and never for an organizer without a
+  // talk: setDinnerChoice requires a confirmed talk. A failed read hides the picker rather
   // than showing an unanswered one that would overwrite a stored choice.
   const routes = briefing.dinner?.routes
   const dinnerChoice =
-    routes && fetchDinnerChoice
+    routes && fetchDinnerChoice && !asOrganizer
       ? await fetchDinnerChoice(conference._id).then(
           (stored) => resolveDinnerChoice(stored, routes),
           (error) => {
@@ -108,5 +122,6 @@ export async function loadDashboardBriefing({
     dinnerChoice,
     conferenceDay: isConferenceDay ? today : undefined,
     pinDinner,
+    ...(asOrganizer && { asOrganizer }),
   }
 }

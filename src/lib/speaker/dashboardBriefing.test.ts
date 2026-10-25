@@ -138,4 +138,63 @@ describe('loadDashboardBriefing dinner choice', () => {
     })
     expect(failed?.dinnerChoice).toBeUndefined()
   })
+
+  describe('organizers without a talk', () => {
+    const orgConference = {
+      ...conference,
+      organization: { _ref: 'org-1' },
+    } as Conference
+    const routes = async () => ({
+      speakerInfo: {
+        dinner: {
+          venueName: 'Bryggen',
+          routes: [{ _key: 'r', label: 'Hike' }],
+        },
+      },
+    })
+    const noTalk = { ...base, conference: orgConference, proposals: [] }
+
+    it('shows an organizer of the org the shared sections, without the picker', async () => {
+      const fetchDinnerChoice = vi.fn(async () => null)
+      const result = await loadDashboardBriefing({
+        ...noTalk,
+        organizer: { _id: 's1', organizerOrgIds: ['org-1'] },
+        fetchFields: routes,
+        fetchDinnerChoice,
+      })
+      expect(result?.asOrganizer).toBe(true)
+      expect(result?.briefing.dinner?.venueName).toBe('Bryggen')
+      expect(result?.briefing.talks).toBeUndefined()
+      expect(result?.briefing.todos).toBeUndefined()
+      expect(result?.dinnerChoice).toBeUndefined()
+      expect(fetchDinnerChoice).not.toHaveBeenCalled()
+    })
+
+    it('shows nothing to a non-organizer or an organizer of another org', async () => {
+      const fetchFields = vi.fn(routes)
+      for (const organizer of [
+        { _id: 's1', organizerOrgIds: [] },
+        { _id: 's1', organizerOrgIds: ['org-2'] },
+        null,
+      ]) {
+        expect(
+          await loadDashboardBriefing({ ...noTalk, organizer, fetchFields }),
+        ).toBeUndefined()
+      }
+      expect(fetchFields).not.toHaveBeenCalled()
+    })
+
+    it('gives an organizer with a confirmed talk the normal speaker view', async () => {
+      const result = await loadDashboardBriefing({
+        ...base,
+        conference: orgConference,
+        organizer: { _id: 's1', organizerOrgIds: ['org-1'] },
+        fetchFields: routes,
+        fetchDinnerChoice: async () => null,
+      })
+      expect(result?.asOrganizer).toBeUndefined()
+      expect(result?.briefing.talks).toHaveLength(1)
+      expect(result?.dinnerChoice).toBeNull()
+    })
+  })
 })

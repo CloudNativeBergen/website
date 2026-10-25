@@ -179,4 +179,15 @@ describe('SpeakerBriefingPanel', () => {
     expect(html).not.toContain('<details')
     expect(html).toContain('Tomorrow talk')
   })
+
+  it('tells an organizer what they see and links to the editor', () => {
+    const html = renderToStaticMarkup(
+      <SpeakerBriefingPanel briefing={{}} asOrganizer />,
+    )
+    expect(html).toContain('You see this as an organizer.')
+    expect(html).toContain('href="/admin/speakers/info"')
+    expect(
+      renderToStaticMarkup(<SpeakerBriefingPanel briefing={{}} />),
+    ).not.toContain('as an organizer')
+  })
 })
