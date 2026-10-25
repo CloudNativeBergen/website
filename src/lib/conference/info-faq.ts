@@ -382,7 +382,7 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         {
           question: 'What do I need to do before the conference?',
           answer:
-            'Confirm your talk and register your free speaker ticket. Confirm the talk on the <u><a href="/cfp/list">speaker dashboard</a></u>. To register the ticket, use the link in the ticket email we sent you.',
+            'Confirm your talk on the <u><a href="/cfp/list">speaker dashboard</a></u> and register your free speaker ticket with the link in the email we sent you.',
         },
         // Also place-specific (the old copy named a Bergen mountain and linked a
         // Bergen cable car), and not every conference holds one at all — so the
@@ -403,7 +403,7 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         {
           question: 'Do I need to bring my own laptop?',
           answer:
-            'Yes, please bring your own laptop. We provide a projector and a screen. If you need anything else, tell us before the conference.',
+            'Yes, please bring your own laptop. We provide a projector and a screen. If you need anything else, such as an adapter or accessibility support, tell us before the conference.',
         },
         // Local sightseeing advice cannot be generated — the old copy asserted
         // fjords, mountains and Bryggen for whatever city was configured, and
