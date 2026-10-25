@@ -114,14 +114,42 @@ describe('speaker briefing procedures', () => {
     expect(b.render).toHaveBeenCalledWith(CONFERENCE, SPEAKER)
   })
 
-  it('sends the test to the signed-in organizer, not a speaker', async () => {
+  it('sends the test to the signed-in organizer, as the chosen speaker', async () => {
     await caller().sendBriefingTest()
-    expect(b.sendTest).toHaveBeenCalledWith(
+    expect(b.sendTest).toHaveBeenLastCalledWith(
+      CONFERENCE,
+      'org@a.example.com',
+      expect.objectContaining({ name: 'Sample Speaker' }),
+    )
+    await caller().sendBriefingTest({ speakerId: 'sp-1' })
+    expect(b.sendTest).toHaveBeenLastCalledWith(
       CONFERENCE,
       'org@a.example.com',
       SPEAKER,
     )
+    await expect(
+      caller().sendBriefingTest({ speakerId: 'sp-other-conf' }),
+    ).rejects.toThrow(/Not a confirmed speaker/)
     expect(b.send).not.toHaveBeenCalled()
+  })
+
+  it('reads the conference uncached', async () => {
+    await caller().sendBriefing()
+    expect(getConferenceMock).toHaveBeenCalledWith({ uncached: true })
+  })
+
+  it('passes mentionChannel into the Slack payload', async () => {
+    b.token.mockResolvedValue('xoxb-tenant')
+    await caller().postBriefingToSlack({ mentionChannel: true })
+    const [message] = b.post.mock.calls[0] as [
+      { blocks: { text?: { text: string } }[] },
+    ]
+    expect(message.blocks[0].text?.text).toMatch(/^<!channel> /)
+    await caller().postBriefingToSlack({ mentionChannel: false })
+    const [plain] = b.post.mock.calls[1] as [
+      { blocks: { text?: { text: string } }[] },
+    ]
+    expect(plain.blocks[0].text?.text).not.toContain('<!channel>')
   })
 
   it('posts to Slack with the tenant token, and says to invite the bot', async () => {

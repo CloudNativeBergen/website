@@ -108,7 +108,10 @@ import {
 
 /** The current domain's conference, for the speaker briefing procedures. */
 async function briefingConference() {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  // Uncached: a send right after a save must see the saved info.
+  const { conference, error } = await getConferenceForCurrentDomain({
+    uncached: true,
+  })
   if (error || !conference?._id) {
     throw new TRPCError({
       code: 'NOT_FOUND',
@@ -120,6 +123,27 @@ async function briefingConference() {
 
 /** A sample speaker for previews and tests when nobody is confirmed yet. */
 const SAMPLE_BRIEFING_SPEAKER = { name: 'Sample Speaker', proposals: [] }
+
+/**
+ * The "Preview as" choice: a confirmed speaker of THIS conference, or the
+ * sample speaker when none is chosen.
+ */
+async function pickBriefingSpeaker(
+  conference: Awaited<ReturnType<typeof briefingConference>>,
+  speakerId?: string,
+) {
+  if (!speakerId) return SAMPLE_BRIEFING_SPEAKER
+  const speaker = (await loadBriefingSpeakers(conference)).find(
+    (s) => s._id === speakerId,
+  )
+  if (!speaker) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Not a confirmed speaker of this conference',
+    })
+  }
+  return speaker
+}
 
 const BRIEFING_SLACK_LOG_KEY = 'speaker-briefing-slack'
 const briefingSlackLogId = (conferenceId: string) =>
@@ -639,52 +663,33 @@ export const conferenceRouter = router({
     .input(z.object({ speakerId: z.string().optional() }))
     .query(async ({ input }) => {
       const conference = await briefingConference()
-      const speaker = input.speakerId
-        ? (await loadBriefingSpeakers(conference)).find(
-            (s) => s._id === input.speakerId,
-          )
-        : SAMPLE_BRIEFING_SPEAKER
-      if (!speaker) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Not a confirmed speaker of this conference',
-        })
-      }
+      const speaker = await pickBriefingSpeaker(conference, input.speakerId)
       return { html: await renderSpeakerBriefing(conference, speaker) }
     }),
 
-  sendBriefingTest: adminProcedure.mutation(async ({ ctx }) => {
-    const conference = await briefingConference()
-    const to = ctx.speaker.email
-    if (!to) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Your account has no email address',
-      })
-    }
-    const [first] = await loadBriefingSpeakers(conference)
-    await sendSpeakerBriefingTest(
-      conference,
-      to,
-      first ?? SAMPLE_BRIEFING_SPEAKER,
-    )
-    return { to }
-  }),
+  sendBriefingTest: adminProcedure
+    .input(z.object({ speakerId: z.string().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const conference = await briefingConference()
+      const to = ctx.speaker.email
+      if (!to) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Your account has no email address',
+        })
+      }
+      await sendSpeakerBriefingTest(
+        conference,
+        to,
+        await pickBriefingSpeaker(conference, input?.speakerId),
+      )
+      return { to }
+    }),
 
   sendBriefing: adminProcedure.mutation(async () => {
     const conference = await briefingConference()
     const speakers = await loadBriefingSpeakers(conference)
     return sendSpeakerBriefings(conference, speakers)
-  }),
-
-  briefingSendHistory: adminProcedure.query(async () => {
-    const conference = await briefingConference()
-    const speakers = await loadBriefingSpeakers(conference)
-    return getBriefingSendHistory(
-      conference._id,
-      speakers.map((s) => s._id),
-      briefingVersion(conference),
-    )
   }),
 
   previewBriefingSlack: adminProcedure
