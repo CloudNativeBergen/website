@@ -433,4 +433,47 @@ describe('wall-photo runner integration', () => {
       unlinkSync(imagePath)
     }
   })
+  it('stops before any photo call when calibration reports no input tokens', async () => {
+    const schema = await import('./schema')
+    const originalLoadData = schema.loadData
+    const clean = {
+      abusive: false,
+      sexual: false,
+      spam: false,
+      personal_info: false,
+    }
+    vi.spyOn(schema, 'loadData').mockImplementation((surface) =>
+      surface === 'wall-photo'
+        ? [
+            schema.wallPhotoSchema.parse({
+              id: 'wp-001',
+              image: { kind: 'generated', generator: 'unused-in-this-test' },
+              labels: { photo: clean },
+              tags: ['benign', 'no_caption'],
+            }),
+          ]
+        : originalLoadData(surface),
+    )
+    vi.stubEnv('OPENROUTER_API_KEY', 'test-key')
+    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+      const { questions } = JSON.parse(String(options?.body))
+      return Response.json({
+        model: 'test',
+        usage: { cost: 0.01 },
+        answers: Object.fromEntries(
+          Object.keys(questions).map((key) => [key, { type: 'noul', noul: 0 }]),
+        ),
+      })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const directory = mkdtempSync(join(tmpdir(), 'jev-photo-test-'))
+    directories.push(directory)
+    await expect(
+      main(['--surface', 'wall-photo', '--repeats', '1', '--out', directory]),
+    ).rejects.toThrow()
+    // Only the text-only calibration call went out; no photo was sent.
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
 })

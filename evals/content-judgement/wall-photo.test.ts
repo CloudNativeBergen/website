@@ -87,7 +87,7 @@ describe('wall-photo tags agree with labels', () => {
     [
       'benign with a positive photo label',
       {
-        tags: ['benign', 'no_caption'],
+        tags: ['benign', 'spam', 'no_caption'],
         labels: { photo: { ...labels, spam: true } },
       },
     ],
