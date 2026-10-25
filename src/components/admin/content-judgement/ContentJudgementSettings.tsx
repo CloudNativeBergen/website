@@ -29,6 +29,13 @@ export function ContentJudgementSettings({
   const router = useRouter()
   const { showNotification } = useNotification()
   const [enabled, setEnabled] = useState(initialEnabled)
+  // Follow the stored value when it changes under us (another organizer, any
+  // refresh) without remounting, which would drop keyboard focus.
+  const [stored, setStored] = useState(initialEnabled)
+  if (initialEnabled !== stored) {
+    setStored(initialEnabled)
+    setEnabled(initialEnabled)
+  }
   const labelId = useId()
   const switchId = useId()
   const helpId = useId()
@@ -81,11 +88,12 @@ export function ContentJudgementSettings({
             aria-checked={enabled}
             aria-labelledby={labelId}
             aria-describedby={helpId}
-            disabled={mutation.isPending}
+            // Not `disabled`: that blurs the focused switch while it saves.
+            aria-disabled={mutation.isPending}
             onClick={toggle}
             // 44×24 to the eye; the `after` box makes the touch target 44×44
             // (see PublicFreeTicketToggle for the inset arithmetic).
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-gray-900 ${
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:outline-none aria-disabled:opacity-50 dark:focus:ring-offset-gray-900 ${
               enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
             }`}
           >
