@@ -5,7 +5,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceVisibility } from '@/lib/conference/visibility'
 import { buildSystemChecks } from '@/lib/system-status/checks'
 import { formatTeamSummary } from '@/lib/teams'
-import { stripHtml } from '@/lib/tickets/public'
+import { stripHtml } from '@/lib/html/text'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import {
   SystemStatusSection,

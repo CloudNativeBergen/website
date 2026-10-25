@@ -5,6 +5,7 @@ import {
   type ConferenceTicketingBinding,
 } from './provider'
 import { cacheLife, cacheTag } from 'next/cache'
+import { stripHtml } from '@/lib/html/text'
 
 // Public ticket-type shapes now live with the provider contract (they are
 // Checkin-shaped — see docs/INTEGRATION_ADAPTERS.md). Re-exported here so
@@ -507,6 +508,6 @@ export function extractComplimentaryTickets(
     })
 }
 
-export function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').trim()
-}
+// Lives in a dependency-free module so pages can use it without pulling in
+// this file's `next/cache` import. Re-exported for existing importers.
+export { stripHtml }

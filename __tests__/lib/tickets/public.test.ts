@@ -666,8 +666,21 @@ describe('stripHtml', () => {
     expect(stripHtml('')).toBe('')
   })
 
-  it('should handle self-closing tags', () => {
-    expect(stripHtml('Line 1<br/>Line 2')).toBe('Line 1Line 2')
+  it('turns <br> and block closers into line breaks', () => {
+    expect(stripHtml('Line 1<br/>Line 2')).toBe('Line 1\nLine 2')
+    expect(stripHtml('<p>One</p><p>Two</p>')).toBe('One\nTwo')
+  })
+
+  it('decodes entities after stripping, so encoded tags stay text', () => {
+    expect(stripHtml('Fish &amp; chips &#8211; &lt;b&gt;')).toBe(
+      'Fish & chips \u2013 <b>',
+    )
+  })
+
+  it('strips the anchor markup stored in conference descriptions', () => {
+    expect(
+      stripHtml('in <u><a href="https://en.visitbergen.com">Bergen</a></u>.'),
+    ).toBe('in Bergen.')
   })
 
   it('should handle nested tags', () => {

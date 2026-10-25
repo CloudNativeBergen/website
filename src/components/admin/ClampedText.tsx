@@ -26,7 +26,7 @@ export function ClampedText({ text }: { text: string }) {
   }, [expanded, text])
 
   return (
-    <div>
+    <div className="text-left">
       <p
         id={id}
         ref={ref}
