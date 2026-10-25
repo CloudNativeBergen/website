@@ -115,7 +115,7 @@ export function StreamWallRotation({
 
   const track = roomTrackOn(schedules, roomTrackTitle, now ?? new Date(0))
   const trackSponsor = track ? trackSponsorOf(track, sponsors) : null
-  const showWall = turn?.view === 'wall' && wallOpen
+  const showWall = turn?.view === 'wall'
 
   return (
     <>
