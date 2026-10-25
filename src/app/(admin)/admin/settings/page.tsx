@@ -260,6 +260,7 @@ export default async function AdminSettings() {
             icon={InformationCircleIcon}
           >
             <InfoCard
+              id="basic-information"
               title="Basic Information"
               icon={InformationCircleIcon}
               editUrl={editUrl}
@@ -340,7 +341,7 @@ export default async function AdminSettings() {
             >
               <div
                 id="visibility"
-                className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
+                className="flex scroll-mt-44 flex-wrap items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
               >
                 <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
                   Status
@@ -405,6 +406,7 @@ export default async function AdminSettings() {
           {/* ---- Schedule ---- */}
           <SettingsGroupSection group={GROUP['schedule']} icon={CalendarIcon}>
             <InfoCard
+              id="dates-timeline"
               title="Dates & Timeline"
               icon={CalendarIcon}
               editUrl={editUrl}
@@ -497,6 +499,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="announcement"
               title="Announcement"
               icon={DocumentTextIcon}
               editUrl={editUrl}
@@ -525,6 +528,7 @@ export default async function AdminSettings() {
             icon={DocumentTextIcon}
           >
             <InfoCard
+              id="cfp-goals"
               title="CFP & Revenue Goals"
               icon={CurrencyDollarIcon}
               editUrl={editUrl}
@@ -570,6 +574,7 @@ export default async function AdminSettings() {
             icon={TagIcon}
           >
             <InfoCard
+              id="registration"
               title="Registration"
               icon={DocumentTextIcon}
               editUrl={editUrl}
@@ -615,6 +620,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="ticketing"
               title="Ticketing"
               icon={LinkIcon}
               editUrl={editUrl}
@@ -661,6 +667,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="local-information"
               title="Local Information"
               icon={MapPinIcon}
               editUrl={editUrl}
@@ -707,6 +714,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="analytics"
               title="Analytics"
               icon={ChartBarIcon}
               editUrl={editUrl}
@@ -743,6 +751,7 @@ export default async function AdminSettings() {
             icon={UserGroupIcon}
           >
             <InfoCard
+              id="organizers-teams"
               title="Organizers & Teams"
               icon={UserGroupIcon}
               editUrl={editUrl}
@@ -797,6 +806,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="communication"
               title="Communication"
               icon={EnvelopeIcon}
               editUrl={editUrl}
@@ -851,6 +861,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="domains-social-links"
               title="Domains & Social Links"
               icon={GlobeAltIcon}
               editUrl={editUrl}
@@ -881,7 +892,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard title="Domain Verification" icon={ShieldCheckIcon}>
-              <div id="domain-verification" className="scroll-mt-24">
+              <div id="domain-verification" className="scroll-mt-44">
                 <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
                   Claiming a domain is not the same as owning it. Publish the
                   DNS TXT record below to prove control. We re-check it every
@@ -893,6 +904,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="topics-formats"
               title="Topics & Formats"
               icon={TagIcon}
               action={

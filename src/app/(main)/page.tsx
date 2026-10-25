@@ -74,7 +74,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
   cacheLife('hours')
   cacheTag('content:homepage')
 
-  const { conference, error } = await getConferenceForDomain(domain, {
+  const { conference, error, status } = await getConferenceForDomain(domain, {
     organizers: true,
     sponsors: true,
     sponsorTiers: true,
@@ -92,7 +92,8 @@ async function CachedHomeContent({ domain }: { domain: string }) {
   }
 
   if (isUnknownHost({ conference, error })) {
-    if (error) console.error('Error fetching conference data:', error)
+    if (status === 'unavailable')
+      console.error('Error fetching conference data:', error)
     return <div>Error loading conference data</div>
   }
 

@@ -6,6 +6,7 @@ import { GitHubIcon, LinkedInIcon } from '@/components/SocialIcons'
 import { AuthError } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { requestEmailSignInLinkAction } from './actions'
+import { FullPageActionForm } from './FullPageActionForm'
 
 const SIGNIN_ERROR_URL = '/error'
 
@@ -99,7 +100,7 @@ export default async function Signin(props: {
                 <span className="h-px flex-1 bg-brand-frosted-steel dark:bg-gray-700" />
               </div>
 
-              <form
+              <FullPageActionForm
                 action={requestEmailSignInLinkAction}
                 className="mt-6 flex flex-col gap-3 sm:flex-row"
               >
@@ -126,7 +127,7 @@ export default async function Signin(props: {
                 >
                   Email me a link
                 </button>
-              </form>
+              </FullPageActionForm>
               <p className="mt-3 text-sm text-brand-slate-gray dark:text-gray-400">
                 We will send you a one-time sign-in link. No password to
                 remember.

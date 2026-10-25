@@ -34,6 +34,7 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleIconSolid } from '@heroicons/react/24/solid'
+import { speakerPath } from '@/lib/speaker/path'
 
 interface WorkshopCardProps {
   workshop: ProposalWithWorkshopData
@@ -351,8 +352,8 @@ export default function WorkshopCard({
               <div className="mb-3">
                 {workshop.speakers.length === 1 ? (
                   <div className="flex items-center gap-3">
-                    <Link
-                      href={`/speaker/${workshop.speakers[0].slug}`}
+                    <SpeakerLink
+                      slug={workshop.speakers[0].slug}
                       className="shrink-0"
                     >
                       {workshop.speakers[0]?.image ? (
@@ -366,14 +367,14 @@ export default function WorkshopCard({
                           <UserIcon className="h-5 w-5 text-blue-500 dark:text-blue-400" />
                         </div>
                       )}
-                    </Link>
+                    </SpeakerLink>
                     <div>
-                      <Link
-                        href={`/speaker/${workshop.speakers[0].slug}`}
+                      <SpeakerLink
+                        slug={workshop.speakers[0].slug}
                         className="text-sm font-medium text-brand-cloud-blue hover:underline dark:text-blue-400"
                       >
                         {workshop.speakers[0].name}
-                      </Link>
+                      </SpeakerLink>
                       {workshop.speakers[0].title && (
                         <p className="text-xs text-gray-600 dark:text-gray-400">
                           {workshop.speakers[0].title}
@@ -386,9 +387,9 @@ export default function WorkshopCard({
                     <div className="flex items-center gap-2">
                       <div className="flex -space-x-2">
                         {workshop.speakers.slice(0, 3).map((speaker, index) => (
-                          <Link
+                          <SpeakerLink
                             key={speaker._id || index}
-                            href={`/speaker/${speaker.slug}`}
+                            slug={speaker.slug}
                             className="relative hover:z-10"
                           >
                             {speaker.image ? (
@@ -402,7 +403,7 @@ export default function WorkshopCard({
                                 <UserIcon className="h-4 w-4 text-blue-500 dark:text-blue-400" />
                               </div>
                             )}
-                          </Link>
+                          </SpeakerLink>
                         ))}
                         {workshop.speakers.length > 3 && (
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600 ring-2 ring-white dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-800">
@@ -414,12 +415,12 @@ export default function WorkshopCard({
                         <div className="text-sm font-medium text-brand-cloud-blue dark:text-blue-400">
                           {workshop.speakers.map((s, idx) => (
                             <span key={s._id || idx}>
-                              <Link
-                                href={`/speaker/${s.slug}`}
+                              <SpeakerLink
+                                slug={s.slug}
                                 className="hover:underline"
                               >
                                 {s.name}
-                              </Link>
+                              </SpeakerLink>
                               {idx < workshop.speakers.length - 1 && ', '}
                             </span>
                           ))}
@@ -657,5 +658,25 @@ export default function WorkshopCard({
         </div>
       </div>
     </>
+  )
+}
+
+/** A link to the speaker's profile, or a plain span when there is no slug. */
+function SpeakerLink({
+  slug,
+  className,
+  children,
+}: {
+  slug?: string | null
+  className?: string
+  children: React.ReactNode
+}) {
+  const href = speakerPath(slug)
+  return href ? (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  ) : (
+    <span className={className}>{children}</span>
   )
 }

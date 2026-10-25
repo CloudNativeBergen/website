@@ -1179,16 +1179,10 @@ export async function getPublicSpeaker(
     err = error as Error
   }
 
+  // An unknown slug (or one with no confirmed talk here) is not an error: it
+  // is a 404, and crawlers request plenty of them. `err` is a failed read only.
   if (!data || Object.keys(data).length === 0) {
-    return {
-      speaker: null,
-      talks: [],
-      err:
-        err ||
-        new Error(
-          'Speaker not found or has no confirmed talks for this conference',
-        ),
-    }
+    return { speaker: null, talks: [], err }
   }
 
   const talks =

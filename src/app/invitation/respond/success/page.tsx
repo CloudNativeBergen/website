@@ -74,7 +74,7 @@ export default async function InvitationSuccessPage({
               <div className="mt-8 space-y-3">
                 {isAccepted && (
                   <Link
-                    href="/speaker-dashboard"
+                    href="/cfp/list"
                     className="bg-cloud-blue hover:bg-cloud-blue-dark focus:ring-cloud-blue block w-full rounded-md px-4 py-2 text-white focus:ring-2 focus:ring-offset-2 focus:outline-none"
                   >
                     Go to Speaker Dashboard

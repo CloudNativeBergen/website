@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { PresentationChartBarIcon } from '@heroicons/react/24/outline'
 import {
@@ -258,6 +260,29 @@ describe('searchDestinations', () => {
 
     const checkin = searchDestinations('checkin').flatMap((g) => g.items)
     expect(checkin.map((d) => d.id)).toContain('settings-tickets-registration')
+  })
+
+  it('finds individual settings cards and links to their anchor', () => {
+    const flat = searchDestinations('posthog').flatMap((g) => g.items)
+    const card = flat.find((d) => d.id === 'settings-analytics')
+    expect(card?.href).toBe('/admin/settings#analytics')
+  })
+
+  it('only links to settings anchors the settings page actually renders', () => {
+    const page = readFileSync(
+      join(process.cwd(), 'src/app/(admin)/admin/settings/page.tsx'),
+      'utf8',
+    )
+    const groupOrTier = new Set(
+      [...SETTINGS_GROUPS, ...SETTINGS_TIERS].map((x) => x.id),
+    )
+    const cardIds = ADMIN_DESTINATIONS.map(
+      (d) => d.href.match(/^\/admin\/settings#([a-z0-9-]+)$/)?.[1],
+    ).filter((id): id is string => !!id && !groupOrTier.has(id))
+    expect(cardIds.length).toBeGreaterThan(10)
+    for (const id of cardIds) {
+      expect(page, `#${id} missing on the page`).toContain(`id="${id}"`)
+    }
   })
 
   it('matches subsequences for fuzzy queries', () => {

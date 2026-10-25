@@ -197,6 +197,45 @@ function guardMessage<T extends { from?: string; replyTo?: string | string[] }>(
   return { message, decision: policy.decision }
 }
 
+/** Extra attempts after a Resend 429, on top of the caller's own retries. */
+const RATE_LIMIT_RETRIES = 2
+
+/** Resend's `retry-after` header (seconds) as a wait, 1 s when absent, at most 10 s. */
+function retryAfterMs(headers: unknown): number {
+  const raw = (headers as Record<string, string> | null | undefined)?.[
+    'retry-after'
+  ]
+  const seconds = Number(raw)
+  return Number.isFinite(seconds) && seconds > 0
+    ? Math.min(seconds, 10) * 1000
+    : 1000
+}
+
+/**
+ * Resend answers a burst over 10 requests/s with a `rate_limit_exceeded`
+ * RESULT (not a throw). Wait as long as it asks and try again, so one fan-out
+ * hitting the shared limit does not log or fail a send that would go through
+ * a second later.
+ */
+async function withRateLimitRetry<
+  R extends { error?: unknown; headers?: unknown } | null | undefined,
+>(call: () => Promise<R>): Promise<R> {
+  let result = await call()
+  for (
+    let attempt = 0;
+    attempt < RATE_LIMIT_RETRIES &&
+    (result?.error as { name?: string } | null | undefined)?.name ===
+      'rate_limit_exceeded';
+    attempt++
+  ) {
+    await new Promise((resolve) =>
+      setTimeout(resolve, retryAfterMs(result?.headers)),
+    )
+    result = await call()
+  }
+  return result
+}
+
 /**
  * Wrap a Resend client's send methods with header sanitisation, the sender
  * policy and failure logging. Mutates and returns the client so that every
@@ -230,7 +269,7 @@ export function instrumentResendClient(
 
       let result: CreateEmailResponse
       try {
-        result = await original(message, options)
+        result = await withRateLimitRetry(() => original(message, options))
       } catch (error) {
         logEmailSendFailure(failureContext, error)
         throw error
@@ -243,9 +282,13 @@ export function instrumentResendClient(
   // `create` is Resend's alias for `send`; both are guarded so neither is a way
   // around the policy. `create` is probed rather than assumed so a test double
   // (or an SDK that drops the alias) cannot turn instrumentation into a crash.
-  emails.send = guard(emails.send.bind(emails))
+  // The SDK's `send` calls `this.create`, so guarding both would log (and
+  // retry) every failure twice. Guard `create` and point `send` at it.
   if (typeof emails.create === 'function') {
     emails.create = guard(emails.create.bind(emails))
+    emails.send = (payload, options) => emails.create(payload, options)
+  } else {
+    emails.send = guard(emails.send.bind(emails))
   }
 
   // BATCH is a third send API: one call, an ARRAY of messages, each with its own
@@ -274,7 +317,7 @@ export function instrumentResendClient(
         }
         let result: { error?: unknown }
         try {
-          result = await bound(messages, options)
+          result = await withRateLimitRetry(() => bound(messages, options))
         } catch (error) {
           logEmailSendFailure(failureContext, error)
           throw error
@@ -282,6 +325,10 @@ export function instrumentResendClient(
         if (result?.error) logEmailSendFailure(failureContext, result.error)
         return result
       }) as typeof batch.send as typeof original
+    }
+    // As for `emails`: the SDK's `send` calls `this.create`, already guarded.
+    if (typeof batch.create === 'function') {
+      batch.send = (payload, options) => batch.create(payload, options)
     }
   }
 

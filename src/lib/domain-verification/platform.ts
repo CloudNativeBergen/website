@@ -442,3 +442,18 @@ export function isPlatformAllocated(
     isPlatformZoneHost(record.hostname, env)
   )
 }
+
+/**
+ * The platform apex that a conventional alias of it (`www.` / `m.`) should
+ * redirect to, or `null` when `host` is not such an alias. Only consulted for
+ * hosts that resolved to no conference, so a tenant claim always wins.
+ */
+export function platformAliasTarget(
+  host: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const suffix = platformDomainSuffix(env)
+  if (suffix === null) return null
+  const h = normalizeDomain(host)
+  return h === `www.${suffix}` || h === `m.${suffix}` ? suffix : null
+}

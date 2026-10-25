@@ -5,6 +5,7 @@ import {
   SpeakerCard,
   type SpeakerCardVariant,
 } from '@/components/admin/marketing/studio-cards'
+import { speakerPath } from '@/lib/speaker/path'
 
 const qrCodeCache = new Map<string, string>()
 
@@ -85,7 +86,7 @@ export async function SpeakerShare({
   showCloudNativePattern = false,
   format,
 }: SpeakerShareProps) {
-  const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug}`
+  const finalCtaUrl = ctaUrl || speakerPath(speaker.slug) || '/speaker'
   const qrCodeUrl = await generateQRCode(finalCtaUrl, 512, baseDomain)
   // Only what the card shows crosses to the client: never the speaker's
   // email or the full proposals behind their talks.

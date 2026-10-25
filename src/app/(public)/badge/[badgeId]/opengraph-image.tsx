@@ -182,7 +182,6 @@ export default async function Image({
           fontSize: '16px',
           fontWeight: '600',
           opacity: 0.8,
-          zIndex: 2,
           textShadow: STYLES.shadow.textSmall,
           display: 'flex',
           whiteSpace: 'nowrap',
@@ -207,7 +206,6 @@ export default async function Image({
           color: brand.textOnLight,
           fontSize: '14px',
           fontWeight: '600',
-          zIndex: 2,
         }}
       >
         <img src={SHIELD_ICON_SVG} alt="" width={20} height={20} />
@@ -224,7 +222,6 @@ export default async function Image({
           gap: '60px',
           flex: 1,
           position: 'relative',
-          zIndex: 1,
         }}
       >
         {/* Badge SVG on left */}
@@ -341,7 +338,6 @@ export default async function Image({
           textAlign: 'center',
           fontFamily: STYLES.fontFamily,
           textShadow: STYLES.shadow.textSmall,
-          zIndex: 2,
         }}
       >
         Cryptographically verified digital credential compliant with W3C

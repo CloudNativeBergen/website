@@ -58,7 +58,7 @@ export function PlanFeaturesCard({ plan, features }: PlanFeaturesCardProps) {
     <InfoCard title="Plan & Features" icon={SparklesIcon}>
       <div
         id="plan-features"
-        className="flex scroll-mt-24 items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700"
+        className="flex scroll-mt-44 items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700"
       >
         {/* Plain span/div, not dt/dd (same fix as the shared FieldRow): dt/dd
             without an enclosing dl is invalid HTML. FieldRow itself is not

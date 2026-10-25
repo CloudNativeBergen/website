@@ -6,6 +6,7 @@ import {
   type SettingsGroup,
 } from '@/lib/settings/groups'
 import { PencilSquareIcon, ArrowUpRightIcon } from '@heroicons/react/24/outline'
+import { CollapsibleGroup } from './CollapsibleGroup'
 
 /**
  * Presentational primitives for the admin Settings page. Extracted from the
@@ -38,9 +39,16 @@ export function InfoCard({
   editUrl,
   manageLink,
   action,
+  id,
 }: {
   title: string
   children: ReactNode
+  /**
+   * Deep-link anchor (`/admin/settings#<id>`). Card ids are listed in the ⌘K
+   * registry (SETTINGS_CARD_ANCHORS in `@/lib/admin/registry`); keep the two
+   * in step.
+   */
+  id?: string
   icon: ComponentType<{ className?: string }>
   editUrl?: string | null
   /**
@@ -57,7 +65,10 @@ export function InfoCard({
   action?: ReactNode
 }) {
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
+    <div
+      id={id}
+      className="scroll-mt-44 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
+    >
       {/* flex-wrap + min-w-0: a card with several actions (Organizers & Teams
           has three) drops them to a second line on a phone instead of
           squeezing the title or pushing past the viewport. */}
@@ -123,9 +134,13 @@ export function StudioEditLink({ editUrl }: { editUrl?: string | null }) {
 
 export function SectionNav() {
   return (
-    <nav className="sticky top-0 z-10 -mx-2 mb-2 space-y-2 border-b border-gray-200 bg-gray-50/90 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4 dark:border-gray-700 dark:bg-gray-900/90">
-      {/* Tier anchors — the three top-level sections. */}
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+    // Sticks BELOW the admin header (z-40, 72px tall on mobile, h-16 from lg)
+    // rather than sliding under it, so the chips stay in reach while
+    // scrolling. Anchors use scroll-mt-44 to clear header + nav.
+    <nav className="sticky top-18 z-10 -mx-2 mb-2 space-y-2 border-b border-gray-200 bg-gray-50/90 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4 lg:top-16 dark:border-gray-700 dark:bg-gray-900/90">
+      {/* Tier anchors — the three top-level sections. One scrollable line,
+          like the chips, so the sticky bar stays short on a phone. */}
+      <ul className="-mx-1 flex gap-x-4 overflow-x-auto px-1 text-sm whitespace-nowrap">
         {SETTINGS_TIER_ANCHORS.map((item) => (
           <li key={item.href}>
             <a
@@ -171,7 +186,7 @@ export function SectionHeading({
 }) {
   const Heading = level === 3 ? 'h3' : 'h2'
   return (
-    <div id={id} className="scroll-mt-24">
+    <div id={id} className="scroll-mt-44">
       <div className="flex items-center gap-2">
         <Icon
           className={
@@ -198,13 +213,14 @@ export function SectionHeading({
 }
 
 /**
- * A tier-1 subsection: a group heading (h3) followed by its own card grid. The
- * `id` is the additive jump-nav anchor; per-card deep-link anchors live inside
- * the cards and are preserved independently.
+ * A tier-1 subsection: a collapsible group header (h3) followed by its own card
+ * grid. The `id` is the additive jump-nav anchor; per-card deep-link anchors
+ * live inside the cards and are preserved independently (a hash pointing at
+ * one opens the group).
  */
 export function SettingsGroupSection({
   group,
-  icon,
+  icon: Icon,
   children,
 }: {
   group: SettingsGroup
@@ -212,15 +228,13 @@ export function SettingsGroupSection({
   children: ReactNode
 }) {
   return (
-    <div className="space-y-4">
-      <SectionHeading
-        id={group.id}
-        icon={icon}
-        title={group.title}
-        description={group.description}
-        level={3}
-      />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">{children}</div>
-    </div>
+    <CollapsibleGroup
+      id={group.id}
+      title={group.title}
+      description={group.description}
+      icon={<Icon />}
+    >
+      {children}
+    </CollapsibleGroup>
   )
 }
