@@ -583,17 +583,17 @@ TypeSafe questions 2 and 6 from `docs/research/jev-data-terms.md` (branch
 
 Every slice is filed under [Content judgement: implementation](https://github.com/CloudNativeBergen/website/issues/1580), with the dependencies above as native blocking edges.
 
-| Slice                                | Issue                                                             |
-| ------------------------------------ | ----------------------------------------------------------------- |
-| J1 setting, client and record        | [#1581](https://github.com/CloudNativeBergen/website/issues/1581) |
-| J2 orphan sweep                      | [#1583](https://github.com/CloudNativeBergen/website/issues/1583) |
-| J3 comments judged, triage strip     | [#1584](https://github.com/CloudNativeBergen/website/issues/1584) |
-| J4 Wall Posts judged, covered photos | [#1585](https://github.com/CloudNativeBergen/website/issues/1585) |
-| J5 Message Category judged           | [#1586](https://github.com/CloudNativeBergen/website/issues/1586) |
-| J6 inbox chip, filter and sort       | [#1587](https://github.com/CloudNativeBergen/website/issues/1587) |
-| J7 enforcement                       | [#1588](https://github.com/CloudNativeBergen/website/issues/1588) |
-| H1 held-out text set (human)         | [#1589](https://github.com/CloudNativeBergen/website/issues/1589) |
-| H2 private image set (human)         | [#1590](https://github.com/CloudNativeBergen/website/issues/1590) |
+| Slice                                             | Issue                                                             |
+| ------------------------------------------------- | ----------------------------------------------------------------- |
+| J1 setting, client and record                     | [#1581](https://github.com/CloudNativeBergen/website/issues/1581) |
+| J2 orphan sweep                                   | [#1583](https://github.com/CloudNativeBergen/website/issues/1583) |
+| J3 comments judged, triage strip                  | [#1584](https://github.com/CloudNativeBergen/website/issues/1584) |
+| J4 Wall Posts judged, covered photos              | [#1585](https://github.com/CloudNativeBergen/website/issues/1585) |
+| J5 Message Category judged                        | [#1586](https://github.com/CloudNativeBergen/website/issues/1586) |
+| J6 inbox chip, filter and sort                    | [#1587](https://github.com/CloudNativeBergen/website/issues/1587) |
+| J7 enforcement                                    | [#1588](https://github.com/CloudNativeBergen/website/issues/1588) |
+| H1 held-out text set (human)                      | [#1589](https://github.com/CloudNativeBergen/website/issues/1589) |
+| H2 private image set, all photo questions (human) | [#1590](https://github.com/CloudNativeBergen/website/issues/1590) |
 
 ## 15. Verification
 
