@@ -46,8 +46,11 @@ const GROUP: Record<string, SettingsGroup> = Object.fromEntries(
   SETTINGS_GROUPS.map((g) => [g.id, g]),
 )
 
-/** Stored as raw HTML in some datasets — the long-token case for mobile QA. */
-const DESCRIPTION =
+/**
+ * Raw, unstripped HTML as some datasets store it: the long unbreakable-token
+ * case for mobile overflow QA. The page itself strips tags before rendering.
+ */
+const RAW_HTML_DESCRIPTION =
   'Cloud Native Bergen is a community conference in <u><a href="https://en.visitbergen.com/visit-bergen/things-to-do">Bergen</a></u>, Norway. Two days of talks and workshops about Kubernetes, platform engineering and observability.'
 
 const EDIT_URL =
@@ -104,7 +107,10 @@ function SettingsIADemo() {
               <FieldRow label="City" value="Bergen" />
               <FieldRow label="Country" value="Norway" />
               <FieldRow label="Tagline" value="Cloud on your terms" />
-              <FieldRow label="Description" value={DESCRIPTION} />
+              <FieldRow
+                label="Description (raw HTML)"
+                value={RAW_HTML_DESCRIPTION}
+              />
             </InfoCard>
 
             {/* Summary + way in to the Appearance section; the editors live
