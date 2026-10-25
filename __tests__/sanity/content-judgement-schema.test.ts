@@ -1,0 +1,89 @@
+/**
+ * The Judgement record (Content judgement spec §7.1) never holds the judged
+ * text or photo, only a hash, and never blocks deleting its content. A new
+ * field here is a privacy decision (it lands on /privacy and in
+ * PRIVACY_OPERATIONS.md), so the field list is pinned.
+ */
+import { describe, expect, it } from 'vitest'
+import contentJudgement from '../../sanity/schemaTypes/contentJudgement'
+import organization from '../../sanity/schemaTypes/organization'
+
+type Field = {
+  name: string
+  type: string
+  weak?: boolean
+  fields?: Field[]
+  of?: Field[]
+}
+const fields = contentJudgement.fields as unknown as Field[]
+const field = (name: string) => fields.find((f) => f.name === name)!
+
+/** Every field name at any depth. */
+function allNames(list: Field[]): string[] {
+  return list.flatMap((f) => [
+    f.name,
+    ...allNames(f.fields ?? []),
+    ...allNames(f.of ?? []),
+  ])
+}
+
+describe('contentJudgement holds no judged content', () => {
+  it('has exactly the spec fields', () => {
+    expect(fields.map((f) => f.name)).toEqual([
+      'conference',
+      'surface',
+      'content',
+      'parts',
+      'model',
+      'questionSet',
+      'contentHash',
+      'inputTokens',
+      'judgedAt',
+    ])
+  })
+
+  it('has no field, at any depth, that could carry text or an image', () => {
+    const names = allNames(fields)
+    for (const banned of [
+      'text',
+      'caption',
+      'comment',
+      'message',
+      'photo',
+      'image',
+      'subject',
+      'body',
+    ])
+      expect(names).not.toContain(banned)
+    const types = (list: Field[]): string[] =>
+      list.flatMap((f) => [
+        f.type,
+        ...types(f.fields ?? []),
+        ...types(f.of ?? []),
+      ])
+    expect(types(fields)).not.toContain('image')
+    expect(types(fields)).not.toContain('text')
+  })
+
+  it('references its content weakly', () => {
+    expect(field('content').type).toBe('reference')
+    expect(field('content').weak).toBe(true)
+  })
+})
+
+describe('organization.contentJudgement', () => {
+  const setting = (organization.fields as unknown as Field[]).find(
+    (f) => f.name === 'contentJudgement',
+  )!
+  it('records who changed it with a weak reference', () => {
+    const changedBy = setting.fields!.find((f) => f.name === 'changedBy')!
+    expect(changedBy.weak).toBe(true)
+    expect(setting.fields!.map((f) => f.name)).toEqual([
+      'enabled',
+      'enforceFeedbackComments',
+      'enforceWallPosts',
+      'changedAt',
+      'changedBy',
+    ])
+  })
+})
