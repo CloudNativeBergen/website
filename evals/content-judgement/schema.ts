@@ -1,5 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
+import {
+  categories,
+  moderationKeys,
+  type Category,
+  type ModerationKey,
+} from '../../src/lib/content-judgement/questions'
+
+export { categories, moderationKeys, type Category, type ModerationKey }
 
 export const surfaces = [
   'wall-caption',
@@ -8,21 +16,6 @@ export const surfaces = [
   'wall-photo',
 ] as const
 export const languages = ['nb', 'nn', 'en', 'mixed'] as const
-export const categories = [
-  'talk_details',
-  'proposal_status',
-  'account_and_site',
-  'schedule',
-  'travel_and_visa',
-  'tickets',
-  'other',
-] as const
-export const moderationKeys = [
-  'abusive',
-  'sexual',
-  'spam',
-  'personal_info',
-] as const
 const moderationTags = [
   'benign',
   'abusive',
@@ -41,8 +34,6 @@ export type ModerationSurface = Exclude<
   'conversation-opening' | 'wall-photo'
 >
 export type Language = (typeof languages)[number]
-export type Category = (typeof categories)[number]
-export type ModerationKey = (typeof moderationKeys)[number]
 
 const uniqueTags = (tags: string[]) => new Set(tags).size === tags.length
 const labelsSchema = z.strictObject({

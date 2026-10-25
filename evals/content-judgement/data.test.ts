@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildRequest, QUESTION_SET_VERSION } from './questions'
+import { buildRequest, SURFACE_QUESTION_SET } from './questions'
 import { imageTemplates } from './images/templates'
 import { categories, loadData, moderationKeys } from './schema'
 
@@ -62,7 +62,12 @@ describe('public labelled eval data', () => {
   })
 
   it('builds versioned requests with state content and no reference labels', () => {
-    expect(QUESTION_SET_VERSION).toBe('v4')
+    expect(SURFACE_QUESTION_SET).toEqual({
+      'wall-caption': 'v4',
+      'wall-photo': 'v4',
+      'feedback-comment': 'v2',
+      'conversation-opening': 'v2',
+    })
     for (const surface of ['wall-caption', 'feedback-comment'] as const) {
       const item = loadData(surface)[0]
       const request = buildRequest(surface, item)

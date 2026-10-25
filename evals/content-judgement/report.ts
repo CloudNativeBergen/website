@@ -6,7 +6,7 @@ import {
   photoAdviceMetrics,
   stability,
 } from './metrics'
-import { QUESTION_SET_VERSION } from './questions'
+import { SURFACE_QUESTION_SET } from './questions'
 import {
   categories,
   languages,
@@ -460,7 +460,7 @@ export function buildReport(
   return (
     [
       '# Jev offline evaluation',
-      `Question set: ${QUESTION_SET_VERSION}. Requested model: ${JSON.stringify(model)}. Repeats: ${repeats}. Created: ${new Date().toISOString()}.`,
+      `Question sets: ${runs.map((run) => `${run.surface} ${SURFACE_QUESTION_SET[run.surface]}`).join(', ') || 'none'}. Requested model: ${JSON.stringify(model)}. Repeats: ${repeats}. Created: ${new Date().toISOString()}.`,
       `Calls: ${calls.length}; successful: ${calls.length - failed.length}; failed: ${failed.length}. Known returned cost: $${calls.reduce((total, result) => total + (result.cost ?? 0), 0).toFixed(6)}. Cost missing for ${calls.filter((result) => result.cost === null).length} calls; failed/retried requests may incur additional unreported charges.`,
       `End-to-end request latency (includes retries/backoff and failed calls): p50 ${percentile(
         calls.map((result) => result.latencyMs),

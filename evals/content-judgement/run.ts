@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { prepareImage } from './images/prepare'
+import { IMAGE_GUARD } from '../../src/lib/content-judgement/questions'
 import { buildRequest, DEFAULT_MODEL } from './questions'
 import { buildReport, type SurfaceRun } from './report'
 import { loadData, surfaces, type Surface } from './schema'
@@ -13,7 +14,7 @@ import {
 } from './transport'
 
 // Probe on 2026-10-25: 2,762 input tokens with image vs 378 without.
-export const IMAGE_TOKEN_MARGIN = 500
+export const IMAGE_TOKEN_MARGIN = IMAGE_GUARD.margin
 
 export interface Options {
   surface: Surface | 'all'
