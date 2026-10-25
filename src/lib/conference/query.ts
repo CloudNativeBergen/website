@@ -175,8 +175,6 @@ const EXPANDED_SCHEDULES = `schedules[]-> {
         "hasTalkRef": defined(talk),
         talk->{
           _id,
-          title,
-          description,
           format,
           level,
           status,
@@ -191,12 +189,19 @@ const EXPANDED_SCHEDULES = `schedules[]-> {
             slug,
             description
           },
-          speakers[]->{
-          _id,
-          name,
-          "slug": slug.current,
-          title,
-          "image": coalesce(image.asset->url, imageURL)
+          // A canceled or withdrawn talk keeps its slot on the public
+          // programme, but its title, description and speakers never ship:
+          // a speaker who withdrew is not named.
+          !(status in ["canceled", "withdrawn"]) => {
+            title,
+            description,
+            speakers[]->{
+            _id,
+            name,
+            "slug": slug.current,
+            title,
+            "image": coalesce(image.asset->url, imageURL)
+            }
           }
         }
         }

@@ -18,6 +18,7 @@ import {
   AnnounceModal,
 } from '@/components/admin/workshop'
 import { isCanceledWorkshop } from '@/lib/workshop/listed'
+import { NotifyCanceledModal } from './NotifyCanceledModal'
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
 import { SponsorEarlyAccessCard } from './SponsorEarlyAccessCard'
@@ -125,6 +126,13 @@ function WorkshopsClientPageFor({
     WorkshopRef & { currentCapacity: number; currentSignups: number }
   >()
   const announceDialog = useDialog<WorkshopRef & { confirmedCount: number }>()
+  const notifyDialog = useDialog<
+    WorkshopRef & { confirmedCount: number; waitlistCount: number }
+  >()
+  // A notice sent from this view, until the server render is read again.
+  const [noticeSentHere, setNoticeSentHere] = useState<Record<string, string>>(
+    {},
+  )
   const [deleteAnnouncementTarget, setDeleteAnnouncementTarget] =
     useState<WorkshopAnnouncementView | null>(null)
 
@@ -352,6 +360,25 @@ function WorkshopsClientPageFor({
       onError: notifyFailure('Could not delete announcement'),
     })
 
+  const notifyCanceledMutation = api.workshop.admin.notifyCanceled.useMutation({
+    onSuccess: (result, { workshopId }) => {
+      if (result.sentAt) {
+        const sentAt = result.sentAt
+        setNoticeSentHere((sent) => ({ ...sent, [workshopId]: sentAt }))
+      }
+      notifyDialog.close()
+      showNotification({
+        type: result.failed > 0 ? 'warning' : 'success',
+        title: 'Participants notified',
+        message:
+          result.failed > 0
+            ? `${result.sent} sent, ${result.failed} failed of ${result.recipientCount}.`
+            : `Emailed ${result.sent} participant${result.sent === 1 ? '' : 's'}.`,
+      })
+    },
+    onError: notifyFailure('Could not notify participants'),
+  })
+
   const handleAddParticipant = (participant: ParticipantFormData) => {
     manualSignupMutation.mutate({
       userName: participant.userName,
@@ -504,7 +531,13 @@ function WorkshopsClientPageFor({
                   <WorkshopCard
                     key={workshop._id}
                     titleLevel={titleLevel}
-                    workshop={{ ...workshop, capacity }}
+                    workshop={{
+                      ...workshop,
+                      capacity,
+                      workshopCancelNoticeSentAt:
+                        noticeSentHere[workshop._id] ??
+                        workshop.workshopCancelNoticeSentAt,
+                    }}
                     confirmedCount={confirmedCount}
                     waitlistCount={waitlistCount}
                     onViewConfirmed={() =>
@@ -531,6 +564,13 @@ function WorkshopsClientPageFor({
                     }
                     onAnnounce={() =>
                       announceDialog.open({ ...workshopRef, confirmedCount })
+                    }
+                    onNotifyCanceled={() =>
+                      notifyDialog.open({
+                        ...workshopRef,
+                        confirmedCount,
+                        waitlistCount,
+                      })
                     }
                   />
                 )
@@ -656,6 +696,29 @@ function WorkshopsClientPageFor({
           setDeleteAnnouncementTarget(announcement)
         }
         isEditingAnnouncement={updateAnnouncementMutation.isPending}
+      />
+
+      <NotifyCanceledModal
+        isOpen={notifyDialog.isOpen}
+        onClose={notifyDialog.close}
+        workshopTitle={notifyDialog.about?.workshopTitle ?? ''}
+        confirmedCount={notifyDialog.about?.confirmedCount ?? 0}
+        waitlistCount={notifyDialog.about?.waitlistCount ?? 0}
+        lastSentAt={
+          notifyDialog.about
+            ? (noticeSentHere[notifyDialog.about.workshopId] ??
+              initialWorkshops.find(
+                (w) => w._id === notifyDialog.about?.workshopId,
+              )?.workshopCancelNoticeSentAt)
+            : null
+        }
+        onSubmit={(message) =>
+          notifyCanceledMutation.mutate({
+            workshopId: notifyDialog.about?.workshopId ?? '',
+            message,
+          })
+        }
+        isSubmitting={notifyCanceledMutation.isPending}
       />
 
       <ConfirmationModal

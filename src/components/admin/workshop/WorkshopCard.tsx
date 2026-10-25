@@ -6,6 +6,7 @@ import {
   PencilIcon,
   MegaphoneIcon,
   ExclamationTriangleIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline'
 import { getWorkshopDuration } from '@/lib/workshop/utils'
 import { isCanceledWorkshop } from '@/lib/workshop/listed'
@@ -13,6 +14,7 @@ import { calculateWorkshopStats, getCapacityColorClass } from './utils'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { StatusBadge } from '@/components/StatusBadge'
+import { formatDateTimeSafe } from '@/lib/time'
 
 interface WorkshopCardProps {
   workshop: ProposalWithWorkshopData
@@ -23,6 +25,8 @@ interface WorkshopCardProps {
   onAddParticipant: () => void
   onEditCapacity: () => void
   onAnnounce: () => void
+  /** A canceled workshop's "Notify participants". */
+  onNotifyCanceled?: () => void
   /** One below the heading the card sits under. */
   titleLevel?: 3 | 4
 }
@@ -36,6 +40,7 @@ export function WorkshopCard({
   onAddParticipant,
   onEditCapacity,
   onAnnounce,
+  onNotifyCanceled,
   titleLevel = 3,
 }: WorkshopCardProps) {
   const Title = `h${titleLevel}` as const
@@ -124,7 +129,25 @@ export function WorkshopCard({
         </div>
       </div>
 
-      {!canceled && (
+      {canceled ? (
+        <div className="flex flex-col gap-2 border-t border-gray-200 p-3 dark:border-gray-700">
+          {workshop.workshopCancelNoticeSentAt && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Participants notified{' '}
+              {formatDateTimeSafe(workshop.workshopCancelNoticeSentAt)}
+            </p>
+          )}
+          <AdminButton
+            variant="secondary"
+            onClick={onNotifyCanceled}
+            className="w-full"
+            disabled={confirmedCount + waitlistCount === 0}
+          >
+            <EnvelopeIcon className="h-4 w-4" />
+            Notify participants
+          </AdminButton>
+        </div>
+      ) : (
         <div className="flex flex-col gap-2 border-t border-gray-200 p-3 dark:border-gray-700">
           <div className="flex gap-2">
             <AdminButton

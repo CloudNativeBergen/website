@@ -877,6 +877,8 @@ export interface EditConferenceCardProps {
    * the server settings page from the resolved request domain.
    */
   currentDomain?: string
+  /** Fields of the fieldset to leave out of the form; they are not saved. */
+  hiddenFields?: string[]
 }
 
 /**
@@ -890,9 +892,12 @@ export function EditConferenceCard({
   initialValues,
   defaultOpen = false,
   currentDomain,
+  hiddenFields,
 }: EditConferenceCardProps) {
   const def = FIELDSET_DEFS[fieldset]
-  const { fields } = def
+  const fields = hiddenFields
+    ? def.fields.filter((f) => !hiddenFields.includes(f.name))
+    : def.fields
   const router = useRouter()
   const utils = api.useUtils()
   const { showNotification } = useNotification()

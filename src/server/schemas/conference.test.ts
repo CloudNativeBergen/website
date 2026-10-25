@@ -3,6 +3,7 @@ import {
   UpdateDatesSchema,
   UpdateHomepageSectionsSchema,
   UpdatePublicFreeTicketsSchema,
+  UpdateSpeakerInfoSchema,
   UpdateTicketingIdsSchema,
 } from './conference'
 import {
@@ -237,5 +238,19 @@ describe('UpdateDatesSchema — calendar validation and Milestone fields (#1010)
         recordingsLiveDate: '2028-02-29',
       }).success,
     ).toBe(true)
+  })
+})
+
+describe('UpdateSpeakerInfoSchema — map links (#1592)', () => {
+  it('accepts http(s) and rejects other schemes', () => {
+    const parse = (mapUrl: string) =>
+      UpdateSpeakerInfoSchema.safeParse({ dinner: { mapUrl } }).success
+    expect(parse('https://maps.example.com/x')).toBe(true)
+    expect(parse('javascript:alert(1)')).toBe(false)
+    expect(
+      UpdateSpeakerInfoSchema.safeParse({
+        dinner: { routes: [{ meetingPointMapUrl: 'ftp://example.com' }] },
+      }).success,
+    ).toBe(false)
   })
 })

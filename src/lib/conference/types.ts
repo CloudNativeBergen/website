@@ -171,6 +171,12 @@ export interface Conference {
   speakerDinnerInfo?: string
   localRecommendations?: string
   /**
+   * Structured speaker briefing (#1592), edited at `/admin/speakers/info`.
+   * Projected by the main conference projection's `...` spread. ABSENT/blank
+   * sections are omitted; `speakerDinnerInfo` is the fallback for `dinner`.
+   */
+  speakerInfo?: SpeakerInfo
+  /**
    * Event hashtag for the live social wall (`/stream`). ABSENT means no hashtag
    * search is performed at all — the wall never falls back to another event's
    * tag.
@@ -328,4 +334,34 @@ export interface Conference {
   lifecycleLinkLabel?: string
   /** Destination for the notice link. Same safe-link rules as hero CTAs. */
   lifecycleLinkHref?: string
+}
+
+export interface SpeakerInfoRoute {
+  _key?: string
+  label?: string
+  meetingPoint?: string
+  meetingPointMapUrl?: string
+  departsAt?: string
+  /** Free-text departure when it is not a clock time. */
+  departsNote?: string
+  details?: TypedObject[]
+}
+
+export interface SpeakerInfo {
+  dinner?: {
+    startsAt?: string
+    venueName?: string
+    address?: string
+    mapUrl?: string
+    /** Display text only; the RSVP is collected on the speaker ticket. */
+    rsvpNote?: string
+    description?: TypedObject[]
+    routes?: SpeakerInfoRoute[]
+  }
+  checkIn?: TypedObject[]
+  equipment?: TypedObject[]
+  onsiteContact?: { name?: string; phone?: string; email?: string }
+  accommodation?: TypedObject[]
+  extra?: TypedObject[]
+  updatedAt?: string
 }

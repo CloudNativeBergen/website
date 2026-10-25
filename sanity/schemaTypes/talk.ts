@@ -202,6 +202,17 @@ export default defineType({
             return true
           }),
     }),
+    // Written by "Notify participants" on /admin/workshops when a canceled
+    // workshop's sign-ups were told. Never edited by hand.
+    defineField({
+      name: 'workshopCancelNoticeSentAt',
+      title: 'Cancellation Notice Sent',
+      type: 'datetime',
+      readOnly: true,
+      hidden: ({ document }) => !document?.workshopCancelNoticeSentAt,
+      description:
+        'When the participants of this canceled workshop were last emailed about it. Set from the workshops admin page.',
+    }),
     defineField({
       name: 'prerequisites',
       title: 'Prerequisites',

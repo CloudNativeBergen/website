@@ -573,6 +573,59 @@ const PortableTextBlockSchema = z
   .object({ _type: z.string().min(1) })
   .catchall(z.unknown())
 
+/**
+ * Speaker briefing (#1592) — a full replace of `speakerInfo`. The form omits
+ * blank fields so an absent section stays absent; `updatedAt` is set
+ * server-side and never accepted from the client.
+ */
+// `optionalText` is the sponsorship one above: trimmed, `null`-able.
+// Not `safeLinkHref`: that also admits site paths (`/tickets`), and a map link
+// opened from an email or another site must be an absolute http(s) URL.
+const optionalHttpUrl = z
+  .string()
+  .trim()
+  .url()
+  .refine((u) => /^https?:\/\//i.test(u), 'Must be an http(s) URL')
+  .optional()
+const optionalBlocks = z.array(PortableTextBlockSchema).optional()
+
+export const UpdateSpeakerInfoSchema = z.object({
+  dinner: z
+    .object({
+      startsAt: z.string().datetime({ offset: true }).optional(),
+      venueName: optionalText,
+      address: optionalText,
+      mapUrl: optionalHttpUrl,
+      rsvpNote: optionalText,
+      description: optionalBlocks,
+      routes: z
+        .array(
+          z.object({
+            _key: z.string().optional(),
+            label: optionalText,
+            meetingPoint: optionalText,
+            meetingPointMapUrl: optionalHttpUrl,
+            departsNote: optionalText,
+            departsAt: z.string().datetime({ offset: true }).optional(),
+            details: optionalBlocks,
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
+  checkIn: optionalBlocks,
+  equipment: optionalBlocks,
+  onsiteContact: z
+    .object({
+      name: optionalText,
+      phone: optionalText,
+      email: z.string().trim().email().optional(),
+    })
+    .optional(),
+  accommodation: optionalBlocks,
+  extra: optionalBlocks,
+})
+
 export const UpdateAnnouncementSchema = z.object({
   announcement: z.array(PortableTextBlockSchema).nullable(),
 })
