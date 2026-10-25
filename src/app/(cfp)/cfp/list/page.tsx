@@ -231,7 +231,13 @@ export default async function SpeakerDashboard() {
       const briefing = showBriefing
         ? getSpeakerBriefing(
             { ...conference, ...briefingFields },
-            { proposals },
+            {
+              proposals,
+              speakerId,
+              // ponytail: no `ticketState` — the redeemed set is one ~10 s
+              // full-event provider fetch, memoized only 30 s per instance.
+              travelSupport: travelSupport ?? undefined,
+            },
           )
         : undefined
       // Pin the dinner from the start of its day until it begins; without a
