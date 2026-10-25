@@ -41,7 +41,7 @@ export function ActivationChecklist({
   const pct = required === 0 ? 100 : Math.round((done / required) * 100)
 
   return (
-    <div id={ACTIVATION_CHECKLIST_ANCHOR} className="scroll-mt-24">
+    <div id={ACTIVATION_CHECKLIST_ANCHOR} className="scroll-mt-44">
       <CollapsibleSection
         headingLevel={3}
         title="Get started"
