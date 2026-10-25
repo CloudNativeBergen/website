@@ -47,6 +47,7 @@ import {
   SectionHeading,
   SettingsGroupSection,
 } from './settingsLayout'
+import { SettingsFilter, FilterableCard } from './SettingsFilter'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -251,7 +252,7 @@ export default async function AdminSettings() {
             configuration cards and deep-links into them. */}
         <ActivationChecklist checklist={activation} />
 
-        <div className="space-y-10">
+        <SettingsFilter>
           {/* ---- Identity & Brand ---- */}
           <SettingsGroupSection
             group={GROUP['identity-brand']}
@@ -374,31 +375,38 @@ export default async function AdminSettings() {
             ) : null}
 
             {/* Set-once — collapsed by default. */}
-            <CollapsibleSection
-              headingLevel={4}
+            {/* Labels listed: the collapsed body is not rendered, so the
+                card cannot read them from the DOM. */}
+            <FilterableCard
               title="Venue Information"
-              icon={<MapPinIcon />}
-              action={
-                <>
-                  <StudioEditLink editUrl={editUrl} />
-                  <EditConferenceCard
-                    fieldset="venue"
-                    initialValues={{
-                      venueName: conference.venueName,
-                      venueAddress: conference.venueAddress,
-                    }}
-                  />
-                </>
-              }
+              labels={['Venue Name', 'Venue Address']}
             >
-              <div className="space-y-3 px-6 py-4">
-                <FieldRow label="Venue Name" value={conference.venueName} />
-                <FieldRow
-                  label="Venue Address"
-                  value={conference.venueAddress}
-                />
-              </div>
-            </CollapsibleSection>
+              <CollapsibleSection
+                headingLevel={4}
+                title="Venue Information"
+                icon={<MapPinIcon />}
+                action={
+                  <>
+                    <StudioEditLink editUrl={editUrl} />
+                    <EditConferenceCard
+                      fieldset="venue"
+                      initialValues={{
+                        venueName: conference.venueName,
+                        venueAddress: conference.venueAddress,
+                      }}
+                    />
+                  </>
+                }
+              >
+                <div className="space-y-3 px-6 py-4">
+                  <FieldRow label="Venue Name" value={conference.venueName} />
+                  <FieldRow
+                    label="Venue Address"
+                    value={conference.venueAddress}
+                  />
+                </div>
+              </CollapsibleSection>
+            </FilterableCard>
           </SettingsGroupSection>
 
           {/* ---- Schedule ---- */}
@@ -930,7 +938,7 @@ export default async function AdminSettings() {
               />
             </InfoCard>
           </SettingsGroupSection>
-        </div>
+        </SettingsFilter>
       </section>
 
       {/* ---- Tools ---- */}

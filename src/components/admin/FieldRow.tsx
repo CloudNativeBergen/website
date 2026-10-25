@@ -233,7 +233,10 @@ export function FieldRow({
     <div className="flex flex-col gap-1 border-b border-gray-200 py-2 last:border-b-0 sm:flex-row sm:justify-between sm:gap-3 dark:border-gray-700">
       {/* Plain span/div, not dt/dd: rows render inside arbitrary containers,
           and dt/dd without an enclosing dl is invalid HTML. */}
-      <span className="text-sm font-medium text-gray-500 sm:shrink-0 dark:text-gray-400">
+      <span
+        data-field-label=""
+        className="text-sm font-medium text-gray-500 sm:shrink-0 dark:text-gray-400"
+      >
         {label}
       </span>
       {/* min-w-0 lets the value column actually shrink inside the flex row —

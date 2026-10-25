@@ -7,6 +7,7 @@ import {
 } from '@/lib/settings/groups'
 import { PencilSquareIcon, ArrowUpRightIcon } from '@heroicons/react/24/outline'
 import { CollapsibleGroup } from './CollapsibleGroup'
+import { FilterableCard } from './SettingsFilter'
 
 /**
  * Presentational primitives for the admin Settings page. Extracted from the
@@ -65,33 +66,35 @@ export function InfoCard({
   action?: ReactNode
 }) {
   return (
-    <div
-      id={id}
-      className="scroll-mt-44 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
-    >
-      {/* flex-wrap + min-w-0: a card with several actions (Organizers & Teams
+    <FilterableCard title={title}>
+      <div
+        id={id}
+        className="scroll-mt-44 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
+      >
+        {/* flex-wrap + min-w-0: a card with several actions (Organizers & Teams
           has three) drops them to a second line on a phone instead of
           squeezing the title or pushing past the viewport. */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center">
-          <Icon className="mr-2 h-5 w-5 shrink-0 text-gray-400 dark:text-gray-500" />
-          <h3 className="min-w-0 text-lg font-medium break-words text-gray-900 dark:text-white">
-            {title}
-          </h3>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {/* One or the other, per the contract above: an in-app manage
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center">
+            <Icon className="mr-2 h-5 w-5 shrink-0 text-gray-400 dark:text-gray-500" />
+            <h3 className="min-w-0 text-lg font-medium break-words text-gray-900 dark:text-white">
+              {title}
+            </h3>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {/* One or the other, per the contract above: an in-app manage
               link supersedes the Studio deep-link. */}
-          {manageLink ? (
-            <ManageLink {...manageLink} />
-          ) : (
-            <StudioEditLink editUrl={editUrl} />
-          )}
-          {action}
+            {manageLink ? (
+              <ManageLink {...manageLink} />
+            ) : (
+              <StudioEditLink editUrl={editUrl} />
+            )}
+            {action}
+          </div>
         </div>
+        <div className="space-y-3">{children}</div>
       </div>
-      <div className="space-y-3">{children}</div>
-    </div>
+    </FilterableCard>
   )
 }
 
