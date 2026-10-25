@@ -54,10 +54,10 @@ describe('offline runner integration', () => {
           model: 'test-returned-model',
           usage: { cost: 0.01 },
           answers: {
-            abusive: { noul: 0.1 },
-            sexual: { noul: 0 },
-            spam: { noul: 0 },
-            personal_info: { noul: 0 },
+            abusive: { type: 'noul', noul: 0.1 },
+            sexual: { type: 'noul', noul: 0 },
+            spam: { type: 'noul', noul: 0 },
+            personal_info: { type: 'noul', noul: 0 },
           },
         }),
       )
@@ -123,6 +123,7 @@ describe('offline runner integration', () => {
         'message' in body.state
           ? {
               category: {
+                type: 'choice',
                 choice: 'talk_details',
                 confidence: 0.9,
                 probabilities: {
@@ -137,10 +138,10 @@ describe('offline runner integration', () => {
               },
             }
           : {
-              abusive: { noul: 0 },
-              sexual: { noul: 0 },
-              spam: { noul: 0 },
-              personal_info: { noul: 0 },
+              abusive: { type: 'noul', noul: 0 },
+              sexual: { type: 'noul', noul: 0 },
+              spam: { type: 'noul', noul: 0 },
+              personal_info: { type: 'noul', noul: 0 },
             }
       return Response.json({
         model: 'synthetic-model',

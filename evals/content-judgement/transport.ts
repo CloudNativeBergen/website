@@ -3,9 +3,12 @@ import { categories, type Surface } from './schema'
 import { type DecisionRequest } from './questions'
 
 const probability = z.number().finite().min(0).max(1)
-export const noulAnswerSchema = z.object({ noul: probability }).strict()
+export const noulAnswerSchema = z
+  .object({ type: z.literal('noul'), noul: probability })
+  .strict()
 const choiceAnswerSchema = z
   .object({
+    type: z.literal('choice'),
     choice: z.enum(categories),
     probabilities: z.record(z.enum(categories), probability),
     confidence: probability,

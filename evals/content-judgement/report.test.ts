@@ -25,9 +25,9 @@ describe('report aggregation', () => {
       cost: 0.01,
       answers: {
         abusive: { noul },
-        sexual: { noul: 0 },
-        spam: { noul: 0 },
-        personal_info: { noul: 0 },
+        sexual: { type: 'noul', noul: 0 },
+        spam: { type: 'noul', noul: 0 },
+        personal_info: { type: 'noul', noul: 0 },
       },
     }))
     const report = buildReport(

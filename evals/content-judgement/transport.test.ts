@@ -7,15 +7,33 @@ const request = () => buildRequest('wall-caption', loadData('wall-caption')[0])
 const valid = () => ({
   model: 'typesafe/jev-1.14',
   answers: {
-    abusive: { noul: 0.8 },
-    sexual: { noul: 0 },
-    spam: { noul: 0.1 },
-    personal_info: { noul: 1 },
+    abusive: { type: 'noul', noul: 0.8 },
+    sexual: { type: 'noul', noul: 0 },
+    spam: { type: 'noul', noul: 0.1 },
+    personal_info: { type: 'noul', noul: 1 },
   },
   usage: { cost: 0.002, input_tokens: 100 },
 })
 
 describe('decision transport', () => {
+  it('accepts the live OpenRouter shape (recorded 2026-10-25, jev-1.14-20261014)', () => {
+    const live = {
+      model: 'typesafe/jev-1.14-20261014',
+      answers: {
+        abusive: { type: 'noul', noul: 0.02 },
+        sexual: { type: 'noul', noul: 0.01 },
+        spam: { type: 'noul', noul: 0.11 },
+        personal_info: { type: 'noul', noul: 0.03 },
+      },
+      usage: { input_tokens: 352, output_tokens: 49, cost: 0.000014784 },
+      id: 'gen-dec-1792886607-s6jeMm9HKuViocIqwqIr',
+      provider: 'TypeSafe',
+    }
+    expect(parseResponse('wall-caption', live).model).toBe(
+      'typesafe/jev-1.14-20261014',
+    )
+  })
+
   it('sends the decision body and retries transient statuses at most four times', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -76,7 +94,10 @@ describe('decision transport', () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response('{'))
       .mockResolvedValueOnce(
-        Response.json({ ...valid(), answers: { abusive: { noul: 2 } } }),
+        Response.json({
+          ...valid(),
+          answers: { abusive: { type: 'noul', noul: 2 } },
+        }),
       )
     await expect(
       requestDecision('wall-caption', request(), 'test-key', fetcher),
@@ -90,7 +111,7 @@ describe('decision transport', () => {
     expect(() =>
       parseResponse('wall-caption', {
         ...valid(),
-        answers: { ...valid().answers, spam: { noul: -0.1 } },
+        answers: { ...valid().answers, spam: { type: 'noul', noul: -0.1 } },
       }),
     ).toThrow()
     const probabilities = {
@@ -106,7 +127,12 @@ describe('decision transport', () => {
       model: 'test',
       usage: {},
       answers: {
-        category: { choice: 'talk_details', confidence: 0.4, probabilities },
+        category: {
+          type: 'choice',
+          choice: 'talk_details',
+          confidence: 0.4,
+          probabilities,
+        },
       },
     }
     expect(parseResponse('conversation-opening', conversation)).toEqual(
