@@ -33,6 +33,37 @@ function talkReferenceId(talk: {
   return talk.talk?._id ?? talk.talk?._ref
 }
 
+/**
+ * Statuses a talk may have in an official (public) schedule. Canceled and
+ * withdrawn talks keep their slot so the public program can show them as
+ * canceled instead of the slot silently vanishing.
+ */
+const PUBLISHABLE_TALK_STATUSES: ReadonlySet<string> = new Set([
+  ProposalStatus.accepted,
+  ProposalStatus.confirmed,
+  ProposalStatus.canceled,
+  ProposalStatus.withdrawn,
+])
+
+/** Strict Block: refuse to publish a day holding a talk that is not publishable. */
+function assertPublishable(
+  tracks: ConferenceSchedule['tracks'] | undefined,
+  statuses: Record<string, string>,
+): void {
+  for (const track of tracks || []) {
+    for (const talk of track.talks || []) {
+      if (talk.placeholder) continue
+      const ref = talkReferenceId(talk)
+      if (ref && !PUBLISHABLE_TALK_STATUSES.has(statuses[ref])) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Strict Block: Cannot publish schedule. Talk ${ref} is not accepted, confirmed, canceled or withdrawn (status: ${statuses[ref]}).`,
+        })
+      }
+    }
+  }
+}
+
 export const scheduleRouter = router({
   save: adminProcedure
     .input(SaveScheduleSchema)
@@ -87,28 +118,8 @@ export const scheduleRouter = router({
         }
       }
 
-      // STRICT BLOCK:
-      // If publishing an official schedule, every scheduled talk must be approved.
       if (payload.status === ScheduleStatus.Official) {
-        const statuses = await getTalkStatuses(conference._id)
-        for (const track of payload.tracks || []) {
-          for (const talk of track.talks || []) {
-            if (talk.placeholder) continue
-            const ref = talkReferenceId(talk)
-            if (ref) {
-              const status = statuses[ref]
-              if (
-                status !== ProposalStatus.accepted &&
-                status !== ProposalStatus.confirmed
-              ) {
-                throw new TRPCError({
-                  code: 'BAD_REQUEST',
-                  message: `Strict Block: Cannot publish schedule. Talk ${ref} is not accepted/confirmed (status: ${status}).`,
-                })
-              }
-            }
-          }
-        }
+        assertPublishable(payload.tracks, await getTalkStatuses(conference._id))
       }
 
       const validTalkIds = await getValidTalkIds(conference._id)
@@ -618,26 +629,10 @@ export const scheduleRouter = router({
           })
         }
 
-        // Strict Block for promote!
-        const statuses = await getTalkStatuses(conference._id)
-        for (const track of targetSchedule.tracks || []) {
-          for (const talk of track.talks || []) {
-            if (talk.placeholder) continue
-            const ref = talkReferenceId(talk)
-            if (ref) {
-              const status = statuses[ref]
-              if (
-                status !== ProposalStatus.accepted &&
-                status !== ProposalStatus.confirmed
-              ) {
-                throw new TRPCError({
-                  code: 'BAD_REQUEST',
-                  message: `Strict Block: Cannot publish schedule. Talk ${ref} is not accepted/confirmed (status: ${status}).`,
-                })
-              }
-            }
-          }
-        }
+        assertPublishable(
+          targetSchedule.tracks,
+          await getTalkStatuses(conference._id),
+        )
 
         const date = targetSchedule.date
 

@@ -187,6 +187,33 @@ describe('schedule router — draft and publish guards', () => {
     )
     expect(saveScheduleMock).not.toHaveBeenCalled()
   })
+
+  it.each(['canceled', 'withdrawn', 'accepted', 'confirmed'])(
+    'publishes an official schedule holding a %s talk',
+    async (status) => {
+      getTalkStatusesMock.mockResolvedValueOnce({ 'talk-1': status })
+      getValidTalkIdsMock.mockResolvedValueOnce(new Set(['talk-1']))
+
+      await makeCaller().save({
+        ...validPayload,
+        status: ScheduleStatus.Official,
+        tracks: [
+          {
+            trackTitle: 'T1',
+            talks: [
+              {
+                startTime: '10:00',
+                endTime: '10:30',
+                talk: { _ref: 'talk-1' },
+              },
+            ],
+          },
+        ],
+      })
+
+      expect(saveScheduleMock).toHaveBeenCalled()
+    },
+  )
 })
 
 describe('schedule router — the Feedback Code index (speaker feedback §5.1)', () => {

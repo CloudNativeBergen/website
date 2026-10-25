@@ -238,6 +238,18 @@ describe('schedule.action promote — the Feedback Code index (speaker feedback 
     )
   })
 
+  it.each([ProposalStatus.canceled, ProposalStatus.withdrawn])(
+    'publishes a draft holding a %s talk',
+    async (status) => {
+      wireFetch(null)
+      vi.mocked(getTalkStatuses).mockResolvedValue({ 'talk-a': status })
+
+      await expect(
+        createCaller().schedule.action({ id: 'draft-1', action: 'promote' }),
+      ).resolves.not.toThrow()
+    },
+  )
+
   it('expires nothing when the publish is refused', async () => {
     wireFetch(null)
     vi.mocked(getTalkStatuses).mockResolvedValue({

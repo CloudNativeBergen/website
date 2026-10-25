@@ -337,6 +337,43 @@ export const Default: Story = {
   },
 }
 
+/** Day 1 with one talk canceled and one withdrawn after the day was published. */
+const canceledSlotData: FilteredProgramData = {
+  ...twoTrackData,
+  schedules: twoTrackData.schedules.map((day) => ({
+    ...day,
+    tracks: day.tracks.map((track) => ({
+      ...track,
+      talks: track.talks.map((slot) =>
+        slot.talk?._id === 't2' || slot.talk?._id === 't4'
+          ? {
+              ...slot,
+              talk: {
+                ...slot.talk,
+                status:
+                  slot.talk._id === 't2' ? Status.canceled : Status.withdrawn,
+              },
+            }
+          : slot,
+      ),
+    })),
+  })),
+}
+
+export const CanceledSlot: Story = {
+  args: {
+    data: canceledSlotData,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A published day with a canceled and a withdrawn talk. Both keep their slot and read "Cancelled", without title, speakers or links.',
+      },
+    },
+  },
+}
+
 export const MultiDay: Story = {
   args: {
     data: multiDayData,
