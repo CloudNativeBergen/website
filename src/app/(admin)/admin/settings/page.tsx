@@ -258,6 +258,7 @@ export default async function AdminSettings() {
             icon={InformationCircleIcon}
           >
             <InfoCard
+              id="basic-information"
               title="Basic Information"
               icon={InformationCircleIcon}
               editUrl={editUrl}
@@ -403,6 +404,7 @@ export default async function AdminSettings() {
           {/* ---- Schedule ---- */}
           <SettingsGroupSection group={GROUP['schedule']} icon={CalendarIcon}>
             <InfoCard
+              id="dates-timeline"
               title="Dates & Timeline"
               icon={CalendarIcon}
               editUrl={editUrl}
@@ -495,6 +497,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="announcement"
               title="Announcement"
               icon={DocumentTextIcon}
               editUrl={editUrl}
@@ -523,6 +526,7 @@ export default async function AdminSettings() {
             icon={DocumentTextIcon}
           >
             <InfoCard
+              id="cfp-goals"
               title="CFP & Revenue Goals"
               icon={CurrencyDollarIcon}
               editUrl={editUrl}
@@ -568,6 +572,7 @@ export default async function AdminSettings() {
             icon={TagIcon}
           >
             <InfoCard
+              id="registration"
               title="Registration"
               icon={DocumentTextIcon}
               editUrl={editUrl}
@@ -613,6 +618,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="ticketing"
               title="Ticketing"
               icon={LinkIcon}
               editUrl={editUrl}
@@ -659,6 +665,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="local-information"
               title="Local Information"
               icon={MapPinIcon}
               editUrl={editUrl}
@@ -705,6 +712,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="analytics"
               title="Analytics"
               icon={ChartBarIcon}
               editUrl={editUrl}
@@ -741,6 +749,7 @@ export default async function AdminSettings() {
             icon={UserGroupIcon}
           >
             <InfoCard
+              id="organizers-teams"
               title="Organizers & Teams"
               icon={UserGroupIcon}
               editUrl={editUrl}
@@ -795,6 +804,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="communication"
               title="Communication"
               icon={EnvelopeIcon}
               editUrl={editUrl}
@@ -849,6 +859,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="domains-social-links"
               title="Domains & Social Links"
               icon={GlobeAltIcon}
               editUrl={editUrl}
@@ -891,6 +902,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="topics-formats"
               title="Topics & Formats"
               icon={TagIcon}
               action={
