@@ -1,5 +1,5 @@
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { prepareImage } from './images/prepare'
 import { IMAGE_GUARD } from '../../src/lib/content-judgement/questions'
@@ -38,6 +38,12 @@ export interface Options {
    */
   data?: string
 }
+/** Whether `target` is `root` or below it. Both must be real paths. */
+export function isWithin(root: string, target: string): boolean {
+  const path = relative(root, target)
+  return !(path === '..' || path.startsWith(`..${sep}`) || isAbsolute(path))
+}
+
 export function parseOptions(args: string[]): Options {
   let surface: Options['surface'] = 'all'
   let repeats = 3
@@ -89,9 +95,15 @@ export function parseOptions(args: string[]): Options {
       throw new Error(
         '--data needs --surface wall-caption, feedback-comment or conversation-opening',
       )
-    // A held-out set must never be committed, so it may not live in the repo.
-    const inside = relative(REPO_ROOT, data)
-    if (!inside.startsWith('..') && !isAbsolute(inside))
+    // A held-out set must never be committed, so it may not live in the repo,
+    // and neither may a symlink's target.
+    let real: string
+    try {
+      real = realpathSync(data)
+    } catch {
+      throw new Error('--data directory not found')
+    }
+    if (isWithin(realpathSync(REPO_ROOT), real))
       throw new Error('--data must be a directory outside this repository')
   }
   const modelDirectory = model.replace(/[^a-zA-Z0-9._-]/g, '-')

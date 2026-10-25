@@ -180,6 +180,18 @@ describe('the answer', () => {
     ['a missing answer', { ...commentAnswers, spam: undefined }],
     ['an answer nobody asked for', { ...commentAnswers, extra: noul(0) }],
     ['a probability out of range', { ...commentAnswers, spam: noul(1.5) }],
+    [
+      'a choice answer to a yes/no question',
+      {
+        ...commentAnswers,
+        spam: {
+          type: 'choice',
+          choice: 'other',
+          probabilities: { other: 1 },
+          confidence: 1,
+        },
+      },
+    ],
   ])('%s is not judged', async (_name, answers) => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const judge = await judgeWith(async () => ok(answers))
@@ -390,4 +402,18 @@ describe('the eval runner and production POST the same bytes', () => {
     expect(productionSide.bodies[0]).toBe(evalSide.bodies[0])
     expect(JSON.parse(productionSide.bodies[0]).provider).toEqual({ zdr: true })
   })
+})
+
+it('a yes/no answer to the category question is not judged', async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const judge = await judgeWith(async () => ok({ category: noul(0.9) }))
+  expect(
+    await judge.judge(
+      buildConversationRequest({
+        subject: 's',
+        message: 'm',
+        openedBy: 'speaker',
+      }),
+    ),
+  ).toEqual({ ok: false, why: 'failed' })
 })

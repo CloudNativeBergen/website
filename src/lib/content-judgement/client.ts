@@ -102,7 +102,10 @@ async function callJev(
     if (result.kind === 'answer') {
       // Zod issues can quote the response; only the category is logged.
       const parsed = responseSchema.safeParse(result.value)
-      if (!parsed.success || !sameKeys(parsed.data.answers, request.questions))
+      if (
+        !parsed.success ||
+        !answersMatch(parsed.data.answers, request.questions)
+      )
         return failed('invalid_response', attempt)
       return {
         ok: true,
@@ -182,10 +185,21 @@ async function attemptOnce(
   }
 }
 
-/** Every question answered, and nothing answered that wasn't asked. */
-function sameKeys(answers: object, questions: object): boolean {
-  const asked = Object.keys(questions).sort().join(',')
-  return Object.keys(answers).sort().join(',') === asked
+/**
+ * Every question answered with its own answer type (a `noul` answer to a
+ * `choice` question would read as `undefined` downstream), and nothing
+ * answered that wasn't asked.
+ */
+function answersMatch(
+  answers: Record<string, JevAnswer>,
+  questions: DecisionRequest['questions'],
+): boolean {
+  const asked: Record<string, { type: string }> = questions
+  const keys = Object.keys(asked)
+  return (
+    Object.keys(answers).length === keys.length &&
+    keys.every((key) => answers[key]?.type === asked[key].type)
+  )
 }
 
 function failed(category: string, attempt: number): JudgeOutcome {

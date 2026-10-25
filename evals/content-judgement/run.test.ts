@@ -1,6 +1,7 @@
 import {
   mkdtempSync,
   readdirSync,
+  symlinkSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -8,7 +9,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { main, parseOptions } from './run'
+import { isWithin, main, parseOptions } from './run'
 
 const savedExitCode = process.exitCode
 const directories: string[] = []
@@ -536,6 +537,38 @@ describe('a private held-out text set (--data)', () => {
     ).toThrow('outside this repository')
   })
 
+  it('refuses a symlink whose target is inside the repository', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'jev-held-out-link-'))
+    directories.push(directory)
+    const link = join(directory, 'set')
+    symlinkSync(join(process.cwd(), 'evals/content-judgement/data'), link)
+    expect(() =>
+      parseOptions(['--data', link, '--surface', 'feedback-comment']),
+    ).toThrow('outside this repository')
+  })
+
+  it('refuses a directory that does not exist', () => {
+    expect(() =>
+      parseOptions([
+        '--data',
+        join(tmpdir(), 'jev-no-such-directory-1581'),
+        '--surface',
+        'feedback-comment',
+      ]),
+    ).toThrow('--data directory not found')
+  })
+
+  it.each([
+    ['the root itself', '/repo', true],
+    ['a child', '/repo/evals/x', true],
+    ['a child named like a parent step', '/repo/..held-out', true],
+    ['the parent', '/', false],
+    ['a sibling', '/repo-private', false],
+    ['a sibling below the parent', '/elsewhere/set', false],
+  ])('isWithin: %s', (_name, target, within) => {
+    expect(isWithin('/repo', target)).toBe(within)
+  })
+
   it('accepts a directory outside the repository', () => {
     const directory = privateSet()
     expect(
@@ -586,6 +619,8 @@ describe('a private held-out text set (--data)', () => {
     const report = readFileSync(join(out, 'report.md'), 'utf8')
     expect(report).toContain('private held-out set')
     expect(report).toContain('Scored 2/2 items')
+    // The gate row's numbers are printed, not left to be worked out.
+    expect(report).toMatch(/\| FPR \| Negatives \|/)
     expect(report).not.toContain(MARKER)
     expect(report).not.toMatch(/fc-00\d/)
   })
