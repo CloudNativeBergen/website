@@ -42,7 +42,8 @@ export function CompactConferenceCard({
     galleryImages.length > 0 ||
     workshopStats.length > 0 ||
     travelSupport !== null ||
-    badges.length > 0
+    badges.length > 0 ||
+    !!data.briefing
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
@@ -73,6 +74,7 @@ export function CompactConferenceCard({
               conferenceDay={data.conferenceDay}
               pinDinner={data.pinDinner}
               dinnerChoice={data.dinnerChoice}
+              asOrganizer={data.asOrganizer}
               changesEmail={
                 data.conference.cfpEmail || data.conference.contactEmail
               }
