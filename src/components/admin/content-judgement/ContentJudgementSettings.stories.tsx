@@ -124,3 +124,12 @@ export const RollsBackOnError: Story = {
     await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'))
   },
 }
+
+/** The label is part of the target: clicking "Judge content" toggles. */
+export const LabelToggles: Story = {
+  play: async ({ canvas, userEvent }) => {
+    const toggle = await canvas.findByRole('switch', { name: 'Judge content' })
+    await userEvent.click(canvas.getByText('Judge content'))
+    await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  },
+}

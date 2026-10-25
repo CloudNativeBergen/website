@@ -30,6 +30,7 @@ export function ContentJudgementSettings({
   const { showNotification } = useNotification()
   const [enabled, setEnabled] = useState(initialEnabled)
   const labelId = useId()
+  const switchId = useId()
   const helpId = useId()
 
   const mutation = api.organization.updateContentJudgement.useMutation({
@@ -41,8 +42,8 @@ export function ContentJudgementSettings({
           ? 'Content judgement on'
           : 'Content judgement off',
         message: variables.enabled
-          ? 'New content is checked for every edition run by this organization.'
-          : 'No new content is sent for checking.',
+          ? 'OpenRouter is now listed on the privacy page of every edition run by this organization.'
+          : 'Nothing new is sent for checking.',
       })
     },
     onError: (error, variables) => {
@@ -66,13 +67,15 @@ export function ContentJudgementSettings({
     <div className="space-y-4">
       <div>
         <div className="flex items-center justify-between gap-4">
-          <p
+          <label
             id={labelId}
-            className="text-sm font-medium text-gray-900 dark:text-white"
+            htmlFor={switchId}
+            className="cursor-pointer text-sm font-medium text-gray-900 dark:text-white"
           >
             Judge content
-          </p>
+          </label>
           <button
+            id={switchId}
             type="button"
             role="switch"
             aria-checked={enabled}

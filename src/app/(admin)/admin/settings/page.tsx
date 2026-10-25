@@ -889,7 +889,10 @@ export default async function AdminSettings() {
                 edition (Content judgement spec §5). */}
             {organization ? (
               <InfoCard title="Content judgement" icon={ScaleIcon}>
+                {/* Keyed on the stored state, so a change made elsewhere
+                    (another organizer, any refresh) resets the switch. */}
                 <ContentJudgementSettings
+                  key={`${organization.contentJudgement?.enabled === true}-${organization.contentJudgement?.changedAt ?? ''}`}
                   enabled={organization.contentJudgement?.enabled === true}
                   changedAt={organization.contentJudgement?.changedAt}
                   changedByName={organization.contentJudgement?.changedByName}
