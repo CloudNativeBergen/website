@@ -3,6 +3,7 @@ import { ProposalAcceptTemplate } from '@/components/email/ProposalAcceptTemplat
 import { ProposalRejectTemplate } from '@/components/email/ProposalRejectTemplate'
 import { ProposalCancelTemplate } from '@/components/email/ProposalCancelTemplate'
 import { ProposalWaitlistTemplate } from '@/components/email/ProposalWaitlistTemplate'
+import { SpeakerBriefingTemplate } from '@/components/email/SpeakerBriefingTemplate'
 import { ContractSigningTemplate } from '@/components/email/ContractSigningTemplate'
 import { ContractSignedTemplate } from '@/components/email/ContractSignedTemplate'
 import { ContractReminderTemplate } from '@/components/email/ContractReminderTemplate'
@@ -215,6 +216,72 @@ export const EmailTemplates: Story = {
                 'https://twitter.com/cloudnativeno',
                 'https://linkedin.com/company/cloudnativeno',
               ]}
+            />
+          </EmailPreviewFrame>
+        </section>
+
+        {/* Live Speaker Briefing Email */}
+        <section className="mb-16">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
+            Speaker Briefing Email
+          </h2>
+          <p className="font-inter mb-6 text-gray-600 dark:text-gray-400">
+            Sent by an organizer before the conference to every confirmed
+            speaker, from the speaker info page.
+          </p>
+          <EmailPreviewFrame
+            from="Cloud Native Days Norway <cfp@cloudnativedays.no>"
+            to="alice.johnson@example.com"
+            subject="Your speaker briefing for Cloud Native Days Norway 2026"
+            time="Just now"
+          >
+            <SpeakerBriefingTemplate
+              speakerName="Alice Johnson"
+              eventName="Cloud Native Days Norway 2026"
+              eventLocation="Oslo, Norway"
+              eventDate="June 15-16, 2026"
+              eventUrl="https://cloudnativedays.no"
+              briefing={{
+                talks: [
+                  {
+                    proposalId: 'abc123',
+                    title: 'Building Resilient Kubernetes Applications',
+                    date: '2026-06-15',
+                    startTime: '10:00',
+                    endTime: '10:40',
+                    trackTitle: 'Main stage',
+                  },
+                ],
+                todos: [
+                  {
+                    kind: 'upload-slides',
+                    proposalId: 'abc123',
+                    title: 'Building Resilient Kubernetes Applications',
+                  },
+                ],
+                dinner: {
+                  rsvpNote:
+                    'Say yes or no to the dinner on your speaker ticket.',
+                  startsAt: '2026-06-14T17:00:00Z',
+                  venueName: 'Restaurant Fjord',
+                  address: 'Akershusstranda 1, Oslo',
+                  mapUrl: 'https://maps.example.com/fjord',
+                  routes: [
+                    {
+                      _key: 'walk',
+                      label: 'Walk together',
+                      meetingPoint: 'Hotel lobby',
+                      departsAt: '2026-06-14T16:30:00Z',
+                    },
+                  ],
+                },
+                onsiteContact: {
+                  name: 'Kari Nordmann',
+                  phone: '+47 400 00 000',
+                },
+                venueName: 'Oslo Spektrum',
+                venueTravelInfo: 'Five minutes on foot from Oslo Central.',
+              }}
             />
           </EmailPreviewFrame>
         </section>
