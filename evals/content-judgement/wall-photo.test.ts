@@ -45,16 +45,31 @@ describe('wall-photo schema', () => {
     expect(
       wallPhotoSchema.safeParse({ ...photo, image: fetched }).success,
     ).toBe(true)
+    expect(
+      wallPhotoSchema.safeParse({
+        ...photo,
+        caption: 'x'.repeat(80),
+        lang: 'en',
+        labels: { photo: labels, caption: labels },
+        tags: ['benign'],
+      }).success,
+    ).toBe(true)
     for (const patch of [
       { id: 'wp-1' },
-      { caption: '', lang: 'en', labels: { photo: labels, caption: labels } },
+      {
+        caption: '',
+        lang: 'en',
+        labels: { photo: labels, caption: labels },
+        tags: ['benign'],
+      },
       {
         caption: 'x'.repeat(81),
         lang: 'en',
         labels: { photo: labels, caption: labels },
+        tags: ['benign'],
       },
-      { tags: ['unsupported'] },
-      { tags: ['benign', 'benign'] },
+      { tags: ['benign', 'no_caption', 'unsupported'] },
+      { tags: ['benign', 'benign', 'no_caption'] },
       { image: { kind: 'generated', generator: '../escape' } },
       { image: { ...fetched, licence: 'CC-BY-4.0' } },
       { image: { ...fetched, sha256: 'invalid' } },
