@@ -656,3 +656,32 @@ describe('round-5 adversarial findings', () => {
     expect(shownPosts(s)).toHaveLength(MOSAIC_TILES)
   })
 })
+
+describe('round-7 adversarial findings', () => {
+  it('Mosaic: a removal in the same poll as an arrival leaves the walk’s next post its place', () => {
+    let s = started('mosaic', 10)
+    let now = T0 + 1_000
+    // A burst of two: 11 takes the spotlight, 12 waits out the gap.
+    s = loadAll(poll(s, posts(12), now), now)
+    expect(ids(s.queue)).toEqual(['wallPost-12'])
+    expect(featuredId(s)).toBe('wallPost-11')
+    const next = walkNext(s)
+    now += ARRIVAL_GAP_MS
+    // One poll removes 11 and lets 12 in.
+    s = poll(
+      s,
+      posts(12).filter((p) => p._id !== 'wallPost-11'),
+      now,
+    )
+    expect(featuredId(s)).toBe('wallPost-12')
+    // Nothing was featured but 12: the walk's next is still next.
+    s = run(s, now, now + SWAP_EVERY_MS)
+    expect(featuredId(s)).toBe(next)
+  })
+})
+
+/** The post the Mosaic walk features after the current turn, nothing happening meanwhile. */
+function walkNext(s: StreamState): string {
+  const at = s.feature!.at
+  return featuredId(run(s, at, at + SWAP_EVERY_MS))!
+}
