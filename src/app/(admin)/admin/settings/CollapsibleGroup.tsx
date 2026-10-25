@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { ChevronDownIcon } from '@heroicons/react/24/outline'
 import { hashTargetsWithin } from '@/lib/settings/groups'
+import { GroupTitleContext, useSettingsQuery } from './SettingsFilter'
 
 const LG = '(min-width: 1024px)'
 
@@ -33,6 +34,9 @@ export function CollapsibleGroup({
   const ref = useRef<HTMLDivElement>(null)
   const contentId = useId()
   const descriptionId = useId()
+  // While filtering, every group with a match is shown expanded and the
+  // toggle is disabled (collapsing would hide the matches being looked for).
+  const filtering = useSettingsQuery().trim() !== ''
 
   useEffect(() => {
     const root = ref.current
@@ -52,15 +56,23 @@ export function CollapsibleGroup({
     return () => window.removeEventListener('hashchange', openForHash)
   }, [])
 
-  const hiddenClass = open === null ? 'max-lg:hidden' : open ? '' : 'hidden'
+  const expanded = filtering || open
+  const hiddenClass =
+    expanded === null ? 'max-lg:hidden' : expanded ? '' : 'hidden'
 
   return (
-    <div id={id} ref={ref} className="scroll-mt-44 space-y-4">
+    // A group with no visible card (the filter hid them all) hides itself.
+    <div
+      id={id}
+      ref={ref}
+      className="scroll-mt-44 space-y-4 [&:not(:has([data-settings-card]:not([hidden])))]:hidden"
+    >
       <div>
         <h3>
           <button
             type="button"
-            aria-expanded={open ?? undefined}
+            aria-expanded={expanded ?? undefined}
+            disabled={filtering}
             aria-controls={contentId}
             aria-describedby={descriptionId}
             onClick={() => setOpen(!(open ?? window.matchMedia(LG).matches))}
@@ -74,7 +86,7 @@ export function CollapsibleGroup({
             </span>
             <ChevronDownIcon
               aria-hidden="true"
-              className={`h-5 w-5 shrink-0 text-gray-400 transition-transform ${open === null ? 'lg:rotate-180' : open ? 'rotate-180' : ''}`}
+              className={`h-5 w-5 shrink-0 text-gray-400 transition-transform ${expanded === null ? 'lg:rotate-180' : expanded ? 'rotate-180' : ''}`}
             />
           </button>
         </h3>
@@ -82,7 +94,7 @@ export function CollapsibleGroup({
             summary is attached to the toggle as its description. */}
         <p
           id={descriptionId}
-          className={`mt-1 pl-7 text-sm text-gray-500 dark:text-gray-400 ${open ? '' : 'line-clamp-1 lg:line-clamp-none'}`}
+          className={`mt-1 pl-7 text-sm text-gray-500 dark:text-gray-400 ${expanded ? '' : 'line-clamp-1 lg:line-clamp-none'}`}
         >
           {description}
         </p>
@@ -91,7 +103,9 @@ export function CollapsibleGroup({
         id={contentId}
         className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${hiddenClass}`}
       >
-        {children}
+        <GroupTitleContext.Provider value={title}>
+          {children}
+        </GroupTitleContext.Provider>
       </div>
     </div>
   )
