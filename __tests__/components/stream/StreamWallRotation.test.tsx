@@ -209,6 +209,15 @@ describe('StreamWallRotation', () => {
     expect(wallShown()).toBe(true)
   })
 
+  it('stays off a gone wall through a later poll that failed for another reason', async () => {
+    mount(view())
+    h.answer.mockReturnValue(NOT_FOUND)
+    await advance(6_000)
+    h.answer.mockReturnValue(SERVER_ERROR)
+    await advance(ROOM_TURN_MS)
+    expect(wallShown()).toBe(false)
+  })
+
   it('keeps taking turns through a poll that failed for another reason', async () => {
     mount(view())
     h.answer.mockReturnValue(SERVER_ERROR)

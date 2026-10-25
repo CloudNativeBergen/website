@@ -126,8 +126,13 @@ export function useLiveScreenPoll(
   initial: ScreenView,
 ): ScreenPoll & { gone: boolean } {
   const { data, dataUpdatedAt, errorUpdatedAt, error } = useScreenPoll(initial)
-  const gone =
+  // Latched until a real answer: a later poll the Wi-Fi swallows must not
+  // bring a deleted wall's last photos back.
+  const [goneAt, setGoneAt] = useState(0)
+  const notFound =
     error instanceof TRPCClientError && error.data?.code === 'NOT_FOUND'
+  if (notFound && goneAt !== errorUpdatedAt) setGoneAt(errorUpdatedAt)
+  const gone = (notFound ? errorUpdatedAt : goneAt) > dataUpdatedAt
   return { data, dataUpdatedAt, errorUpdatedAt, gone }
 }
 
