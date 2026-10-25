@@ -4,7 +4,7 @@ A public, labelled offline evaluation set for TypeSafe's Jev classifier, used to
 
 **Content warning:** the data includes harassment, discriminatory insults, threats, adult sexual remarks, spam, and fictional doxxing. It contains no sexual content involving minors. Norwegian Bokmål, Nynorsk, English, and code-switching reflect conference conversations.
 
-Labels follow the definitions in [questions.ts](./questions.ts), version `v3`. The surfaces have distinct boundaries: harsh criticism of a talk is allowed feedback; sponsor thanks are allowed captions. Conversation categories follow the question actually asked, with talk-change announcements classified as `talk_details` even when acceptance is mentioned. Notes explain close cases.
+Labels follow the definitions in [questions.ts](../../src/lib/content-judgement/questions.ts), the module production sends, so the eval measures exactly what production asks ([spec](../../docs/CONTENT_JUDGEMENT_SPEC.md) §4.2). `./questions.ts` here only maps eval items onto its builders. Question set versions are per surface (`QUESTION_SET_VERSIONS`: comments and conversations `v2`, Wall Posts `v4`; the caption-only surface measures the Wall Post set), and every report names them. The surfaces have distinct boundaries: harsh criticism of a talk is allowed feedback; sponsor thanks are allowed captions. Conversation categories follow the question actually asked, with talk-change announcements classified as `talk_details` even when acceptance is mentioned. Notes explain close cases.
 
 ```sh
 pnpm tsx evals/content-judgement/run.ts --dry-run
@@ -48,6 +48,16 @@ Each live run makes one calibration call per request shape (with a caption, eigh
 
 The report separates caption and photo precision/recall at 0.5 and 0.9. The photo advice bar flags when any mean photo probability is at least 0.5. It requires recall of at least 95% for every photo question with at least five positives, and an any-photo false-positive rate of at most 5% across photos tagged `benign` or `borderline`, also reported separately for those tags. Caption flags do not affect this photo rate. Questions with fewer than five positives have insufficient support; zero-positive questions are **not measurable on the public set**, never passing. Public photo sexual/abusive questions are expected to have no positives. The private nudity/gore set is separate and must never be committed.
 
+## Held-out sets (private)
+
+A held-out text set written by people (spec §11.2) is never committed. Lay it out like `data/` (`<dir>/feedback-comment.jsonl`, same schema) in a directory **outside the repository**, and pass it with `--data` and one text surface:
+
+```sh
+OPENROUTER_API_KEY=... pnpm tsx evals/content-judgement/run.ts --data ~/jev-held-out --surface feedback-comment
+```
+
+The runner refuses a directory inside the repository. The raw results, which carry item ids, are written next to the data; only `report.md`, which holds numbers alone, goes to `--out` (default `results/<model>-<date>-held-out/`). Copy a question's false-positive rate and recall at 0.9, and its negatives, into [gates.json](../../src/lib/content-judgement/gates.json), for the build and question set the report names.
+
 ## This is a development set
 
 This set was written and labelled by a model (gpt-6.1-sol), and the question wording in `questions.ts` was written alongside it. Some criteria sentences describe the exact patterns of specific items, so these slices are **in-sample**: the `ambiguous` conversation items (for example co-003/011/015, co-033/038/043, co-053/058/064, co-068/075/076, co-083/088/090), the `borderline` items ("sexy YAML"), sponsor captions, and "sales pitch is not spam" comments. The negatives are also soft: the harsh-but-fair comments have no profanity, and the evasion items are mostly one-character edits of other items here. Treat its numbers as an upper bound for development, never as the evidence that unlocks enforcement.
@@ -66,7 +76,7 @@ Agreed on 2026-10-25 in [Build the offline eval set and the pass bar per surface
 
 A precision bar is deliberately not used for enforcement: precision depends on how common abuse is in the set, and this set is about half positive. Zero false positives in 300 negatives is roughly what it takes to show a false-positive rate of 1% or less.
 
-Every bar must be met again whenever the model build or `QUESTION_SET_VERSION` changes.
+Every bar must be met again whenever the model build or a surface's question set version changes. A wording change without a version bump fails `src/lib/content-judgement/questions.test.ts`.
 
 ## Runs
 
