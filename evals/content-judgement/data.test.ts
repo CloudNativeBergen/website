@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { buildRequest, QUESTION_SET_VERSION } from './questions'
-import { categories, loadData, moderationKeys, surfaces } from './schema'
+import { categories, loadData, moderationKeys } from './schema'
 
 describe('public labelled eval data', () => {
+  const surfaces = [
+    'wall-caption',
+    'feedback-comment',
+    'conversation-opening',
+  ] as const
   const expectedCounts = {
     'wall-caption': 130,
     'feedback-comment': 160,
@@ -21,7 +26,9 @@ describe('public labelled eval data', () => {
       ).toBeGreaterThanOrEqual(0.4)
       if (surface === 'wall-caption') {
         for (const item of items)
-          expect(item.text.length).toBeLessThanOrEqual(80)
+          expect(
+            'text' in item ? item.text.length : Infinity,
+          ).toBeLessThanOrEqual(80)
       }
     },
   )
@@ -54,7 +61,7 @@ describe('public labelled eval data', () => {
   })
 
   it('builds versioned requests with state content and no reference labels', () => {
-    expect(QUESTION_SET_VERSION).toBe('v2')
+    expect(QUESTION_SET_VERSION).toBe('v3')
     for (const surface of ['wall-caption', 'feedback-comment'] as const) {
       const item = loadData(surface)[0]
       const request = buildRequest(surface, item)

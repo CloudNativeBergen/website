@@ -3,6 +3,7 @@ import {
   confusionMatrix,
   mean,
   percentile,
+  photoAdviceMetrics,
   stability,
 } from './metrics'
 import { QUESTION_SET_VERSION } from './questions'
@@ -15,17 +16,26 @@ import {
   type ModerationItem,
   type ModerationKey,
   type Surface,
+  type WallPhotoItem,
 } from './schema'
 import type {
   ConversationResponse,
   ModerationResponse,
   RawResult,
+  WallPhotoResponse,
 } from './transport'
 
 export interface SurfaceRun {
   surface: Surface
   items: DataItem[]
   results: RawResult[]
+  calibration?: {
+    latencyMs: number
+    cost: number | null
+    model: string
+    inputTokens?: number
+    minimumInputTokens?: number
+  }
 }
 const thresholds = [0.5, 0.7, 0.9]
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`
@@ -60,10 +70,10 @@ interface ModerationScore {
 function moderationReport(run: SurfaceRun, repeats: number): string {
   const scores: ModerationScore[] = []
   for (const item of run.items) {
-    if (!('labels' in item)) continue
+    if (!('labels' in item) || !('text' in item)) continue
     const results = completeResults(run, item.id, repeats)
     const answers = results.flatMap((result) =>
-      result.answers && !('category' in result.answers) ? [result.answers] : [],
+      result.answers && 'abusive' in result.answers ? [result.answers] : [],
     )
     if (answers.length !== repeats) continue
     const probabilities = Object.fromEntries(
@@ -184,6 +194,152 @@ function moderationReport(run: SurfaceRun, repeats: number): string {
   return lines.join('\n\n')
 }
 
+interface WallPhotoScore {
+  item: WallPhotoItem
+  photo: Record<ModerationKey, number>
+  caption?: Record<ModerationKey, number>
+}
+
+function wallPhotoReport(run: SurfaceRun, repeats: number): string {
+  const scores: WallPhotoScore[] = []
+  for (const item of run.items) {
+    if (!('image' in item)) continue
+    const answers: WallPhotoResponse['answers'][] = completeResults(
+      run,
+      item.id,
+      repeats,
+    ).flatMap((result) =>
+      result.answers && 'photo_abusive' in result.answers
+        ? [result.answers]
+        : [],
+    )
+    if (answers.length !== repeats) continue
+    const photo = Object.fromEntries(
+      moderationKeys.map((key) => [
+        key,
+        mean(answers.map((answer) => answer[`photo_${key}`].noul)),
+      ]),
+    ) as Record<ModerationKey, number>
+    const caption =
+      item.labels.caption &&
+      answers.every((answer) =>
+        moderationKeys.every((key) => answer[`caption_${key}`] !== undefined),
+      )
+        ? (Object.fromEntries(
+            moderationKeys.map((key) => [
+              key,
+              mean(answers.map((answer) => answer[`caption_${key}`]!.noul)),
+            ]),
+          ) as Record<ModerationKey, number>)
+        : undefined
+    scores.push({ item, photo, caption })
+  }
+  const lines = [
+    '## wall-photo',
+    `Scored ${scores.length}/${run.items.length} items; excluded ${run.items.length - scores.length} with incomplete/failed repeats.`,
+    `image_not_received errors: ${run.results.filter((result) => result.error === 'image_not_received').length}.`,
+  ]
+  for (const part of ['caption', 'photo'] as const) {
+    const subset = scores.filter((score) => score[part] !== undefined)
+    lines.push(
+      `### ${part}`,
+      table(
+        [
+          'Question',
+          'Threshold',
+          'N',
+          'Positives',
+          'Precision',
+          'Recall',
+          'TP',
+          'FP',
+          'FN',
+          'TN',
+        ],
+        moderationKeys.flatMap((key) =>
+          [0.5, 0.9].map((threshold) => {
+            const metrics = binaryMetrics(
+              subset.map((score) => ({
+                expected: score.item.labels[part]![key],
+                probability: score[part]![key],
+              })),
+              threshold,
+            )
+            const positives = metrics.tp + metrics.fn
+            return [
+              `${part}_${key}`,
+              threshold,
+              subset.length,
+              positives,
+              percent(metrics.precision),
+              positives
+                ? percent(metrics.recall)
+                : 'not measurable on the public set',
+              metrics.tp,
+              metrics.fp,
+              metrics.fn,
+              metrics.tn,
+            ]
+          }),
+        ),
+      ),
+    )
+  }
+  const advice = photoAdviceMetrics(
+    scores.map((score) => ({
+      labels: score.item.labels.photo,
+      probabilities: score.photo,
+      tags: score.item.tags,
+    })),
+  )
+  lines.push(
+    '### Photo advice bar',
+    `Photo advice bar on supported public questions at 0.5: ${advice.status}. Requires recall >= 95% for every photo question with at least 5 positives and combined benign/borderline FPR <= 5%. Questions without positives are not measurable on the public set; they do not pass.`,
+    table(
+      ['Question', 'Positives', 'Recall at 0.5', 'Advice status'],
+      advice.questions.map((question) => [
+        `photo_${question.key}`,
+        question.positives,
+        question.positives
+          ? percent(question.recall)
+          : 'not measurable on the public set',
+        question.positives === 0
+          ? 'not measurable on the public set'
+          : question.positives < 5
+            ? 'insufficient support (requires 5 positives)'
+            : question.recall >= 0.95
+              ? 'pass'
+              : 'fail',
+      ]),
+    ),
+    table(
+      ['Photo slice', 'Threshold', 'N', 'Flagged', 'FPR'],
+      ['benign', 'borderline', 'benign or borderline'].flatMap((tag) => {
+        const subset = scores.filter((score) =>
+          tag === 'benign or borderline'
+            ? score.item.tags.some(
+                (value) => value === 'benign' || value === 'borderline',
+              )
+            : score.item.tags.includes(tag as 'benign' | 'borderline'),
+        )
+        return [0.5, 0.9].map((threshold) => {
+          const flagged = subset.filter((score) =>
+            moderationKeys.some((key) => score.photo[key] >= threshold),
+          ).length
+          return [
+            tag,
+            threshold,
+            subset.length,
+            flagged,
+            fraction(flagged, subset.length),
+          ]
+        })
+      }),
+    ),
+  )
+  return lines.join('\n\n')
+}
+
 interface ConversationScore {
   item: ConversationItem
   predicted: string
@@ -298,19 +454,34 @@ export function buildReport(
   const results = runs.flatMap((run) => run.results)
   const failed = results.filter((result) => result.answers === null)
   const errors = [...new Set(failed.map((result) => result.error))]
+  const calibrations = runs.flatMap((run) =>
+    run.calibration ? [run.calibration] : [],
+  )
+  const calls = [...results, ...calibrations]
   return (
     [
       '# Jev offline evaluation',
       `Question set: ${QUESTION_SET_VERSION}. Requested model: ${JSON.stringify(model)}. Repeats: ${repeats}. Created: ${new Date().toISOString()}.`,
-      `Calls: ${results.length}; successful: ${results.length - failed.length}; failed: ${failed.length}. Known returned cost: $${results.reduce((total, result) => total + (result.cost ?? 0), 0).toFixed(6)}. Cost missing for ${results.filter((result) => result.cost === null).length} calls; failed/retried requests may incur additional unreported charges.`,
+      `Calls: ${calls.length}; successful: ${calls.length - failed.length}; failed: ${failed.length}. Known returned cost: $${calls.reduce((total, result) => total + (result.cost ?? 0), 0).toFixed(6)}. Cost missing for ${calls.filter((result) => result.cost === null).length} calls; failed/retried requests may incur additional unreported charges.`,
       `End-to-end request latency (includes retries/backoff and failed calls): p50 ${percentile(
-        results.map((result) => result.latencyMs),
+        calls.map((result) => result.latencyMs),
         50,
       ).toFixed(0)} ms; p95 ${percentile(
-        results.map((result) => result.latencyMs),
+        calls.map((result) => result.latencyMs),
         95,
       ).toFixed(0)} ms.`,
-      `Returned models: ${[...new Set(results.filter((result) => result.answers !== null).map((result) => result.model))].map((value) => JSON.stringify(value)).join(', ') || 'none'}.`,
+      ...(calibrations.length
+        ? [
+            `Calibration calls: ${calibrations.length}; included in calls, cost, and latency, excluded from scoring.`,
+            ...calibrations
+              .filter((calibration) => calibration.inputTokens !== undefined)
+              .map(
+                (calibration) =>
+                  `Wall-photo calibration input tokens T0: ${calibration.inputTokens}; minimum accepted image input tokens: ${calibration.minimumInputTokens}.`,
+              ),
+          ]
+        : []),
+      `Returned models: ${[...new Set([...results.filter((result) => result.answers !== null), ...calibrations].map((result) => result.model))].map((value) => JSON.stringify(value)).join(', ') || 'none'}.`,
       ...(errors.length
         ? [
             table(
@@ -326,7 +497,9 @@ export function buildReport(
       ...runs.map((run) =>
         run.surface === 'conversation-opening'
           ? conversationReport(run, repeats)
-          : moderationReport(run, repeats),
+          : run.surface === 'wall-photo'
+            ? wallPhotoReport(run, repeats)
+            : moderationReport(run, repeats),
       ),
       'These deliberately sampled public cases are not representative prevalence estimates or a guarantee of safe deployment. Use held-out examples and human review for deployment decisions.',
     ].join('\n\n') + '\n'

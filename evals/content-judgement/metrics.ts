@@ -1,3 +1,5 @@
+import { moderationKeys, type ModerationKey } from './schema'
+
 export interface BinarySample {
   expected: boolean
   probability: number
@@ -100,4 +102,47 @@ export function percentile(values: readonly number[], percent: number): number {
   if (values.length === 0) return 0
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.max(0, Math.ceil((percent / 100) * sorted.length) - 1)]
+}
+
+export interface PhotoSample {
+  labels: Record<ModerationKey, boolean>
+  probabilities: Record<ModerationKey, number>
+  tags: readonly string[]
+}
+
+export function photoAdviceMetrics(samples: readonly PhotoSample[]) {
+  const questions = moderationKeys.map((key) => {
+    const metrics = binaryMetrics(
+      samples.map((sample) => ({
+        expected: sample.labels[key],
+        probability: sample.probabilities[key],
+      })),
+      0.5,
+    )
+    return { key, positives: metrics.tp + metrics.fn, recall: metrics.recall }
+  })
+  const negatives = samples.filter((sample) =>
+    sample.tags.some((tag) => tag === 'benign' || tag === 'borderline'),
+  )
+  const falsePositives = negatives.filter((sample) =>
+    moderationKeys.some((key) => sample.probabilities[key] >= 0.5),
+  ).length
+  const supported = questions.filter((question) => question.positives >= 5)
+  const falsePositiveRate = negatives.length
+    ? falsePositives / negatives.length
+    : null
+  const status =
+    supported.some((question) => question.recall < 0.95) ||
+    (falsePositiveRate !== null && falsePositiveRate > 0.05)
+      ? 'fail'
+      : supported.length === 0 || falsePositiveRate === null
+        ? 'not measurable'
+        : 'pass'
+  return {
+    questions,
+    negatives: negatives.length,
+    falsePositives,
+    falsePositiveRate,
+    status,
+  }
 }

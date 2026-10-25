@@ -4,7 +4,7 @@ A public, labelled offline evaluation set for TypeSafe's Jev classifier, used to
 
 **Content warning:** the data includes harassment, discriminatory insults, threats, adult sexual remarks, spam, and fictional doxxing. It contains no sexual content involving minors. Norwegian Bokmål, Nynorsk, English, and code-switching reflect conference conversations.
 
-Labels follow the definitions in [questions.ts](./questions.ts), version `v1`. The surfaces have distinct boundaries: harsh criticism of a talk is allowed feedback; sponsor thanks are allowed captions. Conversation categories follow the question actually asked, with talk-change announcements classified as `talk_details` even when acceptance is mentioned. Notes explain close cases.
+Labels follow the definitions in [questions.ts](./questions.ts), version `v3`. The surfaces have distinct boundaries: harsh criticism of a talk is allowed feedback; sponsor thanks are allowed captions. Conversation categories follow the question actually asked, with talk-change announcements classified as `talk_details` even when acceptance is mentioned. Notes explain close cases.
 
 ```sh
 pnpm tsx evals/content-judgement/run.ts --dry-run
@@ -13,15 +13,34 @@ OPENROUTER_API_KEY=... pnpm tsx evals/content-judgement/run.ts --surface feedbac
 npx vitest run evals/content-judgement
 ```
 
-Node 22+ is required. The default is all surfaces, three repeats, concurrency four, and `typesafe/jev-1.14`. Dry-run validates **all** data files and prints one request per surface without an API key, API calls, or output files. `--limit` applies per selected surface. Live runs use OpenRouter's decisions endpoint and **cost money**; the live runner is never run in CI. The offline unit/data tests make no API calls. Keep keys in the environment.
+Node 22+ is required. The default is all surfaces, three repeats, concurrency four, and `typesafe/jev-1.14`. Dry-run validates all available data files and prints request shape sizes per surface. It requires no API key, makes no calls, and writes no output files; submitted text and image bytes are omitted. `--limit` applies per selected surface. Live runs use OpenRouter's decisions endpoint and **cost money**; the live runner is never run in CI. The offline unit/data tests make no API calls. Keep keys in the environment.
 
-Raw response records go to `raw-<surface>.jsonl` and a Markdown report to `report.md`. The default output directory is `results/<sanitised-model>-<UTC-date>/` under this directory; reusing a directory overwrites selected raw files and the report. Raw files contain IDs and answers, never submitted text. Invalid responses fail an individual repeat, are recorded by error category, and make the process exit nonzero after completing the run. HTTP 429/529/5xx responses get up to four attempts with exponential backoff; each attempt has a 60-second timeout. No error body is logged.
+Raw response records go to `raw-<surface>.jsonl` and a Markdown report to `report.md`. The default output directory is `results/<sanitised-model>-<UTC-date>/` under this directory; reusing a directory overwrites selected raw files and the report. Raw files contain IDs and answers, never submitted text or image bytes. Invalid responses fail an individual repeat, are recorded by error category, and make the process exit nonzero after completing the run. HTTP 429/529/5xx responses get up to four attempts with exponential backoff; each attempt has a 60-second timeout. No error body is logged.
 
 Moderation metrics threshold the **mean probability across repeats** at 0.5, 0.7, and 0.9. Precision measures how many flags are warranted; recall measures how many labelled positives were found; F1 balances the two. TP/FP/FN/TN are correct flags, incorrect flags, missed positives, and correct passes. The overall `flag` metric compares any question reaching the threshold with any true label. Evasion recall measures obfuscated positives; `harsh_fair` and `borderline` false-positive rates measure unnecessary refusals. Language breakdowns help expose unequal performance.
 
 Conversation accuracy uses majority top-choice voting across repeats (ties follow the category order in `questions.ts`), with per-category precision/recall, an expected-row confusion matrix, and slices by language, opener role, and ambiguity. Confidence is averaged across repeats and compared for correctly/incorrectly classified items. Repeat stability is the share of items with identical decisions across all repeats (moderation at 0.5). A single repeat is trivially stable.
 
 Only items with all repeats successful enter metrics; excluded counts are explicit. Undefined ratios are zero; empty slice rates are marked where applicable and support counts are shown. Cost sums returned usage costs; missing costs and failed/retried requests can make this an underestimate. p50/p95 latency includes retries and backoff. This deliberately sampled set does not estimate real-world prevalence, and stability or high confidence does not imply correctness. Public examples can become contaminated by training: use fresh held-out cases and human review before deployment.
+
+## Wall Post photos
+
+`wall-photo` judges one optional caption and one photo in a single multimodal call. With a caption it asks eight questions: four `caption_*` questions with the existing caption meanings, and four `photo_*` questions. Without a caption only the four photo questions are asked. Caption, language, and caption labels must all be present or all absent. Photo questions use the caption only as context. Conference sponsor booths, banners, and swag are allowed; unrelated ads and QR-code lures are spam. Readable full-name badges, ID cards, and private contact information in screens or papers count as personal information.
+
+The public `data/wall-photo.jsonl` is maintained separately. Until it is supplied, existing surfaces remain usable. Fetch and generate the local image cache before running this surface:
+
+```sh
+pnpm tsx evals/content-judgement/images/fetch.ts
+pnpm tsx evals/content-judgement/images/generate.ts
+pnpm tsx evals/content-judgement/run.ts --surface wall-photo --dry-run
+OPENROUTER_API_KEY=... pnpm tsx evals/content-judgement/run.ts --surface wall-photo
+```
+
+Fetched images require CC0-1.0 or PDM-1.0 attribution metadata and a matching SHA-256 digest. Fetching is sequential and skips correctly cached files. Generated fixtures use invented people and contact details, example.com/example.no email addresses, phone numbers starting with 0, and a generic ID card. Images are stored only in the gitignored `.image-cache/` directory and must never be committed. Preparation auto-rotates by EXIF, removes metadata, and encodes JPEG at quality 85 with the longest side at most 1568 pixels, without upscaling; a resulting short side below 280 pixels is rejected.
+
+Each live run makes one calibration call for the first photo item's questions and caption state with the image omitted. Its input token count is T0. Every photo response must report at least T0 + 500 input tokens; otherwise it is an `image_not_received` error and excluded from scores. Missing usage input tokens also fail this guard. The margin follows the 2026-10-25 probe: 2,762 tokens with an image versus 378 without. Calibration is included in reported calls and returned cost, but never scored. Dry-run makes no calls and prints shape sizes without caption text or image bytes.
+
+The report separates caption and photo precision/recall at 0.5 and 0.9. The photo advice bar flags when any mean photo probability is at least 0.5. It requires recall of at least 95% for every photo question with at least five positives, and an any-photo false-positive rate of at most 5% across photos tagged `benign` or `borderline`, also reported separately for those tags. Caption flags do not affect this photo rate. Questions with fewer than five positives have insufficient support; zero-positive questions are **not measurable on the public set**, never passing. Public photo sexual/abusive questions are expected to have no positives. The private nudity/gore set is separate and must never be committed.
 
 ## This is a development set
 

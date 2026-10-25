@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildReport } from './report'
-import { loadData } from './schema'
+import { loadData, moderationKeys, type WallPhotoItem } from './schema'
 import { parseOptions } from './run'
-import type { RawResult } from './transport'
+import type { RawResult, WallPhotoResponse } from './transport'
 
 describe('report aggregation', () => {
   it('thresholds mean probabilities, excludes incomplete items, and totals returned usage', () => {
@@ -117,5 +117,124 @@ describe('CLI options', () => {
     ['--unknown'],
   ])('rejects invalid options %j', (...args) => {
     expect(() => parseOptions(args)).toThrow()
+  })
+})
+
+describe('wall-photo report', () => {
+  const labels = {
+    abusive: false,
+    sexual: false,
+    spam: false,
+    personal_info: false,
+  }
+  const item = (id: string, caption = false): WallPhotoItem => ({
+    id,
+    ...(caption ? { caption: 'Synthetic caption', lang: 'en' as const } : {}),
+    image: { kind: 'generated', generator: 'slide-1' },
+    labels: {
+      photo: { ...labels },
+      ...(caption ? { caption: { ...labels, abusive: true } } : {}),
+    },
+    tags: caption ? ['benign', 'caption_flag'] : ['borderline', 'no_caption'],
+  })
+  const result = (item: WallPhotoItem, photoSpam = 0): RawResult => ({
+    id: item.id,
+    repeat: 1,
+    model: 'test',
+    latencyMs: 10,
+    cost: 0.01,
+    answers: Object.fromEntries([
+      ...moderationKeys.map((key) => [
+        `photo_${key}`,
+        { type: 'noul', noul: key === 'spam' ? photoSpam : 0 },
+      ]),
+      ...(item.caption
+        ? moderationKeys.map((key) => [
+            `caption_${key}`,
+            { type: 'noul', noul: key === 'abusive' ? 1 : 0 },
+          ])
+        : []),
+    ]) as WallPhotoResponse['answers'],
+  })
+
+  it('separates caption scoring, counts errors and calibration, and marks zero-positive questions unmeasurable', () => {
+    const items = [item('wp-001', true), item('wp-002'), item('wp-003')]
+    const report = buildReport(
+      [
+        {
+          surface: 'wall-photo',
+          items,
+          calibration: { model: 'test', latencyMs: 5, cost: 0.002 },
+          results: [
+            result(items[0]),
+            result(items[1], 0.5),
+            {
+              id: items[2].id,
+              repeat: 1,
+              model: 'test',
+              latencyMs: 10,
+              cost: 0.01,
+              answers: null,
+              error: 'image_not_received',
+            },
+          ],
+        },
+      ],
+      'test',
+      1,
+    )
+    expect(report).toContain('Scored 2/3 items; excluded 1')
+    expect(report).toContain('Calls: 4; successful: 3; failed: 1')
+    expect(report).toContain('Calibration calls: 1')
+    expect(report).toContain('$0.032000')
+    expect(report).toContain('image_not_received errors: 1')
+    expect(report).toContain(
+      '| caption_abusive | 0.5 | 1 | 1 | 100.0% | 100.0% |',
+    )
+    expect(report).toContain(
+      '| photo_abusive | 0.5 | 2 | 0 | 0.0% | not measurable on the public set |',
+    )
+    expect(report).toContain(
+      '| photo_sexual | 0 | not measurable on the public set | not measurable on the public set |',
+    )
+    expect(report).toContain('| benign | 0.5 | 1 | 0 | 0.0% |')
+    expect(report).toContain('| borderline | 0.5 | 1 | 1 | 100.0% |')
+    expect(report).toContain('| benign or borderline | 0.5 | 2 | 1 | 50.0% |')
+    expect(report).toContain(
+      'Photo advice bar on supported public questions at 0.5: fail',
+    )
+  })
+
+  it('passes only supported photo questions and thresholds mean repeat probabilities', () => {
+    const items = Array.from({ length: 6 }, (_, index) =>
+      item(`wp-${String(index + 1).padStart(3, '0')}`),
+    )
+    for (const positive of items.slice(0, 5)) {
+      positive.labels.photo.spam = true
+      positive.tags = ['spam', 'no_caption']
+    }
+    const results = items.flatMap((entry) => {
+      const first = result(entry, entry.labels.photo.spam ? 0.4 : 0)
+      const second = result(entry, entry.labels.photo.spam ? 1 : 0)
+      return [first, { ...second, repeat: 2 }]
+    })
+    const report = buildReport(
+      [{ surface: 'wall-photo', items, results }],
+      'test',
+      2,
+    )
+    expect(report).toContain(
+      '| photo_spam | 0.5 | 6 | 5 | 100.0% | 100.0% | 5 | 0 | 0 | 1 |',
+    )
+    expect(report).toContain(
+      '| photo_spam | 0.9 | 6 | 5 | 0.0% | 0.0% | 0 | 0 | 5 | 1 |',
+    )
+    expect(report).toContain('| photo_spam | 5 | 100.0% | pass |')
+    expect(report).toContain(
+      'Photo advice bar on supported public questions at 0.5: pass',
+    )
+    expect(report).toContain(
+      '| photo_abusive | 0 | not measurable on the public set | not measurable on the public set |',
+    )
   })
 })

@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
+import { moderationKeys } from './schema'
 import {
   binaryMetrics,
   confusionMatrix,
   mean,
   percentile,
+  photoAdviceMetrics,
   stability,
 } from './metrics'
 
@@ -129,5 +131,67 @@ describe('summary statistics', () => {
     expect(percentile([], 95)).toBe(0)
     expect(values).toEqual([100, 10, 80, 30, 50])
     expect(() => percentile(values, 101)).toThrow('between 0 and 100')
+  })
+})
+
+describe('photo advice bar', () => {
+  const sample = (positive: boolean, probability: number) => ({
+    labels: {
+      abusive: false,
+      sexual: false,
+      spam: positive,
+      personal_info: false,
+    },
+    probabilities: {
+      abusive: 0,
+      sexual: 0,
+      spam: probability,
+      personal_info: 0,
+    },
+    tags: positive ? ['spam'] : ['benign'],
+  })
+
+  it('requires 95% recall for each supported question and at most 5% any-photo false positives', () => {
+    const positives = Array.from({ length: 20 }, () => sample(true, 0.5))
+    const negatives = Array.from({ length: 20 }, () => sample(false, 0))
+    positives[0] = sample(true, 0.49)
+    negatives[0] = sample(false, 0.5)
+    expect(photoAdviceMetrics([...positives, ...negatives])).toMatchObject({
+      falsePositives: 1,
+      falsePositiveRate: 0.05,
+      status: 'pass',
+    })
+    positives[1] = sample(true, 0.49)
+    expect(photoAdviceMetrics([...positives, ...negatives]).status).toBe('fail')
+    positives[1] = sample(true, 0.5)
+    negatives[1] = sample(false, 0.5)
+    expect(photoAdviceMetrics([...positives, ...negatives]).status).toBe('fail')
+  })
+
+  it.each(moderationKeys)(
+    'counts a %s photo flag once across overlapping benign/borderline tags',
+    (key) => {
+      const negative = sample(false, 0)
+      negative.tags = ['benign', 'borderline']
+      negative.probabilities[key] = 0.5
+      expect(photoAdviceMetrics([negative])).toMatchObject({
+        negatives: 1,
+        falsePositives: 1,
+        falsePositiveRate: 1,
+        status: 'fail',
+      })
+    },
+  )
+
+  it('does not pass an empty or unsupported public set', () => {
+    expect(photoAdviceMetrics([]).status).toBe('not measurable')
+    expect(
+      photoAdviceMetrics(Array.from({ length: 5 }, () => sample(true, 1)))
+        .status,
+    ).toBe('not measurable')
+    expect(photoAdviceMetrics([sample(false, 0)]).status).toBe('not measurable')
+    expect(photoAdviceMetrics([sample(true, 1), sample(false, 0)]).status).toBe(
+      'not measurable',
+    )
   })
 })
