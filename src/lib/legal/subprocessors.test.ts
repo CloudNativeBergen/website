@@ -27,6 +27,8 @@ function facts(
     workshops: false,
     dedicatedEmailAccount: false,
     bufferPublishing: false,
+    contentJudgementEnabled: false,
+    storedJudgements: false,
     ...overrides,
   }
 }
@@ -379,5 +381,74 @@ describe('Buffer, when the organization publishes LinkedIn through it', () => {
         facts({ tenantKnown: false, bufferPublishing: false }),
       ).processors.find((p) => p.id === 'buffer')?.certainty,
     ).toBe('possible')
+  })
+})
+
+describe('OpenRouter, while content judgement is on or any Judgement is stored', () => {
+  const openrouter = (f: TenantProcessingFacts) =>
+    buildSubprocessorDisclosure(f).processors.find((p) => p.id === 'openrouter')
+
+  it('is absent when the setting is off and nothing is stored', () => {
+    expect(ids(facts())).not.toContain('openrouter')
+  })
+
+  it('is confirmed while the setting is on', () => {
+    expect(openrouter(facts({ contentJudgementEnabled: true }))).toMatchObject({
+      certainty: 'confirmed',
+      name: 'OpenRouter',
+      location: 'United States',
+      chosenBy: 'organizer',
+    })
+  })
+
+  it('stays confirmed after the setting is turned off while a Judgement is stored', () => {
+    expect(
+      openrouter(
+        facts({ contentJudgementEnabled: false, storedJudgements: true }),
+      )?.certainty,
+    ).toBe('confirmed')
+  })
+
+  it('is possible, never omitted, when the stored-Judgement read failed', () => {
+    expect(
+      openrouter(
+        facts({ contentJudgementEnabled: false, storedJudgements: null }),
+      )?.certainty,
+    ).toBe('possible')
+  })
+
+  it('is possible when the organization read failed, and nothing is known to be stored', () => {
+    expect(
+      openrouter(
+        facts({
+          organizationReadFailed: true,
+          contentJudgementEnabled: false,
+          storedJudgements: false,
+        }),
+      )?.certainty,
+    ).toBe('possible')
+  })
+
+  it('a stored Judgement confirms it even when the organization read failed', () => {
+    expect(
+      openrouter(
+        facts({ organizationReadFailed: true, storedJudgements: true }),
+      )?.certainty,
+    ).toBe('confirmed')
+  })
+
+  it('is possible for an unknown tenant', () => {
+    expect(openrouter(facts({ tenantKnown: false }))?.certainty).toBe(
+      'possible',
+    )
+  })
+
+  it('names the United States transfer', () => {
+    const disclosure = buildSubprocessorDisclosure(
+      facts({ contentJudgementEnabled: true }),
+    )
+    expect(
+      internationalTransferProcessors(disclosure).map((p) => p.id),
+    ).toContain('openrouter')
   })
 })

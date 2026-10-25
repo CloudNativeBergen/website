@@ -24,6 +24,8 @@ function disclosure(overrides: Partial<TenantProcessingFacts> = {}) {
     workshops: true,
     dedicatedEmailAccount: false,
     bufferPublishing: true,
+    contentJudgementEnabled: true,
+    storedJudgements: true,
     ...overrides,
   })
 }

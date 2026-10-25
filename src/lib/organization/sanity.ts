@@ -104,7 +104,12 @@ const ORGANIZATION_PROJECTION = `{
   contactEmail,
   plan,
   featureOverrides,
-  analyticsPosthogToken
+  analyticsPosthogToken,
+  contentJudgement {
+    enabled,
+    changedAt,
+    "changedByName": changedBy->name
+  }
 }`
 
 /**

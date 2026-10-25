@@ -39,7 +39,7 @@ const status = (code: number) =>
   new Response('{"echo":"body"}', { status: code })
 
 let enabled: boolean | undefined | 'throw'
-const pause = vi.fn(async (_ms: number) => {})
+const pause = vi.fn<(ms: number) => Promise<void>>(async () => {})
 
 beforeEach(() => {
   enabled = true
