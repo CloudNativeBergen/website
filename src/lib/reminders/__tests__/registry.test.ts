@@ -174,7 +174,10 @@ describe('logistics', () => {
       '2026-09-09',
     )
     expect(copy).not.toBeNull()
-    expect(copy!.link).toBe('/program')
+    expect(copy!.link).toBe('/cfp/list#briefing')
+    expect(copy!.message).toContain(
+      'everything you need on your speaker dashboard',
+    )
   })
   it('is not due 3 days out', () => {
     expect(

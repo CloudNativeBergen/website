@@ -1106,6 +1106,14 @@ export default defineType({
         'Slack channel name where CFP notifications are posted (e.g. #conference-cfp)',
     }),
     defineField({
+      name: 'speakerSlackChannel',
+      title: 'Speakers Slack Channel',
+      type: 'string',
+      fieldset: 'communication',
+      description:
+        'Slack channel where the speaker info is posted (e.g. #conference-speakers)',
+    }),
+    defineField({
       name: 'volunteerSlackInviteUrl',
       title: 'Volunteer Slack Invite Link',
       type: 'string',

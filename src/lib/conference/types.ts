@@ -279,6 +279,8 @@ export interface Conference {
   sponsorRevenueGoal?: number
   salesNotificationChannel?: string
   cfpNotificationChannel?: string
+  /** Where `postBriefingToSlack` posts the shared speaker info (#1592). */
+  speakerSlackChannel?: string
   volunteerSlackInviteUrl?: string
   volunteerRegistrationLink?: string
   socialLinks?: string[]
