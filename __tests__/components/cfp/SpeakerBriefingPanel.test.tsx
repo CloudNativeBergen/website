@@ -64,7 +64,9 @@ describe('SpeakerBriefingPanel', () => {
       <SpeakerBriefingPanel briefing={briefing} />,
     )
     expect(html).toContain('id="briefing"')
-    expect(html.indexOf('Still to do')).toBeLessThan(html.indexOf('Your talks'))
+    expect(html.indexOf('Still to do')).toBeLessThan(
+      html.indexOf('Your talks and workshops'),
+    )
     expect(html).toContain('href="/cfp/proposal/p2"')
     expect(html).toContain('href="tel:+4790000000"')
     expect(html).toContain('href="mailto:k@example.com"')
@@ -75,7 +77,7 @@ describe('SpeakerBriefingPanel', () => {
     const html = renderToStaticMarkup(
       <SpeakerBriefingPanel briefing={briefing} />,
     )
-    expect(html).toContain('Meeting point: Lobby')
+    expect(html).toContain('Meet at Lobby')
     expect(html).not.toContain('javascript:')
   })
 
@@ -93,7 +95,7 @@ describe('SpeakerBriefingPanel', () => {
       <SpeakerBriefingPanel briefing={briefing} conferenceDay="2026-10-27" />,
     )
     const details = html.indexOf('<details')
-    expect(html.indexOf('Your talks today')).toBeLessThan(details)
+    expect(html.indexOf('Your talk today')).toBeLessThan(details)
     expect(html.indexOf('Badge desk')).toBeLessThan(details)
     expect(html.indexOf('On-site contact')).toBeLessThan(details)
     expect(html.indexOf('HDMI on stage')).toBeGreaterThan(details)
@@ -111,7 +113,7 @@ describe('SpeakerBriefingPanel', () => {
     )
     const details = html.indexOf('<details')
     expect(html.indexOf('Speaker dinner')).toBeLessThan(details)
-    expect(html.indexOf('Meeting point:')).toBeLessThan(details)
+    expect(html.indexOf('Meet at')).toBeLessThan(details)
     expect(html).toContain('href="mailto:cfp@example.com"')
     expect(html.slice(details)).not.toContain('Speaker dinner')
   })
@@ -121,7 +123,7 @@ describe('SpeakerBriefingPanel', () => {
       <SpeakerBriefingPanel briefing={briefing} />,
     )
     expect(html).toContain('href="/cfp/expense"')
-    expect(html).toContain('ticket email')
+    expect(html).toContain('<li>Claim your free speaker ticket</li>')
     expect(html).not.toContain('href="/cfp/proposal/undefined"')
     expect(html).toContain('Your workshop:')
     expect(html).toContain('href="/cfp/workshop/p3"')
@@ -150,10 +152,12 @@ describe('SpeakerBriefingPanel', () => {
       />,
     )
     expect(html).not.toContain('Invalid Date')
-    expect(html).toContain('Departs Mon 26 Oct, 17:30 (after the last talk)')
+    expect(html).toContain(
+      'Departs Mon 26 Oct, 17:30 (local time) (after the last talk)',
+    )
     expect(html).toContain('<p>whenever</p>')
     expect(html).not.toContain('Departs whenever')
-    expect(html).toContain('Map of Lobby')
+    expect(html).toContain('Open map')
   })
 
   it('collapses nothing when nothing is pinned on a conference day', () => {

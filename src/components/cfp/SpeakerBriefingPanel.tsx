@@ -7,6 +7,7 @@ import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import type {
   SpeakerBriefing,
+  SpeakerBriefingTalk,
   SpeakerBriefingTodo,
 } from '@/lib/speaker/briefing'
 import { formatConferenceDayDate, formatConferenceDayTime } from '@/lib/time'
@@ -39,24 +40,36 @@ function todoLink(t: SpeakerBriefingTodo): { text: string; href?: string } {
   const proposal = t.proposalId ? `/cfp/proposal/${t.proposalId}` : undefined
   switch (t.kind) {
     case 'confirm-talk':
-      return { text: `Confirm your talk “${t.title}”`, href: proposal }
+      return { text: `Confirm your talk: ${t.title}`, href: proposal }
     case 'upload-slides':
-      return { text: `Upload slides for “${t.title}”`, href: proposal }
+      return { text: `Upload your slides: ${t.title}`, href: proposal }
     case 'co-speaker-invite-pending':
       return {
-        text: `A co-speaker has not accepted the invite for “${t.title}”`,
+        text: `Your co-speaker has not accepted the invite yet: ${t.title}`,
         href: proposal,
       }
     case 'claim-ticket':
-      return {
-        text: 'Claim your free speaker ticket with the link in your ticket email',
-      }
+      return { text: 'Claim your free speaker ticket' }
     case 'travel-support':
       return {
         text: 'Submit your travel support request',
         href: '/cfp/expense',
       }
   }
+}
+
+// Same headings as the speaker info email (copy glossary, #1592).
+function talksHeading(talks: SpeakerBriefingTalk[], today = false) {
+  const workshops = talks.filter((t) => t.isWorkshop).length
+  const heading =
+    workshops === talks.length
+      ? 'Your workshop'
+      : workshops > 0
+        ? 'Your talks and workshops'
+        : talks.length === 1
+          ? 'Your talk'
+          : 'Your talks'
+  return today ? `${heading} today` : heading
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -133,7 +146,7 @@ export function SpeakerBriefingPanel({
                 {[
                   t.date && formatConferenceDayDate(t.date),
                   t.startTime &&
-                    (t.endTime ? `${t.startTime}–${t.endTime}` : t.startTime),
+                    `${t.endTime ? `${t.startTime}–${t.endTime}` : t.startTime} (local time)`,
                   t.trackTitle,
                 ]
                   .filter(Boolean)
@@ -189,7 +202,7 @@ export function SpeakerBriefingPanel({
         </p>
       )}
       {d.text && <p className="whitespace-pre-line">{d.text}</p>}
-      {dayTime(d.startsAt) && <p>{dayTime(d.startsAt)}</p>}
+      {dayTime(d.startsAt) && <p>{dayTime(d.startsAt)} (local time)</p>}
       {(d.venueName || d.address) && (
         <p>{[d.venueName, d.address].filter(Boolean).join(', ')}</p>
       )}
@@ -201,7 +214,7 @@ export function SpeakerBriefingPanel({
             rel="noopener noreferrer"
             className={linkClass}
           >
-            Map to the dinner venue
+            Open map
           </a>
         </p>
       )}
@@ -213,7 +226,7 @@ export function SpeakerBriefingPanel({
               {r.label && <p className="font-medium">{r.label}</p>}
               {r.meetingPoint && (
                 <p>
-                  Meeting point: {r.meetingPoint}
+                  Meet at {r.meetingPoint}
                   {isHttpUrl(r.meetingPointMapUrl) && (
                     <>
                       {' · '}
@@ -223,7 +236,7 @@ export function SpeakerBriefingPanel({
                         rel="noopener noreferrer"
                         className={`${linkClass} font-medium`}
                       >
-                        Map of {r.meetingPoint}
+                        Open map
                       </a>
                     </>
                   )}
@@ -232,7 +245,7 @@ export function SpeakerBriefingPanel({
               {(dayTime(r.departsAt) || r.departsNote) && (
                 <p>
                   {dayTime(r.departsAt)
-                    ? `Departs ${dayTime(r.departsAt)}${r.departsNote ? ` (${r.departsNote})` : ''}`
+                    ? `Departs ${dayTime(r.departsAt)} (local time)${r.departsNote ? ` (${r.departsNote})` : ''}`
                     : r.departsNote}
                 </p>
               )}
@@ -274,7 +287,7 @@ export function SpeakerBriefingPanel({
   const pinned = pinTalks || pinDin || pinCheckIn || pinContact
   const rest = (
     <>
-      {b.talks && talkList('Your talks', b.talks)}
+      {b.talks && talkList(talksHeading(b.talks), b.talks)}
       {!pinDin && dinner}
       {!pinCheckIn && checkIn}
       {b.equipment && (
@@ -289,7 +302,7 @@ export function SpeakerBriefingPanel({
         </Section>
       )}
       {b.extra && (
-        <Section title="More information">
+        <Section title="Good to know">
           <Rich value={b.extra} />
         </Section>
       )}
@@ -307,11 +320,11 @@ export function SpeakerBriefingPanel({
         id="briefing-heading"
         className="text-sm font-semibold text-gray-700 dark:text-gray-300"
       >
-        Speaker briefing
+        Speaker info
       </h4>
       {pinned ? (
         <>
-          {pinTalks && talkList('Your talks today', todayTalks)}
+          {pinTalks && talkList(talksHeading(todayTalks, true), todayTalks)}
           {pinDin && dinner}
           {pinCheckIn && checkIn}
           {pinContact && contact}
