@@ -23,18 +23,36 @@ Conversation accuracy uses majority top-choice voting across repeats (ties follo
 
 Only items with all repeats successful enter metrics; excluded counts are explicit. Undefined ratios are zero; empty slice rates are marked where applicable and support counts are shown. Cost sums returned usage costs; missing costs and failed/retried requests can make this an underestimate. p50/p95 latency includes retries and backoff. This deliberately sampled set does not estimate real-world prevalence, and stability or high confidence does not imply correctness. Public examples can become contaminated by training: use fresh held-out cases and human review before deployment.
 
+## This is a development set
+
+This set was written and labelled by a model (gpt-6.1-sol), and the question wording in `questions.ts` was written alongside it. Some criteria sentences describe the exact patterns of specific items, so these slices are **in-sample**: the `ambiguous` conversation items (for example co-003/011/015, co-033/038/043, co-053/058/064, co-068/075/076, co-083/088/090), the `borderline` items ("sexy YAML"), sponsor captions, and "sales pitch is not spam" comments. The negatives are also soft: the harsh-but-fair comments have no profanity, and the evasion items are mostly one-character edits of other items here. Treat its numbers as an upper bound for development, never as the evidence that unlocks enforcement.
+
+Phone numbers in the data start with 0, which no Norwegian subscriber number does, so none can belong to a real person. Names, streets and domains (`.example.invalid`) are invented.
+
 ## Pass bar
 
-Agreed on 2026-10-25 in [Build the offline eval set and the pass bar per surface](https://github.com/CloudNativeBergen/website/issues/1569). "Flag" means any of the four moderation questions at or above the threshold, using the mean probability across repeats.
+Agreed on 2026-10-25 in [Build the offline eval set and the pass bar per surface](https://github.com/CloudNativeBergen/website/issues/1569) (see its resolution comment). "Flag" means any of the four moderation questions at or above the threshold, using the mean probability across repeats.
 
-| Use                               | Surface                                        | Bar                                                                                                           |
-| --------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Advice (badge)                    | Wall Post captions, Feedback Response comments | Flag at **0.5**: recall ≥ 95%, harsh-but-fair false-positive rate ≤ 5%                                        |
-| Enforcement candidate (auto-hide) | Wall Post captions, Feedback Response comments | Flag at **0.9**: precision ≥ 98%, **zero** harsh-but-fair or borderline false positives, evasion recall ≥ 80% |
-| Message Category                  | Conversation openings                          | Accuracy ≥ 90%; a choice with confidence below **0.7** is shown as uncertain and not used as a filter value   |
+| Use                                                             | Bar                                                                                                                                                                                                                                    | Measured on                                                                                 |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Advice** (badge on Wall Posts and Feedback Response comments) | Flag at **0.5**: recall ≥ 95%, harsh-but-fair false-positive rate ≤ 5%                                                                                                                                                                 | This development set is enough                                                              |
+| **Message Category**                                            | Accuracy ≥ 90%. A choice with confidence below **0.7** is shown as uncertain and not used as a filter value                                                                                                                            | This development set is enough                                                              |
+| **Enforcement** (auto-hide), **per question**                   | False-positive rate ≤ **1% on at least 300 negatives**, including hard negatives (profanity in fair criticism, people sharing their own contact details, sponsor captions); recall ≥ **80%** for that question at the chosen threshold | A **held-out set written by humans**, never seen while writing the questions. Not built yet |
 
-The bar must be met again whenever the model build or `QUESTION_SET_VERSION` changes, and on a set expanded with adversarial items written by a human before enforcement is switched on anywhere. This set was generated and labelled by a model, so its numbers are an upper bound, not proof.
+A precision bar is deliberately not used for enforcement: precision depends on how common abuse is in the set, and this set is about half positive. Zero false positives in 300 negatives is roughly what it takes to show a false-positive rate of 1% or less.
+
+Every bar must be met again whenever the model build or `QUESTION_SET_VERSION` changes.
 
 ## Runs
 
-- [`typesafe/jev-1.14-20261014`, 2026-10-25](results/typesafe-jev-1.14-2026-10-25/report.md): all three bars met. Flag at 0.5: 100% precision, 98.7% / 97.6% recall (captions / comments), 0 of 30 harsh-but-fair comments flagged. Flag at 0.9: 100% precision, 82.7% / 84.1% recall, evasion recall 84% / 80%, which clears the enforcement bar narrowly. Categories: 97.3% accuracy, wrong answers at mean confidence 0.56. Every "abusive" false positive is a sexual remark aimed at the speaker, labelled only "sexual". The misses are Norwegian sexual remarks with spaced-out letters. 1,206 calls, $0.049, p50 250 ms.
+Current: [`typesafe/jev-1.14-20261014`, question set v2, 2026-10-25](results/typesafe-jev-1.14-2026-10-25-v2/report.md). 1,206 calls, $0.049, no failures.
+
+- **Advice bar: met.** Flag at 0.5: 100% precision, 98.7% / 97.6% recall (captions / comments), 0 of 30 harsh-but-fair comments flagged (in-sample, soft negatives).
+- **Category bar: met.** 97.3% accuracy; the three wrong answers average confidence 0.57. One of them (co-078) is above the 0.7 uncertainty gate, and two correct answers (co-020, co-028) fall below it.
+- **Enforcement: not measurable on this set**, and two questions would fail recall at 0.9 anyway:
+  - **personal_info**: 42.9% / 21.4% recall at 0.9 (100% at 0.5). Recall dropped from v1 after the phone numbers were changed to start with 0, so part of it may be the less realistic numbers. Either way, personal info does not qualify for auto-hide at 0.9 today.
+  - **sexual** on comments: 83.3% recall at 0.9, with evasion recall of 62.5% (8 items). The misses are Norwegian sexual remarks, several with spaced-out letters ("n a k e n", "R u m p a"), and one plain Bokmål caption (wc-071).
+- Flag at 0.9: 100% precision, 81.3% / 82.9% recall, evasion recall 84.0% / 76.7%.
+- The earlier 80% evasion-recall figure was proposed after seeing a run that scored exactly 80%, which is one reason enforcement now waits for the held-out set.
+
+Earlier: [v1 run](results/typesafe-jev-1.14-2026-10-25/report.md), before sexual remarks aimed at a person were also labelled abusive (they were all counted as abusive "false positives") and before the phone numbers changed.
