@@ -73,6 +73,15 @@ export const TrackSponsored: Story = {
 export const TrackSponsoredPhone: Story = {
   args: { track: track('sopra') },
   parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    const banner = within(canvasElement).getByRole('region', {
+      name: 'Track sponsored by',
+    })
+    const edge = banner.getBoundingClientRect().right
+    for (const part of banner.querySelectorAll('svg, span')) {
+      await expect(part.getBoundingClientRect().right).toBeLessThanOrEqual(edge)
+    }
+  },
 }
 
 /** Hovedsalen, with no track sponsor: every sponsor, thanked in the loop. */
