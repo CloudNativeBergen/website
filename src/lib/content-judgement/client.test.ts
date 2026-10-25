@@ -39,7 +39,7 @@ const status = (code: number) =>
   new Response('{"echo":"body"}', { status: code })
 
 let enabled: boolean | undefined | 'throw'
-const pause = vi.fn(async () => {})
+const pause = vi.fn(async (_ms: number) => {})
 
 beforeEach(() => {
   enabled = true
@@ -225,7 +225,7 @@ describe('retries, the spend cap and the timeout', () => {
     })
     expect(fetcher).toHaveBeenCalledTimes(3)
     // Backoff grows between attempts.
-    const waits = pause.mock.calls.map(([ms]) => ms as number)
+    const waits = pause.mock.calls.map(([ms]) => ms)
     expect(waits).toHaveLength(2)
     expect(waits[1]).toBeGreaterThan(waits[0])
   })
