@@ -870,6 +870,82 @@ describe('the actions (§10)', () => {
     expect(h.deletePost).not.toHaveBeenCalled()
   })
 
+  describe('a poll makes the post ineligible while Withdraw asks', () => {
+    const consenting = post({
+      _id: 'wallPost-7',
+      status: 'notShown',
+      caption: 'Late one',
+      marketingConsent: true,
+      decidedAt: '2026-10-26T08:10:00Z',
+    })
+    const view = (p: ModerationPost) => (
+      <ModerationQueueView
+        queue={{ posts: [p] }}
+        onAction={async () => 'done'}
+      />
+    )
+    const openConfirm = () => {
+      const r = render(view(consenting))
+      fireEvent.click(tab(/^Not shown/))
+      fireEvent.click(
+        within(card('Late one')).getByRole('button', {
+          name: 'Withdraw marketing OK',
+        }),
+      )
+      return r
+    }
+    const confirmGroup = () =>
+      within(card('Late one')).queryByRole('group', {
+        name: /^Withdraw marketing OK\?/,
+      })
+
+    it.each([
+      [
+        'the mark is gone (another organizer withdrew it)',
+        { marketingConsent: false },
+        ['Approve', 'Delete now'],
+        'Delete now',
+      ],
+      [
+        'the post is deleting (another organizer started a Delete)',
+        { status: 'deleting' as const, photo: null },
+        ['Try again'],
+        'Try again',
+      ],
+    ])(
+      'closes when %s, and hands focus to the delete button',
+      async (_name, change, after, focused) => {
+        const { rerender } = openConfirm()
+        await vi.waitFor(() =>
+          expect(
+            within(confirmGroup()!).getByRole('button', { name: 'Cancel' }),
+          ).toHaveFocus(),
+        )
+        rerender(view({ ...consenting, ...change }))
+        expect(confirmGroup()).toBeNull()
+        expect(buttons(card('Late one'))).toEqual(after)
+        await vi.waitFor(() =>
+          expect(
+            within(card('Late one')).getByRole('button', { name: focused }),
+          ).toHaveFocus(),
+        )
+        // Closed for good: the mark coming back does not reopen it.
+        rerender(view(consenting))
+        expect(confirmGroup()).toBeNull()
+      },
+    )
+
+    it('leaves focus the organizer moved elsewhere alone', async () => {
+      const { rerender } = openConfirm()
+      const elsewhere = tab(/^Pending/)
+      elsewhere.focus()
+      rerender(view({ ...consenting, marketingConsent: false }))
+      expect(confirmGroup()).toBeNull()
+      await act(() => Promise.resolve())
+      expect(elsewhere).toHaveFocus()
+    })
+  })
+
   it.each([
     ['gone', { status: 'gone' }, 'This photo was deleted.'],
     ['failed', null, 'Couldn’t withdraw marketing OK. Try again.'],

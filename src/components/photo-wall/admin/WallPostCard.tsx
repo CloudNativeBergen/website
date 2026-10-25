@@ -231,6 +231,18 @@ function Actions({
     handBackTo.current = handBack ? confirming : null
     setConfirming(null)
   }
+  // A poll can take Withdraw away while it asks: another organizer withdrew
+  // the mark, or started a Delete. The confirm closes for good in that
+  // render (never a Withdraw without the mark, nor in place of Try again),
+  // and focus, if it went with it, goes to Delete now (or Try again).
+  const [dismissals, setDismissals] = useState(0)
+  if (confirming === 'withdrawMarketing' && !offersWithdraw(post)) {
+    setConfirming(null)
+    setDismissals((n) => n + 1)
+  }
+  useEffect(() => {
+    if (dismissals && focusIsWith(null)) askedRefs.current.delete?.focus()
+  }, [dismissals])
 
   const run = async (action: PostAction) => {
     // Not `disabled`, which drops focus: a press while busy does nothing.
