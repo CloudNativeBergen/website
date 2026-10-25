@@ -338,7 +338,10 @@ export interface SpeakerInfoRoute {
   _key?: string
   label?: string
   meetingPoint?: string
+  meetingPointMapUrl?: string
   departsAt?: string
+  /** Free-text departure when it is not a clock time. */
+  departsNote?: string
   details?: TypedObject[]
 }
 
@@ -348,6 +351,8 @@ export interface SpeakerInfo {
     venueName?: string
     address?: string
     mapUrl?: string
+    /** Display text only; the RSVP is collected on the speaker ticket. */
+    rsvpNote?: string
     description?: TypedObject[]
     routes?: SpeakerInfoRoute[]
   }

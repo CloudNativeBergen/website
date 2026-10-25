@@ -1312,6 +1312,13 @@ export default defineType({
             defineField({ name: 'address', title: 'Address', type: 'string' }),
             defineField({ name: 'mapUrl', title: 'Map URL', type: 'url' }),
             defineField({
+              name: 'rsvpNote',
+              title: 'RSVP Note',
+              type: 'string',
+              description:
+                'How to reply. Display text only; the RSVP itself is collected on the speaker ticket.',
+            }),
+            defineField({
               name: 'description',
               title: 'Description',
               type: 'array',
@@ -1337,9 +1344,23 @@ export default defineType({
                       type: 'string',
                     }),
                     defineField({
+                      name: 'meetingPointMapUrl',
+                      title: 'Meeting Point Map URL',
+                      type: 'url',
+                      validation: (Rule) =>
+                        Rule.uri({ scheme: ['http', 'https'] }),
+                    }),
+                    defineField({
                       name: 'departsAt',
                       title: 'Departs At',
                       type: 'datetime',
+                    }),
+                    defineField({
+                      name: 'departsNote',
+                      title: 'Departure Note',
+                      type: 'string',
+                      description:
+                        'When the departure is not a clock time, e.g. “When the workshops are over”.',
                     }),
                     defineField({
                       name: 'details',

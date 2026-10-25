@@ -579,6 +579,12 @@ const PortableTextBlockSchema = z
  * server-side and never accepted from the client.
  */
 // `optionalText` is the sponsorship one above: trimmed, `null`-able.
+const optionalHttpUrl = z
+  .string()
+  .trim()
+  .url()
+  .refine((u) => /^https?:\/\//i.test(u), 'Must be an http(s) URL')
+  .optional()
 const optionalBlocks = z.array(PortableTextBlockSchema).optional()
 
 export const UpdateSpeakerInfoSchema = z.object({
@@ -588,6 +594,7 @@ export const UpdateSpeakerInfoSchema = z.object({
       venueName: optionalText,
       address: optionalText,
       mapUrl: z.string().trim().url().optional(),
+      rsvpNote: optionalText,
       description: optionalBlocks,
       routes: z
         .array(
@@ -595,6 +602,8 @@ export const UpdateSpeakerInfoSchema = z.object({
             _key: z.string().optional(),
             label: optionalText,
             meetingPoint: optionalText,
+            meetingPointMapUrl: optionalHttpUrl,
+            departsNote: optionalText,
             departsAt: z.string().datetime({ offset: true }).optional(),
             details: optionalBlocks,
           }),

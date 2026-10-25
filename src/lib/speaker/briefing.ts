@@ -31,6 +31,7 @@ export interface SpeakerBriefing {
     venueName?: string
     address?: string
     mapUrl?: string
+    rsvpNote?: string
     description?: TypedObject[]
     routes?: SpeakerInfoRoute[]
     /** Plain `speakerDinnerInfo`, only when the structured dinner is empty. */
@@ -78,6 +79,8 @@ export function getSpeakerBriefing(
         _key: r._key,
         label: text(r.label),
         meetingPoint: text(r.meetingPoint),
+        meetingPointMapUrl: text(r.meetingPointMapUrl),
+        departsNote: text(r.departsNote),
         departsAt: text(r.departsAt),
         details: blocks(r.details),
       }),
@@ -90,6 +93,7 @@ export function getSpeakerBriefing(
       venueName: text(d?.venueName),
       address: text(d?.address),
       mapUrl: text(d?.mapUrl),
+      rsvpNote: text(d?.rsvpNote),
       description: blocks(d?.description),
       routes: routes && routes.length > 0 ? routes : undefined,
     }) ?? compact({ text: text(conference.speakerDinnerInfo) })

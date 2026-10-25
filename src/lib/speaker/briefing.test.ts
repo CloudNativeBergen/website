@@ -29,6 +29,28 @@ describe('getSpeakerBriefing', () => {
     expect(b.dinner).toEqual({ venueName: 'Bryggen' })
   })
 
+  it('keeps a route with only the map link or departure note', () => {
+    const b = getSpeakerBriefing({
+      speakerInfo: {
+        dinner: {
+          rsvpNote: ' On your ticket ',
+          routes: [
+            { _key: 'a', meetingPointMapUrl: ' https://maps.example.com/x ' },
+            { _key: 'b', departsNote: 'After the workshops' },
+            { _key: 'c', departsNote: '  ' },
+          ],
+        },
+      },
+    })
+    expect(b.dinner).toEqual({
+      rsvpNote: 'On your ticket',
+      routes: [
+        { _key: 'a', meetingPointMapUrl: 'https://maps.example.com/x' },
+        { _key: 'b', departsNote: 'After the workshops' },
+      ],
+    })
+  })
+
   it('omits empty sections entirely', () => {
     expect(
       getSpeakerBriefing({

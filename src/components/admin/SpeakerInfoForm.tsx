@@ -34,11 +34,14 @@ function buildPayload(info: SpeakerInfo) {
       venueName: str(d.venueName),
       address: str(d.address),
       mapUrl: str(d.mapUrl),
+      rsvpNote: str(d.rsvpNote),
       description: blk(d.description),
       routes: d.routes?.map((r) => ({
         _key: r._key,
         label: str(r.label),
         meetingPoint: str(r.meetingPoint),
+        meetingPointMapUrl: str(r.meetingPointMapUrl),
+        departsNote: str(r.departsNote),
         departsAt: fromLocalInput(r.departsAt),
         details: blk(r.details),
       })),
@@ -161,6 +164,15 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
               setValue={(v) => setDinner({ mapUrl: v })}
             />
           </div>
+          <div className="sm:col-span-2">
+            <Input
+              name="dinner-rsvpNote"
+              label="RSVP note"
+              placeholder="RSVP on your speaker ticket"
+              value={dinner.rsvpNote ?? ''}
+              setValue={(v) => setDinner({ rsvpNote: v })}
+            />
+          </div>
         </div>
         <PortableTextEditor
           label="Description"
@@ -201,6 +213,24 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
                     type="datetime-local"
                     value={r.departsAt ?? ''}
                     setValue={(v) => setRoute(idx, { departsAt: v })}
+                  />
+                </div>
+                <div>
+                  <Input
+                    name={`route-${idx}-meetingPointMapUrl`}
+                    label="Meeting point map URL"
+                    type="url"
+                    value={r.meetingPointMapUrl ?? ''}
+                    setValue={(v) => setRoute(idx, { meetingPointMapUrl: v })}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Input
+                    name={`route-${idx}-departsNote`}
+                    label="Departure note (instead of a time)"
+                    placeholder="When the workshops are over"
+                    value={r.departsNote ?? ''}
+                    setValue={(v) => setRoute(idx, { departsNote: v })}
                   />
                 </div>
               </div>

@@ -52,14 +52,22 @@ export const Filled: Story = {
         venueName: 'Harbour Hall',
         address: 'Quay 1',
         mapUrl: 'https://maps.example.com/harbour-hall',
+        rsvpNote:
+          'RSVP on your speaker ticket, and tell us if you are getting there yourself.',
         description: [para('d', 'Three courses; vegetarian on request.')],
         routes: [
           {
             _key: 'walk',
             label: 'Walk together',
             meetingPoint: 'Venue main entrance',
+            meetingPointMapUrl: 'https://maps.example.com/venue-entrance',
             departsAt: '2026-10-27T17:30:00.000Z',
             details: [para('w', 'About 20 minutes on foot.')],
+          },
+          {
+            _key: 'bus',
+            label: 'Bus after the workshops',
+            departsNote: 'When the workshops are over',
           },
         ],
       },
