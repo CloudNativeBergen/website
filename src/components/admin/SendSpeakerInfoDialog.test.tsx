@@ -18,7 +18,14 @@ const m = vi.hoisted(() => ({
   calls: [] as string[],
   saveChannel: vi.fn(),
   invalidate: vi.fn(),
-  channelOptions: undefined as undefined | { onSuccess: () => void },
+  channelOptions: undefined as
+    | undefined
+    | {
+        onSuccess: (
+          d: unknown,
+          i: { speakerSlackChannel: string | null },
+        ) => void
+      },
   post: vi.fn(),
   send: vi.fn(),
   test: vi.fn(),
@@ -43,7 +50,12 @@ vi.mock('@/lib/trpc/client', () => ({
     }),
     conference: {
       updateSpeakerSlackChannel: {
-        useMutation: (options: { onSuccess: () => void }) => {
+        useMutation: (options: {
+          onSuccess: (
+            d: unknown,
+            i: { speakerSlackChannel: string | null },
+          ) => void
+        }) => {
           m.channelOptions = options
           return mutation(m.saveChannel)
         },
@@ -112,7 +124,9 @@ describe('SlackChannelField', () => {
     expect(m.saveChannel).toHaveBeenCalledWith({
       speakerSlackChannel: '#cndn-2026-speakers',
     })
-    m.channelOptions!.onSuccess()
+    m.channelOptions!.onSuccess(undefined, {
+      speakerSlackChannel: '#cndn-2026-speakers',
+    })
     expect(m.invalidate).toHaveBeenCalledTimes(2)
   })
 
@@ -246,5 +260,112 @@ describe('SendSpeakerInfoDialog', () => {
     expect(first).toMatchObject({ force: true })
     expect(second.runId).toBe(first.runId)
     expect(m.post).not.toHaveBeenCalled()
+  })
+
+  it('continues an interrupted forced run with the same run id', async () => {
+    m.send
+      .mockImplementationOnce(async () => ({
+        sent: 2,
+        skipped: 0,
+        failed: [],
+        logFailed: [],
+        remaining: 1,
+      }))
+      .mockRejectedValueOnce(new Error('Network down.'))
+      .mockImplementationOnce(async () => ({
+        sent: 1,
+        skipped: 0,
+        failed: [],
+        logFailed: [],
+        remaining: 0,
+      }))
+    dialog()
+    fireEvent.click(screen.getByLabelText(/Post to #/))
+    fireEvent.click(screen.getByLabelText('All confirmed speakers (3)'))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Email 3 speakers' }))
+    })
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          /Send again to continue this run; speakers already reached are skipped\./,
+        ),
+      ).toBeTruthy(),
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
+    })
+    await waitFor(() =>
+      expect(screen.getByText('Emailed 1 speaker.')).toBeTruthy(),
+    )
+    const ids = m.send.mock.calls.map((c) => c[0].runId)
+    expect(ids).toHaveLength(3)
+    expect(new Set(ids).size).toBe(1)
+    expect(ids[0]).toBeTruthy()
+  })
+
+  it('says who was not attempted when a call makes no progress', async () => {
+    m.send.mockImplementationOnce(async () => ({
+      sent: 0,
+      skipped: 0,
+      failed: [{ speakerId: 'a', name: 'Ada', error: 'bad address' }],
+      logFailed: [],
+      remaining: 1,
+    }))
+    dialog()
+    fireEvent.click(screen.getByLabelText(/Post to #/))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Email 2 speakers' }))
+    })
+    await waitFor(() =>
+      expect(
+        screen.getByText('1 speaker not attempted yet. Send again.'),
+      ).toBeTruthy(),
+    )
+    expect(screen.queryByText(/^Emailed/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Send again' })).toBeTruthy()
+  })
+
+  it('turns Slack on after a channel is saved in the dialog', () => {
+    const view = dialog({ slackChannel: '' })
+    fireEvent.change(screen.getByLabelText('Speakers Slack Channel'), {
+      target: { value: '#new' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    act(() => {
+      m.channelOptions!.onSuccess(undefined, { speakerSlackChannel: '#new' })
+    })
+    view.rerender(
+      <NotificationProvider>
+        <SendSpeakerInfoDialog
+          isOpen
+          onClose={() => {}}
+          speakers={SPEAKERS}
+          behind={2}
+          slackChannel="#new"
+        />
+      </NotificationProvider>,
+    )
+    expect(
+      (screen.getByLabelText(/Post to #new/) as HTMLInputElement).checked,
+    ).toBe(true)
+    expect(
+      (screen.getByLabelText('Speakers Slack Channel') as HTMLInputElement)
+        .value,
+    ).toBe('#new')
+  })
+})
+
+describe('two channel fields', () => {
+  it('follows a save made elsewhere unless edited here', () => {
+    const view = render(<SlackChannelField current="#old" />)
+    view.rerender(<SlackChannelField current="#new" />)
+    const input = screen.getByLabelText(
+      'Speakers Slack Channel',
+    ) as HTMLInputElement
+    expect(input.value).toBe('#new')
+    fireEvent.change(input, { target: { value: '#mine' } })
+    view.rerender(<SlackChannelField current="#other" />)
+    expect(input.value).toBe('#mine')
   })
 })

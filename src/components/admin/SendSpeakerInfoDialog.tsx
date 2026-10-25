@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ModalShell } from '@/components/ModalShell'
 import { useNotification } from './NotificationProvider'
@@ -27,13 +27,27 @@ function useDebounced<T>(value: T, ms = 400): T {
  * other Communication settings are untouched; `#` is optional, as in
  * Settings. Saving refetches the panel, so the preview and post button follow.
  */
-export function SlackChannelField({ current }: { current: string }) {
+export function SlackChannelField({
+  current,
+  onSaved,
+}: {
+  current: string
+  /** Called after a save, e.g. to turn the Slack option on. */
+  onSaved?: (channel: string | null) => void
+}) {
   const utils = api.useUtils()
   const [value, setValue] = useState(current)
+  // Another field (panel or dialog) may save: follow it unless edited here.
+  const shown = useRef(current)
+  useEffect(() => {
+    setValue((v) => (v.trim() === shown.current.trim() ? current : v))
+    shown.current = current
+  }, [current])
   const save = api.conference.updateSpeakerSlackChannel.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, input) => {
       utils.conference.briefingSpeakers.invalidate()
       utils.conference.previewBriefingSlack.invalidate()
+      onSaved?.(input.speakerSlackChannel ?? null)
     },
   })
   const dirty = value.trim() !== current
@@ -128,6 +142,13 @@ export function SendSpeakerInfoDialog({
   const [progress, setProgress] = useState({ sent: 0, of: 0 })
   const [summary, setSummary] = useState<string[]>([])
   const [slackError, setSlackError] = useState('')
+  /**
+   * One run id per compose, kept across "Send again" and reopening after a
+   * stop, so a forced run never reaches a speaker twice. Cleared only once a
+   * run has reached everyone.
+   */
+  const runId = useRef<string | null>(null)
+  const [incomplete, setIncomplete] = useState(false)
 
   const settledNote = useDebounced(note).trim() || undefined
   const preview = api.conference.previewBriefing.useQuery(
@@ -174,9 +195,10 @@ export function SendSpeakerInfoDialog({
   /** The email loop, as the email button had it; returns summary lines. */
   async function runEmail(): Promise<string[]> {
     const of = recipients
-    // One run id per send: a forced continuation skips whom it reached.
-    const runId = crypto.randomUUID().replace(/-/g, '')
+    runId.current ??= crypto.randomUUID().replace(/-/g, '')
+    const id = runId.current
     let sent = 0
+    let remaining = 0
     let skipped: number | undefined
     const failed = new Map<string, string>()
     const logFailed = new Set<string>()
@@ -185,15 +207,32 @@ export function SendSpeakerInfoDialog({
       for (;;) {
         const r = await sendEmail.mutateAsync({
           note: trimmedNote,
-          ...(everyone ? { force: true as const, runId } : {}),
+          ...(everyone ? { force: true as const, runId: id } : {}),
         })
         sent += r.sent
         skipped ??= r.skipped
         for (const f of r.failed) failed.set(f.name, f.error)
         for (const f of r.logFailed) logFailed.add(f.name)
+        remaining = r.remaining
         setProgress({ sent, of })
         if (r.remaining === 0 || r.sent === 0) break
       }
+      const problems = [
+        failed.size > 0 &&
+          `Failed: ${[...failed].map(([n, e]) => `${n} (${e})`).join('; ')}.`,
+        logFailed.size > 0 &&
+          `Sent to ${[...logFailed].join(', ')}, but the send log failed, so they may receive it again on the next send.`,
+      ].filter((l): l is string => !!l)
+      if (remaining > 0) {
+        setIncomplete(true)
+        return [
+          `Sent ${sent} of ${of}.`,
+          ...problems,
+          `${plural(remaining, 'speaker')} not attempted yet. Send again.`,
+        ]
+      }
+      setIncomplete(false)
+      runId.current = null
       return [
         `Emailed ${plural(sent, 'speaker')}.`,
         failed.size > 0 &&
@@ -203,8 +242,13 @@ export function SendSpeakerInfoDialog({
         !!skipped && 'Speakers who already had this version were skipped.',
       ].filter((l): l is string => !!l)
     } catch (e) {
+      setIncomplete(true)
       return [
-        `Stopped after sending ${sent} of ${of}. ${(e as Error).message} Fix the error and send again. Speakers who already got it are skipped.`,
+        `Stopped after sending ${sent} of ${of}. ${(e as Error).message} ${
+          everyone
+            ? 'Send again to continue this run; speakers already reached are skipped.'
+            : 'Fix the error and send again. Speakers who already got it are skipped.'
+        }`,
       ]
     } finally {
       utils.conference.briefingSpeakers.invalidate()
@@ -248,6 +292,11 @@ export function SendSpeakerInfoDialog({
     setPhase('compose')
     setSummary([])
     setSlackError('')
+    // Keep an unfinished run's id, so Send again continues it.
+    if (!incomplete) {
+      runId.current = null
+      setEveryone(false)
+    }
     onClose()
   }
 
@@ -286,7 +335,10 @@ export function SendSpeakerInfoDialog({
                 <span className="text-gray-500">(no channel set)</span>
               )}
             </label>
-            <SlackChannelField current={slackChannel} />
+            <SlackChannelField
+              current={slackChannel}
+              onSaved={(c) => setSlack(!!c)}
+            />
           </fieldset>
 
           {email && (
@@ -455,8 +507,18 @@ export function SendSpeakerInfoDialog({
               <li key={line}>{line}</li>
             ))}
           </ul>
-          <div className="flex justify-end">
-            <AdminButton onClick={close}>Close</AdminButton>
+          <div className="flex justify-end gap-3">
+            <AdminButton
+              variant={incomplete ? 'ghost' : 'primary'}
+              onClick={close}
+            >
+              Close
+            </AdminButton>
+            {incomplete && email && (
+              <AdminButton onClick={() => finishWithEmail([])}>
+                Send again
+              </AdminButton>
+            )}
           </div>
         </div>
       )}
