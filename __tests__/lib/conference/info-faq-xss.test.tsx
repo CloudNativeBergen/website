@@ -243,3 +243,171 @@ describe('/info FAQ preserves its own hardcoded markup', () => {
     expect(container.textContent).not.toContain('&amp;')
   })
 })
+
+const block = (text: string, href?: string) => ({
+  _type: 'block',
+  _key: text.slice(0, 8),
+  style: 'normal',
+  markDefs: href ? [{ _key: 'l', _type: 'link', href }] : [],
+  children: [{ _type: 'span', _key: 's', text, marks: href ? ['l'] : [] }],
+})
+
+describe('/info speaker briefing', () => {
+  it('neutralises payloads in the structured dinner and contact', () => {
+    const { container } = renderInfo({
+      speakerInfo: {
+        dinner: {
+          venueName: PAYLOAD,
+          mapUrl: 'javascript:alert(1)',
+          description: [block(PAYLOAD, 'javascript:alert(1)')],
+          rsvpNote: PAYLOAD,
+          routes: [
+            {
+              _key: 'r',
+              label: PAYLOAD,
+              meetingPoint: PAYLOAD,
+              meetingPointMapUrl: 'javascript:alert(1)',
+              departsNote: PAYLOAD,
+            },
+          ],
+        },
+        onsiteContact: { name: PAYLOAD, phone: PAYLOAD, email: PAYLOAD },
+        checkIn: [block(PAYLOAD)],
+      },
+    })
+
+    expectNoInjection(container)
+    expectPayloadRenderedAsText(container, PAYLOAD)
+    for (const a of container.querySelectorAll('a')) {
+      expect(a.getAttribute('href')).not.toMatch(/^javascript:/i)
+    }
+    expect(container.textContent).not.toContain('Open map')
+  })
+
+  it('renders the structured dinner with its routes', () => {
+    const { container } = renderInfo({
+      speakerDinnerInfo: 'ignored when structured',
+      speakerInfo: {
+        dinner: {
+          startsAt: '2026-10-27T17:00:00Z',
+          venueName: 'Harbour Hall',
+          address: 'Quay 1',
+          mapUrl: 'https://maps.example/x',
+          rsvpNote: 'Reply by Friday.',
+          description: [block('Three courses.')],
+          routes: [
+            {
+              _key: 'r',
+              label: 'Walk',
+              meetingPoint: 'Lobby',
+              meetingPointMapUrl: 'https://maps.example/lobby',
+              departsAt: '2026-10-27T16:30:00Z',
+              departsNote: 'sharp',
+              details: [block('Bring a jacket.')],
+            },
+            { _key: 'b', label: 'Bus', departsNote: 'after the last talk' },
+          ],
+        },
+      },
+    })
+
+    const text = container.textContent ?? ''
+    expect(text).toContain('Tue 27 Oct, 18:00 (local time)')
+    expect(text).toContain('Harbour Hall')
+    expect(text).toContain('Quay 1')
+    expect(text).toContain('Three courses.')
+    expect(text).not.toContain('Reply by Friday.')
+    expect(text).toContain(
+      'Walk: meet at Lobby (Open map), departs Tue 27 Oct, 17:30 (local time), sharp',
+    )
+    expect(text).toContain('Bus: departs after the last talk')
+    expect(
+      container.querySelector('a[href="https://maps.example/lobby"]'),
+    ).not.toBeNull()
+    expect(text).toContain('Bring a jacket.')
+    expect(text).not.toContain('ignored when structured')
+    expect(
+      container.querySelector('a[href="https://maps.example/x"]'),
+    ).not.toBeNull()
+  })
+
+  it('falls back to the plain dinner text and the default laptop answer', () => {
+    const { container } = renderInfo({ speakerDinnerInfo: 'Dinner at 7.' })
+
+    const text = container.textContent ?? ''
+    expect(text).toContain('Dinner at 7.')
+    expect(text).toContain('Yes, please bring your own laptop.')
+    expect(text).not.toContain('Who do I contact on site?')
+    expect(text).not.toContain('Where do I check in as a speaker?')
+  })
+
+  it('replaces the laptop answer with tenant equipment info', () => {
+    const { container } = renderInfo({
+      speakerInfo: { equipment: [block('HDMI only.')] },
+    })
+
+    expect(container.textContent).toContain('HDMI only.')
+    expect(container.textContent).not.toContain('bring your own laptop')
+    expect(container.textContent).toContain('What equipment is provided?')
+  })
+
+  it('flattens headings and lists and skips non-text blocks', () => {
+    const { container } = renderInfo({
+      speakerInfo: {
+        extra: [
+          { ...block('Heading'), style: 'h2' },
+          { ...block('Item'), listItem: 'bullet', level: 1 },
+          { _type: 'image', _key: 'img' },
+        ],
+      },
+    })
+
+    expect(container.querySelectorAll('dd :is(h2, ul, li)')).toHaveLength(0)
+    expect(container.textContent).toContain('Heading')
+    expect(container.textContent).toContain('Item')
+  })
+
+  it('keeps the on-site phone off the page, and a phone-only contact', () => {
+    const withName = renderInfo({
+      speakerInfo: {
+        onsiteContact: { name: 'Kari', phone: '+47 123', email: 'k@x.no' },
+      },
+    }).container
+    expect(withName.textContent).toContain('Kari')
+    expect(withName.textContent).toContain('k@x.no')
+    expect(withName.textContent).not.toContain('+47 123')
+    expect(withName.querySelector('a[href^="tel:"]')).toBeNull()
+
+    const phoneOnly = renderInfo({
+      speakerInfo: { onsiteContact: { phone: '+47 123' } },
+    }).container
+    expect(phoneOnly.textContent).not.toContain('Who do I contact on site?')
+  })
+
+  it('orders the speaker questions like the dashboard and email', () => {
+    const { container } = renderInfo({
+      speakerDinnerInfo: 'Dinner.',
+      speakerInfo: {
+        checkIn: [block('Desk.')],
+        equipment: [block('HDMI.')],
+        onsiteContact: { name: 'Kari' },
+        accommodation: [block('Hotel.')],
+        extra: [block('More.')],
+      },
+    })
+
+    const questions = [...container.querySelectorAll('dt')].map(
+      (dt) => dt.textContent,
+    )
+    const order = [
+      'Will there be a speaker dinner?',
+      'Where do I check in as a speaker?',
+      'What equipment is provided?',
+      'Who do I contact on site?',
+      'Where should I stay?',
+      'Anything else I should know?',
+    ].map((q) => questions.indexOf(q))
+    expect(order.every((i) => i >= 0)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+  })
+})
