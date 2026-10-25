@@ -7,7 +7,7 @@ import type {
   Surface,
 } from './schema'
 
-export const QUESTION_SET_VERSION = 'v1'
+export const QUESTION_SET_VERSION = 'v2'
 export const DEFAULT_MODEL = 'typesafe/jev-1.14'
 
 export type NoulQuestion = {
@@ -43,7 +43,7 @@ function moderationSet(
       type: 'noul',
       instructions: `${read} Does ${field} contain abuse? ${abuseBoundary}`,
       criteria: {
-        true: 'Harassment, personal insults, hate, slurs, or threats aimed at a person or group.',
+        true: 'Harassment, personal insults, hate, slurs, or threats aimed at a person or group, including sexual remarks or propositions aimed at a person.',
         false: `No abuse as defined above. ${abuseBoundary}`,
       },
     },
