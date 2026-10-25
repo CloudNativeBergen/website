@@ -75,7 +75,7 @@ describe('cached image preparation', () => {
         outcome = error instanceof Error ? error.message : 'unknown error'
       }
       expect(outcome).toBe(
-        'wp-001: image preparation failed (minimum side 280 px)',
+        'wp-001: image preparation failed (Image short side is below 280 px)',
       )
     },
   )
@@ -117,5 +117,25 @@ describe('cached image preparation', () => {
       width: 1000,
       height: 800,
     })
+  })
+  it('loads a fetched image whose extension is upper case', async () => {
+    const directory = await cache(await png(900, 800))
+    await writeFile(join(directory, 'wp-003.JPG'), await png(1100, 800))
+    const prepared = await prepareImage(
+      {
+        ...item,
+        id: 'wp-003',
+        image: {
+          kind: 'fetched',
+          url: 'https://example.com/Photo.JPG',
+          page: 'https://example.com/photo',
+          author: 'Example',
+          licence: 'CC0-1.0',
+          sha256: 'a'.repeat(64),
+        },
+      },
+      directory,
+    )
+    expect(prepared.width).toBe(1100)
   })
 })

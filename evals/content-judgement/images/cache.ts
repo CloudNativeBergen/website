@@ -10,6 +10,9 @@ export async function fetchedImageFiles(
   directory: string,
 ): Promise<string[]> {
   return (await readdir(directory)).filter((name) =>
-    new RegExp(`^${id}\\.(jpg|jpeg|png|webp|avif|gif|tiff|heif)$`).test(name),
+    // Commons keeps the uploader's extension case (`.JPG`).
+    new RegExp(`^${id}\\.(jpg|jpeg|png|webp|avif|gif|tiff|heif)$`, 'i').test(
+      name,
+    ),
   )
 }

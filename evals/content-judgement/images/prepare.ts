@@ -40,9 +40,16 @@ export async function prepareImage(
       width: info.width,
       height: info.height,
     }
-  } catch {
-    throw new Error(
-      `${item.id}: image preparation failed (minimum side 280 px)`,
-    )
+  } catch (error) {
+    // Keep paths and decoder output out of logs; the reason is one of ours.
+    const reason =
+      error instanceof Error &&
+      [
+        'Missing or ambiguous cache entry',
+        'Image short side is below 280 px',
+      ].includes(error.message)
+        ? error.message
+        : 'decode or resize failed'
+    throw new Error(`${item.id}: image preparation failed (${reason})`)
   }
 }
