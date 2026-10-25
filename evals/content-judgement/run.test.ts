@@ -569,6 +569,35 @@ describe('a private held-out text set (--data)', () => {
     expect(isWithin('/repo', target)).toBe(within)
   })
 
+  it('a bad private line names the failing fields, never the text', async () => {
+    const { loadData } = await import('./schema')
+    const directory = mkdtempSync(join(tmpdir(), 'jev-held-out-bad-'))
+    directories.push(directory)
+    writeFileSync(
+      join(directory, 'feedback-comment.jsonl'),
+      JSON.stringify({
+        id: 'fc-1000',
+        text: `${MARKER} ${'x'.repeat(1000)}`,
+        lang: 'en',
+        labels: {
+          abusive: false,
+          sexual: false,
+          spam: false,
+          personal_info: false,
+        },
+        tags: ['benign'],
+      }) + '\n',
+    )
+    let message = ''
+    try {
+      loadData('feedback-comment', directory)
+    } catch (error) {
+      message = (error as Error).message
+    }
+    expect(message).toBe('feedback-comment line 1: invalid schema (id, text)')
+    expect(message).not.toContain(MARKER)
+  })
+
   it('accepts a directory outside the repository', () => {
     const directory = privateSet()
     expect(

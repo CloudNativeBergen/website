@@ -124,8 +124,13 @@ describe('schema rejection boundaries', () => {
     expect(() =>
       feedbackCommentSchema.parse({ ...feedback, text: '' }),
     ).toThrow()
+    // Production accepts comments up to 1000 characters; so must a held-out set.
+    expect(
+      feedbackCommentSchema.safeParse({ ...feedback, text: 'x'.repeat(1000) })
+        .success,
+    ).toBe(true)
     expect(() =>
-      feedbackCommentSchema.parse({ ...feedback, text: 'x'.repeat(401) }),
+      feedbackCommentSchema.parse({ ...feedback, text: 'x'.repeat(1001) }),
     ).toThrow()
     const conversation = loadData('conversation-opening')[0]
     expect(() =>

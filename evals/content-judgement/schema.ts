@@ -7,6 +7,7 @@ import {
   type Category,
   type ModerationKey,
 } from '../../src/lib/content-judgement/questions'
+import { MAX_COMMENT_LENGTH } from '../../src/lib/feedback/comment'
 
 export { categories, moderationKeys, type Category, type ModerationKey }
 
@@ -61,7 +62,8 @@ export const wallCaptionSchema = z.strictObject({
 export const feedbackCommentSchema = z.strictObject({
   ...moderationShared,
   id: z.string().regex(/^fc-\d{3}$/),
-  text: z.string().min(1).max(400),
+  // Production's own limit: a held-out set may hold any comment it accepts.
+  text: z.string().min(1).max(MAX_COMMENT_LENGTH),
   tags: z
     .array(z.enum([...moderationTags, 'harsh_fair']))
     .min(1)
@@ -184,8 +186,14 @@ export function loadData(surface: Surface, directory?: string): DataItem[] {
     }
     const result = schema.safeParse(value)
     if (!result.success) {
-      // Zod diagnostics can contain the supplied content. Keep it out of logs.
-      throw new Error(`${surface} line ${index + 1}: invalid schema`)
+      // Zod messages can contain the supplied content; the field paths are
+      // keys and indices only, so they name what to fix without quoting it.
+      const fields = [
+        ...new Set(result.error.issues.map((issue) => issue.path.join('.'))),
+      ].join(', ')
+      throw new Error(
+        `${surface} line ${index + 1}: invalid schema (${fields || 'item'})`,
+      )
     }
     if (ids.has(result.data.id)) {
       throw new Error(`${surface} line ${index + 1}: duplicate id`)
