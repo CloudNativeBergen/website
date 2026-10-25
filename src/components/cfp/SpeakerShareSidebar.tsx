@@ -1,6 +1,7 @@
 import { SpeakerShareWrapper } from '@/components/cfp/SpeakerShareWrapper'
 import { generateQRCode } from '@/components/SpeakerShare'
 import type { SpeakerWithTalks } from '@/lib/speaker/types'
+import { speakerPath } from '@/lib/speaker/path'
 
 interface SpeakerShareSidebarProps {
   speaker: SpeakerWithTalks
@@ -15,7 +16,7 @@ export async function SpeakerShareSidebar({
   eventName,
   baseDomain,
 }: SpeakerShareSidebarProps) {
-  const speakerUrl = `/speaker/${speaker.slug}`
+  const speakerUrl = speakerPath(speaker.slug) || '/speaker'
   const fullSpeakerUrl = baseDomain
     ? `https://${baseDomain}${speakerUrl}`
     : speakerUrl

@@ -6,6 +6,7 @@ import {
   computeSpeakerData,
   stripCompanyFromTitle,
 } from '@/lib/speaker/promotion'
+import { speakerPath } from '@/lib/speaker/path'
 
 interface FeaturedSpeakerTileProps {
   speaker: SpeakerWithTalks
@@ -22,6 +23,7 @@ interface FeaturedSpeakerTileProps {
  */
 export function FeaturedSpeakerTile({ speaker }: FeaturedSpeakerTileProps) {
   const { name, slug, title, image } = speaker
+  const profileHref = speakerPath(slug)
   const { company, hasWorkshop } = computeSpeakerData(speaker)
 
   // Prefer the (short) company as the sub-line for overlay legibility, falling
@@ -77,9 +79,9 @@ export function FeaturedSpeakerTile({ speaker }: FeaturedSpeakerTileProps) {
           not just this caption strip. */}
       <div className="z-10 p-4 sm:p-5">
         <h3 className="font-space-grotesk text-lg font-bold text-white sm:text-xl">
-          {slug ? (
+          {profileHref ? (
             <Link
-              href={`/speaker/${slug}`}
+              href={profileHref}
               className="after:absolute after:inset-0 after:content-[''] focus:outline-none"
             >
               {name}

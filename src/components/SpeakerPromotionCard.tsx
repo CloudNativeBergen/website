@@ -19,6 +19,7 @@ import {
 import Link from 'next/link'
 import { memo, useMemo } from 'react'
 import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
+import { speakerPath } from '@/lib/speaker/path'
 
 interface SpeakerPromotionCardProps {
   speaker: SpeakerWithTalks
@@ -132,9 +133,7 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
   )
 
   const finalCtaText = ctaText || (isFeatured ? 'View Speaker' : 'View Profile')
-  // No slug, no profile link: `/speaker/${null}` is a crawlable dead URL.
-  const finalCtaUrl =
-    ctaUrl || (speaker.slug ? `/speaker/${speaker.slug}` : null)
+  const finalCtaUrl = ctaUrl || speakerPath(speaker.slug)
 
   const { name, bio, image } = speaker
 
