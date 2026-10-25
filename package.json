@@ -151,6 +151,7 @@
     "playwright": "^1.63.0",
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
+    "sharp": "0.35.4",
     "simple-git-hooks": "^2.14.0",
     "storybook": "^10.6.0",
     "ts-node": "^10.9.2",

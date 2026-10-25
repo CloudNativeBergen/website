@@ -5,6 +5,7 @@ export const surfaces = [
   'wall-caption',
   'feedback-comment',
   'conversation-opening',
+  'wall-photo',
 ] as const
 export const languages = ['nb', 'nn', 'en', 'mixed'] as const
 export const categories = [
@@ -35,7 +36,10 @@ const moderationTags = [
 ] as const
 
 export type Surface = (typeof surfaces)[number]
-export type ModerationSurface = Exclude<Surface, 'conversation-opening'>
+export type ModerationSurface = Exclude<
+  Surface,
+  'conversation-opening' | 'wall-photo'
+>
 export type Language = (typeof languages)[number]
 export type Category = (typeof categories)[number]
 export type ModerationKey = (typeof moderationKeys)[number]
@@ -81,20 +85,82 @@ export const conversationOpeningSchema = z.strictObject({
   tags: z.array(z.string().min(1)).refine(uniqueTags),
 })
 
+export const wallPhotoSchema = z
+  .strictObject({
+    id: z.string().regex(/^wp-\d{3}$/),
+    caption: z.string().min(1).max(80).optional(),
+    lang: z.enum(languages).optional(),
+    image: z.discriminatedUnion('kind', [
+      z.strictObject({
+        kind: z.literal('fetched'),
+        url: z.url({ protocol: /^https?$/ }),
+        page: z.url({ protocol: /^https?$/ }),
+        author: z.string().min(1),
+        licence: z.enum(['CC0-1.0', 'PDM-1.0']),
+        sha256: z.string().regex(/^[a-fA-F0-9]{64}$/),
+      }),
+      z.strictObject({
+        kind: z.literal('generated'),
+        generator: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+      }),
+    ]),
+    labels: z.strictObject({
+      caption: labelsSchema.optional(),
+      photo: labelsSchema,
+    }),
+    tags: z
+      .array(
+        z.enum([
+          'benign',
+          'borderline',
+          'spam',
+          'personal_info',
+          'caption_flag',
+          'no_caption',
+        ]),
+      )
+      .min(1)
+      .refine(uniqueTags),
+    note: shared.note,
+  })
+  .refine(
+    (item) =>
+      (item.caption !== undefined) === (item.lang !== undefined) &&
+      (item.caption !== undefined) === (item.labels.caption !== undefined),
+  )
+  // Tags pick the scored slices, so they must agree with the labels.
+  .refine((item) => {
+    const photo = Object.values(item.labels.photo).some(Boolean)
+    const caption = Object.values(item.labels.caption ?? {}).some(Boolean)
+    const has = (tag: (typeof item.tags)[number]) => item.tags.includes(tag)
+    return (
+      (has('benign') || has('borderline')) === !photo &&
+      has('spam') === item.labels.photo.spam &&
+      has('personal_info') === item.labels.photo.personal_info &&
+      has('caption_flag') === caption &&
+      has('no_caption') === (item.caption === undefined)
+    )
+  })
+
+export type WallPhotoItem = z.infer<typeof wallPhotoSchema>
+
 export type ModerationItem = z.infer<typeof feedbackCommentSchema>
 export type ConversationItem = z.infer<typeof conversationOpeningSchema>
-export type DataItem = ModerationItem | ConversationItem
+export type DataItem = ModerationItem | ConversationItem | WallPhotoItem
 
 export function loadData(surface: ModerationSurface): ModerationItem[]
 export function loadData(surface: 'conversation-opening'): ConversationItem[]
+export function loadData(surface: 'wall-photo'): WallPhotoItem[]
 export function loadData(surface: Surface): DataItem[]
 export function loadData(surface: Surface): DataItem[] {
   const schema =
     surface === 'wall-caption'
       ? wallCaptionSchema
-      : surface === 'feedback-comment'
-        ? feedbackCommentSchema
-        : conversationOpeningSchema
+      : surface === 'wall-photo'
+        ? wallPhotoSchema
+        : surface === 'feedback-comment'
+          ? feedbackCommentSchema
+          : conversationOpeningSchema
   const lines = readFileSync(
     new URL(`./data/${surface}.jsonl`, import.meta.url),
     'utf8',

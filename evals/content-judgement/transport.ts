@@ -32,9 +32,40 @@ const moderationResponse = envelope.extend({
 const conversationResponse = envelope.extend({
   answers: z.object({ category: choiceAnswerSchema }).strict(),
 })
+const captionAnswers = z.strictObject({
+  caption_abusive: noulAnswerSchema,
+  caption_sexual: noulAnswerSchema,
+  caption_spam: noulAnswerSchema,
+  caption_personal_info: noulAnswerSchema,
+})
+const photoAnswers = z.strictObject({
+  photo_abusive: noulAnswerSchema,
+  photo_sexual: noulAnswerSchema,
+  photo_spam: noulAnswerSchema,
+  photo_personal_info: noulAnswerSchema,
+})
+const wallPhotoResponse = envelope.extend({
+  answers: photoAnswers
+    .extend(captionAnswers.partial().shape)
+    .refine((answers) => {
+      const count = Object.keys(answers).filter((key) =>
+        key.startsWith('caption_'),
+      ).length
+      return count === 0 || count === 4
+    }),
+})
+export type WallPhotoResponse = z.infer<typeof wallPhotoResponse>
+const responseSchema = (surface: Surface) =>
+  surface === 'wall-photo'
+    ? wallPhotoResponse
+    : surface === 'conversation-opening'
+      ? conversationResponse
+      : moderationResponse
+
 export type ModerationResponse = z.infer<typeof moderationResponse>
 export type ConversationResponse = z.infer<typeof conversationResponse>
-export type DecisionResponse = ModerationResponse | ConversationResponse
+export type DecisionResponse =
+  ModerationResponse | ConversationResponse | WallPhotoResponse
 export type RawResult = {
   id: string
   repeat: number
@@ -50,11 +81,7 @@ export function parseResponse(
   surface: Surface,
   value: unknown,
 ): DecisionResponse {
-  return (
-    surface === 'conversation-opening'
-      ? conversationResponse
-      : moderationResponse
-  ).parse(value)
+  return responseSchema(surface).parse(value)
 }
 
 export class ItemError extends Error {
@@ -102,12 +129,14 @@ export async function requestDecision(
     } catch {
       throw new ItemError('invalid_json')
     }
-    const parsed = (
-      surface === 'conversation-opening'
-        ? conversationResponse
-        : moderationResponse
-    ).safeParse(value)
+    const parsed = responseSchema(surface).safeParse(value)
     if (!parsed.success) throw new ItemError('invalid_response')
+    if (
+      surface === 'wall-photo' &&
+      Object.keys(parsed.data.answers).sort().join(',') !==
+        Object.keys(request.questions).sort().join(',')
+    )
+      throw new ItemError('invalid_response')
     return parsed.data
   }
   throw new ItemError('retry_exhausted')
