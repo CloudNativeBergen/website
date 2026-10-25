@@ -137,8 +137,10 @@ export function ContentJudgementSettings({
       </p>
 
       <p className="border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
-        {busy ? (
+        {mutation.isPending || (refreshing && !mutation.isError) ? (
           'Saving…'
+        ) : refreshing ? (
+          'Checking what is saved…'
         ) : changedAt ? (
           <>
             {initialEnabled ? 'Turned on' : 'Turned off'} by{' '}

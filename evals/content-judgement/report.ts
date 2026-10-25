@@ -251,9 +251,16 @@ function gateRows(
       date: new Date().toISOString().slice(0, 10),
     }
   })
+  const positives = moderationKeys
+    .map(
+      (key) =>
+        `${key} ${scores.filter((score) => score.item.labels[key]).length}`,
+    )
+    .join(', ')
   return [
     heading,
     'Copy into gates.json only if every bar holds on these exact values.',
+    `Positives per question (the bar needs 50 each): ${positives}.`,
     '```json',
     JSON.stringify(rows, null, 2),
     '```',

@@ -302,10 +302,12 @@ describe('held-out gate rows', () => {
       latencyMs: 1,
       cost: 0,
       answers: {
-        // Four benign items flagged at 0.95; every positive caught.
+        // Four benign items flagged at 0.95, one at 0.7 (below the 0.9
+        // enforcement threshold, so NOT a false positive); every positive
+        // caught.
         abusive: {
           type: 'noul',
-          noul: index < 4 || index >= 399 ? 0.95 : 0.01,
+          noul: index < 4 || index >= 399 ? 0.95 : index === 4 ? 0.7 : 0.01,
         },
         sexual: { type: 'noul', noul: 0 },
         spam: { type: 'noul', noul: 0 },
@@ -334,6 +336,9 @@ describe('held-out gate rows', () => {
       recall: 1,
     })
     expect(abusive.falsePositiveRate).toBe(4 / 399)
+    expect(report).toContain(
+      'Positives per question (the bar needs 50 each): abusive 4, sexual 0, spam 0, personal_info 0.',
+    )
     expect(abusive.falsePositiveRate).toBeGreaterThan(0.01)
   })
 
@@ -353,6 +358,35 @@ describe('held-out gate rows', () => {
     expect(report).toContain('### Gate rows at 0.9 (unrounded)')
     expect(report).toContain(reason)
     expect(report).not.toContain('```json')
+  })
+
+  it('never stamp one build on a run answered by two', async () => {
+    const { parseGateFile } =
+      await import('../../src/lib/content-judgement/gates')
+    const items = loadData('feedback-comment').slice(0, 2)
+    const results = items.map((item, index) => ({
+      id: item.id,
+      repeat: 1,
+      model:
+        index === 0
+          ? 'typesafe/jev-1.14-20261014'
+          : 'typesafe/jev-1.14-20261101',
+      latencyMs: 1,
+      cost: 0,
+      answers: Object.fromEntries(
+        moderationKeys.map((key) => [key, { type: 'noul', noul: 0 }]),
+      ),
+    })) as RawResult[]
+    const report = buildReport(
+      [{ surface: 'feedback-comment', items, results }],
+      'typesafe/jev-1.14',
+      1,
+      { heldOut: true },
+    )
+    const json = /```json\n([\s\S]*?)\n```/.exec(report)?.[1]
+    expect(json).toContain('MIXED')
+    // And such a row cannot be pasted into the gate file.
+    expect(() => parseGateFile(JSON.parse(json ?? 'null'))).toThrow()
   })
 
   it('are absent from public reports', () => {
