@@ -20,8 +20,6 @@ export const QUESTION_SET_VERSIONS = {
   conversation: 'v2',
 } as const
 
-export type JudgedSurface = keyof typeof QUESTION_SET_VERSIONS
-
 export const moderationKeys = [
   'abusive',
   'sexual',
