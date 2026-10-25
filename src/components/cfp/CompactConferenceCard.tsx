@@ -11,6 +11,7 @@ import { CompactPhotoStrip } from './CompactPhotoStrip'
 import { CompactWorkshopStats } from './CompactWorkshopStats'
 import { CompactTravelSupport } from './CompactTravelSupport'
 import { CompactBadges } from './CompactBadges'
+import { SpeakerBriefingPanel } from './SpeakerBriefingPanel'
 
 interface CompactConferenceCardProps {
   data: ConferenceWithSpeakerData
@@ -66,6 +67,17 @@ export function CompactConferenceCard({
 
       {isExpanded && hasContent && (
         <div className="space-y-4 border-t border-gray-200 px-4 py-4 dark:border-gray-700">
+          {data.briefing && (
+            <SpeakerBriefingPanel
+              briefing={data.briefing}
+              conferenceDay={data.conferenceDay}
+              pinDinner={data.pinDinner}
+              changesEmail={
+                data.conference.cfpEmail || data.conference.contactEmail
+              }
+            />
+          )}
+
           {badges.length > 0 && <CompactBadges badges={badges} />}
 
           {proposals.length > 0 && (

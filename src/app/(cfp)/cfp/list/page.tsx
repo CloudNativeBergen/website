@@ -6,7 +6,7 @@ import { getProposals } from '@/lib/proposal/data/sanity'
 import { getGalleryImages } from '@/lib/gallery/sanity'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
 import { getTravelSupport } from '@/lib/travel-support/sanity'
-import { clientReadCached } from '@/lib/sanity/client'
+import { clientReadCached, clientReadUncached } from '@/lib/sanity/client'
 import { resolveSnapshotField } from '@/lib/speaker/utils'
 import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
@@ -22,6 +22,8 @@ import { ProposalConfirmationHandler } from '@/components/cfp/ProposalConfirmati
 import { NotSeeingTalksPrompt } from '@/components/cfp/NotSeeingTalksPrompt'
 import { MessagesIntroCard } from '@/components/cfp/MessagesIntroCard'
 import { startProviderLink } from '@/app/(cfp)/cfp/profile/link-actions'
+import { getSpeakerBriefing } from '@/lib/speaker/briefing'
+import { osloTodayDateString } from '@/lib/time'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
@@ -201,6 +203,45 @@ export default async function SpeakerDashboard() {
             })
           : {}
 
+      // The briefing (#1592) shows on this host's edition only, for a speaker
+      // with a confirmed talk, until the conference is over.
+      const showBriefing =
+        conference._id === currentConference?._id &&
+        !isOver &&
+        (proposals ?? []).some((p) => p.status === 'confirmed')
+      // Read live, not through the 300 s cache: a last-minute change (a hike
+      // called off for weather) must show at once.
+      const briefingFields = showBriefing
+        ? await clientReadUncached.fetch<Partial<Conference> | null>(
+            // groq-global-scoped: `$id` is the current domain's conference.
+            groq`*[_type == "conference" && _id == $id][0]{
+              speakerInfo,
+              speakerDinnerInfo,
+              venueName,
+              venueAddress,
+              venueTravelInfo
+            }`,
+            { id: conference._id },
+          )
+        : null
+      const now = new Date()
+      const today = osloTodayDateString(now)
+      const isConferenceDay =
+        today >= conference.startDate && today <= conference.endDate
+      const briefing = showBriefing
+        ? getSpeakerBriefing(
+            { ...conference, ...briefingFields },
+            { proposals },
+          )
+        : undefined
+      // Pin the dinner from the start of its day until it begins; without a
+      // start time, on the conference days.
+      const dinnerAt = briefing?.dinner?.startsAt
+      const pinDinner = dinnerAt
+        ? today >= osloTodayDateString(new Date(dinnerAt)) &&
+          now < new Date(dinnerAt)
+        : isConferenceDay
+
       return {
         conference,
         proposals: proposals || [],
@@ -217,6 +258,11 @@ export default async function SpeakerDashboard() {
         badges: badges || [],
         isOver,
         canEditProposals,
+        ...(briefing && {
+          briefing,
+          conferenceDay: isConferenceDay ? today : undefined,
+          pinDinner,
+        }),
       } as ConferenceWithSpeakerData
     } catch (error) {
       console.error(
