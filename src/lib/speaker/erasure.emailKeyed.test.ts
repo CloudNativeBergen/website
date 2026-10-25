@@ -196,6 +196,10 @@ const DISPOSITIONS: Record<string, Disposition> = {
     verdict: 'no-pii',
     why: 'conference configuration address, not a speaker',
   },
+  'conference.email': {
+    verdict: 'no-pii',
+    why: '`speakerInfo.onsiteContact.email` — the organizer on call, published on /info',
+  },
 }
 
 /**

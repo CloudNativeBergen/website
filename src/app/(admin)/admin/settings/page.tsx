@@ -1,3 +1,5 @@
+import Link from 'next/link'
+import { getSpeakerBriefing } from '@/lib/speaker/briefing'
 import { denyNonOrganizer } from '@/lib/authz/page-guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceVisibility } from '@/lib/conference/visibility'
@@ -133,6 +135,10 @@ export default async function AdminSettings() {
   }
 
   const editUrl = studioEditUrl(conference._id)
+  // Once the structured dinner has content, the old text is only a fallback.
+  const structuredDinner = !!getSpeakerBriefing({
+    speakerInfo: conference.speakerInfo,
+  }).dinner
   const visibility = resolveConferenceVisibility(conference)
   // Ownership-verification state per claimed domain (#683). Read here so the
   // card server-renders its real state; the client island refetches once its
@@ -647,6 +653,9 @@ export default async function AdminSettings() {
               action={
                 <EditConferenceCard
                   fieldset="localInfo"
+                  hiddenFields={
+                    structuredDinner ? ['speakerDinnerInfo'] : undefined
+                  }
                   initialValues={{
                     venueTravelInfo: conference.venueTravelInfo,
                     speakerDinnerInfo: conference.speakerDinnerInfo,
@@ -660,10 +669,19 @@ export default async function AdminSettings() {
                 label="Getting to the venue"
                 value={conference.venueTravelInfo}
               />
-              <FieldRow
-                label="Speaker dinner"
-                value={conference.speakerDinnerInfo}
-              />
+              {structuredDinner ? (
+                <Link
+                  href="/admin/speakers/info"
+                  className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Edit the speaker dinner under Speakers → Speaker Info
+                </Link>
+              ) : (
+                <FieldRow
+                  label="Speaker dinner"
+                  value={conference.speakerDinnerInfo}
+                />
+              )}
               <FieldRow
                 label="Local recommendations"
                 value={conference.localRecommendations}
