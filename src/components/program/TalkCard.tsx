@@ -28,6 +28,7 @@ import { hasProposalVideo } from '@/lib/proposal/video'
 import clsx from 'clsx'
 import { FEEDBACK_EMBED_PARAM } from '@/lib/feedback/url'
 import { FeedbackSheet, useFeedbackSheet } from './FeedbackSheet'
+import { speakerPath } from '@/lib/speaker/path'
 
 interface PortableTextChild {
   _type: string
@@ -329,9 +330,10 @@ export function TalkCard({
                 {isConfirmed ? (
                   primarySpeaker &&
                   typeof primarySpeaker === 'object' &&
-                  'slug' in primarySpeaker ? (
+                  'slug' in primarySpeaker &&
+                  speakerPath(primarySpeaker.slug) ? (
                     <Link
-                      href={`/speaker/${primarySpeaker.slug}`}
+                      href={speakerPath(primarySpeaker.slug)!}
                       className="transition-colors hover:text-brand-cloud-blue dark:hover:text-blue-400"
                     >
                       {talkData.title}
