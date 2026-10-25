@@ -377,12 +377,12 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
       anchor: 'speakers',
       heading: 'For Speakers',
       description:
-        'Information for our awesome speakers to make their experience as smooth as possible. If you have any other questions do not hesitate to contact us.',
+        'Practical information for speakers. If your question is not answered here, contact us.',
       questions: [
         {
           question: 'What do I need to do before the conference?',
           answer:
-            'You need to confirm your talk and register your ticket before the conference. You can do this by going to the <u><a href="/cfp/list">speaker dashboard</a></u> to confirm your talk, and clicking the link in the email you received to register your complimentary speaker ticket.',
+            'Confirm your talk on the <u><a href="/cfp/list">speaker dashboard</a></u> and claim your free speaker ticket with the link in the email we sent you.',
         },
         // Also place-specific (the old copy named a Bergen mountain and linked a
         // Bergen cable car), and not every conference holds one at all — so the
@@ -398,12 +398,12 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         {
           question: 'Can I make changes to my talk?',
           answer:
-            'Yes, you can make changes to your talk up until the day before the conference. You can edit your talk directly from our website by going to the <u><a href="/cfp/list">speaker dashboard</a></u>.',
+            'Yes. You can edit your talk on the <u><a href="/cfp/list">speaker dashboard</a></u> until the day before the conference.',
         },
         {
           question: 'Do I need to bring my own laptop?',
           answer:
-            'Yes, we recommend you to bring your own laptop. We will provide a projector and a screen for your presentation. If you have any special needs, please let us know in advance.',
+            'Yes, please bring your own laptop. We provide a projector and a screen. If you need anything else, such as an adapter or accessibility support, tell us before the conference.',
         },
         // Local sightseeing advice cannot be generated — the old copy asserted
         // fjords, mountains and Bryggen for whatever city was configured, and
@@ -416,8 +416,8 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
                 // React escapes it there; escaping here too would surface
                 // literal entities like `&amp;` to readers.
                 question: conference.city
-                  ? `What do you recommend me to do during my stay in ${conference.city}?`
-                  : 'What do you recommend me to do during my stay?',
+                  ? `What do you recommend doing in ${conference.city}?`
+                  : 'What do you recommend doing during my stay?',
                 answer: escapeHtml(conference.localRecommendations),
               },
             ]
