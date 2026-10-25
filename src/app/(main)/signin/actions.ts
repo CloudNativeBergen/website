@@ -2,7 +2,6 @@
 
 import { randomBytes } from 'crypto'
 import { cookies, headers } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { AuthError } from 'next-auth'
 import { signIn } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -20,6 +19,8 @@ import { requestEmailSignInLink } from '@/lib/auth/email-link/request'
 import { sendEmailSignInLink } from '@/lib/auth/email-link/send'
 import { readPendingEmailSignIn } from './confirm/pending'
 
+const SIGNIN_ERROR_PATH = '/signin?error=EmailSignIn'
+
 /**
  * The "email me a sign-in link" form action.
  *
@@ -36,7 +37,7 @@ import { readPendingEmailSignIn } from './confirm/pending'
  */
 export async function requestEmailSignInLinkAction(
   formData: FormData,
-): Promise<void> {
+): Promise<string> {
   const email = String(formData.get('email') ?? '')
   const callbackUrl = safeCallbackPath(
     String(formData.get('callbackUrl') ?? ''),
@@ -84,7 +85,7 @@ export async function requestEmailSignInLinkAction(
     maxAge: EMAIL_LINK_INTENT_TTL_SECONDS,
   })
 
-  redirect(EMAIL_LINK_VERIFY_REQUEST_PATH)
+  return EMAIL_LINK_VERIFY_REQUEST_PATH
 }
 
 /**
@@ -100,14 +101,14 @@ export async function requestEmailSignInLinkAction(
  * The cookie is deleted BEFORE the sign-in is attempted, so a failure cannot
  * leave a resubmittable interstitial behind.
  */
-export async function confirmEmailSignInAction(): Promise<void> {
+export async function confirmEmailSignInAction(): Promise<string> {
   const jar = await cookies()
   const pending = readPendingEmailSignIn(
     jar.get(EMAIL_LINK_PENDING_COOKIE)?.value,
   )
   jar.delete(EMAIL_LINK_PENDING_COOKIE)
 
-  if (!pending) redirect('/signin?error=EmailSignIn')
+  if (!pending) return SIGNIN_ERROR_PATH
 
   let destination: string
   try {
@@ -123,7 +124,7 @@ export async function confirmEmailSignInAction(): Promise<void> {
     if (!(error instanceof AuthError)) {
       console.error('[email-link] unexpected failure confirming a link', error)
     }
-    redirect('/signin?error=EmailSignIn')
+    return SIGNIN_ERROR_PATH
   }
 
   // `signIn` resolves the destination through the `redirect` callback (which
@@ -131,7 +132,7 @@ export async function confirmEmailSignInAction(): Promise<void> {
   // its path+query is reused, against this origin, so an unexpected value can
   // only ever produce a same-origin redirect — the same belt-and-braces the
   // callback route applies.
-  redirect(samePathOf(destination, pending.callbackUrl))
+  return samePathOf(destination, pending.callbackUrl)
 }
 
 function samePathOf(destination: string, fallback: string): string {

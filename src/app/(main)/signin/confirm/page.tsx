@@ -9,6 +9,7 @@ import { EMAIL_LINK_PENDING_COOKIE } from '@/lib/auth/email-link/intent'
 import { requestHost } from '@/lib/auth/email-link/origin'
 import { peekEmailSignInToken } from '@/lib/auth/email-link/verify'
 import { confirmEmailSignInAction } from '../actions'
+import { FullPageActionForm } from '../FullPageActionForm'
 import { maskAddress, readPendingEmailSignIn } from './pending'
 
 export const metadata: Metadata = {
@@ -79,14 +80,17 @@ export default async function ConfirmEmailSignIn() {
             </div>
           )}
 
-          <form action={confirmEmailSignInAction} className="mt-8">
+          <FullPageActionForm
+            action={confirmEmailSignInAction}
+            className="mt-8"
+          >
             <button
               type="submit"
               className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-brand-cloud-blue px-6 py-4 text-lg font-semibold text-white transition-all duration-200 hover:bg-brand-cloud-blue-hover focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue active:scale-[0.98]"
             >
               Continue signing in
             </button>
-          </form>
+          </FullPageActionForm>
 
           <p className="mt-4 text-base text-brand-slate-gray dark:text-gray-400">
             Did not expect this?{' '}
