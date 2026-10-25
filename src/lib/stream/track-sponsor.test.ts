@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { ScheduleTrack } from '@/lib/conference/types'
+import type { ConferenceSchedule, ScheduleTrack } from '@/lib/conference/types'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
-import { trackSponsorOf } from './track-sponsor'
+import { roomTrackOn, trackSponsorOf } from './track-sponsor'
 
 const sponsor = (
   _id: string,
@@ -16,7 +16,7 @@ const track = (sponsorRef?: string): ScheduleTrack => ({
   trackTitle: 'Proact IT - Lillesalen',
   trackDescription: '',
   talks: [],
-  sponsor: sponsorRef ? { _ref: sponsorRef } : undefined,
+  sponsor: sponsorRef ? { _ref: sponsorRef } : null,
 })
 
 const sponsors = [
@@ -45,5 +45,45 @@ describe('trackSponsorOf', () => {
         sponsor('proact', 'Proact IT Norge AS', null),
       ]),
     ).toBeNull()
+  })
+})
+
+describe('roomTrackOn', () => {
+  const day = (date: string, sponsorRef?: string): ConferenceSchedule => ({
+    _id: date,
+    date,
+    tracks: [
+      { ...track(sponsorRef), trackTitle: 'Hovedsalen' },
+      { ...track(), trackTitle: 'Loftet' },
+    ],
+  })
+  // Monday and Tuesday share the room; only Tuesday's track is sponsored.
+  const schedules = [day('2026-10-26'), day('2026-10-27', 'proact')]
+  const at = (iso: string) => new Date(`${iso}T10:00:00`)
+
+  it("is today's track of that room", () => {
+    expect(
+      roomTrackOn(schedules, 'Hovedsalen', at('2026-10-27'))?.sponsor,
+    ).toEqual({ _ref: 'proact' })
+    expect(
+      roomTrackOn(schedules, 'Hovedsalen', at('2026-10-26'))?.sponsor,
+    ).toBeNull()
+  })
+
+  it('is the first day with that room on a day without one', () => {
+    expect(
+      roomTrackOn(schedules, 'Hovedsalen', at('2026-10-20'))?.sponsor,
+    ).toBeNull()
+    expect(
+      roomTrackOn(
+        [day('2026-10-26'), { ...day('2026-10-27', 'proact'), tracks: [] }],
+        'Hovedsalen',
+        at('2026-10-27'),
+      )?.trackTitle,
+    ).toBe('Hovedsalen')
+  })
+
+  it('is nothing for a room no day has', () => {
+    expect(roomTrackOn(schedules, 'Galleriet', at('2026-10-27'))).toBeNull()
   })
 })

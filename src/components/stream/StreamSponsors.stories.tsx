@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, within } from 'storybook/test'
-import type { ScheduleTrack } from '@/lib/conference/types'
+import type { ConferenceSchedule } from '@/lib/conference/types'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import { StreamSponsors } from './StreamSponsors'
 
@@ -25,12 +25,21 @@ const sponsors = [
   sponsor('telenor', 'Telenor', wordmark('TELENOR', '#00ACE6', 140)),
 ]
 
-const track = (sponsorRef?: string): ScheduleTrack => ({
-  trackTitle: 'Proact IT - Lillesalen',
-  trackDescription: '',
-  talks: [],
-  sponsor: sponsorRef ? { _ref: sponsorRef } : null,
-})
+/** One day with the room, its track sponsored by `sponsorRef`. */
+const day = (sponsorRef?: string): ConferenceSchedule[] => [
+  {
+    _id: 'tuesday',
+    date: '2026-10-27',
+    tracks: [
+      {
+        trackTitle: 'Proact IT - Lillesalen',
+        trackDescription: '',
+        talks: [],
+        sponsor: sponsorRef ? { _ref: sponsorRef } : null,
+      },
+    ],
+  },
+]
 
 const meta: Meta<typeof StreamSponsors> = {
   title: 'Systems/Sponsors/Public/StreamSponsors',
@@ -44,7 +53,12 @@ const meta: Meta<typeof StreamSponsors> = {
       },
     },
   },
-  args: { sponsors, speed: 120, className: 'mb-8' },
+  args: {
+    sponsors,
+    roomTrackTitle: 'Proact IT - Lillesalen',
+    speed: 120,
+    className: 'mb-8',
+  },
   decorators: [
     (Story) => (
       <div className="min-h-screen bg-gray-100 px-8 py-12 dark:bg-gray-950">
@@ -59,7 +73,7 @@ type Story = StoryObj<typeof StreamSponsors>
 
 /** "Proact IT - Lillesalen" on Tuesday: Proact alone, still. */
 export const TrackSponsored: Story = {
-  args: { track: track('proact') },
+  args: { schedules: day('proact') },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const banner = canvas.getByRole('region', { name: 'Track sponsored by' })
@@ -71,7 +85,7 @@ export const TrackSponsored: Story = {
 
 /** A longer name on a phone: the logo and name wrap, centred. */
 export const TrackSponsoredPhone: Story = {
-  args: { track: track('sopra') },
+  args: { schedules: day('sopra') },
   parameters: { viewport: { defaultViewport: 'mobile1' } },
   play: async ({ canvasElement }) => {
     const banner = within(canvasElement).getByRole('region', {
@@ -86,7 +100,7 @@ export const TrackSponsoredPhone: Story = {
 
 /** Hovedsalen, with no track sponsor: every sponsor, thanked in the loop. */
 export const ThankYouLoop: Story = {
-  args: { track: track() },
+  args: { schedules: day() },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getByText('Thank you to:')).toBeVisible()

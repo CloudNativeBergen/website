@@ -88,7 +88,8 @@ export default async function StreamRoomPage({ params }: Props) {
             <div className={STREAM_CONFIG.layout.containerPadding}>
               {conference.sponsors && conference.sponsors.length > 0 && (
                 <StreamSponsors
-                  track={matchedTrack}
+                  schedules={conference.schedules}
+                  roomTrackTitle={matchedTrack.trackTitle}
                   sponsors={conference.sponsors as ConferenceSponsor[]}
                   className={STREAM_CONFIG.sponsorBanner.className}
                   speed={STREAM_CONFIG.sponsorBanner.speed}
