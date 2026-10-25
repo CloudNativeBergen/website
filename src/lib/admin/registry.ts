@@ -43,6 +43,7 @@ import {
   UserGroupIcon,
   UsersIcon,
   MegaphoneIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline'
 import type { NavigationItem } from '@/components/common/DashboardLayout'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
@@ -319,6 +320,14 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     group: 'People',
     keywords: ['travel', 'funding', 'reimbursement', 'expenses'],
     icon: HeartIcon,
+  },
+  {
+    id: 'speakers-info',
+    title: 'Speaker Info',
+    href: '/admin/speakers/info',
+    group: 'People',
+    keywords: ['briefing', 'dinner', 'check-in', 'equipment', 'contact'],
+    icon: InformationCircleIcon,
   },
   // The provider-backed ticketing sub-pages: every one of them reads live data
   // from Checkin/Tito, so they are gated with the section itself.

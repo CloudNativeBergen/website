@@ -16,6 +16,7 @@ import {
   CreditCardIcon,
   ArrowsPointingInIcon,
   TicketIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
@@ -421,6 +422,12 @@ export default function SpeakersPageClient({
               label: 'Travel Support',
               href: '/admin/speakers/travel-support',
               icon: <CreditCardIcon className="h-4 w-4" />,
+              variant: 'secondary',
+            },
+            {
+              label: 'Speaker Info',
+              href: '/admin/speakers/info',
+              icon: <InformationCircleIcon className="h-4 w-4" />,
               variant: 'secondary',
             },
             {
