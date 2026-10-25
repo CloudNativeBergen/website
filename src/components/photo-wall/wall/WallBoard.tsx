@@ -170,7 +170,8 @@ function SpotlightFeed({ posts }: { posts: WallPagePost[] }) {
             height={post.whole.height}
             loading={i < EAGER_PHOTOS ? 'eager' : 'lazy'}
             decoding="async"
-            // Full width, but never taller than 80% of the small viewport (svh: steady while iOS Safari's toolbar collapses): a tall
+            // Full width, but never taller than 80% of the small viewport
+            // (svh holds still while iOS Safari's toolbar moves): a tall
             // photo narrows to keep its shape, centred, with no bands.
             className="mx-auto block h-auto w-full rounded-md"
             style={{
