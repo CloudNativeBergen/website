@@ -25,9 +25,15 @@ Only items with all repeats successful enter metrics; excluded counts are explic
 
 ## Wall Post photos
 
-`wall-photo` judges one optional caption and one photo in a single multimodal call. With a caption it asks eight questions: four `caption_*` questions with the existing caption meanings, and four `photo_*` questions. Without a caption only the four photo questions are asked. Caption, language, and caption labels must all be present or all absent. Photo questions use the caption only as context. Conference sponsor booths, banners, and swag are allowed; unrelated ads and QR-code lures are spam. Readable full-name badges, ID cards, and private contact information in screens or papers count as personal information.
+`wall-photo` judges one optional caption and one photo in a single multimodal call. With a caption it asks eight questions: four `caption_*` questions with the existing caption meanings, and four `photo_*` questions. Without a caption only the four photo questions are asked. Caption, language, and caption labels must all be present or all absent. Photo questions judge only what is visible and ignore the caption, which its own questions judge (question set v4; in v3 the photo questions read the caption as context, and an abusive or spam caption raised the photo answers too). Conference sponsor booths, banners, and swag are allowed; unrelated ads and QR-code lures are spam. Readable full-name badges, ID cards, and private contact information in screens or papers count as personal information.
 
-The public `data/wall-photo.jsonl` is maintained separately. Until it is supplied, existing surfaces remain usable. Fetch and generate the local image cache before running this surface:
+`data/wall-photo.jsonl` holds 75 Wall Posts: 38 benign, 13 borderline, 16 spam and 8 personal info. 4 benign posts carry a flagged caption (abuse, a spam pitch, a phone number, an email), and 11 have no caption.
+
+- **60 photos** are CC0 (59 from Wikimedia Commons, one from Flickr via Openverse), each licence checked on its source page. They were picked and labelled by a model (Claude), and a human approved the set on 2026-10-25. People appear only at a distance or on stage; two wide group photos (wp-010, wp-015) show faces at full resolution.
+- **15 images are generated** (`images/templates.ts`): badges, an ID card, private screens, a boarding pass, a sticky note, QR and ad posters, slides and a sponsor banner. They are clean renders, not photos, so they are likely easier than a badge photographed in a dim hall.
+- There are **no nudity, gore or hate-symbol images**, so photo_sexual and photo_abusive can only show false positives here.
+
+Fetch and generate the local image cache before running this surface:
 
 ```sh
 pnpm tsx evals/content-judgement/images/fetch.ts
@@ -38,7 +44,7 @@ OPENROUTER_API_KEY=... pnpm tsx evals/content-judgement/run.ts --surface wall-ph
 
 Fetched images require CC0-1.0 or PDM-1.0 attribution metadata and a matching SHA-256 digest. Fetching is sequential and skips correctly cached files. Generated fixtures use invented people and contact details, example.com/example.no email addresses, phone numbers starting with 0, and a generic ID card. Images are stored only in the gitignored `.image-cache/` directory and must never be committed. Preparation auto-rotates by EXIF, removes metadata, and encodes JPEG at quality 85 with the longest side at most 1568 pixels, without upscaling; a resulting short side below 280 pixels is rejected.
 
-Each live run makes one calibration call for the first photo item's questions and caption state with the image omitted. Its input token count is T0. Every photo response must report at least T0 + 500 input tokens; otherwise it is an `image_not_received` error and excluded from scores. Missing usage input tokens also fail this guard. The margin follows the 2026-10-25 probe: 2,762 tokens with an image versus 378 without. Calibration is included in reported calls and returned cost, but never scored. Dry-run makes no calls and prints shape sizes without caption text or image bytes.
+Each live run makes one calibration call per request shape (with a caption, eight questions; without, four) for the first item of that shape, with the image omitted. Its input token count is T0 for that shape. Every photo response must report at least T0 + 500 input tokens; otherwise it is an `image_not_received` error and excluded from scores. Missing usage input tokens also fail this guard. The margin follows the 2026-10-25 probe: 2,762 tokens with an image versus 378 without. Calibration is included in reported calls and returned cost, but never scored. Dry-run makes no calls and prints shape sizes without caption text or image bytes.
 
 The report separates caption and photo precision/recall at 0.5 and 0.9. The photo advice bar flags when any mean photo probability is at least 0.5. It requires recall of at least 95% for every photo question with at least five positives, and an any-photo false-positive rate of at most 5% across photos tagged `benign` or `borderline`, also reported separately for those tags. Caption flags do not affect this photo rate. Questions with fewer than five positives have insufficient support; zero-positive questions are **not measurable on the public set**, never passing. Public photo sexual/abusive questions are expected to have no positives. The private nudity/gore set is separate and must never be committed.
 
@@ -73,5 +79,16 @@ Current: [`typesafe/jev-1.14-20261014`, question set v2, 2026-10-25](results/typ
   - **sexual** on comments: 83.3% recall at 0.9, with evasion recall of 62.5% (8 items). The misses are Norwegian sexual remarks, several with spaced-out letters ("n a k e n", "R u m p a"), and one plain Bokmål caption (wc-071).
 - Flag at 0.9: 100% precision, 81.3% / 82.9% recall, evasion recall 84.0% / 76.7%.
 - The earlier 80% evasion-recall figure was proposed after seeing a run that scored exactly 80%, which is one reason enforcement now waits for the held-out set.
+
+### Wall Post photos
+
+Current: [`typesafe/jev-1.14-20261014`, question set v4, 2026-10-25](results/typesafe-jev-1.14-2026-10-25-photo-v4/report.md). 227 calls (2 calibration), $0.054, no failures, no `image_not_received`.
+
+- **Photo advice bar: not met as written, accepted for advice** (decided on [Build the public image eval set and test Jev against the advice bar](https://github.com/CloudNativeBergen/website/issues/1576)). False positives at 0.5: 0 of 38 benign, 1 of 13 borderline (wp-043, a QR wifi sign), 2.0% together (bar ≤ 5%). personal_info recall 8 of 8. **spam recall 15 of 16 (93.8%, bar ≥ 95%)**: the miss is a Bitcoin sticker on a pole (wp-054, 0.46 / 0.47 / 0.53). With 16 positives, a 95% bar allows no miss, so this set is too small to measure it.
+- Jev also flags phone numbers on ads as personal info (wp-051, wp-057, wp-059, wp-069). Harmless for advice: those posts are flagged anyway.
+- Captions in the same call: abusive, personal_info and spam caught 4 of 4. Two captions written for spam photos ("Scan it, trust me", "Cheap rooms if anyone missed the hotel deadline") were flagged as spam; their labels are arguable.
+- At 0.9: spam recall 62.5%, personal_info 100% with one false positive.
+
+Earlier: [v3 run](results/typesafe-jev-1.14-2026-10-25-photo-v3/report.md), with photo questions reading the caption: two caption-bleed false positives (wp-005, wp-031), wp-014 still labelled benign (its slide shows a real email address; Jev was right), and three photos dropped by an upper-case `.JPG` cache bug (72 of 75 scored).
 
 Earlier: [v1 run](results/typesafe-jev-1.14-2026-10-25/report.md), before sexual remarks aimed at a person were also labelled abusive (they were all counted as abusive "false positives") and before the phone numbers changed.
