@@ -9,6 +9,7 @@ import {
   buildCommentRequest,
   buildConversationRequest,
   buildWallPostRequest,
+  IMAGE_GUARD,
   QUESTION_SET_VERSIONS,
 } from './questions'
 
@@ -51,4 +52,10 @@ describe('question wording is pinned to its version', () => {
     expect(QUESTION_SET_VERSIONS[surface]).toBe(version)
     expect(sha256(questions())).toBe(hash)
   })
+})
+
+it('the image guard baselines were measured on the current Wall Post question set', () => {
+  // Bumping the Wall Post set means re-measuring the baselines (spec §4.3)
+  // with the eval runner's calibration calls, then updating IMAGE_GUARD.
+  expect(IMAGE_GUARD.questionSet).toBe(QUESTION_SET_VERSIONS.wallPost)
 })
