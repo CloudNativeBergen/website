@@ -149,6 +149,26 @@ describe('organization.updateContentJudgement', () => {
     expect(store().doc('org-B')?.contentJudgement).toBeUndefined()
   })
 
+  it('a failed write is an error, not a success, and busts nothing', async () => {
+    store().failWrites()
+    await expect(
+      organizer().updateContentJudgement({ enabled: true }),
+    ).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to update content judgement',
+    })
+    expect(h.revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('refuses a string for the switch: "false" must never turn it on', async () => {
+    await expect(
+      organizer().updateContentJudgement({
+        enabled: 'false',
+      } as unknown as { enabled: boolean }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(store().doc('org-A')?.contentJudgement).toBeUndefined()
+  })
+
   it('takes no organization from the client', async () => {
     await organizer().updateContentJudgement({
       enabled: true,

@@ -34,6 +34,7 @@ describe('the held-out gate file', () => {
     ['a question set that is not a version', { questionSet: '2' }],
     ['a date that is not a day', { date: 'soon' }],
     ['an extra field', { note: 'item fc-301 was wrong' }],
+    ['a fractional count of negatives', { negatives: 300.5 }],
     ['a photo question on comments', { question: 'photo_spam' }],
     [
       'a bare question on Wall Posts',

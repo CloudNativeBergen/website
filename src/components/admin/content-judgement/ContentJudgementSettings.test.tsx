@@ -59,6 +59,10 @@ describe('ContentJudgementSettings', () => {
     // Saving: the switch stays focusable (aria-disabled, not disabled).
     m.isPending = true
     rerender(card({ enabled: false }))
+    // jsdom does not blur a control that turns `disabled` (browsers do), so
+    // the attribute itself is pinned: marked busy, never disabled.
+    expect(toggle).toHaveAttribute('aria-disabled', 'true')
+    expect(toggle).toBeEnabled()
     expect(document.activeElement).toBe(toggle)
 
     // Saved, then router.refresh() brings the new stored props.

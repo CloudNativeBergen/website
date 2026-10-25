@@ -61,6 +61,10 @@ describe('contentJudgement holds no judged content', () => {
     ])
   })
 
+  it('is read-only in the Studio: only the server writes Judgements', () => {
+    expect((contentJudgement as { readOnly?: unknown }).readOnly).toBe(true)
+  })
+
   it('references its content weakly', () => {
     expect(field('content').type).toBe('reference')
     expect(field('content').weak).toBe(true)
@@ -71,6 +75,10 @@ describe('organization.contentJudgement', () => {
   const setting = (organization.fields as unknown as Field[]).find(
     (f) => f.name === 'contentJudgement',
   )!
+  it('is read-only in the Studio, so every change records who made it', () => {
+    expect((setting as Field & { readOnly?: unknown }).readOnly).toBe(true)
+  })
+
   it('records who changed it with a weak reference', () => {
     const changedBy = setting.fields!.find((f) => f.name === 'changedBy')!
     expect(changedBy.weak).toBe(true)

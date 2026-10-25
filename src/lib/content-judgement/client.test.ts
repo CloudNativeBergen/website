@@ -180,6 +180,11 @@ describe('the answer', () => {
     ['a missing answer', { ...commentAnswers, spam: undefined }],
     ['an answer nobody asked for', { ...commentAnswers, extra: noul(0) }],
     ['a probability out of range', { ...commentAnswers, spam: noul(1.5) }],
+    ['a negative probability', { ...commentAnswers, spam: noul(-0.1) }],
+    [
+      'an answer with a field nobody defined',
+      { ...commentAnswers, spam: { ...noul(0), reason: 'x' } },
+    ],
     [
       'a choice answer to a yes/no question',
       {
@@ -301,7 +306,10 @@ describe('nothing judged is ever logged', () => {
       () => status(402),
       () => status(400),
       () => ok({ wrong: noul(0) }),
-      () => new Response('not json'),
+      // A 200 the schema refuses, quoting the content: neither the body nor
+      // the Zod issues (which quote values) may reach a log line.
+      () => ok({ ...commentAnswers, spam: { type: 'noul', noul: COMMENT } }),
+      () => new Response(`not json ${COMMENT}`),
       () => {
         throw new TypeError(`fetch failed: ${COMMENT}`)
       },
