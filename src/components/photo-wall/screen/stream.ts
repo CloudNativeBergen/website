@@ -393,11 +393,16 @@ function onPoll(
     next = { ...next, seen: met.seen, queue: [...next.queue, ...met.fresh] }
   }
 
-  // A removed featured post hands over to the post Up next promised, the
-  // first of it still on the list; a waiting arrival that is still there
-  // takes its turn as usual.
+  // Spotlight: a removed featured post hands over to the post Up next
+  // promised, the first of it still on the list; a waiting arrival that is
+  // still there takes its turn as usual. (Mosaic shows no Up next: its walk
+  // goes on as `advance` picks it.)
   const removed = state.feature && !listKeys.has(state.feature.key)
-  if (removed && !state.waiting.some((key) => listKeys.has(key))) {
+  if (
+    removed &&
+    state.look === 'spotlight' &&
+    !state.waiting.some((key) => listKeys.has(key))
+  ) {
     const promised = upNext(state).find((post) =>
       listKeys.has(screenPostKey(post)),
     )
