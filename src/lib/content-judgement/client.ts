@@ -1,6 +1,6 @@
 import 'server-only'
 import { z } from 'zod'
-import { categories, type DecisionRequest } from './questions'
+import { categories, decisionBody, type DecisionRequest } from './questions'
 import { isContentJudgementEnabled } from './settings'
 
 /**
@@ -69,7 +69,11 @@ interface Dependencies {
 /**
  * A judge for this organization, or `null` when it hasn't turned content
  * judgement on (or that can't be read). Throws only when the setting is on
- * and `OPENROUTER_API_KEY` is missing, a deployment error worth surfacing.
+ * and `OPENROUTER_API_KEY` is missing, a deployment error worth surfacing;
+ * a judging task catches it like any other failure (never-fail, spec §6).
+ *
+ * Get one per piece of content and never hold on to it: the setting is read
+ * here, so a judge kept across content would outlive turning it off.
  */
 export async function judgeForOrganization(
   orgId: string | null | undefined,
@@ -92,7 +96,7 @@ async function callJev(
   fetcher: typeof fetch,
   pause: (ms: number) => Promise<void>,
 ): Promise<JudgeOutcome> {
-  const body = JSON.stringify({ ...request, provider: { zdr: true } })
+  const body = decisionBody(request)
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     const result = await attemptOnce(fetcher, apiKey, body)
     if (result.kind === 'answer') {
@@ -119,6 +123,7 @@ async function callJev(
     warn(`http_${result.status}`, attempt)
     await pause(BACKOFF_MS * 2 ** (attempt - 1))
   }
+  // Unreachable (the last attempt always returns), but TypeScript needs it.
   return failed('retry_exhausted', ATTEMPTS)
 }
 
@@ -156,7 +161,16 @@ async function attemptOnce(
       return { kind: 'status', status: response.status }
     }
     try {
-      return { kind: 'answer', value: await response.json() }
+      // Raced against the abort, so a body that stalls after the headers is
+      // cut off at the same 20 seconds whatever the fetch implementation does
+      // with the signal.
+      const aborted = new Promise<never>((_, reject) =>
+        controller.signal.addEventListener('abort', () => reject(new Error())),
+      )
+      return {
+        kind: 'answer',
+        value: await Promise.race([response.json(), aborted]),
+      }
     } catch {
       return {
         kind: 'error',

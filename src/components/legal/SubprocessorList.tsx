@@ -7,7 +7,7 @@ import {
   GlobeAltIcon,
   LockClosedIcon,
   MegaphoneIcon,
-  ShieldCheckIcon,
+  ScaleIcon,
 } from '@heroicons/react/24/outline'
 // Imported from the MODULE, not the `@/lib/legal` barrel: the barrel re-exports
 // `resolveSubprocessorDisclosure` from a `server-only` file, and this component
@@ -39,7 +39,7 @@ const ICONS: Record<SubprocessorId, typeof LockClosedIcon> = {
   posthog: ChartBarIcon,
   slack: ChatBubbleLeftRightIcon,
   buffer: MegaphoneIcon,
-  openrouter: ShieldCheckIcon,
+  openrouter: ScaleIcon,
   'oauth-providers': LockClosedIcon,
   workos: LockClosedIcon,
 }

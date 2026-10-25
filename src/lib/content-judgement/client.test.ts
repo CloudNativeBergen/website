@@ -305,3 +305,89 @@ describe('nothing judged is ever logged', () => {
     expect(output).not.toContain('sk-or-test')
   })
 })
+
+describe('the timeout covers the body', () => {
+  it('a body that stalls after the headers is cut off at 20 seconds', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.useFakeTimers()
+    // Headers arrive at once; the body never does, and ignores the signal.
+    const stalled = () =>
+      new Response(new ReadableStream({ start() {} }), {
+        headers: { 'content-type': 'application/json' },
+      })
+    const judge = await judgeWith(async () => stalled())
+    let settled = false
+    const outcome = judge.judge(buildCommentRequest(COMMENT)).finally(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(19_999)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await outcome).toEqual({ ok: false, why: 'failed' })
+  })
+})
+
+/**
+ * Spec §15: the eval runner and production send byte-identical requests.
+ * Compared on the WIRE: the body each transport actually POSTs, for one
+ * labelled item per production surface.
+ */
+describe('the eval runner and production POST the same bytes', () => {
+  const capture = () => {
+    const bodies: string[] = []
+    const fetcher: typeof fetch = async (_url, init) => {
+      bodies.push(String(init?.body))
+      return new Response(null, { status: 400 })
+    }
+    return { bodies, fetcher }
+  }
+
+  it.each([
+    ['feedback comment', 'feedback-comment', 0],
+    ['Wall Post with a caption', 'wall-photo', 'caption'],
+    ['Wall Post without a caption', 'wall-photo', 'none'],
+    ['Conversation opening', 'conversation-opening', 0],
+  ] as const)('%s', async (_name, surface, pick) => {
+    const { loadData } = await import('../../../evals/content-judgement/schema')
+    const evalQuestions =
+      await import('../../../evals/content-judgement/questions')
+    const { requestDecision } =
+      await import('../../../evals/content-judgement/transport')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const items = loadData(surface)
+    const item =
+      pick === 0
+        ? items[0]
+        : items.find((i) =>
+            'image' in i
+              ? (i.caption !== undefined) === (pick === 'caption')
+              : false,
+          )!
+    const image = 'image' in item ? 'AAEC' : undefined
+
+    const evalSide = capture()
+    await requestDecision(
+      surface,
+      evalQuestions.buildRequest(surface, item, undefined, image),
+      'k',
+      evalSide.fetcher,
+    ).catch(() => {})
+
+    const production =
+      'image' in item
+        ? buildWallPostRequest({ caption: item.caption, imageBase64: image })
+        : 'category' in item
+          ? buildConversationRequest({
+              subject: item.subject,
+              message: item.text,
+              openedBy: item.openedBy,
+            })
+          : buildCommentRequest(item.text)
+    const productionSide = capture()
+    await (await judgeWith(productionSide.fetcher)).judge(production)
+
+    expect(productionSide.bodies).toHaveLength(1)
+    expect(productionSide.bodies[0]).toBe(evalSide.bodies[0])
+    expect(JSON.parse(productionSide.bodies[0]).provider).toEqual({ zdr: true })
+  })
+})

@@ -139,6 +139,25 @@ describe('organization.updateContentJudgement', () => {
   })
 })
 
+describe('organization.updateAnalytics', () => {
+  const TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
+
+  it('sets the token on the request’s organization only', async () => {
+    await organizer().updateAnalytics({ analyticsPosthogToken: TOKEN })
+    expect(store().doc('org-A')?.analyticsPosthogToken).toBe(TOKEN)
+    expect(store().doc('org-B')?.analyticsPosthogToken).toBeUndefined()
+    expect(h.revalidateTag).toHaveBeenCalledWith(
+      'sanity:organization-org-A',
+      'default',
+    )
+  })
+
+  it('null unsets it', async () => {
+    await organizer().updateAnalytics({ analyticsPosthogToken: null })
+    expect(store().doc('org-A')).not.toHaveProperty('analyticsPosthogToken')
+  })
+})
+
 describe('the organization mutation surface is pinned', () => {
   it('lists every mutation', () => {
     const procedures = (

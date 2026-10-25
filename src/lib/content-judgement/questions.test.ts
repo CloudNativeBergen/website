@@ -1,13 +1,10 @@
 /**
- * The eval measures what production sends (spec §4.2, §15): for one item per
- * production surface, the eval runner's request and the production builder's
- * are byte-identical. The eval side maps a labelled item; the production side
- * is handed the same values the way a judging task will hand them over.
+ * Question wording is pinned to its question set version. (That the eval
+ * runner and production POST byte-identical requests is proven on the wire,
+ * in client.test.ts.)
  */
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { buildRequest } from '../../../evals/content-judgement/questions'
-import { loadData } from '../../../evals/content-judgement/schema'
 import {
   buildCommentRequest,
   buildConversationRequest,
@@ -15,47 +12,8 @@ import {
   QUESTION_SET_VERSIONS,
 } from './questions'
 
-const bytes = (value: unknown) => JSON.stringify(value)
 const sha256 = (value: unknown) =>
-  createHash('sha256').update(bytes(value)).digest('hex')
-
-describe('eval and production build the same request', () => {
-  it('feedback comment', () => {
-    const item = loadData('feedback-comment')[0]
-    expect(bytes(buildCommentRequest(item.text))).toBe(
-      bytes(buildRequest('feedback-comment', item)),
-    )
-  })
-
-  it('Wall Post with a caption', () => {
-    const item = loadData('wall-photo').find((i) => i.caption !== undefined)!
-    expect(
-      bytes(
-        buildWallPostRequest({ caption: item.caption, imageBase64: 'AAEC' }),
-      ),
-    ).toBe(bytes(buildRequest('wall-photo', item, undefined, 'AAEC')))
-  })
-
-  it('Wall Post without a caption', () => {
-    const item = loadData('wall-photo').find((i) => i.caption === undefined)!
-    expect(bytes(buildWallPostRequest({ imageBase64: 'AAEC' }))).toBe(
-      bytes(buildRequest('wall-photo', item, undefined, 'AAEC')),
-    )
-  })
-
-  it('Conversation opening', () => {
-    const item = loadData('conversation-opening')[0]
-    expect(
-      bytes(
-        buildConversationRequest({
-          subject: item.subject,
-          message: item.text,
-          openedBy: item.openedBy,
-        }),
-      ),
-    ).toBe(bytes(buildRequest('conversation-opening', item)))
-  })
-})
+  createHash('sha256').update(JSON.stringify(value)).digest('hex')
 
 /**
  * A wording change must come with a version bump, because every bar in §11

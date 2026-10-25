@@ -63,7 +63,10 @@ describe('decision transport', () => {
       Authorization: 'Bearer test-key',
       'Content-Type': 'application/json',
     })
-    expect(JSON.parse(String(options?.body))).toEqual(request())
+    expect(JSON.parse(String(options?.body))).toEqual({
+      ...request(),
+      provider: { zdr: true },
+    })
   })
   it('records exhausted retries and never includes a remote body', async () => {
     const fetcher = vi

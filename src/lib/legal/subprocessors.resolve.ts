@@ -7,7 +7,7 @@ import {
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { resolveSocialConnections } from '@/lib/social/provider'
 import { resolveWorkshopsForConference } from '@/lib/features/workshops'
-import { hasStoredJudgements } from '@/lib/content-judgement/records'
+import { hasStoredJudgements } from '@/lib/content-judgement'
 import {
   conferenceProviderType,
   hasTicketingBinding,
@@ -144,7 +144,8 @@ async function resolveProcessingFacts(
   // organization means no conference to have judged anything in.
   const storedJudgements = orgRef
     ? await hasStoredJudgements(orgRef)
-        .then((stored) => stored === true)
+        // Anything but a boolean is an answer we can't read: unknown.
+        .then((stored) => (typeof stored === 'boolean' ? stored : null))
         .catch((error: unknown) => {
           console.error(
             `[legal] stored Judgement read failed for ${orgRef}; disclosing OpenRouter as POSSIBLE`,

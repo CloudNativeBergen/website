@@ -19,6 +19,8 @@ describe('the held-out gate file', () => {
 
   it('accepts a complete row', () => {
     expect(parseGateFile([row])).toEqual([row])
+    const photo = { ...row, surface: 'wallPost', question: 'photo_spam' }
+    expect(parseGateFile([photo])).toEqual([photo])
   })
 
   it.each([
@@ -32,6 +34,11 @@ describe('the held-out gate file', () => {
     ['a question set that is not a version', { questionSet: '2' }],
     ['a date that is not a day', { date: 'soon' }],
     ['an extra field', { note: 'item fc-301 was wrong' }],
+    ['a photo question on comments', { question: 'photo_spam' }],
+    [
+      'a bare question on Wall Posts',
+      { surface: 'wallPost', questionSet: 'v4' },
+    ],
   ])('refuses %s', (_name, change) => {
     expect(() => parseGateFile([{ ...row, ...change }])).toThrow()
   })

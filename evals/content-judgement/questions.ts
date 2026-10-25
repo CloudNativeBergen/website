@@ -22,6 +22,7 @@ import type {
 // The questions are production's (spec §4.2): this file only maps eval items
 // onto the production builders, so the eval measures what production sends.
 export {
+  decisionBody,
   moderationQuestions,
   photoQuestions,
   conversationQuestions,

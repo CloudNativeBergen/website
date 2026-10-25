@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { formatDateTimeSafe } from '@/lib/time'
@@ -29,6 +29,8 @@ export function ContentJudgementSettings({
   const router = useRouter()
   const { showNotification } = useNotification()
   const [enabled, setEnabled] = useState(initialEnabled)
+  const labelId = useId()
+  const helpId = useId()
 
   const mutation = api.organization.updateContentJudgement.useMutation({
     onSuccess: (_data, variables) => {
@@ -65,7 +67,7 @@ export function ContentJudgementSettings({
       <div>
         <div className="flex items-center justify-between gap-4">
           <p
-            id="judge-content-label"
+            id={labelId}
             className="text-sm font-medium text-gray-900 dark:text-white"
           >
             Judge content
@@ -74,8 +76,8 @@ export function ContentJudgementSettings({
             type="button"
             role="switch"
             aria-checked={enabled}
-            aria-labelledby="judge-content-label"
-            aria-describedby="judge-content-help"
+            aria-labelledby={labelId}
+            aria-describedby={helpId}
             disabled={mutation.isPending}
             onClick={toggle}
             // 44×24 to the eye; the `after` box makes the touch target 44×44
@@ -93,7 +95,7 @@ export function ContentJudgementSettings({
           </button>
         </div>
         <p
-          id="judge-content-help"
+          id={helpId}
           className="mt-1 text-sm text-gray-500 dark:text-gray-400"
         >
           TypeSafe&apos;s Jev classifier checks Wall Posts, comments on session
@@ -109,7 +111,9 @@ export function ContentJudgementSettings({
       </p>
 
       <p className="border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
-        {changedAt ? (
+        {mutation.isPending ? (
+          'Saving…'
+        ) : changedAt ? (
           <>
             {initialEnabled ? 'Turned on' : 'Turned off'} by{' '}
             <span className="font-medium text-gray-700 dark:text-gray-300">

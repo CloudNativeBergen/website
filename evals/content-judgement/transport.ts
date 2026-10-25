@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { categories, type Surface } from './schema'
-import { type DecisionRequest } from './questions'
+import { decisionBody, type DecisionRequest } from './questions'
 
 const probability = z.number().finite().min(0).max(1)
 export const noulAnswerSchema = z
@@ -108,7 +108,7 @@ export async function requestDecision(
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(request),
+        body: decisionBody(request),
         signal: AbortSignal.timeout(60_000),
       })
     } catch {

@@ -210,6 +210,15 @@ export type WallPhotoRequest = {
 export type DecisionRequest =
   ModerationRequest | ConversationRequest | WallPhotoRequest
 
+/**
+ * The exact bytes POSTed to OpenRouter, by production and by the eval: the
+ * built request with `provider.zdr` (zero data retention, spec §4.1) on
+ * every request, on top of the account-level setting.
+ */
+export function decisionBody(request: DecisionRequest): string {
+  return JSON.stringify({ ...request, provider: { zdr: true } })
+}
+
 /** A comment on a Feedback Response (question set `feedbackComment`). */
 export function buildCommentRequest(
   comment: string,

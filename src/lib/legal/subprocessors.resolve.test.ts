@@ -280,4 +280,14 @@ describe('/privacy OpenRouter disclosure, two tenants (Content judgement §13.1)
     )
     expect(openrouter(off)?.certainty).toBe('possible')
   })
+
+  it('an answer that is not a boolean is unknown, never a "no"', async () => {
+    fetchMock.mockImplementation(
+      judging(async () => null as unknown as boolean),
+    )
+    const off = await resolveSubprocessorDisclosure(
+      conference('conf-off', ORG_OFF),
+    )
+    expect(openrouter(off)?.certainty).toBe('possible')
+  })
 })

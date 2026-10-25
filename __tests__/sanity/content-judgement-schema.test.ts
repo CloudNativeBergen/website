@@ -42,27 +42,23 @@ describe('contentJudgement holds no judged content', () => {
     ])
   })
 
-  it('has no field, at any depth, that could carry text or an image', () => {
-    const names = allNames(fields)
-    for (const banned of [
-      'text',
-      'caption',
-      'comment',
-      'message',
-      'photo',
-      'image',
-      'subject',
-      'body',
+  it('holds only scores inside its parts, at any depth', () => {
+    // Every nested field, pinned: a new one (a `note`, an `excerpt`) is a
+    // privacy decision and must come with the /privacy copy.
+    expect(allNames(field('parts').of!)).toEqual([
+      'judgementPart',
+      'part',
+      'answers',
+      'judgementAnswer',
+      'question',
+      'probability',
+      'choice',
+      'probabilities',
+      'choiceProbability',
+      'choice',
+      'probability',
+      'confidence',
     ])
-      expect(names).not.toContain(banned)
-    const types = (list: Field[]): string[] =>
-      list.flatMap((f) => [
-        f.type,
-        ...types(f.fields ?? []),
-        ...types(f.of ?? []),
-      ])
-    expect(types(fields)).not.toContain('image')
-    expect(types(fields)).not.toContain('text')
   })
 
   it('references its content weakly', () => {

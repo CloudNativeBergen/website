@@ -19,20 +19,27 @@ const questionKey = z.enum([
   ...moderationKeys.map((key) => `photo_${key}` as const),
 ])
 
-export const gateRowSchema = z.strictObject({
-  question: questionKey,
-  surface: z.enum(['feedbackComment', 'wallPost']),
-  /** The dated build that answered, e.g. `typesafe/jev-1.14-20261014`. */
-  build: z.string().regex(/^[a-z0-9-]+\/[a-z0-9.-]+-\d{8}$/),
-  questionSet: z.string().regex(/^v\d+$/),
-  /** At the enforcement threshold, 0.9. */
-  falsePositiveRate: z.number().min(0).max(1),
-  recall: z.number().min(0).max(1),
-  /** Benign items scored; the bar needs at least 300. */
-  negatives: z.number().int().nonnegative(),
-  /** When the held-out run was made, `YYYY-MM-DD`. */
-  date: z.iso.date(),
-})
+export const gateRowSchema = z
+  .strictObject({
+    question: questionKey,
+    surface: z.enum(['feedbackComment', 'wallPost']),
+    /** The dated build that answered, e.g. `typesafe/jev-1.14-20261014`. */
+    build: z.string().regex(/^[a-z0-9-]+\/[a-z0-9.-]+-\d{8}$/),
+    questionSet: z.string().regex(/^v\d+$/),
+    /** At the enforcement threshold, 0.9. */
+    falsePositiveRate: z.number().min(0).max(1),
+    recall: z.number().min(0).max(1),
+    /** Benign items scored; the bar needs at least 300. */
+    negatives: z.number().int().nonnegative(),
+    /** When the held-out run was made, `YYYY-MM-DD`. */
+    date: z.iso.date(),
+  })
+  // A comment question is a bare key; a Wall Post's is `caption_` or `photo_`.
+  .refine(
+    (row) =>
+      (row.surface === 'wallPost') === /^(caption|photo)_/.test(row.question),
+    { message: 'question does not belong to its surface' },
+  )
 
 export type GateRow = z.infer<typeof gateRowSchema>
 
