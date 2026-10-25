@@ -33,8 +33,17 @@ vi.mock('@/lib/sanity/client', () => ({
         setPatch(id, fields)
         return { commit: async () => ({}) }
       },
+      unset: (fields: unknown) => {
+        setPatch(id, { unset: fields })
+        return { commit: async () => ({}) }
+      },
     }),
   },
+}))
+
+const rateLimit = vi.fn()
+vi.mock('@/lib/workshop/announcementRateLimit', () => ({
+  consumeAnnouncementRateLimit: (...a: unknown[]) => rateLimit(...a),
 }))
 
 const getCanceled = vi.fn()
@@ -105,6 +114,7 @@ beforeEach(() => {
     signup('c', 'cancelled'),
   ])
   sendCanceled.mockResolvedValue({ data: { emailId: 'e' } })
+  rateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 })
 })
 
 afterEach(() => {
@@ -113,6 +123,11 @@ afterEach(() => {
 
 describe('workshop.admin.notifyCanceled', () => {
   it('emails confirmed and waitlisted sign-ups with their own status, and stores when', async () => {
+    // Stored before the first email goes out.
+    sendCanceled.mockImplementation(async () => {
+      expect(setPatch).toHaveBeenCalledTimes(1)
+      return { data: { emailId: 'e' } }
+    })
     const result = await caller().admin.notifyCanceled({
       workshopId: 'ws-1',
       message: '  Sorry.  ',
@@ -127,12 +142,13 @@ describe('workshop.admin.notifyCanceled', () => {
     ])
     expect(sendCanceled.mock.calls[0][0].message).toBe('Sorry.')
     expect(result).toMatchObject({ recipientCount: 2, sent: 2, failed: 0 })
-    expect(setPatch).toHaveBeenCalledWith('ws-1', {
+    expect(rateLimit).toHaveBeenCalledWith('cancel-notice:ws-1')
+    expect(setPatch).toHaveBeenLastCalledWith('ws-1', {
       workshopCancelNoticeSentAt: result.sentAt,
     })
   })
 
-  it('counts a failed send and stores nothing when none went out', async () => {
+  it('counts a failed send and takes the stored time back when none went out', async () => {
     sendCanceled.mockResolvedValue({ error: { message: 'x' } })
 
     const result = await caller().admin.notifyCanceled({
@@ -141,6 +157,34 @@ describe('workshop.admin.notifyCanceled', () => {
     })
 
     expect(result).toMatchObject({ sent: 0, failed: 2, sentAt: null })
+    expect(setPatch).toHaveBeenLastCalledWith('ws-1', {
+      unset: ['workshopCancelNoticeSentAt'],
+    })
+  })
+
+  it('keeps the earlier time when a second send reached no one', async () => {
+    getCanceled.mockResolvedValue({
+      _id: 'ws-1',
+      title: 'K8s Ops',
+      status: 'canceled',
+      workshopCancelNoticeSentAt: '2026-10-01T10:00:00.000Z',
+    })
+    sendCanceled.mockResolvedValue({ error: { message: 'x' } })
+
+    await caller().admin.notifyCanceled({ workshopId: 'ws-1', message: '' })
+
+    expect(setPatch).toHaveBeenLastCalledWith('ws-1', {
+      workshopCancelNoticeSentAt: '2026-10-01T10:00:00.000Z',
+    })
+  })
+
+  it('refuses a send over the limit, and sends nothing', async () => {
+    rateLimit.mockReturnValue({ allowed: false, retryAfterMs: 120_000 })
+
+    await expect(
+      caller().admin.notifyCanceled({ workshopId: 'ws-1', message: '' }),
+    ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' })
+    expect(sendCanceled).not.toHaveBeenCalled()
     expect(setPatch).not.toHaveBeenCalled()
   })
 

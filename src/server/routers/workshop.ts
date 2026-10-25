@@ -1415,6 +1415,18 @@ export const workshopRouter = router({
             message: 'No canceled workshop with this id in this conference',
           })
         }
+        // Against a double click or a second organizer at the same moment:
+        // the announcement limit, on its own key.
+        const rateLimit = consumeAnnouncementRateLimit(
+          `cancel-notice:${workshop._id}`,
+        )
+        if (!rateLimit.allowed) {
+          const minutes = Math.max(1, Math.ceil(rateLimit.retryAfterMs / 60000))
+          throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message: `Notice limit reached for this workshop. Try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+          })
+        }
         try {
           const recipients = (
             await getWorkshopSignupsByWorkshop(workshop._id, conferenceId)
@@ -1423,6 +1435,14 @@ export const workshopRouter = router({
               s.status === WorkshopSignupStatus.CONFIRMED ||
               s.status === WorkshopSignupStatus.WAITLIST,
           )
+          // STORED BEFORE THE SEND: a reply lost mid-send still leaves the
+          // page warning before a second one.
+          const setSentAt = (at: string) =>
+            clientWrite
+              .patch(workshop._id)
+              .set({ workshopCancelNoticeSentAt: at })
+              .commit()
+          await setSentAt(new Date().toISOString())
           const { conference } = await getConferenceForCurrentDomain({})
           const { sent, failed } = await fanOutEmails(recipients, (s) =>
             sendWorkshopCanceledEmail({
@@ -1438,13 +1458,16 @@ export const workshopRouter = router({
             }),
           )
           const sentAt = new Date().toISOString()
-          if (sent > 0) {
+          // None reached: what was stored before stands again.
+          if (sent > 0) await setSentAt(sentAt)
+          else if (workshop.workshopCancelNoticeSentAt)
+            await setSentAt(workshop.workshopCancelNoticeSentAt)
+          else
             await clientWrite
               .patch(workshop._id)
-              .set({ workshopCancelNoticeSentAt: sentAt })
+              .unset(['workshopCancelNoticeSentAt'])
               .commit()
-            revalidateTag('admin:workshops', 'default')
-          }
+          revalidateTag('admin:workshops', 'default')
           return {
             recipientCount: recipients.length,
             sent,

@@ -126,6 +126,7 @@ async function storedTalkOf(workshopId: string, conferenceId: string) {
     status?: string
     format?: string
     conference?: { _ref?: string }
+    workshopCancelNoticeSentAt?: string
   }>(workshopId)
   return talk?._id === workshopId &&
     talk._type === 'talk' &&
