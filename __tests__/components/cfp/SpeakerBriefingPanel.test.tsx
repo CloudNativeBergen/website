@@ -79,7 +79,7 @@ describe('SpeakerBriefingPanel', () => {
     expect(html).toContain('Confirm your talk for “Second”')
     expect(html).toContain('href="tel:+4790000000"')
     expect(html).toContain('href="mailto:k@example.com"')
-    expect(html).not.toContain('<details')
+    expect(html).not.toContain('More details')
   })
 
   it('drops a non-http meeting point map link', () => {
@@ -103,7 +103,7 @@ describe('SpeakerBriefingPanel', () => {
     const html = renderToStaticMarkup(
       <SpeakerBriefingPanel briefing={briefing} conferenceDay="2026-10-27" />,
     )
-    const details = html.indexOf('<details')
+    const details = html.indexOf('More details')
     expect(html.indexOf('Your talk today')).toBeLessThan(details)
     expect(html.indexOf('Badge desk')).toBeLessThan(details)
     expect(html.indexOf('On-site contact')).toBeLessThan(details)
@@ -120,7 +120,7 @@ describe('SpeakerBriefingPanel', () => {
         changesEmail="cfp@example.com"
       />,
     )
-    const details = html.indexOf('<details')
+    const details = html.indexOf('More details')
     expect(html.indexOf('Speaker dinner')).toBeLessThan(details)
     expect(html.indexOf('Meet at')).toBeLessThan(details)
     expect(html).toContain('href="mailto:cfp@example.com"')
@@ -161,12 +161,13 @@ describe('SpeakerBriefingPanel', () => {
       />,
     )
     expect(html).not.toContain('Invalid Date')
-    expect(html).toContain(
-      'Departs Mon 26 Oct, 17:30 (local time) (after the last talk)',
-    )
-    expect(html).toContain('<p>whenever</p>')
+    expect(html).toContain('Departs Mon 26 Oct, 17:30 (local time)')
+    expect(html).toContain('after the last talk')
+    expect(html).toMatch(/<p[^>]*>whenever<\/p>/)
     expect(html).not.toContain('Departs whenever')
-    expect(html).toContain('Open map')
+    expect(html).toMatch(
+      /href="https:\/\/maps.example.com\/x"[^>]*>Meet at Lobby/,
+    )
   })
 
   it('collapses nothing when nothing is pinned on a conference day', () => {
@@ -176,7 +177,7 @@ describe('SpeakerBriefingPanel', () => {
         conferenceDay="2026-10-27"
       />,
     )
-    expect(html).not.toContain('<details')
+    expect(html).not.toContain('More details')
     expect(html).toContain('Tomorrow talk')
   })
 
@@ -189,5 +190,17 @@ describe('SpeakerBriefingPanel', () => {
     expect(
       renderToStaticMarkup(<SpeakerBriefingPanel briefing={{}} />),
     ).not.toContain('as an organizer')
+  })
+
+  it('folds long sections closed on first render and gives the contact buttons', () => {
+    const html = renderToStaticMarkup(
+      <SpeakerBriefingPanel briefing={briefing} />,
+    )
+    expect(html).toMatch(
+      /<details class="group"><summary[^>]*><h5[^>]*>Equipment<\/h5>/,
+    )
+    expect(html).not.toMatch(/<details[^>]* open/)
+    expect(html).toContain('aria-label="Call +47 900 00 000"')
+    expect(html).toContain('aria-label="Email k@example.com"')
   })
 })
