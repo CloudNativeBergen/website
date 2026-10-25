@@ -7,12 +7,11 @@
 import { describe, expect, it } from 'vitest'
 import type { ScreenPost, ScreenView } from '@/lib/photo-wall/screen'
 import { screenPostKey as key } from '@/lib/photo-wall/screen'
-import { IMAGE_RETRY_MS, SWAP_EVERY_MS } from './board'
+import { SWAP_EVERY_MS } from './board'
 import {
   featured,
   initialStream,
   pendingStreamImages,
-  shownPosts,
   streamReducer,
   upNext,
   type StreamState,
