@@ -4,6 +4,7 @@ import { isUnknownHost } from '@/lib/conference/guard'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { SpeakerInfoForm } from '@/components/admin/SpeakerInfoForm'
 import { getSpeakerInfoGaps } from '@/lib/speaker/briefing-checklist'
+import { SpeakerBriefingPanel } from '@/components/admin/SpeakerBriefingPanel'
 
 export default async function AdminSpeakerInfoPage() {
   const { conference, error } = await getConferenceForCurrentDomain({})
@@ -55,6 +56,8 @@ export default async function AdminSpeakerInfoPage() {
           </p>
         </div>
       )}
+      {/* Remounted on a save, so the preview and counts refetch. */}
+      <SpeakerBriefingPanel key={conference.speakerInfo?.updatedAt ?? 'new'} />
     </div>
   )
 }
