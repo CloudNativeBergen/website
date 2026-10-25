@@ -5,7 +5,10 @@ import Link from 'next/link'
 import type { TypedObject } from 'sanity'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
-import type { SpeakerBriefing } from '@/lib/speaker/briefing'
+import type {
+  SpeakerBriefing,
+  SpeakerBriefingTodo,
+} from '@/lib/speaker/briefing'
 import { formatConferenceDateLong, formatConferenceDayTime } from '@/lib/time'
 
 interface SpeakerBriefingPanelProps {
@@ -23,6 +26,30 @@ const isHttpUrl = (url?: string): url is string =>
 
 const linkClass =
   'text-brand-cloud-blue underline hover:no-underline dark:text-blue-400'
+
+function todoLink(t: SpeakerBriefingTodo): { text: string; href?: string } {
+  const proposal = t.proposalId ? `/cfp/proposal/${t.proposalId}` : undefined
+  switch (t.kind) {
+    case 'confirm-talk':
+      return { text: `Confirm your talk “${t.title}”`, href: proposal }
+    case 'upload-slides':
+      return { text: `Upload slides for “${t.title}”`, href: proposal }
+    case 'co-speaker-invite-pending':
+      return {
+        text: `A co-speaker has not accepted the invite for “${t.title}”`,
+        href: proposal,
+      }
+    case 'claim-ticket':
+      return {
+        text: 'Claim your free speaker ticket with the link in your ticket email',
+      }
+    case 'travel-support':
+      return {
+        text: 'Submit your travel support request',
+        href: '/cfp/expense',
+      }
+  }
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -56,15 +83,20 @@ export function SpeakerBriefingPanel({
   const todos = b.todos && (
     <Section title="Still to do">
       <ul className="list-disc space-y-1 pl-5">
-        {b.todos.map((t) => (
-          <li key={`${t.kind}-${t.proposalId}`}>
-            <Link href={`/cfp/proposal/${t.proposalId}`} className={linkClass}>
-              {t.kind === 'confirm-talk'
-                ? `Confirm your talk “${t.title}”`
-                : `Upload slides for “${t.title}”`}
-            </Link>
-          </li>
-        ))}
+        {b.todos.map((t) => {
+          const { text, href } = todoLink(t)
+          return (
+            <li key={`${t.kind}-${t.proposalId ?? ''}`}>
+              {href ? (
+                <Link href={href} className={linkClass}>
+                  {text}
+                </Link>
+              ) : (
+                text
+              )}
+            </li>
+          )
+        })}
       </ul>
     </Section>
   )
@@ -74,7 +106,19 @@ export function SpeakerBriefingPanel({
       <ul className="space-y-1">
         {talks.map((t) => (
           <li key={t.proposalId}>
-            <span className="font-medium">{t.title}</span>
+            {t.isWorkshop ? (
+              <>
+                Your workshop:{' '}
+                <Link
+                  href={`/cfp/workshop/${t.proposalId}`}
+                  className={`${linkClass} font-medium`}
+                >
+                  {t.title}
+                </Link>
+              </>
+            ) : (
+              <span className="font-medium">{t.title}</span>
+            )}
             {(t.date || t.startTime || t.trackTitle) && (
               <span className="text-gray-600 dark:text-gray-400">
                 {' — '}

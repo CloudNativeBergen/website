@@ -2,15 +2,18 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { SpeakerBriefingPanel } from './SpeakerBriefingPanel'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import type { TypedObject } from 'sanity'
+import { Format } from '@/lib/proposal/types'
 import type { SpeakerBriefing } from '@/lib/speaker/briefing'
 
 const pt = (s: string) =>
   convertStringToPortableTextBlocks(s) as unknown as TypedObject[]
 
-const talks: SpeakerBriefing['talks'] = [
+const talks: NonNullable<SpeakerBriefing['talks']> = [
   {
     proposalId: 'talk-1',
     title: 'Scaling Kubernetes at the edge',
+    format: Format.presentation_25,
+    isWorkshop: false,
     date: '2026-10-27',
     startTime: '10:00',
     endTime: '10:40',
@@ -19,6 +22,8 @@ const talks: SpeakerBriefing['talks'] = [
   {
     proposalId: 'talk-2',
     title: 'GitOps in practice',
+    format: Format.workshop_120,
+    isWorkshop: true,
     date: '2026-10-28',
     startTime: '13:00',
     endTime: '13:25',
@@ -28,6 +33,13 @@ const talks: SpeakerBriefing['talks'] = [
 
 const todos: SpeakerBriefing['todos'] = [
   { kind: 'upload-slides', proposalId: 'talk-1', title: talks[0].title },
+  {
+    kind: 'co-speaker-invite-pending',
+    proposalId: 'talk-1',
+    title: talks[0].title,
+  },
+  { kind: 'claim-ticket', title: 'Speaker ticket' },
+  { kind: 'travel-support', title: 'Travel support request' },
 ]
 
 const full: SpeakerBriefing = {

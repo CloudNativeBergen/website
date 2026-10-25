@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { SpeakerBriefingPanel } from '@/components/cfp/SpeakerBriefingPanel'
 import type { SpeakerBriefing } from '@/lib/speaker/briefing'
+import { Format } from '@/lib/proposal/types'
 
 const block = (text: string) => [
   {
@@ -17,15 +18,27 @@ const block = (text: string) => [
 ]
 
 const briefing: SpeakerBriefing = {
-  todos: [{ kind: 'confirm-talk', proposalId: 'p2', title: 'Second' }],
+  todos: [
+    { kind: 'confirm-talk', proposalId: 'p2', title: 'Second' },
+    { kind: 'claim-ticket', title: 'Speaker ticket' },
+    { kind: 'travel-support', title: 'Travel support request' },
+  ],
   talks: [
     {
       proposalId: 'p1',
       title: 'Today talk',
+      format: Format.presentation_25,
+      isWorkshop: false,
       date: '2026-10-27',
       trackTitle: 'Main stage',
     },
-    { proposalId: 'p3', title: 'Tomorrow talk', date: '2026-10-28' },
+    {
+      proposalId: 'p3',
+      title: 'Tomorrow talk',
+      format: Format.workshop_120,
+      isWorkshop: true,
+      date: '2026-10-28',
+    },
   ],
   checkIn: block('Badge desk'),
   equipment: block('HDMI on stage'),
@@ -101,5 +114,16 @@ describe('SpeakerBriefingPanel', () => {
     expect(html.indexOf('Meeting point:')).toBeLessThan(details)
     expect(html).toContain('href="mailto:cfp@example.com"')
     expect(html.slice(details)).not.toContain('Speaker dinner')
+  })
+
+  it('links travel support and workshops, and leaves claim-ticket unlinked', () => {
+    const html = renderToStaticMarkup(
+      <SpeakerBriefingPanel briefing={briefing} />,
+    )
+    expect(html).toContain('href="/cfp/expense"')
+    expect(html).toContain('ticket email')
+    expect(html).not.toContain('href="/cfp/proposal/undefined"')
+    expect(html).toContain('Your workshop:')
+    expect(html).toContain('href="/cfp/workshop/p3"')
   })
 })
