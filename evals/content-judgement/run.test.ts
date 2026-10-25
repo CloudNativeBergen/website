@@ -598,6 +598,7 @@ describe('a private held-out text set (--data)', () => {
       })
     })
     vi.stubGlobal('fetch', fetcher)
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
     await main([
       '--data',
       data,
@@ -609,6 +610,11 @@ describe('a private held-out text set (--data)', () => {
       out,
     ])
     expect(calls.get(`${MARKER} 1`)).toBe(3)
+    // And production's 20 s per attempt, not the eval's patient 60 s.
+    expect(timeout).toHaveBeenCalled()
+    expect(new Set(timeout.mock.calls.map(([ms]) => ms))).toEqual(
+      new Set([20_000]),
+    )
     const report = readFileSync(join(out, 'report.md'), 'utf8')
     expect(report).toContain('1 item(s) have no answer')
     expect(report).not.toContain('```json')
