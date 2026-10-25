@@ -40,6 +40,8 @@ export interface FullSeats {
 export interface WorkshopStats {
   workshopId: string
   workshopTitle: string
+  /** The talk's status: a canceled or withdrawn one is shown to the admin only. */
+  status?: string
   capacity: number
   totalSignups: number
   confirmedSignups: number

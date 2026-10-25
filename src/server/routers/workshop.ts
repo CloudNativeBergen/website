@@ -1371,7 +1371,9 @@ export const workshopRouter = router({
     getSummary: workshopAdminProcedure.query(async () => {
       try {
         const conferenceId = await resolveConferenceId()
-        const statistics = await getWorkshopStatistics(conferenceId)
+        const statistics = await getWorkshopStatistics(conferenceId, {
+          includeCanceled: true,
+        })
 
         return {
           success: true,
