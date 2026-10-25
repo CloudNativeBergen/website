@@ -10,6 +10,7 @@ import type {
   SpeakerBriefingTodo,
 } from '@/lib/speaker/briefing'
 import { formatConferenceDateLong, formatConferenceDayTime } from '@/lib/time'
+import { isSafeLinkHref } from '@/lib/portabletext/safeHref'
 
 interface SpeakerBriefingPanelProps {
   briefing: SpeakerBriefing
@@ -21,8 +22,15 @@ interface SpeakerBriefingPanelProps {
   changesEmail?: string
 }
 
+// Map links open off-site, so http(s) only — no site paths.
 const isHttpUrl = (url?: string): url is string =>
-  !!url && /^https?:\/\//i.test(url)
+  !!url && /^https?:\/\//i.test(url) && isSafeLinkHref(url)
+
+/** An instant in conference time, or nothing when it does not parse. */
+const dayTime = (value?: string) =>
+  value && !Number.isNaN(Date.parse(value))
+    ? formatConferenceDayTime(value)
+    : undefined
 
 const linkClass =
   'text-brand-cloud-blue underline hover:no-underline dark:text-blue-400'
@@ -147,7 +155,7 @@ export function SpeakerBriefingPanel({
           <>
             {c.name && ' · '}
             <a
-              href={`tel:${c.phone.replace(/\s+/g, '')}`}
+              href={`tel:${c.phone.replace(/[^\d+]/g, '')}`}
               className={linkClass}
             >
               Call {c.phone}
@@ -181,7 +189,7 @@ export function SpeakerBriefingPanel({
         </p>
       )}
       {d.text && <p className="whitespace-pre-line">{d.text}</p>}
-      {d.startsAt && <p>{formatConferenceDayTime(d.startsAt)}</p>}
+      {dayTime(d.startsAt) && <p>{dayTime(d.startsAt)}</p>}
       {(d.venueName || d.address) && (
         <p>{[d.venueName, d.address].filter(Boolean).join(', ')}</p>
       )}
@@ -205,30 +213,28 @@ export function SpeakerBriefingPanel({
               {r.label && <p className="font-medium">{r.label}</p>}
               {r.meetingPoint && (
                 <p>
-                  Meeting point:{' '}
-                  {isHttpUrl(r.meetingPointMapUrl) ? (
-                    <a
-                      href={r.meetingPointMapUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`${linkClass} font-medium`}
-                    >
-                      {r.meetingPoint} (map)
-                    </a>
-                  ) : (
-                    r.meetingPoint
+                  Meeting point: {r.meetingPoint}
+                  {isHttpUrl(r.meetingPointMapUrl) && (
+                    <>
+                      {' · '}
+                      <a
+                        href={r.meetingPointMapUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`${linkClass} font-medium`}
+                      >
+                        Map of {r.meetingPoint}
+                      </a>
+                    </>
                   )}
                 </p>
               )}
-              {(r.departsAt || r.departsNote) && (
+              {(dayTime(r.departsAt) || r.departsNote) && (
                 <p>
                   Departs{' '}
-                  {[
-                    r.departsAt && formatConferenceDayTime(r.departsAt),
-                    r.departsNote,
-                  ]
-                    .filter(Boolean)
-                    .join(', ')}
+                  {dayTime(r.departsAt)
+                    ? `${dayTime(r.departsAt)}${r.departsNote ? ` (${r.departsNote})` : ''}`
+                    : r.departsNote}
                 </p>
               )}
               {r.details && <Rich value={r.details} />}
@@ -261,18 +267,23 @@ export function SpeakerBriefingPanel({
   // TODO(#1592): switch to the shared section order constant in briefing.ts
   // once phase 3 merges. Order: to-dos, talks, dinner, check-in, equipment,
   // on-site contact, accommodation, extra, venue and travel.
-  const pinned = !!conferenceDay || !!pinDinner
+  // Pin only what exists; with nothing pinned, nothing is collapsed either.
+  const pinTalks = todayTalks.length > 0
+  const pinDin = !!pinDinner && !!dinner
+  const pinCheckIn = !!conferenceDay && !!checkIn
+  const pinContact = !!conferenceDay && !!contact
+  const pinned = pinTalks || pinDin || pinCheckIn || pinContact
   const rest = (
     <>
       {b.talks && talkList('Your talks', b.talks)}
-      {!pinDinner && dinner}
-      {!conferenceDay && checkIn}
+      {!pinDin && dinner}
+      {!pinCheckIn && checkIn}
       {b.equipment && (
         <Section title="Equipment">
           <Rich value={b.equipment} />
         </Section>
       )}
-      {!conferenceDay && contact}
+      {!pinContact && contact}
       {b.accommodation && (
         <Section title="Accommodation">
           <Rich value={b.accommodation} />
@@ -301,14 +312,14 @@ export function SpeakerBriefingPanel({
       </h4>
       {pinned ? (
         <>
-          {todayTalks.length > 0 && talkList('Your talks today', todayTalks)}
-          {pinDinner && dinner}
-          {conferenceDay && checkIn}
-          {conferenceDay && contact}
+          {pinTalks && talkList('Your talks today', todayTalks)}
+          {pinDin && dinner}
+          {pinCheckIn && checkIn}
+          {pinContact && contact}
           {todos}
           <details>
             <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">
-              Everything else
+              More details
             </summary>
             <div className="mt-3 space-y-4">{rest}</div>
           </details>

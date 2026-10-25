@@ -126,4 +126,41 @@ describe('SpeakerBriefingPanel', () => {
     expect(html).toContain('Your workshop:')
     expect(html).toContain('href="/cfp/workshop/p3"')
   })
+
+  it('never prints Invalid Date and labels departures and maps', () => {
+    const html = renderToStaticMarkup(
+      <SpeakerBriefingPanel
+        briefing={{
+          dinner: {
+            startsAt: 'nonsense',
+            routes: [
+              {
+                _key: 'a',
+                meetingPoint: 'Lobby',
+                meetingPointMapUrl: 'https://maps.example.com/x',
+                departsAt: '2026-10-26T16:30:00Z',
+                departsNote: 'after the last talk',
+              },
+              { _key: 'b', departsAt: 'bad', departsNote: 'whenever' },
+            ],
+          },
+        }}
+      />,
+    )
+    expect(html).not.toContain('Invalid Date')
+    expect(html).toContain('Departs Mon 26 Oct, 17:30 (after the last talk)')
+    expect(html).toContain('Departs whenever')
+    expect(html).toContain('Map of Lobby')
+  })
+
+  it('collapses nothing when nothing is pinned on a conference day', () => {
+    const html = renderToStaticMarkup(
+      <SpeakerBriefingPanel
+        briefing={{ talks: briefing.talks?.slice(1) }}
+        conferenceDay="2026-10-27"
+      />,
+    )
+    expect(html).not.toContain('<details')
+    expect(html).toContain('Tomorrow talk')
+  })
 })
