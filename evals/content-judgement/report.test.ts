@@ -24,7 +24,7 @@ describe('report aggregation', () => {
       latencyMs: 100 + index * 100,
       cost: 0.01,
       answers: {
-        abusive: { noul },
+        abusive: { type: 'noul', noul },
         sexual: { type: 'noul', noul: 0 },
         spam: { type: 'noul', noul: 0 },
         personal_info: { type: 'noul', noul: 0 },
@@ -58,6 +58,7 @@ describe('report aggregation', () => {
         cost: null,
         answers: {
           category: {
+            type: 'choice',
             choice: choice as 'proposal_status' | 'talk_details',
             confidence: 0.8,
             probabilities: {
