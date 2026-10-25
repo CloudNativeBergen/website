@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { ScheduleTrack } from '@/lib/conference/types'
+import type { TrackSponsorOption } from '@/lib/schedule/types'
 import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { calculateTalkContentMinutes } from '@/lib/schedule/geometry'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
@@ -11,6 +12,9 @@ export const TrackHeader = ({
   isEditing,
   editTitle,
   editDescription,
+  editSponsor,
+  sponsorOptions,
+  onEditSponsor,
   onEditTitle,
   onEditDescription,
   onSave,
@@ -23,6 +27,10 @@ export const TrackHeader = ({
   isEditing: boolean
   editTitle: string
   editDescription: string
+  /** The chosen sponsor's id; '' for none. */
+  editSponsor: string
+  sponsorOptions: TrackSponsorOption[]
+  onEditSponsor: (sponsorId: string) => void
   onEditTitle: (value: string) => void
   onEditDescription: (value: string) => void
   onSave: () => void
@@ -35,6 +43,16 @@ export const TrackHeader = ({
   const talkContentMinutes = calculateTalkContentMinutes(track)
   const realTalks = track.talks.filter((talk) => talk.talk).length
   const [confirmingRemove, setConfirmingRemove] = useState(false)
+  const sponsorRef = track.sponsor?._ref
+  const sponsorName = sponsorRef
+    ? (sponsorOptions.find((option) => option._id === sponsorRef)?.name ??
+      'a sponsor no longer shown publicly')
+    : null
+  const trackSponsors = sponsorOptions.filter((option) => option.trackAddon)
+  const otherSponsors = sponsorOptions.filter((option) => !option.trackAddon)
+  const editingUnlisted =
+    editSponsor !== '' &&
+    !sponsorOptions.some((option) => option._id === editSponsor)
 
   // Removing a track un-schedules its real talks (they return to the unassigned
   // list) but permanently DELETES its service sessions — mirror the mobile
@@ -69,6 +87,39 @@ export const TrackHeader = ({
             rows={2}
             placeholder="Track description"
           />
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+            Track sponsor
+            <select
+              value={editSponsor}
+              onChange={(e) => onEditSponsor(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-normal focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">No track sponsor (thank every sponsor)</option>
+              {editingUnlisted && (
+                <option value={editSponsor}>
+                  A sponsor no longer shown publicly
+                </option>
+              )}
+              {trackSponsors.length > 0 && (
+                <optgroup label="Track Sponsorship">
+                  {trackSponsors.map((option) => (
+                    <option key={option._id} value={option._id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {otherSponsors.length > 0 && (
+                <optgroup label="Other sponsors">
+                  {otherSponsors.map((option) => (
+                    <option key={option._id} value={option._id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </label>
           <div className="flex gap-2">
             <button
               onClick={onSave}
@@ -106,6 +157,11 @@ export const TrackHeader = ({
                 </span>
               )}
             </div>
+            {sponsorName && (
+              <p className="mt-2 truncate text-xs font-medium text-amber-800 dark:text-amber-300">
+                Sponsored by {sponsorName}
+              </p>
+            )}
           </div>
           {!isReadOnly && (
             <div className="ml-3 flex shrink-0 gap-1">

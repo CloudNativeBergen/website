@@ -1,7 +1,11 @@
 'use client'
 
 import { createContext, useContext, type Dispatch } from 'react'
-import type { DragItem, EditorSchedule } from '@/lib/schedule/types'
+import type {
+  DragItem,
+  EditorSchedule,
+  TrackSponsorOption,
+} from '@/lib/schedule/types'
 import type { ScheduleAction } from '@/lib/schedule/reducer'
 
 /**
@@ -33,6 +37,8 @@ interface ScheduleContextValue {
   isReadOnly: boolean
   dispatch: Dispatch<ScheduleAction>
   isFilteredOut: (id: string) => boolean
+  /** The sponsors a track can be given, Track Sponsorship holders first. */
+  trackSponsorOptions: TrackSponsorOption[]
 }
 
 const noop: Dispatch<ScheduleAction> = () => {}
@@ -44,6 +50,7 @@ const ScheduleContext = createContext<ScheduleContextValue>({
   isReadOnly: false,
   dispatch: noop,
   isFilteredOut: () => false,
+  trackSponsorOptions: [],
 })
 
 export const ScheduleProvider = ScheduleContext.Provider
