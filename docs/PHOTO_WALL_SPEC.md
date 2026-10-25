@@ -511,7 +511,8 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
 Both: the walk features the post that has waited longest since its last
 turn (the newest first among equals), so a quiet walk goes round in order,
 an arrival never makes it start over or repeat, and Up next names exactly
-the next turns. _Implementation detail._ A burst is let in one post every
+the next turns; a removed featured post hands over to the one Up next
+named. _Implementation detail._ A burst is let in one post every
 2.5 s; a removed post leaves at once
 (a featured one hands over to the next); a post is shown only once its photo
 has loaded; §9.3 and §9.4 apply as for the Pinboard.
