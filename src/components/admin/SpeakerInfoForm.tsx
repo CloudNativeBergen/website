@@ -11,22 +11,16 @@ import { useNotification } from './NotificationProvider'
 import { api } from '@/lib/trpc/client'
 import type { TypedObject } from 'sanity'
 import type { SpeakerInfo, SpeakerInfoRoute } from '@/lib/conference/types'
+import { instantToOsloLocalInput, osloLocalInputToIso } from '@/lib/time'
 
 type Blocks = PortableTextBlock[] | undefined
 // The editor's block type and Sanity's `TypedObject` describe the same JSON.
 const typed = (v: PortableTextBlock[]) => v as unknown as TypedObject[]
 
-// ponytail: datetime-local is the BROWSER's zone, not the conference's; fine
-// while organizers edit from the host city.
-const toLocalInput = (iso?: string) => {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16)
-}
-const fromLocalInput = (v?: string) =>
-  v ? new Date(v).toISOString() : undefined
+// Times are entered and shown as conference (Europe/Oslo) wall-clock, whatever
+// the organizer's own time zone.
+const toLocalInput = instantToOsloLocalInput
+const fromLocalInput = (v?: string) => osloLocalInputToIso(v) ?? undefined
 
 const str = (s?: string) => s?.trim() || undefined
 const blk = (b?: TypedObject[]) => (b && b.length > 0 ? b : undefined)
