@@ -14,3 +14,9 @@ export const UpdateOrganizationAnalyticsSchema = z.object({
     .regex(POSTHOG_TOKEN_PATTERN, POSTHOG_TOKEN_MESSAGE)
     .nullable(),
 })
+
+// === Content judgement (Content judgement spec §5) ===
+// The Judge content switch. The Enforce switches join in J7.
+export const UpdateContentJudgementSchema = z.object({
+  enabled: z.boolean(),
+})
