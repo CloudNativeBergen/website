@@ -234,6 +234,8 @@ const EMAIL_CONCURRENCY = 3
  * of Resend's 10 requests/s, which the account shares with every other send.
  * ponytail: per-invocation pacing; a shared limiter if parallel fan-outs still hit 429.
  */
+// ponytail: in-request pacing (~5/s) inside one tRPC call; the 60 s maxDuration
+// caps a fan-out at ~300 recipients. Move to a queue when a list outgrows that.
 const BATCH_MIN_MS = 600
 
 export interface FanOutResult {
