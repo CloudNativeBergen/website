@@ -35,7 +35,6 @@ import {
   onList,
   recordImage,
   retryFailedImages,
-  sortsAfter,
   type BoardAction,
   type ImageMemory,
 } from './board'
@@ -45,8 +44,6 @@ export type StreamLook = 'mosaic' | 'spotlight'
 interface Feature {
   key: string
   at: number
-  /** Set for an arrival: the walk goes on after this post, not after the arrival. */
-  resumeAfter: string | null
 }
 
 /** Tiles on Mosaic's screen: more than a 1080 px canvas shows, so it is always full. */
@@ -74,12 +71,13 @@ export interface StreamState extends ImageMemory {
   seen: ReadonlySet<string>
   /** Arrivals waiting their turn, in approval order. */
   queue: ScreenPost[]
-  /**
-   * The featured post's key, when it was featured, and for an arrival the
-   * post of the walk it interrupted, after which the walk resumes; null with
-   * nothing shown.
-   */
+  /** The featured post's key and when it was featured; null with nothing shown. */
   feature: Feature | null
+  /**
+   * When each post was last featured, by key: the walk features the post
+   * that waited longest, so after an arrival it goes on where it was.
+   */
+  turns: Readonly<Record<string, number>>
   /** Spotlight: arrivals let in and waiting for their turn as the big post, in order. */
   waiting: string[]
   /** Wears the "new" mark until then, by key. */
@@ -101,6 +99,7 @@ export function initialStream(look: StreamLook): StreamState {
     seen: new Set(),
     queue: [],
     feature: null,
+    turns: {},
     waiting: [],
     marks: {},
     lastArrivalAt: 0,
@@ -146,7 +145,8 @@ const loaded = (state: StreamState, post: ScreenPost) =>
  * photo has loaded. An older loaded photo stays until a newer one has
  * loaded to take its place, so retries never empty the screen. The
  * featured post and Spotlight's waiting arrivals are kept on top of the
- * look's count, so photos that load later never cut a turn or skip one.
+ * look's count (the featured post within it), so photos that load later
+ * never cut a turn or skip one.
  */
 export function shownPosts(state: StreamState): ScreenPost[] {
   const letIn = state.list.filter(
@@ -156,7 +156,11 @@ export function shownPosts(state: StreamState): ScreenPost[] {
   // and Spotlight's arrivals waiting for theirs.
   const kept = (key: string) =>
     key === state.feature?.key || state.waiting.includes(key)
-  let room = state.look === 'mosaic' ? MOSAIC_TILES : SPOTLIGHT_ROTATION
+  // The featured post counts towards the look's count; waiting arrivals
+  // come on top of it.
+  let room =
+    (state.look === 'mosaic' ? MOSAIC_TILES : SPOTLIGHT_ROTATION) -
+    (letIn.some((post) => screenPostKey(post) === state.feature?.key) ? 1 : 0)
   return letIn.filter((post) => {
     if (kept(screenPostKey(post))) return true
     room -= 1
@@ -211,57 +215,27 @@ function rotation(state: StreamState, shown: ScreenPost[]): ScreenPost[] {
 }
 
 /**
- * Where the post with `key` sits in the walk's order (newest approval
- * first, then id), also once it has left the list: a key is
- * `id@approvedAt`, so a removed post still says where it was.
+ * The walk in the order it goes on, after the featured post: the post that
+ * has waited longest since its last turn first, one never featured before
+ * any that was, the newest first among equals. A quiet walk goes round the
+ * newest in order; after an arrival it picks up where it was; nothing comes
+ * round twice before the rest of the walk has had a turn.
  */
-function comesAfter(post: ScreenPost, key: string): boolean {
-  const at = key.lastIndexOf('@')
-  return sortsAfter(post, {
-    _id: key.slice(0, at),
-    approvedAt: key.slice(at + 1),
-  })
+function walkOrder(state: StreamState, walk: ScreenPost[]): ScreenPost[] {
+  const current = state.feature?.key
+  const lastTurn = (post: ScreenPost) =>
+    state.turns[screenPostKey(post)] ?? -Infinity
+  return walk
+    .filter((post) => screenPostKey(post) !== current)
+    .sort((a, b) => lastTurn(a) - lastTurn(b))
 }
 
-/**
- * The post after `key` in the walk, wrapping round; after a post that has
- * left the walk (removed, its photo failed), the one that followed it.
- */
-function nextInRotation(
-  walk: ScreenPost[],
-  key: string | undefined,
-): ScreenPost | undefined {
-  if (walk.length === 0) return undefined
-  if (key === undefined) return walk[0]
-  const at = walk.findIndex((post) => screenPostKey(post) === key)
-  if (at !== -1) return walk[(at + 1) % walk.length]
-  return walk.find((post) => comesAfter(post, key)) ?? walk[0]
-}
-
-/**
- * The walk's post after the featured one: after an arrival, on from the
- * post it interrupted, never the arrival itself again.
- */
-function nextAfter(
-  walk: ScreenPost[],
-  current: Feature | null,
-): ScreenPost | undefined {
-  const post = nextInRotation(walk, current?.resumeAfter ?? current?.key)
-  return post && current && screenPostKey(post) === current.key
-    ? nextInRotation(walk, current.key)
-    : post
-}
-
-/** An arrival featured at `now`, remembering where the walk it interrupted was. */
-function arrivalFeature(
-  current: Feature | null,
-  key: string,
-  now: number,
-): Feature {
+/** `key` featured at `now`, its turn remembered. */
+function feature(state: StreamState, key: string, now: number): StreamState {
   return {
-    key,
-    at: now,
-    resumeAfter: current?.resumeAfter ?? current?.key ?? null,
+    ...state,
+    feature: { key, at: now },
+    turns: { ...state.turns, [key]: now },
   }
 }
 
@@ -269,20 +243,14 @@ function arrivalFeature(
 export function upNext(state: StreamState): ScreenPost[] {
   const shown = shownPosts(state)
   const byKey = new Map(shown.map((post) => [screenPostKey(post), post]))
-  const current = state.feature?.key
   const out: ScreenPost[] = []
   for (const key of state.waiting) {
     const post = byKey.get(key)
     if (post) out.push(post)
   }
-  // The walk from the post the next turn shows, as `advance` picks it.
-  const walk = rotation(state, shown)
-  const first = nextAfter(walk, state.feature)
-  const at = first ? walk.indexOf(first) : -1
-  for (let i = 0; at !== -1 && i < walk.length; i++) {
-    const post = walk[(at + i) % walk.length]
-    const key = screenPostKey(post)
-    if (key !== current && !state.waiting.includes(key)) out.push(post)
+  // Then the walk, in the order `advance` takes it.
+  for (const post of walkOrder(state, rotation(state, shown))) {
+    if (!state.waiting.includes(screenPostKey(post))) out.push(post)
   }
   return out.slice(0, UP_NEXT)
 }
@@ -317,8 +285,7 @@ function advance(state: StreamState, now: number): StreamState {
       next.look === 'mosaic'
         ? // Mosaic: the spotlight at once.
           {
-            ...next,
-            feature: arrivalFeature(next.feature, key, now),
+            ...feature(next, key, now),
             marks: { ...next.marks, [key]: now + NEW_MARK_MS },
           }
         : // Spotlight: next in line.
@@ -354,19 +321,18 @@ function advance(state: StreamState, now: number): StreamState {
     if (first) {
       // Spotlight: a waiting arrival's turn, and its mark for that turn.
       next = {
-        ...next,
+        ...feature(next, first, now),
         waiting: rest,
-        feature: arrivalFeature(current, first, now),
         marks: { ...next.marks, [first]: now + NEW_MARK_MS },
       }
     } else {
-      const post = nextAfter(rotation(next, shown), current)
-      next = {
-        ...next,
-        feature: post
-          ? { key: screenPostKey(post), at: now, resumeAfter: null }
-          : null,
-      }
+      // The walk's next; the featured post again when it is all there is.
+      const post =
+        walkOrder(next, rotation(next, shown))[0] ??
+        shown.find((p) => screenPostKey(p) === current?.key)
+      next = post
+        ? feature(next, screenPostKey(post), now)
+        : { ...next, feature: null }
     }
   }
 
@@ -400,6 +366,7 @@ function onPoll(
     images: onList(state.images, listKeys),
     imageFailures: onList(state.imageFailures, listKeys),
     marks: onList(state.marks, listKeys),
+    turns: onList(state.turns, listKeys),
     queue: state.queue.filter((post) => listKeys.has(screenPostKey(post))),
   }
 
