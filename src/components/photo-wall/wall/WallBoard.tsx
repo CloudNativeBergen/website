@@ -170,7 +170,12 @@ function SpotlightFeed({ posts }: { posts: WallPagePost[] }) {
             height={post.whole.height}
             loading={i < EAGER_PHOTOS ? 'eager' : 'lazy'}
             decoding="async"
-            className="block h-auto max-h-[80dvh] w-full rounded-md bg-gray-100 object-contain dark:bg-gray-900"
+            // Full width, but never taller than 80% of the screen: a tall
+            // photo narrows to keep its shape, centred, with no bands.
+            className="mx-auto block h-auto w-full rounded-md"
+            style={{
+              maxWidth: `calc(80dvh * ${post.whole.width / post.whole.height})`,
+            }}
           />
           {post.caption && <p className="pt-3 break-words">{post.caption}</p>}
         </li>
