@@ -20,6 +20,7 @@ import { onlineManager } from '@tanstack/react-query'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import { inScreenMode, markScreenMode } from '@/components/pwa/screen-update'
 import type { ScreenPost, ScreenView } from '@/lib/photo-wall/screen'
+import type { WallLook } from '@/lib/photo-wall/types'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 
 /**
@@ -73,13 +74,18 @@ import {
   NEW_MARK_MS,
   SWAP_EVERY_MS,
 } from './board'
-import { IMAGE_LOAD_DEADLINE_MS } from './ScreenLayout'
+import { IMAGE_LOAD_DEADLINE_MS } from './ScreenShell'
 
 const at = (minutes: number) =>
   new Date(Date.parse('2026-10-26T07:00:00Z') + minutes * 60_000).toISOString()
 const post = (n: number, fields: Partial<ScreenPost> = {}): ScreenPost => ({
   _id: `wallPost-${n}`,
   src: `https://cdn.sanity.io/images/p/d/${n}-1600x1000.jpg?rect=300,0,1000,1000&w=600&h=600&auto=format`,
+  whole: {
+    src: `https://cdn.sanity.io/images/p/d/${n}.jpg?w=1400`,
+    width: 1600,
+    height: 1000,
+  },
   caption: n % 3 === 0 ? `Caption ${n}` : null,
   name: n % 2 === 0 ? `Name ${n}` : null,
   approvedAt: at(n),
@@ -93,6 +99,7 @@ const view = (
 ): ScreenView => ({
   closed: false,
   sponsorStrip: false,
+  look: 'pinboard',
   posts: list,
   ...fields,
 })
@@ -121,11 +128,19 @@ const conference = (sponsors: ConferenceSponsor[] = []) => ({
 })
 
 /** Rendered in the app's own provider: its query defaults and tRPC client. */
-function mount(initial: ScreenView, sponsors: ConferenceSponsor[] = []) {
+function mount(
+  initial: ScreenView,
+  sponsors: ConferenceSponsor[] = [],
+  look?: WallLook,
+) {
   h.queryFn.mockResolvedValue(initial)
   render(
     <TRPCProvider>
-      <ScreenMode initial={initial} conference={conference(sponsors)} />
+      <ScreenMode
+        initial={initial}
+        conference={conference(sponsors)}
+        look={look}
+      />
     </TRPCProvider>,
   )
 }
@@ -556,5 +571,137 @@ describe('sponsor strip, empty and closed (§9.2, §9.4)', () => {
     expect(screen.queryByRole('marquee')).toBeNull()
     expect(screen.queryByTestId('screen-strip')).toBeNull()
     expect(screen.queryByRole('img', { name: /QR code for/ })).toBeNull()
+  })
+})
+
+describe("Wall Looks (§9): the wall's look, live, and a screen link's ?look=", () => {
+  const tiles = () => screen.queryAllByTestId('mosaic-tile')
+  const spotlightTile = () =>
+    tiles().find((t) => t.hasAttribute('data-spotlight')) ?? null
+  const hero = () => screen.queryByTestId('spotlight-hero')
+
+  it('Mosaic shows the whole photos, the newest in the spotlight tile', async () => {
+    mount(view(posts(8), { look: 'mosaic' }))
+    await advance(0)
+    loadImages()
+    await advance(100)
+    expect(cards()).toHaveLength(0)
+    expect(tiles().map((t) => t.getAttribute('data-post'))).toEqual(
+      posts(8).map((p) => p._id),
+    )
+    expect(spotlightTile()?.getAttribute('data-post')).toBe('wallPost-8')
+    const img = within(spotlightTile()!).getByRole('img')
+    expect(img.getAttribute('src')).toBe(post(8).whole.src)
+  })
+
+  it('Mosaic: an approval on a running screen takes the spotlight, "Just posted"', async () => {
+    mount(view(posts(8), { look: 'mosaic' }))
+    await advance(0)
+    loadImages()
+    await advance(100)
+    h.queryFn.mockResolvedValue(view(posts(9), { look: 'mosaic' }))
+    await nextPoll()
+    loadImages()
+    await advance(100)
+    expect(spotlightTile()?.getAttribute('data-post')).toBe('wallPost-9')
+    expect(within(spotlightTile()!).getByText('Just posted')).toBeTruthy()
+  })
+
+  it('switches look on the next poll after an organizer changes it', async () => {
+    mount(view(posts(8)))
+    await advance(0)
+    loadImages()
+    await advance(100)
+    expect(cards()).toHaveLength(8)
+    h.queryFn.mockResolvedValue(view(posts(8), { look: 'spotlight' }))
+    await nextPoll()
+    loadImages()
+    await advance(100)
+    expect(cards()).toHaveLength(0)
+    expect(hero()?.getAttribute('data-post')).toBe('wallPost-8')
+    // A look switched to starts afresh: nothing is new.
+    expect(hero()?.hasAttribute('data-new')).toBe(false)
+    expect(screen.getAllByTestId('up-next')).toHaveLength(4)
+  })
+
+  it("a switch from Mosaic to Spotlight runs Spotlight's rules: the big post walks 12, not 6", async () => {
+    mount(view(posts(20), { look: 'mosaic' }))
+    await advance(0)
+    loadImages()
+    await advance(100)
+    h.queryFn.mockResolvedValue(view(posts(20), { look: 'spotlight' }))
+    await nextPoll()
+    loadImages()
+    await advance(100)
+    expect(hero()?.getAttribute('data-post')).toBe('wallPost-20')
+    for (let turn = 0; turn < 6; turn++) {
+      await advance(SWAP_EVERY_MS)
+      loadImages()
+    }
+    expect(hero()?.getAttribute('data-post')).toBe('wallPost-14')
+  })
+
+  it('a switched look does not count a failed poll from before the switch (§9.3)', async () => {
+    mount(view(posts(8)))
+    await advance(0)
+    loadImages()
+    await advance(100)
+    h.queryFn.mockRejectedValue(new Error('offline'))
+    await nextPoll()
+    h.queryFn.mockResolvedValue(view(posts(8), { look: 'mosaic' }))
+    await nextPoll()
+    h.queryFn.mockRejectedValue(new Error('offline'))
+    await nextPoll()
+    await nextPoll()
+    expect(offlineDot()).toBeNull()
+    await nextPoll()
+    expect(offlineDot()).toBeInTheDocument()
+  })
+
+  it('Spotlight shows no Up next while the first big post’s photo is on its way', async () => {
+    mount(view(posts(8), { look: 'spotlight' }))
+    await advance(0)
+    // Every photo but the newest has loaded.
+    act(() => {
+      for (const img of document.querySelectorAll('img[data-preload]')) {
+        if (img.getAttribute('data-preload') !== 'wallPost-8')
+          fireEvent.load(img)
+      }
+    })
+    await advance(100)
+    expect(hero()).toBeNull()
+    expect(screen.queryAllByTestId('up-next')).toHaveLength(0)
+    loadImages()
+    await advance(100)
+    expect(hero()?.getAttribute('data-post')).toBe('wallPost-8')
+    expect(screen.getAllByTestId('up-next')).toHaveLength(4)
+  })
+
+  it("keeps a screen link's ?look= whatever the wall's look", async () => {
+    mount(view(posts(8), { look: 'mosaic' }), [], 'spotlight')
+    await advance(0)
+    loadImages()
+    await advance(100)
+    expect(hero()).not.toBeNull()
+    expect(tiles()).toHaveLength(0)
+    h.queryFn.mockResolvedValue(view(posts(8), { look: 'pinboard' }))
+    await nextPoll()
+    loadImages()
+    await advance(100)
+    expect(hero()).not.toBeNull()
+    expect(cards()).toHaveLength(0)
+  })
+
+  it('Spotlight: a removed big post leaves on the next poll', async () => {
+    mount(view(posts(8), { look: 'spotlight' }))
+    await advance(0)
+    loadImages()
+    await advance(100)
+    expect(hero()?.getAttribute('data-post')).toBe('wallPost-8')
+    h.queryFn.mockResolvedValue(view(posts(7), { look: 'spotlight' }))
+    await nextPoll()
+    expect(hero()?.getAttribute('data-post')).toBe('wallPost-7')
+    // Gone from the big post and from Up next.
+    expect(document.querySelector('[data-post="wallPost-8"]')).toBeNull()
   })
 })

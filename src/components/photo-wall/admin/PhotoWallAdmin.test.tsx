@@ -7,7 +7,13 @@
  * the words carry the meaning, so the class is what is asserted for it.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import type { PhotoWallAdminView, PostingState } from '@/lib/photo-wall'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 
@@ -23,6 +29,7 @@ const view = (posting: PostingState): PhotoWallAdminView => ({
     _id: 'photoWall-conf-A',
     postingMode: 'auto',
     sponsorStrip: false,
+    look: 'pinboard',
     closedAt: null,
   },
   posting,
@@ -137,5 +144,49 @@ describe('the Posting switch (§7, §10)', () => {
     )
     fireEvent.click(screen.getByRole('radio', { name: 'Automatic' }))
     expect(onChange).toHaveBeenCalledWith({ postingMode: 'auto' })
+  })
+})
+
+describe('the Wall Look (§9, P3)', () => {
+  const looks = () => screen.getByRole('radiogroup', { name: 'Wall Look' })
+
+  it("offers Pinboard, Mosaic and Spotlight, the wall's look checked", () => {
+    const v = view('open')
+    render(
+      <PhotoWallAdmin
+        view={{ ...v, wall: { ...v.wall!, look: 'mosaic' } }}
+        onSetUp={() => {}}
+        onChange={() => {}}
+      />,
+    )
+    const radios = Array.from(
+      looks().querySelectorAll<HTMLInputElement>('input[type="radio"]'),
+    )
+    expect(radios.map((r) => r.value)).toEqual([
+      'pinboard',
+      'mosaic',
+      'spotlight',
+    ])
+    expect(radios.filter((r) => r.checked).map((r) => r.value)).toEqual([
+      'mosaic',
+    ])
+  })
+
+  it.each([
+    ['Mosaic', 'mosaic'],
+    ['Spotlight', 'spotlight'],
+  ])('choosing %s asks for %s', (label, look) => {
+    const onChange = vi.fn()
+    render(
+      <PhotoWallAdmin
+        view={view('open')}
+        onSetUp={() => {}}
+        onChange={onChange}
+      />,
+    )
+    fireEvent.click(
+      within(looks()).getByRole('radio', { name: new RegExp(label) }),
+    )
+    expect(onChange).toHaveBeenCalledWith({ look })
   })
 })

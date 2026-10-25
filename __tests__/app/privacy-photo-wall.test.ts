@@ -46,12 +46,20 @@ describe('Photo Wall on /privacy', () => {
       'the photo (filtered and resized on your phone, with location and other camera data removed)',
       'your caption',
       'your name if you give one',
-      'how the photo is cropped on the wall',
+      'where the square of a polaroid sits on the photo (some walls show the whole photo)',
       'whether you allow marketing use',
       'a cookie that recognises your phone',
     ]) {
       expect(copy).toContain(item)
     }
+  })
+
+  it('the consent line says the whole photo is shown, not only the square (P3)', () => {
+    const line = composer.replace(/\s+/g, ' ')
+    expect(line).toContain('Your whole photo, caption and name are shown')
+    expect(line).toContain(
+      'the square you choose is only how the polaroids frame it',
+    )
   })
 
   it('says a photo is reachable by its address from upload until deleted (§5)', () => {

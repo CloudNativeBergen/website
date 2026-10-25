@@ -169,14 +169,23 @@ describe('photoWallPublic.get (§8, §9.1)', () => {
     await expect(visitor().get()).resolves.toEqual({
       closed: false,
       postingOpen: true,
+      look: 'pinboard',
       posts: [
         {
           _id: 'wallPost-a1',
           // The short-edge square (1000 px) 20% of the way along the
           // 600 px of slack: x = 120. About 600 px wide on a phone (§5.1).
           src: 'https://cdn.sanity.io/images/test/test/shaa1-1600x1000.jpg?rect=120,0,1000,1000&w=600&h=600&auto=format',
+          // The whole photo for Mosaic and Spotlight, 1000 px on its long
+          // edge: never a `rect=`, which would cut it.
+          whole: {
+            src: 'https://cdn.sanity.io/images/test/test/shaa1-1600x1000.jpg?max-h=1000&max-w=1000&auto=format',
+            width: 1600,
+            height: 1000,
+          },
           caption: 'Keynote crowd',
           name: 'Ada',
+          approvedAt: '2026-10-26T07:40:00Z',
         },
       ],
     })
@@ -319,6 +328,7 @@ describe('photoWallPublic.get (§8, §9.1)', () => {
     await expect(visitor().get()).resolves.toEqual({
       closed: true,
       postingOpen: false,
+      look: 'pinboard',
       posts: [],
     })
   })
@@ -395,10 +405,17 @@ describe('photoWallPublic.screen (§8, §9.2)', () => {
     await expect(visitor().screen()).resolves.toEqual({
       closed: false,
       sponsorStrip: true,
+      look: 'pinboard',
       posts: [
         {
           _id: 'wallPost-a2',
           src: 'https://cdn.sanity.io/images/test/test/shaa2-1600x1000.jpg?rect=300,0,1000,1000&w=600&h=600&auto=format',
+          // Spotlight's big post: 1400 px on the long edge.
+          whole: {
+            src: 'https://cdn.sanity.io/images/test/test/shaa2-1600x1000.jpg?max-h=1400&max-w=1400&auto=format',
+            width: 1600,
+            height: 1000,
+          },
           caption: null,
           name: null,
           approvedAt: '2026-10-26T07:09:00.000Z',
@@ -406,6 +423,11 @@ describe('photoWallPublic.screen (§8, §9.2)', () => {
         {
           _id: 'wallPost-a1',
           src: 'https://cdn.sanity.io/images/test/test/shaa1-1600x1000.jpg?rect=120,0,1000,1000&w=600&h=600&auto=format',
+          whole: {
+            src: 'https://cdn.sanity.io/images/test/test/shaa1-1600x1000.jpg?max-h=1400&max-w=1400&auto=format',
+            width: 1600,
+            height: 1000,
+          },
           caption: 'Keynote crowd',
           name: 'Ada',
           approvedAt: '2026-10-26T07:05:00.000Z',
@@ -413,6 +435,21 @@ describe('photoWallPublic.screen (§8, §9.2)', () => {
       ],
     })
   })
+
+  it.each([
+    [undefined, 'pinboard'],
+    ['pinboard', 'pinboard'],
+    ['mosaic', 'mosaic'],
+    ['spotlight', 'spotlight'],
+    ['carousel', 'pinboard'],
+  ])(
+    'answers the Wall Look stored as %s as %s, on the screen and the Wall page (§4.1)',
+    async (stored, look) => {
+      store().reset([wallOf('conf-A', stored ? { look: stored } : {})])
+      expect(await visitor().screen()).toMatchObject({ look })
+      expect(await visitor().get()).toMatchObject({ look })
+    },
+  )
 
   it('reads the Sponsor strip switch as off when unset (§9.4)', async () => {
     store().reset([wallOf('conf-A')])
@@ -447,6 +484,7 @@ describe('photoWallPublic.screen (§8, §9.2)', () => {
     await expect(visitor().screen()).resolves.toEqual({
       closed: true,
       sponsorStrip: true,
+      look: 'pinboard',
       posts: [],
     })
   })

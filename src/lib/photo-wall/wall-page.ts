@@ -1,8 +1,9 @@
 import 'server-only'
 import { getWall } from './cache'
-import { squareSrc } from './square'
+import { squareSrc, wholeSrc } from './square'
 import {
   WALL_PAGE_PHOTO_PX,
+  WALL_PAGE_WHOLE_PX,
   type WallPagePost,
   type WallPageView,
   type WallPost,
@@ -10,15 +11,19 @@ import {
 import { isPostingOpen } from './window'
 
 /**
- * A post as a polaroid shows it, on the Wall page and on Screen Mode: the
- * same square URL for both, so Sanity cuts each photo once.
+ * A post as the public pages show it, `wholePx` the long edge of its whole
+ * photo: the same square URL on the Wall page and Screen Mode, so Sanity
+ * cuts each square once.
  */
-export function polaroidPost(post: WallPost): WallPagePost {
+export function publicPost(post: WallPost, wholePx: number): WallPagePost {
+  const { width, height } = post.photo
   return {
     _id: post._id,
     src: squareSrc(post.photo, post.crop, WALL_PAGE_PHOTO_PX),
+    whole: { src: wholeSrc(post.photo, wholePx), width, height },
     caption: post.caption,
     name: post.name,
+    approvedAt: post.approvedAt,
   }
 }
 
@@ -45,6 +50,7 @@ export async function readWallPage(
   return {
     closed,
     postingOpen: isPostingOpen(wall, conference, now),
-    posts: closed ? [] : posts.map(polaroidPost),
+    look: wall.look,
+    posts: closed ? [] : posts.map((p) => publicPost(p, WALL_PAGE_WHOLE_PX)),
   }
 }
