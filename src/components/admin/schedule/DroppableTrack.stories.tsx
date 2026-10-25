@@ -11,7 +11,8 @@ import {
   Status,
 } from '@/lib/proposal/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
-import { fn } from 'storybook/test'
+import { expect, fn, userEvent, within } from 'storybook/test'
+import { ScheduleProvider } from './ScheduleContext'
 
 const createMockProposal = (
   overrides: Partial<ProposalExisting> = {},
@@ -171,5 +172,61 @@ export const WithServiceSessions: Story = {
     onRemoveTrack: fn(),
     onRemoveTalk: fn(),
     onDuplicateServiceSession: fn(),
+  },
+}
+
+const sponsorOptions = [
+  { _id: 'proact', name: 'Proact IT Norge AS', trackAddon: true },
+  { _id: 'sopra', name: 'Sopra Steria', trackAddon: true },
+  { _id: 'bekk', name: 'Bekk', trackAddon: false },
+]
+
+const withSponsorOptions: NonNullable<Story['decorators']> = [
+  (Story) => (
+    <ScheduleProvider
+      value={{
+        activeDragItem: null,
+        schedule: null,
+        otherScheduledProposalIds: new Set(),
+        isReadOnly: false,
+        dispatch: () => {},
+        isFilteredOut: () => false,
+        trackSponsorOptions: sponsorOptions,
+      }}
+    >
+      <Story />
+    </ScheduleProvider>
+  ),
+]
+
+/** A track with a sponsor: the header names them under the counts. */
+export const SponsoredTrack: Story = {
+  args: {
+    track: {
+      ...trackWithTalks,
+      trackTitle: 'Proact IT - Lillesalen',
+      sponsor: { _ref: 'proact' },
+    },
+    trackIndex: 0,
+    onUpdateTrack: fn(),
+    onRemoveTrack: fn(),
+    onRemoveTalk: fn(),
+    onDuplicateServiceSession: fn(),
+  },
+  decorators: withSponsorOptions,
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText('Sponsored by Proact IT Norge AS'),
+    ).toBeVisible()
+  },
+}
+
+/** Editing the track: the sponsor picker, Track Sponsorship holders first. */
+export const EditingTrackSponsor: Story = {
+  ...SponsoredTrack,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit track' }))
+    await expect(canvas.getByLabelText('Track sponsor')).toHaveValue('proact')
   },
 }
