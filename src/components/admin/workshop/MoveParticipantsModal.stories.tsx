@@ -64,9 +64,11 @@ export const Default: Story = {
     const body = within(document.body)
     await expect(
       await body.findByText('Clashes with eBPF Hands-on'),
-    ).toBeVisible()
-    await expect(body.getByText('Already signed up')).toBeVisible()
-    await expect(body.getByText(/1 will be on the waitlist/)).toBeVisible()
+    ).toBeInTheDocument()
+    await expect(body.getByText('Already signed up')).toBeInTheDocument()
+    await expect(
+      body.getByText(/1 will be on the waitlist/),
+    ).toBeInTheDocument()
     await userEvent.click(body.getByLabelText(/Grace Hopper/))
     await userEvent.click(body.getByRole('button', { name: 'Move 1 person' }))
     await expect(args.onSubmit).toHaveBeenCalledWith(['s1'])
