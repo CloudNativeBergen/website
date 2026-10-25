@@ -51,7 +51,8 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-const getProposals = vi.fn(async (_args: unknown) => ({
+const getProposals = vi.fn(async (...args: unknown[]) => ({
+  args,
   proposals: h.proposals,
   proposalsError: null,
 }))
