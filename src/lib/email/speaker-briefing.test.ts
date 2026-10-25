@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   erased: [] as string[],
   proposals: [] as unknown[],
   createFails: 0,
+  patches: [] as Record<string, unknown>[],
   created: [] as Record<string, unknown>[],
 }))
 
@@ -47,6 +48,17 @@ vi.mock('@/lib/sanity/client', () => ({
       }
       h.created.push(doc)
       return doc
+    }),
+    patch: vi.fn((id: string) => {
+      const p = {
+        set: (o: Record<string, unknown>) => {
+          h.patches.push({ id, ...o })
+          return p
+        },
+        inc: () => p,
+        commit: async () => ({}),
+      }
+      return p
     }),
   },
 }))
@@ -113,6 +125,7 @@ beforeEach(() => {
   h.erased = []
   h.proposals = []
   h.createFails = 0
+  h.patches = []
   vi.restoreAllMocks()
 })
 
@@ -243,6 +256,58 @@ describe('sendSpeakerBriefings', () => {
     const a = await renderSpeakerBriefing(conference, speaker('sp-1'))
     const b = await renderSpeakerBriefing(conference, speaker('sp-1'))
     expect(a).toBe(b)
+  })
+})
+
+describe('the note and forced resends', () => {
+  it('escapes the note, keeps newlines, and leaves it out of the version', async () => {
+    const note = '<script>x</script> <!channel>\nLine two'
+    const html = await renderSpeakerBriefing(
+      conference,
+      speaker('sp-1'),
+      false,
+      note,
+    )
+    expect(html).toContain('Note from the organizers')
+    expect(html).not.toContain('<script>x</script>')
+    expect(html).toContain('&lt;script&gt;')
+    expect(html).toMatch(
+      /&lt;!channel&gt;(<!-- -->)?<br\/?>(<!-- -->)?Line two/,
+    )
+    // The version is the shared content only: no argument takes a note.
+    expect(briefingVersion.length).toBe(1)
+    await sendSpeakerBriefings(conference, [speaker('sp-1')], new Date(), {
+      note,
+    })
+    expect(h.created[0]._id).toBe(briefingLogId('conf-A', 'sp-1', VERSION))
+  })
+
+  it('force sends to everyone once per run, and keeps one marker per version', async () => {
+    const id1 = briefingLogId('conf-A', 'sp-1', VERSION)
+    h.existing = [{ _id: id1, speakerId: 'sp-1' }]
+    const all = [speaker('sp-1'), speaker('sp-2')]
+    const run = { force: { runId: 'run12345' } }
+
+    const first = await sendSpeakerBriefings(conference, all, new Date(), run)
+    expect(first).toMatchObject({ sent: 2, skipped: 0 })
+    expect(h.send.mock.calls.map((c) => c[1].idempotencyKey)).toEqual([
+      `${id1}.run12345`,
+      `${briefingLogId('conf-A', 'sp-2', VERSION)}.run12345`,
+    ])
+    expect(h.patches.map((p) => p.lastRunId)).toEqual(['run12345', 'run12345'])
+    // Already had this version: a resend, not an update.
+    expect(h.notified).toEqual([])
+
+    // A continuation of the same run skips everyone it reached.
+    h.existing = all.map((s) => ({
+      _id: briefingLogId('conf-A', s._id, VERSION),
+      speakerId: s._id,
+      lastRunId: 'run12345',
+    }))
+    h.send.mockClear()
+    const again = await sendSpeakerBriefings(conference, all, new Date(), run)
+    expect(again).toMatchObject({ sent: 0, skipped: 2 })
+    expect(h.send).not.toHaveBeenCalled()
   })
 })
 

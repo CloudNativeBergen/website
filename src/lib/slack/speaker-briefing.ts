@@ -85,9 +85,18 @@ const sections = (text: string): SlackBlock[] =>
 
 export function buildBriefingSlackMessage(
   briefing: SpeakerBriefing,
-  opts: { title: string; dashboardUrl: string; mentionChannel?: boolean },
+  opts: {
+    title: string
+    dashboardUrl: string
+    mentionChannel?: boolean
+    /** Plain text from the organizers for this post, shown first. */
+    note?: string
+  },
 ): SlackMessage {
   const parts: string[] = []
+  if (opts.note?.trim()) {
+    parts.push(`*Note from the organizers*\n${e(opts.note.trim())}`)
+  }
   const d = briefing.dinner
   if (d) {
     const lines = ['*Speaker dinner*']

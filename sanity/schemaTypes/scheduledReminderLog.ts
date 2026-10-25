@@ -71,6 +71,13 @@ export default defineType({
         'Speaker briefing only: the 16-hex content hash of the briefing that was sent.',
     }),
     defineField({
+      name: 'lastRunId',
+      title: 'Last Run',
+      type: 'string',
+      description:
+        'Speaker briefing only: the forced resend run that last sent it, so a continuation skips it.',
+    }),
+    defineField({
       name: 'lastSentAt',
       title: 'Last Sent At',
       type: 'datetime',

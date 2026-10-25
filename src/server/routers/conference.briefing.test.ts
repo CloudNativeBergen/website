@@ -120,7 +120,10 @@ describe('speaker briefing procedures', () => {
   it('sends to the domain conference speakers', async () => {
     await caller().sendBriefing()
     expect(b.load).toHaveBeenCalledWith(CONFERENCE)
-    expect(b.send).toHaveBeenCalledWith(CONFERENCE, [SPEAKER])
+    expect(b.send).toHaveBeenCalledWith(CONFERENCE, [SPEAKER], undefined, {
+      note: undefined,
+      force: undefined,
+    })
   })
 
   it('refuses an organizer of another org', async () => {
@@ -134,7 +137,7 @@ describe('speaker briefing procedures', () => {
       caller().previewBriefing({ speakerId: 'sp-other-conf' }),
     ).rejects.toThrow(/Not a confirmed speaker/)
     await caller().previewBriefing({ speakerId: 'sp-1' })
-    expect(b.render).toHaveBeenCalledWith(CONFERENCE, SPEAKER)
+    expect(b.render).toHaveBeenCalledWith(CONFERENCE, SPEAKER, false, undefined)
   })
 
   it('sends the test to the signed-in organizer, as the chosen speaker', async () => {
@@ -143,12 +146,14 @@ describe('speaker briefing procedures', () => {
       CONFERENCE,
       'org@a.example.com',
       expect.objectContaining({ name: 'Sample Speaker' }),
+      undefined,
     )
     await caller().sendBriefingTest({ speakerId: 'sp-1' })
     expect(b.sendTest).toHaveBeenLastCalledWith(
       CONFERENCE,
       'org@a.example.com',
       SPEAKER,
+      undefined,
     )
     await expect(
       caller().sendBriefingTest({ speakerId: 'sp-other-conf' }),
@@ -213,6 +218,28 @@ describe('speaker briefing procedures', () => {
     await expect(
       caller(true, ['org-B']).updateSpeakerSlackChannel({
         speakerSlackChannel: '#x',
+      }),
+    ).rejects.toThrow()
+  })
+
+  it('passes a trimmed note and a forced run, and caps the note', async () => {
+    await caller().sendBriefing({
+      note: '  Doors open at 8  ',
+      force: true,
+      runId: 'run12345',
+    })
+    expect(b.send).toHaveBeenCalledWith(CONFERENCE, [SPEAKER], undefined, {
+      note: 'Doors open at 8',
+      force: { runId: 'run12345' },
+    })
+    await expect(caller().sendBriefing({ force: true })).rejects.toThrow()
+    await expect(
+      caller().sendBriefing({ note: 'x'.repeat(1001) }),
+    ).rejects.toThrow()
+    await expect(
+      caller().previewBriefingSlack({
+        mentionChannel: false,
+        note: 'x'.repeat(1001),
       }),
     ).rejects.toThrow()
   })

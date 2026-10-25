@@ -152,3 +152,25 @@ describe('splitMrkdwn', () => {
     expect(text).not.toContain('+47')
   })
 })
+
+describe('the organizers note', () => {
+  it('comes first, escaped, with its newlines', () => {
+    const text = buildBriefingSlackMessage(
+      { checkIn: [para('Badge desk')] },
+      {
+        title: 'Conf A',
+        dashboardUrl: 'https://a.example.com/cfp/list',
+        note: '<!channel> <@U1> <https://evil|pay>\nsecond line',
+      },
+    )
+      .blocks.map((b) => b.text?.text)
+      .join('\n')
+    expect(text).not.toMatch(/<!channel>|<@U1>|<https:\/\/evil/)
+    expect(text).toContain(
+      '*Note from the organizers*\n&lt;!channel&gt; &lt;@U1&gt; &lt;https://evil|pay&gt;\nsecond line',
+    )
+    expect(text.indexOf('Note from the organizers')).toBeLessThan(
+      text.indexOf('Check-in'),
+    )
+  })
+})

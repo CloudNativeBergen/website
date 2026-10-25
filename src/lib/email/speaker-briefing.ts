@@ -207,11 +207,13 @@ export async function renderSpeakerBriefing(
   speaker: Pick<BriefingSpeaker, 'name' | 'proposals'> &
     Partial<Pick<BriefingSpeaker, '_id' | 'ticketState' | 'travelSupport'>>,
   isUpdate = false,
+  note?: string,
 ): Promise<string> {
   return render(
     React.createElement(SpeakerBriefingTemplate, {
       speakerName: speaker.name,
       isUpdate,
+      note,
       briefing: getSpeakerBriefing(conference, {
         proposals: speaker.proposals,
         speakerId: speaker._id,
@@ -273,13 +275,14 @@ export async function sendSpeakerBriefingTest(
   conference: BriefingConference,
   to: string,
   speaker: Parameters<typeof renderSpeakerBriefing>[1],
+  note?: string,
 ): Promise<void> {
   await sendOne(
     conference,
     await resolveFeedbackSummarySender(conference),
     to,
     briefingSubject(conference),
-    await renderSpeakerBriefing(conference, speaker),
+    await renderSpeakerBriefing(conference, speaker, false, note),
   )
 }
 
@@ -302,12 +305,34 @@ export const BRIEFING_TIME_BUDGET_MS = 40_000
 
 async function writeMarker(
   doc: { _id: string; _type: string } & Record<string, unknown>,
+  runId?: string,
 ) {
-  try {
+  const write = async () => {
     await clientWrite.createIfNotExists(doc)
-  } catch {
-    await clientWrite.createIfNotExists(doc)
+    // A forced resend records its run, so a continuation skips the speaker.
+    if (runId) {
+      await clientWrite
+        .patch(doc._id)
+        .set({ lastRunId: runId, lastSentAt: doc.lastSentAt })
+        .inc({ count: 1 })
+        .commit()
+    }
   }
+  try {
+    await write()
+  } catch {
+    await write()
+  }
+}
+
+export interface BriefingSendOptions {
+  /** Plain text from the organizers, shown at the top. Not versioned. */
+  note?: string
+  /**
+   * Send to every confirmed speaker, also those with the current version.
+   * `runId` names the run, so a continuation does not resend within it.
+   */
+  force?: { runId: string }
 }
 
 /**
@@ -320,20 +345,29 @@ export async function sendSpeakerBriefings(
   conference: BriefingConference,
   speakers: BriefingSpeaker[],
   now: Date = new Date(),
+  { note, force }: BriefingSendOptions = {},
 ): Promise<BriefingSendResult> {
   const started = Date.now()
   const version = briefingVersion(conference)
   const ids = speakers.map((s) => briefingLogId(conference._id, s._id, version))
   const markers = await clientReadUncached.fetch<
-    { _id: string; speakerId?: string }[]
+    { _id: string; speakerId?: string; lastRunId?: string }[]
   >(
-    `*[_type == "scheduledReminderLog" && key == $key && conference._ref == $conferenceId]{ _id, "speakerId": speaker._ref }`,
+    `*[_type == "scheduledReminderLog" && key == $key && conference._ref == $conferenceId]{ _id, "speakerId": speaker._ref, lastRunId }`,
     { key: BRIEFING_LOG_KEY, conferenceId: conference._id },
     { cache: 'no-store' },
   )
-  const done = new Set((markers ?? []).map((m) => m._id))
-  // A speaker with any marker not for this version had an older one.
-  const hadEarlier = new Set((markers ?? []).map((m) => m.speakerId))
+  const current = new Set((markers ?? []).map((m) => m._id))
+  // Done: has this version, or (forced) was sent in this run already.
+  const done = new Set(
+    (markers ?? [])
+      .filter((m) => !force || m.lastRunId === force.runId)
+      .map((m) => m._id),
+  )
+  // Had an older version, and not this one: the send is an update.
+  const hadEarlier = new Set(
+    (markers ?? []).filter((m) => !ids.includes(m._id)).map((m) => m.speakerId),
+  )
   const result: BriefingSendResult = {
     sent: 0,
     skipped: 0,
@@ -351,10 +385,16 @@ export async function sendSpeakerBriefings(
       break
     }
     const id = briefingLogId(conference._id, speaker._id, version)
-    const isUpdate = hadEarlier.has(speaker._id)
+    // A forced resend of the version they have is not an update.
+    const isUpdate = hadEarlier.has(speaker._id) && !current.has(id)
     try {
       if (n > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
-      const html = await renderSpeakerBriefing(conference, speaker, isUpdate)
+      const html = await renderSpeakerBriefing(
+        conference,
+        speaker,
+        isUpdate,
+        note,
+      )
       // The marker id doubles as Resend's key: a lost reply then is not
       // delivered twice within Resend's 24 hours.
       await sendOne(
@@ -363,7 +403,7 @@ export async function sendSpeakerBriefings(
         speaker.email,
         briefingSubject(conference, isUpdate),
         html,
-        id,
+        force ? `${id}.${force.runId}` : id,
       )
     } catch (error) {
       result.failed.push({
@@ -375,16 +415,19 @@ export async function sendSpeakerBriefings(
     }
     result.sent++
     try {
-      await writeMarker({
-        _id: id,
-        _type: 'scheduledReminderLog',
-        key: BRIEFING_LOG_KEY,
-        version,
-        conference: { ...createReference(conference._id), _weak: true },
-        speaker: { ...createReference(speaker._id), _weak: true },
-        count: 1,
-        lastSentAt: now.toISOString(),
-      })
+      await writeMarker(
+        {
+          _id: id,
+          _type: 'scheduledReminderLog',
+          key: BRIEFING_LOG_KEY,
+          version,
+          conference: { ...createReference(conference._id), _weak: true },
+          speaker: { ...createReference(speaker._id), _weak: true },
+          count: force ? 0 : 1,
+          lastSentAt: now.toISOString(),
+        },
+        force?.runId,
+      )
     } catch {
       result.logFailed.push({ speakerId: speaker._id, name: speaker.name })
     }

@@ -31,6 +31,8 @@ export interface SpeakerBriefingTemplateProps {
   brandColor?: string
   /** The speaker had an earlier version: say this one is an update. */
   isUpdate?: boolean
+  /** Plain text from the organizers for this send; newlines are kept. */
+  note?: string
 }
 
 /** Map links are organizer input: only http(s) becomes an href. */
@@ -109,6 +111,7 @@ export function SpeakerBriefingTemplate({
   socialLinks = [],
   brandColor,
   isUpdate = false,
+  note,
 }: SpeakerBriefingTemplateProps) {
   const b = briefing
   const d = b.dinner
@@ -280,6 +283,20 @@ export function SpeakerBriefingTemplate({
         {eventName} is coming up. Here is what you need to know as a speaker.
       </EmailText>
       <div style={{ height: '24px' }} />
+
+      {note && (
+        <div style={sectionStyle}>
+          <EmailSectionHeader>Note from the organizers</EmailSectionHeader>
+          <EmailText>
+            {note.split('\n').map((line, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <br />}
+                {line}
+              </React.Fragment>
+            ))}
+          </EmailText>
+        </div>
+      )}
 
       {SPEAKER_BRIEFING_SECTIONS.map((key) => (
         <React.Fragment key={key}>{sections[key]}</React.Fragment>
