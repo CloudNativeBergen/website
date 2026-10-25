@@ -96,12 +96,15 @@ describe('buildBriefingSlackMessage', () => {
     )
     expect(text).toContain('RSVP on your ticket')
     expect(text).toContain('18:00 (local time)')
-    expect(text).toContain('<https://maps.example/b|map>')
+    expect(text).toContain('<https://maps.example/b|Open map>')
+    expect(text).toContain('18:00 (local time)')
     expect(text).toContain(
-      '• *Walk* · meet at <https://maps.example/l|Lobby> · departs sharp',
+      '• *Walk* · Meet at Lobby · <https://maps.example/l|Open map> · sharp',
     )
     expect(text).toContain('Badge desk')
-    expect(text).toContain('<https://a.example.com/cfp/list#briefing|open it>')
+    expect(text).toContain(
+      '<https://a.example.com/cfp/list#briefing|Open your speaker dashboard>',
+    )
   })
 })
 

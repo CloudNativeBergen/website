@@ -164,14 +164,16 @@ describe('speaker briefing procedures', () => {
     b.post.mockRejectedValueOnce(new Error('Slack API error: not_in_channel'))
     await expect(
       caller().postBriefingToSlack({ mentionChannel: false }),
-    ).rejects.toThrow('Invite the bot to #cndn-2026-speakers')
+    ).rejects.toThrow(
+      'Invite the Slack bot to #cndn-2026-speakers, then post again.',
+    )
   })
 
   it('does not post without a tenant token', async () => {
     b.token.mockResolvedValue(undefined)
     await expect(
       caller().postBriefingToSlack({ mentionChannel: false }),
-    ).rejects.toThrow(/No Slack bot/)
+    ).rejects.toThrow(/Connect the Slack bot/)
     expect(b.post).not.toHaveBeenCalled()
   })
 })

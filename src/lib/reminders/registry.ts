@@ -186,7 +186,7 @@ const logistics: Reminder = {
     if (!talk) return null
     return {
       title: `See you soon at ${confName(conference.title)}!`,
-      message: `${confName(conference.title)} is almost here. You'll find everything you need on your speaker dashboard: your talk times, the venue, check-in and the speaker dinner.`,
+      message: `${confName(conference.title)} is almost here. You'll find everything you need on your speaker dashboard: your talk times, the venue and check-in.`,
       link: '/cfp/list#briefing',
     }
   },

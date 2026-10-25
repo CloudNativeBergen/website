@@ -9,10 +9,15 @@ import {
   type SpeakerBriefing,
   type SpeakerBriefingSection,
   type SpeakerBriefingTalk,
-  type SpeakerBriefingTodo,
 } from '@/lib/speaker/briefing'
 import { emailBrand } from './EmailBrandScope'
-import { formatConferenceDayDate, formatSessionInstant } from '@/lib/time'
+import { formatConferenceDayDate, formatConferenceDayTime } from '@/lib/time'
+
+const when = (iso: string) => `${formatConferenceDayTime(iso)} (local time)`
+
+/** "Departs {time}", plus the note; the note alone when there is no time. */
+const departs = (at?: string, note?: string) =>
+  at ? ['Departs ' + when(at), note].filter(Boolean).join(', ') : note
 
 export interface SpeakerBriefingTemplateProps {
   speakerName: string
@@ -31,14 +36,6 @@ export interface SpeakerBriefingTemplateProps {
 /** Map links are organizer input: only http(s) becomes an href. */
 const httpUrl = (url?: string) =>
   url && /^https?:\/\//i.test(url) ? url : undefined
-
-const TODO_LABELS: Record<SpeakerBriefingTodo['kind'], string> = {
-  'confirm-talk': 'Confirm your talk',
-  'upload-slides': 'Upload your slides',
-  'claim-ticket': 'Claim your speaker ticket',
-  'co-speaker-invite-pending': 'Your co-speaker has not accepted yet',
-  'travel-support': 'Finish your travel support request',
-}
 
 /** "Your talk", "Your workshop", or plural for several of a kind. */
 function talksHeading(talks: SpeakerBriefingTalk[]): string {
@@ -154,9 +151,9 @@ export function SpeakerBriefingTemplate({
                     : `${origin}/cfp/proposal/${t.proposalId}`
                 }
               >
-                {TODO_LABELS[t.kind]}
+                {t.label}
               </A>
-              : {t.title}
+              {t.title && `: ${t.title}`}
             </li>
           ))}
         </ul>,
@@ -168,12 +165,16 @@ export function SpeakerBriefingTemplate({
         b.talks.map((t) => (
           <EmailText key={t.proposalId}>
             <strong>{t.title}</strong>
-            {t.date && <> · {formatConferenceDayDate(t.date)}</>}
-            {t.startTime && (
+            {(t.date || t.startTime) && (
               <>
-                {' '}
-                · {t.startTime}
-                {t.endTime && `–${t.endTime}`} (local time)
+                {' · '}
+                {[
+                  t.date && formatConferenceDayDate(t.date),
+                  t.startTime &&
+                    `${t.startTime}${t.endTime ? `–${t.endTime}` : ''} (local time)`,
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
               </>
             )}
             {t.trackTitle && <> · {t.trackTitle}</>}
@@ -195,11 +196,7 @@ export function SpeakerBriefingTemplate({
         'Speaker dinner',
         <>
           {d.rsvpNote && <EmailText weight="600">{d.rsvpNote}</EmailText>}
-          {d.startsAt && (
-            <EmailText>
-              {formatSessionInstant(d.startsAt)} (local time)
-            </EmailText>
-          )}
+          {d.startsAt && <EmailText>{when(d.startsAt)}</EmailText>}
           {(d.venueName || d.address) && (
             <EmailText>
               {[d.venueName, d.address].filter(Boolean).join(', ')}
@@ -218,16 +215,7 @@ export function SpeakerBriefingTemplate({
                 </EmailText>
               )}
               {(r.departsAt || r.departsNote) && (
-                <EmailText>
-                  Departs{' '}
-                  {[
-                    r.departsAt &&
-                      `${formatSessionInstant(r.departsAt)} (local time)`,
-                    r.departsNote,
-                  ]
-                    .filter(Boolean)
-                    .join(', ')}
-                </EmailText>
+                <EmailText>{departs(r.departsAt, r.departsNote)}</EmailText>
               )}
               {rich(r.details)}
             </div>
@@ -277,7 +265,7 @@ export function SpeakerBriefingTemplate({
 
   return (
     <BaseEmailTemplate
-      title={`Your speaker briefing for ${eventName}`}
+      title={`Speaker info for ${eventName}`}
       titleTone="brand"
       brandColor={brandColor}
       speakerName={speakerName}

@@ -60,7 +60,14 @@ describe('SpeakerBriefingTemplate', () => {
               isWorkshop: false,
             },
           ],
-          todos: [{ kind: 'upload-slides', proposalId: 'p1', title: 'Edge' }],
+          todos: [
+            {
+              kind: 'upload-slides',
+              label: 'Upload your slides',
+              proposalId: 'p1',
+              title: 'Edge',
+            },
+          ],
           dinner: {
             rsvpNote: 'RSVP on your speaker ticket',
             startsAt: '2026-10-27T17:00:00Z',
@@ -103,7 +110,10 @@ describe('SpeakerBriefingTemplate', () => {
     for (const t of ['Badge desk', 'HDMI', 'Bob', 'Hotel X', 'Wifi']) {
       expect(html).toContain(t)
     }
-    expect(html).toContain('Wed 28 Oct')
+    expect(html).toContain('Wed 28 Oct, 10:00–10:40 (local time)')
+    expect(html).toContain('Tue 27 Oct, 18:00 (local time)')
+    expect(html).toContain('Departs Tue 27 Oct, 17:30 (local time), sharp')
+    expect(html).toContain('Speaker info for Conf A')
     expect(html).not.toMatch(/onsdag|oktober/)
     expect(html).toContain('href="tel:+471"')
     expect(html).toContain('Open map')
@@ -140,8 +150,16 @@ describe('SpeakerBriefingTemplate', () => {
             },
           ],
           todos: [
-            { kind: 'claim-ticket', proposalId: 'w1', title: 'Hands-on eBPF' },
-            { kind: 'travel-support', title: 'Travel support request' },
+            {
+              kind: 'claim-ticket',
+              label: 'Claim your free speaker ticket',
+              proposalId: 'w1',
+              title: 'Hands-on eBPF',
+            },
+            {
+              kind: 'travel-support',
+              label: 'Submit your travel support request',
+            },
           ],
         }}
       />,
@@ -149,7 +167,9 @@ describe('SpeakerBriefingTemplate', () => {
     expect(html).toContain('Your workshop')
     expect(html).not.toContain('Your talk')
     expect(html).toContain('https://a.example.com/cfp/workshop/w1')
-    expect(html).toContain('Claim your speaker ticket')
+    expect(html).toContain('Claim your free speaker ticket')
+    expect(html).toContain('Submit your travel support request')
+    expect(html).not.toContain('Travel support request')
     expect(html).toContain('https://a.example.com/cfp/expense')
   })
 

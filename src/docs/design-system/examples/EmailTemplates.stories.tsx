@@ -258,6 +258,7 @@ export const EmailTemplates: Story = {
                 todos: [
                   {
                     kind: 'upload-slides',
+                    label: 'Upload your slides',
                     proposalId: 'abc123',
                     title: 'Building Resilient Kubernetes Applications',
                   },

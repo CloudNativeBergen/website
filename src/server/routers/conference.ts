@@ -675,7 +675,8 @@ export const conferenceRouter = router({
       if (!to) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'Your account has no email address',
+          message:
+            'Your account has no email address, so the test cannot be sent. Add an email to your account, or pick a speaker and preview instead.',
         })
       }
       await sendSpeakerBriefingTest(
@@ -711,14 +712,16 @@ export const conferenceRouter = router({
       if (!channel) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'Set the speakers Slack channel in Settings first',
+          message:
+            'Set the Speakers Slack Channel under Settings → Communication, then post again.',
         })
       }
       const botToken = await resolveConferenceSlackToken(conference)
       if (!botToken) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
-          message: 'No Slack bot is connected for this organization',
+          message:
+            'Connect the Slack bot under Settings → Communication, then post again.',
         })
       }
       const name = channel.replace(/^#/, '')
@@ -732,7 +735,7 @@ export const conferenceRouter = router({
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: /not_in_channel|channel_not_found/.test(message)
-            ? `Invite the bot to #${name}`
+            ? `Invite the Slack bot to #${name}, then post again.`
             : message,
         })
       }

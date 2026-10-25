@@ -78,19 +78,19 @@ export function SpeakerBriefingPanel() {
         failed.size > 0 &&
           `Failed: ${[...failed].map(([n, e]) => `${n} (${e})`).join('; ')}.`,
         logFailed.size > 0 &&
-          `Sent, but the send log failed for: ${[...logFailed].join(', ')}. They may get it again.`,
+          `Sent to ${[...logFailed].join(', ')}, but the send log failed, so they may receive it again on the next send.`,
         !!skipped && 'Speakers who already had this version were skipped.',
       ].filter(Boolean)
       showNotification({
         type: failed.size || logFailed.size ? 'warning' : 'success',
         title: `Sent ${sent}${skipped ? `, skipped ${skipped}` : ''}`,
-        message: problems.join(' ') || 'Done.',
+        message: problems.join(' '),
       })
     } catch (e) {
       showNotification({
         type: 'error',
         title: `Stopped after sending ${sent} of ${of}`,
-        message: (e as Error).message,
+        message: `${(e as Error).message} Fix the error and send again. Speakers who already got it are skipped.`,
       })
     } finally {
       setProgress(null)
@@ -132,7 +132,7 @@ export function SpeakerBriefingPanel() {
       {everSent && behind > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-yellow-50 p-4 text-sm text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
           <span>
-            {changed && 'Info changed since last send. '}
+            {changed && 'The speaker info has changed since the last send. '}
             {behind} confirmed speaker{behind === 1 ? '' : 's'} have not
             received the current version.
           </span>
@@ -140,7 +140,9 @@ export function SpeakerBriefingPanel() {
             onClick={() => setConfirmSend(true)}
             disabled={!!progress}
           >
-            {changed ? 'Send update' : 'Send to them'}
+            {changed
+              ? 'Send update'
+              : `Send to ${behind} speaker${behind === 1 ? '' : 's'}`}
           </AdminButton>
         </div>
       )}
@@ -170,9 +172,13 @@ export function SpeakerBriefingPanel() {
         </AdminButton>
         <AdminButton
           onClick={() => setConfirmSend(true)}
-          disabled={total === 0 || !!progress}
+          disabled={behind === 0 || !!progress}
         >
-          Send to {total} confirmed speaker{total === 1 ? '' : 's'}
+          {total === 0
+            ? 'No confirmed speakers yet'
+            : behind === 0
+              ? 'All confirmed speakers have the current version'
+              : `Send to ${behind} confirmed speaker${behind === 1 ? '' : 's'}`}
         </AdminButton>
       </div>
 
@@ -183,7 +189,7 @@ export function SpeakerBriefingPanel() {
       )}
 
       <iframe
-        title="Briefing email preview"
+        title="Speaker info email preview"
         sandbox=""
         srcDoc={preview.data?.html ?? ''}
         className="h-[600px] w-full rounded-md border border-gray-200 bg-white dark:border-gray-700"
@@ -249,9 +255,9 @@ export function SpeakerBriefingPanel() {
           </>
         ) : (
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Set the speakers channel under{' '}
+            Set the Speakers Slack Channel under{' '}
             <Link href="/admin/settings" className="underline">
-              Settings, Communication
+              Settings → Communication
             </Link>{' '}
             to post the speaker info to Slack.
           </p>
@@ -263,7 +269,7 @@ export function SpeakerBriefingPanel() {
         onClose={() => setConfirmSend(false)}
         onConfirm={() => runSend(behind)}
         title="Email confirmed speakers"
-        message={`Send the briefing to ${total} confirmed speaker${total === 1 ? '' : 's'}? ${current} already have the current version and will be skipped.`}
+        message={`Send the speaker info to ${behind} confirmed speaker${behind === 1 ? '' : 's'}? ${current} already have the current version and will be skipped.`}
         confirmButtonText="Send"
         variant="info"
         isLoading={!!progress}

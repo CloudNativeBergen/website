@@ -6,7 +6,7 @@
  */
 import type { TypedObject } from 'sanity'
 import type { SpeakerBriefing } from '@/lib/speaker/briefing'
-import { formatSessionInstant } from '@/lib/time'
+import { formatConferenceDayTime } from '@/lib/time'
 import { escapeMrkdwn, type SlackBlock, type SlackMessage } from './client'
 
 const e = (s: string) => escapeMrkdwn(s)
@@ -17,7 +17,7 @@ const link = (url: string | undefined, label: string) => {
   const href = httpUrl(url)
   return href ? `<${e(href).replace(/\|/g, '%7C')}|${e(label)}>` : ''
 }
-const when = (iso: string) => `${formatSessionInstant(iso)} (local time)`
+const when = (iso: string) => `${formatConferenceDayTime(iso)} (local time)`
 
 type Span = { _type?: string; text?: string; marks?: string[] }
 type Block = TypedObject & {
@@ -95,27 +95,30 @@ export function buildBriefingSlackMessage(
     if (d.startsAt) lines.push(when(d.startsAt))
     const place = [d.venueName, d.address].filter(Boolean).join(', ')
     if (place) {
-      lines.push([e(place), link(d.mapUrl, 'map')].filter(Boolean).join(' · '))
+      lines.push(
+        [e(place), link(d.mapUrl, 'Open map')].filter(Boolean).join(' · '),
+      )
     }
     if (d.text) lines.push(e(d.text))
     const description = portableTextToMrkdwn(d.description)
     if (description) lines.push(description)
     for (const r of d.routes ?? []) {
       const meet = r.meetingPoint
-        ? `meet at ${link(r.meetingPointMapUrl, r.meetingPoint) || e(r.meetingPoint)}`
+        ? [
+            `Meet at ${e(r.meetingPoint)}`,
+            link(r.meetingPointMapUrl, 'Open map'),
+          ]
+            .filter(Boolean)
+            .join(' · ')
         : ''
-      const departs = [
-        r.departsAt && when(r.departsAt),
-        r.departsNote && e(r.departsNote),
-      ]
-        .filter(Boolean)
-        .join(', ')
+      // "Departs {time}", plus the note; the note alone when there is no time.
+      const departs = r.departsAt
+        ? [`Departs ${when(r.departsAt)}`, r.departsNote && e(r.departsNote)]
+            .filter(Boolean)
+            .join(', ')
+        : r.departsNote && e(r.departsNote)
       lines.push(
-        `• ${[
-          r.label && `*${e(r.label)}*`,
-          meet,
-          departs && `departs ${departs}`,
-        ]
+        `• ${[r.label && `*${e(r.label)}*`, meet, departs]
           .filter(Boolean)
           .join(' · ')}`,
       )
@@ -139,12 +142,12 @@ export function buildBriefingSlackMessage(
 
   const heading = `${opts.mentionChannel ? '<!channel> ' : ''}*${e(opts.title)}*`
   return {
-    text: `Speaker info: ${opts.title}`,
+    text: opts.title,
     blocks: [
       ...sections(heading),
       ...parts.flatMap(sections),
       ...sections(
-        `Everything is on your speaker dashboard: ${link(opts.dashboardUrl, 'open it')}`,
+        `Everything is on your speaker dashboard: ${link(opts.dashboardUrl, 'Open your speaker dashboard')}`,
       ),
     ],
   }

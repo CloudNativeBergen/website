@@ -831,7 +831,7 @@ export default async function AdminSettings() {
                 value={conference.cfpNotificationChannel}
               />
               <FieldRow
-                label="Speakers Channel"
+                label="Speakers Slack Channel"
                 value={conference.speakerSlackChannel}
               />
             </InfoCard>
