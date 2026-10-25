@@ -1,4 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { http, HttpResponse } from 'msw'
+import { SponsorDashboardMetrics } from './SponsorDashboardMetrics'
+import { mockSponsor } from '@/__mocks__/sponsor-data'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Dashboard/Metrics',
@@ -223,4 +226,39 @@ function DashboardPage() {
       </div>
     </div>
   ),
+}
+
+/** The real component against an msw-backed `sponsor.crm.list`, at phone width. */
+export const Phone: Story = {
+  parameters: {
+    layout: 'padded',
+    viewport: { defaultViewport: 'phone' },
+    msw: {
+      handlers: [
+        http.get('/api/trpc/sponsor.crm.list', () =>
+          HttpResponse.json({
+            result: {
+              data: [
+                mockSponsor({
+                  _id: 'a',
+                  status: 'closed-won',
+                  contractValue: 1250000,
+                  invoiceStatus: 'paid',
+                }),
+                mockSponsor({
+                  _id: 'b',
+                  status: 'closed-won',
+                  contractValue: 60000,
+                  contractCurrency: 'EUR',
+                  invoiceStatus: 'overdue',
+                }),
+                mockSponsor({ _id: 'c', status: 'negotiating' }),
+              ],
+            },
+          }),
+        ),
+      ],
+    },
+  },
+  render: () => <SponsorDashboardMetrics />,
 }
