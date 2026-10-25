@@ -143,8 +143,18 @@ describe('getSpeakerBriefing', () => {
       },
     ])
     expect(b.todos).toEqual([
-      { kind: 'upload-slides', proposalId: 'c', title: 'Talk' },
-      { kind: 'confirm-talk', proposalId: 'a', title: 'Talk' },
+      {
+        label: 'Upload your slides',
+        kind: 'upload-slides',
+        proposalId: 'c',
+        title: 'Talk',
+      },
+      {
+        label: 'Confirm your talk',
+        kind: 'confirm-talk',
+        proposalId: 'a',
+        title: 'Talk',
+      },
     ])
   })
 
@@ -232,7 +242,9 @@ describe('getSpeakerBriefing', () => {
           travelSupport: { status: TravelSupportStatus.DRAFT },
         },
       ).todos,
-    ).toEqual([{ kind: 'travel-support', title: 'Travel support request' }])
+    ).toEqual([
+      { label: 'Submit your travel support request', kind: 'travel-support' },
+    ])
     expect(
       kinds({
         proposals: [],

@@ -1414,7 +1414,7 @@ export default defineType({
         }),
         defineField({
           name: 'extra',
-          title: 'Additional Information',
+          title: 'Good to know',
           type: 'array',
           of: [{ type: 'block' }],
         }),

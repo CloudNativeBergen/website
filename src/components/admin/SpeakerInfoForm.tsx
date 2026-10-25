@@ -98,14 +98,15 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
       showNotification({
         type: 'success',
         title: 'Speaker info saved',
-        message: 'The speaker briefing was updated.',
+        message:
+          'Speakers see the new version on their dashboard and on /info.',
       })
     },
     onError: (error) =>
       showNotification({
         type: 'error',
         title: 'Could not save',
-        message: error.message || 'Failed to save speaker info.',
+        message: error.message || 'Could not save the speaker info. Try again.',
       }),
   })
 
@@ -332,11 +333,7 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
           'Accommodation',
           'Hotel and booking details.',
         )}
-        {richText(
-          'extra',
-          'Additional information',
-          'Anything else speakers need.',
-        )}
+        {richText('extra', 'Good to know', 'Anything else speakers need.')}
       </section>
 
       <div className="flex items-center gap-4">

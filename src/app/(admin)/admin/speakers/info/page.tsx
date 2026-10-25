@@ -30,7 +30,7 @@ export default async function AdminSpeakerInfoPage() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Speaker Info"
-        description="Practical information for speakers: the dinner, check-in, equipment and who to call on site. Blank sections are not shown."
+        description="Practical information for speakers: the dinner, check-in, equipment and who to call on site. Shown on the speaker dashboard, on /info and in the speaker info email. Blank sections are not shown."
         icon={<InformationCircleIcon className="h-6 w-6" />}
         backLink={{ href: '/admin/speakers', label: 'Back to Speakers' }}
       />

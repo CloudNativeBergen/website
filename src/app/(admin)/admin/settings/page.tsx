@@ -674,7 +674,7 @@ export default async function AdminSettings() {
                   href="/admin/speakers/info"
                   className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
                 >
-                  Edit the speaker dinner on Speaker Info
+                  Edit the speaker dinner under Speakers → Speaker Info
                 </Link>
               ) : (
                 <FieldRow

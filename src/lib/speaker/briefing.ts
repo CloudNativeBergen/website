@@ -40,9 +40,21 @@ export interface SpeakerBriefingTodo {
     | 'claim-ticket'
     | 'co-speaker-invite-pending'
     | 'travel-support'
+  /** The glossary label, the same on the email and the dashboard. */
+  label: string
   /** Absent only for `travel-support`, which belongs to the speaker. */
   proposalId?: string
-  title: string
+  /** The talk's title; absent for `travel-support` (no suffix). */
+  title?: string
+}
+
+const TODO_LABELS: Record<SpeakerBriefingTodo['kind'], string> = {
+  'confirm-talk': 'Confirm your talk',
+  'upload-slides': 'Upload your slides',
+  'claim-ticket': 'Claim your free speaker ticket',
+  'co-speaker-invite-pending':
+    'Your co-speaker has not accepted the invite yet',
+  'travel-support': 'Submit your travel support request',
 }
 
 export interface SpeakerBriefing {
@@ -145,7 +157,7 @@ export function getSpeakerBriefing(
     }) ?? compact({ text: text(conference.speakerDinnerInfo) })
 
   let talks: SpeakerBriefingTalk[] | undefined
-  let todos: SpeakerBriefingTodo[] | undefined
+  let todos: Omit<SpeakerBriefingTodo, 'label'>[] | undefined
   if (speakerData) {
     talks = []
     todos = []
@@ -200,7 +212,7 @@ export function getSpeakerBriefing(
       }
     }
     if (speakerData.travelSupport?.status === TravelSupportStatus.DRAFT) {
-      todos.push({ kind: 'travel-support', title: 'Travel support request' })
+      todos.push({ kind: 'travel-support' })
     }
   }
 
@@ -220,7 +232,9 @@ export function getSpeakerBriefing(
       venueAddress: text(conference.venueAddress),
       venueTravelInfo: text(conference.venueTravelInfo),
       talks: talks?.length ? talks : undefined,
-      todos: todos?.length ? todos : undefined,
+      todos: todos?.length
+        ? todos.map((t) => ({ label: TODO_LABELS[t.kind], ...t }))
+        : undefined,
     }) ?? {}
   )
 }
