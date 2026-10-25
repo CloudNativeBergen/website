@@ -91,10 +91,15 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (options.dryRun) {
     for (const { surface, items } of datasets) {
       console.log(`${surface}: validated ${items.length} items`)
-      // Photos come from the local image cache; only prepare one when asked.
+      // Print request shapes only for the selected surfaces.
       if (options.surface !== 'all' && options.surface !== surface) continue
       const item = items[0]
-      const image = 'image' in item ? await prepareImage(item) : undefined
+      // Only an explicit --surface wall-photo reads the cache; `all` shows the
+      // text-only request shape so a fresh checkout can dry-run.
+      const image =
+        'image' in item && options.surface === surface
+          ? await prepareImage(item)
+          : undefined
       const request = buildRequest(surface, item, options.model, image?.base64)
       console.log(
         JSON.stringify({
