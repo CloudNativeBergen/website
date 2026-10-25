@@ -217,16 +217,20 @@ export function FieldRow({
   }
 
   return (
-    <div className="flex justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
+    // Stacked (label above value, left-aligned) below sm: a 360px phone has no
+    // room for a label column plus a value column — values wrapped every two
+    // words. Side by side from sm up, as before.
+    <div className="flex flex-col gap-1 border-b border-gray-200 py-2 last:border-b-0 sm:flex-row sm:justify-between sm:gap-3 dark:border-gray-700">
       {/* Plain span/div, not dt/dd: rows render inside arbitrary containers,
           and dt/dd without an enclosing dl is invalid HTML. */}
-      <span className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+      <span className="text-sm font-medium text-gray-500 sm:shrink-0 dark:text-gray-400">
         {label}
       </span>
       {/* min-w-0 lets the value column actually shrink inside the flex row —
           without it, wide unbreakable content (URLs) forces the row past the
-          viewport and the page pans horizontally. */}
-      <div className="max-w-xs min-w-0 text-right text-sm text-gray-900 dark:text-white">
+          viewport and the page pans horizontally. wrap-anywhere breaks long
+          unspaced tokens (API keys) that would otherwise do the same. */}
+      <div className="min-w-0 text-sm wrap-anywhere text-gray-900 sm:max-w-xs sm:text-right dark:text-white">
         {displayValue}
       </div>
     </div>

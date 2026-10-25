@@ -58,14 +58,17 @@ export function InfoCard({
 }) {
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center">
-          <Icon className="mr-2 h-5 w-5 text-gray-400 dark:text-gray-500" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+      {/* flex-wrap + min-w-0: a card with several actions (Organizers & Teams
+          has three) drops them to a second line on a phone instead of
+          squeezing the title or pushing past the viewport. */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center">
+          <Icon className="mr-2 h-5 w-5 shrink-0 text-gray-400 dark:text-gray-500" />
+          <h3 className="min-w-0 text-lg font-medium break-words text-gray-900 dark:text-white">
             {title}
           </h3>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {/* One or the other, per the contract above: an in-app manage
               link supersedes the Studio deep-link. */}
           {manageLink ? (
@@ -120,7 +123,7 @@ export function StudioEditLink({ editUrl }: { editUrl?: string | null }) {
 
 export function SectionNav() {
   return (
-    <nav className="sticky top-0 z-10 -mx-4 mb-2 space-y-2 border-b border-gray-200 bg-gray-50/90 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4 dark:border-gray-700 dark:bg-gray-900/90">
+    <nav className="sticky top-0 z-10 -mx-2 mb-2 space-y-2 border-b border-gray-200 bg-gray-50/90 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4 dark:border-gray-700 dark:bg-gray-900/90">
       {/* Tier anchors — the three top-level sections. */}
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
         {SETTINGS_TIER_ANCHORS.map((item) => (

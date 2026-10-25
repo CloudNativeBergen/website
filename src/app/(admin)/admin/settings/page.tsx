@@ -326,12 +326,12 @@ export default async function AdminSettings() {
             >
               <div
                 id="visibility"
-                className="flex scroll-mt-24 items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
+                className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
               >
                 <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
                   Status
                 </dt>
-                <dd className="min-w-0 text-right text-sm">
+                <dd className="min-w-0 text-sm sm:text-right">
                   {visibility === 'unlisted' ? (
                     <StatusBadge label="Unlisted" color="yellow" />
                   ) : (
