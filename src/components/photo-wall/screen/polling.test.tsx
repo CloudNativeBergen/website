@@ -37,6 +37,7 @@ const appQueryClient = () =>
 const view = (posts: ScreenView['posts'] = []): ScreenView => ({
   closed: false,
   sponsorStrip: false,
+  look: 'pinboard',
   posts,
 })
 
@@ -109,6 +110,11 @@ describe('screenPolling (§8)', () => {
       {
         _id: 'wallPost-1',
         src: 'https://cdn.sanity.io/images/p/d/1.jpg',
+        whole: {
+          src: 'https://cdn.sanity.io/images/p/d/1.jpg?w=1400',
+          width: 1600,
+          height: 1000,
+        },
         caption: null,
         name: null,
         approvedAt: '2026-10-26T07:40:00Z',

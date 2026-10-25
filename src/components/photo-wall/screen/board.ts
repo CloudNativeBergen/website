@@ -8,6 +8,7 @@
  * A post is known by `(id, approvedAt)` ({@link screenPostKey}): the same
  * post removed and approved again is new again.
  */
+import { WALL_POST_LIMIT } from '@/lib/photo-wall/wall'
 import {
   screenPostKey,
   type ScreenPost,
@@ -56,23 +57,27 @@ interface Queued {
   initial: boolean
 }
 
-export interface BoardState {
+/** What a screen remembers of the images it asked the browser to fetch. */
+export interface ImageMemory {
+  /** The latest successful answer, newest approval first. */
+  list: ScreenPost[]
+  /** What the browser reported of an image it was asked to fetch. */
+  images: Readonly<Record<string, 'loaded' | 'failed'>>
+  /** When each image last failed and how often in a row: when to try it again. */
+  imageFailures: Readonly<Record<string, { at: number; count: number }>>
+}
+
+export interface BoardState extends ImageMemory {
   /** False until the first successful poll. */
   started: boolean
   closed: boolean
   sponsorStrip: boolean
-  /** The latest successful answer, newest approval first (§9.3: kept through failures). */
-  list: ScreenPost[]
   /** The 17 places on the board, by position; null is an empty slot. */
   slots: (ScreenCard | null)[]
   /** Every `(id, approvedAt)` this screen has met: not new a second time. */
   seen: ReadonlySet<string>
   /** Arrivals waiting their turn, in approval order. */
   queue: Queued[]
-  /** What the browser reported of an image it was asked to fetch. */
-  images: Readonly<Record<string, 'loaded' | 'failed'>>
-  /** When each image last failed and how often in a row: when to try it again. */
-  imageFailures: Readonly<Record<string, { at: number; count: number }>>
   /** Where the idle swap is in the rest of the list. */
   cursor: number
   lastArrivalAt: number
@@ -330,7 +335,10 @@ export function imageRetryDelay(count: number): number {
  * wait is over, so those images are asked for again. The failure count
  * stays until one loads.
  */
-function retryFailedImages(state: BoardState, now: number): BoardState {
+export function retryFailedImages<S extends ImageMemory>(
+  state: S,
+  now: number,
+): S {
   const due = Object.entries(state.imageFailures)
     .filter(
       ([key, { at, count }]) =>
@@ -344,7 +352,10 @@ function retryFailedImages(state: BoardState, now: number): BoardState {
 }
 
 /** Only what is said of the posts still on the list. */
-function onList<T>(record: Readonly<Record<string, T>>, keys: Set<string>) {
+export function onList<T>(
+  record: Readonly<Record<string, T>>,
+  keys: Set<string>,
+) {
   return Object.keys(record).some((key) => !keys.has(key))
     ? Object.fromEntries(
         Object.entries(record).filter(([key]) => keys.has(key)),
@@ -418,27 +429,85 @@ function onPoll(
   }
 
   // New (id, approvedAt) pairs join the queue in approval order.
-  const fresh = view.posts.filter(
-    (post) => !state.seen.has(screenPostKey(post)),
-  )
-  if (fresh.length > 0) {
-    fresh.sort(
-      (a, b) =>
-        a.approvedAt.localeCompare(b.approvedAt) || a._id.localeCompare(b._id),
-    )
-    const seen = new Set(state.seen)
-    for (const post of fresh) seen.add(screenPostKey(post))
+  const met = meetPosts(state, view.posts)
+  if (met) {
     next = {
       ...next,
-      seen,
+      seen: met.seen,
       queue: [
         ...next.queue,
-        ...fresh.map((post) => ({ post, initial: false })),
+        ...met.fresh.map((post) => ({ post, initial: false })),
       ],
     }
   }
 
   return advance(next, now)
+}
+
+/** Whether `a` comes after `b` on the list: an older approval, or the same one and a later id. */
+export function sortsAfter(
+  a: Pick<ScreenPost, '_id' | 'approvedAt'>,
+  b: Pick<ScreenPost, '_id' | 'approvedAt'>,
+): boolean {
+  return (
+    a.approvedAt < b.approvedAt ||
+    (a.approvedAt === b.approvedAt && a._id > b._id)
+  )
+}
+
+/**
+ * The posts of a new answer the screen has not met: all of them to
+ * remember, and the ones that arrive as new (§9.2), in approval order; null
+ * when there are none. A post that slides in at the bottom of a full list —
+ * the 201st approval, once one of the 200 left — was not approved now: it
+ * is met, not new.
+ */
+export function meetPosts(
+  state: { list: ScreenPost[]; seen: ReadonlySet<string> },
+  posts: ScreenPost[],
+): { seen: ReadonlySet<string>; fresh: ScreenPost[] } | null {
+  const unseen = posts.filter((post) => !state.seen.has(screenPostKey(post)))
+  if (unseen.length === 0) return null
+  const tail =
+    state.list.length >= WALL_POST_LIMIT ? state.list.at(-1) : undefined
+  const fresh = unseen
+    .filter((post) => !tail || !sortsAfter(post, tail))
+    // Approval order; among one Approve all's equal times, by id, as the
+    // Pinboard's eviction (the oldest card, the smallest id on a tie) expects.
+    .sort(
+      (a, b) =>
+        a.approvedAt.localeCompare(b.approvedAt) || a._id.localeCompare(b._id),
+    )
+  const seen = new Set(state.seen)
+  for (const post of unseen) seen.add(screenPostKey(post))
+  return { seen, fresh }
+}
+
+/**
+ * What the browser said of an image, for a post still on the list; the
+ * same state back when it changes nothing. A load forgets the failures, a
+ * failure counts one more.
+ */
+export function recordImage<S extends ImageMemory>(
+  state: S,
+  action: { type: 'imageLoaded' | 'imageFailed'; key: string; now: number },
+): S {
+  const known = state.list.some((p) => screenPostKey(p) === action.key)
+  if (!known) return state
+  const result = action.type === 'imageLoaded' ? 'loaded' : 'failed'
+  if (state.images[action.key] === result) return state
+  const imageFailures = { ...state.imageFailures }
+  if (result === 'loaded') {
+    delete imageFailures[action.key]
+  } else {
+    const count = (imageFailures[action.key]?.count ?? 0) + 1
+    imageFailures[action.key] = { at: action.now, count }
+  }
+  return {
+    ...state,
+    images: { ...state.images, [action.key]: result },
+    imageFailures,
+  }
 }
 
 export function boardReducer(
@@ -452,25 +521,8 @@ export function boardReducer(
       return advance({ ...state, failures: state.failures + 1 }, action.now)
     case 'imageLoaded':
     case 'imageFailed': {
-      const known = state.list.some((p) => screenPostKey(p) === action.key)
-      if (!known) return state
-      const result = action.type === 'imageLoaded' ? 'loaded' : 'failed'
-      if (state.images[action.key] === result) return state
-      const imageFailures = { ...state.imageFailures }
-      if (result === 'loaded') {
-        delete imageFailures[action.key]
-      } else {
-        const count = (imageFailures[action.key]?.count ?? 0) + 1
-        imageFailures[action.key] = { at: action.now, count }
-      }
-      return advance(
-        {
-          ...state,
-          images: { ...state.images, [action.key]: result },
-          imageFailures,
-        },
-        action.now,
-      )
+      const next = recordImage(state, action)
+      return next === state ? state : advance(next, action.now)
     }
     case 'tick':
       return advance(state, action.now)

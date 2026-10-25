@@ -236,6 +236,7 @@ describe('photoWall.settings', () => {
       _id: 'photoWall-conf-A',
       postingMode: 'paused',
       sponsorStrip: false,
+      look: 'pinboard',
       closedAt: null,
     })
   })
@@ -264,6 +265,8 @@ describe('photoWall.settings', () => {
       _id: 'photoWall-conf-A',
       postingMode: 'auto',
       sponsorStrip: false,
+      // A missing look reads as Pinboard (§4.1).
+      look: 'pinboard',
       closedAt: null,
     })
     // 2026-10-26 08:00Z is the conference's first day.
@@ -477,6 +480,27 @@ describe('photoWall.updateSettings (§10)', () => {
       sponsorStrip: true,
       postingMode: 'paused',
     })
+  })
+
+  it('switches the Wall Look and leaves the rest alone (P3)', async () => {
+    const view = await organizer().updateSettings({ look: 'mosaic' })
+    expect(store().doc('photoWall-conf-A')).toMatchObject({
+      look: 'mosaic',
+      postingMode: 'paused',
+    })
+    expect(view.wall?.look).toBe('mosaic')
+    await organizer().updateSettings({ look: 'spotlight' })
+    expect(store().doc('photoWall-conf-A')?.look).toBe('spotlight')
+    expect(h.revalidateTag).toHaveBeenCalledWith('photo-wall:conf-A', {
+      expire: 0,
+    })
+  })
+
+  it('refuses a look it does not know, writing nothing', async () => {
+    await expect(
+      organizer().updateSettings({ look: 'carousel' as 'mosaic' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(store().commits).toEqual([])
   })
 
   it('expires the wall tag with expire: 0 on each change (§8)', async () => {

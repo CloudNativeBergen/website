@@ -8,6 +8,7 @@ import {
   postingState,
   photoWallLinks,
   POSTING_MODES,
+  WALL_LOOKS,
   type PhotoWall,
   type PhotoWallAdminView,
 } from '@/lib/photo-wall'
@@ -155,9 +156,10 @@ const settingsInput = z
   .object({
     postingMode: z.enum(POSTING_MODES).optional(),
     sponsorStrip: z.boolean().optional(),
+    look: z.enum(WALL_LOOKS).optional(),
   })
   .strict()
-  .refine((c) => c.postingMode !== undefined || c.sponsorStrip !== undefined, {
+  .refine((c) => Object.values(c).some((v) => v !== undefined), {
     message: 'Nothing to change',
   })
 

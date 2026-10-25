@@ -4,13 +4,15 @@
  * client.
  */
 import type { WallPostCrop } from './moderation'
-import type { PhotoWall } from './types'
+import type { PhotoWall, WallLook } from './types'
 
 /** The wall shows at most this many of the newest approvals (§8, §9.1). */
 export const WALL_POST_LIMIT = 200
 
 /** The Wall page's square, in px: about 600 wide on a phone (§5.1). */
 export const WALL_PAGE_PHOTO_PX = 600
+/** The Wall page's whole photo, on its long edge: a phone-wide feed (§9). */
+export const WALL_PAGE_WHOLE_PX = 1000
 
 /** One approved Wall Post as `getWall` caches it: the WHOLE photo (§8). */
 export interface WallPost {
@@ -30,13 +32,23 @@ export interface WallData {
   posts: WallPost[]
 }
 
-/** One polaroid on the Wall page (§9.1). */
+/** The whole photo as a look shows it: its URL, scaled, and its shape. */
+export interface WholePhoto {
+  src: string
+  width: number
+  height: number
+}
+
+/** One post on the Wall page (§9.1). */
 export interface WallPagePost {
   _id: string
-  /** The square, already cut by Sanity's `rect=` from the crop (§5.1). */
+  /** The square, already cut by Sanity's `rect=` from the crop (§5.1): Pinboard. */
   src: string
+  /** The whole photo: Mosaic and Spotlight. */
+  whole: WholePhoto
   caption: string | null
   name: string | null
+  approvedAt: string
 }
 
 /** What the public `photoWallPublic.get` query answers and the Wall page polls. */
@@ -45,5 +57,7 @@ export interface WallPageView {
   closed: boolean
   /** Whether **Add your photo** shows (§7, §9.1). */
   postingOpen: boolean
+  /** The wall's look; visitors can't switch it (§9). */
+  look: WallLook
   posts: WallPagePost[]
 }

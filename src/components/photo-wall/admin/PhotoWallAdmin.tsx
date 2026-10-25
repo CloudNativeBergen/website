@@ -19,6 +19,7 @@ import type {
   PhotoWallSettingsChange,
   PostingMode,
   PostingState,
+  WallLook,
 } from '@/lib/photo-wall'
 
 export const CARD =
@@ -105,6 +106,11 @@ export function PhotoWallAdmin({
                 on={wall.sponsorStrip}
                 saving={saving}
                 onChange={(sponsorStrip) => onChange({ sponsorStrip })}
+              />
+              <WallLookSetting
+                look={wall.look}
+                saving={saving}
+                onChange={(look) => onChange({ look })}
               />
             </div>
           </section>
@@ -302,7 +308,7 @@ function SponsorStripSetting({
   const labelId = useId()
   const noteId = useId()
   return (
-    <div className="flex items-start justify-between gap-4 pt-4">
+    <div className="flex items-start justify-between gap-4 py-4">
       <div className="min-w-0">
         <p
           id={labelId}
@@ -343,6 +349,99 @@ function SponsorStripSetting({
           }`}
         />
       </button>
+    </div>
+  )
+}
+
+const LOOKS: { value: WallLook; label: string; note: string }[] = [
+  {
+    value: 'pinboard',
+    label: 'Pinboard',
+    note: 'Tilted polaroids on a board.',
+  },
+  {
+    value: 'mosaic',
+    label: 'Mosaic',
+    note: 'Whole photos edge to edge, one shown large.',
+  },
+  {
+    value: 'spotlight',
+    label: 'Spotlight',
+    note: 'One large photo at a time, with what’s up next.',
+  },
+]
+
+/** The Wall Look (§9, P3): the Wall page's and every screen's, unless a screen's link names its own. */
+function WallLookSetting({
+  look,
+  saving,
+  onChange,
+}: {
+  look: WallLook
+  saving: boolean
+  onChange: (look: WallLook) => void
+}) {
+  const labelId = useId()
+  const noteId = useId()
+  const name = useId()
+  return (
+    <div className="pt-4">
+      <p
+        id={labelId}
+        className="text-sm font-medium text-gray-900 dark:text-white"
+      >
+        Wall Look
+      </p>
+      <p id={noteId} className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+        How the Wall page and the screens show the photos. Running screens
+        switch within seconds. One screen can show another look: add{' '}
+        <code className="font-mono text-xs text-gray-800 dark:text-gray-200">
+          ?look=mosaic
+        </code>{' '}
+        to its link.
+      </p>
+      {/* Native radios: arrow keys move between them, and one tab stop. */}
+      <div
+        role="radiogroup"
+        aria-labelledby={labelId}
+        aria-describedby={noteId}
+        className="mt-3 grid gap-2 sm:grid-cols-3"
+      >
+        {LOOKS.map((l) => {
+          const checked = l.value === look
+          return (
+            <label
+              key={l.value}
+              className={`flex flex-col rounded-md border p-3 text-sm has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-brand-cloud-blue dark:has-focus-visible:outline-indigo-400 ${
+                saving ? 'cursor-wait' : 'cursor-pointer'
+              } ${
+                // Not brand-cloud-blue: an unlayered rule beats dark: variants.
+                checked
+                  ? 'border-blue-700 bg-blue-50 ring-1 ring-blue-700 dark:border-indigo-400 dark:bg-indigo-950/40 dark:ring-indigo-400'
+                  : 'border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500'
+              }`}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={l.value}
+                checked={checked}
+                // Not `disabled`: that would drop focus from the radio just
+                // chosen. While a save runs, a choice changes nothing.
+                aria-disabled={saving || undefined}
+                onChange={() => !saving && onChange(l.value)}
+                className="sr-only"
+              />
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {l.label}
+              </span>
+              <span className="mt-0.5 text-gray-600 dark:text-gray-400">
+                {l.note}
+              </span>
+            </label>
+          )
+        })}
+      </div>
     </div>
   )
 }

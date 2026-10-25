@@ -31,6 +31,11 @@ const at = (minutes: number) =>
 const post = (n: number, fields: Partial<ScreenPost> = {}): ScreenPost => ({
   _id: `wallPost-${n}`,
   src: `https://cdn.sanity.io/images/p/d/${n}.jpg`,
+  whole: {
+    src: `https://cdn.sanity.io/images/p/d/${n}.jpg?w=1400`,
+    width: 1600,
+    height: 1000,
+  },
   caption: null,
   name: null,
   approvedAt: at(n),
@@ -42,6 +47,7 @@ const posts = (count: number, from = 1) =>
 const view = (list: ScreenPost[], fields: Partial<ScreenView> = {}) => ({
   closed: false,
   sponsorStrip: false,
+  look: 'pinboard' as const,
   posts: list,
   ...fields,
 })
@@ -479,5 +485,61 @@ describe('the clock', () => {
     expect(
       boardReducer(s, { type: 'imageLoaded', key: 'nope', now: T0 + 100 }),
     ).toBe(s)
+  })
+})
+
+describe('the 200 cap (§8, §9.1)', () => {
+  it('a post that slides in from below the 200 is not a new arrival', () => {
+    // 201 approved; the screen sees the newest 200 (2…201).
+    const first = poll(initialBoard(), posts(200, 2), T0)
+    let s = tick(loadAll(first, T0), T0)
+    // 150 removed: post 1 enters the answer at the bottom.
+    const list = [
+      ...posts(200, 2).filter((p) => p._id !== 'wallPost-150'),
+      post(1),
+    ]
+    s = loadAll(poll(s, list, T0 + 1_000), T0 + 1_000)
+    s = tick(s, T0 + 1_100)
+    expect(s.queue).toEqual([])
+    expect(newIds(s)).toEqual([])
+  })
+})
+
+describe('Approve all (one approvedAt for every post)', () => {
+  it('lets tied approvals in by id, so no arrival evicts one that just arrived', () => {
+    let s = started(17)
+    // 18 approvals stamped with the same instant.
+    const same = at(500)
+    const batch = Array.from({ length: 18 }, (_, i) =>
+      post(100 + i, {
+        _id: `n${String(i + 1).padStart(2, '0')}`,
+        approvedAt: same,
+      }),
+    )
+    s = poll(
+      s,
+      [
+        ...batch.slice().sort((a, b) => a._id.localeCompare(b._id)),
+        ...posts(17),
+      ],
+      T0 + 1_000,
+    )
+    expect(s.queue.map((q) => q.post._id)).toEqual(
+      batch.map((p) => p._id).sort(),
+    )
+    // Let them all in, one every 2.5 s: an arrival never evicts a card still
+    // wearing its "new" mark.
+    let now = T0 + 1_000
+    for (let i = 0; i < 18 * 25 + 10; i++) {
+      now += 100
+      const stillNew = s.slots
+        .filter((c) => c && c.newUntil !== null && c.newUntil > now)
+        .map((c) => c!.post._id)
+      s = loadAll(tick(s, now), now)
+      const onBoard = new Set(s.slots.map((c) => c?.post._id))
+      for (const id of stillNew)
+        expect(onBoard, `${id} at ${now}`).toContain(id)
+    }
+    expect(s.queue).toEqual([])
   })
 })

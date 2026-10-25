@@ -117,7 +117,8 @@ export function PhotoWindow({
         />
       </button>
       <p id={hintId} className="sr-only">
-        Drag the photo, or use the arrow keys, to choose which part of it shows.
+        Drag the photo, or use the arrow keys, to choose the square the
+        polaroids show. Some wall looks show the whole photo.
       </p>
       <p
         className="sr-only"

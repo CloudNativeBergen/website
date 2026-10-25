@@ -1,12 +1,16 @@
 'use client'
 
 import { PlusIcon } from '@heroicons/react/24/solid'
+import clsx from 'clsx'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
+import { photoAlt, tileShape } from '@/lib/photo-wall/look'
+import type { WallLook } from '@/lib/photo-wall/types'
 import {
   WALL_POST_LIMIT,
   type WallPagePost,
   type WallPageView,
 } from '@/lib/photo-wall/wall'
+import { formatConferenceDayTime } from '@/lib/time'
 import { api } from '@/lib/trpc/client'
 import { WallHeader } from '../WallPage'
 import { wallPolling } from './polling'
@@ -41,7 +45,7 @@ function Polaroid({ post, eager }: { post: WallPagePost; eager: boolean }) {
     >
       <img
         src={post.src}
-        alt={post.name ? `Photo by ${post.name}` : 'Photo from the wall'}
+        alt={photoAlt(post)}
         width={600}
         height={600}
         loading={eager ? 'eager' : 'lazy'}
@@ -64,6 +68,139 @@ function Polaroid({ post, eager }: { post: WallPagePost; eager: boolean }) {
   )
 }
 
+/**
+ * A tile flatter than this (a panorama; a 16:9 photo is 0.5625 and keeps
+ * both) holds its caption to one line, and no name under it.
+ */
+const SHORT_TILE = 0.55
+/** Grid rows per column width: a tile spans its shape times this. */
+const ROWS_PER_COLUMN = 24
+
+/**
+ * The Mosaic posts (§9, #1478 variant B): a masonry of whole photos,
+ * newest first along the rows, the caption and name over a gradient. Rows
+ * are a fraction of the column width (container query units), so each
+ * tile spans as many as its photo's shape needs at any width.
+ */
+function MosaicGrid({ posts }: { posts: WallPagePost[] }) {
+  return (
+    <div className="@container">
+      <ul
+        aria-label="Photos"
+        className="grid grid-flow-row-dense grid-cols-2 [--cols:2] sm:grid-cols-3 sm:[--cols:3] lg:grid-cols-4 lg:[--cols:4]"
+        style={{
+          gridAutoRows: `calc(100cqi / var(--cols) / ${ROWS_PER_COLUMN})`,
+        }}
+      >
+        {posts.map((post, i) => {
+          const shape = tileShape(post.whole)
+          return (
+            <li
+              key={post._id}
+              className="p-0.5"
+              style={{ gridRow: `span ${Math.round(shape * ROWS_PER_COLUMN)}` }}
+            >
+              <figure className="relative size-full overflow-hidden rounded-md bg-gray-100 dark:bg-gray-900">
+                <img
+                  src={post.whole.src}
+                  alt={photoAlt(post)}
+                  width={post.whole.width}
+                  height={post.whole.height}
+                  loading={i < EAGER_PHOTOS ? 'eager' : 'lazy'}
+                  decoding="async"
+                  className="absolute inset-0 size-full object-contain"
+                />
+                {(post.caption || post.name) && (
+                  <figcaption className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/90 from-40% via-black/75 via-70% to-transparent p-2 pt-8 text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
+                    {post.caption && (
+                      <span
+                        className={clsx(
+                          'text-xs leading-snug font-semibold break-words',
+                          // A panorama's tile is short: one line, so the
+                          // caption never covers the whole photo.
+                          shape < SHORT_TILE ? 'line-clamp-1' : 'line-clamp-2',
+                        )}
+                      >
+                        {post.caption}
+                      </span>
+                    )}
+                    {post.name && !(post.caption && shape < SHORT_TILE) && (
+                      <span className="block truncate text-[11px] text-white/80">
+                        {post.name}
+                      </span>
+                    )}
+                  </figcaption>
+                )}
+              </figure>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+/**
+ * The Spotlight posts (§9, #1478 variant C): a single-column feed, each
+ * whole photo with who posted it, when, and the caption under it.
+ */
+function SpotlightFeed({ posts }: { posts: WallPagePost[] }) {
+  return (
+    <ul
+      aria-label="Photos"
+      className="mx-auto max-w-xl divide-y divide-gray-200 dark:divide-gray-800"
+    >
+      {posts.map((post, i) => (
+        <li key={post._id} className="py-4 first:pt-0">
+          <div className="flex items-baseline justify-between gap-4 pb-3 text-sm">
+            <span className="min-w-0 truncate font-semibold">
+              {post.name ?? 'Anonymous'}
+            </span>
+            <time
+              dateTime={post.approvedAt}
+              className="shrink-0 text-gray-600 dark:text-gray-400"
+            >
+              {formatConferenceDayTime(post.approvedAt)}
+            </time>
+          </div>
+          <img
+            src={post.whole.src}
+            alt={photoAlt(post)}
+            width={post.whole.width}
+            height={post.whole.height}
+            loading={i < EAGER_PHOTOS ? 'eager' : 'lazy'}
+            decoding="async"
+            // Full width, but never taller than 80% of the small viewport
+            // (svh holds still while iOS Safari's toolbar moves): a tall
+            // photo narrows to keep its shape, centred, with no bands.
+            className="mx-auto block h-auto w-full rounded-md"
+            style={{
+              maxWidth: `calc(80svh * ${post.whole.width / post.whole.height})`,
+            }}
+          />
+          {post.caption && <p className="pt-3 break-words">{post.caption}</p>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Each look's page colours: the Pinboard's board, or plain paper. */
+const LOOK_PAGE: Record<WallLook, { page: string; fade: string }> = {
+  pinboard: {
+    page: 'bg-stone-200 dark:bg-stone-900',
+    fade: 'from-stone-200 via-stone-200/80 dark:from-stone-900 dark:via-stone-900/80',
+  },
+  mosaic: {
+    page: 'bg-white dark:bg-gray-950',
+    fade: 'from-white via-white/80 dark:from-gray-950 dark:via-gray-950/80',
+  },
+  spotlight: {
+    page: 'bg-white dark:bg-gray-950',
+    fade: 'from-white via-white/80 dark:from-gray-950 dark:via-gray-950/80',
+  },
+}
+
 /** What the Wall page shows of its conference. */
 export interface WallConference {
   logo: ConferenceLogoData | null
@@ -75,10 +212,11 @@ export interface WallConference {
 
 /**
  * The Wall page (Photo Wall spec §9.1) for a given answer of `photoWallPublic.get`: the
- * conference on top, the approved posts as tilted polaroids on a board,
- * newest approval first, **Add your photo** while posting is open, and who
- * to ask to have a photo removed. Follows the visitor's light or dark
- * setting; the polaroids stay white photo paper in both.
+ * conference on top, the approved posts in the wall's look, newest approval
+ * first — tilted polaroids on a board (Pinboard), a masonry of whole photos
+ * (Mosaic) or a feed (Spotlight) — **Add your photo** while posting is
+ * open, and who to ask to have a photo removed. Follows the visitor's light
+ * or dark setting; the polaroids stay white photo paper in both.
  */
 export function WallBoardView({
   view,
@@ -89,10 +227,14 @@ export function WallBoardView({
 }) {
   const { posts } = view
   const canAdd = view.postingOpen && !view.closed
+  const colours = LOOK_PAGE[view.look]
   return (
     <div
       data-shell-fit="viewport"
-      className="min-h-dvh overflow-x-clip bg-stone-200 text-gray-900 dark:bg-stone-900 dark:text-gray-100"
+      className={clsx(
+        'min-h-dvh overflow-x-clip text-gray-900 dark:text-gray-100',
+        colours.page,
+      )}
     >
       <WallHeader logo={logo}>
         <div>
@@ -116,7 +258,11 @@ export function WallBoardView({
       ) : (
         <>
           <main
-            className={`mx-auto max-w-5xl px-4 pt-8 ${canAdd ? 'pb-28' : 'pb-10'}`}
+            className={clsx(
+              'mx-auto max-w-5xl pt-8',
+              view.look === 'mosaic' ? 'px-1' : 'px-4',
+              canAdd ? 'pb-28' : 'pb-10',
+            )}
           >
             {posts.length === 0 ? (
               <div className="mx-auto mt-4 grid aspect-square w-full max-w-60 rotate-[-2deg] place-items-center bg-white/70 p-6 text-center text-gray-600 shadow-sm ring-1 ring-black/5 dark:bg-white/10 dark:text-gray-300 dark:ring-white/10">
@@ -124,16 +270,22 @@ export function WallBoardView({
               </div>
             ) : (
               <>
-                <ul
-                  aria-label="Photos"
-                  className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4"
-                >
-                  {posts.map((post, i) => (
-                    <li key={post._id}>
-                      <Polaroid post={post} eager={i < EAGER_PHOTOS} />
-                    </li>
-                  ))}
-                </ul>
+                {view.look === 'mosaic' ? (
+                  <MosaicGrid posts={posts} />
+                ) : view.look === 'spotlight' ? (
+                  <SpotlightFeed posts={posts} />
+                ) : (
+                  <ul
+                    aria-label="Photos"
+                    className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4"
+                  >
+                    {posts.map((post, i) => (
+                      <li key={post._id}>
+                        <Polaroid post={post} eager={i < EAGER_PHOTOS} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {posts.length >= WALL_POST_LIMIT && (
                   <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
                     The {WALL_POST_LIMIT} newest photos.
@@ -160,7 +312,12 @@ export function WallBoardView({
             </footer>
           </main>
           {canAdd && (
-            <div className="fixed inset-x-0 bottom-0 z-10 bg-linear-to-t from-stone-200 via-stone-200/80 to-transparent px-4 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] dark:from-stone-900 dark:via-stone-900/80">
+            <div
+              className={clsx(
+                'fixed inset-x-0 bottom-0 z-10 bg-linear-to-t to-transparent px-4 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))]',
+                colours.fade,
+              )}
+            >
               <a href="/wall/post" className={`mx-auto max-w-md ${ADD_PHOTO}`}>
                 <PlusIcon className="size-5" aria-hidden="true" />
                 Add your photo

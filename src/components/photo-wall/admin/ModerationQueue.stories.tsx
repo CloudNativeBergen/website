@@ -335,6 +335,7 @@ const VIEW: PhotoWallAdminView = {
     _id: 'photoWall-conf-A',
     postingMode: 'open',
     sponsorStrip: false,
+    look: 'pinboard',
     closedAt: null,
   },
   posting: 'open',

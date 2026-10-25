@@ -19,6 +19,7 @@ const WALL: PhotoWall = {
   _id: 'photoWall-conf-A',
   postingMode: 'paused',
   sponsorStrip: false,
+  look: 'pinboard',
   closedAt: null,
 }
 const view = (
@@ -38,7 +39,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The organizers’ Photo Wall page, `/admin/photo-wall` (Photo Wall spec §10), slice M1: before setup a short explanation and **Set up the Photo Wall**; after it the **Posting** (Automatic / Open / Paused, P2) and **Sponsor strip** switches, and the links: the posting link with its QR and PNG download, the Wall page and Screen Mode, each with Copy. One column on a phone, side by side on a wide screen. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The organizers’ Photo Wall page, `/admin/photo-wall` (Photo Wall spec §10), slice M1: before setup a short explanation and **Set up the Photo Wall**; after it the **Posting** (Automatic / Open / Paused, P2) and **Sponsor strip** switches, the **Wall Look** (Pinboard / Mosaic / Spotlight, P3), and the links: the posting link with its QR and PNG download, the Wall page and Screen Mode, each with Copy. One column on a phone, side by side on a wide screen. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
@@ -73,6 +74,35 @@ export const NotSetUpDark: Story = {
 export const NotSetUpPhone: Story = {
   args: { view: view(null) },
   parameters: PHONE,
+}
+
+/** The Wall Look (P3): Mosaic chosen; picking Spotlight asks for it. */
+export const WallLook: Story = {
+  args: { view: view({ look: 'mosaic' }) },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const looks = canvas.getByRole('radiogroup', { name: 'Wall Look' })
+    await expect(
+      within(looks).getByRole('radio', { name: /Mosaic/ }),
+    ).toBeChecked()
+    await userEvent.click(
+      within(looks).getByRole('radio', { name: /Spotlight/ }),
+    )
+    await expect(args.onChange).toHaveBeenCalledWith({ look: 'spotlight' })
+  },
+}
+export const WallLookDark: Story = {
+  args: { view: view({ look: 'mosaic' }) },
+  globals: { theme: 'dark' },
+}
+export const WallLookPhone: Story = {
+  args: { view: view({ look: 'mosaic' }) },
+  parameters: PHONE,
+}
+export const WallLookPhoneDark: Story = {
+  args: { view: view({ look: 'mosaic' }) },
+  parameters: PHONE,
+  globals: { theme: 'dark' },
 }
 
 export const Paused: Story = {

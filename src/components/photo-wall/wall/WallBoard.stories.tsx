@@ -1,46 +1,48 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, within } from 'storybook/test'
 import type { WallPagePost, WallPageView } from '@/lib/photo-wall/wall'
+import { STORY_PHOTOS, storyPhoto } from '../story-photos'
 import { WallBoardView } from './WallBoard'
 
-/**
- * Local fixture photos (`.storybook/main.ts` staticDirs): no network. On the
- * site `src` is already Sanity's `rect=` square; here it is the whole photo,
- * which the polaroid's `object-cover` shows centred.
- */
-const LANDSCAPE = '/storybook-fixtures/wall-landscape.jpg'
-const PORTRAIT = '/storybook-fixtures/wall-portrait.jpg'
-const PHOTO = '/storybook-fixtures/wall-photo.jpg'
-const PANORAMA = '/storybook-fixtures/wall-panorama.jpg'
+const { landscape, portrait, photo, panorama, tall } = STORY_PHOTOS
 
 let n = 0
-const post = (fields: Partial<WallPagePost>): WallPagePost => ({
-  _id: `wallPost-${++n}`,
-  src: LANDSCAPE,
-  caption: null,
-  name: null,
-  ...fields,
-})
+const post = (fields: Partial<WallPagePost>): WallPagePost => {
+  n += 1
+  return {
+    _id: `wallPost-${n}`,
+    ...storyPhoto(landscape),
+    caption: null,
+    name: null,
+    // Approved a few minutes apart on the first morning, newest first.
+    approvedAt: new Date(
+      Date.parse('2026-10-26T09:00:00Z') - n * 4 * 60_000,
+    ).toISOString(),
+    ...fields,
+  }
+}
 
 const POSTS: WallPagePost[] = [
   post({ caption: 'Keynote crowd, first morning', name: 'Ada' }),
-  post({ src: PORTRAIT, caption: 'Doors open' }),
-  post({ src: PHOTO, name: 'Platform team' }),
+  post({ ...storyPhoto(portrait), caption: 'Doors open' }),
+  post({ ...storyPhoto(photo), name: 'Platform team' }),
   post({}),
   post({
-    src: PANORAMA,
+    ...storyPhoto(panorama),
     caption:
       'Fjord views between talks, and the longest caption a phone allows',
     name: 'Bo',
   }),
-  post({ src: PORTRAIT, caption: 'Waffles > YAML' }),
-  post({ src: PHOTO, caption: 'Hallway track', name: 'Cy' }),
+  post({ ...storyPhoto(portrait), caption: 'Waffles > YAML' }),
+  post({ ...storyPhoto(tall), caption: 'Up the stairs to room 3' }),
+  post({ ...storyPhoto(photo), caption: 'Hallway track', name: 'Cy' }),
   post({ name: 'Di' }),
 ]
 
 const view = (fields: Partial<WallPageView> = {}): WallPageView => ({
   closed: false,
   postingOpen: true,
+  look: 'pinboard',
   posts: POSTS,
   ...fields,
 })
@@ -54,7 +56,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The public Wall page `/wall` (Photo Wall spec §9.1), slice M5a: the conference on top, the approved Wall Posts as tilted Pinboard polaroids in two columns on a phone (three and four on wider screens), newest approval first, with the handwritten caption and name; **Add your photo** while posting is open; the removal-contact footer; the empty and closed states. The page polls `photoWallPublic.get` every 10 s while visible (§8). Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          "The public Wall page `/wall` (Photo Wall spec §9.1), slices M5a, P3 and P4: the conference on top, the approved Wall Posts in the wall's look, newest approval first: **Pinboard**, tilted polaroids in two columns on a phone (three and four on wider screens) with the handwritten caption and name; **Mosaic**, a masonry of whole photos with the caption over a gradient; **Spotlight**, a single-column feed with the name, time and caption. **Add your photo** while posting is open; the removal-contact footer; the empty and closed states. The page polls `photoWallPublic.get` every 10 s while visible (§8). Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). Dark mode follows the global `theme` toolbar (story-level `globals`).",
       },
     },
   },
@@ -87,6 +89,37 @@ export const Wall: Story = {
   },
 }
 export const WallDark: Story = { globals: { theme: 'dark' } }
+
+/** Mosaic (P3): whole photos edge to edge, each spanning its own shape. */
+export const Mosaic: Story = {
+  args: { view: view({ look: 'mosaic' }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const srcs = canvas
+      .getAllByRole('img', { name: /Photo/ })
+      .map((img) => img.getAttribute('src'))
+    await expect(srcs).toEqual(POSTS.map((p) => p.whole.src))
+    await expect(canvas.getByText('Keynote crowd, first morning')).toBeVisible()
+  },
+}
+export const MosaicDark: Story = {
+  args: { view: view({ look: 'mosaic' }) },
+  globals: { theme: 'dark' },
+}
+
+/** Spotlight (P4): a feed, one whole photo after another. */
+export const Spotlight: Story = {
+  args: { view: view({ look: 'spotlight' }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getAllByRole('listitem')).toHaveLength(POSTS.length)
+    await expect(canvas.getByText('Mon 26 Oct, 09:56')).toBeVisible()
+  },
+}
+export const SpotlightDark: Story = {
+  args: { view: view({ look: 'spotlight' }) },
+  globals: { theme: 'dark' },
+}
 
 /** Paused, or outside the Posting Window: the wall without the button. */
 export const PostingNotOpen: Story = {
