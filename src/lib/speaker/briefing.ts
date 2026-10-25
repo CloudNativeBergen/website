@@ -7,7 +7,14 @@
  */
 import type { TypedObject } from 'sanity'
 import type { Conference, SpeakerInfoRoute } from '@/lib/conference/types'
-import { Status, type ProposalExisting } from '@/lib/proposal/types'
+import {
+  Status,
+  isWorkshopFormat,
+  type Format,
+  type ProposalExisting,
+} from '@/lib/proposal/types'
+import type { SpeakerTicketState } from '@/lib/tickets/speakerStatus'
+import { TravelSupportStatus } from '@/lib/travel-support/types'
 import {
   isRichTextContentEmpty,
   type RichTextContentBlock,
@@ -16,6 +23,9 @@ import {
 export interface SpeakerBriefingTalk {
   proposalId: string
   title: string
+  format: Format
+  /** Workshops say "your workshop" and link to the participant list. */
+  isWorkshop: boolean
   date?: string
   startTime?: string
   endTime?: string
@@ -24,8 +34,14 @@ export interface SpeakerBriefingTalk {
 }
 
 export interface SpeakerBriefingTodo {
-  kind: 'confirm-talk' | 'upload-slides'
-  proposalId: string
+  kind:
+    | 'confirm-talk'
+    | 'upload-slides'
+    | 'claim-ticket'
+    | 'co-speaker-invite-pending'
+    | 'travel-support'
+  /** Absent only for `travel-support`, which belongs to the speaker. */
+  proposalId?: string
   title: string
 }
 
@@ -75,9 +91,28 @@ function compact<T extends object>(o: T): T | undefined {
   return entries.length > 0 ? (Object.fromEntries(entries) as T) : undefined
 }
 
+export interface SpeakerBriefingData {
+  proposals: ProposalExisting[]
+  /**
+   * The speaker the briefing is for. Without it `confirm-talk` is not limited
+   * to the talk's speakers and `claim-ticket` is never emitted.
+   */
+  speakerId?: string
+  /**
+   * The speaker's ticket state from `joinSpeakerTicketStatus`. Redemption is
+   * only known to the ticket provider, so the caller fetches it; without it
+   * (or when `unknown`) `claim-ticket` is not emitted.
+   */
+  ticketState?: SpeakerTicketState
+  /** The speaker's travel support request, if any. */
+  travelSupport?: { status: TravelSupportStatus }
+  /** For tests; defaults to the current time. */
+  now?: Date
+}
+
 export function getSpeakerBriefing(
   conference: Briefable,
-  speakerData?: { proposals: ProposalExisting[] },
+  speakerData?: SpeakerBriefingData,
 ): SpeakerBriefing {
   const info = conference.speakerInfo
   const d = info?.dinner
@@ -114,14 +149,45 @@ export function getSpeakerBriefing(
   if (speakerData) {
     talks = []
     todos = []
+    const { speakerId, ticketState } = speakerData
+    const now = (speakerData.now ?? new Date()).toISOString()
+    let ticketTodo = false
     for (const p of speakerData.proposals) {
-      if (p.status === Status.accepted) {
+      // The server lets any speaker on the talk confirm it
+      // (`proposal.action`: `$speakerId in speakers[]._ref`).
+      const onTalk =
+        !speakerId ||
+        !!p.speakers?.some((s) => ('_ref' in s ? s._ref : s._id) === speakerId)
+      if (p.status === Status.accepted && onTalk) {
         todos.push({ kind: 'confirm-talk', proposalId: p._id, title: p.title })
       }
+      if (
+        p.coSpeakerInvitations?.some(
+          (i) => i.status === 'pending' && i.expiresAt > now,
+        )
+      ) {
+        todos.push({
+          kind: 'co-speaker-invite-pending',
+          proposalId: p._id,
+          title: p.title,
+        })
+      }
       if (p.status !== Status.confirmed) continue
+      // One ticket per speaker, so one to-do even with several talks.
+      if (
+        !ticketTodo &&
+        speakerId &&
+        ticketState === 'invited' &&
+        p.issuedSpeakerTickets?.some((t) => t.speakerId === speakerId)
+      ) {
+        ticketTodo = true
+        todos.push({ kind: 'claim-ticket', proposalId: p._id, title: p.title })
+      }
       talks.push({
         proposalId: p._id,
         title: p.title,
+        format: p.format,
+        isWorkshop: isWorkshopFormat(p.format),
         ...compact({
           date: p.scheduleInfo?.date,
           startTime: p.scheduleInfo?.timeSlot?.startTime,
@@ -132,6 +198,9 @@ export function getSpeakerBriefing(
       if (!p.attachments?.some((a) => a.attachmentType === 'slides')) {
         todos.push({ kind: 'upload-slides', proposalId: p._id, title: p.title })
       }
+    }
+    if (speakerData.travelSupport?.status === TravelSupportStatus.DRAFT) {
+      todos.push({ kind: 'travel-support', title: 'Travel support request' })
     }
   }
 
