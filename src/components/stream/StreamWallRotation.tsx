@@ -76,8 +76,7 @@ export function StreamWallRotation({
 }) {
   const poll = useScreenMode(wall.initial)
   const [failed, setFailed] = useState(false)
-  // A wall deleted since the page rendered answers null.
-  const wallOpen = !failed && poll.data?.closed === false
+  const wallOpen = !failed && !poll.gone && poll.data?.closed === false
 
   // The tick reads the latest poll, not the one it was set up with.
   const wallOpenRef = useRef(wallOpen)

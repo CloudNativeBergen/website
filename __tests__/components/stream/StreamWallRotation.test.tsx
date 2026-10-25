@@ -27,10 +27,31 @@ const screenFetch = vi.fn(async (input: RequestInfo | URL) => {
   if (!url.pathname.endsWith('/photoWallPublic.screen')) {
     throw new Error(`unexpected request ${url.pathname}`)
   }
-  return new Response(JSON.stringify({ result: { data: h.answer() } }), {
+  const answer = h.answer()
+  if (answer instanceof TrpcError) {
+    const { code, httpStatus } = answer
+    return new Response(
+      JSON.stringify({
+        error: { message: code, code: -32000, data: { code, httpStatus } },
+      }),
+      { status: httpStatus, headers: { 'content-type': 'application/json' } },
+    )
+  }
+  return new Response(JSON.stringify({ result: { data: answer } }), {
     headers: { 'content-type': 'application/json' },
   })
 })
+
+/** What the server answers with a tRPC error. */
+class TrpcError {
+  constructor(
+    readonly code: string,
+    readonly httpStatus: number,
+  ) {}
+}
+/** The wall was deleted (or the conference could not be read). */
+const NOT_FOUND = new TrpcError('NOT_FOUND', 404)
+const SERVER_ERROR = new TrpcError('INTERNAL_SERVER_ERROR', 500)
 
 import { StreamWallRotation } from '@/components/stream/StreamWallRotation'
 
@@ -107,10 +128,13 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-10-27T09:00:00'))
   h.answer.mockReset()
   vi.stubGlobal('fetch', screenFetch)
+  // The tRPC logger reports every failed poll; some tests fail polls on purpose.
+  vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   markScreenMode(null)
   vi.useRealTimers()
 })
@@ -150,6 +174,23 @@ describe('StreamWallRotation', () => {
     h.answer.mockReturnValue(view({ closed: true }))
     await advance(6_000)
     expect(wallShown()).toBe(false)
+  })
+
+  it('skips the wall once a poll says it is gone, and takes it back when it returns', async () => {
+    mount(view())
+    h.answer.mockReturnValue(NOT_FOUND)
+    await advance(ROOM_TURN_MS)
+    expect(wallShown()).toBe(false)
+    h.answer.mockReturnValue(view())
+    await advance(6_000)
+    expect(wallShown()).toBe(true)
+  })
+
+  it('keeps taking turns through a poll that failed for another reason', async () => {
+    mount(view())
+    h.answer.mockReturnValue(SERVER_ERROR)
+    await advance(ROOM_TURN_MS)
+    expect(wallShown()).toBe(true)
   })
 
   it('holds the room view in the five minutes before the next talk, then resumes', async () => {

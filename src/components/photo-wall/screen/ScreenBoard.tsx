@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useReducer, useState } from 'react'
+import { TRPCClientError } from '@trpc/client'
 import { markScreenMode } from '@/components/pwa/screen-update'
 import type { ScreenView } from '@/lib/photo-wall/screen'
 import type { WallLook } from '@/lib/photo-wall/types'
@@ -117,17 +118,23 @@ export function ScreenBoard({
 /**
  * Screen Mode's poll, starting from the server's answer, every 5 s for as
  * long as it is mounted (§8); the page counts as a venue screen meanwhile.
- * Also the room screen's, which shows the wall in turns.
+ * Also the room screen's, which shows the wall in turns: `gone` while the
+ * last poll answered that the conference has no wall (the last answer it
+ * had stays in `data`), so a deleted wall stops taking turns.
  */
-export function useScreenMode(initial: ScreenView): ScreenPoll {
-  const { data, dataUpdatedAt, errorUpdatedAt } = useScreenPoll(initial)
+export function useScreenMode(
+  initial: ScreenView,
+): ScreenPoll & { gone: boolean } {
+  const { data, dataUpdatedAt, errorUpdatedAt, error } = useScreenPoll(initial)
   // Tells the service worker registrar this is a venue screen, also when it
   // was reached (or left) by a client-side navigation.
   useEffect(() => {
     markScreenMode(true)
     return () => markScreenMode(false)
   }, [])
-  return { data, dataUpdatedAt, errorUpdatedAt }
+  const gone =
+    error instanceof TRPCClientError && error.data?.code === 'NOT_FOUND'
+  return { data, dataUpdatedAt, errorUpdatedAt, gone }
 }
 
 /**
