@@ -106,6 +106,14 @@ export function toEditorTrack(track: ScheduleTrack): EditorTrack {
   }
 }
 
+/** A sponsor the schedule editor offers for a track. */
+export interface TrackSponsorOption {
+  _id: string
+  name: string
+  /** Bought the Track Sponsorship add-on: listed first. */
+  trackAddon: boolean
+}
+
 /**
  * Convert a whole persisted day to an {@link EditorSchedule}, dropping ghost
  * slots. Constructed once at the server load boundary so the editor never
