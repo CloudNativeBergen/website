@@ -593,7 +593,7 @@ export const UpdateSpeakerInfoSchema = z.object({
       startsAt: z.string().datetime({ offset: true }).optional(),
       venueName: optionalText,
       address: optionalText,
-      mapUrl: z.string().trim().url().optional(),
+      mapUrl: optionalHttpUrl,
       rsvpNote: optionalText,
       description: optionalBlocks,
       routes: z

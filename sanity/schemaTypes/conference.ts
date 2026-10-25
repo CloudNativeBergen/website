@@ -1310,7 +1310,12 @@ export default defineType({
               type: 'string',
             }),
             defineField({ name: 'address', title: 'Address', type: 'string' }),
-            defineField({ name: 'mapUrl', title: 'Map URL', type: 'url' }),
+            defineField({
+              name: 'mapUrl',
+              title: 'Map URL',
+              type: 'url',
+              validation: (Rule) => Rule.uri({ scheme: ['http', 'https'] }),
+            }),
             defineField({
               name: 'rsvpNote',
               title: 'RSVP Note',
