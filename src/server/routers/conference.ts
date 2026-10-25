@@ -60,6 +60,7 @@ import {
   UpdateTicketingIdsSchema,
   UpdatePublicFreeTicketsSchema,
   UpdateLocalInfoSchema,
+  UpdateSpeakerInfoSchema,
   UpdateCfpGoalsSchema,
   UpdateSocialLinksSchema,
   UpdateVanityMetricsSchema,
@@ -525,6 +526,33 @@ export const conferenceRouter = router({
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, input)
+    }),
+
+  /**
+   * Replace the structured speaker briefing (#1592). Same tenant scoping as
+   * `updateLocalInfo`; `updatedAt` is stamped here so the client cannot set it.
+   */
+  updateSpeakerInfo: adminProcedure
+    .input(UpdateSpeakerInfoSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      const { dinner, ...rest } = input
+      return applyConferencePatch(conferenceId, {
+        speakerInfo: {
+          ...rest,
+          ...(dinner
+            ? {
+                dinner: {
+                  ...dinner,
+                  ...(dinner.routes
+                    ? { routes: ensureArrayKeys(dinner.routes, 'route') }
+                    : {}),
+                },
+              }
+            : {}),
+          updatedAt: new Date().toISOString(),
+        },
+      })
     }),
 
   updateCfpGoals: adminProcedure
