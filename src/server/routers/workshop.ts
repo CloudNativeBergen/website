@@ -34,6 +34,7 @@ import {
   workshopEarlySignupsSchema,
   workshopReminderSchema,
   notifyCanceledWorkshopSchema,
+  moveCanceledSignupsSchema,
 } from '@/server/schemas/workshop'
 import {
   checkWorkshopCapacity,
@@ -54,6 +55,7 @@ import {
   type SignUpOutcome,
 } from '@/lib/workshop/seats'
 import { deliverPromotionEmails } from '@/lib/workshop/promoted'
+import { moveSignups, readMove } from '@/lib/workshop/move'
 import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import {
@@ -339,6 +341,28 @@ const REGISTRATION_TIME_LABELS = {
   workshopRegistrationStart: 'Registration opens',
   workshopRegistrationEnd: 'Registration closes',
 } as const
+
+/** `readMove` for the request's conference, its refusals as errors. */
+async function readMoveOrRefuse(input: {
+  fromWorkshopId: string
+  toWorkshopId: string
+}) {
+  const move = await readMove(
+    await resolveConferenceId(),
+    input.fromWorkshopId,
+    input.toWorkshopId,
+  )
+  if ('refused' in move) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message:
+        move.refused === 'source'
+          ? 'No canceled workshop with this id in this conference'
+          : 'The target is not a listed workshop of this conference',
+    })
+  }
+  return move
+}
 
 export const workshopRouter = router({
   list: publicProcedure.input(workshopListInputSchema).query(async () => {
@@ -1478,6 +1502,56 @@ export const workshopRouter = router({
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to notify the participants',
+            cause: error,
+          })
+        }
+      }),
+
+    /**
+     * Who a move from a canceled workshop to a listed one would take, with
+     * those already in the target and those it clashes for in time.
+     */
+    moveCandidates: workshopAdminProcedure
+      .input(moveCanceledSignupsSchema.omit({ signupIds: true }))
+      .query(async ({ input }) => {
+        const move = await readMoveOrRefuse(input)
+        return {
+          seatsFree: move.seatsFree,
+          candidates: move.candidates,
+        }
+      }),
+
+    /**
+     * Move one or all sign-ups of a canceled or withdrawn workshop to a
+     * listed workshop of the same conference: a seat while one is free, the
+     * waitlist after (decided in the write, see `moveSignups`). Those already
+     * signed up for the target are skipped and reported. Each person moved is
+     * emailed.
+     */
+    moveCanceledSignups: workshopAdminProcedure
+      .input(moveCanceledSignupsSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const move = await readMoveOrRefuse(input)
+        const wanted = input.signupIds && new Set(input.signupIds)
+        try {
+          const { conference } = await getConferenceForCurrentDomain({})
+          const result = await moveSignups({
+            conferenceId,
+            conference: conference || undefined,
+            sourceTitle: move.source.title ?? '',
+            target: move.target,
+            signups: wanted
+              ? move.signups.filter((s) => wanted.has(s._id))
+              : move.signups,
+          })
+          revalidateTag('content:workshops', 'default')
+          revalidateTag('admin:workshops', 'default')
+          return result
+        } catch (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to move the participants',
             cause: error,
           })
         }

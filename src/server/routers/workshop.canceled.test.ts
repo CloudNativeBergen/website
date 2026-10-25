@@ -2,7 +2,8 @@
  * @vitest-environment node
  *
  * The organizer's actions on a canceled or withdrawn workshop: tell its
- * sign-ups (`notifyCanceled`). The router, its organizer waist and the
+ * sign-ups (`notifyCanceled`) and move them to a listed one
+ * (`moveCandidates`, `moveCanceledSignups`). The router, its organizer waist and the
  * workshops gate run for real (harness as in `workshop.reminder.test.ts`); the
  * Sanity reads and writes and the email send are the boundaries.
  */
@@ -52,6 +53,22 @@ vi.mock('@/lib/workshop/sanity', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/workshop/sanity')>()),
   getCanceledWorkshopOf: (...a: unknown[]) => getCanceled(...a),
   getWorkshopSignupsByWorkshop: (...a: unknown[]) => getSignups(...a),
+  getSignupsForHolderJoin: (...a: unknown[]) => holderJoin(...a),
+  deleteWorkshopSignup: (...a: unknown[]) => deleteSignup(...a),
+}))
+const holderJoin = vi.fn()
+const deleteSignup = vi.fn()
+
+const getWorkshops = vi.fn()
+vi.mock('@/lib/proposal/data/sanity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/proposal/data/sanity')>()),
+  getWorkshops: (...a: unknown[]) => getWorkshops(...a),
+}))
+
+const signUp = vi.fn()
+vi.mock('@/lib/workshop/seats', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workshop/seats')>()),
+  signUpForWorkshop: (...a: unknown[]) => signUp(...a),
 }))
 
 const sendCanceled = vi.fn()
@@ -205,5 +222,158 @@ describe('workshop.admin.notifyCanceled', () => {
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect(sendCanceled).not.toHaveBeenCalled()
+  })
+})
+
+describe('moving the sign-ups of a canceled workshop', () => {
+  const target = {
+    _id: 'ws-2',
+    title: 'Platform 101',
+    capacity: 10,
+    signups: 9,
+    date: '2026-10-28',
+    startTime: '10:00',
+    endTime: '12:00',
+  }
+  const clash = {
+    _id: 'ws-3',
+    title: 'Clashing',
+    date: '2026-10-28',
+    startTime: '11:00',
+    endTime: '13:00',
+  }
+
+  beforeEach(() => {
+    getWorkshops.mockResolvedValue({
+      workshops: [target, clash],
+      workshopsError: null,
+    })
+    getSignups.mockResolvedValue([
+      { ...signup('w', 'waitlist'), signedUpAt: '2026-01-01' },
+      { ...signup('a', 'confirmed'), signedUpAt: '2026-01-02' },
+      { ...signup('b', 'confirmed'), signedUpAt: '2026-01-01' },
+      signup('x', 'cancelled'),
+    ])
+    holderJoin.mockResolvedValue([
+      {
+        userEmail: 'a@example.test',
+        status: 'confirmed',
+        workshop: { _id: 'ws-3' },
+      },
+      {
+        userEmail: 'b@example.test',
+        status: 'waitlist',
+        workshop: { _id: 'ws-2' },
+      },
+    ])
+    deleteSignup.mockResolvedValue(undefined)
+  })
+
+  it('previews who is already in the target and who clashes in time', async () => {
+    const preview = await caller().admin.moveCandidates({
+      fromWorkshopId: 'ws-1',
+      toWorkshopId: 'ws-2',
+    })
+
+    expect(preview.seatsFree).toBe(1)
+    expect(
+      preview.candidates.map((c) => [c.signupId, c.inTarget, c.conflict]),
+    ).toEqual([
+      ['b', true, null],
+      ['a', false, 'Clashing'],
+      ['w', false, null],
+    ])
+  })
+
+  it('moves confirmed first, waitlists when full, skips those already in, and emails each moved', async () => {
+    signUp.mockImplementation(async (req: { userWorkOSId: string }) =>
+      req.userWorkOSId === 'b-user'
+        ? { refused: 'already-signed-up' }
+        : {
+            signup: {
+              status: signUp.mock.calls.length === 2 ? 'confirmed' : 'waitlist',
+            },
+          },
+    )
+    getSignups.mockResolvedValue(
+      (await getSignups()).map((s: { _id: string }) => ({
+        ...s,
+        userWorkOSId: `${s._id}-user`,
+      })),
+    )
+
+    const result = await caller().admin.moveCanceledSignups({
+      fromWorkshopId: 'ws-1',
+      toWorkshopId: 'ws-2',
+    })
+
+    expect(signUp.mock.calls.map(([r]) => r.workshopId)).toEqual([
+      'ws-2',
+      'ws-2',
+      'ws-2',
+    ])
+    expect(signUp.mock.calls[0][1]).toEqual({ whenFull: 'waitlist' })
+    expect(result).toEqual({
+      confirmed: ['a'],
+      waitlisted: ['w'],
+      skipped: ['b'],
+      failed: [],
+    })
+    expect(deleteSignup.mock.calls.map(([id]) => id)).toEqual(['a', 'w'])
+    expect(
+      sendCanceled.mock.calls.map(([r]) => [r.userEmail, r.movedTo]),
+    ).toEqual([
+      [
+        'a@example.test',
+        { workshopTitle: 'Platform 101', status: 'confirmed' },
+      ],
+      ['w@example.test', { workshopTitle: 'Platform 101', status: 'waitlist' }],
+    ])
+  })
+
+  it('moves only the sign-ups asked for', async () => {
+    signUp.mockResolvedValue({ signup: { status: 'confirmed' } })
+
+    await caller().admin.moveCanceledSignups({
+      fromWorkshopId: 'ws-1',
+      toWorkshopId: 'ws-2',
+      signupIds: ['w'],
+    })
+
+    expect(deleteSignup.mock.calls).toEqual([['w']])
+  })
+
+  it('refuses a source that is not canceled', async () => {
+    getCanceled.mockResolvedValue(null)
+
+    await expect(
+      caller().admin.moveCanceledSignups({
+        fromWorkshopId: 'ws-1',
+        toWorkshopId: 'ws-2',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(signUp).not.toHaveBeenCalled()
+  })
+
+  it('refuses a target that is not listed in this conference', async () => {
+    await expect(
+      caller().admin.moveCanceledSignups({
+        fromWorkshopId: 'ws-1',
+        toWorkshopId: 'elsewhere',
+      }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'The target is not a listed workshop of this conference',
+    })
+    expect(signUp).not.toHaveBeenCalled()
+  })
+
+  it('refuses someone who is not an organizer', async () => {
+    await expect(
+      caller({ _id: 'x', organizerOrgIds: [] }).admin.moveCanceledSignups({
+        fromWorkshopId: 'ws-1',
+        toWorkshopId: 'ws-2',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 })

@@ -48,6 +48,7 @@ const meta = {
     onEditCapacity: fn(),
     onAnnounce: fn(),
     onNotifyCanceled: fn(),
+    onMoveParticipants: fn(),
   },
 } satisfies Meta<typeof WorkshopCard>
 
@@ -108,6 +109,10 @@ export const Canceled: Story = {
       canvas.getByRole('button', { name: /notify participants/i }),
     )
     await expect(args.onNotifyCanceled).toHaveBeenCalled()
+    await userEvent.click(
+      canvas.getByRole('button', { name: /move participants/i }),
+    )
+    await expect(args.onMoveParticipants).toHaveBeenCalled()
     await expect(canvas.getByText('12/30')).toBeInTheDocument()
     await expect(
       canvas.queryByRole('button', { name: /add participant/i }),
