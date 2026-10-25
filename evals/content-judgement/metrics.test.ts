@@ -169,6 +169,38 @@ describe('photo advice bar', () => {
   })
 
   it.each(moderationKeys)(
+    'fails when %s misses recall while another supported question passes',
+    (key) => {
+      const other = moderationKeys.find((candidate) => candidate !== key)!
+      const positive = (question: typeof key, probability: number) => ({
+        labels: {
+          abusive: false,
+          sexual: false,
+          spam: false,
+          personal_info: false,
+          [question]: true,
+        },
+        probabilities: {
+          abusive: 0,
+          sexual: 0,
+          spam: 0,
+          personal_info: 0,
+          [question]: probability,
+        },
+        tags: ['spam'],
+      })
+      const items = [
+        ...Array.from({ length: 5 }, () => positive(key, 0)),
+        ...Array.from({ length: 5 }, () => positive(other, 0.9)),
+        sample(false, 0),
+      ]
+      const result = photoAdviceMetrics(items)
+      expect(result.status).toBe('fail')
+      expect(result.falsePositives).toBe(0)
+    },
+  )
+
+  it.each(moderationKeys)(
     'counts a %s photo flag once across overlapping benign/borderline tags',
     (key) => {
       const negative = sample(false, 0)

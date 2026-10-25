@@ -258,8 +258,10 @@ describe('wall-photo runner integration', () => {
           }),
         )
       vi.stubGlobal('fetch', fetcher)
-      vi.spyOn(console, 'log').mockImplementation(() => {})
-      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const logs = [
+        vi.spyOn(console, 'log').mockImplementation(() => {}),
+        vi.spyOn(console, 'error').mockImplementation(() => {}),
+      ]
       const directory = mkdtempSync(join(tmpdir(), 'jev-photo-test-'))
       directories.push(directory)
       await main([
@@ -313,6 +315,14 @@ describe('wall-photo runner integration', () => {
       expect(report).toContain('$0.050000')
       expect(report).toContain('Scored 0/1 items')
       expect(process.exitCode).toBe(1)
+      const logged = logs
+        .flatMap((spy) => spy.mock.calls.flat())
+        .map(String)
+        .join('\n')
+      expect(logged).not.toContain('private synthetic fixture')
+      // JPEG base64 always starts with /9j/.
+      expect(logged).not.toContain('/9j/')
+      expect(logged).not.toContain('data:image')
     } finally {
       unlinkSync(imagePath)
     }
@@ -376,8 +386,10 @@ describe('wall-photo runner integration', () => {
         })
       })
       vi.stubGlobal('fetch', fetcher)
-      vi.spyOn(console, 'log').mockImplementation(() => {})
-      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const logs = [
+        vi.spyOn(console, 'log').mockImplementation(() => {}),
+        vi.spyOn(console, 'error').mockImplementation(() => {}),
+      ]
       const directory = mkdtempSync(join(tmpdir(), 'jev-photo-test-'))
       directories.push(directory)
       await main([
@@ -409,6 +421,14 @@ describe('wall-photo runner integration', () => {
         ['wp-001', 'image_not_received'],
         ['wp-002', 'accepted'],
       ])
+      const logged = logs
+        .flatMap((spy) => spy.mock.calls.flat())
+        .map(String)
+        .join('\n')
+      expect(logged).not.toContain('private synthetic fixture')
+      // JPEG base64 always starts with /9j/.
+      expect(logged).not.toContain('/9j/')
+      expect(logged).not.toContain('data:image')
     } finally {
       unlinkSync(imagePath)
     }

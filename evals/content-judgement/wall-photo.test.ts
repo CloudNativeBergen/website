@@ -164,9 +164,9 @@ describe('wall-photo request and response', () => {
       'image_url',
     ])
     const text = request.state[0]
-    expect(text.type === 'text' && Object.keys(JSON.parse(text.text))).toEqual([
-      'caption',
-    ])
+    expect(text.type === 'text' && JSON.parse(text.text)).toEqual({
+      caption: item.caption,
+    })
     expect(Object.keys(request.questions)).toHaveLength(8)
     for (const key of moderationKeys)
       expect(request.questions[`caption_${key}`]).toEqual(
