@@ -394,9 +394,10 @@ function onPoll(
   }
 
   // A removed featured post hands over to the post Up next promised, the
-  // first of it still on the list; waiting arrivals take theirs as usual.
+  // first of it still on the list; a waiting arrival that is still there
+  // takes its turn as usual.
   const removed = state.feature && !listKeys.has(state.feature.key)
-  if (removed && state.waiting.length === 0) {
+  if (removed && !state.waiting.some((key) => listKeys.has(key))) {
     const promised = upNext(state).find((post) =>
       listKeys.has(screenPostKey(post)),
     )
