@@ -125,6 +125,8 @@ describe('SpeakerBriefingPanel', () => {
     expect(html).not.toContain('href="/cfp/proposal/undefined"')
     expect(html).toContain('Your workshop:')
     expect(html).toContain('href="/cfp/workshop/p3"')
+    expect(html).toContain('Tue 27 Oct')
+    expect(html).not.toContain('oktober')
   })
 
   it('never prints Invalid Date and labels departures and maps', () => {
@@ -149,7 +151,8 @@ describe('SpeakerBriefingPanel', () => {
     )
     expect(html).not.toContain('Invalid Date')
     expect(html).toContain('Departs Mon 26 Oct, 17:30 (after the last talk)')
-    expect(html).toContain('Departs whenever')
+    expect(html).toContain('<p>whenever</p>')
+    expect(html).not.toContain('Departs whenever')
     expect(html).toContain('Map of Lobby')
   })
 

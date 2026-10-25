@@ -9,7 +9,7 @@ import type {
   SpeakerBriefing,
   SpeakerBriefingTodo,
 } from '@/lib/speaker/briefing'
-import { formatConferenceDateLong, formatConferenceDayTime } from '@/lib/time'
+import { formatConferenceDayDate, formatConferenceDayTime } from '@/lib/time'
 import { isSafeLinkHref } from '@/lib/portabletext/safeHref'
 
 interface SpeakerBriefingPanelProps {
@@ -131,7 +131,7 @@ export function SpeakerBriefingPanel({
               <span className="text-gray-600 dark:text-gray-400">
                 {' — '}
                 {[
-                  t.date && formatConferenceDateLong(t.date),
+                  t.date && formatConferenceDayDate(t.date),
                   t.startTime &&
                     (t.endTime ? `${t.startTime}–${t.endTime}` : t.startTime),
                   t.trackTitle,
@@ -231,9 +231,8 @@ export function SpeakerBriefingPanel({
               )}
               {(dayTime(r.departsAt) || r.departsNote) && (
                 <p>
-                  Departs{' '}
                   {dayTime(r.departsAt)
-                    ? `${dayTime(r.departsAt)}${r.departsNote ? ` (${r.departsNote})` : ''}`
+                    ? `Departs ${dayTime(r.departsAt)}${r.departsNote ? ` (${r.departsNote})` : ''}`
                     : r.departsNote}
                 </p>
               )}
