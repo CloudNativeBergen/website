@@ -4,7 +4,7 @@ import clsx from 'clsx'
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ScreenBoard,
-  useScreenMode,
+  useLiveScreenPoll,
   type ScreenConference,
 } from '@/components/photo-wall'
 import type { ConferenceSchedule } from '@/lib/conference/types'
@@ -33,11 +33,12 @@ export interface StreamWall {
 }
 
 /**
- * A wall that fails to render leaves the room view alone on screen; the
- * room screen has no error page that reloads, as `/wall/screen` has.
+ * A wall that fails to render leaves the room view alone on screen, and is
+ * tried again with the next poll's answer (`retryKey`); the room screen has
+ * no error page that reloads, as `/wall/screen` has.
  */
 class WallBoundary extends Component<
-  { onError: () => void; children: ReactNode },
+  { retryKey: number; onError: () => void; children: ReactNode },
   { failed: boolean }
 > {
   state = { failed: false }
@@ -47,6 +48,11 @@ class WallBoundary extends Component<
   componentDidCatch(error: unknown) {
     console.error('The Photo Wall failed on the room screen', error)
     this.props.onError()
+  }
+  componentDidUpdate(previous: { retryKey: number }) {
+    if (this.state.failed && previous.retryKey !== this.props.retryKey) {
+      this.setState({ failed: false })
+    }
   }
   render() {
     return this.state.failed ? null : this.props.children
@@ -74,9 +80,11 @@ export function StreamWallRotation({
   /** The room view. */
   children: ReactNode
 }) {
-  const poll = useScreenMode(wall.initial)
-  const [failed, setFailed] = useState(false)
-  const wallOpen = !failed && !poll.gone && poll.data?.closed === false
+  const poll = useLiveScreenPoll(wall.initial)
+  // The answer the wall failed to render: no turns until the next one.
+  const [failedAt, setFailedAt] = useState<number | null>(null)
+  const wallOpen =
+    failedAt !== poll.dataUpdatedAt && !poll.gone && poll.data?.closed === false
 
   // The tick reads the latest poll, not the one it was set up with.
   const wallOpenRef = useRef(wallOpen)
@@ -124,12 +132,15 @@ export function StreamWallRotation({
         data-shown={showWall || undefined}
         inert={!showWall}
         className={clsx(
-          'fixed inset-0 z-30 transition-opacity ease-in-out motion-reduce:transition-none',
+          'fixed inset-0 z-50 transition-opacity ease-in-out motion-reduce:transition-none',
           showWall ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
         style={{ transitionDuration: `${CROSSFADE_MS}ms` }}
       >
-        <WallBoundary onError={() => setFailed(true)}>
+        <WallBoundary
+          retryKey={poll.dataUpdatedAt}
+          onError={() => setFailedAt(poll.dataUpdatedAt)}
+        >
           <ScreenBoard
             poll={poll}
             conference={{ ...wall.conference, trackSponsor }}

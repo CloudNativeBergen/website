@@ -117,21 +117,15 @@ export function ScreenBoard({
 
 /**
  * Screen Mode's poll, starting from the server's answer, every 5 s for as
- * long as it is mounted (§8); the page counts as a venue screen meanwhile.
- * Also the room screen's, which shows the wall in turns: `gone` while the
- * last poll answered that the conference has no wall (the last answer it
- * had stays in `data`), so a deleted wall stops taking turns.
+ * long as it is mounted (§8). Also the room screen's, which shows the wall
+ * in turns: `gone` while the last poll answered that the conference has no
+ * wall (the last answer it had stays in `data`), so a deleted wall stops
+ * taking turns.
  */
-export function useScreenMode(
+export function useLiveScreenPoll(
   initial: ScreenView,
 ): ScreenPoll & { gone: boolean } {
   const { data, dataUpdatedAt, errorUpdatedAt, error } = useScreenPoll(initial)
-  // Tells the service worker registrar this is a venue screen, also when it
-  // was reached (or left) by a client-side navigation.
-  useEffect(() => {
-    markScreenMode(true)
-    return () => markScreenMode(false)
-  }, [])
   const gone =
     error instanceof TRPCClientError && error.data?.code === 'NOT_FOUND'
   return { data, dataUpdatedAt, errorUpdatedAt, gone }
@@ -151,11 +145,14 @@ export function ScreenMode({
   /** The screen link's `?look=`, overriding the wall's look. */
   look?: WallLook
 }) {
-  return (
-    <ScreenBoard
-      poll={useScreenMode(initial)}
-      conference={conference}
-      look={look}
-    />
-  )
+  const poll = useLiveScreenPoll(initial)
+  // Tells the service worker registrar this is a venue screen, also when it
+  // was reached (or left) by a client-side navigation. Not the room screen
+  // showing the wall in turns: its page has none of this one's safety nets
+  // for a reload that lands on an error.
+  useEffect(() => {
+    markScreenMode(true)
+    return () => markScreenMode(false)
+  }, [])
+  return <ScreenBoard poll={poll} conference={conference} look={look} />
 }

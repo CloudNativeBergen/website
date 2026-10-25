@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
-import { markScreenMode } from '@/components/pwa/screen-update'
+import { inScreenMode, markScreenMode } from '@/components/pwa/screen-update'
 import type { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 import type { ScreenView } from '@/lib/photo-wall/screen'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
@@ -21,6 +21,22 @@ const h = vi.hoisted(() => ({
 vi.mock('@/components/feedback/useFeedbackQrPng', () => ({
   useFeedbackQrPng: () => ({ src: 'data:image/png;base64,qr', failed: false }),
 }))
+
+// A wall that throws while it renders an answer whose look is `crash`.
+vi.mock('@/components/photo-wall', async (importOriginal) => {
+  const { createElement } = await import('react')
+  const original =
+    await importOriginal<typeof import('@/components/photo-wall')>()
+  return {
+    ...original,
+    ScreenBoard: (props: Parameters<typeof original.ScreenBoard>[0]) => {
+      if ((props.poll.data?.look as string) === 'crash') {
+        throw new Error('The wall failed to render')
+      }
+      return createElement(original.ScreenBoard, props)
+    },
+  }
+})
 
 const screenFetch = vi.fn(async (input: RequestInfo | URL) => {
   const url = new URL(String(input), 'http://localhost')
@@ -158,6 +174,13 @@ describe('StreamWallRotation', () => {
     expect(roomInert()).toBe(false)
   })
 
+  it('does not make the room page a Screen Mode page, which reloads itself on a deploy', async () => {
+    mount(view())
+    await advance(ROOM_TURN_MS)
+    expect(wallShown()).toBe(true)
+    expect(inScreenMode()).toBe(false)
+  })
+
   it('skips the wall while it is closed, and takes the turn once it opens', async () => {
     mount(view({ closed: true }))
     await advance(ROOM_TURN_MS * 2)
@@ -191,6 +214,17 @@ describe('StreamWallRotation', () => {
     h.answer.mockReturnValue(SERVER_ERROR)
     await advance(ROOM_TURN_MS)
     expect(wallShown()).toBe(true)
+  })
+
+  it('drops the wall when it fails to render, and tries it again with the next answer', async () => {
+    mount(view())
+    h.answer.mockReturnValue(view({ look: 'crash' as ScreenView['look'] }))
+    await advance(ROOM_TURN_MS)
+    expect(wallShown()).toBe(false)
+    h.answer.mockReturnValue(view())
+    await advance(6_000)
+    expect(wallShown()).toBe(true)
+    expect(screen.getByText('Be the first on the wall')).toBeInTheDocument()
   })
 
   it('holds the room view in the five minutes before the next talk, then resumes', async () => {

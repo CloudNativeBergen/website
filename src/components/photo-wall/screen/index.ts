@@ -1,7 +1,7 @@
 export {
   ScreenBoard,
   ScreenMode,
-  useScreenMode,
+  useLiveScreenPoll,
   type ScreenPoll,
 } from './ScreenBoard'
 export { ScreenLayout } from './ScreenLayout'
