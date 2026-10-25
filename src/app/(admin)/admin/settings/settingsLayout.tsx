@@ -66,7 +66,7 @@ export function InfoCard({
   return (
     <div
       id={id}
-      className="scroll-mt-24 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
+      className="scroll-mt-44 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
     >
       {/* flex-wrap + min-w-0: a card with several actions (Organizers & Teams
           has three) drops them to a second line on a phone instead of
