@@ -189,6 +189,7 @@ describe('readTicketHolders', () => {
           _id: 's-cy',
           userEmail: 'cy@x.test',
           userName: 'Name of s-cy',
+          userWorkOSId: null,
           status: 'waitlist',
           workshop: { _id: `talk-${CONF}`, title: `Workshop of ${CONF}` },
         },

@@ -1539,7 +1539,7 @@ export const workshopRouter = router({
           const result = await moveSignups({
             conferenceId,
             conference: conference || undefined,
-            sourceTitle: move.source.title ?? '',
+            source: move.source,
             target: move.target,
             signups: wanted
               ? move.signups.filter((s) => wanted.has(s._id))

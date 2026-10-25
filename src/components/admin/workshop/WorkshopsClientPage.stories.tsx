@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
-import { expect, within } from 'storybook/test'
+import { expect, userEvent, within } from 'storybook/test'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { mockDateBeforeEach } from '@/lib/storybook/mockDate'
 import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
@@ -231,4 +231,63 @@ export const NeedsAttentionPhone: Story = {
 export const NeedsAttentionDark: Story = {
   ...NeedsAttention,
   parameters: { ...NeedsAttention.parameters, ...dark },
+}
+
+const CANCELED = {
+  ...workshop('ws-4', 'Service Mesh Deep Dive', 'Room C', '13:00', 8, 20),
+  status: 'canceled',
+  date: undefined,
+  startTime: undefined,
+  endTime: undefined,
+  room: undefined,
+} as unknown as ProposalWithWorkshopData
+
+/**
+ * A canceled workshop: a badge, its sign-ups, and "Notify participants" and
+ * "Move participants" in place of the usual actions.
+ */
+export const CanceledWorkshop: Story = {
+  args: { initialWorkshops: [...WORKSHOPS, CANCELED] },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(at('moveCandidates'), () =>
+          trpc({
+            seatsFree: 13,
+            candidates: [
+              {
+                signupId: 'su-9',
+                userName: 'Grace Hopper',
+                userEmail: 'grace@example.com',
+                status: 'confirmed',
+                inTarget: false,
+                conflict: null,
+              },
+            ],
+          }),
+        ),
+        ...handlers(0),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement)
+    const body = within(document.body)
+    await expect(await page.findByText('Canceled')).toBeInTheDocument()
+
+    await userEvent.click(
+      page.getByRole('button', { name: /notify participants/i }),
+    )
+    await expect(await body.findByLabelText('Message')).toBeInTheDocument()
+    await userEvent.click(body.getByRole('button', { name: 'Cancel' }))
+
+    await userEvent.click(
+      page.getByRole('button', { name: /move participants/i }),
+    )
+    await userEvent.selectOptions(await body.findByLabelText('Move to'), 'ws-3')
+    await expect(await body.findByText('Grace Hopper')).toBeInTheDocument()
+    await expect(
+      body.getByRole('button', { name: 'Move 1 person' }),
+    ).toBeInTheDocument()
+  },
 }

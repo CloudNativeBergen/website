@@ -69,7 +69,16 @@ const signUp = vi.fn()
 vi.mock('@/lib/workshop/seats', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/workshop/seats')>()),
   signUpForWorkshop: (...a: unknown[]) => signUp(...a),
+  // The document store, as the move re-reads it.
+  current: async (ids: string[], workshopId: string) =>
+    ids
+      .map((id) => stored.get(id))
+      .filter((d) => d && d.workshop === workshopId),
 }))
+const stored = new Map<
+  string,
+  { _id: string; workshop: string; status: string; movedFromSignup?: string }
+>()
 
 const sendCanceled = vi.fn()
 vi.mock('@/lib/email/workshop', async (importOriginal) => ({
@@ -78,6 +87,7 @@ vi.mock('@/lib/email/workshop', async (importOriginal) => ({
 }))
 
 import { workshopRouter } from './workshop'
+import { signupDocumentId } from '@/lib/workshop/seats'
 import type { Context } from '@/server/trpc'
 
 const ORG_ID = 'org-A'
@@ -266,7 +276,12 @@ describe('moving the sign-ups of a canceled workshop', () => {
         workshop: { _id: 'ws-2' },
       },
     ])
-    deleteSignup.mockResolvedValue(undefined)
+    deleteSignup.mockImplementation(async (id: string) => {
+      stored.delete(id)
+    })
+    stored.clear()
+    for (const id of ['w', 'a', 'b'])
+      stored.set(id, { _id: id, workshop: 'ws-1', status: 'confirmed' })
   })
 
   it('previews who is already in the target and who clashes in time', async () => {
@@ -283,6 +298,27 @@ describe('moving the sign-ups of a canceled workshop', () => {
       ['a', false, 'Clashing'],
       ['w', false, null],
     ])
+  })
+
+  it('finds a person in the target by account, whatever email they used there', async () => {
+    getSignups.mockResolvedValue([
+      { ...signup('w', 'waitlist'), userWorkOSId: 'w-user' },
+    ])
+    holderJoin.mockResolvedValue([
+      {
+        userWorkOSId: 'w-user',
+        userEmail: 'work@example.test',
+        status: 'confirmed',
+        workshop: { _id: 'ws-2' },
+      },
+    ])
+
+    const preview = await caller().admin.moveCandidates({
+      fromWorkshopId: 'ws-1',
+      toWorkshopId: 'ws-2',
+    })
+
+    expect(preview.candidates[0].inTarget).toBe(true)
   })
 
   it('moves confirmed first, waitlists when full, skips those already in, and emails each moved', async () => {
@@ -317,7 +353,9 @@ describe('moving the sign-ups of a canceled workshop', () => {
       confirmed: ['a'],
       waitlisted: ['w'],
       skipped: ['b'],
+      gone: [],
       failed: [],
+      emailFailed: [],
     })
     expect(deleteSignup.mock.calls.map(([id]) => id)).toEqual(['a', 'w'])
     expect(
@@ -329,6 +367,88 @@ describe('moving the sign-ups of a canceled workshop', () => {
       ],
       ['w@example.test', { workshopTitle: 'Platform 101', status: 'waitlist' }],
     ])
+  })
+
+  it('leaves alone a sign-up deleted since the dialog read it, and emails no one about it', async () => {
+    stored.delete('a')
+    signUp.mockResolvedValue({ signup: { status: 'confirmed' } })
+
+    const result = await caller().admin.moveCanceledSignups({
+      fromWorkshopId: 'ws-1',
+      toWorkshopId: 'ws-2',
+      signupIds: ['a'],
+    })
+
+    expect(result.gone).toEqual(['a'])
+    expect(signUp).not.toHaveBeenCalled()
+    expect(sendCanceled).not.toHaveBeenCalled()
+  })
+
+  it('a retry after a failed delete finishes the move, with one email', async () => {
+    getSignups.mockResolvedValue([
+      { ...signup('a', 'confirmed'), userWorkOSId: 'a-user' },
+    ])
+    const targetId = signupDocumentId('conf-1', 'ws-2', 'a-user')
+    signUp.mockImplementation(async (req: { movedFromSignup: string }) => {
+      if (stored.has(targetId)) return { refused: 'already-signed-up' }
+      stored.set(targetId, {
+        _id: targetId,
+        workshop: 'ws-2',
+        status: 'confirmed',
+        movedFromSignup: req.movedFromSignup,
+      })
+      return { signup: { status: 'confirmed' } }
+    })
+    deleteSignup.mockRejectedValueOnce(new Error('503'))
+    const move = () =>
+      caller().admin.moveCanceledSignups({
+        fromWorkshopId: 'ws-1',
+        toWorkshopId: 'ws-2',
+      })
+
+    expect(await move()).toMatchObject({ failed: ['a'], confirmed: [] })
+    expect(sendCanceled).not.toHaveBeenCalled()
+
+    expect(await move()).toMatchObject({ failed: [], confirmed: ['a'] })
+    expect(stored.has('a')).toBe(false)
+    expect(sendCanceled).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips a person who signed up for the target on their own', async () => {
+    getSignups.mockResolvedValue([
+      { ...signup('a', 'confirmed'), userWorkOSId: 'a-user' },
+    ])
+    const targetId = signupDocumentId('conf-1', 'ws-2', 'a-user')
+    stored.set(targetId, {
+      _id: targetId,
+      workshop: 'ws-2',
+      status: 'waitlist',
+    })
+    signUp.mockResolvedValue({ refused: 'already-signed-up' })
+
+    const result = await caller().admin.moveCanceledSignups({
+      fromWorkshopId: 'ws-1',
+      toWorkshopId: 'ws-2',
+    })
+
+    expect(result.skipped).toEqual(['a'])
+    expect(deleteSignup).not.toHaveBeenCalled()
+    expect(sendCanceled).not.toHaveBeenCalled()
+  })
+
+  it('reports a person moved whose email failed', async () => {
+    signUp.mockResolvedValue({ signup: { status: 'confirmed' } })
+    sendCanceled.mockResolvedValue({ error: { message: 'x' } })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await caller().admin.moveCanceledSignups({
+      fromWorkshopId: 'ws-1',
+      toWorkshopId: 'ws-2',
+      signupIds: ['w'],
+    })
+
+    expect(result).toMatchObject({ waitlisted: [], emailFailed: ['w'] })
+    expect(result.confirmed).toEqual(['w'])
   })
 
   it('moves only the sign-ups asked for', async () => {

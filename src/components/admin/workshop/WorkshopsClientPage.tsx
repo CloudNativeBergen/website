@@ -20,7 +20,6 @@ import {
 import { isCanceledWorkshop } from '@/lib/workshop/listed'
 import { NotifyCanceledModal } from './NotifyCanceledModal'
 import { MoveParticipantsModal } from './MoveParticipantsModal'
-import { isCanceledWorkshop } from '@/lib/workshop/listed'
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
 import { SponsorEarlyAccessCard } from './SponsorEarlyAccessCard'
@@ -398,14 +397,21 @@ function WorkshopsClientPageFor({
       moveDialog.close()
       const moved = result.confirmed.length + result.waitlisted.length
       showNotification({
-        type: result.failed.length > 0 ? 'warning' : 'success',
+        type:
+          result.failed.length + result.emailFailed.length > 0
+            ? 'warning'
+            : 'success',
         title: 'Participants moved',
         message: [
           `${moved} moved: ${result.confirmed.length} with a seat, ${result.waitlisted.length} on the waitlist.`,
           result.skipped.length > 0 &&
             `${result.skipped.length} already signed up, left as they were.`,
+          result.gone.length > 0 &&
+            `${result.gone.length} no longer signed up, left alone.`,
           result.failed.length > 0 &&
             `${result.failed.length} could not be moved.`,
+          result.emailFailed.length > 0 &&
+            `${result.emailFailed.length} moved but not emailed.`,
         ]
           .filter(Boolean)
           .join(' '),

@@ -38,6 +38,7 @@ export interface HolderSignup {
   _id: string
   userEmail?: string | null
   userName?: string | null
+  userWorkOSId?: string | null
   /** As stored: `WorkshopSignupStatus`'s values. */
   status: `${WorkshopSignupStatus}`
   /** `null` when it is not one of the conference's workshops (a bad write). */
