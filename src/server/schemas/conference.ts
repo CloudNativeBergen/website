@@ -579,6 +579,8 @@ const PortableTextBlockSchema = z
  * server-side and never accepted from the client.
  */
 // `optionalText` is the sponsorship one above: trimmed, `null`-able.
+// Not `safeLinkHref`: that also admits site paths (`/tickets`), and a map link
+// opened from an email or another site must be an absolute http(s) URL.
 const optionalHttpUrl = z
   .string()
   .trim()

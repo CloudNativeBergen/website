@@ -1314,14 +1314,17 @@ export default defineType({
               name: 'mapUrl',
               title: 'Map URL',
               type: 'url',
-              validation: (Rule) => Rule.uri({ scheme: ['http', 'https'] }),
+              validation: (Rule) =>
+                // Absolute http(s) only, not `safeLinkRule`: a map link must work from
+                // an email, so site paths are out.
+                Rule.uri({ scheme: ['http', 'https'] }),
             }),
             defineField({
               name: 'rsvpNote',
               title: 'RSVP Note',
               type: 'string',
               description:
-                'How to reply. Display text only; the RSVP itself is collected on the speaker ticket.',
+                'Shown to speakers. RSVPs are collected on the speaker ticket.',
             }),
             defineField({
               name: 'description',
@@ -1353,6 +1356,8 @@ export default defineType({
                       title: 'Meeting Point Map URL',
                       type: 'url',
                       validation: (Rule) =>
+                        // Absolute http(s) only, not `safeLinkRule`: a map link must work from
+                        // an email, so site paths are out.
                         Rule.uri({ scheme: ['http', 'https'] }),
                     }),
                     defineField({
