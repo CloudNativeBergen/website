@@ -493,10 +493,13 @@ export const SpotlightWideLogo: Story = {
   },
   play: async ({ canvasElement }) => {
     const words = within(canvasElement).getByText('Photo Wall')
-    const rail = words.closest('aside')!
+    const rail = words.closest('aside')!.getBoundingClientRect()
     await expect(words.getBoundingClientRect().right).toBeLessThanOrEqual(
-      rail.getBoundingClientRect().right + 0.5,
+      rail.right + 0.5,
     )
+    // The logo itself at most half the rail (240 of 480 px, at any scale).
+    const logo = words.previousElementSibling!.getBoundingClientRect()
+    await expect(logo.width).toBeLessThanOrEqual(rail.width / 2 + 0.5)
   },
 }
 

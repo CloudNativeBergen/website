@@ -324,6 +324,13 @@ describe('WallBoardView in Mosaic and Spotlight (§9, #1478)', () => {
       'line-clamp-1',
     )
     expect(within(flat).queryByText('Bo')).toBeNull()
+    // As rendered: no display utility next to a clamp, whichever way the
+    // className was assembled (it would undo the clamp outside Chromium).
+    for (const el of document.querySelectorAll('[class*="line-clamp-"]')) {
+      expect(el.className).not.toMatch(
+        /(^|\s)(block|inline|inline-block|flex|inline-flex|grid)(\s|$)/,
+      )
+    }
     // A tile of ordinary shape keeps its name, a 16:9 phone photo too.
     expect(within(regular).getByText('Ada')).toBeInTheDocument()
     cleanup()

@@ -398,7 +398,7 @@ export function ScreenShell({
               role="status"
               aria-label="Offline"
               title="Offline"
-              className="absolute top-9 right-10 z-50 size-4 rounded-full bg-red-500 shadow-lg ring-2 ring-red-500/30"
+              className="absolute top-9 right-10 z-50 size-4 rounded-full bg-red-500 shadow-lg ring-3 ring-black/70"
             />
           )}
 
