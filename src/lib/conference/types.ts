@@ -38,6 +38,8 @@ export interface ScheduleTrack {
   trackTitle: string
   trackDescription: string
   talks: Array<TrackTalk>
+  /** The sponsor who bought this track (a weak reference to a `sponsor`). */
+  sponsor?: { _ref: string } | null
 }
 export interface ConferenceSchedule {
   _id: string

@@ -53,6 +53,7 @@ function DroppableTrack({
   const [isEditing, setIsEditing] = useState(false)
   const [editTitle, setEditTitle] = useState(track.trackTitle)
   const [editDescription, setEditDescription] = useState(track.trackDescription)
+  const [editSponsor, setEditSponsor] = useState(track.sponsor?._ref ?? '')
   const [showServiceModal, setShowServiceModal] = useState(false)
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('')
   const [hoveredSwapTimeSlot, setHoveredSwapTimeSlot] = useState<string | null>(
@@ -60,7 +61,9 @@ function DroppableTrack({
   )
   // Live (official) view: renaming/removing the track are edits with no save
   // path (see ScheduleContext).
-  const { isReadOnly } = useScheduleContext()
+  const { isReadOnly, trackSponsorOptions, schedule } = useScheduleContext()
+  const daySponsored =
+    schedule?.tracks.some((dayTrack) => dayTrack.sponsor?._ref) ?? false
 
   const timeSlots = useMemo(
     () => generateTimeSlots(SCHEDULE_START, SCHEDULE_END, SLOT_INTERVAL),
@@ -94,9 +97,10 @@ function DroppableTrack({
       ...track,
       trackTitle: trimmedTitle,
       trackDescription: editDescription,
+      sponsor: editSponsor ? { _ref: editSponsor } : null,
     })
     setIsEditing(false)
-  }, [onUpdateTrack, track, editTitle, editDescription])
+  }, [onUpdateTrack, track, editTitle, editDescription, editSponsor])
 
   const handleCancelEdit = useCallback(() => {
     setEditTitle(track.trackTitle)
@@ -105,8 +109,9 @@ function DroppableTrack({
   }, [track.trackTitle, track.trackDescription])
 
   const handleStartEdit = useCallback(() => {
+    setEditSponsor(track.sponsor?._ref ?? '')
     setIsEditing(true)
-  }, [])
+  }, [track.sponsor?._ref])
 
   const handleEditTitle = useCallback((value: string) => {
     setEditTitle(value)
@@ -180,9 +185,13 @@ function DroppableTrack({
       <TrackHeader
         track={track}
         isReadOnly={isReadOnly}
+        reserveSponsorRow={daySponsored}
         isEditing={isEditing && !isReadOnly}
         editTitle={editTitle}
         editDescription={editDescription}
+        editSponsor={editSponsor}
+        sponsorOptions={trackSponsorOptions}
+        onEditSponsor={setEditSponsor}
         onEditTitle={handleEditTitle}
         onEditDescription={handleEditDescription}
         onSave={handleSaveEdit}

@@ -1,7 +1,14 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen, act, cleanup } from '@testing-library/react'
+import {
+  render,
+  screen,
+  act,
+  cleanup,
+  fireEvent,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ScheduleEditor } from '@/components/admin/schedule/ScheduleEditor'
 import { ConferenceSchedule, Conference } from '@/lib/conference/types'
@@ -330,5 +337,171 @@ describe('ScheduleEditor — live (read-only) mode', () => {
     expect(removeButtons().length).toBe(0)
 
     confirmSpy.mockRestore()
+  })
+})
+
+describe('ScheduleEditor — the track sponsor', () => {
+  const trackSponsorOptions = [
+    { _id: 'proact', name: 'Proact IT Norge AS', trackAddon: true },
+    { _id: 'sopra', name: 'Sopra Steria', trackAddon: true },
+    { _id: 'bekk', name: 'Bekk', trackAddon: false },
+  ]
+
+  const renderWith = (day: ConferenceSchedule) =>
+    render(
+      <ScheduleEditor
+        officialSchedules={[toEditorSchedule(officialDay)]}
+        draftSchedules={[toEditorSchedule(day)]}
+        conference={conference}
+        initialProposals={[proposal]}
+        trackSponsorOptions={trackSponsorOptions}
+      />,
+    )
+
+  const sponsored = (ref: string): ConferenceSchedule => ({
+    ...draftDay,
+    tracks: [{ ...draftDay.tracks[0], sponsor: { _ref: ref } }],
+  })
+
+  /** The track sponsor in the last save the editor sent. */
+  const savedSponsor = () =>
+    (saveMutateAsync.mock.calls.at(-1)?.[0] as ConferenceSchedule | undefined)
+      ?.tracks[0].sponsor
+
+  const editTrack = () =>
+    act(() => {
+      screen.getByRole('button', { name: 'Edit track' }).click()
+    })
+
+  /** The track header's own Save, not the editor's. */
+  const saveTrack = () =>
+    act(() => {
+      within(screen.getByPlaceholderText('Track title').parentElement!)
+        .getByRole('button', { name: 'Save' })
+        .click()
+    })
+
+  beforeEach(() => {
+    saveMutateAsync.mockImplementation(async (s: ConferenceSchedule) => ({
+      schedule: { ...s, _rev: 'rev-2' },
+    }))
+  })
+
+  it('sets a sponsor on the track and saves it with the day', async () => {
+    renderWith(draftDay)
+    editTrack()
+    fireEvent.change(screen.getByLabelText('Track sponsor'), {
+      target: { value: 'sopra' },
+    })
+    saveTrack()
+    await runAutosave()
+
+    expect(savedSponsor()).toEqual({ _ref: 'sopra' })
+    expect(screen.getByText('Sponsored by Sopra Steria')).toBeInTheDocument()
+  })
+
+  it('lists Track Sponsorship holders apart from the other sponsors', () => {
+    renderWith(draftDay)
+    editTrack()
+    const groups = screen
+      .getByLabelText('Track sponsor')
+      .querySelectorAll('optgroup')
+    expect(
+      [...groups].map((g) => [
+        g.label,
+        [...g.querySelectorAll('option')].map((o) => o.textContent),
+      ]),
+    ).toEqual([
+      ['Track Sponsorship', ['Proact IT Norge AS', 'Sopra Steria']],
+      ['Other sponsors', ['Bekk']],
+    ])
+  })
+
+  it('clears the sponsor', async () => {
+    renderWith(sponsored('proact'))
+    editTrack()
+    fireEvent.change(screen.getByLabelText('Track sponsor'), {
+      target: { value: '' },
+    })
+    saveTrack()
+    await runAutosave()
+
+    expect(saveMutateAsync).toHaveBeenCalledTimes(1)
+    expect(savedSponsor()).toBeNull()
+  })
+
+  it('keeps the sponsor when only the title is renamed', async () => {
+    renderWith(sponsored('proact'))
+    editTrack()
+    fireEvent.change(screen.getByPlaceholderText('Track title'), {
+      target: { value: 'Proact IT - Lillesalen' },
+    })
+    saveTrack()
+    await runAutosave()
+
+    expect(savedSponsor()).toEqual({ _ref: 'proact' })
+  })
+
+  it('forgets a cancelled sponsor choice when the track is edited again', async () => {
+    renderWith(sponsored('proact'))
+    editTrack()
+    fireEvent.change(screen.getByLabelText('Track sponsor'), {
+      target: { value: 'bekk' },
+    })
+    act(() => {
+      screen.getByRole('button', { name: 'Cancel' }).click()
+    })
+    editTrack()
+    expect(screen.getByLabelText('Track sponsor')).toHaveValue('proact')
+    fireEvent.change(screen.getByPlaceholderText('Track title'), {
+      target: { value: 'Renamed' },
+    })
+    saveTrack()
+    await runAutosave()
+
+    expect(savedSponsor()).toEqual({ _ref: 'proact' })
+  })
+
+  it('gives every header the sponsor row when one track has a sponsor, so the timelines stay level', () => {
+    renderWith({
+      ...draftDay,
+      tracks: [
+        { ...draftDay.tracks[0], sponsor: { _ref: 'proact' } },
+        { trackTitle: 'Workshop Room', trackDescription: '', talks: [] },
+      ],
+    })
+    const rows = document.querySelectorAll('[data-sponsor-row]')
+    expect([...rows].map((row) => row.textContent)).toEqual([
+      'Sponsored by Proact IT Norge AS',
+      '\u00a0',
+    ])
+  })
+
+  it('adds no sponsor row on a day without track sponsors', () => {
+    renderWith({
+      ...draftDay,
+      tracks: [
+        draftDay.tracks[0],
+        { trackTitle: 'Workshop Room', trackDescription: '', talks: [] },
+      ],
+    })
+    expect(screen.getByRole('heading', { name: 'Workshop Room' })).toBeVisible()
+    expect(document.querySelectorAll('[data-sponsor-row]')).toHaveLength(0)
+  })
+
+  it('keeps a sponsor who is no longer offered, and says so', async () => {
+    renderWith(sponsored('lost-deal'))
+    expect(
+      screen.getByText('Sponsored by a sponsor no longer shown publicly'),
+    ).toBeInTheDocument()
+    editTrack()
+    expect(screen.getByLabelText('Track sponsor')).toHaveValue('lost-deal')
+    fireEvent.change(screen.getByPlaceholderText('Track title'), {
+      target: { value: 'Renamed' },
+    })
+    saveTrack()
+    await runAutosave()
+
+    expect(savedSponsor()).toEqual({ _ref: 'lost-deal' })
   })
 })

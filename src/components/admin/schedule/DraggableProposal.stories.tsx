@@ -322,6 +322,7 @@ export const FilteredOut: Story = {
           schedule: null,
           otherScheduledProposalIds: new Set(),
           isReadOnly: false,
+          trackSponsorOptions: [],
           dispatch: () => {},
           isFilteredOut: () => true,
         }}
