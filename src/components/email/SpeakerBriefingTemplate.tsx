@@ -8,6 +8,8 @@ import {
   SPEAKER_BRIEFING_SECTIONS,
   type SpeakerBriefing,
   type SpeakerBriefingSection,
+  type SpeakerBriefingTalk,
+  type SpeakerBriefingTodo,
 } from '@/lib/speaker/briefing'
 import { formatConferenceDateLong, formatSessionInstant } from '@/lib/time'
 
@@ -26,6 +28,24 @@ export interface SpeakerBriefingTemplateProps {
 /** Map links are organizer input: only http(s) becomes an href. */
 const httpUrl = (url?: string) =>
   url && /^https?:\/\//i.test(url) ? url : undefined
+
+const TODO_LABELS: Record<SpeakerBriefingTodo['kind'], string> = {
+  'confirm-talk': 'Confirm your talk',
+  'upload-slides': 'Upload your slides',
+  'claim-ticket': 'Claim your speaker ticket',
+  'co-speaker-invite-pending': 'Your co-speaker has not accepted yet',
+  'travel-support': 'Finish your travel support request',
+}
+
+/** "Your talk", "Your workshop", or plural for several of a kind. */
+function talksHeading(talks: SpeakerBriefingTalk[]): string {
+  const workshops = talks.filter((t) => t.isWorkshop).length
+  if (workshops === talks.length) {
+    return workshops > 1 ? 'Your workshops' : 'Your workshop'
+  }
+  if (workshops === 0) return talks.length > 1 ? 'Your talks' : 'Your talk'
+  return 'Your talks and workshops'
+}
 
 const sectionStyle: React.CSSProperties = { marginBottom: '24px' }
 
@@ -94,11 +114,15 @@ export function SpeakerBriefingTemplate({
         'Still to do',
         <ul style={{ margin: 0, paddingLeft: '20px', color: '#334155' }}>
           {b.todos.map((t) => (
-            <li key={`${t.kind}-${t.proposalId}`}>
-              <a href={`${origin}/cfp/proposal/${t.proposalId}`}>
-                {t.kind === 'confirm-talk'
-                  ? 'Confirm your talk'
-                  : 'Upload your slides'}
+            <li key={`${t.kind}-${t.proposalId ?? ''}`}>
+              <a
+                href={
+                  t.kind === 'travel-support' || !t.proposalId
+                    ? `${origin}/cfp/expense`
+                    : `${origin}/cfp/proposal/${t.proposalId}`
+                }
+              >
+                {TODO_LABELS[t.kind]}
               </a>
               : {t.title}
             </li>
@@ -108,7 +132,7 @@ export function SpeakerBriefingTemplate({
     talks:
       b.talks &&
       section(
-        b.talks.length > 1 ? 'Your talks' : 'Your talk',
+        talksHeading(b.talks),
         b.talks.map((t) => (
           <EmailText key={t.proposalId}>
             <strong>{t.title}</strong>
@@ -121,6 +145,15 @@ export function SpeakerBriefingTemplate({
               </>
             )}
             {t.trackTitle && <> · {t.trackTitle}</>}
+            {t.isWorkshop && (
+              <>
+                {' '}
+                ·{' '}
+                <a href={`${origin}/cfp/workshop/${t.proposalId}`}>
+                  participant list
+                </a>
+              </>
+            )}
           </EmailText>
         )),
       ),

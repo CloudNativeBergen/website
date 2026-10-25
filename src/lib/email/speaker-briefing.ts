@@ -16,6 +16,13 @@ import { Status, type ProposalExisting } from '@/lib/proposal/types'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
 import { getSpeakerBriefing } from '@/lib/speaker/briefing'
+import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
+import {
+  fetchRedeemedSpeakerEmails,
+  joinSpeakerTicketStatus,
+  type SpeakerTicketState,
+} from '@/lib/tickets/speakerStatus'
+import type { TravelSupportStatus } from '@/lib/travel-support/types'
 import { createNotifications } from '@/lib/notification/sanity'
 import { formatConferenceDateLong } from '@/lib/time'
 import {
@@ -53,6 +60,8 @@ export interface BriefingSpeaker {
   email: string
   /** THIS conference's proposals only. */
   proposals: ProposalExisting[]
+  ticketState?: SpeakerTicketState
+  travelSupport?: { status: TravelSupportStatus }
 }
 
 /** The marker key, on the shared `scheduledReminderLog` type. */
@@ -92,12 +101,37 @@ export function briefingLogId(
 }
 
 /**
+ * Ticket states for the whole programme: one provider fetch for the batch.
+ * Any failure leaves them unknown, so no `claim-ticket` to-do is shown.
+ */
+async function loadTicketStates(
+  conference: Conference,
+): Promise<Map<string, SpeakerTicketState>> {
+  try {
+    const inputs = await fetchSpeakerTicketInputs(conference._id)
+    if (!inputs) return new Map()
+    const redeemed = await fetchRedeemedSpeakerEmails(conference)
+    return new Map(
+      joinSpeakerTicketStatus(inputs, redeemed, conference).map((s) => [
+        s.speakerId,
+        s.state,
+      ]),
+    )
+  } catch (error) {
+    console.error('Speaker briefing: ticket states unavailable', error)
+    return new Map()
+  }
+}
+
+/**
  * The conference's confirmed speakers with an address, each with their
- * accepted and confirmed proposals of THIS conference (to-dos need both).
+ * accepted and confirmed proposals of THIS conference (to-dos need both),
+ * ticket state and travel support request.
  */
 export async function loadBriefingSpeakers(
-  conferenceId: string,
+  conference: Conference,
 ): Promise<BriefingSpeaker[]> {
+  const conferenceId = conference._id
   const { proposals, proposalsError } = await getProposals({
     conferenceId,
     returnAll: true,
@@ -123,6 +157,21 @@ export async function loadBriefingSpeakers(
       bySpeaker.set(s._id, entry)
     }
   }
+  const [tickets, travel] = await Promise.all([
+    loadTicketStates(conference),
+    clientReadUncached.fetch<
+      { speakerId?: string; status: TravelSupportStatus }[]
+    >(
+      `*[_type == "travelSupport" && conference._ref == $conferenceId]{ "speakerId": speaker._ref, status }`,
+      { conferenceId },
+      { cache: 'no-store' },
+    ),
+  ])
+  for (const t of travel ?? []) {
+    const s = t.speakerId && bySpeaker.get(t.speakerId)
+    if (s) s.travelSupport = { status: t.status }
+  }
+  for (const s of bySpeaker.values()) s.ticketState = tickets.get(s._id)
   return [...bySpeaker.values()]
     .filter(
       (s) => s.email && s.proposals.some((p) => p.status === Status.confirmed),
@@ -135,13 +184,17 @@ export const briefingSubject = (conference: BriefingConference) =>
 
 export async function renderSpeakerBriefing(
   conference: BriefingConference,
-  speaker: Pick<BriefingSpeaker, 'name' | 'proposals'>,
+  speaker: Pick<BriefingSpeaker, 'name' | 'proposals'> &
+    Partial<Pick<BriefingSpeaker, '_id' | 'ticketState' | 'travelSupport'>>,
 ): Promise<string> {
   return render(
     React.createElement(SpeakerBriefingTemplate, {
       speakerName: speaker.name,
       briefing: getSpeakerBriefing(conference, {
         proposals: speaker.proposals,
+        speakerId: speaker._id,
+        ticketState: speaker.ticketState,
+        travelSupport: speaker.travelSupport,
       }),
       eventName: conference.title,
       eventLocation: [conference.city, conference.country]
@@ -196,7 +249,7 @@ async function sendOne(
 export async function sendSpeakerBriefingTest(
   conference: BriefingConference,
   to: string,
-  speaker: Pick<BriefingSpeaker, 'name' | 'proposals'>,
+  speaker: Parameters<typeof renderSpeakerBriefing>[1],
 ): Promise<void> {
   await sendOne(
     conference,

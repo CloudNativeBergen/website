@@ -96,7 +96,7 @@ beforeEach(() => {
 describe('speaker briefing procedures', () => {
   it('sends to the domain conference speakers', async () => {
     await caller().sendBriefing()
-    expect(b.load).toHaveBeenCalledWith('conf-A')
+    expect(b.load).toHaveBeenCalledWith(CONFERENCE)
     expect(b.send).toHaveBeenCalledWith(CONFERENCE, [SPEAKER])
   })
 

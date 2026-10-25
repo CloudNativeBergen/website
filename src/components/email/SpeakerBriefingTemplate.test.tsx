@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render } from '@react-email/render'
 import { SpeakerBriefingTemplate } from './SpeakerBriefingTemplate'
+import { Format } from '@/lib/proposal/types'
 
 const base = {
   speakerName: 'Ada Lovelace',
@@ -54,6 +55,8 @@ describe('SpeakerBriefingTemplate', () => {
               startTime: '10:00',
               endTime: '10:40',
               trackTitle: 'Main stage',
+              format: Format.presentation_20,
+              isWorkshop: false,
             },
           ],
           todos: [{ kind: 'upload-slides', proposalId: 'p1', title: 'Edge' }],
@@ -109,5 +112,32 @@ describe('SpeakerBriefingTemplate', () => {
     expect(html.indexOf('Good to know')).toBeLessThan(
       html.indexOf('Venue and travel'),
     )
+  })
+
+  it('says "Your workshop" with a participant list, and renders new to-dos', async () => {
+    const html = await render(
+      <SpeakerBriefingTemplate
+        {...base}
+        briefing={{
+          talks: [
+            {
+              proposalId: 'w1',
+              title: 'Hands-on eBPF',
+              format: Format.workshop_120,
+              isWorkshop: true,
+            },
+          ],
+          todos: [
+            { kind: 'claim-ticket', proposalId: 'w1', title: 'Hands-on eBPF' },
+            { kind: 'travel-support', title: 'Travel support request' },
+          ],
+        }}
+      />,
+    )
+    expect(html).toContain('Your workshop')
+    expect(html).not.toContain('Your talk')
+    expect(html).toContain('https://a.example.com/cfp/workshop/w1')
+    expect(html).toContain('Claim your speaker ticket')
+    expect(html).toContain('https://a.example.com/cfp/expense')
   })
 })

@@ -610,7 +610,7 @@ export const conferenceRouter = router({
    */
   briefingSpeakers: adminProcedure.query(async () => {
     const conference = await briefingConference()
-    const speakers = await loadBriefingSpeakers(conference._id)
+    const speakers = await loadBriefingSpeakers(conference)
     const version = briefingVersion(conference)
     const history = await getBriefingSendHistory(
       conference._id,
@@ -640,7 +640,7 @@ export const conferenceRouter = router({
     .query(async ({ input }) => {
       const conference = await briefingConference()
       const speaker = input.speakerId
-        ? (await loadBriefingSpeakers(conference._id)).find(
+        ? (await loadBriefingSpeakers(conference)).find(
             (s) => s._id === input.speakerId,
           )
         : SAMPLE_BRIEFING_SPEAKER
@@ -662,7 +662,7 @@ export const conferenceRouter = router({
         message: 'Your account has no email address',
       })
     }
-    const [first] = await loadBriefingSpeakers(conference._id)
+    const [first] = await loadBriefingSpeakers(conference)
     await sendSpeakerBriefingTest(
       conference,
       to,
@@ -673,13 +673,13 @@ export const conferenceRouter = router({
 
   sendBriefing: adminProcedure.mutation(async () => {
     const conference = await briefingConference()
-    const speakers = await loadBriefingSpeakers(conference._id)
+    const speakers = await loadBriefingSpeakers(conference)
     return sendSpeakerBriefings(conference, speakers)
   }),
 
   briefingSendHistory: adminProcedure.query(async () => {
     const conference = await briefingConference()
-    const speakers = await loadBriefingSpeakers(conference._id)
+    const speakers = await loadBriefingSpeakers(conference)
     return getBriefingSendHistory(
       conference._id,
       speakers.map((s) => s._id),

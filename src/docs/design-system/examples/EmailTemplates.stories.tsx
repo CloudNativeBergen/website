@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { Format } from '@/lib/proposal/types'
 import { ProposalAcceptTemplate } from '@/components/email/ProposalAcceptTemplate'
 import { ProposalRejectTemplate } from '@/components/email/ProposalRejectTemplate'
 import { ProposalCancelTemplate } from '@/components/email/ProposalCancelTemplate'
@@ -250,6 +251,8 @@ export const EmailTemplates: Story = {
                     startTime: '10:00',
                     endTime: '10:40',
                     trackTitle: 'Main stage',
+                    format: Format.presentation_20,
+                    isWorkshop: false,
                   },
                 ],
                 todos: [
