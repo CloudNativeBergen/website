@@ -164,7 +164,9 @@ describe('wall-photo report', () => {
         {
           surface: 'wall-photo',
           items,
-          calibration: { model: 'test', latencyMs: 5, cost: 0.002 },
+          calibrations: [
+            { shape: 'caption', model: 'test', latencyMs: 5, cost: 0.002 },
+          ],
           results: [
             result(items[0]),
             result(items[1], 0.5),

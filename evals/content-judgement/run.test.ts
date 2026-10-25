@@ -318,4 +318,100 @@ describe('wall-photo runner integration', () => {
       unlinkSync(imagePath)
     }
   })
+
+  it('calibrates captioned and uncaptioned posts separately', async () => {
+    const { mkdirSync, unlinkSync } = await import('node:fs')
+    const sharp = (await import('sharp')).default
+    const schema = await import('./schema')
+    const originalLoadData = schema.loadData
+    const generator = `runner-shape-test-${Date.now()}`
+    const clean = {
+      abusive: false,
+      sexual: false,
+      spam: false,
+      personal_info: false,
+    }
+    const captioned = schema.wallPhotoSchema.parse({
+      id: 'wp-001',
+      caption: 'private synthetic fixture',
+      lang: 'en',
+      image: { kind: 'generated', generator },
+      labels: { caption: clean, photo: clean },
+      tags: ['benign'],
+    })
+    const uncaptioned = schema.wallPhotoSchema.parse({
+      id: 'wp-002',
+      image: { kind: 'generated', generator },
+      labels: { photo: clean },
+      tags: ['benign', 'no_caption'],
+    })
+    const cache = new URL('./.image-cache/', import.meta.url)
+    mkdirSync(cache, { recursive: true })
+    const imagePath = new URL(`${generator}.png`, cache)
+    await sharp({
+      create: { width: 800, height: 800, channels: 3, background: '#abcdef' },
+    })
+      .png()
+      .toFile(imagePath.pathname)
+    try {
+      vi.spyOn(schema, 'loadData').mockImplementation((surface) =>
+        surface === 'wall-photo'
+          ? [captioned, uncaptioned]
+          : originalLoadData(surface),
+      )
+      vi.stubEnv('OPENROUTER_API_KEY', 'test-key')
+      // Calibration with caption, calibration without, then one call per post.
+      // 900 clears the uncaptioned floor (300 + 500) but not the captioned one.
+      const tokens = [1000, 300, 1400, 900]
+      const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+        const { questions } = JSON.parse(String(options?.body))
+        return Response.json({
+          model: 'test',
+          usage: { input_tokens: tokens.shift(), cost: 0.01 },
+          answers: Object.fromEntries(
+            Object.keys(questions).map((key) => [
+              key,
+              { type: 'noul', noul: 0 },
+            ]),
+          ),
+        })
+      })
+      vi.stubGlobal('fetch', fetcher)
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const directory = mkdtempSync(join(tmpdir(), 'jev-photo-test-'))
+      directories.push(directory)
+      await main([
+        '--surface',
+        'wall-photo',
+        '--repeats',
+        '1',
+        '--concurrency',
+        '1',
+        '--out',
+        directory,
+      ])
+      const requests = fetcher.mock.calls.map(([, options]) =>
+        JSON.parse(String(options?.body)),
+      )
+      expect(
+        requests.map((request) => Object.keys(request.questions).length),
+      ).toEqual([8, 4, 8, 4])
+      const results = readFileSync(
+        join(directory, 'raw-wall-photo.jsonl'),
+        'utf8',
+      )
+        .trim()
+        .split('\n')
+        .map((line: string) => JSON.parse(line))
+      expect(
+        results.map((result) => [result.id, result.error ?? 'accepted']),
+      ).toEqual([
+        ['wp-001', 'image_not_received'],
+        ['wp-002', 'accepted'],
+      ])
+    } finally {
+      unlinkSync(imagePath)
+    }
+  })
 })

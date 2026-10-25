@@ -29,13 +29,14 @@ export interface SurfaceRun {
   surface: Surface
   items: DataItem[]
   results: RawResult[]
-  calibration?: {
+  calibrations?: {
+    shape: 'caption' | 'no_caption'
     latencyMs: number
     cost: number | null
     model: string
     inputTokens?: number
     minimumInputTokens?: number
-  }
+  }[]
 }
 const thresholds = [0.5, 0.7, 0.9]
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`
@@ -454,9 +455,7 @@ export function buildReport(
   const results = runs.flatMap((run) => run.results)
   const failed = results.filter((result) => result.answers === null)
   const errors = [...new Set(failed.map((result) => result.error))]
-  const calibrations = runs.flatMap((run) =>
-    run.calibration ? [run.calibration] : [],
-  )
+  const calibrations = runs.flatMap((run) => run.calibrations ?? [])
   const calls = [...results, ...calibrations]
   return (
     [
@@ -477,7 +476,7 @@ export function buildReport(
               .filter((calibration) => calibration.inputTokens !== undefined)
               .map(
                 (calibration) =>
-                  `Wall-photo calibration input tokens T0: ${calibration.inputTokens}; minimum accepted image input tokens: ${calibration.minimumInputTokens}.`,
+                  `Wall-photo calibration (${calibration.shape}) input tokens T0: ${calibration.inputTokens}; minimum accepted image input tokens: ${calibration.minimumInputTokens}.`,
               ),
           ]
         : []),

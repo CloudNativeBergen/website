@@ -138,27 +138,40 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   for (const run of runs) {
     const rawPath = resolve(options.out, `raw-${run.surface}.jsonl`)
     writeFileSync(rawPath, '')
-    let minimumInputTokens: number | undefined
+    // One text-only call per request shape: a caption adds four questions,
+    // so captioned and uncaptioned posts need their own baseline.
+    const minimumInputTokens = new Map<boolean, number>()
     if (run.surface === 'wall-photo') {
-      const start = performance.now()
-      const response = await requestDecision(
-        run.surface,
-        buildRequest(run.surface, run.items[0], options.model),
-        apiKey,
-      )
-      run.calibration = {
-        model: response.model,
-        latencyMs: performance.now() - start,
-        cost: response.usage.cost ?? null,
-        inputTokens: response.usage.input_tokens,
-        minimumInputTokens:
-          response.usage.input_tokens === undefined
-            ? undefined
-            : response.usage.input_tokens + IMAGE_TOKEN_MARGIN,
+      run.calibrations = []
+      for (const captioned of [true, false]) {
+        const item = run.items.find(
+          (candidate) =>
+            'image' in candidate &&
+            (candidate.caption !== undefined) === captioned,
+        )
+        if (item === undefined) continue
+        const start = performance.now()
+        const response = await requestDecision(
+          run.surface,
+          buildRequest(run.surface, item, options.model),
+          apiKey,
+        )
+        const inputTokens = response.usage.input_tokens
+        run.calibrations.push({
+          shape: captioned ? 'caption' : 'no_caption',
+          model: response.model,
+          latencyMs: performance.now() - start,
+          cost: response.usage.cost ?? null,
+          inputTokens,
+          minimumInputTokens:
+            inputTokens === undefined
+              ? undefined
+              : inputTokens + IMAGE_TOKEN_MARGIN,
+        })
+        if (inputTokens === undefined)
+          throw new ItemError('calibration_missing_input_tokens')
+        minimumInputTokens.set(captioned, inputTokens + IMAGE_TOKEN_MARGIN)
       }
-      if (response.usage.input_tokens === undefined)
-        throw new ItemError('calibration_missing_input_tokens')
-      minimumInputTokens = response.usage.input_tokens + IMAGE_TOKEN_MARGIN
     }
     const images = new Map<string, ReturnType<typeof prepareImage>>()
     const jobs = run.items.flatMap((item) =>
@@ -192,10 +205,14 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
                 buildRequest(run.surface, item, options.model, imageBase64),
                 apiKey,
               )
+              const minimum =
+                'image' in item
+                  ? minimumInputTokens.get(item.caption !== undefined)
+                  : undefined
               if (
-                minimumInputTokens !== undefined &&
+                minimum !== undefined &&
                 (response.usage.input_tokens === undefined ||
-                  response.usage.input_tokens < minimumInputTokens)
+                  response.usage.input_tokens < minimum)
               )
                 throw new ItemError('image_not_received')
               result = {
