@@ -277,3 +277,42 @@ export const WithdrawnWithoutReason: Story = {
     },
   },
 }
+
+export const WithAttachments: Story = {
+  args: {
+    proposal: createMockProposal({
+      status: Status.confirmed,
+      title: 'Advanced Service Mesh Deep Dive',
+      attachments: [
+        {
+          _type: 'fileAttachment',
+          _key: 'file-1',
+          file: {
+            _type: 'file',
+            asset: { _ref: 'file-asset-1', _type: 'reference' },
+          },
+          attachmentType: 'slides',
+          title: 'Presentation Slides',
+          filename: 'service-mesh-deep-dive.pdf',
+          uploadedAt: '2025-11-01T10:00:00Z',
+        },
+        {
+          _type: 'urlAttachment',
+          _key: 'url-1',
+          url: 'https://github.com/example/demo-mesh',
+          attachmentType: 'resource',
+          title: 'Demo Repository',
+          uploadedAt: '2025-11-02T14:00:00Z',
+        },
+      ],
+    }),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A proposal with attachments displayed in the admin detail view with deletion buttons enabled.',
+      },
+    },
+  },
+}

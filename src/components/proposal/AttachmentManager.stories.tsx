@@ -100,3 +100,14 @@ export const ReadOnly: Story = {
     readonly: true,
   },
 }
+
+export const ReadOnlyWithDelete: Story = {
+  args: {
+    proposalId: 'proposal-1',
+    attachments: [mockFileAttachment, mockUrlAttachment],
+    onAttachmentsChange: fn(),
+    onDeleteAttachment: fn(),
+    readonly: true,
+    allowDelete: true,
+  },
+}
