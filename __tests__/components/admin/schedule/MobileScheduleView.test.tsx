@@ -449,6 +449,36 @@ describe('MobileScheduleView', () => {
       )
     })
 
+    it('forgets a cancelled sponsor choice when the track is edited again', () => {
+      const { dispatch } = setup({
+        trackSponsorOptions,
+        schedules: [sponsoredSchedule('proact')],
+      })
+      let sheet = openEdit()
+      fireEvent.change(within(sheet).getByLabelText('Track sponsor'), {
+        target: { value: 'sopra' },
+      })
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Cancel' }))
+      sheet = screen.getByRole('dialog')
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Edit track' }))
+      sheet = screen.getByRole('dialog')
+      expect(within(sheet).getByLabelText('Track sponsor')).toHaveValue(
+        'proact',
+      )
+      fireEvent.change(within(sheet).getByLabelText('Track name'), {
+        target: { value: 'Renamed' },
+      })
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Save' }))
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          track: expect.objectContaining({
+            trackTitle: 'Renamed',
+            sponsor: { _ref: 'proact' },
+          }),
+        }),
+      )
+    })
+
     it('clears the sponsor', () => {
       const { dispatch } = setup({
         trackSponsorOptions,

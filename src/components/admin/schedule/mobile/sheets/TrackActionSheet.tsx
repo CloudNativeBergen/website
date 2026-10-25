@@ -40,6 +40,15 @@ export function TrackActionSheet({
   const action =
     'inline-flex min-h-[44px] w-full items-center justify-start gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
 
+  // Each edit starts from the track: a cancelled edit must not ride along
+  // with the next one.
+  const startEdit = () => {
+    setTitle(track.trackTitle ?? '')
+    setDescription(track.trackDescription ?? '')
+    setSponsor(track.sponsor?._ref ?? '')
+    setMode('rename')
+  }
+
   if (mode === 'rename') {
     const save = () => {
       if (!title.trim()) return
@@ -155,11 +164,7 @@ export function TrackActionSheet({
   return (
     <BottomSheet title={name} onClose={onClose}>
       <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => setMode('rename')}
-          className={action}
-        >
+        <button type="button" onClick={startEdit} className={action}>
           <PencilIcon className="h-5 w-5" />
           Edit track
         </button>
