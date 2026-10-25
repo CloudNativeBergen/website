@@ -12,6 +12,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { getAuthSession } from '@/lib/auth'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
 import { EditOrganizationAnalyticsCard } from '@/components/admin/EditOrganizationAnalyticsCard'
+import { ContentJudgementSettings } from '@/components/admin/content-judgement'
 import { ThemeSwatchRow } from '@/components/admin/ThemeEditor'
 import { DomainVerificationCard } from '@/components/admin/DomainVerificationCard'
 import { listConferenceDomainViews } from '@/lib/domain-verification'
@@ -65,6 +66,7 @@ import {
   EyeSlashIcon,
   ChartBarIcon,
   ShieldCheckIcon,
+  ScaleIcon,
 } from '@heroicons/react/24/outline'
 
 /** Group id → group metadata, so tier-1 subsections stay single-sourced. */
@@ -882,6 +884,18 @@ export default async function AdminSettings() {
                 type="array"
               />
             </InfoCard>
+
+            {/* Organization-wide, like Analytics: one switch for every
+                edition (Content judgement spec §5). */}
+            {organization ? (
+              <InfoCard title="Content judgement" icon={ScaleIcon}>
+                <ContentJudgementSettings
+                  enabled={organization.contentJudgement?.enabled === true}
+                  changedAt={organization.contentJudgement?.changedAt}
+                  changedByName={organization.contentJudgement?.changedByName}
+                />
+              </InfoCard>
+            ) : null}
           </SettingsGroupSection>
         </div>
       </section>
