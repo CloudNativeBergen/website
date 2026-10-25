@@ -442,6 +442,26 @@ describe('ScheduleEditor — the track sponsor', () => {
     expect(savedSponsor()).toEqual({ _ref: 'proact' })
   })
 
+  it('forgets a cancelled sponsor choice when the track is edited again', async () => {
+    renderWith(sponsored('proact'))
+    editTrack()
+    fireEvent.change(screen.getByLabelText('Track sponsor'), {
+      target: { value: 'bekk' },
+    })
+    act(() => {
+      screen.getByRole('button', { name: 'Cancel' }).click()
+    })
+    editTrack()
+    expect(screen.getByLabelText('Track sponsor')).toHaveValue('proact')
+    fireEvent.change(screen.getByPlaceholderText('Track title'), {
+      target: { value: 'Renamed' },
+    })
+    saveTrack()
+    await runAutosave()
+
+    expect(savedSponsor()).toEqual({ _ref: 'proact' })
+  })
+
   it('keeps a sponsor who is no longer offered, and says so', async () => {
     renderWith(sponsored('lost-deal'))
     expect(
