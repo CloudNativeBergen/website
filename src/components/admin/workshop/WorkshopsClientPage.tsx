@@ -17,6 +17,7 @@ import {
   EditCapacityModal,
   AnnounceModal,
 } from '@/components/admin/workshop'
+import { isCanceledWorkshop } from '@/lib/workshop/listed'
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
 import { SponsorEarlyAccessCard } from './SponsorEarlyAccessCard'
@@ -117,7 +118,7 @@ function WorkshopsClientPageFor({
   const queryClient = useQueryClient()
   const { showNotification } = useNotification()
   const signupDialog = useDialog<
-    WorkshopRef & { status: WorkshopSignupStatus }
+    WorkshopRef & { status: WorkshopSignupStatus; canceled: boolean }
   >()
   const addDialog = useDialog<WorkshopRef>()
   const capacityDialog = useDialog<
@@ -497,6 +498,7 @@ function WorkshopsClientPageFor({
                   workshopId: workshop._id,
                   workshopTitle: workshop.title,
                 }
+                const canceled = isCanceledWorkshop(workshop)
 
                 return (
                   <WorkshopCard
@@ -508,12 +510,14 @@ function WorkshopsClientPageFor({
                     onViewConfirmed={() =>
                       signupDialog.open({
                         ...workshopRef,
+                        canceled,
                         status: WorkshopSignupStatus.CONFIRMED,
                       })
                     }
                     onViewWaitlist={() =>
                       signupDialog.open({
                         ...workshopRef,
+                        canceled,
                         status: WorkshopSignupStatus.WAITLIST,
                       })
                     }
@@ -608,6 +612,7 @@ function WorkshopsClientPageFor({
         retrying={workshopSignups.isFetching}
         onRetry={() => void workshopSignups.refetch()}
         onConfirmSignup={signupActions.confirm}
+        canceled={signupDialog.about?.canceled}
         fullRefusal={signupActions.full}
         onConfirmBeyondCapacity={signupActions.confirmBeyondCapacity}
         onDismissFullRefusal={signupActions.dismissFull}
