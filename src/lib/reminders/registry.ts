@@ -163,7 +163,7 @@ const travelReminder: Reminder = {
 }
 
 /**
- * (d) logistics — a warm venue/arrival/AV one-liner to every confirmed speaker
+ * (d) logistics — a warm pointer to the speaker dashboard for every confirmed speaker
  * at T-2d. Single-shot (once per conference).
  */
 const logistics: Reminder = {
@@ -186,8 +186,8 @@ const logistics: Reminder = {
     if (!talk) return null
     return {
       title: `See you soon at ${confName(conference.title)}!`,
-      message: `${confName(conference.title)} is almost here. Check the venue and plan your arrival, and when you get there drop by the speaker room so we can set up your AV. The full schedule is on the program page.`,
-      link: '/program',
+      message: `${confName(conference.title)} is almost here. You'll find everything you need on your speaker dashboard: your talk times, the venue, check-in and the speaker dinner.`,
+      link: '/cfp/list',
     }
   },
 }
