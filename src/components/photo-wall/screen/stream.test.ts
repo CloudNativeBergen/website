@@ -600,3 +600,59 @@ describe('round-4 adversarial findings', () => {
     for (const key of waitingBefore) expect(seenFeatured).toContain(key)
   })
 })
+
+describe('round-5 adversarial findings', () => {
+  it('Spotlight: after two quick arrivals, Up next is exactly the next four big posts, with no repeat', () => {
+    let s = started('spotlight', 12)
+    s = run(s, T0, T0 + 11 * SWAP_EVERY_MS)
+    expect(featuredId(s)).toBe('wallPost-1')
+    let now = T0 + 11 * SWAP_EVERY_MS
+    s = loadAll(poll(s, posts(13), now + 500), now + 500) // F
+    s = run(s, now + 500, now + SWAP_EVERY_MS)
+    now += SWAP_EVERY_MS
+    expect(featuredId(s)).toBe('wallPost-13')
+    s = loadAll(poll(s, posts(14), now + 500), now + 500) // W
+    const promised = ids(upNext(s))
+    expect(promised).toHaveLength(4)
+    const actual: string[] = []
+    for (let turn = 1; turn <= 4; turn++) {
+      s = run(s, now, now + SWAP_EVERY_MS)
+      now += SWAP_EVERY_MS
+      actual.push(featuredId(s)!)
+    }
+    expect(actual).toEqual(promised)
+    expect(actual).not.toContain('wallPost-13')
+  })
+
+  it('Spotlight: with arrivals now and then, Up next always names the next four turns', () => {
+    let s = started('spotlight', 20)
+    let now = T0
+    let newest = 20
+    for (let step = 0; step < 40; step++) {
+      if (step % 5 === 2) {
+        newest += 1
+        s = loadAll(poll(s, posts(newest), now + 100), now + 100)
+      }
+      const promised = ids(upNext(s))
+      // The next four turns, with nothing approved meanwhile.
+      let t = s
+      let at = now
+      const actual: string[] = []
+      for (let turn = 0; turn < promised.length; turn++) {
+        t = run(t, at, at + SWAP_EVERY_MS)
+        at += SWAP_EVERY_MS
+        actual.push(featuredId(t)!)
+      }
+      expect(actual).toEqual(promised)
+      s = run(s, now, now + SWAP_EVERY_MS)
+      now += SWAP_EVERY_MS
+    }
+  })
+
+  it('Mosaic never shows more than 40 tiles', () => {
+    let s = started('mosaic', 60)
+    s = loadAll(poll(s, posts(61), T0 + 1_000), T0 + 1_000)
+    s = run(s, T0 + 1_000, T0 + 20 * SWAP_EVERY_MS)
+    expect(shownPosts(s)).toHaveLength(MOSAIC_TILES)
+  })
+})
