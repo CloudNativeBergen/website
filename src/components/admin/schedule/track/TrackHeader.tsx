@@ -6,6 +6,7 @@ import type { TrackSponsorOption } from '@/lib/schedule/types'
 import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { calculateTalkContentMinutes } from '@/lib/schedule/geometry'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { TrackSponsorSelect } from './TrackSponsorSelect'
 
 export const TrackHeader = ({
   track,
@@ -48,11 +49,6 @@ export const TrackHeader = ({
     ? (sponsorOptions.find((option) => option._id === sponsorRef)?.name ??
       'a sponsor no longer shown publicly')
     : null
-  const trackSponsors = sponsorOptions.filter((option) => option.trackAddon)
-  const otherSponsors = sponsorOptions.filter((option) => !option.trackAddon)
-  const editingUnlisted =
-    editSponsor !== '' &&
-    !sponsorOptions.some((option) => option._id === editSponsor)
 
   // Removing a track un-schedules its real talks (they return to the unassigned
   // list) but permanently DELETES its service sessions — mirror the mobile
@@ -89,36 +85,12 @@ export const TrackHeader = ({
           />
           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
             Track sponsor
-            <select
+            <TrackSponsorSelect
               value={editSponsor}
-              onChange={(e) => onEditSponsor(e.target.value)}
+              options={sponsorOptions}
+              onChange={onEditSponsor}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-normal focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">No track sponsor (thank every sponsor)</option>
-              {editingUnlisted && (
-                <option value={editSponsor}>
-                  A sponsor no longer shown publicly
-                </option>
-              )}
-              {trackSponsors.length > 0 && (
-                <optgroup label="Track Sponsorship">
-                  {trackSponsors.map((option) => (
-                    <option key={option._id} value={option._id}>
-                      {option.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {otherSponsors.length > 0 && (
-                <optgroup label="Other sponsors">
-                  {otherSponsors.map((option) => (
-                    <option key={option._id} value={option._id}>
-                      {option.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+            />
           </label>
           <div className="flex gap-2">
             <button

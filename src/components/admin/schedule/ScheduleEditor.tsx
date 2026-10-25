@@ -933,6 +933,7 @@ export function ScheduleEditor({
           isDraftMode={isDraftMode}
           onToggleDraftMode={handleToggleDraftMode}
           onPromote={handlePromote}
+          trackSponsorOptions={trackSponsorOptions}
         />
         {showAddTrackModal && (
           <AddTrackModal
