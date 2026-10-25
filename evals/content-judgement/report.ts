@@ -6,7 +6,7 @@ import {
   photoAdviceMetrics,
   stability,
 } from './metrics'
-import { QUESTION_SET_VERSION } from './questions'
+import { SURFACE_QUESTION_SET } from './questions'
 import {
   categories,
   languages,
@@ -68,7 +68,11 @@ interface ModerationScore {
   probabilities: Record<ModerationKey, number>
   repeats: ModerationResponse['answers'][]
 }
-function moderationReport(run: SurfaceRun, repeats: number): string {
+function moderationReport(
+  run: SurfaceRun,
+  repeats: number,
+  heldOut = false,
+): string {
   const scores: ModerationScore[] = []
   for (const item of run.items) {
     if (!('labels' in item) || !('text' in item)) continue
@@ -118,6 +122,8 @@ function moderationReport(run: SurfaceRun, repeats: number): string {
           'FP',
           'FN',
           'TN',
+          'FPR',
+          'Negatives',
           'Evasion recall (n positives)',
           'harsh_fair FPR (n)',
           'borderline FPR (n)',
@@ -140,6 +146,8 @@ function moderationReport(run: SurfaceRun, repeats: number): string {
             metrics.fp,
             metrics.fn,
             metrics.tn,
+            percent(metrics.falsePositiveRate),
+            metrics.fp + metrics.tn,
             `${positives.length ? percent(binaryMetrics(positives.map(sample), threshold).recall) : 'N/A'} (${positives.length})`,
             fpr('harsh_fair'),
             fpr('borderline'),
@@ -192,7 +200,76 @@ function moderationReport(run: SurfaceRun, repeats: number): string {
       `Repeat stability at 0.5: ${scores.length ? percent(stability(repeatAnswers)) : 'N/A'} (${scores.length} items).`,
     )
   }
+  if (heldOut) lines.push(gateRows(run, scores, repeats))
   return lines.join('\n\n')
+}
+
+/**
+ * Held-out runs only: one gate-file row per question at the enforcement
+ * threshold, UNROUNDED, ready for src/lib/content-judgement/gates.json
+ * (4 false positives in 399 negatives is 1.0025%, which fails a 1% bar that
+ * a rounded "1.0%" would appear to meet).
+ *
+ * Only for what production actually sends: feedback comments, judged ONCE
+ * per comment. A mean over repeats can hide single-call false positives, and
+ * a caption-only call is not the Wall Post request (caption and photo in one
+ * call, prefixed questions), so neither is evidence for a gate.
+ */
+function gateRows(
+  run: SurfaceRun,
+  scores: ModerationScore[],
+  repeats: number,
+): string {
+  const heading = '### Gate rows at 0.9 (unrounded)'
+  if (run.surface !== 'feedback-comment')
+    return `${heading}\n\nNone: ${run.surface} is not the request production sends, so it is not evidence for a gate.`
+  if (repeats !== 1)
+    return `${heading}\n\nNone: production judges each comment once, so gate rows need \`--repeats 1\`.`
+  // Production treats a failed call as no advice: a miss. Rates over the
+  // answered items alone would overstate recall.
+  const unanswered = run.items.length - scores.length
+  if (unanswered)
+    return `${heading}\n\nNone: ${unanswered} item(s) have no answer, and production treats a failed call as a miss. Rerun until every item is answered.`
+  const builds = [
+    ...new Set(
+      run.results
+        .filter((result) => result.answers !== null)
+        .map((result) => result.model),
+    ),
+  ]
+  const rows = moderationKeys.map((key) => {
+    const metrics = binaryMetrics(
+      scores.map((score) => ({
+        expected: score.item.labels[key],
+        probability: score.probabilities[key],
+      })),
+      0.9,
+    )
+    return {
+      question: key,
+      surface: 'feedbackComment',
+      build: builds.length === 1 ? builds[0] : 'MIXED: do not copy',
+      questionSet: SURFACE_QUESTION_SET[run.surface],
+      falsePositiveRate: metrics.falsePositiveRate,
+      recall: metrics.recall,
+      negatives: metrics.fp + metrics.tn,
+      date: new Date().toISOString().slice(0, 10),
+    }
+  })
+  const positives = moderationKeys
+    .map(
+      (key) =>
+        `${key} ${scores.filter((score) => score.item.labels[key]).length}`,
+    )
+    .join(', ')
+  return [
+    heading,
+    'Copy into gates.json only if every bar holds on these exact values.',
+    `Positives per question (the bar needs 50 each): ${positives}.`,
+    '```json',
+    JSON.stringify(rows, null, 2),
+    '```',
+  ].join('\n')
 }
 
 interface WallPhotoScore {
@@ -451,6 +528,7 @@ export function buildReport(
   runs: SurfaceRun[],
   model: string,
   repeats: number,
+  { heldOut = false }: { heldOut?: boolean } = {},
 ): string {
   const results = runs.flatMap((run) => run.results)
   const failed = results.filter((result) => result.answers === null)
@@ -460,7 +538,12 @@ export function buildReport(
   return (
     [
       '# Jev offline evaluation',
-      `Question set: ${QUESTION_SET_VERSION}. Requested model: ${JSON.stringify(model)}. Repeats: ${repeats}. Created: ${new Date().toISOString()}.`,
+      ...(heldOut
+        ? [
+            'Data: a private held-out set, read from a local path. Only these numbers are committed; the items and raw results stay outside the repository.',
+          ]
+        : []),
+      `Question sets: ${runs.map((run) => `${run.surface} ${SURFACE_QUESTION_SET[run.surface]}`).join(', ') || 'none'}. Requested model: ${JSON.stringify(model)}. Repeats: ${repeats}. Created: ${new Date().toISOString()}.`,
       `Calls: ${calls.length}; successful: ${calls.length - failed.length}; failed: ${failed.length}. Known returned cost: $${calls.reduce((total, result) => total + (result.cost ?? 0), 0).toFixed(6)}. Cost missing for ${calls.filter((result) => result.cost === null).length} calls; failed/retried requests may incur additional unreported charges.`,
       `End-to-end request latency (includes retries/backoff and failed calls): p50 ${percentile(
         calls.map((result) => result.latencyMs),
@@ -498,9 +581,11 @@ export function buildReport(
           ? conversationReport(run, repeats)
           : run.surface === 'wall-photo'
             ? wallPhotoReport(run, repeats)
-            : moderationReport(run, repeats),
+            : moderationReport(run, repeats, heldOut),
       ),
-      'These deliberately sampled public cases are not representative prevalence estimates or a guarantee of safe deployment. Use held-out examples and human review for deployment decisions.',
+      heldOut
+        ? 'A held-out set is evidence for exactly the model build and question sets above. Copy its numbers to src/lib/content-judgement/gates.json only for those.'
+        : 'These deliberately sampled public cases are not representative prevalence estimates or a guarantee of safe deployment. Use held-out examples and human review for deployment decisions.',
     ].join('\n\n') + '\n'
   )
 }

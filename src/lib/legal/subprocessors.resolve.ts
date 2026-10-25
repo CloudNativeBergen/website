@@ -7,6 +7,7 @@ import {
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { resolveSocialConnections } from '@/lib/social/provider'
 import { resolveWorkshopsForConference } from '@/lib/features/workshops'
+import { hasStoredJudgements } from '@/lib/content-judgement'
 import {
   conferenceProviderType,
   hasTicketingBinding,
@@ -73,6 +74,8 @@ async function resolveProcessingFacts(
       workshops: null,
       dedicatedEmailAccount: null,
       bufferPublishing: null,
+      contentJudgementEnabled: null,
+      storedJudgements: null,
     }
   }
 
@@ -134,6 +137,24 @@ async function resolveProcessingFacts(
     )
     .catch(() => null)
 
+  // Content judgement keeps OpenRouter disclosed while ANY Judgement is
+  // stored, even after the setting is turned off (spec §5). Asked whatever
+  // the organization read said: a stored Judgement confirms OpenRouter on
+  // its own. A failed read is unknown, which discloses (rule 1). No
+  // organization means no conference to have judged anything in.
+  const storedJudgements = orgRef
+    ? await hasStoredJudgements(orgRef)
+        // Anything but a boolean is an answer we can't read: unknown.
+        .then((stored) => (typeof stored === 'boolean' ? stored : null))
+        .catch((error: unknown) => {
+          console.error(
+            `[legal] stored Judgement read failed for ${orgRef}; disclosing OpenRouter as POSSIBLE`,
+            error,
+          )
+          return null
+        })
+    : false
+
   return {
     tenantKnown: true,
     organizationReadFailed,
@@ -161,6 +182,12 @@ async function resolveProcessingFacts(
     workshops,
     dedicatedEmailAccount,
     bufferPublishing,
+    // The SAME org read; a rejected read is already `organizationReadFailed`.
+    contentJudgementEnabled:
+      organization === 'failed'
+        ? null
+        : organization?.contentJudgement?.enabled === true,
+    storedJudgements,
   }
 }
 

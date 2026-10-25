@@ -228,3 +228,67 @@ describe('/privacy Buffer disclosure, two tenants', () => {
     }
   })
 })
+
+describe('/privacy OpenRouter disclosure, two tenants (Content judgement §13.1)', () => {
+  const ORG_ON = 'org-judging'
+  const ORG_OFF = 'org-not-judging'
+  const openrouter = (
+    d: Awaited<ReturnType<typeof resolveSubprocessorDisclosure>>,
+  ) => d.processors.find((p) => p.id === 'openrouter')
+
+  /** ORG_ON has the setting on; `stored` answers the stored-Judgement read. */
+  function judging(stored: (orgId: string) => Promise<boolean>) {
+    return (query: string, params?: { orgId?: string }) => {
+      if (query.includes('"contentJudgement"')) return stored(params!.orgId!)
+      if (query.includes('_type == "organization"') && params?.orgId)
+        return Promise.resolve({
+          _id: params.orgId,
+          name: params.orgId,
+          ...(params.orgId === ORG_ON
+            ? { contentJudgement: { enabled: true } }
+            : {}),
+        })
+      return sanity(query, params)
+    }
+  }
+
+  it('confirms OpenRouter for the organization that turned it on, never for the other', async () => {
+    fetchMock.mockImplementation(judging(async () => false))
+    const [on, off] = await Promise.all([
+      resolveSubprocessorDisclosure(conference('conf-on', ORG_ON)),
+      resolveSubprocessorDisclosure(conference('conf-off', ORG_OFF)),
+    ])
+    expect(openrouter(on)?.certainty).toBe('confirmed')
+    expect(openrouter(off)).toBeUndefined()
+  })
+
+  it('keeps OpenRouter for an organization that turned it off while a Judgement is stored', async () => {
+    fetchMock.mockImplementation(judging(async (orgId) => orgId === ORG_OFF))
+    const off = await resolveSubprocessorDisclosure(
+      conference('conf-off', ORG_OFF),
+    )
+    expect(openrouter(off)?.certainty).toBe('confirmed')
+  })
+
+  it('a failed stored-Judgement read discloses OpenRouter as POSSIBLE for the organization with it off', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    fetchMock.mockImplementation(
+      judging(() => Promise.reject(new Error('sanity down'))),
+    )
+    const off = await resolveSubprocessorDisclosure(
+      conference('conf-off', ORG_OFF),
+    )
+    expect(openrouter(off)?.certainty).toBe('possible')
+  })
+
+  it('an answer that is not a boolean is unknown, never a "no"', async () => {
+    fetchMock.mockImplementation(
+      // A count-shaped answer: `0` must not read as "nothing stored".
+      judging(async () => 0 as unknown as boolean),
+    )
+    const off = await resolveSubprocessorDisclosure(
+      conference('conf-off', ORG_OFF),
+    )
+    expect(openrouter(off)?.certainty).toBe('possible')
+  })
+})

@@ -1,5 +1,15 @@
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { z } from 'zod'
+import {
+  categories,
+  moderationKeys,
+  type Category,
+  type ModerationKey,
+} from '../../src/lib/content-judgement/questions'
+import { MAX_COMMENT_LENGTH } from '../../src/lib/feedback/comment'
+
+export { categories, moderationKeys, type Category, type ModerationKey }
 
 export const surfaces = [
   'wall-caption',
@@ -8,21 +18,6 @@ export const surfaces = [
   'wall-photo',
 ] as const
 export const languages = ['nb', 'nn', 'en', 'mixed'] as const
-export const categories = [
-  'talk_details',
-  'proposal_status',
-  'account_and_site',
-  'schedule',
-  'travel_and_visa',
-  'tickets',
-  'other',
-] as const
-export const moderationKeys = [
-  'abusive',
-  'sexual',
-  'spam',
-  'personal_info',
-] as const
 const moderationTags = [
   'benign',
   'abusive',
@@ -41,8 +36,6 @@ export type ModerationSurface = Exclude<
   'conversation-opening' | 'wall-photo'
 >
 export type Language = (typeof languages)[number]
-export type Category = (typeof categories)[number]
-export type ModerationKey = (typeof moderationKeys)[number]
 
 const uniqueTags = (tags: string[]) => new Set(tags).size === tags.length
 const labelsSchema = z.strictObject({
@@ -69,7 +62,8 @@ export const wallCaptionSchema = z.strictObject({
 export const feedbackCommentSchema = z.strictObject({
   ...moderationShared,
   id: z.string().regex(/^fc-\d{3}$/),
-  text: z.string().min(1).max(400),
+  // Production's own limit: a held-out set may hold any comment it accepts.
+  text: z.string().min(1).max(MAX_COMMENT_LENGTH),
   tags: z
     .array(z.enum([...moderationTags, 'harsh_fair']))
     .min(1)
@@ -148,11 +142,24 @@ export type ModerationItem = z.infer<typeof feedbackCommentSchema>
 export type ConversationItem = z.infer<typeof conversationOpeningSchema>
 export type DataItem = ModerationItem | ConversationItem | WallPhotoItem
 
-export function loadData(surface: ModerationSurface): ModerationItem[]
-export function loadData(surface: 'conversation-opening'): ConversationItem[]
-export function loadData(surface: 'wall-photo'): WallPhotoItem[]
-export function loadData(surface: Surface): DataItem[]
-export function loadData(surface: Surface): DataItem[] {
+/**
+ * The public set in `data/`, or with `directory` a private set laid out the
+ * same way (`<directory>/<surface>.jsonl`), validated by the same schemas.
+ */
+export function loadData(
+  surface: ModerationSurface,
+  directory?: string,
+): ModerationItem[]
+export function loadData(
+  surface: 'conversation-opening',
+  directory?: string,
+): ConversationItem[]
+export function loadData(
+  surface: 'wall-photo',
+  directory?: string,
+): WallPhotoItem[]
+export function loadData(surface: Surface, directory?: string): DataItem[]
+export function loadData(surface: Surface, directory?: string): DataItem[] {
   const schema =
     surface === 'wall-caption'
       ? wallCaptionSchema
@@ -162,7 +169,9 @@ export function loadData(surface: Surface): DataItem[] {
           ? feedbackCommentSchema
           : conversationOpeningSchema
   const lines = readFileSync(
-    new URL(`./data/${surface}.jsonl`, import.meta.url),
+    directory
+      ? join(directory, `${surface}.jsonl`)
+      : new URL(`./data/${surface}.jsonl`, import.meta.url),
     'utf8',
   )
     .trim()
@@ -177,8 +186,14 @@ export function loadData(surface: Surface): DataItem[] {
     }
     const result = schema.safeParse(value)
     if (!result.success) {
-      // Zod diagnostics can contain the supplied content. Keep it out of logs.
-      throw new Error(`${surface} line ${index + 1}: invalid schema`)
+      // Zod messages can contain the supplied content; the field paths are
+      // keys and indices only, so they name what to fix without quoting it.
+      const fields = [
+        ...new Set(result.error.issues.map((issue) => issue.path.join('.'))),
+      ].join(', ')
+      throw new Error(
+        `${surface} line ${index + 1}: invalid schema (${fields || 'item'})`,
+      )
     }
     if (ids.has(result.data.id)) {
       throw new Error(`${surface} line ${index + 1}: duplicate id`)

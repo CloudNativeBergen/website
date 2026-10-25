@@ -230,6 +230,50 @@ export default defineType({
             : 'Enter the public project token from PostHog (starts with "phc_").'
         }),
     }),
+    // Content judgement (Content judgement spec §5): an organizer's opt-in
+    // to having Jev judge user-written content through OpenRouter. Off by
+    // default; written only by `organization.updateContentJudgement` from
+    // Admin → Settings, which records who changed it and when. The Enforce
+    // switches are read from J7 on. Read-only here so the Studio cannot flip
+    // it without the record of who did.
+    defineField({
+      name: 'contentJudgement',
+      title: 'Content judgement',
+      type: 'object',
+      readOnly: true,
+      description:
+        'Changed by organizers in Admin → Settings → Content judgement.',
+      fields: [
+        defineField({
+          name: 'enabled',
+          title: 'Judge content',
+          type: 'boolean',
+        }),
+        defineField({
+          name: 'enforceFeedbackComments',
+          title: 'Enforce on feedback comments',
+          type: 'boolean',
+        }),
+        defineField({
+          name: 'enforceWallPosts',
+          title: 'Enforce on Wall Posts',
+          type: 'boolean',
+        }),
+        defineField({
+          name: 'changedAt',
+          title: 'Changed at',
+          type: 'datetime',
+        }),
+        defineField({
+          name: 'changedBy',
+          title: 'Changed by',
+          type: 'reference',
+          to: [{ type: 'speaker' }],
+          // Weak: an organizer's erasure must not be blocked by this record.
+          weak: true,
+        }),
+      ],
+    }),
     // ── OPERATOR-ONLY, EFFECTIVELY IMMUTABLE ────────────────────────────────
     //
     // Names this tenant's discrete credential environment variables

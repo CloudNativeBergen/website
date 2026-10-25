@@ -51,4 +51,17 @@ export interface Organization {
    * PostHog. See `resolvePosthogToken`.
    */
   analyticsPosthogToken?: string
+  /**
+   * The organizers' content judgement opt-in (Content judgement spec §5).
+   * Absent or `enabled` not true means off. The Enforce switches are added to
+   * the projection in J7, where they are first read.
+   */
+  contentJudgement?: OrganizationContentJudgement
+}
+
+export interface OrganizationContentJudgement {
+  enabled?: boolean
+  changedAt?: string
+  /** The organizer who last changed it; `null` once they are erased. */
+  changedByName?: string | null
 }

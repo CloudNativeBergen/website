@@ -1,0 +1,233 @@
+/**
+ * @vitest-environment node
+ *
+ * The `organization` router through the tRPC caller and the REAL authz
+ * waist, on the versioned in-memory store: writes are built by the real
+ * `@sanity/client` and applied with `@sanity/mutator`. Only the conference
+ * resolution (the request's host) and the cache expiry are replaced.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
+
+vi.mock('@/lib/auth', () => ({
+  getAuthSession: vi.fn().mockResolvedValue(null),
+}))
+const h = vi.hoisted(() => ({
+  store: null as null | VersionedSanityStore,
+  revalidateTag: vi.fn(),
+}))
+vi.mock('next/cache', () => ({
+  revalidateTag: h.revalidateTag,
+  updateTag: vi.fn(),
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+}))
+vi.mock('@/lib/sanity/client', async () => {
+  const { createVersionedSanityStore } =
+    await import('../../../__tests__/helpers/versionedSanityStore')
+  h.store = createVersionedSanityStore()
+  return h.store.clients
+})
+vi.mock('@/lib/conference/sanity', () => ({
+  getConferenceForCurrentDomain: vi.fn(async () => ({
+    conference: { _id: 'conf-A', organization: { _ref: 'org-A' } },
+    error: null,
+  })),
+}))
+
+import { initTRPC } from '@trpc/server'
+import type { Context } from '@/server/trpc'
+import { organizationRouter } from './organization'
+
+type Doc = Record<string, unknown> & { _id: string }
+const store = () => h.store!
+
+const t = initTRPC.context<Context>().create()
+function caller(speakerId: string, orgIds?: string[]) {
+  const speaker = {
+    _id: speakerId,
+    name: speakerId,
+    ...(orgIds && { organizerOrgIds: orgIds }),
+  }
+  const user = { email: `${speakerId}@example.com`, name: 'x', picture: '' }
+  return t.createCallerFactory(organizationRouter)({
+    req: { headers: new Headers(), url: 'http://localhost:3000' },
+    session: { expires: '2099-01-01T00:00:00Z', user, speaker },
+    speaker,
+    user,
+    workosUser: null,
+    ipAddress: '127.0.0.1',
+  } as unknown as Context)
+}
+const organizer = () => caller('sp-org', ['org-A'])
+
+const org = (id: string, fields: Record<string, unknown> = {}) =>
+  ({ _id: id, _type: 'organization', name: id, ...fields }) as Doc
+
+beforeEach(() => {
+  store().reset([
+    org('org-A', { analyticsPosthogToken: 'phc_keep' }),
+    org('org-B'),
+  ])
+  h.revalidateTag.mockClear()
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-25T12:00:00Z'))
+})
+
+describe('organization.updateContentJudgement', () => {
+  it('turns it on for the request’s organization, recording who and when', async () => {
+    await expect(
+      organizer().updateContentJudgement({ enabled: true }),
+    ).resolves.toEqual({ success: true })
+    expect(store().doc('org-A')).toMatchObject({
+      analyticsPosthogToken: 'phc_keep',
+      contentJudgement: {
+        enabled: true,
+        changedAt: '2026-10-25T12:00:00.000Z',
+        changedBy: { _type: 'reference', _ref: 'sp-org', _weak: true },
+      },
+    })
+    expect(store().doc('org-B')).toEqual(org('org-B'))
+    // Expired, not stale-while-revalidate: the next /privacy view must
+    // already list OpenRouter (the Next docs: 'default' serves stale once).
+    expect(h.revalidateTag).toHaveBeenCalledWith('sanity:organization-org-A', {
+      expire: 0,
+    })
+  })
+
+  it('creates the parent in an earlier patch than the dotted set', async () => {
+    // Within ONE patch Sanity runs `set` before `setIfMissing`, which the
+    // in-memory store (mutator) cannot model. So the shape is pinned: the
+    // parent is created by its own, earlier patch in the same transaction.
+    await organizer().updateContentJudgement({ enabled: true })
+    const [commit] = store().commits.slice(-1)
+    const patches = commit.map(
+      (m) => (m as { patch?: Record<string, unknown> }).patch ?? {},
+    )
+    expect(patches).toHaveLength(2)
+    expect(patches[0]).toMatchObject({
+      id: 'org-A',
+      setIfMissing: { contentJudgement: {} },
+    })
+    expect(patches[0]).not.toHaveProperty('set')
+    expect(patches[1]).toMatchObject({
+      id: 'org-A',
+      set: { 'contentJudgement.enabled': true },
+    })
+  })
+
+  it('turns it off again and keeps the other content judgement fields', async () => {
+    store().reset([
+      org('org-A', {
+        contentJudgement: { enabled: true, enforceWallPosts: false },
+      }),
+    ])
+    await organizer().updateContentJudgement({ enabled: false })
+    expect(store().doc('org-A')).toMatchObject({
+      contentJudgement: {
+        enabled: false,
+        enforceWallPosts: false,
+        changedBy: { _ref: 'sp-org' },
+      },
+    })
+  })
+
+  it('refuses a speaker who is not an organizer, and writes nothing', async () => {
+    await expect(
+      caller('sp-speaker').updateContentJudgement({ enabled: true }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(store().doc('org-A')).toEqual(
+      org('org-A', { analyticsPosthogToken: 'phc_keep' }),
+    )
+  })
+
+  it('refuses an organizer of another organization, and writes nothing', async () => {
+    await expect(
+      caller('sp-other', ['org-B']).updateContentJudgement({ enabled: true }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(store().doc('org-A')?.contentJudgement).toBeUndefined()
+    expect(store().doc('org-B')?.contentJudgement).toBeUndefined()
+  })
+
+  it('a failed write is an error, not a success', async () => {
+    store().failWrites()
+    await expect(
+      organizer().updateContentJudgement({ enabled: true }),
+    ).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to update content judgement',
+    })
+    expect(store().doc('org-A')?.contentJudgement).toBeUndefined()
+  })
+
+  it('a write that landed but whose response was lost still expires the cache', async () => {
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+    await expect(
+      organizer().updateContentJudgement({ enabled: true }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    // Stored on, so the cached settings card and /privacy must not stay "off".
+    expect(store().doc('org-A')?.contentJudgement).toMatchObject({
+      enabled: true,
+    })
+    expect(h.revalidateTag).toHaveBeenCalledWith('sanity:organization-org-A', {
+      expire: 0,
+    })
+  })
+
+  it('refuses a string for the switch: "false" must never turn it on', async () => {
+    await expect(
+      organizer().updateContentJudgement({
+        enabled: 'false',
+      } as unknown as { enabled: boolean }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(store().doc('org-A')?.contentJudgement).toBeUndefined()
+  })
+
+  it('takes no organization from the client', async () => {
+    await organizer().updateContentJudgement({
+      enabled: true,
+      orgId: 'org-B',
+    } as { enabled: boolean })
+    expect(store().doc('org-B')?.contentJudgement).toBeUndefined()
+    expect(store().doc('org-A')?.contentJudgement).toMatchObject({
+      enabled: true,
+    })
+  })
+})
+
+describe('organization.updateAnalytics', () => {
+  const TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
+
+  it('sets the token on the request’s organization only', async () => {
+    await organizer().updateAnalytics({ analyticsPosthogToken: TOKEN })
+    expect(store().doc('org-A')?.analyticsPosthogToken).toBe(TOKEN)
+    expect(store().doc('org-B')?.analyticsPosthogToken).toBeUndefined()
+    expect(h.revalidateTag).toHaveBeenCalledWith(
+      'sanity:organization-org-A',
+      'default',
+    )
+  })
+
+  it('null unsets it', async () => {
+    await organizer().updateAnalytics({ analyticsPosthogToken: null })
+    expect(store().doc('org-A')).not.toHaveProperty('analyticsPosthogToken')
+  })
+})
+
+describe('the organization mutation surface is pinned', () => {
+  it('lists every mutation', () => {
+    const procedures = (
+      organizationRouter as unknown as {
+        _def: { procedures: Record<string, { _def?: { type?: string } }> }
+      }
+    )._def.procedures
+    expect(
+      Object.entries(procedures)
+        .filter(([, p]) => p._def?.type === 'mutation')
+        .map(([path]) => path)
+        .sort(),
+    ).toEqual(['updateAnalytics', 'updateContentJudgement'])
+  })
+})

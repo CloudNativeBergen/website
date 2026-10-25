@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { categories, type Surface } from './schema'
-import { type DecisionRequest } from './questions'
+import { decisionBody, type DecisionRequest } from './questions'
 
 const probability = z.number().finite().min(0).max(1)
 export const noulAnswerSchema = z
@@ -98,8 +98,13 @@ export async function requestDecision(
   fetcher: typeof fetch = fetch,
   pause: (ms: number) => Promise<void> = (ms) =>
     new Promise((resolve) => setTimeout(resolve, ms)),
+  /** The eval's own patient policy; held-out runs pass production's. */
+  policy: { attempts: number; timeoutMs: number } = {
+    attempts: 4,
+    timeoutMs: 60_000,
+  },
 ): Promise<DecisionResponse> {
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < policy.attempts; attempt++) {
     let response: Response
     try {
       response = await fetcher('https://openrouter.ai/api/alpha/decisions', {
@@ -108,8 +113,8 @@ export async function requestDecision(
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(request),
-        signal: AbortSignal.timeout(60_000),
+        body: decisionBody(request),
+        signal: AbortSignal.timeout(policy.timeoutMs),
       })
     } catch {
       throw new ItemError('network_or_timeout')
@@ -117,7 +122,7 @@ export async function requestDecision(
     if (!response.ok) {
       await response.body?.cancel()
       const retryable = response.status === 429 || response.status >= 500
-      if (retryable && attempt < 3) {
+      if (retryable && attempt < policy.attempts - 1) {
         await pause(1_000 * 2 ** attempt)
         continue
       }

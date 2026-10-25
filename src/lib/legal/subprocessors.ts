@@ -59,6 +59,7 @@ export type SubprocessorId =
   | 'oauth-providers'
   | 'workos'
   | 'buffer'
+  | 'openrouter'
 
 /**
  * How sure we are that THIS tenant uses the processor.
@@ -184,6 +185,18 @@ export const SUBPROCESSOR_CATALOGUE: Record<SubprocessorId, CatalogueEntry> = {
     chosenBy: 'organizer',
     location: 'United States',
   },
+  // Content judgement (Content judgement spec §13.1): user-written content
+  // goes through OpenRouter to TypeSafe's Jev classifier in the US, with
+  // zero data retention. The /privacy copy names TypeSafe.
+  openrouter: {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    purpose:
+      'Routes attendee and speaker content to the TypeSafe Jev classifier for moderation advice and message topics, with zero data retention',
+    group: 'infrastructure',
+    chosenBy: 'organizer',
+    location: 'United States',
+  },
   'oauth-providers': {
     id: 'oauth-providers',
     name: 'GitHub/LinkedIn',
@@ -213,6 +226,7 @@ const DISCLOSURE_ORDER: readonly SubprocessorId[] = [
   'posthog',
   'slack',
   'buffer',
+  'openrouter',
   'oauth-providers',
   'workos',
 ]
@@ -257,6 +271,19 @@ export interface TenantProcessingFacts {
    * this only changes WHICH account, which is the part a DPA cares about.
    */
   dedicatedEmailAccount: boolean | null
+  /**
+   * The organization's `contentJudgement.enabled`, from the SAME organization
+   * read as the other org signals (so ignored when `organizationReadFailed`).
+   * `null` = unknown.
+   */
+  contentJudgementEnabled: boolean | null
+  /**
+   * Whether any Judgement is stored for any of the organization's
+   * conferences. Turning the setting off must not hide data still held
+   * (spec §5), so this alone keeps OpenRouter disclosed. `null` = the read
+   * failed.
+   */
+  storedJudgements: boolean | null
 }
 
 export interface TicketingFacts {
@@ -376,7 +403,23 @@ export function subprocessorSignals(
     buffer: facts.tenantKnown
       ? fromNullableBoolean(facts.bufferPublishing)
       : 'unknown',
+    openrouter: facts.tenantKnown
+      ? anyOf(
+          orgSignal(facts.contentJudgementEnabled),
+          fromNullableBoolean(facts.storedJudgements),
+        )
+      : 'unknown',
   }
+}
+
+/**
+ * Either source in use is a `yes`; only two positive "no"s are a `no`; any
+ * unknown left over discloses as possible.
+ */
+function anyOf(a: Signal, b: Signal): Signal {
+  if (a === 'yes' || b === 'yes') return 'yes'
+  if (a === 'no' && b === 'no') return 'no'
+  return 'unknown'
 }
 
 /**

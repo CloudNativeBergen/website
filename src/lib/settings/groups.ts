@@ -77,7 +77,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     navLabel: 'Team & Content',
     title: 'Team & Content',
     description:
-      'Organizers, teams, contact channels, domains and topics/formats.',
+      'Organizers, teams, contact channels, domains, topics/formats and content judgement.',
   },
 ]
 

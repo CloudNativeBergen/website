@@ -277,3 +277,151 @@ describe('wall-photo report', () => {
     )
   })
 })
+
+describe('held-out gate rows', () => {
+  it('are unrounded: 4 false positives in 399 negatives is above 1%', async () => {
+    const { parseGateFile } =
+      await import('../../src/lib/content-judgement/gates')
+    const labels = (abusive: boolean) => ({
+      abusive,
+      sexual: false,
+      spam: false,
+      personal_info: false,
+    })
+    const items = Array.from({ length: 403 }, (_, index) => ({
+      id: `fc-${String(index + 1).padStart(3, '0')}`,
+      text: 'synthetic',
+      lang: 'en' as const,
+      labels: labels(index >= 399),
+      tags: [index >= 399 ? ('abusive' as const) : ('benign' as const)],
+    }))
+    const results: RawResult[] = items.map((item, index) => ({
+      id: item.id,
+      repeat: 1,
+      model: 'typesafe/jev-1.14-20261014',
+      latencyMs: 1,
+      cost: 0,
+      answers: {
+        // Four benign items flagged at 0.95, one at 0.7 (below the 0.9
+        // enforcement threshold, so NOT a false positive); every positive
+        // caught.
+        abusive: {
+          type: 'noul',
+          noul: index < 4 || index >= 399 ? 0.95 : index === 4 ? 0.7 : 0.01,
+        },
+        sexual: { type: 'noul', noul: 0 },
+        spam: { type: 'noul', noul: 0 },
+        personal_info: { type: 'noul', noul: 0 },
+      },
+    }))
+    const report = buildReport(
+      [{ surface: 'feedback-comment', items, results }],
+      'typesafe/jev-1.14',
+      1,
+      { heldOut: true },
+    )
+    // The table rounds; the gate rows must not.
+    expect(report).toContain('| 1.0% |')
+    const json =
+      /### Gate rows at 0\.9 \(unrounded\)[\s\S]*?```json\n([\s\S]*?)\n```/.exec(
+        report,
+      )?.[1]
+    const rows = parseGateFile(JSON.parse(json ?? 'null'))
+    const abusive = rows.find((row) => row.question === 'abusive')!
+    expect(abusive).toMatchObject({
+      surface: 'feedbackComment',
+      build: 'typesafe/jev-1.14-20261014',
+      questionSet: 'v2',
+      negatives: 399,
+      recall: 1,
+    })
+    expect(abusive.falsePositiveRate).toBe(4 / 399)
+    expect(report).toContain(
+      'Positives per question (the bar needs 50 each): abusive 4, sexual 0, spam 0, personal_info 0.',
+    )
+    expect(abusive.falsePositiveRate).toBeGreaterThan(0.01)
+  })
+
+  it.each([
+    ['repeats were averaged', 'feedback-comment', 3, '--repeats 1'],
+    ['the surface is caption-only', 'wall-caption', 1, 'not the request'],
+  ] as const)('are withheld when %s', (_name, surface, repeats, reason) => {
+    const items = loadData(surface).slice(0, 1)
+    const report = buildReport(
+      [{ surface, items, results: [] }],
+      'm',
+      repeats,
+      {
+        heldOut: true,
+      },
+    )
+    expect(report).toContain('### Gate rows at 0.9 (unrounded)')
+    expect(report).toContain(reason)
+    expect(report).not.toContain('```json')
+  })
+
+  it('are withheld while any item has no answer: a failed call is a miss', () => {
+    const items = loadData('feedback-comment').slice(0, 2)
+    const results = items.map((item, index) => ({
+      id: item.id,
+      repeat: 1,
+      model: 'typesafe/jev-1.14-20261014',
+      latencyMs: 1,
+      cost: 0,
+      ...(index === 0
+        ? { answers: null, error: 'http_500' }
+        : {
+            answers: Object.fromEntries(
+              moderationKeys.map((key) => [key, { type: 'noul', noul: 0 }]),
+            ),
+          }),
+    })) as RawResult[]
+    const report = buildReport(
+      [{ surface: 'feedback-comment', items, results }],
+      'typesafe/jev-1.14',
+      1,
+      { heldOut: true },
+    )
+    expect(report).toContain('1 item(s) have no answer')
+    expect(report).not.toContain('```json')
+  })
+
+  it('never stamp one build on a run answered by two', async () => {
+    const { parseGateFile } =
+      await import('../../src/lib/content-judgement/gates')
+    const items = loadData('feedback-comment').slice(0, 2)
+    const results = items.map((item, index) => ({
+      id: item.id,
+      repeat: 1,
+      model:
+        index === 0
+          ? 'typesafe/jev-1.14-20261014'
+          : 'typesafe/jev-1.14-20261101',
+      latencyMs: 1,
+      cost: 0,
+      answers: Object.fromEntries(
+        moderationKeys.map((key) => [key, { type: 'noul', noul: 0 }]),
+      ),
+    })) as RawResult[]
+    const report = buildReport(
+      [{ surface: 'feedback-comment', items, results }],
+      'typesafe/jev-1.14',
+      1,
+      { heldOut: true },
+    )
+    const json = /```json\n([\s\S]*?)\n```/.exec(report)?.[1]
+    expect(json).toContain('MIXED')
+    // And such a row cannot be pasted into the gate file.
+    expect(() => parseGateFile(JSON.parse(json ?? 'null'))).toThrow()
+  })
+
+  it('are absent from public reports', () => {
+    const items = loadData('feedback-comment').slice(0, 1)
+    const report = buildReport(
+      [{ surface: 'feedback-comment', items, results: [] }],
+      'm',
+      1,
+    )
+    expect(report).not.toContain('Gate rows')
+  })
+})

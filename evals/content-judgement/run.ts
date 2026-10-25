@@ -1,7 +1,11 @@
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { prepareImage } from './images/prepare'
+import {
+  IMAGE_GUARD,
+  JEV_CALL_POLICY,
+} from '../../src/lib/content-judgement/questions'
 import { buildRequest, DEFAULT_MODEL } from './questions'
 import { buildReport, type SurfaceRun } from './report'
 import { loadData, surfaces, type Surface } from './schema'
@@ -13,7 +17,14 @@ import {
 } from './transport'
 
 // Probe on 2026-10-25: 2,762 input tokens with image vs 378 without.
-export const IMAGE_TOKEN_MARGIN = 500
+export const IMAGE_TOKEN_MARGIN = IMAGE_GUARD.margin
+
+const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url))
+const TEXT_SURFACES: readonly Surface[] = [
+  'wall-caption',
+  'feedback-comment',
+  'conversation-opening',
+]
 
 export interface Options {
   surface: Surface | 'all'
@@ -23,7 +34,19 @@ export interface Options {
   out: string
   dryRun: boolean
   model: string
+  /**
+   * A private held-out text set (spec §11.2), read from this directory
+   * outside the repo. Its raw results stay next to it; only the report,
+   * which holds numbers alone, is written to `out`.
+   */
+  data?: string
 }
+/** Whether `target` is `root` or below it. Both must be real paths. */
+export function isWithin(root: string, target: string): boolean {
+  const path = relative(root, target)
+  return !(path === '..' || path.startsWith(`..${sep}`) || isAbsolute(path))
+}
+
 export function parseOptions(args: string[]): Options {
   let surface: Options['surface'] = 'all'
   let repeats = 3
@@ -32,6 +55,7 @@ export function parseOptions(args: string[]): Options {
   let out: string | undefined
   let dryRun = false
   let model = DEFAULT_MODEL
+  let data: string | undefined
   for (let index = 0; index < args.length; index++) {
     const flag = args[index]
     if (flag === '--dry-run') {
@@ -46,6 +70,7 @@ export function parseOptions(args: string[]): Options {
         '--concurrency',
         '--out',
         '--model',
+        '--data',
       ].includes(flag)
     )
       throw new Error(`Unknown option: ${flag}`)
@@ -57,6 +82,7 @@ export function parseOptions(args: string[]): Options {
         throw new Error('Invalid --surface')
       surface = value as Options['surface']
     } else if (flag === '--model') model = value
+    else if (flag === '--data') data = resolve(value)
     else if (flag === '--out') out = value
     else {
       const number = Number(value)
@@ -67,8 +93,25 @@ export function parseOptions(args: string[]): Options {
       else concurrency = number
     }
   }
+  if (data !== undefined) {
+    if (!TEXT_SURFACES.includes(surface as Surface))
+      throw new Error(
+        '--data needs --surface wall-caption, feedback-comment or conversation-opening',
+      )
+    // A held-out set must never be committed, so it may not live in the repo,
+    // and neither may a symlink's target.
+    let real: string
+    try {
+      real = realpathSync(data)
+    } catch {
+      throw new Error('--data directory not found')
+    }
+    if (isWithin(realpathSync(REPO_ROOT), real))
+      throw new Error('--data must be a directory outside this repository')
+  }
   const modelDirectory = model.replace(/[^a-zA-Z0-9._-]/g, '-')
   return {
+    data,
     surface,
     repeats,
     limit,
@@ -77,7 +120,7 @@ export function parseOptions(args: string[]): Options {
     model,
     out:
       out ??
-      `evals/content-judgement/results/${modelDirectory}-${new Date().toISOString().slice(0, 10)}`,
+      `evals/content-judgement/results/${modelDirectory}-${new Date().toISOString().slice(0, 10)}${data ? '-held-out' : ''}`,
   }
 }
 
@@ -88,6 +131,11 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     surface,
     items: loadData(surface),
   }))
+  // A private set replaces the public one for its surface.
+  if (options.data) {
+    const dataset = datasets.find(({ surface }) => surface === options.surface)!
+    dataset.items = loadData(dataset.surface, options.data)
+  }
   if (options.dryRun) {
     for (const { surface, items } of datasets) {
       console.log(`${surface}: validated ${items.length} items`)
@@ -136,7 +184,11 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
       results: [],
     }))
   for (const run of runs) {
-    const rawPath = resolve(options.out, `raw-${run.surface}.jsonl`)
+    // Raw lines carry item ids; a private set's stay outside the repo.
+    const rawPath = resolve(
+      options.data ?? options.out,
+      `raw-${run.surface}.jsonl`,
+    )
     writeFileSync(rawPath, '')
     // One text-only call per request shape: a caption adds four questions,
     // so captioned and uncaptioned posts need their own baseline.
@@ -204,6 +256,11 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
                 run.surface,
                 buildRequest(run.surface, item, options.model, imageBase64),
                 apiKey,
+                undefined,
+                undefined,
+                // A held-out run gates enforcement: it may answer no more
+                // than production would (three attempts, 20 s each).
+                options.data ? JEV_CALL_POLICY : undefined,
               )
               const minimum =
                 'image' in item
@@ -250,7 +307,9 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   }
   writeFileSync(
     resolve(options.out, 'report.md'),
-    buildReport(runs, options.model, options.repeats),
+    buildReport(runs, options.model, options.repeats, {
+      heldOut: options.data !== undefined,
+    }),
   )
   console.log(`Report: ${resolve(options.out, 'report.md')}`)
   if (runs.some((run) => run.results.some((result) => result.answers === null)))

@@ -1,8 +1,15 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import {
+  mkdtempSync,
+  readdirSync,
+  symlinkSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { main } from './run'
+import { isWithin, main, parseOptions } from './run'
 
 const savedExitCode = process.exitCode
 const directories: string[] = []
@@ -489,5 +496,221 @@ describe('wall-photo runner integration', () => {
     ).rejects.toThrow()
     // Only the text-only calibration call went out; no photo was sent.
     expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('a private held-out text set (--data)', () => {
+  const MARKER = 'private held-out wording'
+  const item = (n: number, abusive: boolean) =>
+    JSON.stringify({
+      id: `fc-${String(n).padStart(3, '0')}`,
+      text: `${MARKER} ${n}`,
+      lang: 'en',
+      labels: { abusive, sexual: false, spam: false, personal_info: false },
+      tags: [abusive ? 'abusive' : 'benign'],
+    })
+  const privateSet = () => {
+    const directory = mkdtempSync(join(tmpdir(), 'jev-held-out-'))
+    directories.push(directory)
+    writeFileSync(
+      join(directory, 'feedback-comment.jsonl'),
+      [item(1, true), item(2, false)].join('\n') + '\n',
+    )
+    return directory
+  }
+
+  it.each([['all'], ['wall-photo']])(
+    'needs one text surface, not %s',
+    (surface) => {
+      expect(() =>
+        parseOptions(['--data', tmpdir(), '--surface', surface]),
+      ).toThrow('--data needs --surface')
+    },
+  )
+
+  it.each([
+    ['the repository root', '.'],
+    ['the public data directory', 'evals/content-judgement/data'],
+  ])('refuses %s', (_name, path) => {
+    expect(() =>
+      parseOptions(['--data', path, '--surface', 'feedback-comment']),
+    ).toThrow('outside this repository')
+  })
+
+  it('refuses a symlink whose target is inside the repository', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'jev-held-out-link-'))
+    directories.push(directory)
+    const link = join(directory, 'set')
+    symlinkSync(join(process.cwd(), 'evals/content-judgement/data'), link)
+    expect(() =>
+      parseOptions(['--data', link, '--surface', 'feedback-comment']),
+    ).toThrow('outside this repository')
+  })
+
+  it('refuses a directory that does not exist', () => {
+    expect(() =>
+      parseOptions([
+        '--data',
+        join(tmpdir(), 'jev-no-such-directory-1581'),
+        '--surface',
+        'feedback-comment',
+      ]),
+    ).toThrow('--data directory not found')
+  })
+
+  it.each([
+    ['the root itself', '/repo', true],
+    ['a child', '/repo/evals/x', true],
+    ['a child named like a parent step', '/repo/..held-out', true],
+    ['the parent', '/', false],
+    ['a sibling', '/repo-private', false],
+    ['a sibling below the parent', '/elsewhere/set', false],
+  ])('isWithin: %s', (_name, target, within) => {
+    expect(isWithin('/repo', target)).toBe(within)
+  })
+
+  it('answers no more than production would: an answer on the 4th attempt is a miss', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'synthetic-test-key')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const data = privateSet()
+    const out = mkdtempSync(join(tmpdir(), 'jev-held-out-policy-'))
+    directories.push(out)
+    const calls = new Map<string, number>()
+    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+      const { state } = JSON.parse(String(options?.body)) as {
+        state: { comment: string }
+      }
+      const n = (calls.get(state.comment) ?? 0) + 1
+      calls.set(state.comment, n)
+      // Item 1 fails three times, then would answer; production gives up at 3.
+      if (state.comment.endsWith(' 1') && n <= 3)
+        return new Response(null, { status: 503 })
+      return Response.json({
+        model: 'typesafe/jev-1.14-20261014',
+        usage: { cost: 0 },
+        answers: Object.fromEntries(
+          ['abusive', 'sexual', 'spam', 'personal_info'].map((key) => [
+            key,
+            { type: 'noul', noul: 0 },
+          ]),
+        ),
+      })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    await main([
+      '--data',
+      data,
+      '--surface',
+      'feedback-comment',
+      '--repeats',
+      '1',
+      '--out',
+      out,
+    ])
+    expect(calls.get(`${MARKER} 1`)).toBe(3)
+    // And production's 20 s per attempt, not the eval's patient 60 s.
+    expect(timeout).toHaveBeenCalled()
+    expect(new Set(timeout.mock.calls.map(([ms]) => ms))).toEqual(
+      new Set([20_000]),
+    )
+    const report = readFileSync(join(out, 'report.md'), 'utf8')
+    expect(report).toContain('1 item(s) have no answer')
+    expect(report).not.toContain('```json')
+  }, 15_000)
+
+  it('a bad private line names the failing fields, never the text', async () => {
+    const { loadData } = await import('./schema')
+    const directory = mkdtempSync(join(tmpdir(), 'jev-held-out-bad-'))
+    directories.push(directory)
+    writeFileSync(
+      join(directory, 'feedback-comment.jsonl'),
+      JSON.stringify({
+        id: 'fc-1000',
+        text: `${MARKER} ${'x'.repeat(1000)}`,
+        lang: 'en',
+        labels: {
+          abusive: false,
+          sexual: false,
+          spam: false,
+          personal_info: false,
+        },
+        tags: ['benign'],
+      }) + '\n',
+    )
+    let message = ''
+    try {
+      loadData('feedback-comment', directory)
+    } catch (error) {
+      message = (error as Error).message
+    }
+    expect(message).toBe('feedback-comment line 1: invalid schema (id, text)')
+    expect(message).not.toContain(MARKER)
+  })
+
+  it('accepts a directory outside the repository', () => {
+    const directory = privateSet()
+    expect(
+      parseOptions(['--data', directory, '--surface', 'feedback-comment']).data,
+    ).toBe(directory)
+  })
+
+  it('scores the private items, keeps raw results next to them, and writes only numbers to --out', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'synthetic-test-key')
+    const data = privateSet()
+    const out = mkdtempSync(join(tmpdir(), 'jev-held-out-out-'))
+    directories.push(out)
+    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+      const { state } = JSON.parse(String(options?.body)) as {
+        state: { comment: string }
+      }
+      const abusive = state.comment.endsWith(' 1') ? 0.95 : 0.01
+      return Response.json({
+        model: 'typesafe/jev-1.14-20261014',
+        usage: { cost: 0 },
+        answers: {
+          abusive: { type: 'noul', noul: abusive },
+          sexual: { type: 'noul', noul: 0 },
+          spam: { type: 'noul', noul: 0 },
+          personal_info: { type: 'noul', noul: 0 },
+        },
+      })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main([
+      '--data',
+      data,
+      '--surface',
+      'feedback-comment',
+      '--repeats',
+      '1',
+      '--out',
+      out,
+    ])
+    // The private items were the ones sent, not the public set.
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(readdirSync(out)).toEqual(['report.md'])
+    expect(readdirSync(data).sort()).toEqual([
+      'feedback-comment.jsonl',
+      'raw-feedback-comment.jsonl',
+    ])
+    const report = readFileSync(join(out, 'report.md'), 'utf8')
+    expect(report).toContain('private held-out set')
+    expect(report).toContain('Scored 2/2 items')
+    // The gate row's numbers are printed, not left to be worked out.
+    expect(report).toMatch(/\| FPR \| Negatives \|/)
+    // And as paste-ready gate rows, valid against the gate file's schema.
+    const { parseGateFile } =
+      await import('../../src/lib/content-judgement/gates')
+    const json = /```json\n([\s\S]*?)\n```/.exec(report)?.[1]
+    expect(
+      parseGateFile(JSON.parse(json ?? 'null')).find(
+        (row) => row.question === 'abusive',
+      ),
+    ).toMatchObject({ falsePositiveRate: 0, recall: 1, negatives: 1 })
+    expect(report).not.toContain(MARKER)
+    expect(report).not.toMatch(/fc-00\d/)
   })
 })

@@ -83,6 +83,16 @@ Note: The conference does not offer attendee lead‑scanning or attendee list sh
 
 - Data: internal emails, planning docs, task systems. Ensure appropriate access controls and retention policies.
 
+### H) Content judgement
+
+Only for organizations that turn it on in Admin → Settings ([spec](./CONTENT_JUDGEMENT_SPEC.md) §5, §13).
+
+- Data: scores per question, the returned model build, a SHA-256 of the checked content, time, the Keep mark (organizer, time) and the Message Category. Never a copy of the checked text or photo.
+- Purposes: moderation advice and inbox topics for organizers.
+- Legal bases: legitimate interest (keeping the conference's spaces safe).
+- Retention: until the content is deleted, plus at most one day.
+- **Agreement tally**: anonymous counts per model build, question set, question and score band. No personal data, no reference to any content, organization or conference. Kept indefinitely.
+
 ---
 
 ## 3) Conference lifecycle SOPs
@@ -134,6 +144,8 @@ Adjust as needed; document exceptions.
 - Raw video/photo assets: 12–24 months, then keep only mastered/publication versions needed for archive
 - Safety/incident logs: 3 years unless legal need requires longer
 - Session Feedback (anonymous colour and optional comment per session): 24 months after the conference ends, then folded into per-session totals and deleted (daily `/api/cron/feedback-fold`); earlier when every speaker of the session is erased (speaker erasure, [runbook](./SPEAKER_ERASURE_RUNBOOK.md) step 3d). A session held by a scheduled Content Release keeps its responses until the release is published or archived; answers a session got before it was moved to another conference are deleted only on request (runbook step 3d has the commands).
+- Content judgements: with their content; orphans deleted daily by `/api/cron/content-judgement-sweep`
+- Agreement tally: indefinitely (counts only)
 
 ---
 
@@ -198,6 +210,7 @@ Maintain a live register with purpose, data types, location, DPA link, SCC/TIA s
 - Cloud storage: [provider]
 - Analytics: [provider]
 - Video platform: [provider] — may act as an independent controller for published content; ensure appropriate SCCs/TIA for any related processing; link to provider's privacy notice.
+- Content judgement: OpenRouter (model provider TypeSafe), United States, SCCs, zero data retention. Listed for organizations that have content judgement on or still store a Judgement.
 
 ---
 
