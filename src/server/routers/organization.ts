@@ -20,12 +20,14 @@ import {
 /**
  * Patch the request's organization, then bust the cached org read that the
  * root layout's analytics gate, the settings page and the /privacy
- * disclosure all run through.
+ * disclosure all run through. `'default'` serves the stale page once while
+ * it refreshes; `{ expire: 0 }` makes the next request wait for fresh data.
  */
 async function patchCurrentOrganization(
   orgId: string | null | undefined,
   build: (patch: Patch) => Patch,
   failure: string,
+  expiry: 'default' | { expire: 0 } = 'default',
 ): Promise<{ success: true }> {
   if (!orgId) {
     throw new TRPCError({
@@ -42,7 +44,7 @@ async function patchCurrentOrganization(
       cause: error,
     })
   }
-  revalidateTag(organizationTag(orgId), 'default')
+  revalidateTag(organizationTag(orgId), expiry)
   return { success: true }
 }
 
@@ -89,6 +91,10 @@ export const organizationRouter = router({
             },
           }),
         'Failed to update content judgement',
+        // Never a stale /privacy: once it is on, content can be sent, so the
+        // next view must already list OpenRouter (spec §13.1). A tRPC route
+        // is not a Server Action, so `updateTag` is not available here.
+        { expire: 0 },
       ),
     ),
 })

@@ -88,10 +88,11 @@ describe('organization.updateContentJudgement', () => {
       },
     })
     expect(store().doc('org-B')).toEqual(org('org-B'))
-    expect(h.revalidateTag).toHaveBeenCalledWith(
-      'sanity:organization-org-A',
-      'default',
-    )
+    // Expired, not stale-while-revalidate: the next /privacy view must
+    // already list OpenRouter (the Next docs: 'default' serves stale once).
+    expect(h.revalidateTag).toHaveBeenCalledWith('sanity:organization-org-A', {
+      expire: 0,
+    })
   })
 
   it('turns it off again and keeps the other content judgement fields', async () => {
