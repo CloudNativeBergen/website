@@ -64,6 +64,7 @@ describe('ContentJudgementSettings', () => {
     expect(toggle).toHaveAttribute('aria-disabled', 'true')
     expect(toggle).toBeEnabled()
     expect(document.activeElement).toBe(toggle)
+    expect(screen.getByText('Saving…')).toBeInTheDocument()
 
     // Saved, then router.refresh() brings the new stored props.
     m.isPending = false
@@ -81,6 +82,7 @@ describe('ContentJudgementSettings', () => {
     expect(document.activeElement).toBe(toggle)
     expect(toggle).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByText('Kari Nordmann')).toBeInTheDocument()
+    expect(screen.queryByText('Saving…')).toBeNull()
   })
 
   it('follows the stored value when another organizer changes it', () => {
@@ -155,5 +157,7 @@ describe('ContentJudgementSettings', () => {
     expect(toggle).toHaveAttribute('aria-checked', 'true')
     act(() => m.options?.onError?.(new Error('no'), { enabled: true }))
     expect(toggle).toHaveAttribute('aria-checked', 'false')
+    // And the stored state is read again: the write may have committed.
+    expect(refresh).toHaveBeenCalledTimes(1)
   })
 })

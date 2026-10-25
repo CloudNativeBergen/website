@@ -61,8 +61,11 @@ export function ContentJudgementSettings({
     },
     onError: (error) => {
       // Back to what is stored, which a refresh during the save may have
-      // changed (another organizer), not merely to the pre-click value.
+      // changed (another organizer), not merely to the pre-click value. And
+      // ask again: a response lost AFTER the write committed must not leave
+      // the switch saying off while content judgement is on.
       setOptimistic(null)
+      startRefresh(() => router.refresh())
       showNotification({
         type: 'error',
         title: 'Could not save',
