@@ -1,6 +1,7 @@
 import { lookup } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
 import { fetchImageBytes, readBounded, type ImageBytes } from './bytes'
+import { decodeEntities } from '@/lib/html/text'
 
 /**
  * The link card a platform that does not unfurl (Bluesky) needs us to
@@ -201,38 +202,6 @@ export interface ParsedLinkMetadata {
   title: string
   description: string
   imageUrl: string | null
-}
-
-const ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: ' ',
-}
-
-function decodeEntities(text: string): string {
-  return text.replace(
-    /&(#x[0-9a-f]+|#\d+|[a-z]+);/gi,
-    (whole: string, entity: string) => {
-      const lower = entity.toLowerCase()
-      if (lower.startsWith('#')) {
-        const code = lower.startsWith('#x')
-          ? parseInt(lower.slice(2), 16)
-          : Number(lower.slice(1))
-        // Out of range (`&#1114112;`) or a surrogate is left as written
-        // rather than thrown: a page's typo must not fail a publish.
-        return Number.isInteger(code) &&
-          code >= 0 &&
-          code <= 0x10ffff &&
-          (code < 0xd800 || code > 0xdfff)
-          ? String.fromCodePoint(code)
-          : whole
-      }
-      return ENTITIES[lower] ?? whole
-    },
-  )
 }
 
 function collapse(text: string): string {

@@ -8,6 +8,8 @@ interface WorkshopCanceledTemplateProps {
   status: 'confirmed' | 'waitlist'
   /** The organizer's message, plain text. */
   message: string
+  /** Where an organizer moved the sign-up, and what it got there. */
+  movedTo?: { workshopTitle: string; status: 'confirmed' | 'waitlist' }
   organizer: string
   contactEmail: string
   brandColor?: string
@@ -32,6 +34,7 @@ export const WorkshopCanceledTemplate: React.FC<
   workshopTitle,
   status,
   message,
+  movedTo,
   organizer,
   contactEmail,
   brandColor,
@@ -75,6 +78,22 @@ export const WorkshopCanceledTemplate: React.FC<
             ? 'You had a seat in this workshop, which will no longer take place.'
             : 'You were on the waitlist for this workshop, which will no longer take place.'}
         </p>
+        {movedTo && (
+          <p style={text}>
+            {movedTo.status === 'confirmed' ? (
+              <>
+                We have moved you to <strong>{movedTo.workshopTitle}</strong>,
+                and you have a seat.
+              </>
+            ) : (
+              <>
+                We have put you on the waitlist for{' '}
+                <strong>{movedTo.workshopTitle}</strong>, which is full. We will
+                email you if a seat opens.
+              </>
+            )}
+          </p>
+        )}
         {message && (
           <div
             style={{

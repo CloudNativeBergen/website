@@ -248,6 +248,19 @@ export function formatConferenceDayTime(value: string): string {
 }
 
 /**
+ * A conference calendar date (YYYY-MM-DD), e.g. "Tue 27 Oct": English, no
+ * year, matching {@link formatConferenceDayTime}.
+ */
+export function formatConferenceDayDate(dateString: string): string {
+  return toOsloAnchoredDate(dateString).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: CONFERENCE_TIME_ZONE,
+  })
+}
+
+/**
  * A clock time in the conference's time zone, e.g. "10:50": the end of a
  * range whose start {@link formatConferenceDayTime} gave the day of.
  */

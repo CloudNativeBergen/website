@@ -81,6 +81,24 @@ export interface SpeakerBriefing {
   todos?: SpeakerBriefingTodo[]
 }
 
+/**
+ * The one order every surface renders the briefing in (email, dashboard).
+ * `venue` covers `venueName`, `venueAddress` and `venueTravelInfo`.
+ */
+export const SPEAKER_BRIEFING_SECTIONS = [
+  'todos',
+  'talks',
+  'dinner',
+  'checkIn',
+  'equipment',
+  'onsiteContact',
+  'accommodation',
+  'extra',
+  'venue',
+] as const
+
+export type SpeakerBriefingSection = (typeof SPEAKER_BRIEFING_SECTIONS)[number]
+
 type Briefable = Pick<
   Conference,
   | 'speakerInfo'

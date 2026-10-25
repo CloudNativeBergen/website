@@ -34,6 +34,11 @@ import {
   type DuplicateCandidatesReport,
 } from '@/lib/speaker/duplicates'
 import { clientWrite } from '@/lib/sanity/client'
+import {
+  getDinnerChoiceContext,
+  setDinnerChoice,
+} from '@/lib/speaker/dinnerChoice-sanity'
+import { dinnerChoiceOptions } from '@/lib/speaker/dinnerChoice'
 import { generateKey } from '@/lib/sanity/helpers'
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { handleSpeakerTicket } from '@/lib/events/handlers/speakerTicket'
@@ -528,6 +533,47 @@ export const speakerRouter = router({
         // says "committed, timestamp not read" rather than inventing one.
         socialTagOptOutAt: err ? null : (speaker?.socialTagOptOutAt ?? null),
       }
+    }),
+
+  /**
+   * How the caller gets to the speaker dinner (#1592). SELF ONLY, for the
+   * current domain's conference, and only with a confirmed talk there. The
+   * choice must be one the conference offers right now.
+   */
+  setDinnerChoice: protectedProcedure
+    .input(z.object({ choice: z.string().min(1).max(100) }))
+    .mutation(async ({ input, ctx }) => {
+      // An organizer impersonating a speaker must not answer for them.
+      if (ctx.session?.isImpersonating) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Not available while impersonating a speaker',
+        })
+      }
+      const conferenceId = await resolveConferenceId()
+      const speakerId = ctx.speaker._id
+      const { routes, hasConfirmedTalk } = await getDinnerChoiceContext(
+        conferenceId,
+        speakerId,
+      )
+      if (!hasConfirmedTalk) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only speakers with a confirmed talk can choose a route',
+        })
+      }
+      if (
+        !dinnerChoiceOptions(routes ?? undefined).some(
+          (o) => o.value === input.choice,
+        )
+      ) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'That dinner route is not offered',
+        })
+      }
+      await setDinnerChoice(conferenceId, speakerId, input.choice)
+      return { choice: input.choice }
     }),
 
   // Get OAuth provider emails

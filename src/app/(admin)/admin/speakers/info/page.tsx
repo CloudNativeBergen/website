@@ -3,7 +3,11 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { SpeakerInfoForm } from '@/components/admin/SpeakerInfoForm'
+import { DinnerChoiceSummaryCard } from '@/components/admin/DinnerChoiceSummaryCard'
 import { getSpeakerInfoGaps } from '@/lib/speaker/briefing-checklist'
+import { SpeakerBriefingPanel } from '@/components/admin/SpeakerBriefingPanel'
+import { getDinnerChoiceSummaryInputs } from '@/lib/speaker/dinnerChoice-sanity'
+import { summarizeDinnerChoices } from '@/lib/speaker/dinnerChoice'
 
 export default async function AdminSpeakerInfoPage() {
   const { conference, error } = await getConferenceForCurrentDomain({})
@@ -25,6 +29,19 @@ export default async function AdminSpeakerInfoPage() {
 
   const gaps = getSpeakerInfoGaps(conference.speakerInfo)
   const oldDinner = conference.speakerDinnerInfo?.trim()
+  const routes = conference.speakerInfo?.dinner?.routes
+  // Answers per route, so removing a chosen route says who will be asked again.
+  const routeAnswers = routes?.length
+    ? await getDinnerChoiceSummaryInputs(conference._id)
+        .then(({ speakers, choices }) =>
+          Object.fromEntries(
+            summarizeDinnerChoices(routes, speakers, choices).flatMap((row) =>
+              row.value ? [[row.value, row.speakers.length]] : [],
+            ),
+          ),
+        )
+        .catch(() => undefined)
+    : undefined
 
   return (
     <div className="space-y-6">
@@ -44,7 +61,13 @@ export default async function AdminSpeakerInfoPage() {
           </ul>
         </div>
       )}
-      <SpeakerInfoForm initial={conference.speakerInfo} />
+      <SpeakerInfoForm
+        initial={conference.speakerInfo}
+        routeAnswers={routeAnswers}
+      />
+      {!!conference.speakerInfo?.dinner?.routes?.length && (
+        <DinnerChoiceSummaryCard />
+      )}
       {oldDinner && (
         <div className="rounded-lg border border-gray-200 p-4 text-sm dark:border-gray-700">
           <p className="font-medium text-gray-900 dark:text-white">
@@ -55,6 +78,8 @@ export default async function AdminSpeakerInfoPage() {
           </p>
         </div>
       )}
+      {/* Remounted on a save, so the preview and counts refetch. */}
+      <SpeakerBriefingPanel key={conference.speakerInfo?.updatedAt ?? 'new'} />
     </div>
   )
 }

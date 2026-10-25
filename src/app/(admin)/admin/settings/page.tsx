@@ -5,6 +5,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceVisibility } from '@/lib/conference/visibility'
 import { buildSystemChecks } from '@/lib/system-status/checks'
 import { formatTeamSummary } from '@/lib/teams'
+import { stripHtml } from '@/lib/html/text'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import {
   SystemStatusSection,
@@ -281,7 +282,18 @@ export default async function AdminSettings() {
               <FieldRow label="City" value={conference.city} />
               <FieldRow label="Country" value={conference.country} />
               <FieldRow label="Tagline" value={conference.tagline} />
-              <FieldRow label="Description" value={conference.description} />
+              {/* Some datasets store HTML in this plain-text field. Strip the
+                  tags (the same helper the ticket pages use) and render the
+                  rest as escaped text, clamped to three lines. */}
+              <FieldRow
+                label="Description"
+                value={
+                  conference.description
+                    ? stripHtml(conference.description)
+                    : null
+                }
+                type="longtext"
+              />
             </InfoCard>
 
             {/* Brand and theming have their own section — this card is a
@@ -328,12 +340,12 @@ export default async function AdminSettings() {
             >
               <div
                 id="visibility"
-                className="flex scroll-mt-24 items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
+                className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
               >
                 <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
                   Status
                 </dt>
-                <dd className="min-w-0 text-right text-sm">
+                <dd className="min-w-0 text-sm sm:text-right">
                   {visibility === 'unlisted' ? (
                     <StatusBadge label="Unlisted" color="yellow" />
                   ) : (
@@ -798,6 +810,7 @@ export default async function AdminSettings() {
                     salesNotificationChannel:
                       conference.salesNotificationChannel,
                     cfpNotificationChannel: conference.cfpNotificationChannel,
+                    speakerSlackChannel: conference.speakerSlackChannel,
                     volunteerSlackInviteUrl: conference.volunteerSlackInviteUrl,
                   }}
                 />
@@ -830,6 +843,10 @@ export default async function AdminSettings() {
               <FieldRow
                 label="CFP Notification Channel"
                 value={conference.cfpNotificationChannel}
+              />
+              <FieldRow
+                label="Speakers Slack Channel"
+                value={conference.speakerSlackChannel}
               />
             </InfoCard>
 

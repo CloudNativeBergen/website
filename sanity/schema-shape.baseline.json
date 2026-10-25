@@ -198,6 +198,7 @@
     "speakerInfo.onsiteContact.phone": "string",
     "speakerInfo.updatedAt": "datetime",
     "speakerRegistrationLink": "string",
+    "speakerSlackChannel": "string",
     "speakersAnnouncedDate": "date",
     "sponsorBenefits": "array",
     "sponsorBenefits[object]": "object",

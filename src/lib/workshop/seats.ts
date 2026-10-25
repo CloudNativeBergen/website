@@ -78,6 +78,8 @@ export interface SignUpRequest extends Pick<
   earlyAccessSponsorId?: string
   /** The ticket type that admitted this sign-up early, with no link. */
   earlyAccessTicketType?: string
+  /** The canceled workshop's sign-up this one replaces (a move). */
+  movedFromSignup?: string
 }
 
 /**
@@ -113,6 +115,7 @@ interface Seats {
     _createdAt: string
     signedUpAt?: string
     status: 'confirmed' | 'waitlist'
+    movedFromSignup?: string
     userWorkOSId: string
   }[]
   /** Set by the write: the sign-ups its guard took seats for. */
@@ -429,6 +432,9 @@ export async function signUpForWorkshop(
           },
         }),
         ...(earlyAccessTicketType && { earlyAccessTicketType }),
+        ...(request.movedFromSignup && {
+          movedFromSignup: request.movedFromSignup,
+        }),
       })
       return { done: _id }
     },
@@ -478,13 +484,15 @@ interface Confirmed {
   capacity: number
 }
 
-interface CurrentSignup {
+export interface CurrentSignup {
   _id: string
   /** The revision checked: the write is made on it, or not at all. */
   _rev: string
   _createdAt: string
   signedUpAt?: string
   status: 'confirmed' | 'waitlist'
+  /** Set on a sign-up a move wrote (see `SignUpRequest`). */
+  movedFromSignup?: string
 }
 
 /**
@@ -492,7 +500,7 @@ interface CurrentSignup {
  * not from a read that may still show one deleted or moved. A write is then
  * refused only by a race, not by a read that has not caught up.
  */
-async function current(
+export async function current(
   ids: string[],
   workshopId: string,
   conferenceId: string,

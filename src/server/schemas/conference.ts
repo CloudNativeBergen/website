@@ -226,6 +226,7 @@ export const UpdateCommunicationSchema = z.object({
     .email('Enter a valid email address'),
   salesNotificationChannel: z.string().trim().nullable().optional(),
   cfpNotificationChannel: z.string().trim().nullable().optional(),
+  speakerSlackChannel: z.string().trim().nullable().optional(),
   volunteerSlackInviteUrl: z
     .string()
     .trim()

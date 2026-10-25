@@ -75,7 +75,16 @@ function buildPayload(info: SpeakerInfo) {
   }
 }
 
-export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
+export function SpeakerInfoForm({
+  initial,
+  routeAnswers,
+}: {
+  initial?: SpeakerInfo
+  /** Confirmed speakers who chose each route, by `_key` (#1592, phase 5). */
+  routeAnswers?: Record<string, number>
+}) {
+  // Shown after removing a route that speakers chose.
+  const [removedNotice, setRemovedNotice] = useState<string>()
   const router = useRouter()
   const { showNotification } = useNotification()
   // Datetimes are held as datetime-local strings while editing.
@@ -264,15 +273,29 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() =>
+                onClick={() => {
                   setDinner({ routes: routes.filter((_, i) => i !== idx) })
-                }
+                  const n = (r._key && routeAnswers?.[r._key]) || 0
+                  setRemovedNotice(
+                    n > 0
+                      ? `${n} ${n === 1 ? 'speaker' : 'speakers'} chose this route; they will be asked again.`
+                      : undefined,
+                  )
+                }}
               >
                 <TrashIcon className="h-4 w-4" />
                 Remove route
               </AdminButton>
             </div>
           ))}
+          {removedNotice && (
+            <p
+              role="status"
+              className="text-sm text-amber-800 dark:text-amber-200"
+            >
+              {removedNotice}
+            </p>
+          )}
           <AdminButton
             type="button"
             variant="secondary"
