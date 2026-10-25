@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildBriefingSlackMessage,
   portableTextToMrkdwn,
+  splitMrkdwn,
 } from './speaker-briefing'
 
 const para = (
@@ -101,5 +102,50 @@ describe('buildBriefingSlackMessage', () => {
     )
     expect(text).toContain('Badge desk')
     expect(text).toContain('<https://a.example.com/cfp/list#briefing|open it>')
+  })
+})
+
+describe('splitMrkdwn', () => {
+  it('splits within the limit and never inside a link or entity', () => {
+    const link = '<https://maps.example/a very long label|Open the map here>'
+    const text = Array.from(
+      { length: 40 },
+      (_, i) => `word${i} ${link} &amp;`,
+    ).join(' ')
+    const chunks = splitMrkdwn(text, 200)
+    expect(chunks.length).toBeGreaterThan(1)
+    for (const c of chunks) {
+      expect(c.length).toBeLessThanOrEqual(200)
+      expect((c.match(/</g) ?? []).length).toBe((c.match(/>/g) ?? []).length)
+      expect(c).not.toMatch(/&[a-z]*$/)
+    }
+    expect(chunks.join(' ').replace(/\s+/g, ' ')).toBe(
+      text.replace(/\s+/g, ' '),
+    )
+  })
+
+  it('splits a long section into several blocks', () => {
+    const long = 'x '.repeat(4000)
+    const m = buildBriefingSlackMessage(
+      { extra: [para(long)] },
+      {
+        title: 'Conf A',
+        dashboardUrl: 'https://a.example.com/cfp/list#briefing',
+      },
+    )
+    expect(m.blocks.length).toBeGreaterThan(3)
+    for (const b of m.blocks)
+      expect(b.text!.text.length).toBeLessThanOrEqual(3000)
+  })
+
+  it('leaves the on-site phone number out of the channel', () => {
+    const text = buildBriefingSlackMessage(
+      { onsiteContact: { name: 'Bob', phone: '+47 400', email: 'bob@x.no' } },
+      { title: 'Conf A', dashboardUrl: 'https://a.example.com/cfp/list' },
+    )
+      .blocks.map((b) => b.text?.text)
+      .join('\n')
+    expect(text).toContain('Bob · bob@x.no')
+    expect(text).not.toContain('+47')
   })
 })

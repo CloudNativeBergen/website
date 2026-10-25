@@ -51,11 +51,37 @@ export function portableTextToMrkdwn(blocks?: TypedObject[]): string {
     .join('\n')
 }
 
-const section = (text: string): SlackBlock => ({
-  type: 'section',
-  // Slack caps a section's text at 3000 characters.
-  text: { type: 'mrkdwn', text: text.slice(0, 3000) },
-})
+/** Slack caps a section's text at 3000 characters. */
+export const SLACK_SECTION_LIMIT = 3000
+
+/**
+ * Split text into chunks within the limit, at whitespace and never inside
+ * a `<url|label>` link or an entity, so no chunk breaks markup.
+ */
+export function splitMrkdwn(
+  text: string,
+  limit = SLACK_SECTION_LIMIT,
+): string[] {
+  const chunks: string[] = []
+  let current = ''
+  for (const token of text.match(/<[^>]*>|&[a-z]+;|[^\s<&]+|\s+|[<&]/g) ?? []) {
+    if (current.length + token.length > limit && current) {
+      chunks.push(current.trimEnd())
+      current = ''
+    }
+    if (!current && !token.trim()) continue
+    // ponytail: a single token over the limit (a giant URL) is cut hard.
+    current += token.slice(0, limit)
+  }
+  if (current.trim()) chunks.push(current.trimEnd())
+  return chunks
+}
+
+const sections = (text: string): SlackBlock[] =>
+  splitMrkdwn(text).map((chunk) => ({
+    type: 'section',
+    text: { type: 'mrkdwn', text: chunk },
+  }))
 
 export function buildBriefingSlackMessage(
   briefing: SpeakerBriefing,
@@ -103,9 +129,10 @@ export function buildBriefingSlackMessage(
   rich('Check-in', briefing.checkIn)
   rich('Equipment', briefing.equipment)
   const c = briefing.onsiteContact
-  if (c) {
+  if (c?.name || c?.email) {
     parts.push(
-      `*On-site contact*\n${e([c.name, c.phone, c.email].filter(Boolean).join(' · '))}`,
+      // No phone number in a channel: name and email only.
+      `*On-site contact*\n${e([c.name, c.email].filter(Boolean).join(' · '))}`,
     )
   }
   rich('Good to know', briefing.extra)
@@ -114,9 +141,9 @@ export function buildBriefingSlackMessage(
   return {
     text: `Speaker info: ${opts.title}`,
     blocks: [
-      section(heading),
-      ...parts.map(section),
-      section(
+      ...sections(heading),
+      ...parts.flatMap(sections),
+      ...sections(
         `Everything is on your speaker dashboard: ${link(opts.dashboardUrl, 'open it')}`,
       ),
     ],
