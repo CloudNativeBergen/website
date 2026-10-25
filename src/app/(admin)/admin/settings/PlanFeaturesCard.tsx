@@ -65,7 +65,10 @@ export function PlanFeaturesCard({ plan, features }: PlanFeaturesCardProps) {
             reusable here — its value prop takes primitives/arrays, not a
             ReactNode badge, and this row also carries the #plan-features
             anchor. */}
-        <span className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+        <span
+          data-field-label=""
+          className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400"
+        >
           Plan
         </span>
         <div className="min-w-0 text-right text-sm">
@@ -88,6 +91,7 @@ export function PlanFeaturesCard({ plan, features }: PlanFeaturesCardProps) {
                     it into a one-word-per-line column. */}
                 <div className="flex items-center justify-between gap-3">
                   <p
+                    data-field-label=""
                     className={
                       feature.inactiveReason
                         ? 'min-w-0 text-sm font-medium text-gray-500 dark:text-gray-400'

@@ -375,7 +375,12 @@ export default async function AdminSettings() {
             ) : null}
 
             {/* Set-once — collapsed by default. */}
-            <FilterableCard title="Venue Information">
+            {/* Labels listed: the collapsed body is not rendered, so the
+                card cannot read them from the DOM. */}
+            <FilterableCard
+              title="Venue Information"
+              labels={['Venue Name', 'Venue Address']}
+            >
               <CollapsibleSection
                 headingLevel={4}
                 title="Venue Information"

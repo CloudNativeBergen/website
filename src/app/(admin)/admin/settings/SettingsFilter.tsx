@@ -35,8 +35,13 @@ export function SettingsFilter({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.defaultPrevented || e.isComposing) return
       const t = e.target as HTMLElement | null
-      if (t?.closest('input, textarea, select, [contenteditable="true"]'))
+      // Typing somewhere, or inside a modal (⌘K, an edit dialog).
+      if (
+        t?.isContentEditable ||
+        t?.closest('input, textarea, select, [role="dialog"]')
+      )
         return
       e.preventDefault()
       input.current?.focus()
@@ -109,9 +114,12 @@ export function SettingsFilter({ children }: { children: ReactNode }) {
  */
 export function FilterableCard({
   title,
+  labels: extraLabels = [],
   children,
 }: {
   title: string
+  /** Labels the DOM cannot supply (e.g. inside a collapsed section). */
+  labels?: string[]
   children: ReactNode
 }) {
   const query = useSettingsQuery()
@@ -128,9 +136,22 @@ export function FilterableCard({
     )
   }, [])
 
-  const visible = matchesSettingsQuery(query, [title, group, ...labels])
+  const visible = matchesSettingsQuery(query, [
+    title,
+    group,
+    ...labels,
+    ...extraLabels,
+  ])
+  // `contents` keeps the card a direct grid item (equal-height rows). It
+  // would override the `hidden` attribute's display:none, so the class
+  // switches too; the attribute stays for the `:has` selectors.
   return (
-    <div ref={ref} data-settings-card="" hidden={!visible}>
+    <div
+      ref={ref}
+      data-settings-card=""
+      hidden={!visible}
+      className={visible ? 'contents' : 'hidden'}
+    >
       {children}
     </div>
   )

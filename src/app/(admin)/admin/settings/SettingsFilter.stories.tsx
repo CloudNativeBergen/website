@@ -62,9 +62,12 @@ export const MobileFieldLabelMatch: Story = {
     })
     // The `/` listener attaches after hydration; retry until it is live.
     await waitFor(async () => {
+      await userEvent.clear(input)
+      input.blur()
       await userEvent.keyboard('/')
       await expect(input).toHaveFocus()
     })
+    await userEvent.clear(input)
     await userEvent.type(input, 'POSTHOG')
     await waitFor(() => expect(canvas.getByText('Analytics')).toBeVisible())
     await expect(canvas.queryByText('Ticketing')).not.toBeVisible()
