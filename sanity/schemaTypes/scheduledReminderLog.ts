@@ -11,7 +11,9 @@ import { defineField, defineType } from 'sanity'
  * reminders, and `reminder.day-of.<conferenceId>.<speakerId>.<date>` for the
  * day-of agenda. The speaker briefing email (#1592) writes
  * `briefing.<conferenceId>.<speakerId>.<version>` under key `speaker-briefing`,
- * with the `speakerInfo.updatedAt` it sent in `version`. The cron writes it with `createIfNotExists` + a counter
+ * where `version` is a 16-hex hash of the shared briefing content it sent
+ * (`briefingVersion`), and `briefing-slack.<conferenceId>` for the last Slack
+ * post. The cron writes it with `createIfNotExists` + a counter
  * increment, so concurrent runs converge on ONE marker per (key, conference,
  * speaker) instead of stacking duplicates.
  *
@@ -66,7 +68,7 @@ export default defineType({
       title: 'Version',
       type: 'string',
       description:
-        'Speaker briefing only: the speaker info version (updatedAt) that was sent.',
+        'Speaker briefing only: the 16-hex content hash of the briefing that was sent.',
     }),
     defineField({
       name: 'lastSentAt',
