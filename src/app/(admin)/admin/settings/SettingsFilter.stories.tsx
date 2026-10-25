@@ -57,9 +57,14 @@ export const MobileFieldLabelMatch: Story = {
   parameters: { viewport: { defaultViewport: 'mobile1' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await userEvent.keyboard('/')
-    const input = canvas.getByRole('searchbox', { name: 'Filter settings' })
-    await expect(input).toHaveFocus()
+    const input = await canvas.findByRole('searchbox', {
+      name: 'Filter settings',
+    })
+    // The `/` listener attaches after hydration; retry until it is live.
+    await waitFor(async () => {
+      await userEvent.keyboard('/')
+      await expect(input).toHaveFocus()
+    })
     await userEvent.type(input, 'POSTHOG')
     await waitFor(() => expect(canvas.getByText('Analytics')).toBeVisible())
     await expect(canvas.queryByText('Ticketing')).not.toBeVisible()
