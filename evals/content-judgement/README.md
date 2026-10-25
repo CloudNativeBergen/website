@@ -22,3 +22,19 @@ Moderation metrics threshold the **mean probability across repeats** at 0.5, 0.7
 Conversation accuracy uses majority top-choice voting across repeats (ties follow the category order in `questions.ts`), with per-category precision/recall, an expected-row confusion matrix, and slices by language, opener role, and ambiguity. Confidence is averaged across repeats and compared for correctly/incorrectly classified items. Repeat stability is the share of items with identical decisions across all repeats (moderation at 0.5). A single repeat is trivially stable.
 
 Only items with all repeats successful enter metrics; excluded counts are explicit. Undefined ratios are zero; empty slice rates are marked where applicable and support counts are shown. Cost sums returned usage costs; missing costs and failed/retried requests can make this an underestimate. p50/p95 latency includes retries and backoff. This deliberately sampled set does not estimate real-world prevalence, and stability or high confidence does not imply correctness. Public examples can become contaminated by training: use fresh held-out cases and human review before deployment.
+
+## Pass bar
+
+Agreed on 2026-10-25 in [Build the offline eval set and the pass bar per surface](https://github.com/CloudNativeBergen/website/issues/1569). "Flag" means any of the four moderation questions at or above the threshold, using the mean probability across repeats.
+
+| Use                               | Surface                                        | Bar                                                                                                           |
+| --------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Advice (badge)                    | Wall Post captions, Feedback Response comments | Flag at **0.5**: recall ≥ 95%, harsh-but-fair false-positive rate ≤ 5%                                        |
+| Enforcement candidate (auto-hide) | Wall Post captions, Feedback Response comments | Flag at **0.9**: precision ≥ 98%, **zero** harsh-but-fair or borderline false positives, evasion recall ≥ 80% |
+| Message Category                  | Conversation openings                          | Accuracy ≥ 90%; a choice with confidence below **0.7** is shown as uncertain and not used as a filter value   |
+
+The bar must be met again whenever the model build or `QUESTION_SET_VERSION` changes, and on a set expanded with adversarial items written by a human before enforcement is switched on anywhere. This set was generated and labelled by a model, so its numbers are an upper bound, not proof.
+
+## Runs
+
+- [`typesafe/jev-1.14-20261014`, 2026-10-25](results/typesafe-jev-1.14-2026-10-25/report.md): all three bars met. Flag at 0.5: 100% precision, 98.7% / 97.6% recall (captions / comments), 0 of 30 harsh-but-fair comments flagged. Flag at 0.9: 100% precision, 82.7% / 84.1% recall, evasion recall 84% / 80%, which clears the enforcement bar narrowly. Categories: 97.3% accuracy, wrong answers at mean confidence 0.56. Every "abusive" false positive is a sexual remark aimed at the speaker, labelled only "sexual". The misses are Norwegian sexual remarks with spaced-out letters. 1,206 calls, $0.049, p50 250 ms.
