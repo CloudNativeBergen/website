@@ -472,7 +472,12 @@ export function meetPosts(
     state.list.length >= WALL_POST_LIMIT ? state.list.at(-1) : undefined
   const fresh = unseen
     .filter((post) => !tail || !sortsAfter(post, tail))
-    .sort((a, b) => (sortsAfter(a, b) ? -1 : sortsAfter(b, a) ? 1 : 0))
+    // Approval order; among one Approve all's equal times, by id, as the
+    // Pinboard's eviction (the oldest card, the smallest id on a tie) expects.
+    .sort(
+      (a, b) =>
+        a.approvedAt.localeCompare(b.approvedAt) || a._id.localeCompare(b._id),
+    )
   const seen = new Set(state.seen)
   for (const post of unseen) seen.add(screenPostKey(post))
   return { seen, fresh }
