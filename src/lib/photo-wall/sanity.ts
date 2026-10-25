@@ -3,6 +3,7 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import {
   postingModeOf,
+  wallLookOf,
   type PhotoWall,
   type PhotoWallSettingsChange,
 } from './types'
@@ -22,6 +23,7 @@ interface PhotoWallRow {
   _id: string
   postingMode?: string | null
   sponsorStrip?: boolean | null
+  look?: string | null
   closedAt?: string | null
 }
 
@@ -32,7 +34,7 @@ export async function readPhotoWall(
   const row = await scopedFetch<PhotoWallRow | null>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "photoWall" && _id == $id][0]{ _id, postingMode, sponsorStrip, closedAt }`,
+    `*[_type == "photoWall" && _id == $id][0]{ _id, postingMode, sponsorStrip, look, closedAt }`,
     { id: photoWallId(conferenceId) },
   )
   if (!row) return null
@@ -40,6 +42,7 @@ export async function readPhotoWall(
     _id: row._id,
     postingMode: postingModeOf(row.postingMode),
     sponsorStrip: row.sponsorStrip === true,
+    look: wallLookOf(row.look),
     closedAt: row.closedAt ?? null,
   }
 }

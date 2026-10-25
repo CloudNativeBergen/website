@@ -19,12 +19,31 @@ export function postingModeOf(stored: unknown): PostingMode {
     : 'paused'
 }
 
+/**
+ * The Wall Looks (Photo Wall spec §4.1, §9): how the Wall page and Screen
+ * Mode lay out the approved posts. An organizer picks one per wall; a
+ * screen's own link can override it with `?look=`.
+ */
+export const WALL_LOOKS = ['pinboard', 'mosaic', 'spotlight'] as const
+export type WallLook = (typeof WALL_LOOKS)[number]
+
+export function isWallLook(value: unknown): value is WallLook {
+  return (WALL_LOOKS as readonly unknown[]).includes(value)
+}
+
+/** The look a stored value means: anything missing or unknown is Pinboard (§4.1). */
+export function wallLookOf(stored: unknown): WallLook {
+  return isWallLook(stored) ? stored : 'pinboard'
+}
+
 /** A conference's `photoWall` document as the server reads it. */
 export interface PhotoWall {
   _id: string
   /** A missing mode reads as Automatic; an unrecognised one as Paused (§7). */
   postingMode: PostingMode
   sponsorStrip: boolean
+  /** Missing or unknown reads as Pinboard (§4.1). */
+  look: WallLook
   /** Set by the retention cron (P1): closed to writes. */
   closedAt: string | null
 }
@@ -54,4 +73,5 @@ export interface PhotoWallLinks {
 export interface PhotoWallSettingsChange {
   postingMode?: PostingMode
   sponsorStrip?: boolean
+  look?: WallLook
 }

@@ -293,12 +293,13 @@ export function WallComposer({
           </div>
 
           <p className="mt-5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
-            Your photo, caption and name are shown on the screens at the venue
-            and on the public wall on this website until{' '}
+            Your whole photo, caption and name are shown on the screens at the
+            venue and on the public wall on this website until{' '}
             <time dateTime={deletesOn}>
               {formatDateLocalized(deletesOn, 'en-GB')}
             </time>
-            . Only post photos the people in them are happy with.{' '}
+            ; the square you choose is only how the polaroids frame it. Only
+            post photos the people in them are happy with.{' '}
             <a
               className="underline underline-offset-2 hover:text-gray-900 dark:hover:text-white"
               href="/privacy#photo-wall"

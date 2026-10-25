@@ -23,9 +23,10 @@ export function PhotoWallPrivacy() {
           <strong>What:</strong> if you post a photo to a conference&apos;s
           Photo Wall, we store the photo (filtered and resized on your phone,
           with location and other camera data removed), your caption, your name
-          if you give one, how the photo is cropped on the wall, whether you
-          allow marketing use, and a cookie that recognises your phone. No
-          email, IP address or account is collected.
+          if you give one, where the square of a polaroid sits on the photo
+          (some walls show the whole photo), whether you allow marketing use,
+          and a cookie that recognises your phone. No email, IP address or
+          account is collected.
         </li>
         <li>
           <strong>Who sees it:</strong> your post appears on the wall at the

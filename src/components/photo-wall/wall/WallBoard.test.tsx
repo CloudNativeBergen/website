@@ -55,13 +55,20 @@ const post = (
 ): WallPagePost => ({
   _id,
   src: sanity(_id),
+  whole: {
+    src: `https://cdn.sanity.io/images/p/d/${_id}-1600x1000.jpg?max-h=1000&max-w=1000&auto=format`,
+    width: 1600,
+    height: 1000,
+  },
   caption: null,
   name: null,
+  approvedAt: '2026-10-26T07:40:00Z',
   ...fields,
 })
 const view = (fields: Partial<WallPageView> = {}): WallPageView => ({
   closed: false,
   postingOpen: true,
+  look: 'pinboard',
   posts: [],
   ...fields,
 })
@@ -271,6 +278,119 @@ describe('WallBoardView (§9.1)', () => {
     expect(screen.queryByText('No photos yet.')).toBeNull()
     expect(screen.queryByRole('contentinfo')).toBeNull()
   })
+})
+
+describe('WallBoardView in Mosaic and Spotlight (§9, #1478)', () => {
+  const photos = () =>
+    within(screen.getByRole('list', { name: 'Photos' })).getAllByRole('img')
+
+  it('Mosaic shows each whole photo, newest first, with its caption and name over it', () => {
+    const posts = [
+      post('wallPost-b', { caption: 'Keynote crowd', name: 'Ada' }),
+      post('wallPost-a'),
+    ]
+    renderView(view({ look: 'mosaic', posts }))
+    expect(photos().map((img) => img.getAttribute('src'))).toEqual(
+      posts.map((p) => p.whole.src),
+    )
+    const figures = screen.getAllByRole('figure')
+    expect(within(figures[0]).getByText('Keynote crowd')).toBeInTheDocument()
+    expect(within(figures[0]).getByText('Ada')).toBeInTheDocument()
+    expect(figures[1].querySelector('figcaption')).toBeNull()
+    // Sized to the photo's own shape, so the whole photo shows.
+    expect(photos()[0]).toHaveAttribute('width', '1600')
+    expect(photos()[0]).toHaveAttribute('height', '1000')
+  })
+
+  it('Mosaic: a panorama keeps its caption to one line and drops the name, so the photo still shows', () => {
+    const panorama = post('wallPost-p', {
+      caption:
+        'Fjord views between talks, and the longest caption a phone allows',
+      name: 'Bo',
+      whole: {
+        src: 'https://cdn.sanity.io/images/p/d/p-2048x320.jpg',
+        width: 2048,
+        height: 320,
+      },
+    })
+    renderView(
+      view({
+        look: 'mosaic',
+        posts: [panorama, post('wallPost-a', { name: 'Ada' })],
+      }),
+    )
+    const [flat, regular] = screen.getAllByRole('figure')
+    expect(within(flat).getByText(/Fjord views/).className).toContain(
+      'line-clamp-1',
+    )
+    expect(within(flat).queryByText('Bo')).toBeNull()
+    // As rendered: no display utility next to a clamp, whichever way the
+    // className was assembled (it would undo the clamp outside Chromium).
+    for (const el of document.querySelectorAll('[class*="line-clamp-"]')) {
+      expect(el.className).not.toMatch(
+        /(^|\s)(block|inline|inline-block|flex|inline-flex|grid)(\s|$)/,
+      )
+    }
+    // A tile of ordinary shape keeps its name, a 16:9 phone photo too.
+    expect(within(regular).getByText('Ada')).toBeInTheDocument()
+    cleanup()
+    const wide = post('wallPost-w', {
+      caption: 'Keynote',
+      name: 'Cy',
+      whole: {
+        src: 'https://cdn.sanity.io/images/p/d/w-1600x900.jpg',
+        width: 1600,
+        height: 900,
+      },
+    })
+    renderView(view({ look: 'mosaic', posts: [wide] }))
+    expect(
+      within(screen.getByRole('figure')).getByText('Cy'),
+    ).toBeInTheDocument()
+  })
+
+  it('Spotlight is a feed: each whole photo, newest first, with the name, the time and the caption', () => {
+    const posts = [
+      post('wallPost-b', {
+        caption: 'Keynote crowd',
+        name: 'Ada',
+        approvedAt: '2026-10-26T07:52:00Z',
+      }),
+      post('wallPost-a', { approvedAt: '2026-10-26T07:40:00Z' }),
+    ]
+    renderView(view({ look: 'spotlight', posts }))
+    expect(photos().map((img) => img.getAttribute('src'))).toEqual(
+      posts.map((p) => p.whole.src),
+    )
+    const items = within(
+      screen.getByRole('list', { name: 'Photos' }),
+    ).getAllByRole('listitem')
+    expect(within(items[0]).getByText('Ada')).toBeInTheDocument()
+    // Oslo time: 07:52Z is 08:52 on Monday 26 October.
+    expect(within(items[0]).getByText('Mon 26 Oct, 08:52')).toBeInTheDocument()
+    expect(within(items[0]).getByText('Keynote crowd')).toBeInTheDocument()
+    expect(within(items[1]).getByText('Anonymous')).toBeInTheDocument()
+  })
+
+  it.each(['mosaic', 'spotlight'] as const)(
+    '%s keeps the page around it: the count, Add your photo, the footer, the empty and closed states',
+    (look) => {
+      renderView(
+        view({ look, posts: [post('wallPost-1'), post('wallPost-2')] }),
+      )
+      expect(screen.getByText(/2 photos/)).toBeInTheDocument()
+      expect(
+        screen.getByRole('link', { name: 'Add your photo' }),
+      ).toHaveAttribute('href', '/wall/post')
+      expect(screen.getByText(/want it removed/)).toBeInTheDocument()
+      cleanup()
+      renderView(view({ look, posts: [] }))
+      expect(screen.getByText('No photos yet.')).toBeInTheDocument()
+      cleanup()
+      renderView(view({ look, closed: true, posts: [] }))
+      expect(screen.getByText('This wall has closed.')).toBeInTheDocument()
+    },
+  )
 })
 
 describe('WallBoard, connected', () => {

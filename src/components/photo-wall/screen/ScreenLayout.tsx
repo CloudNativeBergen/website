@@ -1,15 +1,8 @@
 'use client'
 
 import clsx from 'clsx'
-import { useEffect, useRef, useState } from 'react'
-import { ConferenceLogo } from '@/components/ConferenceLogo'
-import { SponsorBanner } from '@/components/stream/SponsorBanner'
-import { useFeedbackQrPng } from '@/components/feedback/useFeedbackQrPng'
-import type { ConferenceLogoData } from '@/lib/conference/logo'
-import { feedbackCodeDisplayUrl } from '@/lib/feedback/code-assets'
-import { screenPostKey, type ScreenPost } from '@/lib/photo-wall/screen'
-import type { ConferenceSponsor } from '@/lib/sponsor/types'
-import { filterPublicSponsors } from '@/lib/sponsor/utils'
+import { photoAlt } from '@/lib/photo-wall/look'
+import type { ScreenPost } from '@/lib/photo-wall/screen'
 import {
   LEAVE_MS,
   type BoardState,
@@ -18,17 +11,17 @@ import {
   pendingImages,
   showsInvitation,
 } from './board'
+import {
+  CANVAS,
+  NewMark,
+  QrPolaroid,
+  STRIP_HEIGHT,
+  ScreenShell,
+  pendingOf,
+  showsStrip,
+  type ScreenConference,
+} from './ScreenShell'
 
-/** The venue screen is laid out on this canvas and scaled to whatever shows it. */
-const CANVAS = { width: 1920, height: 1080 } as const
-/**
- * An image that has reported neither `load` nor `error` this long after it
- * was asked for counts as failed (and is retried like one): a request the
- * venue Wi-Fi swallows must not hold the posts behind it (§9.2).
- */
-export const IMAGE_LOAD_DEADLINE_MS = 15_000
-/** The sponsor strip's share of the canvas (§9.4); the pinboard scales into the rest. */
-const STRIP_HEIGHT = 128
 const COLS = 6
 const CARD_WIDTH = 230
 
@@ -39,57 +32,6 @@ function jitter(key: string, salt: number): number {
     hash = (Math.imul(hash ^ key.charCodeAt(i), 0x01000193) + salt) | 0
   }
   return (Math.abs(hash) % 2001) / 1000 - 1
-}
-
-const KEYFRAMES = `
-@keyframes pw-drop { 0% { transform: translateY(-140px) scale(1.35) rotate(-8deg); opacity: 0 } 60% { opacity: 1 } 100% { transform: none; opacity: 1 } }
-@keyframes pw-fade { from { opacity: 0 } to { opacity: 1 } }
-@keyframes pw-pop { 0% { transform: scale(.4) } 70% { transform: scale(1.15) } 100% { transform: scale(1) } }
-@media (prefers-reduced-motion: reduce) {
-  .pw-card { animation: none !important }
-}
-`
-
-/** What the screen shows of its conference. */
-export interface ScreenConference {
-  logo: ConferenceLogoData | null
-  /** The Composer's absolute URL on the conference's domain, for the QR (§9.2). */
-  postUrl: string
-  /** Loaded when the page rendered (§9.4); shown while the switch is on. */
-  sponsors: ConferenceSponsor[]
-}
-
-/**
- * Renders the 1920×1080 canvas scaled to fit the viewport, centred. A 4K
- * display or an odd aspect ratio shows the same layout, larger or
- * letterboxed, never reflowed.
- */
-function ScreenFit({ children }: { children: React.ReactNode }) {
-  const [scale, setScale] = useState(1)
-  useEffect(() => {
-    const fit = () =>
-      setScale(
-        Math.min(
-          window.innerWidth / CANVAS.width,
-          window.innerHeight / CANVAS.height,
-        ),
-      )
-    fit()
-    window.addEventListener('resize', fit)
-    return () => window.removeEventListener('resize', fit)
-  }, [])
-  return (
-    <div
-      className="absolute top-1/2 left-1/2 origin-center overflow-hidden"
-      style={{
-        width: CANVAS.width,
-        height: CANVAS.height,
-        transform: `translate(-50%, -50%) scale(${scale})`,
-      }}
-    >
-      {children}
-    </div>
-  )
 }
 
 /**
@@ -113,7 +55,7 @@ function Polaroid({
     >
       <img
         src={post.src}
-        alt={post.name ? `Photo by ${post.name}` : 'Photo from the wall'}
+        alt={photoAlt(post)}
         width={600}
         height={600}
         draggable={false}
@@ -123,7 +65,7 @@ function Polaroid({
       {caption && (
         <figcaption className="font-caveat h-[76px] overflow-hidden pt-1.5 leading-tight break-words">
           {post.caption && (
-            <span className="line-clamp-2 block text-xl leading-tight font-medium">
+            <span className="line-clamp-2 text-xl leading-tight font-medium">
               {post.caption}
             </span>
           )}
@@ -172,8 +114,8 @@ function Card({ card, slot }: { card: ScreenCard; slot: number }) {
     >
       <Polaroid post={card.post} tilt={jitter(card.key, 4) * 6} />
       {isNew && (
-        <span className="absolute -top-3 -right-3 animate-[pw-pop_400ms_ease-out] rounded-full bg-(--screen-accent) px-3 py-1 text-sm font-bold text-white shadow-lg">
-          New
+        <span className="absolute -top-3 -right-3">
+          <NewMark />
         </span>
       )}
     </div>
@@ -181,177 +123,13 @@ function Card({ card, slot }: { card: ScreenCard; slot: number }) {
 }
 
 /**
- * The QR polaroid (§9.2): dark code on a white card, whatever the screen,
- * pointing at the Composer. `large` is the empty wall's invitation.
- */
-function QrPolaroid({ url, large = false }: { url: string; large?: boolean }) {
-  const { src, failed } = useFeedbackQrPng(url, large ? 720 : 400)
-  const shown = feedbackCodeDisplayUrl(url)
-  return (
-    <figure
-      className={clsx(
-        'bg-white p-3 pb-2 text-gray-900 shadow-2xl',
-        large ? 'w-[420px] -rotate-1' : 'w-60 rotate-2',
-      )}
-    >
-      <div className="grid aspect-square place-items-center bg-white">
-        {src ? (
-          <img
-            src={src}
-            alt={`QR code for ${shown}`}
-            className="block h-auto w-full [image-rendering:pixelated]"
-          />
-        ) : failed ? (
-          <p className="p-4 text-center text-lg text-gray-600">{shown}</p>
-        ) : null}
-      </div>
-      <figcaption className="font-caveat pt-2 text-center leading-tight">
-        <span className={clsx('block', large ? 'text-4xl' : 'text-2xl')}>
-          Add yours!
-        </span>
-        <span
-          className={clsx(
-            'block break-all text-gray-500',
-            large ? 'text-3xl' : 'text-lg',
-          )}
-        >
-          {shown}
-        </span>
-      </figcaption>
-    </figure>
-  )
-}
-
-/**
- * One image the board wants fetched, off the board. Reports what the
- * browser says of it, including what it said before React was listening:
- * these `<img>`s are server-rendered, and a cached square can finish
- * loading before hydration, whose `load` React never replays. One that
- * says nothing within {@link IMAGE_LOAD_DEADLINE_MS} counts as failed.
- */
-function PreloadImage({
-  post,
-  onLoaded,
-  onFailed,
-}: {
-  post: ScreenPost
-  onLoaded: (key: string) => void
-  onFailed: (key: string) => void
-}) {
-  const key = screenPostKey(post)
-  const ref = useRef<HTMLImageElement>(null)
-  useEffect(() => {
-    const img = ref.current
-    // `complete` is also true of a broken image, whose width is 0.
-    if (img?.complete) {
-      if (img.naturalWidth > 0) onLoaded(key)
-      else onFailed(key)
-      return
-    }
-    const deadline = setTimeout(() => onFailed(key), IMAGE_LOAD_DEADLINE_MS)
-    return () => clearTimeout(deadline)
-  }, [key, onLoaded, onFailed])
-  return (
-    <img
-      ref={ref}
-      src={post.src}
-      alt=""
-      data-preload={post._id}
-      onLoad={() => onLoaded(key)}
-      onError={() => onFailed(key)}
-    />
-  )
-}
-
-/** The images the board wants fetched, off the board (§9.2: shown only once loaded). */
-function Preload({
-  posts,
-  onLoaded,
-  onFailed,
-}: {
-  posts: ScreenPost[]
-  onLoaded: (key: string) => void
-  onFailed: (key: string) => void
-}) {
-  return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute top-0 left-0 size-px overflow-hidden opacity-0"
-    >
-      {posts.map((post) => (
-        <PreloadImage
-          key={screenPostKey(post)}
-          post={post}
-          onLoaded={onLoaded}
-          onFailed={onFailed}
-        />
-      ))}
-    </div>
-  )
-}
-
-/** Keeps the display awake where the browser allows it (§9.2). */
-function useWakeLock() {
-  useEffect(() => {
-    if (!('wakeLock' in navigator)) return
-    let sentinel: WakeLockSentinel | null = null
-    let gone = false
-    const request = () =>
-      navigator.wakeLock
-        .request('screen')
-        .then((s) => {
-          if (gone) return s.release()
-          sentinel = s
-          // The system can let it go with the page still showing (a power
-          // setting, low battery): take it again.
-          s.addEventListener('release', onVisible, { once: true })
-        })
-        .catch(() => {})
-    // The lock is released whenever the page is hidden; take it again.
-    const onVisible = () => {
-      if (!gone && document.visibilityState === 'visible') void request()
-    }
-    void request()
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      gone = true
-      document.removeEventListener('visibilitychange', onVisible)
-      sentinel?.release().catch(() => {})
-    }
-  }, [])
-}
-
-const CURSOR_HIDE_MS = 3_000
-
-/** The cursor goes after 3 s still, and comes back on a move (§9.2). */
-function useHiddenCursor(): boolean {
-  const [hidden, setHidden] = useState(false)
-  useEffect(() => {
-    let timer = setTimeout(() => setHidden(true), CURSOR_HIDE_MS)
-    const onMove = () => {
-      setHidden(false)
-      clearTimeout(timer)
-      timer = setTimeout(() => setHidden(true), CURSOR_HIDE_MS)
-    }
-    window.addEventListener('mousemove', onMove)
-    return () => {
-      clearTimeout(timer)
-      window.removeEventListener('mousemove', onMove)
-    }
-  }, [])
-  return hidden
-}
-
-/**
- * Screen Mode (Photo Wall spec §9.2–§9.4), drawn from the board's state:
- * always dark, no site chrome, the conference logo and brand accent, the
- * 17 slots as scattered polaroids, the QR polaroid, the offline dot, the
- * sponsor strip while its switch is on and a public sponsor exists, and
- * the empty and closed states.
+ * The Pinboard on Screen Mode (Photo Wall spec §9.2), drawn from the board's
+ * state: the 17 slots as scattered polaroids on a dark board under the logo
+ * header, and the QR polaroid, in Screen Mode's shared frame.
  */
 export function ScreenLayout({
   board,
-  conference: { logo, postUrl, sponsors },
+  conference,
   onImageLoaded,
   onImageFailed,
 }: {
@@ -360,118 +138,44 @@ export function ScreenLayout({
   onImageLoaded: (key: string) => void
   onImageFailed: (key: string) => void
 }) {
-  useWakeLock()
-  const cursorHidden = useHiddenCursor()
-  const strip =
-    board.sponsorStrip &&
-    !board.closed &&
-    filterPublicSponsors(sponsors).length > 0
-  const invitation = showsInvitation(board)
+  const strip = showsStrip(
+    board.sponsorStrip,
+    board.closed,
+    conference.sponsors,
+  )
   const boardScale = strip ? (CANVAS.height - STRIP_HEIGHT) / CANVAS.height : 1
   return (
-    // `dark` on the root: the site's dark variant applies inside, whatever
-    // the visitor's setting. The accent is the tenant's primary colour, as
-    // the public layout sets it, or the house blue.
-    <div
-      data-shell-fit="viewport"
-      className={clsx(
-        'dark fixed inset-0 overflow-hidden bg-stone-950 text-white select-none',
-        cursorHidden && 'cursor-none',
-      )}
-      style={
-        {
-          '--screen-accent': 'var(--brand-primary, #1d4ed8)',
-        } as React.CSSProperties
-      }
+    <ScreenShell
+      conference={conference}
+      closed={board.closed}
+      offline={isOffline(board)}
+      invitation={showsInvitation(board)}
+      emptyWall={board.list.length === 0}
+      strip={strip}
+      header
+      background="radial-gradient(ellipse at center, color-mix(in srgb, var(--screen-accent) 14%, #44403c) 0%, #1c1917 75%)"
+      pending={pendingImages(board).map((post) => pendingOf(post, post.src))}
+      onImageLoaded={onImageLoaded}
+      onImageFailed={onImageFailed}
     >
-      <style>{KEYFRAMES}</style>
-      <ScreenFit>
-        <div
-          className="relative size-full overflow-hidden"
-          style={{
-            background:
-              'radial-gradient(ellipse at center, color-mix(in srgb, var(--screen-accent) 14%, #44403c) 0%, #1c1917 75%)',
-          }}
-        >
-          <header className="absolute top-8 left-10 z-50 flex items-center gap-5">
-            <ConferenceLogo
-              conference={logo}
-              variant="horizontal"
-              className="h-14 w-auto max-w-[520px] text-white"
-            />
-            <span className="font-caveat border-l border-white/30 pl-5 text-4xl leading-none text-white/80">
-              Photo Wall
-            </span>
-          </header>
-
-          {isOffline(board) && (
-            <span
-              role="status"
-              aria-label="Offline"
-              title="Offline"
-              className="absolute top-9 right-10 z-50 size-4 rounded-full bg-red-500 shadow-lg ring-2 ring-red-500/30"
-            />
+      <div
+        className="absolute inset-0 origin-top"
+        style={{
+          transform: boardScale === 1 ? undefined : `scale(${boardScale})`,
+        }}
+      >
+        {/* Its own stacking context: an arrival's z-index grows all
+            day and must never climb over the header or the QR. */}
+        <div data-testid="screen-cards" className="absolute inset-0 isolate">
+          {board.slots.map(
+            (card, slot) =>
+              card && <Card key={card.key} card={card} slot={slot} />,
           )}
-
-          {board.closed ? (
-            <p className="font-caveat absolute inset-0 grid place-items-center text-7xl text-white">
-              This wall has closed.
-            </p>
-          ) : invitation ? (
-            <div
-              data-testid="screen-invitation"
-              className="absolute inset-0 flex flex-col items-center justify-center gap-10"
-            >
-              <QrPolaroid url={postUrl} large />
-              {/* Not when there are posts whose photos have yet to load. */}
-              {board.list.length === 0 && (
-                <p className="font-caveat text-6xl text-white">
-                  Be the first on the wall
-                </p>
-              )}
-            </div>
-          ) : (
-            <div
-              className="absolute inset-0 origin-top"
-              style={{
-                transform:
-                  boardScale === 1 ? undefined : `scale(${boardScale})`,
-              }}
-            >
-              {/* Its own stacking context: an arrival's z-index grows all
-                  day and must never climb over the header or the QR. */}
-              <div
-                data-testid="screen-cards"
-                className="absolute inset-0 isolate"
-              >
-                {board.slots.map(
-                  (card, slot) =>
-                    card && <Card key={card.key} card={card} slot={slot} />,
-                )}
-              </div>
-              <div className="absolute right-12 bottom-10 z-500">
-                <QrPolaroid url={postUrl} />
-              </div>
-            </div>
-          )}
-
-          {strip && (
-            <div
-              data-testid="screen-strip"
-              className="absolute inset-x-0 bottom-0 z-40 px-10 pb-6"
-              style={{ height: STRIP_HEIGHT }}
-            >
-              <SponsorBanner sponsors={sponsors} variant="strip" />
-            </div>
-          )}
-
-          <Preload
-            posts={pendingImages(board)}
-            onLoaded={onImageLoaded}
-            onFailed={onImageFailed}
-          />
         </div>
-      </ScreenFit>
-    </div>
+        <div className="absolute right-12 bottom-10 z-500">
+          <QrPolaroid url={conference.postUrl} />
+        </div>
+      </div>
+    </ScreenShell>
   )
 }

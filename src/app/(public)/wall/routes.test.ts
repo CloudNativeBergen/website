@@ -32,7 +32,7 @@ vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: async () => h.resolution,
 }))
 
-import { ComposerClosed, WallPoster } from '@/components/photo-wall'
+import { ComposerClosed, ScreenMode, WallPoster } from '@/components/photo-wall'
 import { ensureDevice } from './post/actions'
 import WallPage from './page'
 import ComposerPage from './post/page'
@@ -51,10 +51,13 @@ const wallOf = (conferenceId: string) => ({
 })
 const NOT_FOUND = { digest: 'NEXT_HTTP_ERROR_FALLBACK;404' }
 
+const screenAt = (query: Record<string, string | string[]> = {}) =>
+  ScreenPage({ searchParams: Promise.resolve(query) })
+
 const ROUTES = [
   ['/wall', WallPage],
   ['/wall/post', ComposerPage],
-  ['/wall/screen', ScreenPage],
+  ['/wall/screen', () => screenAt()],
 ] as const
 
 beforeEach(() => {
@@ -144,4 +147,33 @@ describe('/wall/post while posting is open or not (§6.5, §7)', () => {
       wallClosed: 'closedAt' in settings,
     })
   })
+})
+
+describe("/wall/screen ?look= (§9): a screen link overrides the wall's look", () => {
+  beforeEach(() => {
+    h.store!.reset([{ ...wallOf('conf-A'), look: 'mosaic' }])
+  })
+
+  it("shows the wall's look without one", async () => {
+    const page = await screenAt()
+    expect(page.type).toBe(ScreenMode)
+    expect(page.props.initial.look).toBe('mosaic')
+    expect(page.props.look).toBeUndefined()
+  })
+
+  it.each(['pinboard', 'mosaic', 'spotlight'])(
+    'hands ?look=%s to the screen',
+    async (look) => {
+      const page = await screenAt({ look })
+      expect(page.props.look).toBe(look)
+    },
+  )
+
+  it.each([['carousel'], ['Mosaic'], [['spotlight', 'mosaic']]])(
+    'ignores ?look=%s',
+    async (look) => {
+      const page = await screenAt({ look })
+      expect(page.props.look).toBeUndefined()
+    },
+  )
 })
