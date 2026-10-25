@@ -139,7 +139,6 @@ const SpeakerImage = ({
           objectFit: 'cover',
           border: `3px solid rgba(255, 255, 255, 0.2)`,
           position: 'relative',
-          zIndex: 1,
         }}
       />
     </div>
@@ -353,7 +352,6 @@ export default async function Image({
           flexDirection: 'row',
           alignItems: 'center',
           gap: '32px',
-          zIndex: 2,
           maxWidth: '800px',
         }}
       >
@@ -414,7 +412,6 @@ export default async function Image({
             flexDirection: 'column',
             alignItems: 'flex-end',
             gap: '8px',
-            zIndex: 2,
             maxWidth: '400px',
           }}
         >
@@ -482,7 +479,6 @@ export default async function Image({
           height: mainContentHeight,
           alignItems: 'center',
           position: 'relative',
-          zIndex: 1,
         }}
       >
         <div
@@ -494,7 +490,6 @@ export default async function Image({
             width: '40%',
             paddingRight: '30px',
             position: 'relative',
-            zIndex: 1,
           }}
         >
           <SpeakerImage imageUrl={speakerImgData} name={speakerData.name} />
@@ -543,7 +538,6 @@ export default async function Image({
             width: '60%',
             paddingLeft: '30px',
             position: 'relative',
-            zIndex: 1,
           }}
         >
           <div
@@ -604,7 +598,6 @@ export default async function Image({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            zIndex: 1,
           }}
         >
           <div
