@@ -200,8 +200,7 @@ export async function loadBriefingSpeakers(
 export const briefingSubject = (
   conference: BriefingConference,
   isUpdate = false,
-) =>
-  `Speaker info for ${conference.title}${isUpdate ? ' (updated)' : ''}`
+) => `Speaker info for ${conference.title}${isUpdate ? ' (updated)' : ''}`
 
 export async function renderSpeakerBriefing(
   conference: BriefingConference,

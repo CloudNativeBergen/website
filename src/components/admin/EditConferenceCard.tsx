@@ -462,7 +462,8 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         label: 'Speakers Slack Channel',
         type: 'text',
         nullableWhenEmpty: true,
-        description: 'Slack channel for the speaker info, e.g. #conference-speakers',
+        description:
+          'Slack channel for the speaker info, e.g. #conference-speakers',
       },
       {
         name: 'volunteerSlackInviteUrl',
