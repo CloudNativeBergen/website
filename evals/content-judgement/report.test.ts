@@ -207,6 +207,43 @@ describe('wall-photo report', () => {
     )
   })
 
+  it('scores each photo question from its own answer', () => {
+    // One positive per question, scored 0.9 on its own question and 0.1
+    // elsewhere, so reading the wrong answer drops that row to 0% recall.
+    const items = moderationKeys.map((key, index) => ({
+      ...item(`wp-00${index + 1}`),
+      labels: { photo: { ...labels, [key]: true } },
+      tags: [key === 'spam' || key === 'personal_info' ? key : 'no_caption'],
+    })) as WallPhotoItem[]
+    const report = buildReport(
+      [
+        {
+          surface: 'wall-photo',
+          items,
+          results: items.map((photoItem, index) => ({
+            id: photoItem.id,
+            repeat: 1,
+            model: 'test',
+            latencyMs: 10,
+            cost: 0.01,
+            answers: Object.fromEntries(
+              moderationKeys.map((key, keyIndex) => [
+                `photo_${key}`,
+                { type: 'noul', noul: keyIndex === index ? 0.9 : 0.1 },
+              ]),
+            ) as WallPhotoResponse['answers'],
+          })),
+        },
+      ],
+      'test',
+      1,
+    )
+    for (const key of moderationKeys)
+      expect(report).toContain(
+        `| photo_${key} | 0.5 | 4 | 1 | 100.0% | 100.0% | 1 | 0 | 0 | 3 |`,
+      )
+  })
+
   it('passes only supported photo questions and thresholds mean repeat probabilities', () => {
     const items = Array.from({ length: 6 }, (_, index) =>
       item(`wp-${String(index + 1).padStart(3, '0')}`),
