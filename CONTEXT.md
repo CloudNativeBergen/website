@@ -155,3 +155,33 @@ _Avoid_: layout, theme, template (a Plan Template is a marketing term), style
 **Posting Window**:
 The time a Photo Wall accepts Wall Posts: the conference days, unless an organizer pauses it or opens it early. Outside it the wall can still be viewed.
 _Avoid_: upload window, open period, Feedback Window (a Session Feedback term)
+
+### Content Judgement
+
+**Judgement**:
+An automatic classifier's typed answer about one piece of user-written content: a Wall Post's caption, a Wall Post's photo, a comment on a Feedback Response, or a Conversation's opening. It is advice to organizers unless enforcement is on for that surface; speakers and attendees never see it.
+_Avoid_: verdict, score, moderation result, AI check
+
+**Message Category**:
+The topic of a speaker↔organizer Conversation, picked from one fixed list for the whole platform. It is set once when the Conversation opens, and an organizer's change always wins.
+_Avoid_: tag, label, folder, topic
+
+**Likely unsafe**:
+A Judgement with any moderation answer at or above 0.5 (abusive, sexual, spam or personal details).
+_Avoid_: flagged (a speaker flags a comment), blocked, rejected
+
+**Not judged**:
+Content that should have a Judgement but has none, because the check was off, failed, timed out, hit the spend cap, or the photo did not arrive. It stays on the usual human path.
+_Avoid_: unchecked, safe, pending
+
+**Enforcement**:
+A Judgement acting without an organizer: hiding a comment from its speaker until an organizer decides, or holding a Wall Post in not shown. An organization switches it on per surface, and it covers only questions that have proven themselves.
+_Avoid_: auto-moderation, auto-reject, blocking
+
+**Shadow mode**:
+Running content judgement as advice only while organizers' decisions on flagged content are counted, before enforcement is allowed.
+_Avoid_: trial, dry run, silent mode
+
+**Agreement**:
+An organizer's decision on flagged content that matches the flag (hide, remove or reject), or a Message Category left unchanged until its Conversation is resolved. Counted anonymously across the platform.
+_Avoid_: accuracy, precision, approval rate
