@@ -140,6 +140,12 @@ function candidates(state: StreamState): ScreenPost[] {
 const loaded = (state: StreamState, post: ScreenPost) =>
   state.images[screenPostKey(post)] === 'loaded'
 
+/** The let-in posts whose photo has loaded, newest approval first. */
+const letInLoaded = (state: StreamState) =>
+  state.list.filter(
+    (post) => loaded(state, post) && !isQueued(state, screenPostKey(post)),
+  )
+
 /**
  * What is on screen, newest approval first: the newest let-in posts whose
  * photo has loaded. An older loaded photo stays until a newer one has
@@ -149,9 +155,7 @@ const loaded = (state: StreamState, post: ScreenPost) =>
  * never cut a turn or skip one.
  */
 export function shownPosts(state: StreamState): ScreenPost[] {
-  const letIn = state.list.filter(
-    (post) => loaded(state, post) && !isQueued(state, screenPostKey(post)),
-  )
+  const letIn = letInLoaded(state)
   // Kept whatever loads meanwhile: the featured post until its turn ends,
   // and Spotlight's arrivals waiting for theirs.
   const kept = (key: string) =>
@@ -206,9 +210,14 @@ export function isMarkedNew(state: StreamState, post: ScreenPost): boolean {
   return key in state.marks || state.waiting.includes(key)
 }
 
-/** The rotation the featured post walks: the newest few that are shown. */
-function rotation(state: StreamState, shown: ScreenPost[]): ScreenPost[] {
-  return shown.slice(
+/**
+ * The walk: the newest few let-in posts whose photo has loaded, Spotlight's
+ * waiting arrivals among them. Not drawn from what is on screen, which
+ * keeps the featured post on top, so a turn ending never changes who is in
+ * the walk.
+ */
+function walkPosts(state: StreamState): ScreenPost[] {
+  return letInLoaded(state).slice(
     0,
     state.look === 'mosaic' ? MOSAIC_ROTATION : SPOTLIGHT_ROTATION,
   )
@@ -248,8 +257,8 @@ export function upNext(state: StreamState): ScreenPost[] {
     const post = byKey.get(key)
     if (post) out.push(post)
   }
-  // Then the walk, in the order `advance` takes it.
-  for (const post of walkOrder(state, rotation(state, shown))) {
+  // Then the walk, in the order `advance` takes it once they have had theirs.
+  for (const post of walkOrder(state, walkPosts(state))) {
     if (!state.waiting.includes(screenPostKey(post))) out.push(post)
   }
   return out.slice(0, UP_NEXT)
@@ -328,7 +337,7 @@ function advance(state: StreamState, now: number): StreamState {
     } else {
       // The walk's next; the featured post again when it is all there is.
       const post =
-        walkOrder(next, rotation(next, shown))[0] ??
+        walkOrder(next, walkPosts(next))[0] ??
         shown.find((p) => screenPostKey(p) === current?.key)
       next = post
         ? feature(next, screenPostKey(post), now)
@@ -382,6 +391,16 @@ function onPoll(
   const met = meetPosts(state, view.posts)
   if (met) {
     next = { ...next, seen: met.seen, queue: [...next.queue, ...met.fresh] }
+  }
+
+  // A removed featured post hands over to the post Up next promised, the
+  // first of it still on the list; waiting arrivals take theirs as usual.
+  const removed = state.feature && !listKeys.has(state.feature.key)
+  if (removed && state.waiting.length === 0) {
+    const promised = upNext(state).find((post) =>
+      listKeys.has(screenPostKey(post)),
+    )
+    if (promised) next = feature(next, screenPostKey(promised), now)
   }
   return advance(next, now)
 }
