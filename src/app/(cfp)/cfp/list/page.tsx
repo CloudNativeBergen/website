@@ -6,7 +6,7 @@ import { getProposals } from '@/lib/proposal/data/sanity'
 import { getGalleryImages } from '@/lib/gallery/sanity'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
 import { getTravelSupport } from '@/lib/travel-support/sanity'
-import { clientReadCached } from '@/lib/sanity/client'
+import { clientReadCached, clientReadUncached } from '@/lib/sanity/client'
 import { resolveSnapshotField } from '@/lib/speaker/utils'
 import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
@@ -22,6 +22,10 @@ import { ProposalConfirmationHandler } from '@/components/cfp/ProposalConfirmati
 import { NotSeeingTalksPrompt } from '@/components/cfp/NotSeeingTalksPrompt'
 import { MessagesIntroCard } from '@/components/cfp/MessagesIntroCard'
 import { startProviderLink } from '@/app/(cfp)/cfp/profile/link-actions'
+import {
+  loadDashboardBriefing,
+  type BriefingFields,
+} from '@/lib/speaker/dashboardBriefing'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
@@ -201,6 +205,29 @@ export default async function SpeakerDashboard() {
             })
           : {}
 
+      const briefing = await loadDashboardBriefing({
+        conference,
+        currentConferenceId: currentConference?._id,
+        isOver,
+        proposals: proposals ?? [],
+        speakerId,
+        travelSupport,
+        // Live, not through the 300 s cache: a last-minute change (a hike
+        // called off for weather) must show at once.
+        fetchFields: (id) =>
+          clientReadUncached.fetch<BriefingFields | null>(
+            // groq-global-scoped: `$id` is the current domain's conference.
+            groq`*[_type == "conference" && _id == $id][0]{
+              speakerInfo,
+              speakerDinnerInfo,
+              venueName,
+              venueAddress,
+              venueTravelInfo
+            }`,
+            { id },
+          ),
+      })
+
       return {
         conference,
         proposals: proposals || [],
@@ -217,6 +244,7 @@ export default async function SpeakerDashboard() {
         badges: badges || [],
         isOver,
         canEditProposals,
+        ...briefing,
       } as ConferenceWithSpeakerData
     } catch (error) {
       console.error(

@@ -7,6 +7,7 @@ import type { BadgeRecord } from '@/lib/badge/types'
 import type { FeedbackChips } from '@/lib/feedback/chips'
 import type { WidgetMetadata } from './widget-metadata'
 import type { ConferencePhase } from '@/lib/conference/phase'
+import type { SpeakerBriefing } from '@/lib/speaker/briefing'
 import { z } from 'zod'
 
 /**
@@ -37,6 +38,15 @@ export interface ConferenceWithSpeakerData {
    * edition, the edition's own origin otherwise, `null` for none.
    */
   feedbackLinkOrigin?: string | null
+  /**
+   * The speaker briefing (#1592), only for the current domain's edition while
+   * the speaker has a confirmed talk and the conference is not over.
+   */
+  briefing?: SpeakerBriefing
+  /** The Oslo date when today is one of the conference's days. */
+  conferenceDay?: string
+  /** Pin the dinner: from the start of its day until it begins. */
+  pinDinner?: boolean
 }
 
 export interface GridPosition {
