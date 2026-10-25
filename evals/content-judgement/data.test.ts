@@ -61,7 +61,7 @@ describe('public labelled eval data', () => {
   })
 
   it('builds versioned requests with state content and no reference labels', () => {
-    expect(QUESTION_SET_VERSION).toBe('v3')
+    expect(QUESTION_SET_VERSION).toBe('v4')
     for (const surface of ['wall-caption', 'feedback-comment'] as const) {
       const item = loadData(surface)[0]
       const request = buildRequest(surface, item)
