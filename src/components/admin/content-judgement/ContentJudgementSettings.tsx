@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useId, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { formatDateTimeSafe } from '@/lib/time'
@@ -40,9 +40,12 @@ export function ContentJudgementSettings({
   const switchId = useId()
   const helpId = useId()
 
+  // The footer keeps saying "Saving…" until the refreshed props arrive.
+  const [refreshing, startRefresh] = useTransition()
+
   const mutation = api.organization.updateContentJudgement.useMutation({
     onSuccess: (_data, variables) => {
-      router.refresh()
+      startRefresh(() => router.refresh())
       showNotification({
         type: 'success',
         title: variables.enabled
@@ -53,8 +56,10 @@ export function ContentJudgementSettings({
           : 'Nothing new is sent for checking.',
       })
     },
-    onError: (error, variables) => {
-      setEnabled(!variables.enabled)
+    onError: (error) => {
+      // Back to what is STORED, which a refresh during the save may have
+      // changed (another organizer), not merely to the pre-click value.
+      setEnabled(stored)
       showNotification({
         type: 'error',
         title: 'Could not save',
@@ -93,7 +98,7 @@ export function ContentJudgementSettings({
             onClick={toggle}
             // 44×24 to the eye; the `after` box makes the touch target 44×44
             // (see PublicFreeTicketToggle for the inset arithmetic).
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:outline-none aria-disabled:opacity-50 dark:focus:ring-offset-gray-900 ${
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-50 dark:focus:ring-offset-gray-900 ${
               enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
             }`}
           >
@@ -122,7 +127,7 @@ export function ContentJudgementSettings({
       </p>
 
       <p className="border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
-        {mutation.isPending ? (
+        {mutation.isPending || refreshing ? (
           'Saving…'
         ) : changedAt ? (
           <>

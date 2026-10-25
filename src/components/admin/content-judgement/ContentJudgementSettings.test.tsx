@@ -111,6 +111,23 @@ describe('ContentJudgementSettings', () => {
     expect(m.mutate).not.toHaveBeenCalled()
   })
 
+  it('a refused save returns to the STORED value, even if it changed meanwhile', () => {
+    const { rerender } = render(card({ enabled: false }))
+    const toggle = screen.getByRole('switch', { name: 'Judge content' })
+    fireEvent.click(toggle) // our save: on
+    // Meanwhile a refresh brings another organizer's change: on.
+    rerender(
+      card({
+        enabled: true,
+        changedAt: '2026-10-25T12:00:00Z',
+        changedByName: 'B',
+      }),
+    )
+    // Our save is then refused; on is what is stored, so on it stays.
+    act(() => m.options?.onError?.(new Error('no'), { enabled: true }))
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+  })
+
   it('a refused save puts the switch back', () => {
     render(card({ enabled: false }))
     const toggle = screen.getByRole('switch', { name: 'Judge content' })
