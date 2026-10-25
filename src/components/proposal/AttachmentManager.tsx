@@ -25,6 +25,7 @@ interface AttachmentManagerProps {
   onAttachmentsChange: (attachments: Attachment[]) => void
   onDeleteAttachment: (attachmentKey: string) => void
   readonly?: boolean
+  allowDelete?: boolean
 }
 
 const attachmentTypeOptions = new Map([
@@ -39,6 +40,7 @@ export function AttachmentManager({
   onAttachmentsChange,
   onDeleteAttachment,
   readonly = false,
+  allowDelete = false,
 }: AttachmentManagerProps) {
   const visibleAttachments = getNonRecordingAttachments(attachments)
 
@@ -241,7 +243,7 @@ export function AttachmentManager({
 
   return (
     <div className="space-y-4">
-      {visibleAttachments.length > 0 && (
+      {visibleAttachments.length > 0 ? (
         <div className="space-y-2">
           {visibleAttachments.map((attachment) => {
             const typeLabel =
@@ -319,7 +321,19 @@ export function AttachmentManager({
                           Open
                         </a>
                       )}
-                      {!readonly && (
+                      {attachment._type === 'fileAttachment' &&
+                        attachment.url && (
+                          <a
+                            href={attachment.url}
+                            download
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-indigo-600 transition-colors hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+                          >
+                            Download
+                          </a>
+                        )}
+                      {(!readonly || allowDelete) && (
                         <button
                           type="button"
                           onClick={() => handleRemove(attachment._key)}
@@ -336,7 +350,11 @@ export function AttachmentManager({
             )
           })}
         </div>
-      )}
+      ) : readonly ? (
+        <p className="text-sm text-gray-500 italic dark:text-gray-400">
+          No attachments uploaded
+        </p>
+      ) : null}
 
       {!readonly && !isAdding && (
         <div
