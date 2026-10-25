@@ -13,8 +13,8 @@ export function ContentJudgementPrivacy() {
       id="automatic-checks"
       className="scroll-mt-24 rounded-lg border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-900/20"
     >
-      <h3 className="mb-4 flex items-center text-lg font-semibold text-amber-900 dark:text-amber-200">
-        <ScaleIcon className="mr-3 size-5" />
+      <h3 className="mb-4 flex items-start text-lg font-semibold text-amber-900 dark:text-amber-200">
+        <ScaleIcon className="mt-1 mr-3 size-5 shrink-0" />
         Automatic checks on what you write
       </h3>
       <div className="space-y-3 text-sm text-amber-900 dark:text-amber-200">

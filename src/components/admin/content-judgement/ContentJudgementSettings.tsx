@@ -62,44 +62,44 @@ export function ContentJudgementSettings({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div>
+        <div className="flex items-center justify-between gap-4">
           <p
             id="judge-content-label"
             className="text-sm font-medium text-gray-900 dark:text-white"
           >
             Judge content
           </p>
-          <p
-            id="judge-content-help"
-            className="mt-1 text-sm text-gray-500 dark:text-gray-400"
-          >
-            TypeSafe&apos;s Jev classifier checks Wall Posts, comments on
-            session feedback and the first message of each conversation, and
-            gives organizers advice. A person still decides.
-          </p>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
-          aria-labelledby="judge-content-label"
-          aria-describedby="judge-content-help"
-          disabled={mutation.isPending}
-          onClick={toggle}
-          // 44×24 to the eye; the `after` box makes the touch target 44×44
-          // (see PublicFreeTicketToggle for the inset arithmetic).
-          className={`relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-gray-900 ${
-            enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
-          }`}
-        >
-          <span
-            aria-hidden="true"
-            className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-              enabled ? 'translate-x-5' : 'translate-x-0'
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-labelledby="judge-content-label"
+            aria-describedby="judge-content-help"
+            disabled={mutation.isPending}
+            onClick={toggle}
+            // 44×24 to the eye; the `after` box makes the touch target 44×44
+            // (see PublicFreeTicketToggle for the inset arithmetic).
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-gray-900 ${
+              enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
             }`}
-          />
-        </button>
+          >
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                enabled ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+        <p
+          id="judge-content-help"
+          className="mt-1 text-sm text-gray-500 dark:text-gray-400"
+        >
+          TypeSafe&apos;s Jev classifier checks Wall Posts, comments on session
+          feedback and the first message of each conversation, and gives
+          organizers advice. A person still decides.
+        </p>
       </div>
 
       <p className="text-sm text-gray-500 dark:text-gray-400">
