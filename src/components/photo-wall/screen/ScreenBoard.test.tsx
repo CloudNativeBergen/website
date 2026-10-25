@@ -682,6 +682,7 @@ describe("Wall Looks (§9): the wall's look, live, and a screen link's ?look=", 
     h.queryFn.mockResolvedValue(view(posts(7), { look: 'spotlight' }))
     await nextPoll()
     expect(hero()?.getAttribute('data-post')).toBe('wallPost-7')
-    expect(screen.queryByText(/wallPost-8/)).toBeNull()
+    // Gone from the big post and from Up next.
+    expect(document.querySelector('[data-post="wallPost-8"]')).toBeNull()
   })
 })

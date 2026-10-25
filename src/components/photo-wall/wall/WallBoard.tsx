@@ -68,8 +68,11 @@ function Polaroid({ post, eager }: { post: WallPagePost; eager: boolean }) {
   )
 }
 
-/** A tile this flat or flatter keeps its caption to one line, and no name under it. */
-const SHORT_TILE = 0.6
+/**
+ * A tile flatter than this (a panorama; a 16:9 photo is 0.5625 and keeps
+ * both) holds its caption to one line, and no name under it.
+ */
+const SHORT_TILE = 0.55
 /** Grid rows per column width: a tile spans its shape times this. */
 const ROWS_PER_COLUMN = 24
 

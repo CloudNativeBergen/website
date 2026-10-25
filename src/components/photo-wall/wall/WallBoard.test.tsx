@@ -324,8 +324,22 @@ describe('WallBoardView in Mosaic and Spotlight (§9, #1478)', () => {
       'line-clamp-1',
     )
     expect(within(flat).queryByText('Bo')).toBeNull()
-    // A tile of ordinary shape keeps its name.
+    // A tile of ordinary shape keeps its name, a 16:9 phone photo too.
     expect(within(regular).getByText('Ada')).toBeInTheDocument()
+    cleanup()
+    const wide = post('wallPost-w', {
+      caption: 'Keynote',
+      name: 'Cy',
+      whole: {
+        src: 'https://cdn.sanity.io/images/p/d/w-1600x900.jpg',
+        width: 1600,
+        height: 900,
+      },
+    })
+    renderView(view({ look: 'mosaic', posts: [wide] }))
+    expect(
+      within(screen.getByRole('figure')).getByText('Cy'),
+    ).toBeInTheDocument()
   })
 
   it('Spotlight is a feed: each whole photo, newest first, with the name, the time and the caption', () => {

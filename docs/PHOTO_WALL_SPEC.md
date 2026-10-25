@@ -434,9 +434,9 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
 ### 9.1 Wall page (`/wall`)
 
 - Follows the visitor's light or dark setting. Conference logo and name at the
-  top, then the approved posts as a **two-column grid of slightly tilted
-  polaroids** (square crop, handwritten caption and name), newest approval
-  first.
+  top, then the approved posts in the wall's look, newest approval first:
+  on the Pinboard a **two-column grid of slightly tilted polaroids** (square
+  crop, handwritten caption and name); Mosaic and Spotlight as in §9.2.
 - At most the **200** newest approvals (§8); when a 201st is approved, the
   oldest leaves the Wall page and Screen Mode but stays On the wall in the
   admin queue.
@@ -666,8 +666,9 @@ The same cron deletes:
 
 > **Photo Wall.** If you post a photo to a conference's Photo Wall, we store
 > the photo (filtered and resized on your phone, with location and other
-> camera data removed), your caption, your name if you give one, how the photo
-> is cropped on the wall, whether you allow marketing use, and a cookie that
+> camera data removed), your caption, your name if you give one, where the
+> square of a polaroid sits on the photo (some walls show the whole photo),
+> whether you allow marketing use, and a cookie that
 > recognises your phone. Your post appears on the wall at the venue and on the conference website only after an organizer approves it. The photo file itself is stored with an unlisted web address from the moment you post it, so anyone who has that address can open it, even before approval or after it is taken off the wall, until it is deleted; the platform's administrators can also see it. We show it because you chose to post it, and you can
 > withdraw that by deleting it. If you tick the marketing box, the organizers
 > may also use your photo in their own marketing; untick it at any time. We delete every Photo Wall post 30 days after the conference; a deleted photo can stay in our provider's cache for a short while. Copies the
