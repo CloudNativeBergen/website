@@ -11,7 +11,8 @@ import {
   type SpeakerBriefingTalk,
   type SpeakerBriefingTodo,
 } from '@/lib/speaker/briefing'
-import { formatConferenceDateLong, formatSessionInstant } from '@/lib/time'
+import { emailBrand } from './EmailBrandScope'
+import { formatConferenceDayDate, formatSessionInstant } from '@/lib/time'
 
 export interface SpeakerBriefingTemplateProps {
   speakerName: string
@@ -23,6 +24,8 @@ export interface SpeakerBriefingTemplateProps {
   eventDate: string
   socialLinks?: string[]
   brandColor?: string
+  /** The speaker had an earlier version: say this one is an update. */
+  isUpdate?: boolean
 }
 
 /** Map links are organizer input: only http(s) becomes an href. */
@@ -69,12 +72,28 @@ function Rich({
   )
 }
 
+/** Links get explicit colour: some clients render a bare `<a>` invisibly. */
+function A({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      style={{
+        color: emailBrand().accent,
+        textDecoration: 'underline',
+        fontWeight: 500,
+      }}
+    >
+      {children}
+    </a>
+  )
+}
+
 function MapLink({ url }: { url?: string }) {
   const href = httpUrl(url)
   return href ? (
     <>
-      {' '}
-      (<a href={href}>map</a>)
+      {' · '}
+      <A href={href}>Open map</A>
     </>
   ) : null
 }
@@ -92,6 +111,7 @@ export function SpeakerBriefingTemplate({
   eventDate,
   socialLinks = [],
   brandColor,
+  isUpdate = false,
 }: SpeakerBriefingTemplateProps) {
   const b = briefing
   const d = b.dinner
@@ -112,10 +132,22 @@ export function SpeakerBriefingTemplate({
       b.todos &&
       section(
         'Still to do',
-        <ul style={{ margin: 0, paddingLeft: '20px', color: '#334155' }}>
+        <ul
+          style={{
+            margin: 0,
+            paddingLeft: '24px',
+            listStyleType: 'disc',
+            color: '#334155',
+            fontSize: '16px',
+            lineHeight: '1.6',
+          }}
+        >
           {b.todos.map((t) => (
-            <li key={`${t.kind}-${t.proposalId ?? ''}`}>
-              <a
+            <li
+              key={`${t.kind}-${t.proposalId ?? ''}`}
+              style={{ display: 'list-item', marginBottom: '8px' }}
+            >
+              <A
                 href={
                   t.kind === 'travel-support' || !t.proposalId
                     ? `${origin}/cfp/expense`
@@ -123,7 +155,7 @@ export function SpeakerBriefingTemplate({
                 }
               >
                 {TODO_LABELS[t.kind]}
-              </a>
+              </A>
               : {t.title}
             </li>
           ))}
@@ -136,7 +168,7 @@ export function SpeakerBriefingTemplate({
         b.talks.map((t) => (
           <EmailText key={t.proposalId}>
             <strong>{t.title}</strong>
-            {t.date && <> · {formatConferenceDateLong(t.date)}</>}
+            {t.date && <> · {formatConferenceDayDate(t.date)}</>}
             {t.startTime && (
               <>
                 {' '}
@@ -149,9 +181,9 @@ export function SpeakerBriefingTemplate({
               <>
                 {' '}
                 ·{' '}
-                <a href={`${origin}/cfp/workshop/${t.proposalId}`}>
+                <A href={`${origin}/cfp/workshop/${t.proposalId}`}>
                   participant list
-                </a>
+                </A>
               </>
             )}
           </EmailText>
@@ -200,8 +232,6 @@ export function SpeakerBriefingTemplate({
               {rich(r.details)}
             </div>
           ))}
-          <div style={{ height: '12px' }} />
-          <EmailText>Changed your plans? Reply to this email.</EmailText>
         </>,
       ),
     checkIn: b.checkIn && section('Check-in', rich(b.checkIn)),
@@ -211,7 +241,20 @@ export function SpeakerBriefingTemplate({
       section(
         'On-site contact',
         <EmailText>
-          {[c.name, c.phone, c.email].filter(Boolean).join(' · ')}
+          {[
+            c.name,
+            c.phone && (
+              <A href={`tel:${c.phone.replace(/[^+\d]/g, '')}`}>{c.phone}</A>
+            ),
+            c.email && <A href={`mailto:${c.email}`}>{c.email}</A>,
+          ]
+            .filter(Boolean)
+            .map((part, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && ' · '}
+                {part}
+              </React.Fragment>
+            ))}
         </EmailText>,
       ),
     accommodation:
@@ -245,6 +288,7 @@ export function SpeakerBriefingTemplate({
       socialLinks={socialLinks}
     >
       <EmailText>
+        {isUpdate && 'This is an update to the speaker info we sent earlier. '}
         {eventName} is coming up. Here is what you need to know as a speaker.
       </EmailText>
       <div style={{ height: '24px' }} />
@@ -253,6 +297,7 @@ export function SpeakerBriefingTemplate({
         <React.Fragment key={key}>{sections[key]}</React.Fragment>
       ))}
 
+      <EmailText>Changed your plans? Reply to this email.</EmailText>
       <div style={{ marginTop: '24px', marginBottom: '24px' }}>
         <EmailButton href={`${origin}/cfp/list`}>
           Open your speaker dashboard

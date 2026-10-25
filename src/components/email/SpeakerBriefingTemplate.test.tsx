@@ -28,6 +28,7 @@ describe('SpeakerBriefingTemplate', () => {
     )
     expect(html).toContain('Ada Lovelace')
     expect(html).toContain('https://a.example.com/cfp/list')
+    expect(html).not.toContain('This is an update')
     for (const heading of [
       'Your talk',
       'Still to do',
@@ -102,6 +103,17 @@ describe('SpeakerBriefingTemplate', () => {
     for (const t of ['Badge desk', 'HDMI', 'Bob', 'Hotel X', 'Wifi']) {
       expect(html).toContain(t)
     }
+    expect(html).toContain('Wed 28 Oct')
+    expect(html).not.toMatch(/onsdag|oktober/)
+    expect(html).toContain('href="tel:+471"')
+    expect(html).toContain('Open map')
+    expect(html.indexOf('Changed your plans?')).toBeLessThan(
+      html.indexOf('Open your speaker dashboard'),
+    )
+    expect(html.indexOf('Venue and travel')).toBeLessThan(
+      html.indexOf('Changed your plans?'),
+    )
+    expect(html).toContain('list-style-type:disc')
     expect(html).toContain('Grieghallen')
     expect(html).toContain('Light rail')
     expect(html.indexOf('RSVP on your')).toBeLessThan(html.indexOf('18:00'))
@@ -139,5 +151,14 @@ describe('SpeakerBriefingTemplate', () => {
     expect(html).toContain('https://a.example.com/cfp/workshop/w1')
     expect(html).toContain('Claim your speaker ticket')
     expect(html).toContain('https://a.example.com/cfp/expense')
+  })
+
+  it('opens an update with a line saying so', async () => {
+    const html = await render(
+      <SpeakerBriefingTemplate {...base} briefing={{}} isUpdate />,
+    )
+    expect(html).toContain(
+      'This is an update to the speaker info we sent earlier.',
+    )
   })
 })
