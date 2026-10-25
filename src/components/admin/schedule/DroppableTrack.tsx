@@ -61,7 +61,9 @@ function DroppableTrack({
   )
   // Live (official) view: renaming/removing the track are edits with no save
   // path (see ScheduleContext).
-  const { isReadOnly, trackSponsorOptions } = useScheduleContext()
+  const { isReadOnly, trackSponsorOptions, schedule } = useScheduleContext()
+  const daySponsored =
+    schedule?.tracks.some((dayTrack) => dayTrack.sponsor?._ref) ?? false
 
   const timeSlots = useMemo(
     () => generateTimeSlots(SCHEDULE_START, SCHEDULE_END, SLOT_INTERVAL),
@@ -183,6 +185,7 @@ function DroppableTrack({
       <TrackHeader
         track={track}
         isReadOnly={isReadOnly}
+        reserveSponsorRow={daySponsored}
         isEditing={isEditing && !isReadOnly}
         editTitle={editTitle}
         editDescription={editDescription}

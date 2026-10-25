@@ -23,6 +23,7 @@ export const TrackHeader = ({
   onStartEdit,
   onRemoveTrack,
   isReadOnly = false,
+  reserveSponsorRow = false,
 }: {
   track: ScheduleTrack
   isEditing: boolean
@@ -40,6 +41,11 @@ export const TrackHeader = ({
   onRemoveTrack: () => void
   /** Live (official) view — hide the edit/remove affordances (no save path). */
   isReadOnly?: boolean
+  /**
+   * Another track of the day has a sponsor: keep the row, empty, so every
+   * header is as tall and the timelines below stay level.
+   */
+  reserveSponsorRow?: boolean
 }) => {
   const talkContentMinutes = calculateTalkContentMinutes(track)
   const realTalks = track.talks.filter((talk) => talk.talk).length
@@ -129,9 +135,13 @@ export const TrackHeader = ({
                 </span>
               )}
             </div>
-            {sponsorName && (
-              <p className="mt-2 truncate text-xs font-medium text-amber-800 dark:text-amber-300">
-                Sponsored by {sponsorName}
+            {(sponsorName || reserveSponsorRow) && (
+              <p
+                data-sponsor-row
+                aria-hidden={sponsorName ? undefined : true}
+                className="mt-2 truncate text-xs font-medium text-amber-800 dark:text-amber-300"
+              >
+                {sponsorName ? `Sponsored by ${sponsorName}` : '\u00a0'}
               </p>
             )}
           </div>

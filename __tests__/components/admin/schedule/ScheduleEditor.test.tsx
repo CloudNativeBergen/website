@@ -462,6 +462,33 @@ describe('ScheduleEditor — the track sponsor', () => {
     expect(savedSponsor()).toEqual({ _ref: 'proact' })
   })
 
+  it('gives every header the sponsor row when one track has a sponsor, so the timelines stay level', () => {
+    renderWith({
+      ...draftDay,
+      tracks: [
+        { ...draftDay.tracks[0], sponsor: { _ref: 'proact' } },
+        { trackTitle: 'Workshop Room', trackDescription: '', talks: [] },
+      ],
+    })
+    const rows = document.querySelectorAll('[data-sponsor-row]')
+    expect([...rows].map((row) => row.textContent)).toEqual([
+      'Sponsored by Proact IT Norge AS',
+      '\u00a0',
+    ])
+  })
+
+  it('adds no sponsor row on a day without track sponsors', () => {
+    renderWith({
+      ...draftDay,
+      tracks: [
+        draftDay.tracks[0],
+        { trackTitle: 'Workshop Room', trackDescription: '', talks: [] },
+      ],
+    })
+    expect(screen.getByRole('heading', { name: 'Workshop Room' })).toBeVisible()
+    expect(document.querySelectorAll('[data-sponsor-row]')).toHaveLength(0)
+  })
+
   it('keeps a sponsor who is no longer offered, and says so', async () => {
     renderWith(sponsored('lost-deal'))
     expect(
