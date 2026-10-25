@@ -42,8 +42,11 @@ async function patchCurrentOrganization(
       message: failure,
       cause: error,
     })
+  } finally {
+    // Even when the commit threw: its response can be lost after the write
+    // landed, and a cached "off" must not outlive a stored "on".
+    revalidateTag(organizationTag(orgId), expiry)
   }
-  revalidateTag(organizationTag(orgId), expiry)
   return { success: true }
 }
 

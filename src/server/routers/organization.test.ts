@@ -149,7 +149,7 @@ describe('organization.updateContentJudgement', () => {
     expect(store().doc('org-B')?.contentJudgement).toBeUndefined()
   })
 
-  it('a failed write is an error, not a success, and busts nothing', async () => {
+  it('a failed write is an error, not a success', async () => {
     store().failWrites()
     await expect(
       organizer().updateContentJudgement({ enabled: true }),
@@ -157,7 +157,23 @@ describe('organization.updateContentJudgement', () => {
       code: 'INTERNAL_SERVER_ERROR',
       message: 'Failed to update content judgement',
     })
-    expect(h.revalidateTag).not.toHaveBeenCalled()
+    expect(store().doc('org-A')?.contentJudgement).toBeUndefined()
+  })
+
+  it('a write that landed but whose response was lost still expires the cache', async () => {
+    store().afterNextCommit(() => {
+      throw new Error('socket hang up')
+    })
+    await expect(
+      organizer().updateContentJudgement({ enabled: true }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    // Stored on, so the cached settings card and /privacy must not stay "off".
+    expect(store().doc('org-A')?.contentJudgement).toMatchObject({
+      enabled: true,
+    })
+    expect(h.revalidateTag).toHaveBeenCalledWith('sanity:organization-org-A', {
+      expire: 0,
+    })
   })
 
   it('refuses a string for the switch: "false" must never turn it on', async () => {

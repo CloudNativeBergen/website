@@ -200,7 +200,7 @@ function moderationReport(
       `Repeat stability at 0.5: ${scores.length ? percent(stability(repeatAnswers)) : 'N/A'} (${scores.length} items).`,
     )
   }
-  if (heldOut) lines.push(gateRows(run, scores))
+  if (heldOut) lines.push(gateRows(run, scores, repeats))
   return lines.join('\n\n')
 }
 
@@ -208,9 +208,23 @@ function moderationReport(
  * Held-out runs only: one gate-file row per question at the enforcement
  * threshold, UNROUNDED, ready for src/lib/content-judgement/gates.json
  * (4 false positives in 399 negatives is 1.0025%, which fails a 1% bar that
- * a rounded "1.0%" would appear to meet). Captions are Wall Post questions.
+ * a rounded "1.0%" would appear to meet).
+ *
+ * Only for what production actually sends: feedback comments, judged ONCE
+ * per comment. A mean over repeats can hide single-call false positives, and
+ * a caption-only call is not the Wall Post request (caption and photo in one
+ * call, prefixed questions), so neither is evidence for a gate.
  */
-function gateRows(run: SurfaceRun, scores: ModerationScore[]): string {
+function gateRows(
+  run: SurfaceRun,
+  scores: ModerationScore[],
+  repeats: number,
+): string {
+  const heading = '### Gate rows at 0.9 (unrounded)'
+  if (run.surface !== 'feedback-comment')
+    return `${heading}\n\nNone: ${run.surface} is not the request production sends, so it is not evidence for a gate.`
+  if (repeats !== 1)
+    return `${heading}\n\nNone: production judges each comment once, so gate rows need \`--repeats 1\`.`
   const builds = [
     ...new Set(
       run.results
@@ -227,8 +241,8 @@ function gateRows(run: SurfaceRun, scores: ModerationScore[]): string {
       0.9,
     )
     return {
-      question: run.surface === 'wall-caption' ? `caption_${key}` : key,
-      surface: run.surface === 'wall-caption' ? 'wallPost' : 'feedbackComment',
+      question: key,
+      surface: 'feedbackComment',
       build: builds.length === 1 ? builds[0] : 'MIXED: do not copy',
       questionSet: SURFACE_QUESTION_SET[run.surface],
       falsePositiveRate: metrics.falsePositiveRate,
@@ -238,7 +252,7 @@ function gateRows(run: SurfaceRun, scores: ModerationScore[]): string {
     }
   })
   return [
-    '### Gate rows at 0.9 (unrounded)',
+    heading,
     'Copy into gates.json only if every bar holds on these exact values.',
     '```json',
     JSON.stringify(rows, null, 2),

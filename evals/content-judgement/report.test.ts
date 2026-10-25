@@ -337,6 +337,24 @@ describe('held-out gate rows', () => {
     expect(abusive.falsePositiveRate).toBeGreaterThan(0.01)
   })
 
+  it.each([
+    ['repeats were averaged', 'feedback-comment', 3, '--repeats 1'],
+    ['the surface is caption-only', 'wall-caption', 1, 'not the request'],
+  ] as const)('are withheld when %s', (_name, surface, repeats, reason) => {
+    const items = loadData(surface).slice(0, 1)
+    const report = buildReport(
+      [{ surface, items, results: [] }],
+      'm',
+      repeats,
+      {
+        heldOut: true,
+      },
+    )
+    expect(report).toContain('### Gate rows at 0.9 (unrounded)')
+    expect(report).toContain(reason)
+    expect(report).not.toContain('```json')
+  })
+
   it('are absent from public reports', () => {
     const items = loadData('feedback-comment').slice(0, 1)
     const report = buildReport(
