@@ -479,6 +479,20 @@ export const conferenceRouter = router({
     }),
 
   /**
+   * Just the Speakers Slack Channel, from the speaker info page (#1592).
+   * `updateCommunication` requires the three emails, so it cannot save this
+   * one field; the validation is the same field of its schema. Empty unsets.
+   */
+  updateSpeakerSlackChannel: adminProcedure
+    .input(UpdateCommunicationSchema.pick({ speakerSlackChannel: true }))
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, {
+        speakerSlackChannel: input.speakerSlackChannel || null,
+      })
+    }),
+
+  /**
    * SAFEGUARDED. See {@link ticketingBindingIsClaimed}: these ids are the tenancy
    * anchor every `tickets.*` procedure derives its provider event from, and the
    * provider credential is shared platform-wide, so an unguarded write here

@@ -19,6 +19,11 @@ vi.mock('@/lib/conference/sanity', () => ({
 }))
 
 const commit = vi.fn()
+const patched = vi.hoisted(() => ({
+  id: undefined as string | undefined,
+  set: undefined as Record<string, unknown> | undefined,
+  unset: undefined as string[] | undefined,
+}))
 vi.mock('@/lib/sanity/client', () => {
   const tx = {
     createIfNotExists: () => tx,
@@ -26,7 +31,25 @@ vi.mock('@/lib/sanity/client', () => {
     commit: () => commit(),
   }
   return {
-    clientWrite: { transaction: () => tx },
+    clientWrite: {
+      transaction: () => tx,
+      patch: (id: string) => {
+        patched.id = id
+        const builder = {
+          setIfMissing: () => builder,
+          set: (o: Record<string, unknown>) => {
+            patched.set = o
+            return builder
+          },
+          unset: (k: string[]) => {
+            patched.unset = k
+            return builder
+          },
+          commit: async () => ({ _id: id }),
+        }
+        return builder
+      },
+    },
     clientReadUncached: { fetch: vi.fn(async () => null) },
   }
 })
@@ -175,5 +198,22 @@ describe('speaker briefing procedures', () => {
       caller().postBriefingToSlack({ mentionChannel: false }),
     ).rejects.toThrow(/Connect the Slack bot/)
     expect(b.post).not.toHaveBeenCalled()
+  })
+
+  it('saves only the Speakers Slack Channel, on the domain conference', async () => {
+    await caller().updateSpeakerSlackChannel({
+      speakerSlackChannel: ' #cndn-2026-speakers ',
+    })
+    expect(patched.id).toBe('conf-A')
+    expect(patched.set).toEqual({ speakerSlackChannel: '#cndn-2026-speakers' })
+
+    await caller().updateSpeakerSlackChannel({ speakerSlackChannel: '' })
+    expect(patched.unset).toEqual(['speakerSlackChannel'])
+
+    await expect(
+      caller(true, ['org-B']).updateSpeakerSlackChannel({
+        speakerSlackChannel: '#x',
+      }),
+    ).rejects.toThrow()
   })
 })

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from './NotificationProvider'
@@ -216,7 +215,8 @@ export function SpeakerBriefingPanel() {
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
           Slack
         </h3>
-        {channel ? (
+        {data && <SlackChannelField current={data.slackChannel ?? ''} />}
+        {channel && (
           <>
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -253,14 +253,6 @@ export function SpeakerBriefingPanel() {
               </pre>
             )}
           </>
-        ) : (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Set the Speakers Slack Channel under{' '}
-            <Link href="/admin/settings" className="underline">
-              Settings → Communication
-            </Link>{' '}
-            to post the speaker info to Slack.
-          </p>
         )}
       </div>
 
@@ -285,5 +277,70 @@ export function SpeakerBriefingPanel() {
         isLoading={slack.isPending}
       />
     </section>
+  )
+}
+
+/**
+ * The Speakers Slack Channel, edited where it is used. Saved alone, so the
+ * other Communication settings are untouched; `#` is optional, as in
+ * Settings. Saving refetches the panel, so the preview and post button follow.
+ */
+export function SlackChannelField({ current }: { current: string }) {
+  const utils = api.useUtils()
+  const [value, setValue] = useState(current)
+  const save = api.conference.updateSpeakerSlackChannel.useMutation({
+    onSuccess: () => {
+      utils.conference.briefingSpeakers.invalidate()
+      utils.conference.previewBriefingSlack.invalidate()
+    },
+  })
+  const dirty = value.trim() !== current
+  return (
+    <form
+      className="flex flex-wrap items-end gap-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        save.mutate({ speakerSlackChannel: value.trim() || null })
+      }}
+    >
+      <label className="text-sm text-gray-700 dark:text-gray-300">
+        Speakers Slack Channel
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            save.reset()
+          }}
+          placeholder="#conference-speakers"
+          className="mt-1 block rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-700"
+        />
+      </label>
+      <AdminButton
+        type="submit"
+        variant="secondary"
+        disabled={!dirty || save.isPending}
+      >
+        {save.isPending ? 'Saving…' : 'Save'}
+      </AdminButton>
+      {save.isSuccess && !dirty && (
+        <span
+          role="status"
+          className="text-sm text-green-700 dark:text-green-400"
+        >
+          Saved
+        </span>
+      )}
+      {save.error && (
+        <span role="alert" className="text-sm text-red-700 dark:text-red-400">
+          Could not save: {save.error.message}
+        </span>
+      )}
+      {!current && !dirty && (
+        <span className="text-sm text-gray-600 dark:text-gray-400">
+          Set a channel to post the speaker info to Slack.
+        </span>
+      )}
+    </form>
   )
 }
