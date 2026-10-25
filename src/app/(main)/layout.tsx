@@ -3,6 +3,8 @@ import { PlatformLanding } from '@/components/PlatformLanding'
 import { PlatformUnavailable } from '@/components/PlatformUnavailable'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
+import { platformAliasTarget } from '@/lib/domain-verification/platform'
+import { permanentRedirect } from 'next/navigation'
 
 export default async function MainLayout({
   children,
@@ -27,6 +29,10 @@ export default async function MainLayout({
   // never executes — so pages that dereference an empty conference (e.g. cfp's
   // `conference.formats.filter`) can't crash on an unknown host.
   if (isUnknownHost(resolution)) {
+    // `www.` / `m.` of the platform zone are typed or crawled as aliases of the
+    // apex; send them there instead of serving a second copy of the landing.
+    const apex = platformAliasTarget(resolution.domain)
+    if (apex) permanentRedirect(`https://${apex}/`)
     return <PlatformLanding signupUrl={process.env.PLATFORM_SIGNUP_URL} />
   }
 
