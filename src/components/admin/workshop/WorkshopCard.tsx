@@ -8,6 +8,7 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { getWorkshopDuration } from '@/lib/workshop/utils'
+import { isCanceledWorkshop } from '@/lib/workshop/listed'
 import { calculateWorkshopStats, getCapacityColorClass } from './utils'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -41,6 +42,8 @@ export function WorkshopCard({
   const { capacityPercentage, utilizationPercentage, overCapacityBy } =
     calculateWorkshopStats(workshop, confirmedCount, waitlistCount)
   const overCapacity = overCapacityBy > 0
+  // Not listed and taking no sign-ups; the ones it had are still here.
+  const canceled = isCanceledWorkshop(workshop)
   // One decision drives both what the bar's fill says and what it looks like,
   // so a test can read the former without asserting a class name (#1361).
   const fill = overCapacity
@@ -54,6 +57,13 @@ export function WorkshopCard({
           <Title className="line-clamp-2 text-base leading-tight font-semibold text-gray-900 dark:text-white">
             {workshop.title}
           </Title>
+          {canceled && (
+            <StatusBadge
+              label={workshop.status === 'withdrawn' ? 'Withdrawn' : 'Canceled'}
+              color="gray"
+              className="mt-1"
+            />
+          )}
         </div>
 
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
@@ -114,35 +124,37 @@ export function WorkshopCard({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-gray-200 p-3 dark:border-gray-700">
-        <div className="flex gap-2">
+      {!canceled && (
+        <div className="flex flex-col gap-2 border-t border-gray-200 p-3 dark:border-gray-700">
+          <div className="flex gap-2">
+            <AdminButton
+              variant="secondary"
+              onClick={onEditCapacity}
+              title="Edit capacity"
+            >
+              <PencilIcon className="h-4 w-4" />
+              Capacity
+            </AdminButton>
+            <AdminButton
+              color="blue"
+              onClick={onAddParticipant}
+              className="flex-1"
+            >
+              <PlusCircleIcon className="h-4 w-4" />
+              Add Participant
+            </AdminButton>
+          </div>
           <AdminButton
             variant="secondary"
-            onClick={onEditCapacity}
-            title="Edit capacity"
+            onClick={onAnnounce}
+            className="w-full"
+            title="Announce to confirmed participants"
           >
-            <PencilIcon className="h-4 w-4" />
-            Capacity
-          </AdminButton>
-          <AdminButton
-            color="blue"
-            onClick={onAddParticipant}
-            className="flex-1"
-          >
-            <PlusCircleIcon className="h-4 w-4" />
-            Add Participant
+            <MegaphoneIcon className="h-4 w-4" />
+            Announce to participants
           </AdminButton>
         </div>
-        <AdminButton
-          variant="secondary"
-          onClick={onAnnounce}
-          className="w-full"
-          title="Announce to confirmed participants"
-        >
-          <MegaphoneIcon className="h-4 w-4" />
-          Announce to participants
-        </AdminButton>
-      </div>
+      )}
     </div>
   )
 }

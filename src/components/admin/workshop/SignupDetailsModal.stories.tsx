@@ -184,6 +184,15 @@ export const Waitlist: Story = {
   },
 }
 
+/** A canceled workshop's sign-ups: delete only, no confirm or move. */
+export const CanceledWorkshop: Story = {
+  args: { ...Waitlist.args, canceled: true },
+  play: async ({ canvasElement }) => {
+    await expect(actions(canvasElement, 'Move to Confirmed')).toHaveLength(0)
+    await expect(actions(canvasElement, 'Move to waitlist')).toHaveLength(0)
+  },
+}
+
 export const WaitlistDark: Story = {
   ...Waitlist,
   globals: { theme: 'dark' },

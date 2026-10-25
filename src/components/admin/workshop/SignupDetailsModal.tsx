@@ -28,6 +28,8 @@ interface SignupDetailsModalProps {
   /** A retry is on its way: the failure stays shown, with its button. */
   retrying?: boolean
   onConfirmSignup: (signupId: string, userName: string) => void
+  /** A canceled workshop: no confirm or move, only delete. */
+  canceled?: boolean
   /** Runs after the organizer has answered the question this modal asks. */
   onMoveToWaitlist: (signupId: string, userName: string) => void
   onDeleteSignup: (signupId: string, userName: string) => void
@@ -53,6 +55,7 @@ export function SignupDetailsModal({
   onRetry,
   retrying = false,
   onConfirmSignup,
+  canceled = false,
   onMoveToWaitlist,
   onDeleteSignup,
   fullRefusal = null,
@@ -131,7 +134,7 @@ export function SignupDetailsModal({
       header: 'Actions',
       render: (signup) => (
         <div className="flex items-center gap-2">
-          {signup.status === 'waitlist' && (
+          {!canceled && signup.status === 'waitlist' && (
             <button
               onClick={() => onConfirmSignup(signup._id, signup.userName)}
               disabled={isBusy}
@@ -140,7 +143,7 @@ export function SignupDetailsModal({
               Move to Confirmed
             </button>
           )}
-          {signup.status === 'confirmed' && (
+          {!canceled && signup.status === 'confirmed' && (
             <button
               onClick={() =>
                 setMoveTarget({

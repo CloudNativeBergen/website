@@ -45,6 +45,8 @@ beforeEach(() => {
     talk('submitted', { status: 'submitted' }),
     talk('accepted', { status: 'accepted' }),
     talk('withdrawn', { status: 'withdrawn' }),
+    talk('canceled', { status: 'canceled' }),
+    talk('drafts.canceled', { status: 'canceled' }),
     talk('no-format', { format: undefined }),
     talk('elsewhere', { conference: { _type: 'reference', _ref: 'conf-b' } }),
     // Every other field of a listed workshop: only its type tells.
@@ -74,6 +76,7 @@ describe('a workshop an attendee can sign up for', () => {
     ['a submitted workshop proposal', 'submitted'],
     ['an accepted workshop the speaker has not confirmed', 'accepted'],
     ['a withdrawn workshop', 'withdrawn'],
+    ['a canceled workshop', 'canceled'],
     ['a workshop of another conference', 'elsewhere'],
     ['a document that is not a talk', 'a-sponsor'],
     ['an id that does not exist', 'nothing-here'],
@@ -131,4 +134,21 @@ describe('the portal listing', () => {
       ])
     },
   )
+})
+
+describe('the admin listing', () => {
+  it('adds the canceled and withdrawn workshops, never their drafts', async () => {
+    const { workshops } = await getWorkshops({
+      conferenceId: CONF,
+      includeCanceled: true,
+    })
+
+    expect(workshops.map((w) => w._id).sort()).toEqual([
+      'canceled',
+      'kkdemo.talk.s4',
+      'listed-120',
+      'listed-240',
+      'withdrawn',
+    ])
+  })
 })

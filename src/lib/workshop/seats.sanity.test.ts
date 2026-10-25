@@ -350,6 +350,18 @@ describe('what a request that cannot take a seat is told', () => {
     },
   )
 
+  it.each(['canceled', 'withdrawn'])(
+    'a %s workshop confirms no one, and nothing is written',
+    async (status) => {
+      store().reset([workshop({ status }), signup(1, 'waitlist')])
+
+      expect(await confirmSignups(WORKSHOP, CONF, ['signup-1'])).toEqual({
+        refused: 'not-found',
+      })
+      expect(store().commits).toEqual([])
+    },
+  )
+
   it('a workshop of another conference is not found, by any of the three, and nothing is written', async () => {
     store().reset([
       workshop({ conference: ref('conf-b') }),

@@ -554,65 +554,69 @@ export async function confirmSignups(
   signupIds: string[],
   { acceptPast }: { acceptPast?: number } = {},
 ): Promise<Confirmed | Full | { refused: 'not-found' | 'busy' }> {
-  const outcome = await decideAndCommit<Full, Confirmed>(
-    workshopId,
-    conferenceId,
-    async (seats, tx) => {
-      const taken = takenIn(seats)
-      const remembered = new Set(recentIn(seats).map((r) => r.signup))
-      const wanted = await current(signupIds, workshopId, conferenceId)
-      const waitingNow = wanted.filter((s) => s.status === 'waitlist')
-      // Waiting now, but still remembered by the guard as holding a seat
-      // (moved to the waitlist outside the app): written confirmed all the
-      // same, and not counted twice. A read that still shows it confirmed is
-      // no such sign: only the guard's own memory is.
-      const waiting = waitingNow.filter((s) => !remembered.has(s._id))
-      const after = new Set([...taken, ...waiting.map((s) => s._id)]).size
-      if (
-        waiting.length > 0 &&
-        after > seats.capacity &&
-        (acceptPast === undefined || after - seats.capacity > acceptPast)
-      ) {
-        return {
-          refused: 'full' as const,
-          confirmed: wanted
-            .filter((s) => s.status === 'confirmed')
-            .map((s) => s._id),
-          waiting: waitingNow.map((s) => s._id),
-          seatsTaken: taken.size,
-          capacity: seats.capacity,
-          after,
-        }
-      }
-      if (waitingNow.length > 0) {
-        guard(tx, seats, workshopId, conferenceId, {
-          took: waitingNow.map((s) => s._id),
-        })
-        const confirmedAt = new Date().toISOString()
-        for (const { _id, _rev } of waitingNow) {
-          tx.patch(_id, {
-            ifRevisionID: _rev,
-            set: { status: 'confirmed', confirmedAt },
-            // A promotion email still owed from before (moved back outside
-            // the app, so `freeSeat` never settled it) is owed no more when
-            // this confirm reports the sign-up newly confirmed: the confirm
-            // then tells the person, or chose not to. One the guard still
-            // remembers is reported as nothing new, and told nothing by the
-            // confirm, so its email stays owed to the outbox (#1357).
-            ...(remembered.has(_id) ? {} : { unset: ['promotionEmailDue'] }),
-          })
-        }
-      }
+  const outcome = await decideAndCommit<
+    Full | { refused: 'not-found' },
+    Confirmed
+  >(workshopId, conferenceId, async (seats, tx) => {
+    // A canceled or withdrawn workshop takes no seat (asked again of the
+    // talk this round read, as the sign-up does).
+    if (!isListedWorkshop({ _id: workshopId, ...seats })) {
+      return { refused: 'not-found' as const }
+    }
+    const taken = takenIn(seats)
+    const remembered = new Set(recentIn(seats).map((r) => r.signup))
+    const wanted = await current(signupIds, workshopId, conferenceId)
+    const waitingNow = wanted.filter((s) => s.status === 'waitlist')
+    // Waiting now, but still remembered by the guard as holding a seat
+    // (moved to the waitlist outside the app): written confirmed all the
+    // same, and not counted twice. A read that still shows it confirmed is
+    // no such sign: only the guard's own memory is.
+    const waiting = waitingNow.filter((s) => !remembered.has(s._id))
+    const after = new Set([...taken, ...waiting.map((s) => s._id)]).size
+    if (
+      waiting.length > 0 &&
+      after > seats.capacity &&
+      (acceptPast === undefined || after - seats.capacity > acceptPast)
+    ) {
       return {
-        done: {
-          confirmed: wanted.map((s) => s._id),
-          newlyConfirmed: waiting.map((s) => s._id),
-          seatsTaken: after,
-          capacity: seats.capacity,
-        },
+        refused: 'full' as const,
+        confirmed: wanted
+          .filter((s) => s.status === 'confirmed')
+          .map((s) => s._id),
+        waiting: waitingNow.map((s) => s._id),
+        seatsTaken: taken.size,
+        capacity: seats.capacity,
+        after,
       }
-    },
-  )
+    }
+    if (waitingNow.length > 0) {
+      guard(tx, seats, workshopId, conferenceId, {
+        took: waitingNow.map((s) => s._id),
+      })
+      const confirmedAt = new Date().toISOString()
+      for (const { _id, _rev } of waitingNow) {
+        tx.patch(_id, {
+          ifRevisionID: _rev,
+          set: { status: 'confirmed', confirmedAt },
+          // A promotion email still owed from before (moved back outside
+          // the app, so `freeSeat` never settled it) is owed no more when
+          // this confirm reports the sign-up newly confirmed: the confirm
+          // then tells the person, or chose not to. One the guard still
+          // remembers is reported as nothing new, and told nothing by the
+          // confirm, so its email stays owed to the outbox (#1357).
+          ...(remembered.has(_id) ? {} : { unset: ['promotionEmailDue'] }),
+        })
+      }
+    }
+    return {
+      done: {
+        confirmed: wanted.map((s) => s._id),
+        newlyConfirmed: waiting.map((s) => s._id),
+        seatsTaken: after,
+        capacity: seats.capacity,
+      },
+    }
+  })
   return 'refused' in outcome ? outcome : outcome.done
 }
 

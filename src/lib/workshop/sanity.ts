@@ -425,19 +425,24 @@ export async function getWorkshopsByConference(
   const { workshops } = await getWorkshops({
     conferenceId,
     includeScheduleInfo: true,
+    includeCanceled: true,
   })
   return workshops as ProposalWithWorkshopData[]
 }
 
 export async function getWorkshopStatistics(
   conferenceId: string,
+  { includeCanceled = false }: { includeCanceled?: boolean } = {},
 ): Promise<WorkshopStatistics> {
   const { workshops } = await getWorkshops({
     conferenceId,
     includeScheduleInfo: true,
+    includeCanceled,
   })
 
-  const workshopsWithData = workshops as ProposalWithWorkshopData[]
+  const allWorkshops = workshops as ProposalWithWorkshopData[]
+  // The totals are of what is on; a canceled workshop has its own row only.
+  const workshopsWithData = allWorkshops.filter(isListedWorkshop)
 
   // Fetch all signups across multiple pages to get unique participants count
   let allSignups: WorkshopSignupExisting[] = []
@@ -455,13 +460,14 @@ export async function getWorkshopStatistics(
     currentPage++
   }
 
-  const workshopStats = workshopsWithData.map((workshop) => {
+  const toStats = (workshop: ProposalWithWorkshopData) => {
     const confirmedSignups = workshop.signups || 0
     const waitlistSignups = workshop.waitlistCount || 0
 
     return {
       workshopId: workshop._id,
       workshopTitle: workshop.title,
+      status: workshop.status,
       capacity: workshop.capacity,
       totalSignups: confirmedSignups + waitlistSignups,
       confirmedSignups,
@@ -471,7 +477,8 @@ export async function getWorkshopStatistics(
           ? (confirmedSignups / workshop.capacity) * 100
           : 0,
     }
-  })
+  }
+  const workshopStats = workshopsWithData.map(toStats)
 
   const uniqueParticipants = new Set(
     allSignups
@@ -506,7 +513,7 @@ export async function getWorkshopStatistics(
   }
 
   return {
-    workshops: workshopStats,
+    workshops: allWorkshops.map(toStats),
     totals,
   }
 }
