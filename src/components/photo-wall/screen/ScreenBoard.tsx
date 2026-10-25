@@ -115,6 +115,22 @@ export function ScreenBoard({
 }
 
 /**
+ * Screen Mode's poll, starting from the server's answer, every 5 s for as
+ * long as it is mounted (§8); the page counts as a venue screen meanwhile.
+ * Also the room screen's, which shows the wall in turns.
+ */
+export function useScreenMode(initial: ScreenView): ScreenPoll {
+  const { data, dataUpdatedAt, errorUpdatedAt } = useScreenPoll(initial)
+  // Tells the service worker registrar this is a venue screen, also when it
+  // was reached (or left) by a client-side navigation.
+  useEffect(() => {
+    markScreenMode(true)
+    return () => markScreenMode(false)
+  }, [])
+  return { data, dataUpdatedAt, errorUpdatedAt }
+}
+
+/**
  * `/wall/screen` (Photo Wall spec §9.2): starts from the server's answer and
  * polls `photoWallPublic.screen` every 5 s for as long as it is open (§8).
  */
@@ -128,16 +144,9 @@ export function ScreenMode({
   /** The screen link's `?look=`, overriding the wall's look. */
   look?: WallLook
 }) {
-  const { data, dataUpdatedAt, errorUpdatedAt } = useScreenPoll(initial)
-  // Tells the service worker registrar this is a venue screen, also when it
-  // was reached (or left) by a client-side navigation.
-  useEffect(() => {
-    markScreenMode(true)
-    return () => markScreenMode(false)
-  }, [])
   return (
     <ScreenBoard
-      poll={{ data, dataUpdatedAt, errorUpdatedAt }}
+      poll={useScreenMode(initial)}
       conference={conference}
       look={look}
     />
