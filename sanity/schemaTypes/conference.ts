@@ -1283,6 +1283,118 @@ export default defineType({
       description:
         'Where and when the speaker dinner is held. Shown on /info as “Will there be a speaker dinner?”. Leave blank to omit that question.',
     }),
+    // Structured speaker briefing (#1592). Optional; when `dinner` is empty the
+    // plain `speakerDinnerInfo` text above stays the fallback. Every section is
+    // omitted when blank, never replaced by default prose.
+    defineField({
+      name: 'speakerInfo',
+      title: 'Speaker Information',
+      type: 'object',
+      fieldset: 'content',
+      description:
+        'Practical information for speakers. Edited under Admin → Speakers → Speaker Info.',
+      fields: [
+        defineField({
+          name: 'dinner',
+          title: 'Speaker Dinner',
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'startsAt',
+              title: 'Starts At',
+              type: 'datetime',
+            }),
+            defineField({
+              name: 'venueName',
+              title: 'Venue Name',
+              type: 'string',
+            }),
+            defineField({ name: 'address', title: 'Address', type: 'string' }),
+            defineField({ name: 'mapUrl', title: 'Map URL', type: 'url' }),
+            defineField({
+              name: 'description',
+              title: 'Description',
+              type: 'array',
+              of: [{ type: 'block' }],
+            }),
+            defineField({
+              name: 'routes',
+              title: 'Routes',
+              type: 'array',
+              of: [
+                {
+                  type: 'object',
+                  name: 'route',
+                  fields: [
+                    defineField({
+                      name: 'label',
+                      title: 'Label',
+                      type: 'string',
+                    }),
+                    defineField({
+                      name: 'meetingPoint',
+                      title: 'Meeting Point',
+                      type: 'string',
+                    }),
+                    defineField({
+                      name: 'departsAt',
+                      title: 'Departs At',
+                      type: 'datetime',
+                    }),
+                    defineField({
+                      name: 'details',
+                      title: 'Details',
+                      type: 'array',
+                      of: [{ type: 'block' }],
+                    }),
+                  ],
+                },
+              ],
+            }),
+          ],
+        }),
+        defineField({
+          name: 'checkIn',
+          title: 'Check-in',
+          type: 'array',
+          of: [{ type: 'block' }],
+        }),
+        defineField({
+          name: 'equipment',
+          title: 'Equipment',
+          type: 'array',
+          of: [{ type: 'block' }],
+        }),
+        defineField({
+          name: 'onsiteContact',
+          title: 'On-site Contact',
+          type: 'object',
+          fields: [
+            defineField({ name: 'name', title: 'Name', type: 'string' }),
+            defineField({ name: 'phone', title: 'Phone', type: 'string' }),
+            defineField({ name: 'email', title: 'Email', type: 'string' }),
+          ],
+        }),
+        defineField({
+          name: 'accommodation',
+          title: 'Accommodation',
+          type: 'array',
+          of: [{ type: 'block' }],
+        }),
+        defineField({
+          name: 'extra',
+          title: 'Additional Information',
+          type: 'array',
+          of: [{ type: 'block' }],
+        }),
+        defineField({
+          name: 'updatedAt',
+          title: 'Updated At',
+          type: 'datetime',
+          readOnly: true,
+        }),
+      ],
+    }),
     defineField({
       name: 'localRecommendations',
       title: 'Local Recommendations',
