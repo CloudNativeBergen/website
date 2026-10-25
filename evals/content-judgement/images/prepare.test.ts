@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -25,6 +26,8 @@ async function cache(bytes: Buffer): Promise<string> {
   await writeFile(join(directory, 'test-image.png'), bytes)
   return directory
 }
+const sha256 = (bytes: Buffer) =>
+  createHash('sha256').update(bytes).digest('hex')
 async function png(width: number, height: number): Promise<Buffer> {
   return sharp({
     create: { width, height, channels: 3, background: '#315979' },
@@ -97,7 +100,8 @@ describe('cached image preparation', () => {
   })
   it('loads a fetched image by item id regardless of URL extension', async () => {
     const directory = await cache(await png(900, 800))
-    await writeFile(join(directory, 'wp-002.webp'), await png(1000, 800))
+    const bytes = await png(1000, 800)
+    await writeFile(join(directory, 'wp-002.webp'), bytes)
     const prepared = await prepareImage(
       {
         ...item,
@@ -108,7 +112,7 @@ describe('cached image preparation', () => {
           page: 'https://example.com/photo',
           author: 'Example',
           licence: 'CC0-1.0',
-          sha256: 'a'.repeat(64),
+          sha256: sha256(bytes),
         },
       },
       directory,
@@ -120,7 +124,8 @@ describe('cached image preparation', () => {
   })
   it('loads a fetched image whose extension is upper case', async () => {
     const directory = await cache(await png(900, 800))
-    await writeFile(join(directory, 'wp-003.JPG'), await png(1100, 800))
+    const bytes = await png(1100, 800)
+    await writeFile(join(directory, 'wp-003.JPG'), bytes)
     const prepared = await prepareImage(
       {
         ...item,
@@ -131,11 +136,35 @@ describe('cached image preparation', () => {
           page: 'https://example.com/photo',
           author: 'Example',
           licence: 'CC0-1.0',
-          sha256: 'a'.repeat(64),
+          sha256: sha256(bytes),
         },
       },
       directory,
     )
     expect(prepared.width).toBe(1100)
+  })
+  it('refuses a cached photo whose bytes do not match its sha256', async () => {
+    const directory = await cache(await png(900, 800))
+    const bytes = await png(1000, 800)
+    await writeFile(join(directory, 'wp-004.jpg'), bytes)
+    await expect(
+      prepareImage(
+        {
+          ...item,
+          id: 'wp-004',
+          image: {
+            kind: 'fetched',
+            url: 'https://example.com/photo.jpg',
+            page: 'https://example.com/photo',
+            author: 'Example',
+            licence: 'CC0-1.0',
+            sha256: sha256(await png(1000, 801)),
+          },
+        },
+        directory,
+      ),
+    ).rejects.toThrow(
+      'wp-004: image preparation failed (Cached image does not match its sha256)',
+    )
   })
 })

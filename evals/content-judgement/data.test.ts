@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildRequest, QUESTION_SET_VERSION } from './questions'
+import { imageTemplates } from './images/templates'
 import { categories, loadData, moderationKeys } from './schema'
 
 describe('public labelled eval data', () => {
@@ -134,5 +135,38 @@ describe('schema rejection boundaries', () => {
     expect(() =>
       conversationOpeningSchema.parse({ ...conversation, lang: 'no' }),
     ).toThrow()
+  })
+  it('wall-photo is schema-valid, attributed, and matches its documented slices', async () => {
+    const items = loadData('wall-photo')
+    expect(items).toHaveLength(75)
+    const count = (tag: string) =>
+      items.filter((item) => (item.tags as string[]).includes(tag)).length
+    expect({
+      benign: count('benign'),
+      borderline: count('borderline'),
+      spam: count('spam'),
+      personal_info: count('personal_info'),
+      caption_flag: count('caption_flag'),
+      no_caption: count('no_caption'),
+    }).toEqual({
+      benign: 38,
+      borderline: 13,
+      spam: 16,
+      personal_info: 8,
+      caption_flag: 4,
+      no_caption: 11,
+    })
+    const fetched = items.flatMap((item) =>
+      item.image.kind === 'fetched' ? [item.image] : [],
+    )
+    expect(fetched).toHaveLength(60)
+    expect(new Set(fetched.map((image) => image.sha256)).size).toBe(60)
+    for (const image of fetched) expect(image.url).not.toContain('?')
+    const templates = new Set(
+      (await imageTemplates()).map((template) => template.id),
+    )
+    for (const item of items)
+      if (item.image.kind === 'generated')
+        expect(templates.has(item.image.generator)).toBe(true)
   })
 })

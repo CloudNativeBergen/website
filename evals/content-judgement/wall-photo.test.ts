@@ -14,7 +14,7 @@ const photo = {
   id: 'wp-001',
   image: { kind: 'generated', generator: 'badge-1' },
   labels: { photo: labels },
-  tags: ['no_caption'],
+  tags: ['benign', 'no_caption'],
 }
 
 describe('wall-photo schema', () => {
@@ -25,6 +25,7 @@ describe('wall-photo schema', () => {
         ...(mask & 1 ? { caption: 'synthetic fixture' } : {}),
         ...(mask & 2 ? { lang: 'en' } : {}),
         labels: { ...photo.labels, ...(mask & 4 ? { caption: labels } : {}) },
+        tags: mask & 1 ? ['benign'] : ['benign', 'no_caption'],
       })
       expect(result.success, `presence mask ${mask}`).toBe(
         mask === 0 || mask === 7,
@@ -66,6 +67,56 @@ describe('wall-photo schema', () => {
   })
 })
 
+describe('wall-photo tags agree with labels', () => {
+  it.each([
+    [
+      'benign with a positive photo label',
+      {
+        tags: ['benign', 'no_caption'],
+        labels: { photo: { ...labels, spam: true } },
+      },
+    ],
+    [
+      'a spam label without the spam tag',
+      {
+        tags: ['personal_info', 'no_caption'],
+        labels: { photo: { ...labels, spam: true, personal_info: true } },
+      },
+    ],
+    [
+      'a caption without its no_caption tag removed',
+      {
+        tags: ['benign', 'no_caption'],
+        caption: 'synthetic fixture',
+        lang: 'en',
+        labels: { photo: labels, caption: labels },
+      },
+    ],
+    [
+      'a caption_flag tag on a clean caption',
+      {
+        tags: ['benign', 'caption_flag'],
+        caption: 'synthetic fixture',
+        lang: 'en',
+        labels: { photo: labels, caption: labels },
+      },
+    ],
+  ])('rejects %s', (_name, override) => {
+    expect(wallPhotoSchema.safeParse({ ...photo, ...override }).success).toBe(
+      false,
+    )
+  })
+  it('accepts a spam photo tagged spam', () => {
+    expect(
+      wallPhotoSchema.safeParse({
+        ...photo,
+        tags: ['spam', 'no_caption'],
+        labels: { photo: { ...labels, spam: true } },
+      }).success,
+    ).toBe(true)
+  })
+})
+
 describe('wall-photo request and response', () => {
   it('puts the JPEG inside the state array and asks only photo questions without caption', () => {
     const item = wallPhotoSchema.parse(photo)
@@ -90,6 +141,7 @@ describe('wall-photo request and response', () => {
       caption: 'synthetic fixture',
       lang: 'en',
       labels: { photo: labels, caption: labels },
+      tags: ['benign'],
     })
     const request = buildRequest('wall-photo', item, 'test', 'test-image')
     expect(request.state.map((part) => part.type)).toEqual([

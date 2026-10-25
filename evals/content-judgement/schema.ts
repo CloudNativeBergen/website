@@ -128,6 +128,19 @@ export const wallPhotoSchema = z
       (item.caption !== undefined) === (item.lang !== undefined) &&
       (item.caption !== undefined) === (item.labels.caption !== undefined),
   )
+  // Tags pick the scored slices, so they must agree with the labels.
+  .refine((item) => {
+    const photo = Object.values(item.labels.photo).some(Boolean)
+    const caption = Object.values(item.labels.caption ?? {}).some(Boolean)
+    const has = (tag: (typeof item.tags)[number]) => item.tags.includes(tag)
+    return (
+      (has('benign') || has('borderline')) === !photo &&
+      has('spam') === item.labels.photo.spam &&
+      has('personal_info') === item.labels.photo.personal_info &&
+      has('caption_flag') === caption &&
+      has('no_caption') === (item.caption === undefined)
+    )
+  })
 
 export type WallPhotoItem = z.infer<typeof wallPhotoSchema>
 

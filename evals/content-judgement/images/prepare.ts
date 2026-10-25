@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import sharp from 'sharp'
 import type { WallPhotoItem } from '../schema'
@@ -23,7 +25,15 @@ export async function prepareImage(
         throw new Error('Missing or ambiguous cache entry')
       filename = files[0]
     }
-    const { data, info } = await sharp(join(directory, filename))
+    const bytes = await readFile(join(directory, filename))
+    // A stale cache would score an old photo against new labels.
+    if (
+      item.image.kind === 'fetched' &&
+      createHash('sha256').update(bytes).digest('hex') !==
+        item.image.sha256.toLowerCase()
+    )
+      throw new Error('Cached image does not match its sha256')
+    const { data, info } = await sharp(bytes)
       .rotate()
       .resize({
         width: 1568,
@@ -46,6 +56,7 @@ export async function prepareImage(
       error instanceof Error &&
       [
         'Missing or ambiguous cache entry',
+        'Cached image does not match its sha256',
         'Image short side is below 280 px',
       ].includes(error.message)
         ? error.message
