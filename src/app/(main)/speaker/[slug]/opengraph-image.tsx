@@ -7,6 +7,7 @@ import { ogBrandColors } from '@/lib/og/brand'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
   createSvgDataUrl,
+  fetchImageDataUrl,
   formatDateRange,
   loadBrandFonts,
 } from '@/lib/og/helpers'
@@ -310,6 +311,11 @@ export default async function Image({
           auto: false,
         })
       : null
+  // Resolve the bytes here so a dead URL (an expired LinkedIn signed link)
+  // falls back to the placeholder instead of failing the card in satori.
+  const speakerImgData = speakerImgUrl
+    ? await fetchImageDataUrl(speakerImgUrl)
+    : null
 
   const ingressSponsors = conferenceData.sponsors.filter(
     (s) => s.tier?.title === 'Ingress',
@@ -491,7 +497,7 @@ export default async function Image({
             zIndex: 1,
           }}
         >
-          <SpeakerImage imageUrl={speakerImgUrl} name={speakerData.name} />
+          <SpeakerImage imageUrl={speakerImgData} name={speakerData.name} />
 
           <h2
             style={{

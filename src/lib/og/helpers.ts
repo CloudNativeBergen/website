@@ -1,5 +1,23 @@
 import { protocolForDomain } from '@/lib/environment/localhost'
 
+/**
+ * Fetches a remote image and returns it as a data URI, or null when it cannot
+ * be used. Satori throws on an image it cannot decode (an expired LinkedIn
+ * signed URL answers 403 with an HTML body), which fails the whole OG card;
+ * resolving the bytes first lets the caller fall back to a placeholder.
+ */
+export async function fetchImageDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    const type = res.headers.get('content-type') ?? ''
+    if (!res.ok || !/^image\/(png|jpe?g|gif|webp)/i.test(type)) return null
+    const bytes = Buffer.from(await res.arrayBuffer())
+    return `data:${type.split(';')[0]};base64,${bytes.toString('base64')}`
+  } catch {
+    return null
+  }
+}
+
 export function createSvgDataUrl(svgString: string): string | null {
   if (!svgString?.trim()) return null
 
