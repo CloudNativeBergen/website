@@ -144,14 +144,24 @@ const loaded = (state: StreamState, post: ScreenPost) =>
 /**
  * What is on screen, newest approval first: the newest let-in posts whose
  * photo has loaded. An older loaded photo stays until a newer one has
- * loaded to take its place, so retries never empty the screen.
+ * loaded to take its place, so retries never empty the screen. The
+ * featured post and Spotlight's waiting arrivals are kept on top of the
+ * look's count, so photos that load later never cut a turn or skip one.
  */
 export function shownPosts(state: StreamState): ScreenPost[] {
-  return state.list
-    .filter(
-      (post) => loaded(state, post) && !isQueued(state, screenPostKey(post)),
-    )
-    .slice(0, onScreen(state))
+  const letIn = state.list.filter(
+    (post) => loaded(state, post) && !isQueued(state, screenPostKey(post)),
+  )
+  // Kept whatever loads meanwhile: the featured post until its turn ends,
+  // and Spotlight's arrivals waiting for theirs.
+  const kept = (key: string) =>
+    key === state.feature?.key || state.waiting.includes(key)
+  let room = state.look === 'mosaic' ? MOSAIC_TILES : SPOTLIGHT_ROTATION
+  return letIn.filter((post) => {
+    if (kept(screenPostKey(post))) return true
+    room -= 1
+    return room >= 0
+  })
 }
 
 /** The posts whose photo the screen wants fetched and has no word of yet. */

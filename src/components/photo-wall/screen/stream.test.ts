@@ -560,3 +560,43 @@ describe('round-3 adversarial findings', () => {
     },
   )
 })
+
+describe('round-4 adversarial findings', () => {
+  it('Spotlight: photos that recover never push a waiting arrival out of its turn', () => {
+    let s = started('spotlight', 1)
+    let now = T0 + 5_000
+    // 25 approvals at once; the older 12 load, the newer 13 fail.
+    s = poll(s, posts(26), now)
+    const result = (p: ScreenPost) =>
+      Number(p._id.split('-')[1]) <= 13 ? 'imageLoaded' : 'imageFailed'
+    const settle = (st: StreamState, at: number) => {
+      let state = st
+      for (
+        let b = pendingStreamImages(state);
+        b.length > 0;
+        b = pendingStreamImages(state)
+      ) {
+        state = b.reduce(
+          (x, p) =>
+            streamReducer(x, { type: result(p), key: keyOf(p), now: at }),
+          state,
+        )
+      }
+      return state
+    }
+    s = settle(s, now)
+    for (; now < T0 + 65_000; now += 100) s = settle(tick(s, now), now)
+    const waitingBefore = [...s.waiting]
+    expect(waitingBefore.length).toBeGreaterThan(0)
+    // A successful poll retries the failed photos; this time they all load.
+    s = loadAll(poll(s, posts(26), now), now)
+    const seenFeatured = new Set<string>()
+    for (let turn = 0; turn < 40; turn++) {
+      s = run(s, now, now + SWAP_EVERY_MS)
+      now += SWAP_EVERY_MS
+      const post = featured(s)
+      if (post) seenFeatured.add(keyOf(post))
+    }
+    for (const key of waitingBefore) expect(seenFeatured).toContain(key)
+  })
+})
