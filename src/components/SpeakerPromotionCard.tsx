@@ -132,7 +132,9 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
   )
 
   const finalCtaText = ctaText || (isFeatured ? 'View Speaker' : 'View Profile')
-  const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug}`
+  // No slug, no profile link: `/speaker/${null}` is a crawlable dead URL.
+  const finalCtaUrl =
+    ctaUrl || (speaker.slug ? `/speaker/${speaker.slug}` : null)
 
   const { name, bio, image } = speaker
 
@@ -353,15 +355,17 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
           )}
         </div>
 
-        <Link
-          href={finalCtaUrl}
-          className={`group/cta font-inter inline-flex items-center space-x-2 font-semibold text-brand-cloud-blue transition-all duration-200 hover:text-brand-cloud-blue/80 ${variant === 'featured' ? 'text-base' : 'text-sm'}`}
-        >
-          <span>{finalCtaText}</span>
-          <ArrowRightIcon
-            className={`transition-transform group-hover/cta:translate-x-1 ${variant === 'featured' ? 'h-4 w-4' : 'h-3 w-3'}`}
-          />
-        </Link>
+        {finalCtaUrl && (
+          <Link
+            href={finalCtaUrl}
+            className={`group/cta font-inter inline-flex items-center space-x-2 font-semibold text-brand-cloud-blue transition-all duration-200 hover:text-brand-cloud-blue/80 ${variant === 'featured' ? 'text-base' : 'text-sm'}`}
+          >
+            <span>{finalCtaText}</span>
+            <ArrowRightIcon
+              className={`transition-transform group-hover/cta:translate-x-1 ${variant === 'featured' ? 'h-4 w-4' : 'h-3 w-3'}`}
+            />
+          </Link>
+        )}
       </div>
     </footer>
   )

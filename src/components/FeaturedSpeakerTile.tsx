@@ -77,12 +77,16 @@ export function FeaturedSpeakerTile({ speaker }: FeaturedSpeakerTileProps) {
           not just this caption strip. */}
       <div className="z-10 p-4 sm:p-5">
         <h3 className="font-space-grotesk text-lg font-bold text-white sm:text-xl">
-          <Link
-            href={`/speaker/${slug}`}
-            className="after:absolute after:inset-0 after:content-[''] focus:outline-none"
-          >
-            {name}
-          </Link>
+          {slug ? (
+            <Link
+              href={`/speaker/${slug}`}
+              className="after:absolute after:inset-0 after:content-[''] focus:outline-none"
+            >
+              {name}
+            </Link>
+          ) : (
+            name
+          )}
         </h3>
         {subline && (
           <p className="font-inter mt-1 line-clamp-1 text-sm text-slate-200">

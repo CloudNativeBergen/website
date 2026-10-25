@@ -7,7 +7,6 @@ import { flags, Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import * as social from '@/components/SocialIcons'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
-import { Button } from '@/components/Button'
 import { BackLink } from '@/components/BackButton'
 import { ShowMore } from '@/components/ShowMore'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
@@ -30,6 +29,7 @@ import { formatConferenceDateLong } from '@/lib/time'
 import { PhotoGallerySection } from '@/components/PhotoGallerySection'
 import { AttachmentDisplay } from '@/components/proposal/AttachmentDisplay'
 import { headers } from 'next/headers'
+import { notFound } from 'next/navigation'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { PersonJsonLd } from '@/components/seo/PersonJsonLd'
@@ -138,26 +138,7 @@ async function CachedSpeakerContent({
     console.error('Error loading speaker:', err)
   }
 
-  if (!speaker) {
-    return (
-      <div className="relative py-20 sm:pt-36 sm:pb-24">
-        <BackgroundImage className="-top-36 -bottom-14" />
-        <Container className="relative">
-          <div className="mx-auto max-w-4xl text-center">
-            <h1 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-slate-gray dark:text-white">
-              Speaker Not Found
-            </h1>
-            <p className="font-inter mb-8 text-xl text-gray-600 dark:text-gray-300">
-              Sorry, we couldn&apos;t find the speaker you&apos;re looking for.
-            </p>
-            <Button href="/speaker" variant="primary">
-              View All Speakers
-            </Button>
-          </div>
-        </Container>
-      </div>
-    )
-  }
+  if (!speaker) notFound()
 
   const speakerUrl = canonicalUrl(
     conference,

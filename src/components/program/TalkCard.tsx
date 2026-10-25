@@ -329,7 +329,8 @@ export function TalkCard({
                 {isConfirmed ? (
                   primarySpeaker &&
                   typeof primarySpeaker === 'object' &&
-                  'slug' in primarySpeaker ? (
+                  'slug' in primarySpeaker &&
+                  primarySpeaker.slug ? (
                     <Link
                       href={`/speaker/${primarySpeaker.slug}`}
                       className="transition-colors hover:text-brand-cloud-blue dark:hover:text-blue-400"

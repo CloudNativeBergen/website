@@ -112,3 +112,11 @@ describe('reads that must NOT carry it', () => {
     expect(speaker).not.toHaveProperty('socialTagOptOutAt')
   })
 })
+
+describe('getPublicSpeaker — unknown slug', () => {
+  it('is a plain miss, not an error, so the page 404s without logging', async () => {
+    const { speaker, err } = await getPublicSpeaker('conf-A', 'null')
+    expect(speaker).toBeNull()
+    expect(err).toBeNull()
+  })
+})
