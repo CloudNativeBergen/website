@@ -158,7 +158,8 @@ export function SpotlightScreen({
           <aside className="flex min-h-0 flex-col gap-8">
             <ScreenHeader logo={conference.logo} plain narrow />
             <QrCard url={conference.postUrl} />
-            {next.length > 0 && (
+            {/* No rail while the first big post's photo is still on its way. */}
+            {hero && next.length > 0 && (
               <section className="min-h-0">
                 <h2 className="text-sm font-semibold tracking-widest text-white/60 uppercase">
                   Up next

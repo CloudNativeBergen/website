@@ -4,10 +4,10 @@
  * featured — Mosaic's spotlight tile, Spotlight's big post. Pure, like the
  * Pinboard's `board`, and driven the same way by `ScreenBoard`.
  *
- * What is on screen is derived, not stored: the newest posts on the list
- * that are not waiting their turn and whose photo has loaded. The state
- * holds only what time decides: the arrivals' queue, the featured post and
- * since when, and the "new" marks.
+ * What is on screen is derived, not stored: the newest let-in posts (not
+ * queued) whose photo has loaded. The state holds what time decides: the
+ * arrivals' queue, Spotlight's let-in arrivals waiting for their turn, the
+ * featured post and since when, each post's last turn, and the "new" marks.
  *
  * - **Mosaic** shows {@link MOSAIC_TILES} tiles; the spotlight walks the
  *   {@link MOSAIC_ROTATION} newest every {@link SWAP_EVERY_MS}, and a new
@@ -16,9 +16,10 @@
  *   every {@link SWAP_EVERY_MS}, with the next {@link UP_NEXT} on a rail. A
  *   new post goes next in line, marked new while it waits and for its turn.
  *
- * Both let a burst in one post every {@link ARRIVAL_GAP_MS}, drop a removed
- * post at once (a featured one hands over to the next), and keep the last
- * list through failed polls (§9.3).
+ * Both walk the post that has waited longest since its turn, let a burst
+ * in one post every {@link ARRIVAL_GAP_MS}, drop a removed post at once (a
+ * featured one hands over to the next), and keep the last list through
+ * failed polls (§9.3).
  */
 import {
   screenPostKey,
@@ -59,7 +60,7 @@ export const PRELOAD_AT_ONCE = 17
 /** Spotlight's big post walks this many of the newest posts. */
 export const SPOTLIGHT_ROTATION = 12
 /** Posts on Spotlight's "Up next" rail. */
-export const UP_NEXT = 4
+const UP_NEXT = 4
 
 export interface StreamState extends ImageMemory {
   look: StreamLook
@@ -116,8 +117,8 @@ const isQueued = (state: StreamState, key: string) =>
   state.queue.some((post) => screenPostKey(post) === key)
 
 /**
- * How many posts the look shows. Spotlight keeps every post still waiting
- * for its turn, however many arrived.
+ * How many posts' photos the look asks for. Spotlight adds every arrival
+ * still waiting for its turn, however many arrived.
  */
 const onScreen = (state: StreamState) =>
   state.look === 'mosaic'
@@ -125,8 +126,9 @@ const onScreen = (state: StreamState) =>
     : SPOTLIGHT_ROTATION + state.waiting.length
 
 /**
- * The posts the screen means to show and asks the photos of, newest first:
- * let in, photo not failed.
+ * The posts whose photos the screen asks for, newest first: let in, photo
+ * not failed. What decides the invitation and the first feature's wait;
+ * what is on screen is {@link shownPosts}.
  */
 function candidates(state: StreamState): ScreenPost[] {
   return state.list
@@ -234,9 +236,14 @@ function walkOrder(state: StreamState, walk: ScreenPost[]): ScreenPost[] {
   const current = state.feature?.key
   const lastTurn = (post: ScreenPost) =>
     state.turns[screenPostKey(post)] ?? -Infinity
-  return walk
-    .filter((post) => screenPostKey(post) !== current)
-    .sort((a, b) => lastTurn(a) - lastTurn(b))
+  return (
+    walk
+      .filter((post) => screenPostKey(post) !== current)
+      // Never featured (-Infinity) first; equal turns keep the newest first.
+      .sort((a, b) =>
+        lastTurn(a) === lastTurn(b) ? 0 : lastTurn(a) - lastTurn(b),
+      )
+  )
 }
 
 /** `key` featured at `now`, its turn remembered. */
@@ -302,8 +309,8 @@ function advance(state: StreamState, now: number): StreamState {
     break
   }
 
-  // The featured post: kept for SWAP_EVERY_MS, then the next; a removed or
-  // failed one hands over at once.
+  // The featured post: kept for SWAP_EVERY_MS, then the next; a removed one
+  // hands over at once.
   const shown = shownPosts(next)
   const shownKeys = new Set(shown.map(screenPostKey))
   if (next.waiting.some((key) => !shownKeys.has(key))) {

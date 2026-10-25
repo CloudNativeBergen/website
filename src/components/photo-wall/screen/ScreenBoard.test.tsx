@@ -658,6 +658,25 @@ describe("Wall Looks (§9): the wall's look, live, and a screen link's ?look=", 
     expect(offlineDot()).toBeInTheDocument()
   })
 
+  it('Spotlight shows no Up next while the first big post’s photo is on its way', async () => {
+    mount(view(posts(8), { look: 'spotlight' }))
+    await advance(0)
+    // Every photo but the newest has loaded.
+    act(() => {
+      for (const img of document.querySelectorAll('img[data-preload]')) {
+        if (img.getAttribute('data-preload') !== 'wallPost-8')
+          fireEvent.load(img)
+      }
+    })
+    await advance(100)
+    expect(hero()).toBeNull()
+    expect(screen.queryAllByTestId('up-next')).toHaveLength(0)
+    loadImages()
+    await advance(100)
+    expect(hero()?.getAttribute('data-post')).toBe('wallPost-8')
+    expect(screen.getAllByTestId('up-next')).toHaveLength(4)
+  })
+
   it("keeps a screen link's ?look= whatever the wall's look", async () => {
     mount(view(posts(8), { look: 'mosaic' }), [], 'spotlight')
     await advance(0)
