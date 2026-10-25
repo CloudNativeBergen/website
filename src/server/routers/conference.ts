@@ -13,6 +13,8 @@ import {
   requireSpeakersInCurrentOrg,
 } from '../tenancy'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { getDinnerChoiceSummaryInputs } from '@/lib/speaker/dinnerChoice-sanity'
+import { summarizeDinnerChoices } from '@/lib/speaker/dinnerChoice'
 import {
   getConferenceForCurrentDomain,
   getConferenceForDomain,
@@ -758,6 +760,17 @@ export const conferenceRouter = router({
         .commit()
       return { channel: name, lastSentAt }
     }),
+
+  /**
+   * Who gets to the speaker dinner how (#1592): a row per route, "own",
+   * "not coming" and "no answer", among the confirmed speakers.
+   */
+  dinnerChoiceSummary: adminProcedure.query(async () => {
+    const conferenceId = await resolveConferenceId()
+    const { routes, speakers, choices } =
+      await getDinnerChoiceSummaryInputs(conferenceId)
+    return summarizeDinnerChoices(routes ?? undefined, speakers, choices)
+  }),
 
   updateCfpGoals: adminProcedure
     .input(UpdateCfpGoalsSchema)

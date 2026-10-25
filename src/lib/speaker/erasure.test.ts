@@ -707,7 +707,7 @@ describe('the dependent sweep', () => {
     expect(plan.documentDeletes.map((d) => d.id)).toEqual(['n-mine'])
   })
 
-  it('deletes preferences, dashboard configs and reminder logs owned by the subject', () => {
+  it('deletes preferences, dashboard configs, reminder logs and dinner choices owned by the subject', () => {
     const plan = buildErasurePlan(
       inputs({
         referencingDocs: [
@@ -722,12 +722,22 @@ describe('the dependent sweep', () => {
             _type: 'scheduledReminderLog',
             speaker: ref(SPEAKER),
           },
+          {
+            _id: 'dinnerChoice.c1.' + SPEAKER,
+            _type: 'speakerDinnerChoice',
+            speaker: ref(SPEAKER),
+          },
           { _id: 'dash-2', _type: 'dashboardConfig', speaker: ref('other') },
         ],
       }),
     )
     expect(plan.documentDeletes.map((d) => d.id).sort()).toEqual(
-      ['convpref.c1.' + SPEAKER, 'dash-1', 'reminder.x.c1.' + SPEAKER].sort(),
+      [
+        'convpref.c1.' + SPEAKER,
+        'dash-1',
+        'reminder.x.c1.' + SPEAKER,
+        'dinnerChoice.c1.' + SPEAKER,
+      ].sort(),
     )
   })
 

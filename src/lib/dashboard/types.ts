@@ -47,6 +47,8 @@ export interface ConferenceWithSpeakerData {
   conferenceDay?: string
   /** Pin the dinner: from the start of its day until it begins. */
   pinDinner?: boolean
+  /** The dinner route, checked against the current routes; `null` = unanswered. */
+  dinnerChoice?: string | null
 }
 
 export interface GridPosition {

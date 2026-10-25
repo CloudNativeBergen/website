@@ -804,6 +804,7 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
 
       case 'conversationPreference':
       case 'dashboardConfig':
+      case 'speakerDinnerChoice':
       case 'scheduledReminderLog': {
         if (refPointsAt(doc.speaker, speakerId)) {
           documentDeletes.push({ id, type, reason: 'owned by the subject' })

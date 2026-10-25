@@ -1395,6 +1395,9 @@ describe('the guarded mutation surface is pinned (#730)', () => {
       'admin.update',
       'admin.updateEmail',
       'generateCliToken',
+      // SELF-SCOPED (#1592): no id in the input; writes the caller's choice for
+      // the domain conference, after checking a confirmed talk there.
+      'setDinnerChoice',
       'setMessagingEmailDefault',
       // SELF-SCOPED BY CONSTRUCTION (#1148): the input is one boolean and no
       // id, and the write targets `ctx.speaker._id`, so there is no

@@ -1083,6 +1083,8 @@ export function assertMergeable(
 
 const DETERMINISTIC_ID_PREFIXES = [
   'convpref.',
+  // `dinnerChoice.<conferenceId>.<speakerId>` (#1592).
+  'dinnerChoice.',
   'notification.message.',
   'notification.workshop-not-set.',
   'notification.workshop-capacity.',
@@ -1293,6 +1295,19 @@ export function reconcileDeterministicDoc(
     const lastSentAt = laterIso(survivorDoc.lastSentAt, loserDoc.lastSentAt)
     if (lastSentAt && lastSentAt !== survivorDoc.lastSentAt) {
       mergeSet.lastSentAt = lastSentAt
+    }
+    return { deleteId, canonicalId, mergeSet }
+  }
+
+  // speakerDinnerChoice: the newer answer is what the person wants now.
+  if (deleteId.startsWith('dinnerChoice.')) {
+    const mergeSet: Record<string, unknown> = {}
+    if (
+      laterIso(survivorDoc.updatedAt, loserDoc.updatedAt) !==
+      survivorDoc.updatedAt
+    ) {
+      mergeSet.choice = loserDoc.choice
+      mergeSet.updatedAt = loserDoc.updatedAt
     }
     return { deleteId, canonicalId, mergeSet }
   }

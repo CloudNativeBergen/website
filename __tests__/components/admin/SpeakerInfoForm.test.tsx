@@ -55,6 +55,28 @@ describe('SpeakerInfoForm routes', () => {
     ])
   })
 
+  it('says how many speakers chose a route when it is removed', () => {
+    renderForm({
+      initial: {
+        dinner: {
+          routes: [
+            { _key: 'a', label: 'Walk' },
+            { _key: 'b', label: 'Bus' },
+          ],
+        },
+      },
+      routeAnswers: { a: 3, b: 0 },
+    })
+    fireEvent.click(screen.getAllByRole('button', { name: /remove route/i })[1])
+    expect(screen.queryByText(/will be asked again/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /remove route/i }))
+    expect(
+      screen.getByText(
+        '3 speakers chose this route; they will be asked again.',
+      ),
+    ).toBeTruthy()
+  })
+
   it('adds a new route with a key', () => {
     renderForm({})
     fireEvent.click(screen.getByRole('button', { name: /add route/i }))

@@ -72,6 +72,7 @@ export function CompactConferenceCard({
               briefing={data.briefing}
               conferenceDay={data.conferenceDay}
               pinDinner={data.pinDinner}
+              dinnerChoice={data.dinnerChoice}
               changesEmail={
                 data.conference.cfpEmail || data.conference.contactEmail
               }

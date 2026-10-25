@@ -33,6 +33,7 @@ import schedule from './schemaTypes/schedule'
 import scheduledReminderLog from './schemaTypes/scheduledReminderLog'
 import speaker from './schemaTypes/speaker'
 import speakerBadge from './schemaTypes/speakerBadge'
+import speakerDinnerChoice from './schemaTypes/speakerDinnerChoice'
 import sponsor from './schemaTypes/sponsor'
 import sponsorActivity from './schemaTypes/sponsorActivity'
 import discountCodeClaim from './schemaTypes/discountCodeClaim'
@@ -108,6 +109,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     // Speakers
     speaker,
     speakerBadge,
+    speakerDinnerChoice,
     coSpeakerInvitation,
     travelSupport,
     travelExpense,

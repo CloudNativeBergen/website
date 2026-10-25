@@ -11,6 +11,7 @@ import {
   type SpeakerBriefingData,
 } from '@/lib/speaker/briefing'
 import { osloTodayDateString } from '@/lib/time'
+import { resolveDinnerChoice } from '@/lib/speaker/dinnerChoice'
 
 export type BriefingFields = Partial<
   Pick<
@@ -31,6 +32,7 @@ export async function loadDashboardBriefing({
   speakerId,
   travelSupport,
   fetchFields,
+  fetchDinnerChoice,
   now = new Date(),
 }: {
   conference: Conference
@@ -41,9 +43,16 @@ export async function loadDashboardBriefing({
   travelSupport?: SpeakerBriefingData['travelSupport'] | null
   /** The live (uncached) read of the conference's speaker fields. */
   fetchFields: (conferenceId: string) => Promise<BriefingFields | null>
+  /** The speaker's stored dinner route (#1592, phase 5). */
+  fetchDinnerChoice?: (conferenceId: string) => Promise<string | null>
   now?: Date
 }): Promise<
-  | { briefing: SpeakerBriefing; conferenceDay?: string; pinDinner: boolean }
+  | {
+      briefing: SpeakerBriefing
+      conferenceDay?: string
+      pinDinner: boolean
+      dinnerChoice?: string | null
+    }
   | undefined
 > {
   // This host's edition only, for a speaker with a confirmed talk, until the
@@ -78,8 +87,25 @@ export async function loadDashboardBriefing({
   const pinDinner = Number.isNaN(dinnerAt)
     ? isConferenceDay
     : today === osloTodayDateString(new Date(dinnerAt))
+  // Only with routes to choose from. A failed read hides the picker rather
+  // than showing an unanswered one that would overwrite a stored choice.
+  const routes = briefing.dinner?.routes
+  const dinnerChoice =
+    routes && fetchDinnerChoice
+      ? await fetchDinnerChoice(conference._id).then(
+          (stored) => resolveDinnerChoice(stored, routes),
+          (error) => {
+            console.error(
+              `Could not read dinner choice for ${conference._id}`,
+              error,
+            )
+            return undefined
+          },
+        )
+      : undefined
   return {
     briefing,
+    dinnerChoice,
     conferenceDay: isConferenceDay ? today : undefined,
     pinDinner,
   }

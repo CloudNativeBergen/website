@@ -698,6 +698,46 @@ describe('buildMergePlan', () => {
 // --- reconcileDeterministicDoc (M4) ----------------------------------------
 
 describe('reconcileDeterministicDoc', () => {
+  it('keeps the newer speakerDinnerChoice when both speakers have one', () => {
+    const doc = (speaker: string, choice: string, updatedAt: string) => ({
+      _id: `dinnerChoice.conf-1.${speaker}`,
+      _type: 'speakerDinnerChoice',
+      speaker: { _type: 'reference', _ref: speaker },
+      choice,
+      updatedAt,
+    })
+    const loserNewer = reconcileDeterministicDoc(
+      doc(LOSER, 'hike', '2026-10-02T00:00:00Z'),
+      doc(SURVIVOR, 'taxi', '2026-10-01T00:00:00Z'),
+      LOSER,
+      SURVIVOR,
+    )
+    expect(loserNewer.deleteId).toBe(`dinnerChoice.conf-1.${LOSER}`)
+    expect(loserNewer.canonicalId).toBe(`dinnerChoice.conf-1.${SURVIVOR}`)
+    expect(loserNewer.mergeSet).toEqual({
+      choice: 'hike',
+      updatedAt: '2026-10-02T00:00:00Z',
+    })
+    const survivorNewer = reconcileDeterministicDoc(
+      doc(LOSER, 'hike', '2026-10-01T00:00:00Z'),
+      doc(SURVIVOR, 'taxi', '2026-10-02T00:00:00Z'),
+      LOSER,
+      SURVIVOR,
+    )
+    expect(survivorNewer.mergeSet).toEqual({})
+    const onlyLoser = reconcileDeterministicDoc(
+      doc(LOSER, 'own', '2026-10-01T00:00:00Z'),
+      undefined,
+      LOSER,
+      SURVIVOR,
+    )
+    expect(onlyLoser.createDoc).toMatchObject({
+      _id: `dinnerChoice.conf-1.${SURVIVOR}`,
+      speaker: { _ref: SURVIVOR },
+      choice: 'own',
+    })
+  })
+
   it('MERGEs a convpref: more-restrictive mute wins, loser doc deleted', () => {
     const rec = reconcileDeterministicDoc(
       {

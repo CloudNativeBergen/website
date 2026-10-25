@@ -93,3 +93,49 @@ describe('loadDashboardBriefing', () => {
     expect(await run('2026-10-26T23:30:00Z')).toBe(false) // 27 Oct 00:30 Oslo
   })
 })
+
+describe('loadDashboardBriefing dinner choice', () => {
+  const withRoutes = async () => ({
+    speakerInfo: {
+      dinner: {
+        venueName: 'Bryggen',
+        routes: [{ _key: 'taxi', label: 'Taxi' }],
+      },
+    },
+  })
+
+  it('passes a current choice and reads a removed route as unset', async () => {
+    const current = await loadDashboardBriefing({
+      ...base,
+      fetchFields: withRoutes,
+      fetchDinnerChoice: async () => 'taxi',
+    })
+    expect(current?.dinnerChoice).toBe('taxi')
+    const stale = await loadDashboardBriefing({
+      ...base,
+      fetchFields: withRoutes,
+      fetchDinnerChoice: async () => 'hike',
+    })
+    expect(stale?.dinnerChoice).toBeNull()
+  })
+
+  it('skips the read without routes and hides the picker on a failed read', async () => {
+    const fetchDinnerChoice = vi.fn(async () => 'own')
+    const none = await loadDashboardBriefing({
+      ...base,
+      fetchFields: dinner('2026-10-27T18:00:00Z'),
+      fetchDinnerChoice,
+    })
+    expect(none?.dinnerChoice).toBeUndefined()
+    expect(fetchDinnerChoice).not.toHaveBeenCalled()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const failed = await loadDashboardBriefing({
+      ...base,
+      fetchFields: withRoutes,
+      fetchDinnerChoice: async () => {
+        throw new Error('down')
+      },
+    })
+    expect(failed?.dinnerChoice).toBeUndefined()
+  })
+})
