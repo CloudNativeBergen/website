@@ -283,7 +283,8 @@ describe('/privacy OpenRouter disclosure, two tenants (Content judgement §13.1)
 
   it('an answer that is not a boolean is unknown, never a "no"', async () => {
     fetchMock.mockImplementation(
-      judging(async () => null as unknown as boolean),
+      // A count-shaped answer: `0` must not read as "nothing stored".
+      judging(async () => 0 as unknown as boolean),
     )
     const off = await resolveSubprocessorDisclosure(
       conference('conf-off', ORG_OFF),
