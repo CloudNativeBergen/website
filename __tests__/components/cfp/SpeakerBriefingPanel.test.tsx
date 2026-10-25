@@ -19,9 +19,17 @@ const block = (text: string) => [
 
 const briefing: SpeakerBriefing = {
   todos: [
-    { kind: 'confirm-talk', proposalId: 'p2', title: 'Second' },
-    { kind: 'claim-ticket', title: 'Speaker ticket' },
-    { kind: 'travel-support', title: 'Travel support request' },
+    {
+      kind: 'confirm-talk',
+      label: 'Confirm your talk',
+      proposalId: 'p2',
+      title: 'Second',
+    },
+    { kind: 'claim-ticket', label: 'Claim your free speaker ticket' },
+    {
+      kind: 'travel-support',
+      label: 'Submit your travel support request',
+    },
   ],
   talks: [
     {
@@ -68,6 +76,7 @@ describe('SpeakerBriefingPanel', () => {
       html.indexOf('Your talks and workshops'),
     )
     expect(html).toContain('href="/cfp/proposal/p2"')
+    expect(html).toContain('Confirm your talk for “Second”')
     expect(html).toContain('href="tel:+4790000000"')
     expect(html).toContain('href="mailto:k@example.com"')
     expect(html).not.toContain('<details')

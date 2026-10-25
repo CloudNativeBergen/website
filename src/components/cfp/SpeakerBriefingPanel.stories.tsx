@@ -32,14 +32,23 @@ const talks: NonNullable<SpeakerBriefing['talks']> = [
 ]
 
 const todos: SpeakerBriefing['todos'] = [
-  { kind: 'upload-slides', proposalId: 'talk-1', title: talks[0].title },
   {
-    kind: 'co-speaker-invite-pending',
+    kind: 'upload-slides',
+    label: 'Upload your slides',
     proposalId: 'talk-1',
     title: talks[0].title,
   },
-  { kind: 'claim-ticket', title: 'Speaker ticket' },
-  { kind: 'travel-support', title: 'Travel support request' },
+  {
+    kind: 'co-speaker-invite-pending',
+    label: 'Your co-speaker has not accepted the invite yet',
+    proposalId: 'talk-1',
+    title: talks[0].title,
+  },
+  { kind: 'claim-ticket', label: 'Claim your free speaker ticket' },
+  {
+    kind: 'travel-support',
+    label: 'Submit your travel support request',
+  },
 ]
 
 const full: SpeakerBriefing = {

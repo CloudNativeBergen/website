@@ -37,25 +37,10 @@ const linkClass =
   'text-brand-cloud-blue underline hover:no-underline dark:text-blue-400'
 
 function todoLink(t: SpeakerBriefingTodo): { text: string; href?: string } {
-  const proposal = t.proposalId ? `/cfp/proposal/${t.proposalId}` : undefined
-  switch (t.kind) {
-    case 'confirm-talk':
-      return { text: `Confirm your talk: ${t.title}`, href: proposal }
-    case 'upload-slides':
-      return { text: `Upload your slides: ${t.title}`, href: proposal }
-    case 'co-speaker-invite-pending':
-      return {
-        text: `Your co-speaker has not accepted the invite yet: ${t.title}`,
-        href: proposal,
-      }
-    case 'claim-ticket':
-      return { text: 'Claim your free speaker ticket' }
-    case 'travel-support':
-      return {
-        text: 'Submit your travel support request',
-        href: '/cfp/expense',
-      }
-  }
+  const text = t.title ? `${t.label} for “${t.title}”` : t.label
+  if (t.kind === 'travel-support') return { text, href: '/cfp/expense' }
+  if (t.kind === 'claim-ticket' || !t.proposalId) return { text }
+  return { text, href: `/cfp/proposal/${t.proposalId}` }
 }
 
 // Same headings as the speaker info email (copy glossary, #1592).
