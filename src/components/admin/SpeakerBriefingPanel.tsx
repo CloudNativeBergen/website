@@ -47,23 +47,56 @@ export function SpeakerBriefingPanel() {
       }),
     onError: fail('Could not send the test'),
   })
-  const send = api.conference.sendBriefing.useMutation({
-    onSuccess: (r) => {
-      setConfirmSend(false)
-      utils.conference.briefingSpeakers.invalidate()
+  const send = api.conference.sendBriefing.useMutation()
+  const [progress, setProgress] = useState<{
+    sent: number
+    of: number
+  } | null>(null)
+
+  /**
+   * One call stops before the route's time limit and reports `remaining`,
+   * so keep calling until nothing is left (or a call makes no progress).
+   */
+  async function runSend(of: number) {
+    setConfirmSend(false)
+    let sent = 0
+    let skipped: number | undefined
+    const failed = new Map<string, string>()
+    const logFailed = new Set<string>()
+    setProgress({ sent, of })
+    try {
+      for (;;) {
+        const r = await send.mutateAsync()
+        sent += r.sent
+        skipped ??= r.skipped
+        for (const f of r.failed) failed.set(f.name, f.error)
+        for (const f of r.logFailed) logFailed.add(f.name)
+        setProgress({ sent, of })
+        if (r.remaining === 0 || r.sent === 0) break
+      }
+      const problems = [
+        failed.size > 0 &&
+          `Failed: ${[...failed].map(([n, e]) => `${n} (${e})`).join('; ')}.`,
+        logFailed.size > 0 &&
+          `Sent, but the send log failed for: ${[...logFailed].join(', ')}. They may get it again.`,
+        !!skipped && 'Speakers who already had this version were skipped.',
+      ].filter(Boolean)
       showNotification({
-        type: r.failed.length ? 'warning' : 'success',
-        title: `Sent ${r.sent}, skipped ${r.skipped}`,
-        message: r.failed.length
-          ? `Failed: ${r.failed.map((f) => `${f.name} (${f.error})`).join('; ')}`
-          : 'Speakers who already had this version were skipped.',
+        type: failed.size || logFailed.size ? 'warning' : 'success',
+        title: `Sent ${sent}${skipped ? `, skipped ${skipped}` : ''}`,
+        message: problems.join(' ') || 'Done.',
       })
-    },
-    onError: (e) => {
-      setConfirmSend(false)
-      fail('Could not send')(e)
-    },
-  })
+    } catch (e) {
+      showNotification({
+        type: 'error',
+        title: `Stopped after sending ${sent} of ${of}`,
+        message: (e as Error).message,
+      })
+    } finally {
+      setProgress(null)
+      utils.conference.briefingSpeakers.invalidate()
+    }
+  }
   const slack = api.conference.postBriefingToSlack.useMutation({
     onSuccess: ({ channel }) => {
       setConfirmSlack(false)
@@ -100,10 +133,13 @@ export function SpeakerBriefingPanel() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-yellow-50 p-4 text-sm text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
           <span>
             {changed && 'Info changed since last send. '}
-            {behind} confirmed speaker{behind === 1 ? '' : 's'} don&apos;t have
-            the current version.
+            {behind} confirmed speaker{behind === 1 ? '' : 's'} have not
+            received the current version.
           </span>
-          <AdminButton onClick={() => send.mutate()} disabled={send.isPending}>
+          <AdminButton
+            onClick={() => setConfirmSend(true)}
+            disabled={!!progress}
+          >
             {changed ? 'Send update' : 'Send to them'}
           </AdminButton>
         </div>
@@ -127,18 +163,24 @@ export function SpeakerBriefingPanel() {
         </label>
         <AdminButton
           variant="secondary"
-          onClick={() => test.mutate()}
+          onClick={() => test.mutate({ speakerId: speakerId || undefined })}
           disabled={test.isPending}
         >
           Send test to me
         </AdminButton>
         <AdminButton
           onClick={() => setConfirmSend(true)}
-          disabled={total === 0 || send.isPending}
+          disabled={total === 0 || !!progress}
         >
           Send to {total} confirmed speaker{total === 1 ? '' : 's'}
         </AdminButton>
       </div>
+
+      {progress && (
+        <p role="status" className="text-sm text-gray-700 dark:text-gray-300">
+          Sent {progress.sent} of {progress.of}…
+        </p>
+      )}
 
       <iframe
         title="Briefing email preview"
@@ -219,12 +261,12 @@ export function SpeakerBriefingPanel() {
       <ConfirmationModal
         isOpen={confirmSend}
         onClose={() => setConfirmSend(false)}
-        onConfirm={() => send.mutate()}
+        onConfirm={() => runSend(behind)}
         title="Email confirmed speakers"
         message={`Send the briefing to ${total} confirmed speaker${total === 1 ? '' : 's'}? ${current} already have the current version and will be skipped.`}
         confirmButtonText="Send"
         variant="info"
-        isLoading={send.isPending}
+        isLoading={!!progress}
       />
       <ConfirmationModal
         isOpen={confirmSlack}
