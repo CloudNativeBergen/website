@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { SponsorDashboardMetrics } from './SponsorDashboardMetrics'
 import { mockSponsor } from '@/__mocks__/sponsor-data'
+import { mockExchangeRatesBeforeEach } from '@/lib/storybook/mockExchangeRates'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Dashboard/Metrics',
@@ -230,6 +231,7 @@ function DashboardPage() {
 
 /** The real component against an msw-backed `sponsor.crm.list`, at phone width. */
 export const Phone: Story = {
+  beforeEach: mockExchangeRatesBeforeEach(),
   parameters: {
     layout: 'padded',
     viewport: { defaultViewport: 'phone' },

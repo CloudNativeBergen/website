@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { expect, userEvent, within } from 'storybook/test'
+import { mockExchangeRatesBeforeEach } from '@/lib/storybook/mockExchangeRates'
 import { TravelSupportAdminPage } from './TravelSupportAdminPage'
 
 // Renders the real page against msw-backed `travelSupport.admin.*` reads.
@@ -53,6 +54,7 @@ const requests = [
 const meta = {
   title: 'Systems/TravelSupport/Admin/TravelSupportAdminPage',
   component: TravelSupportAdminPage,
+  beforeEach: mockExchangeRatesBeforeEach(),
   parameters: {
     layout: 'padded',
     options: { showPanel: false },
