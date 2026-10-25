@@ -8,7 +8,7 @@ import type {
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
 import { freeSeat } from './seats'
-import { isListedWorkshop } from './listed'
+import { isCanceledWorkshop, isListedWorkshop } from './listed'
 import type { HolderSignup } from './holders'
 
 export async function getWorkshopSignups(
@@ -105,19 +105,33 @@ export async function isListedWorkshopOf(
   workshopId: string,
   conferenceId: string,
 ): Promise<boolean> {
+  const talk = await storedTalkOf(workshopId, conferenceId)
+  return !!talk && isListedWorkshop(talk)
+}
+
+/** The canceled or withdrawn workshop of the conference, read as above. */
+export async function getCanceledWorkshopOf(
+  workshopId: string,
+  conferenceId: string,
+) {
+  const talk = await storedTalkOf(workshopId, conferenceId)
+  return talk && isCanceledWorkshop(talk) ? talk : null
+}
+
+async function storedTalkOf(workshopId: string, conferenceId: string) {
   const talk = await clientWrite.getDocument<{
     _id: string
     _type: string
+    title?: string
     status?: string
     format?: string
     conference?: { _ref?: string }
   }>(workshopId)
-  return (
-    talk?._id === workshopId &&
+  return talk?._id === workshopId &&
     talk._type === 'talk' &&
-    talk.conference?._ref === conferenceId &&
-    isListedWorkshop(talk)
-  )
+    talk.conference?._ref === conferenceId
+    ? talk
+    : null
 }
 
 /**

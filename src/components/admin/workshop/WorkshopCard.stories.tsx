@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, fn, within } from 'storybook/test'
+import { expect, fn, userEvent, within } from 'storybook/test'
 import { WorkshopCard } from './WorkshopCard'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 
@@ -47,6 +47,7 @@ const meta = {
     onAddParticipant: fn(),
     onEditCapacity: fn(),
     onAnnounce: fn(),
+    onNotifyCanceled: fn(),
   },
 } satisfies Meta<typeof WorkshopCard>
 
@@ -95,12 +96,18 @@ export const Canceled: Story = {
     workshop: {
       ...workshop(30),
       status: 'canceled',
+      workshopCancelNoticeSentAt: '2026-10-20T09:30:00Z',
     } as ProposalWithWorkshopData,
     confirmedCount: 12,
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getByText('Canceled')).toBeInTheDocument()
+    await expect(canvas.getByText(/Participants notified/)).toBeInTheDocument()
+    await userEvent.click(
+      canvas.getByRole('button', { name: /notify participants/i }),
+    )
+    await expect(args.onNotifyCanceled).toHaveBeenCalled()
     await expect(canvas.getByText('12/30')).toBeInTheDocument()
     await expect(
       canvas.queryByRole('button', { name: /add participant/i }),

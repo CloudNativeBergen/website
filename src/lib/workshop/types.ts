@@ -131,6 +131,8 @@ export interface ProposalWithWorkshopData extends Omit<
   signups: number
   available: number
   waitlistCount?: number
+  /** When the sign-ups of a canceled workshop were last emailed about it. */
+  workshopCancelNoticeSentAt?: string
   date?: string
   startTime?: string
   endTime?: string

@@ -33,6 +33,7 @@ import {
   workshopAnnouncementsQuerySchema,
   workshopEarlySignupsSchema,
   workshopReminderSchema,
+  notifyCanceledWorkshopSchema,
 } from '@/server/schemas/workshop'
 import {
   checkWorkshopCapacity,
@@ -44,6 +45,7 @@ import {
   getWorkshopSignupsByWorkshop,
   getAllWorkshopSignups,
   getWorkshopStatistics,
+  getCanceledWorkshopOf,
 } from '@/lib/workshop/sanity'
 import {
   changeCapacity,
@@ -54,7 +56,10 @@ import {
 import { deliverPromotionEmails } from '@/lib/workshop/promoted'
 import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
-import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
+import {
+  sendBasicWorkshopConfirmation,
+  sendWorkshopCanceledEmail,
+} from '@/lib/email/workshop'
 
 /**
  * The organizer's confirm tells the person itself; a send that fails is not
@@ -121,6 +126,7 @@ import {
   updateWorkshopAnnouncementBody,
   deleteWorkshopAnnouncement,
   sendAnnouncementToConfirmedParticipants,
+  fanOutEmails,
   isWorkshopFormat,
 } from '@/lib/workshop/announcements'
 import { consumeAnnouncementRateLimit } from '@/lib/workshop/announcementRateLimit'
@@ -1388,6 +1394,71 @@ export const workshopRouter = router({
         })
       }
     }),
+
+    /**
+     * "Notify participants" of a canceled or withdrawn workshop: one email to
+     * every sign-up it still holds, confirmed and waitlisted, with the
+     * organizer's message. Only when an organizer asks; the time of the send
+     * is stored on the talk so the page can warn before a second one.
+     */
+    notifyCanceled: workshopAdminProcedure
+      .input(notifyCanceledWorkshopSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const workshop = await getCanceledWorkshopOf(
+          input.workshopId,
+          conferenceId,
+        )
+        if (!workshop) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'No canceled workshop with this id in this conference',
+          })
+        }
+        try {
+          const recipients = (
+            await getWorkshopSignupsByWorkshop(workshop._id, conferenceId)
+          ).filter(
+            (s) =>
+              s.status === WorkshopSignupStatus.CONFIRMED ||
+              s.status === WorkshopSignupStatus.WAITLIST,
+          )
+          const { conference } = await getConferenceForCurrentDomain({})
+          const { sent, failed } = await fanOutEmails(recipients, (s) =>
+            sendWorkshopCanceledEmail({
+              userEmail: s.userEmail,
+              userName: s.userName,
+              status:
+                s.status === WorkshopSignupStatus.CONFIRMED
+                  ? 'confirmed'
+                  : 'waitlist',
+              conference: conference || undefined,
+              workshopTitle: workshop.title ?? '',
+              message: input.message,
+            }),
+          )
+          const sentAt = new Date().toISOString()
+          if (sent > 0) {
+            await clientWrite
+              .patch(workshop._id)
+              .set({ workshopCancelNoticeSentAt: sentAt })
+              .commit()
+            revalidateTag('admin:workshops', 'default')
+          }
+          return {
+            recipientCount: recipients.length,
+            sent,
+            failed,
+            sentAt: sent > 0 ? sentAt : null,
+          }
+        } catch (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to notify the participants',
+            cause: error,
+          })
+        }
+      }),
 
     /**
      * The ticket holders joined to the sign-ups (#1333, spec §4): who holds a

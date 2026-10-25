@@ -134,6 +134,15 @@ export const updateWorkshopCapacitySchema = z.object({
 })
 
 /** Owner/organizer composing a broadcast announcement to confirmed participants. */
+/** "Notify participants" of a canceled workshop: the organizer's message. */
+export const notifyCanceledWorkshopSchema = z.object({
+  workshopId: z.string().min(1, 'Workshop ID is required'),
+  message: z
+    .string()
+    .trim()
+    .max(2000, 'Message must be 2000 characters or fewer'),
+})
+
 export const workshopAnnounceSchema = z.object({
   workshopId: z.string().min(1, 'Workshop ID is required'),
   body: z

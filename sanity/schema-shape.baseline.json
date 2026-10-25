@@ -249,6 +249,8 @@
     "visibility": "string",
     "volunteerRegistrationLink": "string",
     "volunteerSlackInviteUrl": "string",
+    "workshopEarlyAccessTicketTypes": "array",
+    "workshopEarlyAccessTicketTypes[string]": "string",
     "workshopRegistrationEnd": "datetime",
     "workshopRegistrationSponsorStart": "datetime",
     "workshopRegistrationStart": "datetime",
