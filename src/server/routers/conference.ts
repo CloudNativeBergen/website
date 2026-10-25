@@ -620,6 +620,8 @@ export const conferenceRouter = router({
     const slack = await clientReadUncached.fetch<{
       lastSentAt?: string
     } | null>(
+      // groq-global-scoped: by-id read of `briefing-slack.<conferenceId>`,
+      // whose id embeds the domain-resolved conference id.
       `*[_id == $id][0]{ lastSentAt }`,
       { id: briefingSlackLogId(conference._id) },
       { cache: 'no-store' },
