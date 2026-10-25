@@ -621,6 +621,15 @@ describe('a private held-out text set (--data)', () => {
     expect(report).toContain('Scored 2/2 items')
     // The gate row's numbers are printed, not left to be worked out.
     expect(report).toMatch(/\| FPR \| Negatives \|/)
+    // And as paste-ready gate rows, valid against the gate file's schema.
+    const { parseGateFile } =
+      await import('../../src/lib/content-judgement/gates')
+    const json = /```json\n([\s\S]*?)\n```/.exec(report)?.[1]
+    expect(
+      parseGateFile(JSON.parse(json ?? 'null')).find(
+        (row) => row.question === 'abusive',
+      ),
+    ).toMatchObject({ falsePositiveRate: 0, recall: 1, negatives: 1 })
     expect(report).not.toContain(MARKER)
     expect(report).not.toMatch(/fc-00\d/)
   })

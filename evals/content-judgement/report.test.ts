@@ -277,3 +277,73 @@ describe('wall-photo report', () => {
     )
   })
 })
+
+describe('held-out gate rows', () => {
+  it('are unrounded: 4 false positives in 399 negatives is above 1%', async () => {
+    const { parseGateFile } =
+      await import('../../src/lib/content-judgement/gates')
+    const labels = (abusive: boolean) => ({
+      abusive,
+      sexual: false,
+      spam: false,
+      personal_info: false,
+    })
+    const items = Array.from({ length: 403 }, (_, index) => ({
+      id: `fc-${String(index + 1).padStart(3, '0')}`,
+      text: 'synthetic',
+      lang: 'en' as const,
+      labels: labels(index >= 399),
+      tags: [index >= 399 ? ('abusive' as const) : ('benign' as const)],
+    }))
+    const results: RawResult[] = items.map((item, index) => ({
+      id: item.id,
+      repeat: 1,
+      model: 'typesafe/jev-1.14-20261014',
+      latencyMs: 1,
+      cost: 0,
+      answers: {
+        // Four benign items flagged at 0.95; every positive caught.
+        abusive: {
+          type: 'noul',
+          noul: index < 4 || index >= 399 ? 0.95 : 0.01,
+        },
+        sexual: { type: 'noul', noul: 0 },
+        spam: { type: 'noul', noul: 0 },
+        personal_info: { type: 'noul', noul: 0 },
+      },
+    }))
+    const report = buildReport(
+      [{ surface: 'feedback-comment', items, results }],
+      'typesafe/jev-1.14',
+      1,
+      { heldOut: true },
+    )
+    // The table rounds; the gate rows must not.
+    expect(report).toContain('| 1.0% |')
+    const json =
+      /### Gate rows at 0\.9 \(unrounded\)[\s\S]*?```json\n([\s\S]*?)\n```/.exec(
+        report,
+      )?.[1]
+    const rows = parseGateFile(JSON.parse(json ?? 'null'))
+    const abusive = rows.find((row) => row.question === 'abusive')!
+    expect(abusive).toMatchObject({
+      surface: 'feedbackComment',
+      build: 'typesafe/jev-1.14-20261014',
+      questionSet: 'v2',
+      negatives: 399,
+      recall: 1,
+    })
+    expect(abusive.falsePositiveRate).toBe(4 / 399)
+    expect(abusive.falsePositiveRate).toBeGreaterThan(0.01)
+  })
+
+  it('are absent from public reports', () => {
+    const items = loadData('feedback-comment').slice(0, 1)
+    const report = buildReport(
+      [{ surface: 'feedback-comment', items, results: [] }],
+      'm',
+      1,
+    )
+    expect(report).not.toContain('Gate rows')
+  })
+})

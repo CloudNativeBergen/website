@@ -68,7 +68,11 @@ interface ModerationScore {
   probabilities: Record<ModerationKey, number>
   repeats: ModerationResponse['answers'][]
 }
-function moderationReport(run: SurfaceRun, repeats: number): string {
+function moderationReport(
+  run: SurfaceRun,
+  repeats: number,
+  heldOut = false,
+): string {
   const scores: ModerationScore[] = []
   for (const item of run.items) {
     if (!('labels' in item) || !('text' in item)) continue
@@ -196,7 +200,50 @@ function moderationReport(run: SurfaceRun, repeats: number): string {
       `Repeat stability at 0.5: ${scores.length ? percent(stability(repeatAnswers)) : 'N/A'} (${scores.length} items).`,
     )
   }
+  if (heldOut) lines.push(gateRows(run, scores))
   return lines.join('\n\n')
+}
+
+/**
+ * Held-out runs only: one gate-file row per question at the enforcement
+ * threshold, UNROUNDED, ready for src/lib/content-judgement/gates.json
+ * (4 false positives in 399 negatives is 1.0025%, which fails a 1% bar that
+ * a rounded "1.0%" would appear to meet). Captions are Wall Post questions.
+ */
+function gateRows(run: SurfaceRun, scores: ModerationScore[]): string {
+  const builds = [
+    ...new Set(
+      run.results
+        .filter((result) => result.answers !== null)
+        .map((result) => result.model),
+    ),
+  ]
+  const rows = moderationKeys.map((key) => {
+    const metrics = binaryMetrics(
+      scores.map((score) => ({
+        expected: score.item.labels[key],
+        probability: score.probabilities[key],
+      })),
+      0.9,
+    )
+    return {
+      question: run.surface === 'wall-caption' ? `caption_${key}` : key,
+      surface: run.surface === 'wall-caption' ? 'wallPost' : 'feedbackComment',
+      build: builds.length === 1 ? builds[0] : 'MIXED: do not copy',
+      questionSet: SURFACE_QUESTION_SET[run.surface],
+      falsePositiveRate: metrics.falsePositiveRate,
+      recall: metrics.recall,
+      negatives: metrics.fp + metrics.tn,
+      date: new Date().toISOString().slice(0, 10),
+    }
+  })
+  return [
+    '### Gate rows at 0.9 (unrounded)',
+    'Copy into gates.json only if every bar holds on these exact values.',
+    '```json',
+    JSON.stringify(rows, null, 2),
+    '```',
+  ].join('\n')
 }
 
 interface WallPhotoScore {
@@ -508,7 +555,7 @@ export function buildReport(
           ? conversationReport(run, repeats)
           : run.surface === 'wall-photo'
             ? wallPhotoReport(run, repeats)
-            : moderationReport(run, repeats),
+            : moderationReport(run, repeats, heldOut),
       ),
       heldOut
         ? 'A held-out set is evidence for exactly the model build and question sets above. Copy its numbers to src/lib/content-judgement/gates.json only for those.'
