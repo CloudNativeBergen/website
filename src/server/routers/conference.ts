@@ -13,7 +13,10 @@ import {
   requireSpeakersInCurrentOrg,
 } from '../tenancy'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
-import { getConferenceForDomain } from '@/lib/conference/sanity'
+import {
+  getConferenceForCurrentDomain,
+  getConferenceForDomain,
+} from '@/lib/conference/sanity'
 import {
   getPublicTicketTypes,
   getLowestTicketPrice,
@@ -84,10 +87,55 @@ import {
   SvgSanitizeError,
 } from '@/lib/svg/upload'
 import { defaultVariant } from '@/lib/homepage/variants'
+import { z } from 'zod'
+import {
+  briefingVersion,
+  getBriefingSendHistory,
+  loadBriefingSpeakers,
+  renderSpeakerBriefing,
+  sendSpeakerBriefingTest,
+  sendSpeakerBriefings,
+} from '@/lib/email/speaker-briefing'
+import { getSpeakerBriefing } from '@/lib/speaker/briefing'
+import { buildBriefingSlackMessage } from '@/lib/slack/speaker-briefing'
+import { postSlackMessage } from '@/lib/slack/client'
+import { resolveConferenceSlackToken } from '@/lib/slack/token'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import {
   redatePlanForConference,
   redateWarnings,
 } from '@/lib/marketing/redate-run'
+
+/** The current domain's conference, for the speaker briefing procedures. */
+async function briefingConference() {
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || !conference?._id) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve conference from domain',
+    })
+  }
+  return conference
+}
+
+/** A sample speaker for previews and tests when nobody is confirmed yet. */
+const SAMPLE_BRIEFING_SPEAKER = { name: 'Sample Speaker', proposals: [] }
+
+const BRIEFING_SLACK_LOG_KEY = 'speaker-briefing-slack'
+const briefingSlackLogId = (conferenceId: string) =>
+  `briefing-slack.${conferenceId}`
+
+/** The briefing as one Slack message, from the SHARED part only. */
+function briefingSlackMessage(
+  conference: Awaited<ReturnType<typeof briefingConference>>,
+  mentionChannel: boolean,
+) {
+  return buildBriefingSlackMessage(getSpeakerBriefing(conference), {
+    title: `Speaker info for ${conference.title}`,
+    dashboardUrl: `${conferenceBaseUrl(conference)}/cfp/list#briefing`,
+    mentionChannel,
+  })
+}
 
 /** The message the self-lockout guard rejects a self-removal with. */
 export const CANNOT_REMOVE_SELF_ORGANIZER =
@@ -553,6 +601,152 @@ export const conferenceRouter = router({
           updatedAt: new Date().toISOString(),
         },
       })
+    }),
+
+  /**
+   * The speaker briefing email (#1592). Manual only. Every procedure reads
+   * the conference from the request domain, never from input, and only
+   * confirmed speakers of THAT conference are loaded.
+   */
+  briefingSpeakers: adminProcedure.query(async () => {
+    const conference = await briefingConference()
+    const speakers = await loadBriefingSpeakers(conference._id)
+    const version = briefingVersion(conference)
+    const history = await getBriefingSendHistory(
+      conference._id,
+      speakers.map((s) => s._id),
+      version,
+    )
+    const slack = await clientReadUncached.fetch<{
+      lastSentAt?: string
+    } | null>(
+      `*[_id == $id][0]{ lastSentAt }`,
+      { id: briefingSlackLogId(conference._id) },
+      { cache: 'no-store' },
+    )
+    return {
+      speakers: speakers.map((s) => ({ _id: s._id, name: s.name })),
+      version,
+      history,
+      slackChannel: conference.speakerSlackChannel ?? null,
+      slackLastPostedAt: slack?.lastSentAt ?? null,
+    }
+  }),
+
+  previewBriefing: adminProcedure
+    .input(z.object({ speakerId: z.string().optional() }))
+    .query(async ({ input }) => {
+      const conference = await briefingConference()
+      const speaker = input.speakerId
+        ? (await loadBriefingSpeakers(conference._id)).find(
+            (s) => s._id === input.speakerId,
+          )
+        : SAMPLE_BRIEFING_SPEAKER
+      if (!speaker) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Not a confirmed speaker of this conference',
+        })
+      }
+      return { html: await renderSpeakerBriefing(conference, speaker) }
+    }),
+
+  sendBriefingTest: adminProcedure.mutation(async ({ ctx }) => {
+    const conference = await briefingConference()
+    const to = ctx.speaker.email
+    if (!to) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Your account has no email address',
+      })
+    }
+    const [first] = await loadBriefingSpeakers(conference._id)
+    await sendSpeakerBriefingTest(
+      conference,
+      to,
+      first ?? SAMPLE_BRIEFING_SPEAKER,
+    )
+    return { to }
+  }),
+
+  sendBriefing: adminProcedure.mutation(async () => {
+    const conference = await briefingConference()
+    const speakers = await loadBriefingSpeakers(conference._id)
+    return sendSpeakerBriefings(conference, speakers)
+  }),
+
+  briefingSendHistory: adminProcedure.query(async () => {
+    const conference = await briefingConference()
+    const speakers = await loadBriefingSpeakers(conference._id)
+    return getBriefingSendHistory(
+      conference._id,
+      speakers.map((s) => s._id),
+      briefingVersion(conference),
+    )
+  }),
+
+  previewBriefingSlack: adminProcedure
+    .input(z.object({ mentionChannel: z.boolean().default(false) }))
+    .query(async ({ input }) => {
+      const conference = await briefingConference()
+      return briefingSlackMessage(conference, input.mentionChannel)
+    }),
+
+  /**
+   * Post the SHARED briefing to `speakerSlackChannel` with the tenant's bot,
+   * through the one token gate. Slack's refusals come back readable.
+   */
+  postBriefingToSlack: adminProcedure
+    .input(z.object({ mentionChannel: z.boolean().default(false) }))
+    .mutation(async ({ input }) => {
+      const conference = await briefingConference()
+      const channel = conference.speakerSlackChannel?.trim()
+      if (!channel) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Set the speakers Slack channel in Settings first',
+        })
+      }
+      const botToken = await resolveConferenceSlackToken(conference)
+      if (!botToken) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'No Slack bot is connected for this organization',
+        })
+      }
+      const name = channel.replace(/^#/, '')
+      try {
+        await postSlackMessage(
+          briefingSlackMessage(conference, input.mentionChannel),
+          { channel: name, botToken, forceSlack: true },
+        )
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: /not_in_channel|channel_not_found/.test(message)
+            ? `Invite the bot to #${name}`
+            : message,
+        })
+      }
+      const id = briefingSlackLogId(conference._id)
+      const lastSentAt = new Date().toISOString()
+      await clientWrite
+        .transaction()
+        .createIfNotExists({
+          _id: id,
+          _type: 'scheduledReminderLog',
+          key: BRIEFING_SLACK_LOG_KEY,
+          conference: {
+            _type: 'reference',
+            _ref: conference._id,
+            _weak: true,
+          },
+          count: 0,
+        })
+        .patch(id, (patch) => patch.set({ lastSentAt }).inc({ count: 1 }))
+        .commit()
+      return { channel: name, lastSentAt }
     }),
 
   updateCfpGoals: adminProcedure
