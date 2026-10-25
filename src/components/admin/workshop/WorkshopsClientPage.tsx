@@ -19,6 +19,7 @@ import {
 } from '@/components/admin/workshop'
 import { isCanceledWorkshop } from '@/lib/workshop/listed'
 import { NotifyCanceledModal } from './NotifyCanceledModal'
+import { MoveParticipantsModal } from './MoveParticipantsModal'
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
 import { SponsorEarlyAccessCard } from './SponsorEarlyAccessCard'
@@ -129,6 +130,8 @@ function WorkshopsClientPageFor({
   const notifyDialog = useDialog<
     WorkshopRef & { confirmedCount: number; waitlistCount: number }
   >()
+  const moveDialog = useDialog<WorkshopRef>()
+  const [moveTargetId, setMoveTargetId] = useState('')
   // A notice sent from this view, until the server render is read again.
   const [noticeSentHere, setNoticeSentHere] = useState<Record<string, string>>(
     {},
@@ -379,6 +382,47 @@ function WorkshopsClientPageFor({
     onError: notifyFailure('Could not notify participants'),
   })
 
+  const moveCandidates = api.workshop.admin.moveCandidates.useQuery(
+    {
+      fromWorkshopId: moveDialog.about?.workshopId ?? '',
+      toWorkshopId: moveTargetId,
+    },
+    { enabled: moveDialog.isOpen && !!moveDialog.about && !!moveTargetId },
+  )
+
+  const moveMutation = api.workshop.admin.moveCanceledSignups.useMutation({
+    onSuccess: (result) => {
+      readSignupsAgain()
+      void moveCandidates.refetch()
+      moveDialog.close()
+      const moved = result.confirmed.length + result.waitlisted.length
+      showNotification({
+        type:
+          result.failed.length + result.emailFailed.length > 0
+            ? 'warning'
+            : 'success',
+        title: 'Participants moved',
+        message: [
+          `${moved} moved: ${result.confirmed.length} with a seat, ${result.waitlisted.length} on the waitlist.`,
+          result.skipped.length > 0 &&
+            `${result.skipped.length} already signed up, left as they were.`,
+          result.gone.length > 0 &&
+            `${result.gone.length} no longer signed up, left alone.`,
+          result.failed.length > 0 &&
+            `${result.failed.length} could not be moved.`,
+          result.emailFailed.length > 0 &&
+            `${result.emailFailed.length} moved but not emailed.`,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      })
+    },
+    onError: (error) => {
+      readSignupsAgain()
+      notifyFailure('Could not move participants')(error)
+    },
+  })
+
   const handleAddParticipant = (participant: ParticipantFormData) => {
     manualSignupMutation.mutate({
       userName: participant.userName,
@@ -565,6 +609,10 @@ function WorkshopsClientPageFor({
                     onAnnounce={() =>
                       announceDialog.open({ ...workshopRef, confirmedCount })
                     }
+                    onMoveParticipants={() => {
+                      setMoveTargetId('')
+                      moveDialog.open(workshopRef)
+                    }}
                     onNotifyCanceled={() =>
                       notifyDialog.open({
                         ...workshopRef,
@@ -696,6 +744,25 @@ function WorkshopsClientPageFor({
           setDeleteAnnouncementTarget(announcement)
         }
         isEditingAnnouncement={updateAnnouncementMutation.isPending}
+      />
+
+      <MoveParticipantsModal
+        isOpen={moveDialog.isOpen}
+        onClose={moveDialog.close}
+        workshopTitle={moveDialog.about?.workshopTitle ?? ''}
+        targets={initialWorkshops.filter((w) => !isCanceledWorkshop(w))}
+        targetId={moveTargetId}
+        onTargetChange={setMoveTargetId}
+        candidates={moveCandidates.data?.candidates}
+        seatsFree={moveCandidates.data?.seatsFree}
+        onSubmit={(signupIds) =>
+          moveMutation.mutate({
+            fromWorkshopId: moveDialog.about?.workshopId ?? '',
+            toWorkshopId: moveTargetId,
+            signupIds,
+          })
+        }
+        isSubmitting={moveMutation.isPending}
       />
 
       <NotifyCanceledModal

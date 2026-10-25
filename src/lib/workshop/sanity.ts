@@ -426,6 +426,7 @@ export async function getSignupsForHolderJoin(
       _id,
       userEmail,
       userName,
+      userWorkOSId,
       status,
       "workshop": select(workshop->conference._ref == $conferenceId => workshop->{ _id, title })
     }`,

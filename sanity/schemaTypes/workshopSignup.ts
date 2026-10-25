@@ -176,6 +176,16 @@ export default defineType({
       readOnly: true,
       description: 'The ticket type that admitted this early sign-up',
     }),
+    defineField({
+      // Set by "Move participants" on /admin/workshops: the canceled
+      // workshop's sign-up this one replaced. A retried move finds its own
+      // sign-up by it, and tells it from one the person made themselves.
+      name: 'movedFromSignup',
+      title: 'Moved From Sign-up',
+      type: 'string',
+      readOnly: true,
+      hidden: ({ document }) => !document?.movedFromSignup,
+    }),
   ],
 
   preview: {

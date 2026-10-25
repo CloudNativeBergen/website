@@ -143,6 +143,14 @@ export const notifyCanceledWorkshopSchema = z.object({
     .max(2000, 'Message must be 2000 characters or fewer'),
 })
 
+/** Move the sign-ups of a canceled workshop to a listed one. */
+export const moveCanceledSignupsSchema = z.object({
+  fromWorkshopId: z.string().min(1, 'Workshop ID is required'),
+  toWorkshopId: z.string().min(1, 'Workshop ID is required'),
+  /** Only these sign-ups of the source; all of them when left out. */
+  signupIds: z.array(z.string().min(1)).max(500).optional(),
+})
+
 export const workshopAnnounceSchema = z.object({
   workshopId: z.string().min(1, 'Workshop ID is required'),
   body: z

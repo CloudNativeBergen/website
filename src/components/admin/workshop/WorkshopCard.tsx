@@ -7,6 +7,7 @@ import {
   MegaphoneIcon,
   ExclamationTriangleIcon,
   EnvelopeIcon,
+  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline'
 import { getWorkshopDuration } from '@/lib/workshop/utils'
 import { isCanceledWorkshop } from '@/lib/workshop/listed'
@@ -27,6 +28,8 @@ interface WorkshopCardProps {
   onAnnounce: () => void
   /** A canceled workshop's "Notify participants". */
   onNotifyCanceled?: () => void
+  /** A canceled workshop's "Move participants". */
+  onMoveParticipants?: () => void
   /** One below the heading the card sits under. */
   titleLevel?: 3 | 4
 }
@@ -41,6 +44,7 @@ export function WorkshopCard({
   onEditCapacity,
   onAnnounce,
   onNotifyCanceled,
+  onMoveParticipants,
   titleLevel = 3,
 }: WorkshopCardProps) {
   const Title = `h${titleLevel}` as const
@@ -145,6 +149,15 @@ export function WorkshopCard({
           >
             <EnvelopeIcon className="h-4 w-4" />
             Notify participants
+          </AdminButton>
+          <AdminButton
+            variant="secondary"
+            onClick={onMoveParticipants}
+            className="w-full"
+            disabled={confirmedCount + waitlistCount === 0}
+          >
+            <ArrowsRightLeftIcon className="h-4 w-4" />
+            Move participants
           </AdminButton>
         </div>
       ) : (

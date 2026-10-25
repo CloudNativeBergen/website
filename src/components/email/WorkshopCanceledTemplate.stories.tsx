@@ -45,3 +45,27 @@ export const Waitlist: Story = {
     ).toBeInTheDocument()
   },
 }
+
+export const MovedWithSeat: Story = {
+  args: {
+    message: '',
+    movedTo: { workshopTitle: 'Platform Engineering 101', status: 'confirmed' },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText(/and you have a seat/),
+    ).toBeInTheDocument()
+  },
+}
+
+export const MovedToWaitlist: Story = {
+  args: {
+    message: '',
+    movedTo: { workshopTitle: 'Platform Engineering 101', status: 'waitlist' },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText(/We will email you if a seat opens/),
+    ).toBeInTheDocument()
+  },
+}

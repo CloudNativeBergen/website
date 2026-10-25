@@ -587,6 +587,8 @@ export interface WorkshopCanceledEmailRequest {
   workshopTitle: string
   /** The organizer's message, plain text. */
   message: string
+  /** Where an organizer moved them (`workshop.admin.moveCanceledSignups`). */
+  movedTo?: { workshopTitle: string; status: 'confirmed' | 'waitlist' }
 }
 
 /**
@@ -600,6 +602,7 @@ export async function sendWorkshopCanceledEmail({
   conference,
   workshopTitle,
   message,
+  movedTo,
 }: WorkshopCanceledEmailRequest): Promise<EmailResult<{ emailId: string }>> {
   try {
     const { client } = await resolveEmailSender(conference?.organization?._ref)
@@ -607,12 +610,15 @@ export async function sendWorkshopCanceledEmail({
       const result = await client.emails.send({
         from: resolveConferenceFrom(conference),
         to: [userEmail],
-        subject: `Workshop canceled: ${workshopTitle}`,
+        subject: movedTo
+          ? `Workshop changed: ${workshopTitle} → ${movedTo.workshopTitle}`
+          : `Workshop canceled: ${workshopTitle}`,
         react: React.createElement(WorkshopCanceledTemplate, {
           userName,
           workshopTitle,
           status,
           message,
+          movedTo,
           organizer: conference?.organizer || PLATFORM_NAME,
           contactEmail: resolveConferenceContact(conference),
           brandColor: emailBrandColor(conference?.theme),
