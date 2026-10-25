@@ -104,6 +104,7 @@ export default async function SpeakerDashboard() {
     *[_type == "conference" && organization._ref == $orgId] | order(startDate desc) {
       _id,
       title,
+      organization,
       organizer,
       city,
       country,
@@ -212,6 +213,7 @@ export default async function SpeakerDashboard() {
         isOver,
         proposals: proposals ?? [],
         speakerId,
+        organizer: speaker,
         travelSupport,
         // Live, not through the 300 s cache: a last-minute change (a hike
         // called off for weather) must show at once.
@@ -275,7 +277,8 @@ export default async function SpeakerDashboard() {
       c.galleryImages.length > 0 ||
       c.workshopStats.length > 0 ||
       c.travelSupport !== null ||
-      c.badges.length > 0,
+      c.badges.length > 0 ||
+      !!c.briefing,
   )
 
   // Prioritize the current conference by moving it to the top of the list

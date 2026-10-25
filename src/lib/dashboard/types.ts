@@ -49,6 +49,8 @@ export interface ConferenceWithSpeakerData {
   pinDinner?: boolean
   /** The dinner route, checked against the current routes; `null` = unanswered. */
   dinnerChoice?: string | null
+  /** The briefing is shown because the speaker organizes the edition. */
+  asOrganizer?: boolean
 }
 
 export interface GridPosition {
