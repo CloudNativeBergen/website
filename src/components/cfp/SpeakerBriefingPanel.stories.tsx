@@ -103,7 +103,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The speaker briefing (#1592) at the top of the current conference card on `/cfp/list#briefing`. Empty parts are left out. On a conference day, today’s talks, check-in and the on-site contact are pinned and the rest is collapsed.',
+          'The speaker info panel (#1592) at the top of the current conference card on `/cfp/list#briefing`. Empty parts are left out. On a conference day, today’s talks, check-in and the on-site contact are pinned and the rest is collapsed. Long sections fold on phones and open from `sm`.',
       },
     },
   },
@@ -126,6 +126,14 @@ export const ConferenceDay: Story = {
 }
 
 export const Minimal: Story = { args: { briefing: { talks, todos } } }
+
+/** An organizer of the edition: the shared info and an edit button. */
+export const AsOrganizer: Story = {
+  args: {
+    briefing: { ...full, talks: undefined, todos: undefined },
+    asOrganizer: true,
+  },
+}
 
 /** The route picker under the dinner (#1592, phase 5), saving to a mocked API. */
 export const WithDinnerChoice: Story = {
