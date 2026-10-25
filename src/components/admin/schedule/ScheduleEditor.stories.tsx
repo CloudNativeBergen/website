@@ -377,6 +377,25 @@ export const SingleDayWithTracks: Story = {
   },
 }
 
+/** One track has a track sponsor: every header keeps the row, so the timelines stay level. */
+export const WithTrackSponsor: Story = {
+  args: {
+    ...SingleDayWithTracks.args,
+    draftSchedules: [
+      {
+        ...singleDaySchedule,
+        tracks: singleDaySchedule.tracks.map((track, i) =>
+          i === 0 ? { ...track, sponsor: { _ref: 'proact' } } : track,
+        ),
+      },
+    ].map(toEditorSchedule),
+    trackSponsorOptions: [
+      { _id: 'proact', name: 'Proact IT Norge AS', trackAddon: true },
+      { _id: 'bekk', name: 'Bekk', trackAddon: false },
+    ],
+  },
+}
+
 export const MultiDay: Story = {
   args: {
     officialSchedules: multiDaySchedules.map(toEditorSchedule),

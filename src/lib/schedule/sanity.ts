@@ -39,6 +39,21 @@ export async function getValidTalkIds(
   return new Set(ids || [])
 }
 
+/**
+ * The `sponsor` ids of this conference's sponsors, in any status, so a lost
+ * deal never makes the day unsavable: the room screen only shows a public one.
+ */
+async function getConferenceSponsorIds(
+  conferenceId: string,
+): Promise<Set<string>> {
+  const ids = await scopedFetch<string[]>(
+    clientWrite,
+    { conferenceId },
+    `*[_type == "sponsorForConference"].sponsor._ref`,
+  )
+  return new Set(ids || [])
+}
+
 /** Fetch all talk statuses for the Strict Block guard. */
 export async function getTalkStatuses(
   conferenceId: string,
@@ -207,11 +222,27 @@ export async function saveScheduleToSanity(
       `Saving schedule ${schedule._id || '(new)'} date=${schedule.date} tracks=${(schedule.tracks || []).length} slots=${slotCount}`,
     )
 
+    // A track sponsor must be one of this conference's: a foreign or deleted
+    // one is dropped rather than failing the save (the editor autosaves). Read
+    // only when a track has one.
+    const sponsorIds = (schedule.tracks || []).some((t) => t.sponsor?._ref)
+      ? await getConferenceSponsorIds(conference._id)
+      : new Set<string>()
+
     const sanitizedTracks = (schedule.tracks || []).map(
       (track, trackIndex) => ({
         _key: generateKey(`track-${trackIndex}`),
         trackTitle: track.trackTitle,
         trackDescription: track.trackDescription,
+        ...(track.sponsor?._ref && sponsorIds.has(track.sponsor._ref)
+          ? {
+              sponsor: {
+                _type: 'reference',
+                _ref: track.sponsor._ref,
+                _weak: true,
+              },
+            }
+          : {}),
         // Drop ghost slots before serializing — otherwise the talk branch below
         // emits an empty `{_ref:''}` that `validateSchedulePayload` rejects,
         // failing the whole save. A ghost is a slot that is neither a placeholder

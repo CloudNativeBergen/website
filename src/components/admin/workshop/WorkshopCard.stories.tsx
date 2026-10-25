@@ -88,3 +88,23 @@ export const OverCapacity: Story = {
 }
 export const OverCapacityDark: Story = { ...OverCapacity, globals: dark }
 export const OverCapacityMobile: Story = { ...OverCapacity, parameters: phone }
+
+/** Canceled: never listed, but its sign-ups are still counted. */
+export const Canceled: Story = {
+  args: {
+    workshop: {
+      ...workshop(30),
+      status: 'canceled',
+    } as ProposalWithWorkshopData,
+    confirmedCount: 12,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText('Canceled')).toBeInTheDocument()
+    await expect(canvas.getByText('12/30')).toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('button', { name: /add participant/i }),
+    ).not.toBeInTheDocument()
+  },
+}
+export const CanceledDark: Story = { ...Canceled, globals: dark }

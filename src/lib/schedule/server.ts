@@ -3,15 +3,23 @@ import { getProposals } from '@/lib/proposal/server'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { ConferenceSchedule } from '@/lib/conference/types'
 import type { Conference } from '@/lib/conference/types'
-import { EditorSchedule, toEditorSchedule, ScheduleStatus } from './types'
+import {
+  EditorSchedule,
+  toEditorSchedule,
+  ScheduleStatus,
+  type TrackSponsorOption,
+} from './types'
 import { Status } from '@/lib/proposal/types'
 import { clientReadUncached } from '@/lib/sanity/client'
+import { scopedFetch } from '@/lib/sanity/scoped'
 
 export interface ScheduleData {
   officialSchedules: EditorSchedule[]
   draftSchedules: EditorSchedule[]
   conference: Conference
   proposals: ProposalExisting[]
+  /** The sponsors a track can be given, Track Sponsorship holders first. */
+  trackSponsorOptions: TrackSponsorOption[]
   error?: string
 }
 
@@ -29,6 +37,40 @@ function generateConferenceDates(startDate: string, endDate: string): string[] {
   return dates
 }
 
+/**
+ * The conference's public sponsors (a closed deal with a tier), the ones a
+ * room screen can thank alone: Track Sponsorship holders first, then by name.
+ */
+async function getTrackSponsorOptions(
+  conferenceId: string,
+): Promise<TrackSponsorOption[]> {
+  // Only the picker needs these: a failed read must not take the editor down.
+  try {
+    const options = await scopedFetch<Partial<TrackSponsorOption>[]>(
+      clientReadUncached,
+      { conferenceId },
+      `*[_type == "sponsorForConference" && status == "closed-won" && defined(tier->_id) && defined(sponsor->_id)]{
+        "_id": sponsor->_id,
+        "name": sponsor->name,
+        "trackAddon": count(addons[@->title match "track*"]) > 0
+      }`,
+    )
+    return (options || [])
+      .filter(
+        (o): o is TrackSponsorOption =>
+          typeof o._id === 'string' && typeof o.name === 'string',
+      )
+      .sort(
+        (a, b) =>
+          Number(b.trackAddon) - Number(a.trackAddon) ||
+          a.name.localeCompare(b.name),
+      )
+  } catch (error) {
+    console.error('Failed to read the track sponsor options:', error)
+    return []
+  }
+}
+
 export async function getScheduleData(): Promise<ScheduleData> {
   try {
     const { conference, error: conferenceError } =
@@ -43,6 +85,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
         draftSchedules: [],
         conference: {} as Conference,
         proposals: [],
+        trackSponsorOptions: [],
         error: 'Failed to fetch conference data',
       }
     }
@@ -54,6 +97,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
         tracks[]{
           trackTitle,
           trackDescription,
+          sponsor,
           talks[]{
             startTime,
             endTime,
@@ -125,6 +169,8 @@ export async function getScheduleData(): Promise<ScheduleData> {
     const officialSchedules = fillAndSort(officialRaw, ScheduleStatus.Official)
     const draftSchedules = fillAndSort(draftRaw, ScheduleStatus.Draft)
 
+    const trackSponsorOptions = await getTrackSponsorOptions(conference._id)
+
     const { proposals, proposalsError } = await getProposals({
       conferenceId: conference._id,
       returnAll: true,
@@ -138,6 +184,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
         draftSchedules,
         conference,
         proposals: [],
+        trackSponsorOptions,
         error: 'Failed to fetch proposals',
       }
     }
@@ -148,6 +195,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       draftSchedules,
       conference,
       proposals: proposals || [],
+      trackSponsorOptions,
     }
   } catch (error) {
     console.error('Error fetching schedule data:', error)
@@ -156,6 +204,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       draftSchedules: [],
       conference: {} as Conference,
       proposals: [],
+      trackSponsorOptions: [],
       error: 'Internal server error',
     }
   }
