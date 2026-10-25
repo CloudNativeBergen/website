@@ -6,6 +6,7 @@ import {
   type SettingsGroup,
 } from '@/lib/settings/groups'
 import { PencilSquareIcon, ArrowUpRightIcon } from '@heroicons/react/24/outline'
+import { CollapsibleGroup } from './CollapsibleGroup'
 
 /**
  * Presentational primitives for the admin Settings page. Extracted from the
@@ -202,13 +203,14 @@ export function SectionHeading({
 }
 
 /**
- * A tier-1 subsection: a group heading (h3) followed by its own card grid. The
- * `id` is the additive jump-nav anchor; per-card deep-link anchors live inside
- * the cards and are preserved independently.
+ * A tier-1 subsection: a collapsible group header (h3) followed by its own card
+ * grid. The `id` is the additive jump-nav anchor; per-card deep-link anchors
+ * live inside the cards and are preserved independently (a hash pointing at
+ * one opens the group).
  */
 export function SettingsGroupSection({
   group,
-  icon,
+  icon: Icon,
   children,
 }: {
   group: SettingsGroup
@@ -216,15 +218,13 @@ export function SettingsGroupSection({
   children: ReactNode
 }) {
   return (
-    <div className="space-y-4">
-      <SectionHeading
-        id={group.id}
-        icon={icon}
-        title={group.title}
-        description={group.description}
-        level={3}
-      />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">{children}</div>
-    </div>
+    <CollapsibleGroup
+      id={group.id}
+      title={group.title}
+      description={group.description}
+      icon={<Icon />}
+    >
+      {children}
+    </CollapsibleGroup>
   )
 }
