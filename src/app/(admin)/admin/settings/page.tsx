@@ -5,6 +5,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceVisibility } from '@/lib/conference/visibility'
 import { buildSystemChecks } from '@/lib/system-status/checks'
 import { formatTeamSummary } from '@/lib/teams'
+import { stripHtml } from '@/lib/html/text'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import {
   SystemStatusSection,
@@ -279,7 +280,18 @@ export default async function AdminSettings() {
               <FieldRow label="City" value={conference.city} />
               <FieldRow label="Country" value={conference.country} />
               <FieldRow label="Tagline" value={conference.tagline} />
-              <FieldRow label="Description" value={conference.description} />
+              {/* Some datasets store HTML in this plain-text field. Strip the
+                  tags (the same helper the ticket pages use) and render the
+                  rest as escaped text, clamped to three lines. */}
+              <FieldRow
+                label="Description"
+                value={
+                  conference.description
+                    ? stripHtml(conference.description)
+                    : null
+                }
+                type="longtext"
+              />
             </InfoCard>
 
             {/* Brand and theming have their own section — this card is a

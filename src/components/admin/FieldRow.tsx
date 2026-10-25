@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { formatDate, formatDateTimeSafe } from '@/lib/time'
 import { formats, Format } from '@/lib/proposal/types'
 import { StatusBadge } from '@/components/StatusBadge'
+import { ClampedText } from '@/components/admin/ClampedText'
 import {
   CheckCircleIcon,
   XCircleIcon,
@@ -62,6 +63,7 @@ export function FieldRow({
     | 'team'
     | 'url'
     | 'email'
+    | 'longtext'
 }) {
   let displayValue: ReactNode = value as ReactNode
 
@@ -207,6 +209,14 @@ export function FieldRow({
       ) : (
         'Not set'
       )
+      break
+    case 'longtext':
+      displayValue =
+        typeof value === 'string' && value.trim() ? (
+          <ClampedText text={value} />
+        ) : (
+          'Not set'
+        )
       break
     default:
       // `??`/emptiness check, not `||`: a legitimate 0 must not read as unset.
