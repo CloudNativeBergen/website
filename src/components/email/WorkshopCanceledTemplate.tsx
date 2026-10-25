@@ -36,7 +36,8 @@ export const WorkshopCanceledTemplate: React.FC<
   contactEmail,
   brandColor,
 }) => {
-  const accent = brandedOr(resolveEmailBrandPalette(brandColor), '#1D4ED8')
+  const brand = resolveEmailBrandPalette(brandColor)
+  const accent = brandedOr(brand, '#1D4ED8')
   return (
     <div
       style={{
