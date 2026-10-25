@@ -569,6 +569,51 @@ describe('a private held-out text set (--data)', () => {
     expect(isWithin('/repo', target)).toBe(within)
   })
 
+  it('answers no more than production would: an answer on the 4th attempt is a miss', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'synthetic-test-key')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const data = privateSet()
+    const out = mkdtempSync(join(tmpdir(), 'jev-held-out-policy-'))
+    directories.push(out)
+    const calls = new Map<string, number>()
+    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+      const { state } = JSON.parse(String(options?.body)) as {
+        state: { comment: string }
+      }
+      const n = (calls.get(state.comment) ?? 0) + 1
+      calls.set(state.comment, n)
+      // Item 1 fails three times, then would answer; production gives up at 3.
+      if (state.comment.endsWith(' 1') && n <= 3)
+        return new Response(null, { status: 503 })
+      return Response.json({
+        model: 'typesafe/jev-1.14-20261014',
+        usage: { cost: 0 },
+        answers: Object.fromEntries(
+          ['abusive', 'sexual', 'spam', 'personal_info'].map((key) => [
+            key,
+            { type: 'noul', noul: 0 },
+          ]),
+        ),
+      })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    await main([
+      '--data',
+      data,
+      '--surface',
+      'feedback-comment',
+      '--repeats',
+      '1',
+      '--out',
+      out,
+    ])
+    expect(calls.get(`${MARKER} 1`)).toBe(3)
+    const report = readFileSync(join(out, 'report.md'), 'utf8')
+    expect(report).toContain('1 item(s) have no answer')
+    expect(report).not.toContain('```json')
+  }, 15_000)
+
   it('a bad private line names the failing fields, never the text', async () => {
     const { loadData } = await import('./schema')
     const directory = mkdtempSync(join(tmpdir(), 'jev-held-out-bad-'))

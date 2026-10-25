@@ -2,7 +2,10 @@ import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { prepareImage } from './images/prepare'
-import { IMAGE_GUARD } from '../../src/lib/content-judgement/questions'
+import {
+  IMAGE_GUARD,
+  JEV_CALL_POLICY,
+} from '../../src/lib/content-judgement/questions'
 import { buildRequest, DEFAULT_MODEL } from './questions'
 import { buildReport, type SurfaceRun } from './report'
 import { loadData, surfaces, type Surface } from './schema'
@@ -253,6 +256,11 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
                 run.surface,
                 buildRequest(run.surface, item, options.model, imageBase64),
                 apiKey,
+                undefined,
+                undefined,
+                // A held-out run gates enforcement: it may answer no more
+                // than production would (three attempts, 20 s each).
+                options.data ? JEV_CALL_POLICY : undefined,
               )
               const minimum =
                 'image' in item

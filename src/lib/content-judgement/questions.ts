@@ -53,6 +53,14 @@ export const IMAGE_GUARD = {
   margin: 500,
 } as const
 
+/**
+ * Production's call policy (spec §4.1): attempts on 429/5xx and the
+ * per-attempt timeout. The eval keeps its own, more patient transport, but a
+ * held-out run, whose numbers gate enforcement, must answer no more than
+ * production would.
+ */
+export const JEV_CALL_POLICY = { attempts: 3, timeoutMs: 20_000 } as const
+
 export type NoulQuestion = {
   type: 'noul'
   instructions: string

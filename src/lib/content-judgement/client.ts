@@ -1,6 +1,11 @@
 import 'server-only'
 import { z } from 'zod'
-import { categories, decisionBody, type DecisionRequest } from './questions'
+import {
+  categories,
+  decisionBody,
+  JEV_CALL_POLICY,
+  type DecisionRequest,
+} from './questions'
 import { isContentJudgementEnabled } from './settings'
 
 /**
@@ -18,8 +23,8 @@ import { isContentJudgementEnabled } from './settings'
 
 export const JEV_ENDPOINT = 'https://openrouter.ai/api/alpha/decisions'
 
-const TIMEOUT_MS = 20_000
-const ATTEMPTS = 3
+const TIMEOUT_MS = JEV_CALL_POLICY.timeoutMs
+const ATTEMPTS = JEV_CALL_POLICY.attempts
 const BACKOFF_MS = 1_000
 
 const probability = z.number().finite().min(0).max(1)
