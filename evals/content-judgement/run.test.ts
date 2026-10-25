@@ -4,18 +4,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { main } from './run'
 
-vi.mock('node:fs', async (importOriginal) => {
-  const fs = await importOriginal<typeof import('node:fs')>()
-  return {
-    ...fs,
-    // The photo dataset is authored separately; legacy runner fixtures stay fixed.
-    existsSync: (path: Parameters<typeof fs.existsSync>[0]) =>
-      path instanceof URL && path.pathname.endsWith('/data/wall-photo.jsonl')
-        ? false
-        : fs.existsSync(path),
-  }
-})
-
 const savedExitCode = process.exitCode
 const directories: string[] = []
 afterEach(() => {
@@ -28,7 +16,9 @@ afterEach(() => {
 })
 
 describe('offline runner integration', () => {
-  it('dry-run validates every dataset without a key or fetch', async () => {
+  it('dry-run validates every dataset without a key, fetch or photo cache', async () => {
+    const prepare = await import('./images/prepare')
+    const prepareImage = vi.spyOn(prepare, 'prepareImage')
     vi.stubEnv('OPENROUTER_API_KEY', '')
     const fetcher = vi.fn<typeof fetch>()
     vi.stubGlobal('fetch', fetcher)
@@ -44,7 +34,10 @@ describe('offline runner integration', () => {
       'wall-caption: validated 130 items',
       'feedback-comment: validated 160 items',
       'conversation-opening: validated 112 items',
+      'wall-photo: validated 75 items',
     ])
+    // A text surface must not need the gitignored image cache.
+    expect(prepareImage).not.toHaveBeenCalled()
     const output = log.mock.calls.map(([value]) => String(value)).join('\n')
     expect(output.includes('data:image')).toBe(false)
     expect(output).toContain('requestBytes')
@@ -123,6 +116,12 @@ describe('offline runner integration', () => {
     expect(process.exitCode).toBe(1)
   })
   it('runs all surfaces with bounded concurrency and records every successful repeat', async () => {
+    // Photos need the gitignored image cache; this test covers the text surfaces.
+    const schema = await import('./schema')
+    const originalLoadData = schema.loadData
+    vi.spyOn(schema, 'loadData').mockImplementation((surface) =>
+      surface === 'wall-photo' ? [] : originalLoadData(surface),
+    )
     vi.stubEnv('OPENROUTER_API_KEY', 'synthetic-test-key')
     let active = 0
     let peak = 0

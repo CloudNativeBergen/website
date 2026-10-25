@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { prepareImage } from './images/prepare'
@@ -84,20 +84,15 @@ export function parseOptions(args: string[]): Options {
 export async function main(args = process.argv.slice(2)): Promise<void> {
   const options = parseOptions(args)
   // Validate every file even when selecting one surface or limiting paid calls.
-  const datasets = surfaces
-    .filter(
-      (surface) =>
-        surface !== 'wall-photo' ||
-        options.surface === 'wall-photo' ||
-        existsSync(new URL('./data/wall-photo.jsonl', import.meta.url)),
-    )
-    .map((surface) => ({
-      surface,
-      items: loadData(surface),
-    }))
+  const datasets = surfaces.map((surface) => ({
+    surface,
+    items: loadData(surface),
+  }))
   if (options.dryRun) {
     for (const { surface, items } of datasets) {
       console.log(`${surface}: validated ${items.length} items`)
+      // Photos come from the local image cache; only prepare one when asked.
+      if (options.surface !== 'all' && options.surface !== surface) continue
       const item = items[0]
       const image = 'image' in item ? await prepareImage(item) : undefined
       const request = buildRequest(surface, item, options.model, image?.base64)
