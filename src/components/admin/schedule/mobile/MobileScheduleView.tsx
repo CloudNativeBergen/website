@@ -42,6 +42,7 @@ export function MobileScheduleView({
   isDraftMode,
   onToggleDraftMode,
   onPromote,
+  trackSponsorOptions = [],
 }: MobileScheduleViewProps) {
   const schedule = schedules[currentDayIndex] ?? null
   const tracks = useMemo(() => schedule?.tracks ?? [], [schedule])
@@ -659,6 +660,7 @@ export function MobileScheduleView({
         <TrackActionSheet
           track={trackSheetTrack}
           trackIndex={sheet.trackIndex}
+          sponsorOptions={trackSponsorOptions}
           dispatch={dispatch}
           onClose={closeSheet}
         />

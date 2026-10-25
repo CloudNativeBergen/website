@@ -167,6 +167,7 @@ const EXPANDED_SCHEDULES = `schedules[]-> {
       tracks[]{
         trackTitle,
         trackDescription,
+        sponsor,
         talks[]{
         startTime,
         endTime,

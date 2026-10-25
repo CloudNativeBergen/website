@@ -1,6 +1,10 @@
 import type React from 'react'
 import type { ProposalExisting } from '@/lib/proposal/types'
-import type { EditorSchedule, Slot } from '@/lib/schedule/types'
+import type {
+  EditorSchedule,
+  Slot,
+  TrackSponsorOption,
+} from '@/lib/schedule/types'
 import type { ScheduleAction } from '@/lib/schedule/reducer'
 
 export interface MobileScheduleViewProps {
@@ -27,6 +31,8 @@ export interface MobileScheduleViewProps {
   onToggleDraftMode: (enabled: boolean) => void
   /** Publish the current day (draft → official). */
   onPromote: () => void
+  /** The sponsors a track can be given, Track Sponsorship holders first. */
+  trackSponsorOptions?: TrackSponsorOption[]
 }
 
 /**

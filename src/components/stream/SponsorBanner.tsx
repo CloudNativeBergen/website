@@ -16,6 +16,8 @@ interface SponsorBannerProps {
    * (spec §9.4), on a 1920×1080 canvas with no responsive steps.
    */
   variant?: 'default' | 'strip'
+  /** A line above the loop, e.g. "Thank you to:" on a room's stream screen. */
+  heading?: string
 }
 
 export function SponsorBanner({
@@ -23,6 +25,7 @@ export function SponsorBanner({
   className,
   speed = 30,
   variant = 'default',
+  heading,
 }: SponsorBannerProps) {
   const [scrollWidth, setScrollWidth] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -67,6 +70,11 @@ export function SponsorBanner({
       role="marquee"
       aria-live="off"
     >
+      {heading && (
+        <p className="mb-8 px-12 text-center text-lg font-semibold tracking-widest text-gray-600 uppercase dark:text-gray-400">
+          {heading}
+        </p>
+      )}
       <div
         ref={contentRef}
         className="animate-marquee-dynamic flex items-center"

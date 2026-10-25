@@ -25,7 +25,11 @@ import {
 } from 'react'
 import React from 'react'
 import { ScheduleTrack, TrackTalk, Conference } from '@/lib/conference/types'
-import { DragItem, type EditorSchedule } from '@/lib/schedule/types'
+import {
+  DragItem,
+  type EditorSchedule,
+  type TrackSponsorOption,
+} from '@/lib/schedule/types'
 import {
   scheduleReducer,
   initScheduleEditorState,
@@ -63,7 +67,11 @@ interface ScheduleEditorProps {
   draftSchedules: EditorSchedule[]
   conference: Conference
   initialProposals: ProposalExisting[]
+  /** The sponsors a track can be given (see `getScheduleData`). */
+  trackSponsorOptions?: TrackSponsorOption[]
 }
+
+const NO_SPONSORS: TrackSponsorOption[] = []
 
 const PRIMARY_BUTTON =
   'inline-flex items-center gap-2 rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600'
@@ -261,6 +269,7 @@ export function ScheduleEditor({
   officialSchedules,
   draftSchedules,
   initialProposals,
+  trackSponsorOptions = NO_SPONSORS,
 }: ScheduleEditorProps) {
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
@@ -852,6 +861,7 @@ export function ScheduleEditor({
       isReadOnly,
       dispatch: editDispatch,
       isFilteredOut,
+      trackSponsorOptions,
     }),
     [
       activeItem,
@@ -860,6 +870,7 @@ export function ScheduleEditor({
       isReadOnly,
       editDispatch,
       isFilteredOut,
+      trackSponsorOptions,
     ],
   )
 
@@ -922,6 +933,7 @@ export function ScheduleEditor({
           isDraftMode={isDraftMode}
           onToggleDraftMode={handleToggleDraftMode}
           onPromote={handlePromote}
+          trackSponsorOptions={trackSponsorOptions}
         />
         {showAddTrackModal && (
           <AddTrackModal

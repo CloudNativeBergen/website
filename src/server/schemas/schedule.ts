@@ -42,6 +42,12 @@ const ScheduleTrackSchema = z.object({
   // A single track holds far fewer than 300 slots in practice; the cap only
   // rejects abuse, not real schedules.
   talks: z.array(TrackTalkSchema).max(300),
+  // The track's sponsor; the save keeps it only if it is one of this
+  // conference's sponsors.
+  sponsor: z
+    .object({ _ref: z.string().min(1).max(200) })
+    .nullable()
+    .optional(),
 })
 
 export const SaveScheduleSchema = z
