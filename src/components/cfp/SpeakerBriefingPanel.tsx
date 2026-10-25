@@ -12,6 +12,7 @@ import type {
 } from '@/lib/speaker/briefing'
 import { formatConferenceDayDate, formatConferenceDayTime } from '@/lib/time'
 import { isSafeLinkHref } from '@/lib/portabletext/safeHref'
+import { DinnerRouteChoice } from './DinnerRouteChoice'
 
 interface SpeakerBriefingPanelProps {
   briefing: SpeakerBriefing
@@ -21,6 +22,11 @@ interface SpeakerBriefingPanelProps {
   pinDinner?: boolean
   /** Where a speaker writes when their dinner plans change. */
   changesEmail?: string
+  /**
+   * The speaker's dinner route, checked against the current routes; `null`
+   * when unanswered. Leave it out to hide the route picker.
+   */
+  dinnerChoice?: string | null
 }
 
 // Map links open off-site, so http(s) only — no site paths.
@@ -81,6 +87,7 @@ export function SpeakerBriefingPanel({
   conferenceDay,
   pinDinner,
   changesEmail,
+  dinnerChoice,
 }: SpeakerBriefingPanelProps) {
   const todayTalks = conferenceDay
     ? (b.talks ?? []).filter((t) => t.date === conferenceDay)
@@ -179,6 +186,7 @@ export function SpeakerBriefingPanel({
   )
 
   const d = b.dinner
+  const showRoutePicker = !!d?.routes && dinnerChoice !== undefined
   const dinner = d && (
     <Section title="Speaker dinner">
       {d.rsvpNote && (
@@ -239,9 +247,14 @@ export function SpeakerBriefingPanel({
           ))}
         </ul>
       )}
+      {showRoutePicker && (
+        <DinnerRouteChoice routes={d.routes!} choice={dinnerChoice} />
+      )}
       {changesEmail && (
         <p className="mt-2">
-          Changed your plans?{' '}
+          {showRoutePicker
+            ? 'Anything else about the dinner?'
+            : 'Changed your plans?'}{' '}
           <a href={`mailto:${changesEmail}`} className={linkClass}>
             Email {changesEmail}
           </a>

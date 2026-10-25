@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { http, HttpResponse } from 'msw'
 import { SpeakerBriefingPanel } from './SpeakerBriefingPanel'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import type { TypedObject } from 'sanity'
@@ -125,3 +126,26 @@ export const ConferenceDay: Story = {
 }
 
 export const Minimal: Story = { args: { briefing: { talks, todos } } }
+
+/** The route picker under the dinner (#1592, phase 5), saving to a mocked API. */
+export const WithDinnerChoice: Story = {
+  args: {
+    briefing: full,
+    changesEmail: 'cfp@example.com',
+    dinnerChoice: 'walk',
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/speaker.setDinnerChoice', async ({ request }) =>
+          HttpResponse.json({ result: { data: await request.json() } }),
+        ),
+      ],
+    },
+  },
+}
+
+export const DinnerChoiceUnanswered: Story = {
+  args: { ...WithDinnerChoice.args, dinnerChoice: null },
+  parameters: WithDinnerChoice.parameters,
+}

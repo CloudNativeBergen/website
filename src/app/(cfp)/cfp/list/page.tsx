@@ -26,6 +26,7 @@ import {
   loadDashboardBriefing,
   type BriefingFields,
 } from '@/lib/speaker/dashboardBriefing'
+import { getDinnerChoice } from '@/lib/speaker/dinnerChoice-sanity'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
@@ -226,6 +227,7 @@ export default async function SpeakerDashboard() {
             }`,
             { id },
           ),
+        fetchDinnerChoice: (id) => getDinnerChoice(id, speakerId),
       })
 
       return {
