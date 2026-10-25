@@ -463,3 +463,54 @@ describe('a failed send is never silent', () => {
     expect(error).not.toHaveBeenCalled()
   })
 })
+
+describe('Resend rate limit (10 requests/s)', () => {
+  const LIMITED = {
+    data: null,
+    error: { name: 'rate_limit_exceeded', message: 'Too many requests.' },
+    headers: { 'retry-after': '1' },
+  }
+  const MESSAGE = {
+    from: PLATFORM_FROM,
+    to: 'a@example.com',
+    subject: 's',
+    html: '<p>x</p>',
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('waits for retry-after and sends again, logging nothing when that succeeds', async () => {
+    vi.useFakeTimers()
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const results = [LIMITED, { data: { id: 'email_1' }, error: null }]
+    const { client, send } = fakeClient(async () => results.shift()!)
+    instrumentResendClient(client, { enforceSenderPolicy: false })
+
+    const pending = client.emails.send(MESSAGE)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(send).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await pending
+
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(result.error).toBeNull()
+    expect(log).not.toHaveBeenCalled()
+  })
+
+  it('gives up after two retries and logs the failure ONCE', async () => {
+    vi.useFakeTimers()
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { client, send } = fakeClient(async () => LIMITED)
+    instrumentResendClient(client, { enforceSenderPolicy: false })
+
+    const pending = client.emails.send(MESSAGE)
+    await vi.advanceTimersByTimeAsync(5000)
+    const result = await pending
+
+    expect(send).toHaveBeenCalledTimes(3)
+    expect(result.error).toEqual(LIMITED.error)
+    expect(log).toHaveBeenCalledTimes(1)
+  })
+})

@@ -229,6 +229,13 @@ export async function getAnnouncementsByWorkshop(
 /** Upper bound on simultaneous announcement emails in flight. */
 const EMAIL_CONCURRENCY = 3
 
+/**
+ * Minimum time per batch of {@link EMAIL_CONCURRENCY} sends: 5 emails/s, half
+ * of Resend's 10 requests/s, which the account shares with every other send.
+ * ponytail: per-invocation pacing; a shared limiter if parallel fan-outs still hit 429.
+ */
+const BATCH_MIN_MS = 600
+
 export interface FanOutResult {
   sent: number
   failed: number
@@ -262,7 +269,8 @@ export async function sendAnnouncementToConfirmedParticipants(input: {
 }
 
 /**
- * One email per item, {@link EMAIL_CONCURRENCY} at a time. A send that throws
+ * One email per item, {@link EMAIL_CONCURRENCY} at a time, at most 5 a
+ * second ({@link BATCH_MIN_MS}). A send that throws
  * or answers an error is counted as failed; the batch goes on.
  */
 export async function fanOutEmails<T>(
@@ -273,9 +281,14 @@ export async function fanOutEmails<T>(
   let failed = 0
 
   for (let i = 0; i < items.length; i += EMAIL_CONCURRENCY) {
+    const started = Date.now()
     const results = await Promise.allSettled(
       items.slice(i, i + EMAIL_CONCURRENCY).map(send),
     )
+    const wait = BATCH_MIN_MS - (Date.now() - started)
+    if (i + EMAIL_CONCURRENCY < items.length && wait > 0) {
+      await new Promise((resolve) => setTimeout(resolve, wait))
+    }
 
     for (const result of results) {
       if (result.status === 'fulfilled' && !result.value.error) {
