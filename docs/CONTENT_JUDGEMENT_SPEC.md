@@ -98,7 +98,10 @@ Feedback Colour and an optional comment), **Conversation**.
 
 - **OpenRouter**, `POST https://openrouter.ai/api/alpha/decisions`, body
   `{ model, questions, state }`, with `provider: { zdr: true }` on every
-  request and zero data retention also enforced on the account (#1574).
+  request and zero data retention also enforced on the account (#1574). Jev
+  has one provider behind OpenRouter, TypeSafe in the United States; Jev isn't
+  offered on OpenRouter's EU in-region routing (#1565), and the disclosure
+  says the data goes to the US.
 - **Model** `typesafe/jev-1.14`. The response's `model` names the dated build
   that answered (today `typesafe/jev-1.14-20261014`); every Judgement stores it.
 - **One platform-owned OpenRouter account.** Organizations never bring keys.
@@ -196,7 +199,9 @@ enforceWallPosts: boolean, changedAt, changedBy }`. The `organization`
 - **Refinement (spec):** content written while the setting was off is never
   judged retroactively. Turning the setting off stops new calls at once; stored
   Judgements stay until their content is deleted (§12) and are hidden from the
-  admin views while the setting is off.
+  admin views while the setting is off. **OpenRouter and the `/privacy`
+  section stay disclosed while any Judgement for the organization is stored**
+  (§13), so turning the setting off never hides data we still hold.
 
 ## 6. When content is judged
 
@@ -293,8 +298,9 @@ annotate its queries for `tenancy/no-unscoped-groq` and explain why.
 - **What counts** (#1572): only content Jev flagged. Hide, Remove or Reject is
   agreed; Keep or Approve is disagreed, including Keep or Approve on enforced
   content. Inaction counts as nothing, and misses aren't measured. A Message
-  Category counts when the Conversation is resolved: unchanged is agreed,
-  changed by an organizer is disagreed. **Refinement (spec):** a Conversation
+  Category counts when the Conversation is resolved, **only if Jev set it**
+  (`source: 'jev'` at first): unchanged is agreed, changed by an organizer is
+  disagreed. Categories set by the system never count. **Refinement (spec):** a Conversation
   is tallied once, at its first resolve; a flagged comment or Wall Post is
   tallied once, at its first decision.
 - **The bias is accepted:** organizers see the advice before deciding, so
@@ -461,8 +467,12 @@ They gate enforcement only, so building them blocks nothing in v1.
   committed**. Per surface: 300 benign items shared by all four questions,
   about a third harsh-but-fair or borderline, plus 50 positives per question.
   **Feedback comments first**; captions later.
-- **Images** (#1570): a private nudity/gore set built by a person, kept
-  outside the repo, read from a local path, only numbers committed.
+- **Images** (#1570): a private set built by a person, kept outside the
+  repo, read from a local path, only numbers committed. It covers **all four
+  photo questions** with human-picked positives and negatives (nudity and
+  sexual content, gore and hate symbols, ads and QR lures, readable badges and
+  screens), so each can meet the held-out bar on its own. A question it
+  doesn't cover stays advice-only, and the Enforce switch says so.
 
 ## 12. Retention and erasure
 
@@ -484,22 +494,22 @@ They gate enforcement only, so building them blocks nothing in v1.
 
 ### 13.1 Subprocessor
 
-**OpenRouter** joins the registry, disclosed **only for organizations that
-turned content judgement on**. **Implementation detail:** a new
+**OpenRouter** joins the registry, disclosed **for organizations that have
+content judgement on or still store any Judgement** (§5). **Implementation detail:** a new
 `SubprocessorId` `openrouter`, a catalogue entry
 `{ name: 'OpenRouter', purpose: 'Routes attendee and speaker content to the
 TypeSafe Jev classifier for moderation advice and message topics, with zero
 data retention', group: 'infrastructure', location: 'United States',
 chosenBy: 'organizer' }`, an entry in `DISCLOSURE_ORDER`, and a signal from
-the organization's `contentJudgement.enabled` (a failed read discloses it as
-possible, never omits it). TypeSafe is named as OpenRouter's model provider in
+the organization's `contentJudgement.enabled` or a stored Judgement in any of
+its conferences (a failed read discloses it as possible, never omits it). TypeSafe is named as OpenRouter's model provider in
 the `/privacy` copy.
 
 ### 13.2 `/privacy` copy
 
 **Refinement (spec):** a `ContentJudgementPrivacy` section in
-`src/components/legal/`, rendered only when the organization has content
-judgement on (unlike the Photo Wall and Session Feedback sections, which are
+`src/components/legal/`, rendered while the organization has content
+judgement on or still stores any Judgement (§5) (unlike the Photo Wall and Session Feedback sections, which are
 unconditional). Proposed copy:
 
 > **Automatic checks on what you write**
@@ -514,9 +524,11 @@ unconditional). Proposed copy:
 > The content is sent through OpenRouter to TypeSafe's Jev classifier in the
 > United States, under the EU Standard Contractual Clauses, with zero data
 > retention: neither keeps it after answering, and it is not used to train
-> models. We store only the scores, a fingerprint of what was checked and the
-> time, never a copy of your text or photo, and we delete them within a day
-> after the content itself is deleted.
+> models. We store the classifier's scores and the message topic, a
+> fingerprint of what was checked, which version of the classifier answered,
+> when, and whether an organizer kept a flagged comment, but never a copy of
+> your text or photo. We delete it within a day after the content itself is
+> deleted.
 >
 > The advice is shown to organizers only. A person always decides; the
 > organizers may have chosen to hide a comment or hold a photo automatically
@@ -559,7 +571,7 @@ sweep) is deployed.**
 | J6  | **Inbox chip, filter and sort.** The row chip, the server-side filter and sort inputs with the keyset change, the thread-header menu, organizer override, uncertain guesses (§8.3), and the tally at first resolve. Demo: filtering by Travel and visa shows only those Conversations; changing a category survives a reload and is never overwritten.                                                                                                                                                                                                                                                                                                                                                                                             | J3, J5 |
 | J7  | **Enforcement.** The Enforce switches with their disabled reasons (§10.3); the gate computation over the gate file and the tally (§10.2); hiding a comment from the speaker's view with the 10-minute wait (§10.1); holding a Wall Post in Not shown; the "automatically" labels and reversal counting as disagreement. Demo with a test gate file: a comment scoring 0.95 on an enforced question never reaches the speaker until Keep; with no passed question the switch says why it is disabled.                                                                                                                                                                                                                                               | J3, J4 |
 | H1  | **Held-out text set for feedback comments** (§11.2): a human task; then commit its numbers to the gate file. Gates enforcement, blocks no build.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | J1     |
-| H2  | **Private nudity/gore image set** (§11.2): a human task; numbers only. Gates photo enforcement, blocks no build.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | J4     |
+| H2  | **Private image set** for all four photo questions (§11.2): a human task; numbers only. Gates photo enforcement, blocks no build.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | J4     |
 
 **User steps** (before the first organization turns it on in production):
 set `OPENROUTER_API_KEY` in Vercel; set a monthly credit limit on the
