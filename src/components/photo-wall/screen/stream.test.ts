@@ -665,7 +665,6 @@ describe('round-7 adversarial findings', () => {
     s = loadAll(poll(s, posts(12), now), now)
     expect(ids(s.queue)).toEqual(['wallPost-12'])
     expect(featuredId(s)).toBe('wallPost-11')
-    const next = walkNext(s)
     now += ARRIVAL_GAP_MS
     // One poll removes 11 and lets 12 in.
     s = poll(
@@ -674,14 +673,10 @@ describe('round-7 adversarial findings', () => {
       now,
     )
     expect(featuredId(s)).toBe('wallPost-12')
-    // Nothing was featured but 12: the walk's next is still next.
+    // Nothing was featured but 12. The walk is 12, 10, 9, 8, 7, 6; 10 had
+    // the first turn, so the next is 9, the newest never featured (not 8,
+    // as when 9's turn was recorded without it being shown).
     s = run(s, now, now + SWAP_EVERY_MS)
-    expect(featuredId(s)).toBe(next)
+    expect(featuredId(s)).toBe('wallPost-9')
   })
 })
-
-/** The post the Mosaic walk features after the current turn, nothing happening meanwhile. */
-function walkNext(s: StreamState): string {
-  const at = s.feature!.at
-  return featuredId(run(s, at, at + SWAP_EVERY_MS))!
-}
