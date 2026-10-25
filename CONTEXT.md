@@ -177,3 +177,11 @@ _Avoid_: unchecked, safe, pending
 **Enforcement**:
 A Judgement acting without an organizer: hiding a comment from its speaker until an organizer decides, or holding a Wall Post in not shown. An organization switches it on per surface, and it covers only questions that have proven themselves.
 _Avoid_: auto-moderation, auto-reject, blocking
+
+**Shadow mode**:
+Running content judgement as advice only while organizers' decisions on flagged content are counted, before enforcement is allowed.
+_Avoid_: trial, dry run, silent mode
+
+**Agreement**:
+An organizer's decision on flagged content that matches the flag (hide, remove or reject), or a Message Category left unchanged until its Conversation is resolved. Counted anonymously across the platform.
+_Avoid_: accuracy, precision, approval rate

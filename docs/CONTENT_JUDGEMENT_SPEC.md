@@ -125,7 +125,7 @@ eval measures exactly what production sends. **Implementation detail:** move
 | Comment                    | four `noul`: `abusive`, `sexual`, `spam`, `personal_info` (comment wording: harsh criticism of the talk is not abuse) | v2  |
 | Wall Post, caption present | the four caption questions (`caption_*`) and four photo questions (`photo_*`)                                         | v4  |
 | Wall Post, no caption      | the four photo questions                                                                                              | v4  |
-| Conversation opening       | one `choice`, `category`, over the seven Message Categories (§8.3), from the subject and the opening message          | v2  |
+| Conversation opening       | one `choice`, `category`, over the seven Message Categories (§8.3), from `{ subject, message, openedBy }`             | v2  |
 
 - **Photo questions judge only what is visible and ignore the caption** (#1576).
   Their meanings: sexual = nudity or sexual content; abusive = harassment, hate
@@ -135,8 +135,16 @@ eval measures exactly what production sends. **Implementation detail:** move
   phone numbers or addresses.
 - **Abusive includes sexual remarks or propositions aimed at a person**
   (#1569).
+- `openedBy` is `organizer` when the opening's author is an organizer of the
+  conference, otherwise `speaker`.
+- **Refinement (spec): question set versions are per surface** (the column
+  above), so rewording the photo questions doesn't reset the comment tally.
+  Today the eval module has one `QUESTION_SET_VERSION` (`v4`); J1 splits it.
+  The comment and conversation wording is unchanged since v2.
 - The question set version and the model build are part of every Judgement.
   **Every bar in §11 must be met again whenever either changes.**
+- Only the questions are shared with the eval runner. The production client
+  has its own timeouts and retries (§4.1).
 
 ### 4.3 The Wall Post call
 
@@ -199,12 +207,23 @@ writes either a Judgement or a not-judged summary.
 | Wall Post    | `submitWallPost()` creates the post                                                | Wall Posts can't be edited.                                                                                                                                                                                    |
 | Conversation | the first message of a `proposal` or `general` Conversation is written by a person | Sponsor Conversations are never judged. **System-generated openings are never judged** (#1568); they take their category from the event that created them (§8.3).                                              |
 
-**System-generated openings need a marker.** Today the withdrawal and removal
-relays (`proposal.ts`), the "no longer a speaker" notice and marketing outreach
-(`marketing.ts`) are ordinary messages authored by the acting organizer, so
-nothing distinguishes them. **Implementation detail:** add `origin: 'person' |
-'system'` to `message`, set to `system` at those call sites (absent means
-person), and pass the event's category alongside.
+**System-generated openings need a marker.** Today every message posted by a
+proposal action is an ordinary message authored by the acting person, so
+nothing distinguishes it. **Refinement (spec):** these call sites post
+`system` messages, all with the category **Proposal status**:
+
+- the proposal-action relays in `proposal.ts` (withdraw and remove, and the
+  accept, reject, waitlist and remind comment relays, `COMMENT_RELAY_ACTIONS`),
+  **even when the relay carries a comment or reason someone typed**: the
+  action defines the topic;
+- the "no longer a speaker on this talk" notice (`removeCoSpeaker`,
+  `proposal.ts`).
+
+**Marketing outreach** (`marketing.ts`) is text an organizer wrote, so it is a
+person's opening and is judged. No code posts a language or format change
+notice today; one added later carries its own category (Talk details).
+**Implementation detail:** add `origin: 'person' | 'system'` to `message`
+(absent means person) and pass the event's category alongside.
 
 ## 7. Data model
 
@@ -261,8 +280,12 @@ with `agreed` and `disagreed` counters, incremented with `inc` in the same
 transaction as the organizer's action. It is deliberately outside tenancy:
 annotate its queries for `tenancy/no-unscoped-groq` and explain why.
 
-- **Score bands:** `[0.5, 0.9)` and `[0.9, 1]` for moderation questions;
-  confidence `< 0.7` and `≥ 0.7` for categories.
+- **Score bands:** `[0.5, 0.9)` and `[0.9, 1]` for moderation questions.
+  **Refinement (spec):** confidence `< 0.7` and `≥ 0.7` for categories.
+- **Refinement (spec):** a decision on content flagged by several questions
+  increments the tally for **every** flagged question, each in its own band
+  (a Rejected post with caption spam 0.6 and photo personal_info 0.95 adds an
+  agreement to both).
 - **What counts** (#1572): only content Jev flagged. Hide, Remove or Reject is
   agreed; Keep or Approve is disagreed, including Keep or Approve on enforced
   content. Inaction counts as nothing, and misses aren't measured. A Message
@@ -331,15 +354,18 @@ throwaway branch `prototype/content-judgement-ui`
   so "By category" needs a keyset that includes the sort key).
 - **An uncertain guess is not a filter value** (#1569): it appears under
   "All" and sorts first under "Unsure first" until an organizer confirms or
-  changes it.
+  changes it. **Refinement (spec):** filter counts leave uncertain guesses out;
+  there is no separate Unsure chip (the user chose the plain filter bar,
+  #1571); "By category" orders the seven categories in list order, then
+  uncertain guesses, then not-judged Conversations, newest first within each.
 - **Changing a category**: the chip in the thread header opens the menu
   ("Best guess (55%): confirm or change it" for uncertain guesses). Below `lg`
   the chip sits on a line under the subject (the header already holds Resolve,
   Mute and "…"). Confirming or changing sets `source: 'organizer'`.
 - **Not judged**: no chip; the Conversation shows only under "All".
-- **System-generated openings** take their category from the event: a
-  withdrawal, removal or cancellation is **Proposal status**; a language or
-  format change is **Talk details** (#1568).
+- **System-generated openings** take their category from the event (#1568):
+  every proposal-action relay and the co-speaker removal notice are **Proposal
+  status** (§6).
 - **Sponsor Conversations** never get a category and appear only under "All".
 
 ## 9. Shadow mode
@@ -384,8 +410,11 @@ A question is **enforced** on a surface only if all of these hold:
    negatives and recall ≥ 80% at 0.9, on a held-out set written by people
    (§11.2), for the current model build and question set.
 2. **Shadow bar** (#1572): at least **30 organizer decisions** on content that
-   question flagged at **≥ 0.9**, with **at most 1 disagreement**, on the
-   current model build and question set. A new build starts again at zero.
+   question flagged at **≥ 0.9**, with **at most 1 disagreement per 30**
+   (about 97%), on the current model build and question set. A new build
+   starts again at zero. **Refinement (spec):** computed as a rate over all
+   decisions on that build (disagreed ≤ total / 30, total ≥ 30), so a second
+   disagreement after 60 agreements doesn't end enforcement for good.
 3. The organization's **Enforce** switch for that surface is on.
 
 **Implementation detail:** held-out results are committed as numbers in a
@@ -516,17 +545,17 @@ mocked in the affected UI tests and the mutation-surface snapshots are updated.
 **No organization turns content judgement on in production before J2 (the
 sweep) is deployed.**
 
-| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | After  |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| J1  | **Setting, client and record.** The organization's `contentJudgement` fields and the Content judgement card on `/admin/settings` (Judge content only); the OpenRouter client (§4.1) with the questions module shared with the eval runner (§4.2); the `contentJudgement` type (§7.1); the OpenRouter subprocessor entry and the conditional `/privacy` section (§13.1, §13.2); the `PRIVACY_OPERATIONS.md` lines (§13.3). Demo: an organizer turns it on and OpenRouter appears on that conference's `/privacy`; off, it disappears and no call can be made. | —      |
-| J2  | **Orphan sweep** (§12): the daily cron and its tests (a Judgement whose content is deleted by each existing path is gone after one run).                                                                                                                                                                                                                                                                                                                                                                                                                     | J1     |
-| J3  | **Comments judged, triage strip.** Judging on `submitFeedback()` with re-judging and deletion (§6); the summary (§7.2); the triage strip, collapsed text and percentages (§8.2); Keep records who and when; the tally document and its writes for Hide, Remove and Keep (§7.3). Demo: an abusive comment shows "Likely unsafe: may be abusive (88%)" within seconds; Keep stops the advice and adds one disagreement.                                                                                                                                        | J1     |
-| J4  | **Wall Posts judged, covered photos.** The one-call caption + photo judging with the image guard (§4.3); the covered photo, which part, not-judged pills (§8.1); Approve all skipping flagged posts; tally writes on Approve and Reject. Demo: a QR-lure photo arrives covered with "May be an ad or a QR-code lure (86%)"; Approve all leaves it Pending.                                                                                                                                                                                                   | J3     |
-| J5  | **Message Category judged.** `message.origin` set at the system call sites (§6); category judging on a person's opening; event categories for system openings; `conversation.messageCategory` (§7.2). Demo: a speaker's "can I get a visa letter?" opening gets Travel and visa; a withdrawal relay gets Proposal status without a call.                                                                                                                                                                                                                     | J1     |
-| J6  | **Inbox chip, filter and sort.** The row chip, the server-side filter and sort inputs with the keyset change, the thread-header menu, organizer override, uncertain guesses (§8.3), and the tally at first resolve. Demo: filtering by Travel and visa shows only those Conversations; changing a category survives a reload and is never overwritten.                                                                                                                                                                                                       | J3, J5 |
-| J7  | **Enforcement.** The Enforce switches with their disabled reasons (§10.3); the gate file and gate computation (§10.2); hiding a comment from the speaker's view with the 10-minute wait (§10.1); holding a Wall Post in Not shown; the "automatically" labels and reversal counting as disagreement. Demo with a test gate file: a comment scoring 0.95 on an enforced question never reaches the speaker until Keep; with no passed question the switch says why it is disabled.                                                                            | J3, J4 |
-| H1  | **Held-out text set for feedback comments** (§11.2): a human task; then commit its numbers to the gate file. Gates enforcement, blocks no build.                                                                                                                                                                                                                                                                                                                                                                                                             | J1     |
-| H2  | **Private nudity/gore image set** (§11.2): a human task; numbers only. Gates photo enforcement, blocks no build.                                                                                                                                                                                                                                                                                                                                                                                                                                             | J4     |
+| #   | Slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | After  |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| J1  | **Setting, client and record.** The organization's `contentJudgement` fields and the Content judgement card on `/admin/settings` (Judge content only); the OpenRouter client (§4.1) with the questions module shared with the eval runner and per-surface question set versions (§4.2); the gate file's format, empty (§10.2); the `contentJudgement` type (§7.1); the OpenRouter subprocessor entry and the conditional `/privacy` section (§13.1, §13.2); the `PRIVACY_OPERATIONS.md` lines (§13.3). Demo: an organizer turns it on and OpenRouter appears on that conference's `/privacy`; off, it disappears and no call can be made. | —      |
+| J2  | **Orphan sweep** (§12): the daily cron and its tests (a Judgement whose content is deleted by each existing path is gone after one run).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | J1     |
+| J3  | **Comments judged, triage strip.** Judging on `submitFeedback()` with re-judging and deletion (§6); the summary (§7.2); the triage strip, collapsed text and percentages (§8.2); Keep records who and when; the tally document and its writes for Hide, Remove and Keep (§7.3). Demo: an abusive comment shows "Likely unsafe: may be abusive (88%)" within seconds; Keep stops the advice and adds one disagreement.                                                                                                                                                                                                                     | J1     |
+| J4  | **Wall Posts judged, covered photos.** The one-call caption + photo judging with the image guard (§4.3); the covered photo, which part, not-judged pills (§8.1); Approve all skipping flagged posts; tally writes on Approve and Reject; an eval-runner option to read a private image set from a local path and commit only its numbers (for H2). Demo: a QR-lure photo arrives covered with "May be an ad or a QR-code lure (86%)"; Approve all leaves it Pending.                                                                                                                                                                      | J3     |
+| J5  | **Message Category judged.** `message.origin` set at the system call sites (§6); category judging on a person's opening; event categories for system openings; `conversation.messageCategory` (§7.2). Demo: a speaker's "can I get a visa letter?" opening gets Travel and visa; a withdrawal relay gets Proposal status without a call.                                                                                                                                                                                                                                                                                                  | J1     |
+| J6  | **Inbox chip, filter and sort.** The row chip, the server-side filter and sort inputs with the keyset change, the thread-header menu, organizer override, uncertain guesses (§8.3), and the tally at first resolve. Demo: filtering by Travel and visa shows only those Conversations; changing a category survives a reload and is never overwritten.                                                                                                                                                                                                                                                                                    | J3, J5 |
+| J7  | **Enforcement.** The Enforce switches with their disabled reasons (§10.3); the gate computation over the gate file and the tally (§10.2); hiding a comment from the speaker's view with the 10-minute wait (§10.1); holding a Wall Post in Not shown; the "automatically" labels and reversal counting as disagreement. Demo with a test gate file: a comment scoring 0.95 on an enforced question never reaches the speaker until Keep; with no passed question the switch says why it is disabled.                                                                                                                                      | J3, J4 |
+| H1  | **Held-out text set for feedback comments** (§11.2): a human task; then commit its numbers to the gate file. Gates enforcement, blocks no build.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | J1     |
+| H2  | **Private nudity/gore image set** (§11.2): a human task; numbers only. Gates photo enforcement, blocks no build.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | J4     |
 
 **User steps** (before the first organization turns it on in production):
 set `OPENROUTER_API_KEY` in Vercel; set a monthly credit limit on the
@@ -563,7 +592,10 @@ table of slice → issue is added in the same PR.
 - **No held-out set exists yet**, so nothing can be enforced at launch; that
   is by design.
 - **Photo recall for nudity and gore is unmeasured** until H2 exists; spam
-  photo recall missed the bar by one borderline item (#1576).
+  photo recall missed the bar by one borderline item (#1576). If Jev fails
+  the private set, the photo judge can become a vision model behind the same
+  client seam (Gemini via Google, Claude via Bedrock or GPT via Azure, all
+  zero-retention on the same OpenRouter account, #1570).
 - **TypeSafe's Telemetry licence** may or may not reach OpenRouter-routed
   traffic (#1574). If it does, message categorization alone is reconsidered.
 - **Image input is experimental** at TypeSafe and runs in its slower
