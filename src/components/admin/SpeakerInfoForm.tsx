@@ -4,14 +4,23 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 import type { PortableTextBlock } from '@portabletext/editor'
-import { Input } from '@/components/Form'
+import { HelpText, Input } from '@/components/Form'
 import { PortableTextEditor } from '@/components/PortableTextEditor'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotification } from './NotificationProvider'
 import { api } from '@/lib/trpc/client'
 import type { TypedObject } from 'sanity'
 import type { SpeakerInfo, SpeakerInfoRoute } from '@/lib/conference/types'
-import { instantToOsloLocalInput, osloLocalInputToIso } from '@/lib/time'
+import {
+  formatDateTimeSafe,
+  instantToOsloLocalInput,
+  osloLocalInputToIso,
+} from '@/lib/time'
+import { generateKey } from '@/lib/sanity/helpers'
+import {
+  isRichTextContentEmpty,
+  type RichTextContentBlock,
+} from '@/lib/homepage/richText'
 
 type Blocks = PortableTextBlock[] | undefined
 // The editor's block type and Sanity's `TypedObject` describe the same JSON.
@@ -23,36 +32,44 @@ const toLocalInput = instantToOsloLocalInput
 const fromLocalInput = (v?: string) => osloLocalInputToIso(v) ?? undefined
 
 const str = (s?: string) => s?.trim() || undefined
-const blk = (b?: TypedObject[]) => (b && b.length > 0 ? b : undefined)
+// An emptied editor still holds one blank paragraph; treat that as cleared.
+const blk = (b?: TypedObject[]) =>
+  b && !isRichTextContentEmpty(b as unknown as RichTextContentBlock[])
+    ? b
+    : undefined
+/** An object whose fields are all blank is dropped, not saved as `{}`. */
+const orNone = <T extends object>(o: T) =>
+  Object.values(o).some((v) => v !== undefined) ? o : undefined
 
 /** Blank fields are omitted so an empty section stays absent on save. */
 function buildPayload(info: SpeakerInfo) {
   const d = info.dinner ?? {}
+  const routes = d.routes?.map((r) => ({
+    _key: r._key,
+    label: str(r.label),
+    meetingPoint: str(r.meetingPoint),
+    meetingPointMapUrl: str(r.meetingPointMapUrl),
+    departsNote: str(r.departsNote),
+    departsAt: fromLocalInput(r.departsAt),
+    details: blk(r.details),
+  }))
   return {
-    dinner: {
+    dinner: orNone({
       startsAt: fromLocalInput(d.startsAt),
       venueName: str(d.venueName),
       address: str(d.address),
       mapUrl: str(d.mapUrl),
       rsvpNote: str(d.rsvpNote),
       description: blk(d.description),
-      routes: d.routes?.map((r) => ({
-        _key: r._key,
-        label: str(r.label),
-        meetingPoint: str(r.meetingPoint),
-        meetingPointMapUrl: str(r.meetingPointMapUrl),
-        departsNote: str(r.departsNote),
-        departsAt: fromLocalInput(r.departsAt),
-        details: blk(r.details),
-      })),
-    },
+      routes: routes?.length ? routes : undefined,
+    }),
     checkIn: blk(info.checkIn),
     equipment: blk(info.equipment),
-    onsiteContact: {
+    onsiteContact: orNone({
       name: str(info.onsiteContact?.name),
       phone: str(info.onsiteContact?.phone),
       email: str(info.onsiteContact?.email),
-    },
+    }),
     accommodation: blk(info.accommodation),
     extra: blk(info.extra),
   }
@@ -69,6 +86,7 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
       startsAt: toLocalInput(initial?.dinner?.startsAt),
       routes: initial?.dinner?.routes?.map((r) => ({
         ...r,
+        _key: r._key ?? generateKey('route'),
         departsAt: toLocalInput(r.departsAt),
       })),
     },
@@ -133,7 +151,7 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
           <div>
             <Input
               name="dinner-startsAt"
-              label="Starts at"
+              label="Starts at (Europe/Oslo)"
               type="datetime-local"
               value={dinner.startsAt ?? ''}
               setValue={(v) => setDinner({ startsAt: v })}
@@ -186,7 +204,7 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
           </h3>
           {routes.map((r, idx) => (
             <div
-              key={r._key ?? idx}
+              key={r._key}
               className="space-y-4 rounded-md border border-gray-200 p-4 dark:border-gray-700"
             >
               <div className="grid gap-4 sm:grid-cols-3">
@@ -209,7 +227,7 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
                 <div>
                   <Input
                     name={`route-${idx}-departsAt`}
-                    label="Departs at"
+                    label="Departs at (Europe/Oslo)"
                     type="datetime-local"
                     value={r.departsAt ?? ''}
                     setValue={(v) => setRoute(idx, { departsAt: v })}
@@ -227,11 +245,12 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
                 <div className="sm:col-span-2">
                   <Input
                     name={`route-${idx}-departsNote`}
-                    label="Departure note (instead of a time)"
+                    label="Departure note"
                     placeholder="When the workshops are over"
                     value={r.departsNote ?? ''}
                     setValue={(v) => setRoute(idx, { departsNote: v })}
                   />
+                  <HelpText>Use when there is no fixed time</HelpText>
                 </div>
               </div>
               <PortableTextEditor
@@ -257,7 +276,9 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => setDinner({ routes: [...routes, {}] })}
+            onClick={() =>
+              setDinner({ routes: [...routes, { _key: generateKey('route') }] })
+            }
           >
             <PlusIcon className="h-4 w-4" />
             Add route
@@ -324,7 +345,7 @@ export function SpeakerInfoForm({ initial }: { initial?: SpeakerInfo }) {
         </AdminButton>
         {initial?.updatedAt && (
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            Last updated {new Date(initial.updatedAt).toLocaleString()}
+            Last updated {formatDateTimeSafe(initial.updatedAt)}
           </span>
         )}
       </div>
