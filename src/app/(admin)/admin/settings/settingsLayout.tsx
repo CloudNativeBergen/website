@@ -38,9 +38,16 @@ export function InfoCard({
   editUrl,
   manageLink,
   action,
+  id,
 }: {
   title: string
   children: ReactNode
+  /**
+   * Deep-link anchor (`/admin/settings#<id>`). Card ids are listed in the ⌘K
+   * registry (SETTINGS_CARD_ANCHORS in `@/lib/admin/registry`); keep the two
+   * in step.
+   */
+  id?: string
   icon: ComponentType<{ className?: string }>
   editUrl?: string | null
   /**
@@ -57,7 +64,10 @@ export function InfoCard({
   action?: ReactNode
 }) {
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
+    <div
+      id={id}
+      className="scroll-mt-24 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
+    >
       {/* flex-wrap + min-w-0: a card with several actions (Organizers & Teams
           has three) drops them to a second line on a phone instead of
           squeezing the title or pushing past the viewport. */}

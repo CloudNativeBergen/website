@@ -260,6 +260,12 @@ describe('searchDestinations', () => {
     expect(checkin.map((d) => d.id)).toContain('settings-tickets-registration')
   })
 
+  it('finds individual settings cards and links to their anchor', () => {
+    const flat = searchDestinations('posthog').flatMap((g) => g.items)
+    const card = flat.find((d) => d.id === 'settings-analytics')
+    expect(card?.href).toBe('/admin/settings#analytics')
+  })
+
   it('matches subsequences for fuzzy queries', () => {
     const flat = searchDestinations('spnsr').flatMap((g) => g.items)
     expect(flat.map((d) => d.id)).toContain('sponsors')
