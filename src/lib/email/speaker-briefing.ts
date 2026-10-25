@@ -31,7 +31,10 @@ import {
   isTransientError,
   retryWithBackoff,
 } from './config'
-import { resolveFeedbackSummarySender } from './feedback-summary'
+import {
+  resolveFeedbackSummarySender,
+  type FeedbackSummarySender,
+} from './feedback-summary'
 
 export type BriefingConference = Pick<
   Conference,
@@ -172,24 +175,44 @@ export async function loadBriefingSpeakers(
     if (s) s.travelSupport = { status: t.status }
   }
   for (const s of bySpeaker.values()) s.ticketState = tickets.get(s._id)
+  // An erased speaker (GDPR) keeps its talks but must not be mailed.
+  const erased = new Set(
+    bySpeaker.size
+      ? await clientReadUncached.fetch<string[]>(
+          // groq-global-scoped: by-id read of speakers already scoped to this
+          // conference through its talks above.
+          `*[_type == "speaker" && _id in $ids && defined(erasedAt)]._id`,
+          { ids: [...bySpeaker.keys()] },
+          { cache: 'no-store' },
+        )
+      : [],
+  )
   return [...bySpeaker.values()]
     .filter(
-      (s) => s.email && s.proposals.some((p) => p.status === Status.confirmed),
+      (s) =>
+        s.email &&
+        !erased.has(s._id) &&
+        s.proposals.some((p) => p.status === Status.confirmed),
     )
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export const briefingSubject = (conference: BriefingConference) =>
-  `Your speaker briefing for ${conference.title}`
+export const briefingSubject = (
+  conference: BriefingConference,
+  isUpdate = false,
+) =>
+  `Your speaker briefing for ${conference.title}${isUpdate ? ' (updated)' : ''}`
 
 export async function renderSpeakerBriefing(
   conference: BriefingConference,
   speaker: Pick<BriefingSpeaker, 'name' | 'proposals'> &
     Partial<Pick<BriefingSpeaker, '_id' | 'ticketState' | 'travelSupport'>>,
+  isUpdate = false,
 ): Promise<string> {
   return render(
     React.createElement(SpeakerBriefingTemplate, {
       speakerName: speaker.name,
+      isUpdate,
       briefing: getSpeakerBriefing(conference, {
         proposals: speaker.proposals,
         speakerId: speaker._id,
@@ -213,11 +236,12 @@ export async function renderSpeakerBriefing(
 /** One email, retried on a transient failure; throws when it is not sent. */
 async function sendOne(
   conference: BriefingConference,
+  sender: FeedbackSummarySender,
   to: string,
+  subject: string,
   html: string,
   idempotencyKey?: string,
 ): Promise<void> {
-  const sender = await resolveFeedbackSummarySender(conference)
   await retryWithBackoff(
     async () => {
       const { error } = await sender.client.emails.send(
@@ -226,7 +250,7 @@ async function sendOne(
           to,
           // "Changed your plans? Reply to this email." lands with the team.
           replyTo: conference.cfpEmail || conference.contactEmail || undefined,
-          subject: briefingSubject(conference),
+          subject,
           html,
         },
         idempotencyKey ? { idempotencyKey } : undefined,
@@ -253,7 +277,9 @@ export async function sendSpeakerBriefingTest(
 ): Promise<void> {
   await sendOne(
     conference,
+    await resolveFeedbackSummarySender(conference),
     to,
+    briefingSubject(conference),
     await renderSpeakerBriefing(conference, speaker),
   )
 }
@@ -262,18 +288,41 @@ export interface BriefingSendResult {
   sent: number
   skipped: number
   failed: { speakerId: string; name: string; error: string }[]
+  /** Sent, but the marker write failed twice: they may get it again. */
+  logFailed: { speakerId: string; name: string }[]
+  /** Not tried: the time budget ran out. Calling again continues. */
+  remaining: number
 }
 
 /**
- * Send the current version to every speaker without its marker. The marker
- * is written right after each send, so a run cut short resumes where it
- * stopped. A failed speaker gets no marker and is retried next time.
+ * No new send starts after this much time since the call began, so a call
+ * ends well inside the tRPC route's 60 s `maxDuration` (a send that starts
+ * just inside it can still run on through its retries).
+ */
+export const BRIEFING_TIME_BUDGET_MS = 40_000
+
+async function writeMarker(
+  doc: { _id: string; _type: string } & Record<string, unknown>,
+) {
+  try {
+    await clientWrite.createIfNotExists(doc)
+  } catch {
+    await clientWrite.createIfNotExists(doc)
+  }
+}
+
+/**
+ * Send the current version to every speaker without its marker, within
+ * {@link BRIEFING_TIME_BUDGET_MS}. The marker (and, on an update, the hub
+ * notice) is written right after each send, so a run cut short resumes
+ * where it stopped. A failed speaker gets no marker and is retried next time.
  */
 export async function sendSpeakerBriefings(
   conference: BriefingConference,
   speakers: BriefingSpeaker[],
   now: Date = new Date(),
 ): Promise<BriefingSendResult> {
+  const started = Date.now()
   const version = briefingVersion(conference)
   const ids = speakers.map((s) => briefingLogId(conference._id, s._id, version))
   const markers = await clientReadUncached.fetch<
@@ -286,21 +335,48 @@ export async function sendSpeakerBriefings(
   const done = new Set((markers ?? []).map((m) => m._id))
   // A speaker with any marker not for this version had an older one.
   const hadEarlier = new Set((markers ?? []).map((m) => m.speakerId))
-  const updated: string[] = []
-  const result: BriefingSendResult = { sent: 0, skipped: 0, failed: [] }
-  for (const [i, speaker] of speakers.entries()) {
-    const id = ids[i]
-    if (done.has(id)) {
-      result.skipped++
-      continue
+  const result: BriefingSendResult = {
+    sent: 0,
+    skipped: 0,
+    failed: [],
+    logFailed: [],
+    remaining: 0,
+  }
+  const due = speakers.filter((_, i) => !done.has(ids[i]))
+  result.skipped = speakers.length - due.length
+  if (due.length === 0) return result
+  const sender = await resolveFeedbackSummarySender(conference)
+  for (const [n, speaker] of due.entries()) {
+    if (Date.now() - started >= BRIEFING_TIME_BUDGET_MS) {
+      result.remaining = due.length - n
+      break
     }
+    const id = briefingLogId(conference._id, speaker._id, version)
+    const isUpdate = hadEarlier.has(speaker._id)
     try {
-      if (result.sent > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
-      const html = await renderSpeakerBriefing(conference, speaker)
+      if (n > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+      const html = await renderSpeakerBriefing(conference, speaker, isUpdate)
       // The marker id doubles as Resend's key: a lost reply then is not
       // delivered twice within Resend's 24 hours.
-      await sendOne(conference, speaker.email, html, id)
-      await clientWrite.createIfNotExists({
+      await sendOne(
+        conference,
+        sender,
+        speaker.email,
+        briefingSubject(conference, isUpdate),
+        html,
+        id,
+      )
+    } catch (error) {
+      result.failed.push({
+        speakerId: speaker._id,
+        name: speaker.name,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      continue
+    }
+    result.sent++
+    try {
+      await writeMarker({
         _id: id,
         _type: 'scheduledReminderLog',
         key: BRIEFING_LOG_KEY,
@@ -310,27 +386,24 @@ export async function sendSpeakerBriefings(
         count: 1,
         lastSentAt: now.toISOString(),
       })
-      result.sent++
-      if (hadEarlier.has(speaker._id)) updated.push(speaker._id)
-    } catch (error) {
-      result.failed.push({
-        speakerId: speaker._id,
-        name: speaker.name,
-        error: error instanceof Error ? error.message : String(error),
-      })
+    } catch {
+      result.logFailed.push({ speakerId: speaker._id, name: speaker.name })
+    }
+    // Only on an update: a first send needs no "updated" nudge in the hub.
+    // `createNotifications` never throws.
+    if (isUpdate) {
+      await createNotifications([
+        {
+          recipientId: speaker._id,
+          conferenceId: conference._id,
+          notificationType: 'system',
+          title: 'Speaker info updated',
+          message: `The speaker info for ${conference.title} has changed.`,
+          link: '/cfp/list#briefing',
+        },
+      ])
     }
   }
-  // Only on an update: a first send needs no "updated" nudge in the hub.
-  await createNotifications(
-    updated.map((recipientId) => ({
-      recipientId,
-      conferenceId: conference._id,
-      notificationType: 'system' as const,
-      title: 'Speaker info updated',
-      message: `The speaker info for ${conference.title} has changed.`,
-      link: '/cfp/list#briefing',
-    })),
-  )
   return result
 }
 
