@@ -71,8 +71,12 @@ export function ContentJudgementSettings({
     },
   })
 
+  // Busy from the click until the refreshed props arrive: a second click in
+  // between would be shown as its opposite when the first refresh lands.
+  const busy = mutation.isPending || refreshing
+
   const toggle = () => {
-    if (mutation.isPending) return
+    if (busy) return
     const next = !enabled
     setOptimistic({ value: next, revision })
     mutation.mutate({ enabled: next })
@@ -97,7 +101,7 @@ export function ContentJudgementSettings({
             aria-labelledby={labelId}
             aria-describedby={helpId}
             // Not `disabled`: that blurs the focused switch while it saves.
-            aria-disabled={mutation.isPending}
+            aria-disabled={busy}
             onClick={toggle}
             // 44×24 to the eye; the `after` box makes the touch target 44×44
             // (see PublicFreeTicketToggle for the inset arithmetic).
@@ -130,7 +134,7 @@ export function ContentJudgementSettings({
       </p>
 
       <p className="border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
-        {mutation.isPending || refreshing ? (
+        {busy ? (
           'Saving…'
         ) : changedAt ? (
           <>
