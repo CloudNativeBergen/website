@@ -104,6 +104,26 @@ describe('ContentJudgementSettings', () => {
     expect(toggle).toHaveAttribute('aria-checked', 'false')
   })
 
+  it('a newer change by another organizer wins over our optimistic value', () => {
+    // On. We turn it off; before our refresh lands, B turns it back on. The
+    // refreshed value equals the one we started from, but it is a NEWER
+    // revision, so the switch must show B's on.
+    const start = { enabled: true, changedAt: '2026-10-25T11:00:00Z' }
+    const { rerender } = render(card(start))
+    const toggle = screen.getByRole('switch', { name: 'Judge content' })
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    act(() => m.options?.onSuccess?.({ success: true }, { enabled: false }))
+    rerender(
+      card({
+        enabled: true,
+        changedAt: '2026-10-25T11:01:00Z',
+        changedByName: 'B',
+      }),
+    )
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+  })
+
   it('a click while saving sends nothing more', () => {
     m.isPending = true
     render(card({ enabled: false }))

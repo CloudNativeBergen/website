@@ -28,14 +28,17 @@ export function ContentJudgementSettings({
 }: ContentJudgementSettingsProps) {
   const router = useRouter()
   const { showNotification } = useNotification()
-  const [enabled, setEnabled] = useState(initialEnabled)
-  // Follow the stored value when it changes under us (another organizer, any
-  // refresh) without remounting, which would drop keyboard focus.
-  const [stored, setStored] = useState(initialEnabled)
-  if (initialEnabled !== stored) {
-    setStored(initialEnabled)
-    setEnabled(initialEnabled)
-  }
+  // The stored state's revision. An optimistic value is shown only while the
+  // revision it was made against is still the stored one: any newer revision
+  // (this save landing, another organizer, any refresh) wins, without a
+  // remount, which would drop keyboard focus.
+  const revision = `${initialEnabled}|${changedAt ?? ''}`
+  const [optimistic, setOptimistic] = useState<{
+    value: boolean
+    revision: string
+  } | null>(null)
+  const enabled =
+    optimistic?.revision === revision ? optimistic.value : initialEnabled
   const labelId = useId()
   const switchId = useId()
   const helpId = useId()
@@ -57,9 +60,9 @@ export function ContentJudgementSettings({
       })
     },
     onError: (error) => {
-      // Back to what is STORED, which a refresh during the save may have
+      // Back to what is stored, which a refresh during the save may have
       // changed (another organizer), not merely to the pre-click value.
-      setEnabled(stored)
+      setOptimistic(null)
       showNotification({
         type: 'error',
         title: 'Could not save',
@@ -71,7 +74,7 @@ export function ContentJudgementSettings({
   const toggle = () => {
     if (mutation.isPending) return
     const next = !enabled
-    setEnabled(next)
+    setOptimistic({ value: next, revision })
     mutation.mutate({ enabled: next })
   }
 
