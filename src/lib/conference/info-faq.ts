@@ -382,7 +382,7 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         {
           question: 'What do I need to do before the conference?',
           answer:
-            'Confirm your talk on the <u><a href="/cfp/list">speaker dashboard</a></u> and register your free speaker ticket with the link in the email we sent you.',
+            'Confirm your talk on the <u><a href="/cfp/list">speaker dashboard</a></u> and claim your free speaker ticket with the link in the email we sent you.',
         },
         // Also place-specific (the old copy named a Bergen mountain and linked a
         // Bergen cable car), and not every conference holds one at all — so the
