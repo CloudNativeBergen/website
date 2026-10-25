@@ -123,9 +123,13 @@ export function StudioEditLink({ editUrl }: { editUrl?: string | null }) {
 
 export function SectionNav() {
   return (
-    <nav className="sticky top-0 z-10 -mx-2 mb-2 space-y-2 border-b border-gray-200 bg-gray-50/90 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4 dark:border-gray-700 dark:bg-gray-900/90">
-      {/* Tier anchors — the three top-level sections. */}
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+    // Sticks BELOW the admin header (z-40, 72px tall on mobile, h-16 from lg)
+    // rather than sliding under it, so the chips stay in reach while
+    // scrolling. Anchors use scroll-mt-44 to clear header + nav.
+    <nav className="sticky top-18 z-10 -mx-2 mb-2 space-y-2 border-b border-gray-200 bg-gray-50/90 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4 lg:top-16 dark:border-gray-700 dark:bg-gray-900/90">
+      {/* Tier anchors — the three top-level sections. One scrollable line,
+          like the chips, so the sticky bar stays short on a phone. */}
+      <ul className="-mx-1 flex gap-x-4 overflow-x-auto px-1 text-sm whitespace-nowrap">
         {SETTINGS_TIER_ANCHORS.map((item) => (
           <li key={item.href}>
             <a
@@ -171,7 +175,7 @@ export function SectionHeading({
 }) {
   const Heading = level === 3 ? 'h3' : 'h2'
   return (
-    <div id={id} className="scroll-mt-24">
+    <div id={id} className="scroll-mt-44">
       <div className="flex items-center gap-2">
         <Icon
           className={

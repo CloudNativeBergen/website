@@ -338,7 +338,7 @@ export default async function AdminSettings() {
             >
               <div
                 id="visibility"
-                className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
+                className="flex scroll-mt-44 flex-wrap items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
               >
                 <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
                   Status
@@ -879,7 +879,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard title="Domain Verification" icon={ShieldCheckIcon}>
-              <div id="domain-verification" className="scroll-mt-24">
+              <div id="domain-verification" className="scroll-mt-44">
                 <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
                   Claiming a domain is not the same as owning it. Publish the
                   DNS TXT record below to prove control. We re-check it every
