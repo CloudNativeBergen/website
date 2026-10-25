@@ -145,3 +145,31 @@ describe('adv6: removed big post hands over to a post that was never on the rail
     expect(featured(st)!._id).toBe(rail[0])
   })
 })
+
+describe('round-7: the big post and every waiting arrival removed in one poll', () => {
+  it('hands over to the first promised post still on the list', () => {
+    const at = (sec: number) => new Date(s(sec)).toISOString()
+    const A: ScreenPost = { ...post(0), _id: 'A', approvedAt: at(65) }
+    const B: ScreenPost = { ...post(0), _id: 'B', approvedAt: at(65.5) }
+    const list = Array.from({ length: 13 }, (_, i) => post(i + 1))
+    let st = initialStream('spotlight')
+    st = streamReducer(st, { type: 'poll', view: view(list), now: s(0) })
+    for (let n = 1; n <= 12; n++) st = load(st, n, s(0))
+    for (let t = 6; t <= 60; t += 6) st = tick(st, s(t))
+    expect(featured(st)!._id).toBe('p11')
+    st = streamReducer(st, {
+      type: 'poll',
+      view: view([B, A, ...list]),
+      now: s(65),
+    })
+    st = streamReducer(st, { type: 'imageLoaded', key: key(A), now: s(65) })
+    st = streamReducer(st, { type: 'imageLoaded', key: key(B), now: s(65) })
+    st = tick(st, s(66))
+    expect(featured(st)!._id).toBe('A')
+    st = tick(st, s(67.5))
+    const rail = ids(upNext(st))
+    expect(rail[0]).toBe('B')
+    st = streamReducer(st, { type: 'poll', view: view(list), now: s(70) })
+    expect(featured(st)!._id).toBe(rail[1])
+  })
+})
