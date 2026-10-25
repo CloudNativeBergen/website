@@ -504,3 +504,42 @@ describe('the 200 cap (§8, §9.1)', () => {
     expect(newIds(s)).toEqual([])
   })
 })
+
+describe('Approve all (one approvedAt for every post)', () => {
+  it('lets tied approvals in by id, so no arrival evicts one that just arrived', () => {
+    let s = started(17)
+    // 18 approvals stamped with the same instant.
+    const same = at(500)
+    const batch = Array.from({ length: 18 }, (_, i) =>
+      post(100 + i, {
+        _id: `n${String(i + 1).padStart(2, '0')}`,
+        approvedAt: same,
+      }),
+    )
+    s = poll(
+      s,
+      [
+        ...batch.slice().sort((a, b) => a._id.localeCompare(b._id)),
+        ...posts(17),
+      ],
+      T0 + 1_000,
+    )
+    expect(s.queue.map((q) => q.post._id)).toEqual(
+      batch.map((p) => p._id).sort(),
+    )
+    // Let them all in, one every 2.5 s: an arrival never evicts a card still
+    // wearing its "new" mark.
+    let now = T0 + 1_000
+    for (let i = 0; i < 18 * 25 + 10; i++) {
+      now += 100
+      const stillNew = s.slots
+        .filter((c) => c && c.newUntil !== null && c.newUntil > now)
+        .map((c) => c!.post._id)
+      s = loadAll(tick(s, now), now)
+      const onBoard = new Set(s.slots.map((c) => c?.post._id))
+      for (const id of stillNew)
+        expect(onBoard, `${id} at ${now}`).toContain(id)
+    }
+    expect(s.queue).toEqual([])
+  })
+})
