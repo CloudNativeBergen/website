@@ -60,3 +60,4 @@ certificates
 
 # Vitest blob reports (`--reporter=blob`, merged in CI)
 .vitest/
+evals/content-judgement/.image-cache/
