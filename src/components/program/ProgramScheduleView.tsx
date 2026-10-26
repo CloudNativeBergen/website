@@ -12,7 +12,11 @@ import {
   TrackTalk,
 } from '@/lib/conference/types'
 import { TalkCard } from './TalkCard'
-import { getTalkStatusKey, isScheduleInPast } from '@/lib/program/time-utils'
+import {
+  getTalkStatusKey,
+  isDayCollapsedByDefault,
+  isScheduleInPast,
+} from '@/lib/program/time-utils'
 import type { TalkStatus, CurrentPosition } from '@/lib/program/time-utils'
 import { formatConferenceDateLong } from '@/lib/time'
 import clsx from 'clsx'
@@ -409,15 +413,19 @@ const DaySchedule = React.memo(function DaySchedule({
   currentPosition,
   scheduleIndex,
   scrollTargetRef,
+  allScheduleDates,
 }: {
   schedule: ConferenceSchedule
+  allScheduleDates: string[]
   talkStatusMap?: Map<string, TalkStatus>
   currentPosition?: CurrentPosition | null
   scheduleIndex: number
   scrollTargetRef: React.RefObject<HTMLDivElement | null>
 }) {
   const isPast = isScheduleInPast(schedule.date)
-  const [isOpen, setIsOpen] = useState(!isPast)
+  const [isOpen, setIsOpen] = useState(
+    !isDayCollapsedByDefault(schedule.date, allScheduleDates),
+  )
 
   if (schedule.tracks.length === 0) {
     return (
@@ -532,6 +540,8 @@ export const ProgramScheduleView = React.memo(function ProgramScheduleView({
     )
   }
 
+  const allScheduleDates = data.schedules.map((s) => s.date)
+
   return (
     <div className="space-y-8">
       {data.schedules.map((schedule, scheduleIndex) => (
@@ -542,6 +552,7 @@ export const ProgramScheduleView = React.memo(function ProgramScheduleView({
             currentPosition={currentPosition}
             scheduleIndex={scheduleIndex}
             scrollTargetRef={scrollTargetRef}
+            allScheduleDates={allScheduleDates}
           />
           {scheduleIndex < data.schedules.length - 1 && (
             <div className="mt-8 border-t border-brand-frosted-steel dark:border-gray-700" />
