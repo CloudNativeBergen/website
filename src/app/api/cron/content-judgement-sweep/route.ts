@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { unstable_noStore as noStore } from 'next/cache'
-import { sweepOrphanJudgements } from '@/lib/content-judgement/sweep'
+import { sweepOrphanJudgements } from '@/lib/content-judgement'
 
 /** Daily orphan erasure (content judgement spec §12), 04:50 UTC. */
 export const maxDuration = 300

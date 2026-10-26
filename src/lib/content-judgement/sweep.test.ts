@@ -217,13 +217,17 @@ it('one conference failing leaves the next conference swept', async () => {
   expect(storedIds()).toEqual(['a-orphan'])
 })
 
-it('reads fresh with bounded requests; a failed write deletes and invalidates nothing', async () => {
+it('reads fresh with bounded requests; a failed write deletes nothing but still expires privacy', async () => {
   h.store!.reset([conference('a'), judgement('gone')])
   h.store!.failWrites()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   expect(await sweep()).toMatchObject({ deleted: 0, failed: 1 })
   expect(storedIds()).toEqual(['gone'])
-  expect(h.revalidateTag).toHaveBeenCalledTimes(0)
+  // The commit's outcome is unknown (it may have landed after a timeout).
+  expect(h.revalidateTag.mock.calls).toEqual([
+    ['sanity:conference-a', { expire: 0 }],
+    ['sanity:organization-org-a', { expire: 0 }],
+  ])
   for (const [, , options] of h.fetch.mock.calls) {
     expect(options).toMatchObject({
       cache: 'no-store',

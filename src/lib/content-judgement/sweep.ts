@@ -73,14 +73,24 @@ export async function sweepOrphanJudgements({
           p.ifRevisionId(row._rev).unset(['_revision_lock_pseudo_field_']),
         ).delete(row._id)
       }
-      // Synchronous visibility keeps the next page from selecting deleted ids.
-      await tx.commit({ visibility: 'sync', ...requestOptions() })
-      report.deleted += rows.length
-      revalidateTag(conferenceTag(conferenceId), { expire: 0 })
-      // Disclosure is organization-wide: another edition may hold its last page.
-      if (organizationId) {
-        revalidateTag(organizationTag(organizationId), { expire: 0 })
+      const expire = () => {
+        revalidateTag(conferenceTag(conferenceId), { expire: 0 })
+        // Disclosure is organization-wide: another edition may hold its last page.
+        if (organizationId) {
+          revalidateTag(organizationTag(organizationId), { expire: 0 })
+        }
       }
+      try {
+        // Synchronous visibility keeps the next page from selecting deleted ids.
+        await tx.commit({ visibility: 'sync', ...requestOptions() })
+      } catch (error) {
+        // A timed-out commit may still have landed; expiring a tag for
+        // Judgements that still exist is harmless, a stale disclosure isn't.
+        expire()
+        throw error
+      }
+      report.deleted += rows.length
+      expire()
     }
   }
 

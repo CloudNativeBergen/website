@@ -371,7 +371,13 @@ describe('a selected judgement replaced before the sweep commits', () => {
     'preserves the newer judgement %s under its revision guard',
     async (_, replacementConference) => {
       const selected = judgement('judgement-race', 'content-gone', 'wallPost')
-      seed([conference('conf-B'), selected])
+      // Selected in the same batch and not replaced: the batch is all or nothing.
+      const sibling = judgement(
+        'judgement-sibling',
+        'content-gone-2',
+        'wallPost',
+      )
+      seed([conference('conf-B'), selected, sibling])
       const replacementContent = {
         ...content('wallPost-new', 'wallPost', { status: 'approved' }),
         conference: ref(replacementConference),
@@ -395,6 +401,7 @@ describe('a selected judgement replaced before the sweep commits', () => {
       })
       expect(String(logged.mock.calls[0]?.[1])).toContain('revision mismatch')
       expect(store().doc(selected._id)).toEqual(replacement)
+      expect(store().doc(sibling._id)).toEqual(sibling)
       expect(store().doc(replacementContent._id)).toEqual(replacementContent)
       expect(store().doc(survivorJudgement._id)).toEqual(survivorJudgement)
       expect(store().commits).toHaveLength(0)
