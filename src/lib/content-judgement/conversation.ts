@@ -6,46 +6,61 @@ import { judgeForOrganization } from './client'
 import { buildConversationRequest } from './questions'
 import { judgementDocument } from './store'
 
-const HAS_OPENING_MESSAGE =
-  // groq-global-scoped: correlated to the exact authorized conversation in
-  // the outer projection; messages have no conference field of their own.
-  'count(*[_type == "message" && conversation._ref == ^._id]) > 0'
-
 /** A snapshot used with a revision precondition in the message transaction. */
 export interface ConversationOpening {
   _id: string
   _rev: string
   conferenceId: string
-  organizationId: string | null
-  conversationType: 'proposal' | 'general' | 'sponsor'
+  conversationType: 'proposal' | 'general'
   subject: string
   hasMessages: boolean
 }
 
 /**
- * Existing threads have no opening marker to migrate. Count their stored
- * messages and compare-and-set the parent's revision when appending the first:
- * every message writer bumps that revision in its transaction, so concurrent
- * starters cannot both claim the opening, including ensureProposalConversation.
+ * Read the parent via the document endpoint: GROQ can lag a just-created thread.
+ * The marker and first message commit together under this revision. Only legacy
+ * unmarked threads need a count of their (already indexed) stored messages.
  */
 export async function readConversationOpening(
   conversationId: string,
 ): Promise<ConversationOpening | null> {
   try {
-    const opening = await clientReadUncached.fetch<ConversationOpening | null>(
-      // groq-global-scoped: id-keyed point read of the conversation already
-      // authorized by the caller; the message subquery is correlated to that
-      // exact parent, and conference/organization derive from its reference.
-      `*[_type == "conversation" && _id == $conversationId][0]{
-        _id, _rev, conversationType, subject,
-        "conferenceId": conference._ref,
-        "organizationId": conference->organization._ref,
-        "hasMessages": ${HAS_OPENING_MESSAGE}
-      }`,
-      { conversationId },
-      { cache: 'no-store' },
+    const doc = await clientReadUncached.getDocument<{
+      conference?: { _ref?: string }
+      conversationType?: string
+      subject?: string
+      openedAt?: string
+    }>(conversationId)
+    if (
+      !doc ||
+      // getDocument('a,b') reads a list; validate the returned identity too.
+      doc._id !== conversationId ||
+      doc._type !== 'conversation' ||
+      typeof doc._rev !== 'string' ||
+      typeof doc.conference?._ref !== 'string' ||
+      typeof doc.subject !== 'string' ||
+      (doc.conversationType !== 'proposal' &&
+        doc.conversationType !== 'general')
     )
-    return opening ?? null
+      return null
+
+    const hasMessages =
+      doc.openedAt != null ||
+      (await clientReadUncached.fetch<boolean>(
+        // groq-global-scoped: messages of the exact conversation already authorized
+        // by the caller; no parent query whose indexing could lag creation.
+        `count(*[_type == "message" && conversation._ref == $conversationId]) > 0`,
+        { conversationId },
+        { cache: 'no-store' },
+      ))
+    return {
+      _id: doc._id,
+      _rev: doc._rev,
+      conferenceId: doc.conference._ref,
+      conversationType: doc.conversationType,
+      subject: doc.subject,
+      hasMessages,
+    }
   } catch {
     // Do not log the error: transport errors can include message content.
     console.error('[content-judgement] conversation opening read failed')
@@ -56,17 +71,16 @@ export async function readConversationOpening(
 /** Scheduling and the task itself both obey the messaging never-fail contract. */
 export function judgeConversationOpening(
   opening: ConversationOpening,
+  organizationId: string | null,
   authorId: string,
   message: string,
 ): void {
   try {
     runAfterResponse(async () => {
       try {
-        const judge = await judgeForOrganization(opening.organizationId)
+        const judge = await judgeForOrganization(organizationId)
         if (!judge) return
-        const organizers = await getOrganizerSpeakerIdsForOrg(
-          opening.organizationId,
-        )
+        const organizers = await getOrganizerSpeakerIdsForOrg(organizationId)
         const request = buildConversationRequest({
           subject: opening.subject,
           message,

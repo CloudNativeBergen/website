@@ -29,6 +29,7 @@ import type {
   ConversationParty,
   ConversationPreference,
   ConversationStatus,
+  ConversationType,
   ConversationView,
   ConversationViewCounts,
   ConversationWithContext,
@@ -1616,9 +1617,13 @@ export async function addMessage({
   body,
   reopen = false,
   marketingTask,
+  conversationType,
   origin,
   category,
-}: {
+}: (
+  | { origin?: 'person'; category?: never }
+  | { origin: 'system'; category: Category }
+) & {
   conversationId: string
   /**
    * The SPEAKER/organizer author id. Provide this OR {@link sponsorAuthor},
@@ -1634,10 +1639,8 @@ export async function addMessage({
    */
   sponsorAuthor?: { sponsorForConferenceId: string; authorName: string }
   body: string
-  /** Absent means person; action relays explicitly carry system. */
-  origin?: MessageOrigin
-  /** The event's topic, used only for a system opening. */
-  category?: Category
+  /** Server-known type; sponsor threads never need an opening lookup. */
+  conversationType?: ConversationType
   reopen?: boolean
   /** Server-authorized outreach Task; completion commits atomically with delivery. */
   marketingTask?: {
@@ -1658,7 +1661,14 @@ export async function addMessage({
   // DENORMALIZED tenant key (CaaS T1-1): a message has no conference key of its
   // own, so copy the organization down from the parent conversation's conference
   // at creation. Best-effort: absent before the 044 backfill.
-  const orgRef = await getOrganizationRefViaParentConference(conversationId)
+  let snapshot =
+    sponsorAuthor || conversationType === 'sponsor'
+      ? null
+      : await readConversationOpening(conversationId)
+  const orgRef = await getOrganizationRefViaParentConference(
+    conversationId,
+    snapshot?.conferenceId,
+  )
 
   // Build the author fields for the two shapes. A speaker author keeps the
   // legacy `author` ref + speaker `authorParty` (unchanged); a sponsor author
@@ -1682,18 +1692,14 @@ export async function addMessage({
         }),
       }
 
-  // A revision precondition makes the stored no-messages snapshot authoritative
-  // at commit time. A concurrent starter bumps the revision; retry its loser as
-  // a normal reply. Legacy conversations are checked by their actual messages,
-  // not by an absent marker or a client-supplied "first" flag.
-  let snapshot = await readConversationOpening(conversationId)
-  for (;;) {
+  // Claim at most three times: unrelated parent edits must not starve delivery.
+  // Every delivered message also leaves a marker, even on the plain fallback,
+  // so lagging message queries cannot make a later reply look like an opening.
+  const maxOpeningAttempts = 3
+  for (let attempt = 0; ; attempt++) {
     const opening = snapshot
     const first =
-      opening &&
-      !opening.hasMessages &&
-      (opening.conversationType === 'proposal' ||
-        opening.conversationType === 'general')
+      opening && !opening.hasMessages && attempt < maxOpeningAttempts
 
     const transaction = clientWrite
       .transaction()
@@ -1709,11 +1715,18 @@ export async function addMessage({
       })
       .patch(conversationId, (patch) => {
         if (first) patch = patch.ifRevisionId(opening._rev)
-        if (first && origin === 'system' && category) {
-          patch = patch.setIfMissing({
-            messageCategory: { value: category, source: 'system', setAt: now },
-          })
-        }
+        patch = patch.setIfMissing({
+          openedAt: now,
+          ...(first && origin === 'system'
+            ? {
+                messageCategory: {
+                  value: category,
+                  source: 'system',
+                  setAt: now,
+                },
+              }
+            : {}),
+        })
         return patch.set(
           reopen
             ? { lastMessageAt: now, status: 'open' }
@@ -1743,7 +1756,7 @@ export async function addMessage({
       throw error
     }
     if (first && origin !== 'system' && authorId) {
-      judgeConversationOpening(opening, authorId, body)
+      judgeConversationOpening(opening, orgRef, authorId, body)
     }
     break
   }

@@ -1,5 +1,3 @@
-import type { Category } from '../content-judgement/questions'
-
 /**
  * Speaker↔organizer messaging domain types (messaging M1).
  *
@@ -19,17 +17,6 @@ export type ConversationType = 'proposal' | 'general' | 'sponsor'
 
 /** Absent on legacy messages means person. */
 export type MessageOrigin = 'person' | 'system'
-
-/** The topic of the opening; an organizer's setting always wins. */
-export interface ConversationMessageCategory {
-  value: Category
-  source: 'jev' | 'organizer' | 'system'
-  /** Only Jev choices carry confidence. */
-  confidence?: number
-  setAt: string
-  /** Only organizer settings carry the acting speaker reference. */
-  setBy?: { _type: 'reference'; _ref: string; _weak?: boolean }
-}
 
 /**
  * Ticketing status of a thread for the ORGANIZER audience. `'open'` is the
@@ -191,7 +178,6 @@ export interface ConversationWithContext {
   createdById: string
   subjectSpeakerId?: string
   subject: string
-  messageCategory?: ConversationMessageCategory
   createdAt: string
   lastMessageAt: string
   /**
@@ -267,7 +253,6 @@ export interface ConversationListItem {
   _id: string
   conversationType: ConversationType
   subject: string
-  messageCategory?: ConversationMessageCategory
   proposalId?: string
   proposalTitle?: string
   createdAt: string

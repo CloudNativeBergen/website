@@ -14,13 +14,14 @@ import { createHash } from 'node:crypto'
 
 const h = vi.hoisted(() => ({
   fetch: vi.fn(),
+  getDocument: vi.fn(),
   transaction: vi.fn(),
   create: vi.fn(),
   createIfNotExists: vi.fn(),
   after: vi.fn(),
 }))
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadUncached: { fetch: h.fetch },
+  clientReadUncached: { fetch: h.fetch, getDocument: h.getDocument },
   clientReadCached: { fetch: h.fetch },
   clientWrite: {
     transaction: h.transaction,
@@ -159,6 +160,10 @@ beforeEach(() => {
   })
   put('organizer-a', 'speaker', { name: 'Organizer A' })
   put('organizer-b', 'speaker', { name: 'Organizer B' })
+  h.getDocument.mockImplementation(async (id: string) => {
+    const doc = documents.get(id)
+    return doc ? { ...doc } : undefined
+  })
   h.fetch.mockImplementation(
     async (query: string, params: Record<string, unknown>) =>
       (
@@ -236,15 +241,47 @@ describe('conversation opening: executed GROQ and first-message ownership', () =
     put('message-b', 'message', { conversation: ref('conversation-b') })
     expect(await readConversationOpening('conversation-a')).toMatchObject({
       conferenceId: 'conf-a',
-      organizationId: 'org-a',
       hasMessages: false,
     })
     expect(await readConversationOpening('conversation-b')).toMatchObject({
       conferenceId: 'conf-b',
-      organizationId: 'org-b',
       hasMessages: true,
     })
     expect(await readConversationOpening('missing-conversation')).toBeNull()
+  })
+
+  it.each([
+    { _id: 'different-conversation' },
+    { _type: 'talk' },
+    { _rev: undefined },
+    { conference: {} },
+    { subject: undefined },
+  ])('rejects an invalid document endpoint response: %o', async (fields) => {
+    const id = conversation()
+    expect(await readConversationOpening(id)).toMatchObject({
+      _id: id,
+      hasMessages: false,
+    })
+    h.getDocument.mockResolvedValueOnce({ ...documents.get(id), ...fields })
+    h.fetch.mockClear()
+    expect(await readConversationOpening(id)).toBeNull()
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it('rejects a comma-id response returning another document', async () => {
+    conversation()
+    h.getDocument.mockResolvedValueOnce({ ...documents.get('conversation-a') })
+    expect(
+      await readConversationOpening('conversation-a,conversation-b'),
+    ).toBeNull()
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it('skips the legacy message count for a sponsor document', async () => {
+    const id = conversation()
+    documents.get(id)!.conversationType = 'sponsor'
+    expect(await readConversationOpening(id)).toBeNull()
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -271,6 +308,7 @@ describe('conversation opening: executed GROQ and first-message ownership', () =
             id: conversationId,
             ifRevisionID: revision,
             set: { lastMessageAt: expect.any(String) },
+            setIfMissing: { openedAt: expect.any(String) },
           },
         },
       ])
@@ -407,6 +445,161 @@ describe('conversation opening: executed GROQ and first-message ownership', () =
     ).toBe(messages()[0].body)
   })
 
+  it.each(['person', 'system'] as const)(
+    'judges a new %s opening even when GROQ cannot see the conversation',
+    async (origin) => {
+      const conversationId = await open('general')
+      h.fetch.mockImplementation(
+        async (query: string, params: Record<string, unknown>) =>
+          (
+            await evaluate(parse(query), {
+              dataset: [...documents.values()].filter(
+                (doc) => doc._type !== 'conversation',
+              ),
+              params,
+            })
+          ).get(),
+      )
+      await addMessage({
+        conversationId,
+        authorId: 'speaker-a',
+        body: BODY,
+        ...(origin === 'system'
+          ? { origin, category: 'proposal_status' as const }
+          : { origin }),
+      })
+      expect(messages()).toHaveLength(1)
+      expect(
+        h.fetch.mock.calls.filter(([query]) =>
+          query.includes('organization._ref'),
+        ),
+      ).toHaveLength(1)
+      await drain()
+      expect(documents.get(conversationId)?.messageCategory).toMatchObject({
+        source: origin === 'system' ? 'system' : 'jev',
+        value: origin === 'system' ? 'proposal_status' : 'travel_and_visa',
+      })
+      expect(h.getDocument).toHaveBeenCalledWith(conversationId)
+    },
+  )
+
+  it('concurrent openings under message-index lag have exactly one judged winner', async () => {
+    const conversationId = conversation()
+    h.fetch.mockImplementation(
+      async (query: string, params: Record<string, unknown>) =>
+        (
+          await evaluate(parse(query), {
+            dataset: [...documents.values()].filter(
+              (doc) => doc._type !== 'message',
+            ),
+            params,
+          })
+        ).get(),
+    )
+    await Promise.all([
+      addMessage({ conversationId, authorId: 'speaker-a', body: BODY }),
+      addMessage({ conversationId, authorId: 'speaker-a', body: 'Second' }),
+    ])
+    expect(messages()).toHaveLength(2)
+    expect(conflicts).toBe(1)
+    await drain()
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('a marked opening is a reply even when no stored messages are visible', async () => {
+    const conversationId = conversation()
+    documents.get(conversationId)!.openedAt = '2026-10-01T00:00:00.000Z'
+    const reply = await addMessage({
+      conversationId,
+      authorId: 'speaker-a',
+      body: BODY,
+    })
+    expect(reply.body).toBe(BODY)
+    expect(messages()).toHaveLength(1)
+    await drain()
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(documents.get(conversationId)?.openedAt).toBe(
+      '2026-10-01T00:00:00.000Z',
+    )
+    expect(
+      h.fetch.mock.calls.filter(([query]) => query.includes('count(')),
+    ).toHaveLength(0)
+  })
+
+  it('caps changing-parent conflicts at three opening attempts then delivers a plain reply', async () => {
+    const conversationId = conversation()
+    let attempts = 0
+    h.transaction.mockImplementation(() => {
+      const tx = transaction()
+      const commit = vi.mocked(tx.commit).getMockImplementation()!
+      vi.mocked(tx.commit).mockImplementation(async () => {
+        attempts++
+        if (attempts > 8) throw new Error('Unbounded opening retries')
+        const guarded = tx
+          .serialize()
+          .some(
+            (mutation) => 'patch' in mutation && mutation.patch.ifRevisionID,
+          )
+        if (guarded)
+          documents.get(conversationId)!._rev = `revision-${++revisions}`
+        return commit()
+      })
+      return tx
+    })
+    const message = await addMessage({
+      conversationId,
+      authorId: 'speaker-a',
+      body: BODY,
+    })
+    expect(message.body).toBe(BODY)
+    expect(messages()).toHaveLength(1)
+    expect(attempts).toBe(4)
+    expect(conflicts).toBe(3)
+    expect(documents.get(conversationId)?.openedAt).toEqual(expect.any(String))
+    await drain()
+    expect(fetcher).not.toHaveBeenCalled()
+    // Hide the delivered fallback from GROQ: its marker must still prevent a claim.
+    h.fetch.mockImplementation(
+      async (query: string, params: Record<string, unknown>) =>
+        (
+          await evaluate(parse(query), {
+            dataset: [...documents.values()].filter(
+              (doc) => doc._type !== 'message',
+            ),
+            params,
+          })
+        ).get(),
+    )
+    await addMessage({
+      conversationId,
+      authorId: 'speaker-a',
+      body: 'Reply after fallback',
+    })
+    await drain()
+    expect(messages()).toHaveLength(2)
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('requires categories for system inputs and forbids them for person inputs', () => {
+    const accepts = (input: Parameters<typeof addMessage>[0]) =>
+      input.origin ?? 'person'
+    const message = {
+      conversationId: 'conversation-a',
+      authorId: 'speaker-a',
+      body: BODY,
+    }
+    // @ts-expect-error System relays must supply their event category.
+    accepts({ ...message, origin: 'system' })
+    // @ts-expect-error Person messages cannot supply an event category.
+    accepts({ ...message, origin: 'person', category: 'proposal_status' })
+    // @ts-expect-error An omitted origin is also a person message.
+    accepts({ ...message, category: 'proposal_status' })
+    expect(
+      accepts({ ...message, origin: 'system', category: 'proposal_status' }),
+    ).toBe('system')
+    expect(accepts(message)).toBe('person')
+  })
+
   it('a stale outreach Task fails once without retrying an unchanged parent revision', async () => {
     const conversationId = await open('general', 'organizer-a')
     put('task-a', 'marketingTask', { status: 'open' })
@@ -535,6 +728,7 @@ describe('system and sponsor openings', () => {
           ifRevisionID: revision,
           set: { lastMessageAt: expect.any(String) },
           setIfMissing: {
+            openedAt: expect.any(String),
             messageCategory: {
               value: 'proposal_status',
               source: 'system',
@@ -584,7 +778,11 @@ describe('system and sponsor openings', () => {
     expect(message.origin).toBe('system')
     expect(messages()).toHaveLength(2)
     expect(committed[0][1]).toEqual({
-      patch: { id: conversationId, set: { lastMessageAt: message.createdAt } },
+      patch: {
+        id: conversationId,
+        set: { lastMessageAt: message.createdAt },
+        setIfMissing: { openedAt: message.createdAt },
+      },
     })
     expect(documents.get(conversationId)?.messageCategory).toBeUndefined()
   })
@@ -598,7 +796,7 @@ describe('system and sponsor openings', () => {
         conversationId,
         body: BODY,
         ...(author === 'organizer'
-          ? { authorId: 'organizer-a' }
+          ? { authorId: 'organizer-a', conversationType: 'sponsor' as const }
           : {
               sponsorAuthor: {
                 sponsorForConferenceId: 'sfc-a',
@@ -608,6 +806,7 @@ describe('system and sponsor openings', () => {
       })
       expect(message.body).toBe(BODY)
       expect(messages()[0].body).toBe(BODY)
+      expect(h.getDocument).not.toHaveBeenCalled()
       await drain()
       expect(tasks).toHaveLength(0)
       expect(fetcher).not.toHaveBeenCalled()
@@ -758,13 +957,7 @@ describe('never-fail on both person write paths', () => {
 
   it('an opening lookup failure still delivers the person’s message', async () => {
     const conversationId = conversation()
-    const execute = h.fetch.getMockImplementation()!
-    h.fetch.mockImplementation(
-      (query: string, params: Record<string, unknown>) => {
-        if (query.includes('hasMessages')) throw new Error(BODY)
-        return execute(query, params)
-      },
-    )
+    h.getDocument.mockRejectedValueOnce(new Error(BODY))
     const message = await addMessage({
       conversationId,
       authorId: 'speaker-a',

@@ -94,6 +94,14 @@ export default defineType({
       validation: (Rule) => Rule.required().max(200),
     }),
     defineField({
+      name: 'openedAt',
+      title: 'Opened At',
+      type: 'datetime',
+      description:
+        'Set once with message delivery. Prevents replies from being judged as openings even while GROQ indexing lags. Legacy threads are marked on their next message.',
+      readOnly: true,
+    }),
+    defineField({
       name: 'messageCategory',
       title: 'Message Category',
       type: 'object',
