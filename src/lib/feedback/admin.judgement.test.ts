@@ -690,6 +690,23 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
     ])
   })
 
+  it('a chart-range Remove from the talk’s own panel counts nothing either: the chart shows no advice', async () => {
+    const result = await removeResponses({
+      conferenceId: 'conf-A',
+      talkId: 'talk-1',
+      responses: [
+        { id: rid(R_UNSAFE), submittedAt: `2026-10-27T08:01:00.000Z` },
+      ],
+      range: {
+        from: '2026-10-27T08:00:00.000Z',
+        to: '2026-10-27T09:00:00.000Z',
+      },
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'ok', removed: 1, gone: 0, changed: 0 })
+    expect(tallies()).toEqual([])
+  })
+
   it('a Remove without a talk (the overview page, which shows no advice) deletes but counts nothing', async () => {
     const result = await removeResponses({
       conferenceId: 'conf-A',
