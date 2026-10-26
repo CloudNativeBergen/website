@@ -24,9 +24,12 @@
  *    first's and clear a Keep given in between), under `ifRevisionId` of
  *    that read. A newer comment drops the answer; an unrelated change in
  *    between (an organizer's Hide, a speaker's flag: a 409) re-reads and tries
- *    again, a few times. The record and the summary go in ONE transaction, and
- *    a new Judgement always clears the Keep mark (§8.2): it was about the old
- *    wording.
+ *    again, a few times. The record and the summary go in ONE transaction,
+ *    which also clears the Keep mark: any Keep standing at that moment was
+ *    made against the OLD Judgement (the new one lands only with this
+ *    write), and re-judging clears it (§8.2). A Keep made against a NEW
+ *    Judgement of this text can only exist once another task has written
+ *    that record, and the hash check on every attempt steps aside then.
  *
  * An EMPTIED comment deletes the Judgement, the summary and the Keep mark,
  * with no call and whatever the setting says: the content is gone (§12). So
@@ -70,8 +73,8 @@ export function scheduleCommentJudgement(input: CommentJudgingInput): void {
   runAfterResponse(() => judgeComment(input))
 }
 
-/** How often a write that lost its revision guard is tried again. */
-const WRITE_ATTEMPTS = 3
+/** How often a write whose revision guard failed is tried again. */
+const MAX_WRITE_ATTEMPTS = 3
 
 interface ResponseDoc {
   _id: string
@@ -135,7 +138,7 @@ async function writeJudgement(
 ): Promise<void> {
   const recordId = judgementId(input.responseId)
   const hash = contentHash(request)
-  for (let attempt = 1; attempt <= WRITE_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt++) {
     const [current, existing] = await clientWrite.getDocuments<
       ResponseDoc & { contentHash?: unknown }
     >([input.responseId, recordId])
@@ -181,7 +184,8 @@ async function writeJudgement(
       await tx.commit()
       return
     } catch (error) {
-      if (sanityStatus(error) !== 409 || attempt === WRITE_ATTEMPTS) throw error
+      if (sanityStatus(error) !== 409 || attempt === MAX_WRITE_ATTEMPTS)
+        throw error
     }
   }
 }
@@ -198,7 +202,7 @@ async function forgetJudgement(
   expected: string | null,
 ): Promise<void> {
   const recordId = judgementId(responseId)
-  for (let attempt = 1; attempt <= WRITE_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt++) {
     const current = await clientWrite.getDocument<ResponseDoc>(responseId)
     if (!current?._rev || (current.comment ?? null) !== expected) return
     try {
@@ -213,7 +217,8 @@ async function forgetJudgement(
         .commit()
       return
     } catch (error) {
-      if (sanityStatus(error) !== 409 || attempt === WRITE_ATTEMPTS) throw error
+      if (sanityStatus(error) !== 409 || attempt === MAX_WRITE_ATTEMPTS)
+        throw error
     }
   }
 }

@@ -94,6 +94,13 @@ const R_FAILED = 6
 /** Another conference's, flagged like R_UNSAFE's abusive answer. */
 const R_FOREIGN = 7
 
+/** The response as GROQ still shows it while it lags the Judgement's write. */
+const beforeJudgement = (n: number) => {
+  const doc = { ...store().doc(rid(n))! }
+  delete doc.judgement
+  return { ...doc, _rev: `rev-${n}-before` }
+}
+
 const tallies = () =>
   store()
     .all()
@@ -337,6 +344,27 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
     expect(JSON.stringify(tally)).not.toMatch(/conf-|feedbackResponse-|sp-org/)
   })
 
+  it('counts the disagreement from the document endpoint when GROQ still lags the Judgement', async () => {
+    store().readsLagFor(rid(R_UNSAFE), beforeJudgement(R_UNSAFE))
+    const result = await keepResponse({
+      conferenceId: 'conf-A',
+      responseId: rid(R_UNSAFE),
+      seenRev: `rev-${R_UNSAFE}`,
+      keptBy: 'sp-org',
+      now: NOW,
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'kept' })
+    expect(tallies()).toEqual([
+      { question: 'abusive', band: '0.5-0.9', agreed: 0, disagreed: 1 },
+      { question: 'personal_info', band: '0.5-0.9', agreed: 0, disagreed: 1 },
+    ])
+    expect(
+      (store().doc(rid(R_UNSAFE))!.judgement as { talliedAt?: string })
+        .talliedAt,
+    ).toBe(NOW.toISOString())
+  })
+
   it('a Keep on a comment Jev did not flag records the mark and counts nothing', async () => {
     await keepResponse({
       conferenceId: 'conf-A',
@@ -493,6 +521,7 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
     })
     await removeResponses({
       conferenceId: 'conf-A',
+      talkId: 'talk-1',
       responses: [
         { id: rid(R_UNSAFE), submittedAt: `2026-10-27T08:01:00.000Z` },
       ],
@@ -523,6 +552,49 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
     ])
   })
 
+  it('counts the agreement from the document endpoint when GROQ still lags the Judgement', async () => {
+    store().readsLagFor(rid(R_UNSAFE), beforeJudgement(R_UNSAFE))
+    const result = await hideResponses({
+      conferenceId: 'conf-A',
+      responseIds: [rid(R_UNSAFE)],
+      now: NOW,
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'ok', count: 1 })
+    expect(tallies()).toEqual([
+      { question: 'abusive', band: '0.5-0.9', agreed: 1, disagreed: 0 },
+      { question: 'personal_info', band: '0.5-0.9', agreed: 1, disagreed: 0 },
+    ])
+  })
+
+  it('re-plans through the document endpoint, so a lagging GROQ never makes it give up', async () => {
+    // GROQ keeps showing the row as it was before the Keep, for good.
+    store().readsLagFor(rid(R_UNSAFE), store().doc(rid(R_UNSAFE))!)
+    store().beforeNextCommit(() => {
+      const doc = store().doc(rid(R_UNSAFE))!
+      store().put({
+        ...doc,
+        _rev: 'rev-kept-meanwhile',
+        keptAt: '2026-10-27T10:13:00.000Z',
+        keptBy: { ...ref('sp-org'), _weak: true },
+      })
+    })
+    const result = await hideResponses({
+      conferenceId: 'conf-A',
+      responseIds: [rid(R_UNSAFE)],
+      now: NOW,
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'ok', count: 1 })
+    // One refused commit, one re-read, one commit.
+    expect(store().docReads.filter((id) => id === rid(R_UNSAFE))).toHaveLength(
+      2,
+    )
+    expect(store().commits).toHaveLength(1)
+    expect(store().doc(rid(R_UNSAFE))!.hiddenAt).toBe(NOW.toISOString())
+    expect(tallies()).toEqual([])
+  })
+
   it('a Keep landing under a Hide is seen: the Hide re-plans and counts nothing', async () => {
     store().beforeNextCommit(() => {
       const doc = store().doc(rid(R_UNSAFE))!
@@ -544,6 +616,11 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
       tally: true,
     })
     expect(result).toEqual({ status: 'ok', count: 2 })
+    // The first commit lost its guard: the rows were read again, once.
+    expect(store().docReads.filter((id) => id === rid(R_UNSAFE))).toHaveLength(
+      2,
+    )
+    expect(store().commits).toHaveLength(1)
     expect(store().doc(rid(R_UNSAFE))!.hiddenAt).toBe(NOW.toISOString())
     expect(store().doc(rid(R_UNCHECKED))!.hiddenAt).toBe(NOW.toISOString())
     expect(tallies()).toEqual([])
@@ -570,7 +647,7 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
     expect(tallies()).toEqual([])
   })
 
-  it('Remove, a comment and a range alike, tallies the flagged ones in the delete’s own transaction', async () => {
+  it('a chart-range Remove deletes but counts nothing: the organizer never saw the advice', async () => {
     const result = await removeResponses({
       conferenceId: 'conf-A',
       responses: [
@@ -589,10 +666,68 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
     expect(result).toEqual({ status: 'ok', removed: 3, gone: 1, changed: 0 })
     expect(store().commits).toHaveLength(1)
     expect(store().doc(rid(R_FOREIGN))).toBeDefined()
+    expect(tallies()).toEqual([])
+  })
+
+  it('a Remove from a talk’s panel (talkId, no range) tallies the flagged comments it deletes, in the delete’s own transaction', async () => {
+    const result = await removeResponses({
+      conferenceId: 'conf-A',
+      talkId: 'talk-1',
+      responses: [
+        { id: rid(R_UNSAFE), submittedAt: `2026-10-27T08:01:00.000Z` },
+        { id: rid(R_UNCHECKED), submittedAt: `2026-10-27T08:03:00.000Z` },
+        { id: rid(R_HIDDEN), submittedAt: `2026-10-27T08:04:00.000Z` },
+      ],
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'ok', removed: 3, gone: 0, changed: 0 })
+    expect(store().commits).toHaveLength(1)
     // R_UNSAFE's two answers, and R_HIDDEN's abusive 0.91 in the upper band.
     expect(tallies()).toEqual([
       { question: 'abusive', band: '0.5-0.9', agreed: 1, disagreed: 0 },
       { question: 'abusive', band: '0.9-1', agreed: 1, disagreed: 0 },
+      { question: 'personal_info', band: '0.5-0.9', agreed: 1, disagreed: 0 },
+    ])
+  })
+
+  it('a Remove without a talk (the overview page, which shows no advice) deletes but counts nothing', async () => {
+    const result = await removeResponses({
+      conferenceId: 'conf-A',
+      responses: [
+        { id: rid(R_UNSAFE), submittedAt: `2026-10-27T08:01:00.000Z` },
+      ],
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'ok', removed: 1, gone: 0, changed: 0 })
+    expect(tallies()).toEqual([])
+  })
+
+  it('a Remove naming another talk counts nothing for a response that is not that talk’s', async () => {
+    const result = await removeResponses({
+      conferenceId: 'conf-A',
+      talkId: 'talk-other',
+      responses: [
+        { id: rid(R_UNSAFE), submittedAt: `2026-10-27T08:01:00.000Z` },
+      ],
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'ok', removed: 1, gone: 0, changed: 0 })
+    expect(tallies()).toEqual([])
+  })
+
+  it('a panel Remove counts the agreement from the document endpoint when GROQ still lags the Judgement', async () => {
+    store().readsLagFor(rid(R_UNSAFE), beforeJudgement(R_UNSAFE))
+    const result = await removeResponses({
+      conferenceId: 'conf-A',
+      talkId: 'talk-1',
+      responses: [
+        { id: rid(R_UNSAFE), submittedAt: `2026-10-27T08:01:00.000Z` },
+      ],
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'ok', removed: 1, gone: 0, changed: 0 })
+    expect(tallies()).toEqual([
+      { question: 'abusive', band: '0.5-0.9', agreed: 1, disagreed: 0 },
       { question: 'personal_info', band: '0.5-0.9', agreed: 1, disagreed: 0 },
     ])
   })
@@ -608,6 +743,7 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
     })
     const result = await removeResponses({
       conferenceId: 'conf-A',
+      talkId: 'talk-1',
       responses: [
         { id: rid(R_UNSAFE), submittedAt: `2026-10-27T08:01:00.000Z` },
         { id: rid(R_UNCHECKED), submittedAt: `2026-10-27T08:03:00.000Z` },

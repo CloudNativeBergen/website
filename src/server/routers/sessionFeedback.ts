@@ -88,6 +88,13 @@ const removeInput = z.object({
     .min(1)
     .max(MAX_RESPONSES_PER_REQUEST),
   range: z.object({ from: z.iso.datetime(), to: z.iso.datetime() }).optional(),
+  /**
+   * The talk whose panel the Remove came from (Content judgement spec §7.3):
+   * only there is Jev's advice shown, so only such a Remove, of that talk's
+   * own comments and not by range, counts an agreement. The overview page
+   * sends none.
+   */
+  talkId: z.string().max(200).regex(TALK_ID).optional(),
 })
 
 /**
@@ -292,6 +299,7 @@ export const sessionFeedbackRouter = router({
         conferenceId: await resolveConferenceId(),
         responses: input.responses,
         range: input.range,
+        talkId: input.talkId,
         tally: await judgementOn(ctx.orgId),
       })
       if (result.status === 'failed')

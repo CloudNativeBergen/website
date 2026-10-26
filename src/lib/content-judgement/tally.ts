@@ -1,5 +1,6 @@
 import type { Transaction } from '@sanity/client'
 import type { JudgementSurface } from './store'
+import { parseJudgementSummary } from './summary'
 
 /**
  * The agreement tally (Content judgement spec §7.3): an anonymous,
@@ -71,22 +72,12 @@ export interface TallyableJudgement {
  * for a shape this code does not recognise.
  */
 export function tallyable(summary: unknown): TallyableJudgement | null {
-  if (typeof summary !== 'object' || summary === null) return null
-  const s = summary as Record<string, unknown>
-  if (s.state !== 'judged' || s.talliedAt) return null
-  if (typeof s.model !== 'string' || typeof s.questionSet !== 'string')
-    return null
-  if (!Array.isArray(s.reasons)) return null
-  const reasons = s.reasons.flatMap((r) => {
-    const reason = r as { question?: unknown; probability?: unknown } | null
-    return typeof reason?.question === 'string' &&
-      typeof reason.probability === 'number' &&
-      reason.probability >= 0.5
-      ? [{ question: reason.question, probability: reason.probability }]
-      : []
-  })
+  const parsed = parseJudgementSummary(summary)
+  if (parsed?.state !== 'judged' || parsed.talliedAt) return null
+  if (parsed.model === null || parsed.questionSet === null) return null
+  const reasons = parsed.reasons.filter((r) => r.probability >= 0.5)
   return reasons.length > 0
-    ? { model: s.model, questionSet: s.questionSet, reasons }
+    ? { model: parsed.model, questionSet: parsed.questionSet, reasons }
     : null
 }
 

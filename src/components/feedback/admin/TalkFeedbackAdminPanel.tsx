@@ -177,8 +177,12 @@ export function TalkFeedbackAdminPanel({
         onCardsExpired={readAgain}
         filter={filter}
         onFilterChange={setFilter}
+        // Named as this talk's panel: where Jev's advice is shown, so a
+        // per-comment Remove here counts an agreement (never a range).
         onRemove={(request) =>
-          removeInRequests(request, (chunk) => remove.mutateAsync(chunk))
+          removeInRequests(request, (chunk) =>
+            remove.mutateAsync({ ...chunk, talkId }),
+          )
         }
       />
     </div>

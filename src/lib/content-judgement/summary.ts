@@ -71,6 +71,48 @@ export function judgedSummary({
   }
 }
 
+/**
+ * A stored summary as the server reads it back: the shape above, checked
+ * field by field, so one parser serves the page (`CommentJudgement`) and the
+ * tally. A shape this code does not recognise is `null` (no Judgement).
+ */
+export type ParsedJudgementSummary =
+  | {
+      state: 'judged'
+      reasons: { question: string; probability: number }[]
+      model: string | null
+      questionSet: string | null
+      talliedAt: string | null
+    }
+  | { state: 'notJudged'; why: 'failed' | 'spendCap' }
+
+export function parseJudgementSummary(
+  summary: unknown,
+): ParsedJudgementSummary | null {
+  if (typeof summary !== 'object' || summary === null) return null
+  const s = summary as Record<string, unknown>
+  if (s.state === 'notJudged')
+    return {
+      state: 'notJudged',
+      why: s.notJudgedWhy === 'spendCap' ? 'spendCap' : 'failed',
+    }
+  if (s.state !== 'judged') return null
+  const reasons = (Array.isArray(s.reasons) ? s.reasons : []).flatMap((r) => {
+    const reason = r as { question?: unknown; probability?: unknown } | null
+    return typeof reason?.question === 'string' &&
+      typeof reason.probability === 'number'
+      ? [{ question: reason.question, probability: reason.probability }]
+      : []
+  })
+  return {
+    state: 'judged',
+    reasons,
+    model: typeof s.model === 'string' ? s.model : null,
+    questionSet: typeof s.questionSet === 'string' ? s.questionSet : null,
+    talliedAt: typeof s.talliedAt === 'string' ? s.talliedAt : null,
+  }
+}
+
 export function notJudgedSummary(
   notJudgedWhy: NotJudgedWhy,
   judgedAt: string,
