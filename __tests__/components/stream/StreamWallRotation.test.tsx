@@ -209,6 +209,16 @@ describe('StreamWallRotation', () => {
     expect(wallShown()).toBe(true)
   })
 
+  it('takes turns once a wall that did not exist when the page loaded is made', async () => {
+    mount(view({ closed: true }))
+    h.answer.mockReturnValue(NOT_FOUND)
+    await advance(ROOM_TURN_MS * 2)
+    expect(wallShown()).toBe(false)
+    h.answer.mockReturnValue(view())
+    await advance(6_000)
+    expect(wallShown()).toBe(true)
+  })
+
   it('stays off a gone wall through a later poll that failed for another reason', async () => {
     mount(view())
     h.answer.mockReturnValue(NOT_FOUND)

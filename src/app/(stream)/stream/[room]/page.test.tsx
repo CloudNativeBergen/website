@@ -86,9 +86,4 @@ describe('/stream/[room]', () => {
       undefined,
     )
   })
-
-  it('shows the room view alone when the conference has no wall', async () => {
-    h.readStreamWall.mockResolvedValue(null)
-    expect(rotationIn(await open({ wall: '1' }))).toBeUndefined()
-  })
 })

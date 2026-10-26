@@ -44,13 +44,24 @@ describe('readStreamWall', () => {
     })
   })
 
-  it('is null for a conference without a Photo Wall', async () => {
+  it('starts from a closed wall for a conference without one, so the screen polls until it is made', async () => {
     h.readScreenPage.mockResolvedValue(null)
-    expect(await readStreamWall(conference, [], undefined)).toBeNull()
+    const wall = await readStreamWall(conference, [], undefined)
+    expect(wall.initial).toEqual({
+      closed: true,
+      sponsorStrip: false,
+      look: 'pinboard',
+      posts: [],
+    })
+    expect(wall.conference.postUrl).toBe(
+      'https://2026.cloudnativedays.no/wall/post',
+    )
   })
 
-  it('is null when the read fails, so the room view shows alone', async () => {
+  it('starts from a closed wall when the read fails, so the next poll can bring it in', async () => {
     h.readScreenPage.mockRejectedValue(new Error('Sanity is down'))
-    expect(await readStreamWall(conference, [], undefined)).toBeNull()
+    const wall = await readStreamWall(conference, [], 'mosaic')
+    expect(wall.initial.closed).toBe(true)
+    expect(wall.look).toBe('mosaic')
   })
 })
