@@ -11,3 +11,4 @@ export {
 } from './questions'
 export { hasStoredJudgements } from './records'
 export { isContentJudgementEnabled } from './settings'
+export { sweepOrphanJudgements, type SweepReport } from './sweep'
