@@ -28,8 +28,8 @@ export default async function ProfilePage(props: {
 
   const { speaker, err } = await getSpeaker(session.speaker._id)
 
-  if (err) {
-    console.error('Error loading speaker:', err)
+  if (err || !speaker) {
+    console.error('Error loading speaker:', err ?? 'not found')
     return (
       <div className="mx-auto max-w-7xl">
         <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
