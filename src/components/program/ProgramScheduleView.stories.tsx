@@ -439,3 +439,79 @@ export const PastDayCollapsed: Story = {
     },
   },
 }
+
+const slot = (
+  id: string,
+  title: string,
+  startTime: string,
+  endTime: string,
+) => ({ talk: createTalk(id, title, Format.lightning_10), startTime, endTime })
+
+/** Day 1 afternoon of Cloud Native Days Norway 2026, the organizer's case. */
+const durationSpanData: FilteredProgramData = {
+  ...twoTrackData,
+  schedules: [
+    {
+      _id: 'schedule-duration-span',
+      date: '2026-11-20',
+      tracks: [
+        {
+          trackTitle: 'Track 1',
+          trackDescription: 'Main hall',
+          talks: [
+            slot('d1', 'Platform Teams at Scale', '15:30', '15:50'),
+            { placeholder: 'Party Prep', startTime: '15:50', endTime: '17:00' },
+            { placeholder: 'Party', startTime: '17:00', endTime: '20:00' },
+          ],
+        },
+        {
+          trackTitle: 'Track 2',
+          trackDescription: 'Room 2',
+          talks: [
+            slot('d2', 'eBPF for Everyone', '15:50', '16:10'),
+            {
+              placeholder: 'Short Break',
+              startTime: '16:10',
+              endTime: '16:20',
+            },
+            slot(
+              'd3',
+              'From Pipelines to Control Planes: Rethinking Delivery',
+              '16:20',
+              '16:40',
+            ),
+            slot('d4', 'Cost-Aware Autoscaling', '16:40', '17:00'),
+            { placeholder: 'Party', startTime: '17:00', endTime: '20:00' },
+          ],
+        },
+        {
+          trackTitle: 'Track 3',
+          trackDescription: 'Room 3',
+          talks: [
+            slot('d5', 'OpenTelemetry in Practice', '15:50', '16:10'),
+            {
+              placeholder: 'Short Break',
+              startTime: '16:10',
+              endTime: '16:20',
+            },
+            slot('d6', 'Lightning: Kyverno Tips', '16:20', '16:30'),
+            slot('d7', 'Secrets Without Tears', '16:30', '16:50'),
+            { placeholder: 'Party', startTime: '17:00', endTime: '20:00' },
+          ],
+        },
+      ],
+    },
+  ],
+}
+
+export const DurationSpan: Story = {
+  args: { data: durationSpanData },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Long slots (Party Prep 15:50–17:00) and slots that run into a row another track starts in (16:20–16:40) span the rows until they end. The last row of the day is taller, but capped.',
+      },
+    },
+  },
+}

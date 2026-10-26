@@ -173,12 +173,13 @@ export function TalkCard({
     }
 
     return (
-      <div className="relative">
+      <div className={clsx('relative', fixedHeight && 'h-full')}>
         <StatusIndicator status={status} />
         <div
           suppressHydrationWarning
           className={clsx(
             'rounded-lg border transition-all duration-200',
+            fixedHeight && 'h-full',
             isPast && 'opacity-60',
             isHappeningNow &&
               'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
