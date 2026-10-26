@@ -176,6 +176,8 @@ describe('proposal.admin.removeSpeaker', () => {
     expect(addMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         body: 'Co Speaker is no longer a speaker on this talk.\n\nFamily matters',
+        origin: 'system',
+        category: 'proposal_status',
       }),
     )
     expect(getConversationById).toHaveBeenCalledWith('conv-1')
@@ -200,6 +202,17 @@ describe('proposal.admin.removeSpeaker', () => {
       'Family matters',
       undefined,
     )
+  })
+
+  it('marks the stock removal notice as system Proposal status', async () => {
+    await remove(organizerSpeaker)
+    expect(addMessage).toHaveBeenCalledExactlyOnceWith({
+      conversationId: 'conv-1',
+      authorId: organizerSpeaker._id,
+      body: 'Co Speaker is no longer a speaker on this talk.',
+      origin: 'system',
+      category: 'proposal_status',
+    })
   })
 
   it('does not email or notify an organizer removing themselves', async () => {

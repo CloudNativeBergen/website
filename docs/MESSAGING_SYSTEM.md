@@ -70,6 +70,8 @@ speaker, and `notification` is the shared hub document.
 | `createdBy`                   | **Weak** ref to the starter. Required for proposal/general; **optional** for sponsor threads (a portal-initiated sponsor thread has no speaker creator; an organizer-initiated one records the acting organizer).                                                                                                                                                 |
 | `subjectSpeaker`              | **Weak** ref. Set only when an **organizer** starts a general thread targeting a speaker; unset on speaker-created threads (creator IS the subject).                                                                                                                                                                                                              |
 | `subject`                     | Stored **explicitly** (proposal threads default it to the talk title at creation) so a thread renders without dereferencing the proposal, and a later title edit never rewrites history. Max 200.                                                                                                                                                                 |
+| `messageCategory`             | Opening topic: `value`, `source` (`jev`, `system`, or `organizer`), `setAt`, optional Jev `confidence` or organizer `setBy`. Written once; existing categories win. Absent means unjudged; sponsor threads are excluded.                                                                                                                                          |
+| `openedAt`                    | Read-only opening marker, set if missing in the message transaction. Opening claims use the document endpoint and parent revision; unmarked legacy threads also check stored messages. Plain delivery after retry exhaustion still marks the thread to prevent later replies being judged.                                                                        |
 | `createdAt` / `lastMessageAt` | `lastMessageAt` is bumped in the **same transaction** that adds a message and drives inbox ordering.                                                                                                                                                                                                                                                              |
 | `status`                      | `'open'` \| `'resolved'`. **Absent means open** — every read `coalesce(status, 'open')`, so pre-ticketing threads need no migration.                                                                                                                                                                                                                              |
 | `assignedTo`                  | **Weak** ref to the responsible organizer. `null`/absent = unassigned.                                                                                                                                                                                                                                                                                            |
@@ -81,7 +83,9 @@ speaker, and `notification` is the shared hub document.
 ### `message` (created in `src/lib/messaging/sanity.ts`)
 
 `_id` `message.<nanoid>`, with `conversation` (strong ref), `author` (ref), `body`
-(≤5000, trimmed), `createdAt`. `addMessage` creates the message **and** patches
+(≤5000, trimmed), `createdAt`, optional `origin` (`person` or `system`; absent means
+person). Proposal-action relays use `system` and supply their event category;
+person openings are judged after delivery. `addMessage` creates the message **and** patches
 the parent `lastMessageAt` in one transaction so the two can never drift. Messages
 carry **no per-document retention** — they are immortal until the whole conference
 ages out (see Lifecycle).

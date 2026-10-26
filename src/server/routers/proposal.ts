@@ -1977,6 +1977,8 @@ export const proposalRouter = router({
               conversationId,
               authorId: ctx.speaker._id,
               body: relayBody,
+              origin: 'system',
+              category: 'proposal_status',
             })
             if (fanOut) {
               const conversation = await getConversationById(conversationId)
@@ -2223,6 +2225,8 @@ export const proposalRouter = router({
             conversationId,
             authorId: ctx.speaker._id,
             body: `${removedName} is no longer a speaker on this talk.${comment ? `\n\n${comment}` : ''}`,
+            origin: 'system',
+            category: 'proposal_status',
           })
           const conversation = await getConversationById(conversationId)
           if (conversation) {

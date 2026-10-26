@@ -75,6 +75,8 @@ function installPatch(committed: Record<string, unknown> = {}) {
 function installTransaction() {
   const patchBuilder = {
     set: vi.fn((_v?: Record<string, unknown>) => patchBuilder),
+    setIfMissing: vi.fn((_v?: Record<string, unknown>) => patchBuilder),
+    ifRevisionId: vi.fn((_rev?: string) => patchBuilder),
     unset: vi.fn((_v?: string[]) => patchBuilder),
   }
   const tx = {

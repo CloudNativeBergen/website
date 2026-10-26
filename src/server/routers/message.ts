@@ -473,6 +473,7 @@ export const messageRouter = router({
 
       const message = await addMessage({
         conversationId: conversation._id,
+        conversationType: conversation.conversationType,
         authorId: actorId,
         body: input.body,
         reopen,

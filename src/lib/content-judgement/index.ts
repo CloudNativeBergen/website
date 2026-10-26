@@ -12,3 +12,9 @@ export {
 export { hasStoredJudgements } from './records'
 export { isContentJudgementEnabled } from './settings'
 export { sweepOrphanJudgements, type SweepReport } from './sweep'
+export {
+  judgementDocument,
+  judgementId,
+  type JudgementPart,
+  type JudgementSurface,
+} from './store'
