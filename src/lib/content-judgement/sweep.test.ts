@@ -135,8 +135,21 @@ it('expires conference and organization privacy tags after the final judgement d
   ])
 })
 
+it('visits no conference when no Judgement is stored', async () => {
+  expect(await sweep()).toEqual({ conferences: 0, deleted: 0, timedOut: false })
+  // Discovery, then the missing-conference pass: none per conference.
+  expect(h.fetch).toHaveBeenCalledTimes(2)
+})
+
 it('does not invalidate privacy when nothing was deleted', async () => {
-  expect(await sweep()).toEqual({ conferences: 2, deleted: 0, timedOut: false })
+  h.store!.reset([
+    conference('a'),
+    conference('b'),
+    { _id: 'content-live', _type: 'wallPost', conference: ref('a') },
+    judgement('live', 'a', 'content-live'),
+  ])
+  // Only conference a holds a Judgement, so b is never visited.
+  expect(await sweep()).toEqual({ conferences: 1, deleted: 0, timedOut: false })
   expect(h.revalidateTag).toHaveBeenCalledTimes(0)
 })
 

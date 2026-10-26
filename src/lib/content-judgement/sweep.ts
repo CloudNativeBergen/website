@@ -7,8 +7,11 @@ const REQUEST_TIMEOUT_MS = 5_000
 // One selection and one commit, each bounded. Leave time to answer in the route.
 const BATCH_BUDGET_MS = 2 * REQUEST_TIMEOUT_MS
 
-// groq-global: cron discovers every conference, including ones with judgement off.
-const CONFERENCES = `*[_type == "conference"]{_id, "organizationId": organization._ref}`
+// groq-global: every conference a stored Judgement points at, across tenants.
+const JUDGED_CONFERENCE_IDS = `*[_type == "contentJudgement"].conference._ref`
+// groq-global: cron discovers every conference holding a Judgement, including
+// ones with judgement off since; one read on a day with nothing stored.
+const CONFERENCES = `*[_type == "conference" && _id in ${JUDGED_CONFERENCE_IDS}]{_id, "organizationId": organization._ref}`
 const ORPHANS = `*[_type == "contentJudgement" && conference._ref == $conferenceId && !defined(content->_id)] | order(_id)[0...100]{_id, _rev}`
 // groq-global: a judgement whose conference is gone cannot be reached by the
 // conference-scoped pass. Only missing conferences qualify, regardless of content.
