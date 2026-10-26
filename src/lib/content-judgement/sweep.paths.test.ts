@@ -9,13 +9,23 @@ vi.mock('@/lib/sanity/client', async () => {
   h.store = createVersionedSanityStore()
   return h.store.clients
 })
-vi.mock('next/cache', () => ({ revalidateTag: vi.fn(), updateTag: vi.fn() }))
+vi.mock('next/cache', () => ({
+  revalidateTag: vi.fn(),
+  updateTag: vi.fn(),
+  // The Feedback Code index's directives, for Delete my answer.
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+}))
 
 import { deleteWallPost } from '@/lib/photo-wall/delete'
+import { runPhotoWallRetention } from '@/lib/photo-wall/retention'
+import { deleteFeedback } from '@/lib/feedback/delete'
+import { feedbackResponseId, recordAnswer } from '@/lib/feedback/device'
 import { removeResponses } from '@/lib/feedback/admin'
 import { foldExpiredFeedback } from '@/lib/feedback/fold'
 import { deleteExpiredMessagingData } from '@/lib/messaging/retention'
 import { deleteProposal } from '@/lib/proposal/data/sanity'
+import { eraseSpeakerInPlace } from '@/lib/speaker/erasure'
 import { sweepOrphanJudgements } from './sweep'
 
 type Doc = Record<string, unknown> & { _id: string }
@@ -174,6 +184,102 @@ describe('one orphan sweep after the existing real deletion paths', () => {
     expect(store().doc('talk-delete')?.feedbackFolded).toMatchObject({
       greenCount: 1,
     })
+    await expectSwept(['response-delete'], 1)
+  })
+
+  it('the Photo Wall 30-day deletion deletes posts before the sweep', async () => {
+    // src/lib/photo-wall/retention.ts:258 purges every post of a due wall's
+    // conference, so the wall is on B: the survivor's conference has none.
+    const onB = (doc: Doc) => ({ ...doc, conference: ref('conf-B') })
+    const post = onB(
+      content('wallPost-retention', 'wallPost', {
+        status: 'approved',
+        deviceKey: 'device-1',
+        photo: { _type: 'image', asset: ref('image-wall-1600x1000-jpg') },
+      }),
+    )
+    seed([
+      conference('conf-B'),
+      onB(content('photoWall-conf-B', 'photoWall', { closedAt: AT })),
+      post,
+      {
+        _id: 'image-wall-1600x1000-jpg',
+        _type: 'sanity.imageAsset',
+        source: { name: 'photo-wall', id: 'conf-B' },
+      },
+      onB(judgement('judgement-post', post._id, 'wallPost')),
+    ])
+    expect(
+      await runPhotoWallRetention({
+        now: NOW,
+        deadline: new Date(NOW.getTime() + 290_000),
+      }),
+    ).toMatchObject({ due: 1, purged: 1, posts: 1, assets: 1, unfinished: [] })
+    await expectSwept([post._id, 'image-wall-1600x1000-jpg'], 1)
+  })
+
+  it("the attendee's Delete my answer deletes the response before the sweep", async () => {
+    // src/lib/feedback/delete.ts:60, with the cookie Submit would have set.
+    const { device, cookie } = recordAnswer(null, 'talk-delete', NOW)
+    const id = feedbackResponseId(device.token, 'talk-delete')
+    seed([
+      content('talk-delete', 'talk', {
+        status: 'confirmed',
+        feedbackCode: 'ABC234',
+      }),
+      content(id, 'feedbackResponse', {
+        talk: ref('talk-delete'),
+        colour: 'green',
+        comment: 'A comment',
+        submittedAt: AT,
+      }),
+      judgement('judgement-response', id, 'feedbackComment'),
+    ])
+    expect(
+      await deleteFeedback({
+        conference: conference(),
+        code: 'ABC234',
+        cookie: cookie.value,
+        now: NOW,
+      }),
+    ).toMatchObject({ outcome: { deleted: true } })
+    await expectSwept([id], 1)
+  })
+
+  it("speaker erasure's feedback fold deletes responses before the sweep", async () => {
+    // A talk left with no live speaker folds through src/lib/feedback/fold.ts:327.
+    seed([
+      {
+        _id: 'speaker-erase',
+        _type: 'speaker',
+        _rev: 'rev-speaker-erase',
+        name: 'Ada',
+        email: 'ada@example.com',
+        slug: { _type: 'slug', current: 'ada' },
+      },
+      content('talk-delete', 'talk', {
+        status: 'confirmed',
+        title: 'A talk',
+        speakers: [{ ...ref('speaker-erase'), _key: 'k0' }],
+        feedbackCode: 'ABC234',
+      }),
+      content('response-delete', 'feedbackResponse', {
+        talk: ref('talk-delete'),
+        colour: 'green',
+        comment: 'A comment',
+        submittedAt: AT,
+      }),
+      judgement('judgement-response', 'response-delete', 'feedbackComment'),
+    ])
+    const result = await eraseSpeakerInPlace({
+      speakerId: 'speaker-erase',
+      actor: 'op',
+      waitForInFlightSubmits: async () => {},
+    })
+    expect(result.err).toBeNull()
+    expect(result.feedbackFolds).toEqual([
+      { talkId: 'talk-delete', status: 'folded', responses: 1, error: null },
+    ])
     await expectSwept(['response-delete'], 1)
   })
 
