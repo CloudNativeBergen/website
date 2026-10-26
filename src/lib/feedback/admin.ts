@@ -328,9 +328,12 @@ export async function readTalkFeedback({
   const comments = adminComments(responses, judgementOn)
   return {
     totals: talkTotals(talk, responses),
-    comments: filter
-      ? comments.filter((c) => matchesTriage(c, filter))
-      : comments,
+    // A tile pressed before the setting went off would otherwise leave an
+    // empty list with no strip to clear it.
+    comments:
+      filter && judgementOn
+        ? comments.filter((c) => matchesTriage(c, filter))
+        : comments,
     triage: judgementOn ? triageCounts(comments) : null,
     responses: responses.flatMap((r) =>
       isFeedbackColour(r.colour) && typeof r.submittedAt === 'string'
@@ -438,7 +441,17 @@ async function commitPatches(
   return { status: 'ok', count }
 }
 
-/** Hide (§10.3): sets `hiddenAt`, clears `flaggedAt`; the colour still counts. */
+/** How often a Hide whose tally lost its revision guard is planned again. */
+const HIDE_REPLANS = 3
+
+/**
+ * Hide (§10.3): sets `hiddenAt`, clears `flaggedAt`; the colour still counts.
+ * A response whose Judgement the Hide tallies is patched under the revision
+ * the guard read found: a Keep or another Hide landing in between (GROQ can
+ * lag a write by about a second) fails the commit with 409, and the Hide is
+ * planned again from a fresh read, which then sees the mark and counts
+ * nothing. An untallied Hide carries no guard, as before.
+ */
 export async function hideResponses({
   conferenceId,
   responseIds,
@@ -451,22 +464,34 @@ export async function hideResponses({
   /** Count agreements (§7.3): the organization has judgement on. */
   tally?: boolean
 }): Promise<ModerationResult> {
-  const rows = await ownedResponses(conferenceId, responseIds)
-  if (!rows) return { status: 'refused' }
   const at = now.toISOString()
-  const tx = clientWrite.transaction()
-  for (const [id, row] of rows) {
-    const counted = tallyDecision(tx, tally, row, 'agreed')
-    tx.patch(id, (p) =>
-      p
-        .set({
-          hiddenAt: at,
-          ...(counted ? { 'judgement.talliedAt': at } : {}),
-        })
-        .unset(['flaggedAt']),
-    )
+  for (let replans = 0; ; replans++) {
+    const rows = await ownedResponses(conferenceId, responseIds)
+    if (!rows) return { status: 'refused' }
+    const tx = clientWrite.transaction()
+    let guarded = false
+    for (const [id, row] of rows) {
+      const counted = tallyDecision(tx, tally, row, 'agreed')
+      guarded ||= counted
+      tx.patch(id, (p) => {
+        const patch = counted ? p.ifRevisionId(row.rev) : p
+        return patch
+          .set({
+            hiddenAt: at,
+            ...(counted ? { 'judgement.talliedAt': at } : {}),
+          })
+          .unset(['flaggedAt'])
+      })
+    }
+    try {
+      await tx.commit()
+    } catch (error) {
+      if (isNotFound(error)) return { status: 'refused' }
+      if (guarded && isConflict(error) && replans < HIDE_REPLANS) continue
+      throw error
+    }
+    return { status: 'ok', count: rows.size }
   }
-  return commitPatches(tx, rows.size)
 }
 
 /**

@@ -263,6 +263,36 @@ describe('what triggers a judging (§6)', () => {
     expect(response.keptBy).toBeUndefined()
   })
 
+  it('two tasks for the same text, both past the start check: the second writes nothing and keeps the Keep mark', async () => {
+    const holds: ((r: Response) => void)[] = []
+    fetchMock.mockImplementation(
+      () => new Promise<Response>((resolve) => holds.push(resolve)),
+    )
+    await tap('red', 'same text')
+    await tap('red', 'same text')
+    const [taskA, taskB] = h.tasks.splice(0)
+    const runningA = taskA()
+    const runningB = taskB()
+    // Both read "no Judgement yet" and are inside their Jev calls.
+    await vi.waitFor(() => expect(holds).toHaveLength(2))
+    holds[0](jevOk(answers(0.9)))
+    await runningA
+    const [{ _id }] = responses()
+    expect(judgements()).toHaveLength(1)
+    // An organizer keeps it before the second answer arrives.
+    store().put({
+      ...store().doc(_id)!,
+      keptAt: '2026-10-26T09:31:00.000Z',
+      keptBy: { _type: 'reference', _ref: 'sp-org', _weak: true },
+    })
+    const commits = store().commits.length
+    holds[1](jevOk(answers(0.9)))
+    await runningB
+    expect(store().commits).toHaveLength(commits)
+    expect(store().doc(_id)!.keptAt).toBe('2026-10-26T09:31:00.000Z')
+    expect(judgements()).toHaveLength(1)
+  })
+
   it('a reword after a tallied Keep starts the tally over for the new Judgement', async () => {
     await tap('red', 'first wording')
     await runTasks()

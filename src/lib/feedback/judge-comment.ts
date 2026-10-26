@@ -16,10 +16,13 @@
  *    will judge it) or none is left alone; a Judgement whose `contentHash`
  *    is this comment's means the comment is UNCHANGED and is not judged again.
  * 3. The Jev call.
- * 4. THE GUARD, at write time: the response is read again through the doc
- *    endpoint (past GROQ's lag), and the answer is written only while the
- *    stored comment is still the one that was judged, under `ifRevisionId`
- *    of that read. A newer comment drops the answer; an unrelated change in
+ * 4. THE GUARD, at write time: the response and its Judgement are read again
+ *    through the doc endpoint (past GROQ's lag), and the answer is written
+ *    only while the stored comment is still the one that was judged and no
+ *    Judgement of exactly that text has landed meanwhile (two tasks for the
+ *    same text, both past step 2: the second would otherwise replace the
+ *    first's and clear a Keep given in between), under `ifRevisionId` of
+ *    that read. A newer comment drops the answer; an unrelated change in
  *    between (an organizer's Hide, a speaker's flag: a 409) re-reads and tries
  *    again, a few times. The record and the summary go in ONE transaction, and
  *    a new Judgement always clears the Keep mark (§8.2): it was about the old
@@ -131,10 +134,15 @@ async function writeJudgement(
   outcome: JudgeOutcome,
 ): Promise<void> {
   const recordId = judgementId(input.responseId)
+  const hash = contentHash(request)
   for (let attempt = 1; attempt <= WRITE_ATTEMPTS; attempt++) {
-    const current = await clientWrite.getDocument<ResponseDoc>(input.responseId)
+    const [current, existing] = await clientWrite.getDocuments<
+      ResponseDoc & { contentHash?: unknown }
+    >([input.responseId, recordId])
     // Reworded or deleted while Jev answered: the answer is about old text.
     if (!current?._rev || current.comment !== comment) return
+    // Another task judged this exact text meanwhile: its answer stands.
+    if (existing?.contentHash === hash) return
     const judgedAt = new Date().toISOString()
     const tx = clientWrite.transaction()
     let summary: JudgementSummary

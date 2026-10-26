@@ -87,7 +87,7 @@ Note: The conference does not offer attendee lead‑scanning or attendee list sh
 
 Only for organizations that turn it on in Admin → Settings ([spec](./CONTENT_JUDGEMENT_SPEC.md) §5, §13).
 
-- Data: scores per question, the returned model build, a SHA-256 of the checked content, time, the Keep mark (organizer, time) and the Message Category. Never a copy of the checked text or photo.
+- Data: scores per question, the returned model build, a SHA-256 of the checked content, time, the Keep mark (organizer, time; recorded on every Keep of a flagged comment, whether or not content judgement is on, and disclosed in the Session Feedback section of /privacy) and the Message Category. Never a copy of the checked text or photo.
 - Purposes: moderation advice and inbox topics for organizers.
 - Legal bases: legitimate interest (keeping the conference's spaces safe).
 - Retention: until the content is deleted, plus at most one day.

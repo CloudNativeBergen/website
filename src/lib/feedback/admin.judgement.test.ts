@@ -253,6 +253,18 @@ describe('a talk’s comments with Jev’s advice (§8.2)', () => {
     expect(unchecked.responses).toHaveLength(6)
   })
 
+  it('applies no triage filter while the organization has judgement off (the strip is gone)', async () => {
+    const read = (await readTalkFeedback({
+      conference: CONF_A,
+      talkId: 'talk-1',
+      now: NOW,
+      judgementOn: false,
+      filter: 'unsafe',
+    }))!
+    expect(read.comments).toHaveLength(6)
+    expect(read.triage).toBeNull()
+  })
+
   it('never shows another conference’s Judgement', async () => {
     const read = (await readTalkFeedback({
       conference: CONF_B,
@@ -509,6 +521,32 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
       { question: 'abusive', band: '0.5-0.9', agreed: 1, disagreed: 0 },
       { question: 'personal_info', band: '0.5-0.9', agreed: 1, disagreed: 0 },
     ])
+  })
+
+  it('a Keep landing under a Hide is seen: the Hide re-plans and counts nothing', async () => {
+    store().beforeNextCommit(() => {
+      const doc = store().doc(rid(R_UNSAFE))!
+      store().put({
+        ...doc,
+        _rev: 'rev-kept-meanwhile',
+        keptAt: '2026-10-27T10:13:00.000Z',
+        keptBy: { ...ref('sp-org'), _weak: true },
+        judgement: {
+          ...(doc.judgement as object),
+          talliedAt: '2026-10-27T10:13:00.000Z',
+        },
+      })
+    })
+    const result = await hideResponses({
+      conferenceId: 'conf-A',
+      responseIds: [rid(R_UNSAFE), rid(R_UNCHECKED)],
+      now: NOW,
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'ok', count: 2 })
+    expect(store().doc(rid(R_UNSAFE))!.hiddenAt).toBe(NOW.toISOString())
+    expect(store().doc(rid(R_UNCHECKED))!.hiddenAt).toBe(NOW.toISOString())
+    expect(tallies()).toEqual([])
   })
 
   it('an already-kept comment counts nothing when hidden', async () => {
