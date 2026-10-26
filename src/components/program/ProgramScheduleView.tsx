@@ -340,7 +340,7 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
           return (
             <div
               key={timeSlot}
-              className="grid items-start gap-x-4"
+              className="grid items-stretch gap-x-4"
               style={{
                 gridTemplateColumns: `120px repeat(${tracks.length}, minmax(0, 1fr))`,
               }}

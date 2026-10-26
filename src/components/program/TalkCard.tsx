@@ -303,12 +303,15 @@ export function TalkCard({
                 !isHappeningSoon &&
                 'border-gray-300 bg-gray-50 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500',
         compact ? 'p-3' : 'p-6',
+        // Fill the schedule row, so a one-line title matches its neighbours.
+        fixedHeight && 'h-full',
       )}
     >
       <StatusIndicator status={status} />
       <div
         className={clsx(
           'flex h-full flex-col',
+          fixedHeight && 'justify-between',
           compact ? 'space-y-2' : 'space-y-4',
         )}
       >
