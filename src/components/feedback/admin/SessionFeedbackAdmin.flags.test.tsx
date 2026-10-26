@@ -220,9 +220,7 @@ describe('Keep in a session row', () => {
       .closest('li')!
     await waitFor(() =>
       expect(
-        within(item).getByText(
-          'Already handled: no longer flagged.',
-        ),
+        within(item).getByText('Already handled: no longer flagged.'),
       ).toBeTruthy(),
     )
     expect(screen.queryByText(CHANGED)).toBeNull()

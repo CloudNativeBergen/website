@@ -549,10 +549,9 @@ describe('TalkFeedbackPanel comments', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Keep' }))
     expect(
-      await screen.findByText(
-        'Already handled: no longer flagged.',
-        { selector: 'p:not([role])' },
-      ),
+      await screen.findByText('Already handled: no longer flagged.', {
+        selector: 'p:not([role])',
+      }),
     ).toBeTruthy()
   })
 
