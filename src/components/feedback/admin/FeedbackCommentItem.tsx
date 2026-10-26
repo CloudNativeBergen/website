@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   CheckIcon,
+  EllipsisHorizontalCircleIcon,
+  ExclamationTriangleIcon,
   EyeIcon,
   EyeSlashIcon,
   FlagIcon,
@@ -14,6 +16,13 @@ import type {
   KeepNow,
 } from '@/lib/feedback/admin'
 import type { RemovedCounts } from '@/lib/feedback/bulk-remove'
+import {
+  bySpeaker,
+  likelyUnsafe,
+  needsALook,
+  reasonText,
+  unchecked,
+} from '@/lib/feedback/triage'
 import { plural } from '@/lib/text/display'
 import { formatConferenceDayTime } from '@/lib/time'
 import { ANSWERS } from '../answers'
@@ -106,6 +115,21 @@ export function failureNote(error: unknown, shown: boolean): Note {
   const code = (error as { data?: { code?: unknown } } | null)?.data?.code
   if (code === 'NOT_FOUND' && shown) return KEEP_REFUSED.gone
   return { ok: false, text: errorText(error) }
+}
+
+/**
+ * Who flagged a comment, and why (Content judgement spec §8.2): the speaker,
+ * Jev's advice with its percentages, or both. `CommentItem`'s pill says it
+ * without triage; with triage it leads the collapsed comment.
+ */
+export function flagSource(comment: AdminFeedbackComment): string {
+  const parts: string[] = []
+  if (bySpeaker(comment)) parts.push('Flagged by a speaker')
+  if (likelyUnsafe(comment.judgement))
+    parts.push(`Likely unsafe: ${reasonText(comment.judgement)}`)
+  else if (bySpeaker(comment) && comment.judgement?.state === 'judged')
+    parts.push('nothing found automatically')
+  return parts.join(' · ')
 }
 
 /** A comment's start, for naming it in a note. */
@@ -237,6 +261,7 @@ export function CommentItem({
   onKeep,
   onRemove,
   stacked = false,
+  triage = false,
 }: {
   comment: AdminFeedbackComment
   /**
@@ -261,8 +286,19 @@ export function CommentItem({
    * page's sidebar), where three buttons beside it would squeeze the text.
    */
   stacked?: boolean
+  /**
+   * Under a triage strip (Content judgement spec §8.2): a flagged comment,
+   * by a speaker or by Jev, shows its reason line and **Show comment**
+   * instead of its text and offers Keep; a kept one says who kept it and
+   * what the advice was; one without a Judgement says "Not checked".
+   */
+  triage?: boolean
 }) {
   const textId = useId()
+  // Opened by the organizer, for this comment, until it is re-rendered
+  // under another id: a flagged comment starts collapsed (§8.2).
+  const [opened, setOpened] = useState(false)
+  const collapsed = triage && needsALook(comment)
   // An action can take its own button away (Keep, Hide swapped for Unhide):
   // focus goes to the comment it was about instead of falling to the page.
   // Not to the note, which the page's live region already says; and only
@@ -319,21 +355,82 @@ export function CommentItem({
               Hidden from speakers
             </span>
           )}
-          {comment.flagged && place === 'session' && (
+          {comment.flagged && place === 'session' && !collapsed && (
             <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
               <FlagIcon className="size-3.5" aria-hidden="true" />
-              Flagged by a speaker
+              {flagSource(comment)}
+            </span>
+          )}
+          {triage && comment.hidden && likelyUnsafe(comment.judgement) && (
+            <span className="text-gray-500 dark:text-gray-400">
+              was: {reasonText(comment.judgement)}
+            </span>
+          )}
+          {triage && comment.kept && (
+            <span className="text-gray-500 dark:text-gray-400">
+              <CheckIcon className="mr-1 inline size-3.5" aria-hidden="true" />
+              Kept by {comment.kept.by ?? 'an organizer'},{' '}
+              {formatConferenceDayTime(comment.kept.at)}
+              {likelyUnsafe(comment.judgement) &&
+                ` · was: ${reasonText(comment.judgement)}`}
+            </span>
+          )}
+          {triage && unchecked(comment) && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-400 px-2 py-0.5 font-medium text-gray-600 dark:border-gray-500 dark:text-gray-400">
+              <EllipsisHorizontalCircleIcon
+                className="size-3.5"
+                aria-hidden="true"
+              />
+              Not checked
             </span>
           )}
         </p>
-        <p
-          id={textId}
-          ref={textRef}
-          tabIndex={-1}
-          className={`mt-1 text-sm wrap-break-word whitespace-pre-line ${comment.hidden ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}
-        >
-          {comment.comment}
-        </p>
+        {collapsed ? (
+          <div className="mt-1">
+            <p
+              id={textId}
+              ref={textRef}
+              tabIndex={-1}
+              className={`flex items-start gap-1.5 text-xs font-medium ${comment.flagged ? 'text-red-700 dark:text-red-300' : 'text-amber-800 dark:text-amber-200'}`}
+            >
+              {comment.flagged ? (
+                <FlagIcon
+                  className="mt-0.5 size-3.5 shrink-0"
+                  aria-hidden="true"
+                />
+              ) : (
+                <ExclamationTriangleIcon
+                  className="mt-0.5 size-3.5 shrink-0"
+                  aria-hidden="true"
+                />
+              )}
+              <span>{flagSource(comment)}</span>
+            </p>
+            {opened ? (
+              <p className="mt-1 text-sm wrap-break-word whitespace-pre-line text-gray-900 dark:text-gray-100">
+                {comment.comment}
+              </p>
+            ) : (
+              <button
+                type="button"
+                aria-describedby={textId}
+                onClick={() => setOpened(true)}
+                className="mt-1 inline-flex min-h-8 items-center rounded-md border border-gray-300 px-2.5 text-xs font-medium text-gray-700 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Show comment
+              </button>
+            )}
+          </div>
+        ) : (
+          <p
+            id={textId}
+            ref={textRef}
+            tabIndex={-1}
+            className={`mt-1 text-sm wrap-break-word whitespace-pre-line ${comment.hidden ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}
+          >
+            {comment.comment}
+          </p>
+        )}
         {note && <OutcomeNote outcome={note} className="mt-2" />}
       </div>
       <div
@@ -343,7 +440,7 @@ export function CommentItem({
             : '-ml-2.5 flex shrink-0 flex-wrap gap-1 sm:ml-0'
         }
       >
-        {comment.flagged && onKeep && (
+        {(triage ? needsALook(comment) : comment.flagged) && onKeep && (
           <button
             type="button"
             aria-describedby={textId}

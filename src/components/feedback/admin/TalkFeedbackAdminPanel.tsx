@@ -1,8 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { keepPreviousData } from '@tanstack/react-query'
 import { api } from '@/lib/trpc/client'
 import { removeInRequests } from '@/lib/feedback/bulk-remove'
+import type { TriageFilter } from '@/lib/feedback/triage'
 import { AdminFeedbackCodePanel } from '../AdminFeedbackCodePanel'
 import { TalkFeedbackPanel } from './TalkFeedbackPanel'
 
@@ -26,9 +28,13 @@ export function TalkFeedbackAdminPanel({
   showCode: boolean
 }) {
   const utils = api.useUtils()
+  // The triage tile pressed (Content judgement spec §8.2): the server
+  // filters, so a tile is a new read; the list it replaces stays on screen
+  // until the new one lands.
+  const [filter, setFilter] = useState<TriageFilter | null>(null)
   const feedback = api.sessionFeedback.adminTalk.useQuery(
-    { talkId },
-    { retry: false },
+    { talkId, filter: filter ?? undefined },
+    { retry: false, placeholderData: keepPreviousData },
   )
   // `/admin/feedback` holds the same responses and totals: a visit there
   // after acting here must not show what this page just changed.
@@ -169,6 +175,8 @@ export function TalkFeedbackAdminPanel({
         onKeep={(c) => keep.mutateAsync({ responseId: c.id, rev: c.rev })}
         headingRef={heading}
         onCardsExpired={readAgain}
+        filter={filter}
+        onFilterChange={setFilter}
         onRemove={(request) =>
           removeInRequests(request, (chunk) => remove.mutateAsync(chunk))
         }
