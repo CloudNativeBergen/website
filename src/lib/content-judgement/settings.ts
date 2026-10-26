@@ -21,10 +21,9 @@ export async function isContentJudgementEnabled(
       { orgId },
     )
     return enabled === true
-  } catch (error) {
+  } catch {
     console.error(
       `[content-judgement] setting read failed for ${orgId}; not judging`,
-      error,
     )
     return false
   }

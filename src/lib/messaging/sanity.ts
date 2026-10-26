@@ -17,6 +17,11 @@ import {
 } from '@/lib/notification/sanity'
 import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import { getViewerTeamKeys } from '@/lib/teams'
+import {
+  judgeConversationOpening,
+  readConversationOpening,
+} from '@/lib/content-judgement/conversation'
+import type { Category } from '@/lib/content-judgement/questions'
 import type {
   AccessSpeaker,
   ConversationListItem,
@@ -29,6 +34,7 @@ import type {
   ConversationWithContext,
   EmailOverride,
   Message,
+  MessageOrigin,
 } from './types'
 import { DEFAULT_CONVERSATION_PREFERENCE, ORGANIZERS_GROUP } from './types'
 import {
@@ -1300,6 +1306,7 @@ interface RawMessageRow {
   createdAt: string
   authorName?: string | null
   authorSponsorId?: string | null
+  origin?: MessageOrigin | null
 }
 
 /**
@@ -1343,6 +1350,7 @@ export async function listMessages({
     "authorId": coalesce(author._ref, ""),
     body,
     createdAt,
+    origin,
     authorName,
     "authorSponsorId": authorParty.sponsorForConference._ref
   }`
@@ -1358,6 +1366,7 @@ export async function listMessages({
     authorId: row.authorId ?? '',
     body: row.body,
     createdAt: row.createdAt,
+    ...(row.origin ? { origin: row.origin } : {}),
     ...(row.authorName ? { authorName: row.authorName } : {}),
     ...(row.authorSponsorId ? { authorSponsorId: row.authorSponsorId } : {}),
   }))
@@ -1607,6 +1616,8 @@ export async function addMessage({
   body,
   reopen = false,
   marketingTask,
+  origin,
+  category,
 }: {
   conversationId: string
   /**
@@ -1623,6 +1634,10 @@ export async function addMessage({
    */
   sponsorAuthor?: { sponsorForConferenceId: string; authorName: string }
   body: string
+  /** Absent means person; action relays explicitly carry system. */
+  origin?: MessageOrigin
+  /** The event's topic, used only for a system opening. */
+  category?: Category
   reopen?: boolean
   /** Server-authorized outreach Task; completion commits atomically with delivery. */
   marketingTask?: {
@@ -1667,33 +1682,71 @@ export async function addMessage({
         }),
       }
 
-  const transaction = clientWrite
-    .transaction()
-    .create({
-      _id: messageId,
-      _type: 'message',
-      conversation: createReference(conversationId),
-      body,
-      createdAt: now,
-      ...organizationField(orgRef),
-      ...authorFields,
-    })
-    .patch(conversationId, (patch) =>
-      patch.set(
-        reopen
-          ? { lastMessageAt: now, status: 'open' }
-          : { lastMessageAt: now },
-      ),
-    )
+  // A revision precondition makes the stored no-messages snapshot authoritative
+  // at commit time. A concurrent starter bumps the revision; retry its loser as
+  // a normal reply. Legacy conversations are checked by their actual messages,
+  // not by an absent marker or a client-supplied "first" flag.
+  let snapshot = await readConversationOpening(conversationId)
+  for (;;) {
+    const opening = snapshot
+    const first =
+      opening &&
+      !opening.hasMessages &&
+      (opening.conversationType === 'proposal' ||
+        opening.conversationType === 'general')
 
-  if (marketingTask) {
-    transaction.patch(marketingTask.id, (patch) =>
-      patch
-        .ifRevisionId(marketingTask.rev)
-        .set({ ...marketingTask.fields, messageId }),
-    )
+    const transaction = clientWrite
+      .transaction()
+      .create({
+        _id: messageId,
+        _type: 'message',
+        conversation: createReference(conversationId),
+        body,
+        createdAt: now,
+        ...(origin ? { origin } : {}),
+        ...organizationField(orgRef),
+        ...authorFields,
+      })
+      .patch(conversationId, (patch) => {
+        if (first) patch = patch.ifRevisionId(opening._rev)
+        if (first && origin === 'system' && category) {
+          patch = patch.setIfMissing({
+            messageCategory: { value: category, source: 'system', setAt: now },
+          })
+        }
+        return patch.set(
+          reopen
+            ? { lastMessageAt: now, status: 'open' }
+            : { lastMessageAt: now },
+        )
+      })
+
+    if (marketingTask) {
+      transaction.patch(marketingTask.id, (patch) =>
+        patch
+          .ifRevisionId(marketingTask.rev)
+          .set({ ...marketingTask.fields, messageId }),
+      )
+    }
+    try {
+      await transaction.commit()
+    } catch (error) {
+      if (first && (error as { statusCode?: number })?.statusCode === 409) {
+        const latest = await readConversationOpening(conversationId)
+        // An outreach Task also has a revision precondition. Only retry a
+        // changed PARENT, never a stale Task revision (which must still refuse).
+        if (latest && latest._rev !== opening._rev) {
+          snapshot = latest
+          continue
+        }
+      }
+      throw error
+    }
+    if (first && origin !== 'system' && authorId) {
+      judgeConversationOpening(opening, authorId, body)
+    }
+    break
   }
-  await transaction.commit()
 
   return {
     _id: messageId,
@@ -1701,6 +1754,7 @@ export async function addMessage({
     authorId: sponsorAuthor ? '' : (authorId as string),
     body,
     createdAt: now,
+    ...(origin ? { origin } : {}),
     ...(sponsorAuthor
       ? {
           authorName: sponsorAuthor.authorName,

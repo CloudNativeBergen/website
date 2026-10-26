@@ -1,4 +1,5 @@
 import { defineField, defineType } from 'sanity'
+import { categories } from '../../src/lib/content-judgement/questions'
 
 /**
  * A speaker↔organizer conversation thread (messaging M1).
@@ -91,6 +92,46 @@ export default defineType({
       description:
         'Thread subject. For proposal threads this defaults to the proposal title at creation and is stored explicitly.',
       validation: (Rule) => Rule.required().max(200),
+    }),
+    defineField({
+      name: 'messageCategory',
+      title: 'Message Category',
+      type: 'object',
+      description:
+        'The opening topic. Jev writes it once; an organizer setting always wins. Absent means not judged. Sponsor conversations have no category.',
+      readOnly: true,
+      fields: [
+        defineField({
+          name: 'value',
+          type: 'string',
+          options: { list: [...categories] },
+          validation: (Rule) => Rule.required(),
+        }),
+        defineField({
+          name: 'source',
+          type: 'string',
+          options: { list: ['jev', 'organizer', 'system'] },
+          validation: (Rule) => Rule.required(),
+        }),
+        defineField({
+          name: 'confidence',
+          type: 'number',
+          description: 'Confidence of Jev’s category choice.',
+          validation: (Rule) => Rule.min(0).max(1),
+        }),
+        defineField({
+          name: 'setAt',
+          type: 'datetime',
+          validation: (Rule) => Rule.required(),
+        }),
+        defineField({
+          name: 'setBy',
+          type: 'reference',
+          to: [{ type: 'speaker' }],
+          weak: true,
+          description: 'Only present when an organizer sets the category.',
+        }),
+      ],
     }),
     defineField({
       name: 'createdAt',

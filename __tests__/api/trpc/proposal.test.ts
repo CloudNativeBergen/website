@@ -624,7 +624,11 @@ describe('proposal router', () => {
           comment: 'Program cut',
         })
         expect(addMessage).toHaveBeenCalledWith(
-          expect.objectContaining({ body: 'Program cut' }),
+          expect.objectContaining({
+            body: 'Program cut',
+            origin: 'system',
+            category: 'proposal_status',
+          }),
         )
         expect(notifyNewMessage).toHaveBeenCalledTimes(1)
         expect(published().metadata.shouldNotify).toBe(false)
@@ -639,6 +643,8 @@ describe('proposal router', () => {
         expect(addMessage).toHaveBeenCalledWith(
           expect.objectContaining({
             body: 'Your talk "My Talk" has been canceled by the organizers.',
+            origin: 'system',
+            category: 'proposal_status',
           }),
         )
       })
@@ -667,7 +673,11 @@ describe('proposal router', () => {
           comment: 'No-show risk',
         })
         expect(addMessage).toHaveBeenCalledWith(
-          expect.objectContaining({ body: 'No-show risk' }),
+          expect.objectContaining({
+            body: 'No-show risk',
+            origin: 'system',
+            category: 'proposal_status',
+          }),
         )
         expect(published().metadata.reason).toBe('No-show risk')
       })
@@ -902,6 +912,8 @@ describe('proposal router', () => {
           conversationId: 'conv-1',
           authorId: regularSpeaker._id,
           body: 'Withdrawn: Ill',
+          origin: 'system',
+          category: 'proposal_status',
         })
         expect(notifyNewMessage).toHaveBeenCalledTimes(1)
         expect(published().metadata.postedToThread).toBe(true)
@@ -1739,6 +1751,8 @@ describe('proposal router', () => {
         conversationId,
         authorId: adminSpeaker._id,
         body: 'Congrats — see you in Bergen!',
+        origin: 'system',
+        category: 'proposal_status',
       })
       // S2: the decision status rail (proposal_status_changed notification +
       // decision email, both carrying this comment) is the single delivery — the
@@ -1746,6 +1760,41 @@ describe('proposal router', () => {
       // double-notified for one organizer action.
       expect(notifyNewMessage).not.toHaveBeenCalled()
     })
+
+    it.each([
+      [Action.accept, Status.submitted, Status.accepted],
+      [Action.reject, Status.submitted, Status.rejected],
+      [Action.waitlist, Status.submitted, Status.waitlisted],
+      [Action.remind, Status.accepted, Status.accepted],
+    ])(
+      'marks the %s relay as system Proposal status even with a typed comment',
+      async (action, initialStatus, finalStatus) => {
+        mockAcceptFlow()
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: { ...mockProposal, status: initialStatus } as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...mockProposal, status: finalStatus } as any,
+          err: null,
+        })
+
+        const result = await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action,
+          comment: 'Please send your travel details',
+        })
+
+        expect(result.proposalStatus).toBe(finalStatus)
+        expect(addMessage).toHaveBeenCalledExactlyOnceWith({
+          conversationId,
+          authorId: adminSpeaker._id,
+          body: 'Please send your travel details',
+          origin: 'system',
+          category: 'proposal_status',
+        })
+      },
+    )
 
     it('never fails the action when the messaging write throws', async () => {
       mockAcceptFlow()
