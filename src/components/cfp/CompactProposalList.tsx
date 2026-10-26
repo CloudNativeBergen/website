@@ -245,7 +245,7 @@ export function CompactProposalList({
                   {isApproved &&
                     proposal.scheduleInfo?.date &&
                     proposal.scheduleInfo?.timeSlot && (
-                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm font-medium text-gray-800 dark:text-gray-200">
                         <span className="flex items-center">
                           <CalendarIcon className="mr-1 h-3.5 w-3.5" />
                           {formatConferenceDateLong(proposal.scheduleInfo.date)}
