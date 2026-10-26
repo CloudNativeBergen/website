@@ -44,8 +44,9 @@ export function SessionFeedbackPrivacy() {
           the comment; the one in the app is deleted after 90 days. When an
           organizer keeps a flagged comment, we record on the answer which
           organizer did so and when, so other organizers can see it was looked
-          at. When a session&apos;s feedback closes, each of its speakers gets one summary
-          by email and in the app, with the counts only, never the comments.
+          at. When a session&apos;s feedback closes, each of its speakers gets
+          one summary by email and in the app, with the counts only, never the
+          comments.
         </li>
         <li>
           <strong>Purpose and legal basis:</strong> helping speakers and
