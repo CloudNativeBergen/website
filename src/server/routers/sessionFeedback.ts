@@ -7,9 +7,11 @@ import {
   router,
 } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isContentJudgementEnabled } from '@/lib/content-judgement'
 import { feedbackCodeUrl, type FeedbackWindow } from '@/lib/feedback'
 import type { KeepAnswer } from '@/lib/feedback/admin'
 import { MAX_RESPONSES_PER_REQUEST } from '@/lib/feedback/bulk-remove'
+import { TRIAGE_FILTERS } from '@/lib/feedback/triage'
 import { SHORT_CODE_SHAPE } from '@/lib/marketing/short-code'
 import {
   countFlaggedComments,
@@ -102,6 +104,14 @@ const flagInput = talkInput.extend({
 
 const notFound = () =>
   new TRPCError({ code: 'NOT_FOUND', message: 'Talk not found' })
+
+/**
+ * Whether the organization has content judgement on (Content judgement spec
+ * §5), read live: Jev's advice is carried to the page, and an organizer's
+ * decision on a flagged comment is tallied (§7.3), only while it is.
+ */
+const judgementOn = (orgId: string | null) =>
+  orgId ? isContentJudgementEnabled(orgId) : Promise.resolve(false)
 
 /** A talk's code as every procedure here answers it, URL on its domain. */
 const toCodeResponse = (
@@ -242,11 +252,12 @@ export const sessionFeedbackRouter = router({
    */
   adminHide: adminProcedure
     .input(responsesInput)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const result = await hideResponses({
         conferenceId: await resolveConferenceId(),
         responseIds: input.responseIds,
         now: new Date(),
+        tally: await judgementOn(ctx.orgId),
       })
       if (result.status === 'refused') throw responseNotFound()
       return { count: result.count }
@@ -274,24 +285,27 @@ export const sessionFeedbackRouter = router({
    * exactly like a missing one. A chunk that fails after others committed
    * says how many went.
    */
-  adminRemove: adminProcedure.input(removeInput).mutation(async ({ input }) => {
-    const result = await removeResponses({
-      conferenceId: await resolveConferenceId(),
-      responses: input.responses,
-      range: input.range,
-    })
-    if (result.status === 'failed')
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        // Not "try again": what went is gone; a reload shows what is left.
-        message: `Removed ${result.removed} of ${new Set(input.responses.map((r) => r.id)).size} responses. Reload to see what’s left, then remove those.`,
+  adminRemove: adminProcedure
+    .input(removeInput)
+    .mutation(async ({ ctx, input }) => {
+      const result = await removeResponses({
+        conferenceId: await resolveConferenceId(),
+        responses: input.responses,
+        range: input.range,
+        tally: await judgementOn(ctx.orgId),
       })
-    return {
-      removed: result.removed,
-      gone: result.gone,
-      changed: result.changed,
-    }
-  }),
+      if (result.status === 'failed')
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          // Not "try again": what went is gone; a reload shows what is left.
+          message: `Removed ${result.removed} of ${new Set(input.responses.map((r) => r.id)).size} responses. Reload to see what’s left, then remove those.`,
+        })
+      return {
+        removed: result.removed,
+        gone: result.gone,
+        changed: result.changed,
+      }
+    }),
 
   /**
    * Rotate the talk's Feedback Code (§10.4), after the page's confirmation:
@@ -331,19 +345,25 @@ export const sessionFeedbackRouter = router({
   /**
    * One talk's Session Feedback on its admin page (§10.2): totals, every
    * comment, and every response's time for the chart. Another conference's
-   * talk gets the same NOT_FOUND as a missing one.
+   * talk gets the same NOT_FOUND as a missing one. With content judgement on,
+   * the comments carry Jev's advice and the triage counts, and `filter`
+   * narrows the comments to one tile's (Content judgement spec §8.2).
    */
-  adminTalk: adminProcedure.input(talkInput).query(async ({ input }) => {
-    const { conference } = await getConferenceForCurrentDomain()
-    if (!conference?._id) throw notFound()
-    const result = await readTalkFeedback({
-      conference,
-      talkId: input.talkId,
-      now: new Date(),
-    })
-    if (!result) throw notFound()
-    return result
-  }),
+  adminTalk: adminProcedure
+    .input(talkInput.extend({ filter: z.enum(TRIAGE_FILTERS).optional() }))
+    .query(async ({ ctx, input }) => {
+      const { conference } = await getConferenceForCurrentDomain()
+      if (!conference?._id) throw notFound()
+      const result = await readTalkFeedback({
+        conference,
+        talkId: input.talkId,
+        now: new Date(),
+        judgementOn: await judgementOn(ctx.orgId),
+        filter: input.filter,
+      })
+      if (!result) throw notFound()
+      return result
+    }),
 
   /**
    * A speaker flags a comment on their talk for organizers (§9.3, §10.3).
@@ -378,12 +398,13 @@ export const sessionFeedbackRouter = router({
   }),
 
   /**
-   * Keep (§10.3): clears `flaggedAt`, the comment stays visible to speakers.
-   * Guarded like {@link adminHide}, and on the response's revision as the
-   * page showed it: after a new flag, a reworded comment or any other change
-   * since, nothing is written and the answer says where the comment stands
-   * now (read through the doc endpoint), never a flag cleared on something
-   * nobody looked at.
+   * Keep (§10.3): clears `flaggedAt`, the comment stays visible to speakers,
+   * and records who kept it and when (Content judgement spec §8.2), which
+   * ends Jev's advice on it. Guarded like {@link adminHide}, and on the
+   * response's revision as the page showed it: after a new flag, a reworded
+   * comment or any other change since, nothing is written and the answer
+   * says where the comment stands now (read through the doc endpoint), never
+   * a flag cleared on something nobody looked at.
    */
   adminKeep: adminProcedure
     .input(
@@ -392,11 +413,14 @@ export const sessionFeedbackRouter = router({
         rev: z.string().min(1).max(64),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const result = await keepResponse({
         conferenceId: await resolveConferenceId(),
         responseId: input.responseId,
         seenRev: input.rev,
+        keptBy: ctx.speaker._id,
+        now: new Date(),
+        tally: await judgementOn(ctx.orgId),
       })
       if (result.status === 'refused') throw responseNotFound()
       const answer: KeepAnswer =

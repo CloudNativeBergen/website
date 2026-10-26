@@ -66,6 +66,8 @@ const comment = (
   hidden: false,
   flagged: false,
   rev: `rev-${n}`,
+  judgement: null,
+  kept: null,
   ...fields,
 })
 
@@ -97,6 +99,7 @@ const FEEDBACK: AdminTalkFeedback = {
     closesAt: '2026-10-28T08:40:00.000Z',
     feedbackVisible: true,
   },
+  triage: null,
 }
 
 /** After the window closed: the chart spans all 24 h 40 min of it. */
@@ -289,6 +292,7 @@ export const CardCountsOnly: Story = {
       comments: [],
       responses: [],
       window: { state: 'closed', feedbackVisible: true },
+      triage: null,
     },
   },
 }

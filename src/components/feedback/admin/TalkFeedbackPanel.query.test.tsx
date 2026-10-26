@@ -36,6 +36,7 @@ const bRevert = (): AdminTalkFeedback => ({
   comments: [],
   responses: [],
   window: { state: 'closed', feedbackVisible: true },
+  triage: null,
 })
 
 afterEach(cleanup)

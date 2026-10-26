@@ -42,6 +42,8 @@ const X: AdminFeedbackComment = {
   hidden: false,
   flagged: true,
   rev: 'r1',
+  judgement: null,
+  kept: null,
 }
 const overview = (
   ...comments: AdminFeedbackComment[]

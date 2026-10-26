@@ -41,6 +41,8 @@ const OVERVIEW: AdminFeedbackOverview = {
           hidden: false,
           flagged: false,
           rev: 'rev-1',
+          judgement: null,
+          kept: null,
         },
       ],
     },

@@ -27,6 +27,8 @@ const comment = (
   hidden: false,
   flagged: false,
   rev: `rev-${n}`,
+  judgement: null,
+  kept: null,
   ...fields,
 })
 

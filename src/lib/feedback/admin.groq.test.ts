@@ -311,6 +311,9 @@ describe('readAdminFeedback — what is read', () => {
         flagged: false,
         // What Keep sends back (§10.3).
         rev: 'rev-r1',
+        // The overview carries no Jev advice (Content judgement spec §8.2).
+        judgement: null,
+        kept: null,
       },
       expect.objectContaining({ id: rid(2), hidden: true, flagged: false }),
       expect.objectContaining({ id: rid(4), hidden: false, flagged: true }),

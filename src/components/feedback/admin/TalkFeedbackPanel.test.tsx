@@ -34,6 +34,7 @@ const feedback = (
   comments: [],
   responses: [],
   window: { state: 'closed', feedbackVisible: true },
+  triage: null,
 })
 
 /** One read object, as React Query hands the same one back. */
@@ -442,6 +443,8 @@ describe('TalkFeedbackPanel comments', () => {
     hidden: false,
     flagged: false,
     rev: 'rev-1',
+    judgement: null,
+    kept: null,
   }
 
   it('forgets a Hide’s note once a range Remove takes that comment away', async () => {
