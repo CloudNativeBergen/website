@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/content-judgement-sweep",
+      "schedule": "50 4 * * *"
+    },
+    {
       "path": "/api/cron/weekly-update",
       "schedule": "0 9 * * 1"
     },
