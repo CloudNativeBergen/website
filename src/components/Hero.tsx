@@ -6,6 +6,7 @@ import { Button } from '@/components/Button'
 import { CollapsibleDescription } from '@/components/CollapsibleDescription'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { Container } from '@/components/Container'
+import { DismissibleBanner } from '@/components/DismissibleBanner'
 import { iconForLink } from '@/components/SocialIcons'
 import { TypewriterEffect } from '@/components/TypewriterEffect'
 import {
@@ -288,7 +289,10 @@ export function HeroAnnouncement({ conference }: { conference: Conference }) {
     return null
 
   return (
-    <div className="mb-8 rounded-lg border border-accent-yellow bg-brand-sunbeam-yellow/20 p-6 shadow-sm dark:border-brand-sunbeam-yellow dark:bg-brand-sunbeam-yellow/20 dark:shadow-md">
+    <DismissibleBanner
+      version={announcementVersion(conference.announcement)}
+      className="mb-8 rounded-lg border border-accent-yellow bg-brand-sunbeam-yellow/20 p-6 pr-12 shadow-sm dark:border-brand-sunbeam-yellow dark:bg-brand-sunbeam-yellow/20 dark:shadow-md"
+    >
       <div className="flex items-center">
         <div className="font-space-grotesk text-brand-slate-gray dark:text-white">
           <PortableText
@@ -343,8 +347,17 @@ export function HeroAnnouncement({ conference }: { conference: Conference }) {
           />
         </div>
       </div>
-    </div>
+    </DismissibleBanner>
   )
+}
+
+/** A short fingerprint of the announcement, so a closed banner reopens when it changes. */
+function announcementVersion(announcement: TypedObject[]): string {
+  const text = JSON.stringify(announcement)
+  let hash = 5381
+  for (let i = 0; i < text.length; i++)
+    hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0
+  return (hash >>> 0).toString(36)
 }
 
 /**
