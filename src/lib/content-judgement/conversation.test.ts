@@ -710,8 +710,10 @@ describe('never-fail on both person write paths', () => {
         const execute = h.fetch.getMockImplementation()!
         h.fetch.mockImplementation(
           (query: string, params: Record<string, unknown>) => {
+            // The setting read sends only the organization id, so its
+            // error (logged by J1's settings.ts) cannot quote the message.
             if (query.includes('contentJudgement.enabled'))
-              throw new Error(BODY)
+              throw new Error('Sanity unavailable')
             return execute(query, params)
           },
         )
