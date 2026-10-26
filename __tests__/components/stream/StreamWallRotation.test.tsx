@@ -6,11 +6,18 @@
  * answering, and fake timers for the clock.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import { inScreenMode, markScreenMode } from '@/components/pwa/screen-update'
 import type { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
-import type { ScreenView } from '@/lib/photo-wall/screen'
+import type { ScreenPost, ScreenView } from '@/lib/photo-wall/screen'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import { ROOM_TURN_MS, WALL_TURN_MS } from '@/lib/stream/wall-rotation'
 
@@ -78,6 +85,24 @@ const view = (fields: Partial<ScreenView> = {}): ScreenView => ({
   posts: [],
   ...fields,
 })
+
+/** `count` approved posts, newest first. */
+const posts = (count: number): ScreenPost[] =>
+  Array.from({ length: count }, (_, i) => {
+    const n = count - i
+    return {
+      _id: `wallPost-${n}`,
+      src: `https://cdn.sanity.io/images/p/d/${n}-600x600.jpg`,
+      whole: {
+        src: `https://cdn.sanity.io/images/p/d/${n}.jpg`,
+        width: 1600,
+        height: 1000,
+      },
+      caption: null,
+      name: null,
+      approvedAt: new Date(Date.UTC(2026, 9, 27, 7, n)).toISOString(),
+    }
+  })
 
 const logo = `<svg viewBox="0 0 100 40" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="40"/></svg>`
 const sponsor = (_id: string, name: string): ConferenceSponsor => ({
@@ -217,6 +242,23 @@ describe('StreamWallRotation', () => {
     h.answer.mockReturnValue(view())
     await advance(6_000)
     expect(wallShown()).toBe(true)
+  })
+
+  it('shows the whole wall at once when it comes in after a closed start, not as a queue of new arrivals', async () => {
+    mount(view({ closed: true }))
+    h.answer.mockReturnValue(view({ posts: posts(8) }))
+    await advance(6_000)
+    act(() => {
+      for (const img of document.querySelectorAll('img[data-preload]')) {
+        fireEvent.load(img)
+      }
+    })
+    await advance(100)
+    const cards = screen.getAllByTestId('wall-card')
+    expect(cards.map((card) => card.getAttribute('data-post'))).toEqual(
+      posts(8).map((post) => post._id),
+    )
+    expect(cards.filter((card) => card.hasAttribute('data-new'))).toEqual([])
   })
 
   it('stays off a gone wall through a later poll that failed for another reason', async () => {

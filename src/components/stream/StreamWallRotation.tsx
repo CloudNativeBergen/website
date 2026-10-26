@@ -137,16 +137,21 @@ export function StreamWallRotation({
         )}
         style={{ transitionDuration: `${CROSSFADE_MS}ms` }}
       >
-        <WallBoundary
-          retryKey={poll.dataUpdatedAt}
-          onError={() => setFailedAt(poll.dataUpdatedAt)}
-        >
-          <ScreenBoard
-            poll={poll}
-            conference={{ ...wall.conference, trackSponsor }}
-            look={wall.look}
-          />
-        </WallBoundary>
+        {/* Only an open wall has a board: one that opens (or is made, or is
+            read at last) starts afresh from that answer, with nothing in it
+            taken for a new arrival. */}
+        {poll.data?.closed === false && (
+          <WallBoundary
+            retryKey={poll.dataUpdatedAt}
+            onError={() => setFailedAt(poll.dataUpdatedAt)}
+          >
+            <ScreenBoard
+              poll={poll}
+              conference={{ ...wall.conference, trackSponsor }}
+              look={wall.look}
+            />
+          </WallBoundary>
+        )}
       </div>
     </>
   )
