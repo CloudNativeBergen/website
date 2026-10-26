@@ -81,10 +81,20 @@ export function StreamWallRotation({
   children: ReactNode
 }) {
   const poll = useLiveScreenPoll(wall.initial)
+  // Each time the wall opens (or is made, or is read at last, after a closed
+  // start) its board starts afresh from that answer, with nothing in it
+  // taken for a new arrival. A board that closes stays, saying so, through
+  // the fade.
+  const open = poll.data?.closed === false
+  const [wasOpen, setWasOpen] = useState(open)
+  const [openings, setOpenings] = useState(0)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setOpenings(openings + 1)
+  }
   // The answer the wall failed to render: no turns until the next one.
   const [failedAt, setFailedAt] = useState<number | null>(null)
-  const wallOpen =
-    failedAt !== poll.dataUpdatedAt && !poll.gone && poll.data?.closed === false
+  const wallOpen = failedAt !== poll.dataUpdatedAt && !poll.gone && open
 
   // The tick reads the latest poll, not the one it was set up with.
   const wallOpenRef = useRef(wallOpen)
@@ -137,21 +147,17 @@ export function StreamWallRotation({
         )}
         style={{ transitionDuration: `${CROSSFADE_MS}ms` }}
       >
-        {/* Only an open wall has a board: one that opens (or is made, or is
-            read at last) starts afresh from that answer, with nothing in it
-            taken for a new arrival. */}
-        {poll.data?.closed === false && (
-          <WallBoundary
-            retryKey={poll.dataUpdatedAt}
-            onError={() => setFailedAt(poll.dataUpdatedAt)}
-          >
-            <ScreenBoard
-              poll={poll}
-              conference={{ ...wall.conference, trackSponsor }}
-              look={wall.look}
-            />
-          </WallBoundary>
-        )}
+        <WallBoundary
+          retryKey={poll.dataUpdatedAt}
+          onError={() => setFailedAt(poll.dataUpdatedAt)}
+        >
+          <ScreenBoard
+            key={openings}
+            poll={poll}
+            conference={{ ...wall.conference, trackSponsor }}
+            look={wall.look}
+          />
+        </WallBoundary>
       </div>
     </>
   )

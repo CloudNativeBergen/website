@@ -222,6 +222,12 @@ describe('StreamWallRotation', () => {
     h.answer.mockReturnValue(view({ closed: true }))
     await advance(6_000)
     expect(wallShown()).toBe(false)
+    // Fading out, the wall still has its board: it says it closed.
+    expect(
+      within(screen.getByTestId('stream-wall')).getByText(
+        'This wall has closed.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('skips the wall once a poll says it is gone, and takes it back when it returns', async () => {
