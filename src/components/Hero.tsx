@@ -283,7 +283,7 @@ function ActionButtons({
  * Extracted verbatim from the pre-variant hero — same element tree, same
  * classes — so `classic` keeps rendering byte-identically.
  */
-function HeroAnnouncement({ conference }: { conference: Conference }) {
+export function HeroAnnouncement({ conference }: { conference: Conference }) {
   if (!conference.announcement || isPortableTextEmpty(conference.announcement))
     return null
 
