@@ -532,12 +532,13 @@ export const SessionFeedbackChips: Story = {
     expect(
       canvas.getByRole('link', { name: /82% loved it · 57 responses/ }),
     ).toHaveAttribute('href', '/cfp/proposal/talk-1#session-feedback')
-    expect(canvas.getByRole('link', { name: 'Feedback Code' })).toHaveAttribute(
-      'href',
-      '/cfp/proposal/talk-2#session-feedback',
-    )
+    expect(
+      canvas.getByRole('link', { name: 'Show feedback QR code' }),
+    ).toHaveAttribute('href', '/cfp/proposal/talk-2#session-feedback')
     // A talk with no chip shows none.
-    expect(canvas.getAllByText(/Feedback Code|loved it/)).toHaveLength(2)
+    expect(canvas.getAllByText(/Show feedback QR code|loved it/)).toHaveLength(
+      2,
+    )
   },
 }
 

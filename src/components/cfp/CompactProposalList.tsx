@@ -77,10 +77,11 @@ function FeedbackChipBadge({
   const { className, Icon, text, srSuffix } =
     chip.kind === 'code'
       ? {
+          // A button-like look: speakers missed the grey chip on the day.
           className:
-            'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
+            'bg-brand-cloud-blue text-white shadow-sm hover:bg-brand-cloud-blue/90 dark:bg-blue-600 dark:hover:bg-blue-500',
           Icon: QrCodeIcon,
-          text: 'Feedback Code',
+          text: 'Show feedback QR code',
           srSuffix: '',
         }
       : {
