@@ -259,17 +259,12 @@ describe('one orphan sweep after the existing real deletion paths', () => {
 
 describe('a selected judgement replaced before the sweep commits', () => {
   it.each([
-    ['conference pass', 'conf-A', 'conf-A'],
-    ['conference pass re-scoped to B', 'conf-A', 'conf-B'],
-    ['missing-conference pass', 'conf-gone', 'conf-A'],
-    ['missing-conference pass re-scoped to B', 'conf-gone', 'conf-B'],
+    ['in its own conference', 'conf-A'],
+    ['re-scoped to another conference', 'conf-B'],
   ])(
-    '%s preserves the newer judgement under its revision guard',
-    async (_, selectedConference, replacementConference) => {
-      const selected = {
-        ...judgement('judgement-race', 'content-gone', 'wallPost'),
-        conference: ref(selectedConference),
-      }
+    'preserves the newer judgement %s under its revision guard',
+    async (_, replacementConference) => {
+      const selected = judgement('judgement-race', 'content-gone', 'wallPost')
       seed([conference('conf-B'), selected])
       const replacementContent = {
         ...content('wallPost-new', 'wallPost', { status: 'approved' }),
@@ -285,10 +280,14 @@ describe('a selected judgement replaced before the sweep commits', () => {
         store().put(replacementContent)
         store().put(replacement)
       })
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      await expect(sweepOrphanJudgements({ now: NOW })).rejects.toMatchObject({
-        statusCode: 409,
+      // Conference A's pass fails on the guard; the run goes on.
+      expect(await sweepOrphanJudgements({ now: NOW })).toMatchObject({
+        deleted: 0,
+        failed: 1,
       })
+      expect(String(logged.mock.calls[0]?.[1])).toContain('revision mismatch')
       expect(store().doc(selected._id)).toEqual(replacement)
       expect(store().doc(replacementContent._id)).toEqual(replacementContent)
       expect(store().doc(survivorJudgement._id)).toEqual(survivorJudgement)

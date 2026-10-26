@@ -13,13 +13,13 @@ const JUDGED_CONFERENCE_IDS = `*[_type == "contentJudgement"].conference._ref`
 // ones with judgement off since; one read on a day with nothing stored.
 const CONFERENCES = `*[_type == "conference" && _id in ${JUDGED_CONFERENCE_IDS}]{_id, "organizationId": organization._ref}`
 const ORPHANS = `*[_type == "contentJudgement" && conference._ref == $conferenceId && !defined(content->_id)] | order(_id)[0...100]{_id, _rev}`
-// groq-global: a judgement whose conference is gone cannot be reached by the
-// conference-scoped pass. Only missing conferences qualify, regardless of content.
-const MISSING_CONFERENCES = `*[_type == "contentJudgement" && !defined(conference->_id)] | order(_id)[0...100]{_id, _rev, "conferenceId": conference._ref}`
 
 export interface SweepReport {
+  /** Conferences swept to the end. */
   conferences: number
   deleted: number
+  /** Conferences whose pass failed; the next run tries them again. */
+  failed: number
   timedOut: boolean
 }
 
@@ -31,7 +31,12 @@ export async function sweepOrphanJudgements({
   now: Date
   deadline?: Date
 }): Promise<SweepReport> {
-  const report: SweepReport = { conferences: 0, deleted: 0, timedOut: false }
+  const report: SweepReport = {
+    conferences: 0,
+    deleted: 0,
+    failed: 0,
+    timedOut: false,
+  }
   const hasTime = (budget: number) => {
     if (Date.now() + budget > deadline.getTime()) report.timedOut = true
     return !report.timedOut
@@ -45,20 +50,25 @@ export async function sweepOrphanJudgements({
     { _id: string; organizationId: string | null }[]
   >(CONFERENCES, {}, { cache: 'no-store', ...requestOptions() })
 
-  const sweep = async (
-    query: string,
-    params: { conferenceId?: string },
-    organizationId?: string | null,
-  ) => {
+  // The conference's `contentJudgement.conference` reference is strong, so a
+  // conference can't be deleted while a Judgement points at it: every
+  // Judgement is reachable conference by conference.
+  const sweep = async ({
+    _id: conferenceId,
+    organizationId,
+  }: {
+    _id: string
+    organizationId: string | null
+  }) => {
     while (hasTime(BATCH_BUDGET_MS)) {
       const rows = await clientReadUncached.fetch<
-        { _id: string; _rev: string; conferenceId?: string }[]
-      >(query, params, { cache: 'no-store', ...requestOptions() })
+        { _id: string; _rev: string }[]
+      >(ORPHANS, { conferenceId }, { cache: 'no-store', ...requestOptions() })
       if (rows.length === 0) return
       if (!hasTime(REQUEST_TIMEOUT_MS)) return
       const tx = clientWrite.transaction()
       for (const row of rows) {
-        // A deterministic id may have been replaced or moved since selection.
+        // A deterministic id may have been replaced since selection.
         tx.patch(row._id, (p) =>
           p.ifRevisionId(row._rev).unset(['_revision_lock_pseudo_field_']),
         ).delete(row._id)
@@ -66,11 +76,7 @@ export async function sweepOrphanJudgements({
       // Synchronous visibility keeps the next page from selecting deleted ids.
       await tx.commit({ visibility: 'sync', ...requestOptions() })
       report.deleted += rows.length
-      for (const id of new Set(
-        rows.map((row) => params.conferenceId ?? row.conferenceId),
-      )) {
-        if (id) revalidateTag(conferenceTag(id), { expire: 0 })
-      }
+      revalidateTag(conferenceTag(conferenceId), { expire: 0 })
       // Disclosure is organization-wide: another edition may hold its last page.
       if (organizationId) {
         revalidateTag(organizationTag(organizationId), { expire: 0 })
@@ -79,14 +85,20 @@ export async function sweepOrphanJudgements({
   }
 
   for (const conference of conferences) {
-    await sweep(
-      ORPHANS,
-      { conferenceId: conference._id },
-      conference.organizationId,
-    )
+    try {
+      await sweep(conference)
+    } catch (error) {
+      // One conference's refusal (a Judgement replaced since selection, an
+      // outage) must not leave every other conference's orphans for a day.
+      report.failed++
+      console.error(
+        `[content-judgement] sweep failed for conference ${conference._id}`,
+        error,
+      )
+      continue
+    }
     if (report.timedOut) return report
     report.conferences++
   }
-  await sweep(MISSING_CONFERENCES, {})
   return report
 }

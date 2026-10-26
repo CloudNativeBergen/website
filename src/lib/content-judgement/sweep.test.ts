@@ -74,6 +74,7 @@ it.each(['wallPost', 'feedbackResponse', 'conversation'])(
     expect(await sweep()).toEqual({
       conferences: 2,
       deleted: 1,
+      failed: 0,
       timedOut: false,
     })
     expect(storedIds()).toEqual(['b-live', 'survives'])
@@ -94,35 +95,26 @@ it('conference A never deletes B judgements in its pass', async () => {
       vi.setSystemTime(new Date(NOW.getTime() + 60_000))
     }
   })
-  expect(await sweep()).toEqual({ conferences: 0, deleted: 1, timedOut: true })
+  expect(await sweep()).toEqual({
+    conferences: 0,
+    deleted: 1,
+    failed: 0,
+    timedOut: true,
+  })
   expect(storedIds()).toEqual(['b-orphan'])
 })
 
-it('deletes judgements of missing conferences even when their content still exists', async () => {
+it('splits 205 orphans across 100/100/5 transactions', async () => {
   h.store!.reset([
     conference('a'),
-    { _id: 'live', _type: 'wallPost', conference: ref('a') },
-    judgement('survives', 'a', 'live'),
-    judgement('lost-conference', 'gone', 'live'),
+    ...Array.from({ length: 205 }, (_, i) => judgement(`j-${i}`)),
   ])
-  expect(await sweep()).toEqual({ conferences: 1, deleted: 1, timedOut: false })
-  expect(storedIds()).toEqual(['survives'])
+  expect((await sweep()).deleted).toBe(205)
+  expect(
+    h.store!.commits.map((tx) => tx.filter((m) => 'delete' in m).length),
+  ).toEqual([100, 100, 5])
+  expect(storedIds()).toEqual([])
 })
-
-it.each(['a', 'gone'])(
-  'splits 205 orphans for conference %s across 100/100/5 transactions',
-  async (id) => {
-    h.store!.reset([
-      conference('a'),
-      ...Array.from({ length: 205 }, (_, i) => judgement(`j-${i}`, id)),
-    ])
-    expect((await sweep()).deleted).toBe(205)
-    expect(
-      h.store!.commits.map((tx) => tx.filter((m) => 'delete' in m).length),
-    ).toEqual([100, 100, 5])
-    expect(storedIds()).toEqual([])
-  },
-)
 
 it('expires conference and organization privacy tags after the final judgement disappears', async () => {
   h.store!.reset([conference('a'), judgement('gone')])
@@ -136,9 +128,14 @@ it('expires conference and organization privacy tags after the final judgement d
 })
 
 it('visits no conference when no Judgement is stored', async () => {
-  expect(await sweep()).toEqual({ conferences: 0, deleted: 0, timedOut: false })
-  // Discovery, then the missing-conference pass: none per conference.
-  expect(h.fetch).toHaveBeenCalledTimes(2)
+  expect(await sweep()).toEqual({
+    conferences: 0,
+    deleted: 0,
+    failed: 0,
+    timedOut: false,
+  })
+  // Discovery only: nothing per conference.
+  expect(h.fetch).toHaveBeenCalledTimes(1)
 })
 
 it('does not invalidate privacy when nothing was deleted', async () => {
@@ -149,7 +146,12 @@ it('does not invalidate privacy when nothing was deleted', async () => {
     judgement('live', 'a', 'content-live'),
   ])
   // Only conference a holds a Judgement, so b is never visited.
-  expect(await sweep()).toEqual({ conferences: 1, deleted: 0, timedOut: false })
+  expect(await sweep()).toEqual({
+    conferences: 1,
+    deleted: 0,
+    failed: 0,
+    timedOut: false,
+  })
   expect(h.revalidateTag).toHaveBeenCalledTimes(0)
 })
 
@@ -160,7 +162,7 @@ it('stops before discovery when even one request cannot finish', async () => {
       now: NOW,
       deadline: new Date(NOW.getTime() + 4_999),
     }),
-  ).toEqual({ conferences: 0, deleted: 0, timedOut: true })
+  ).toEqual({ conferences: 0, deleted: 0, failed: 0, timedOut: true })
   expect(h.fetch).toHaveBeenCalledTimes(0)
   expect(storedIds()).toEqual(['gone'])
 })
@@ -172,7 +174,7 @@ it('stops before starting a batch without its full read and write budget', async
       now: NOW,
       deadline: new Date(NOW.getTime() + 9_999),
     }),
-  ).toEqual({ conferences: 0, deleted: 0, timedOut: true })
+  ).toEqual({ conferences: 0, deleted: 0, failed: 0, timedOut: true })
   expect(h.fetch).toHaveBeenCalledTimes(1)
   expect(storedIds()).toEqual(['gone'])
 })
@@ -185,14 +187,41 @@ it('rechecks the remaining write budget after a slow selection', async () => {
       vi.setSystemTime(new Date(NOW.getTime() + 56_000))
     return result
   })
-  expect(await sweep()).toEqual({ conferences: 0, deleted: 0, timedOut: true })
+  expect(await sweep()).toEqual({
+    conferences: 0,
+    deleted: 0,
+    failed: 0,
+    timedOut: true,
+  })
   expect(storedIds()).toEqual(['gone'])
 })
 
-it('reads fresh with bounded requests and propagates failed writes without deleting or invalidating', async () => {
+it('one conference failing leaves the next conference swept', async () => {
+  h.store!.reset([
+    conference('a'),
+    conference('b'),
+    judgement('a-orphan'),
+    judgement('b-orphan', 'b'),
+  ])
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  h.fetch.mockImplementation(async (...args) => {
+    if (args[1]?.conferenceId === 'a') throw new Error('read refused')
+    return h.store!.clients.clientReadUncached.fetch(...args)
+  })
+  expect(await sweep()).toEqual({
+    conferences: 1,
+    deleted: 1,
+    failed: 1,
+    timedOut: false,
+  })
+  expect(storedIds()).toEqual(['a-orphan'])
+})
+
+it('reads fresh with bounded requests; a failed write deletes and invalidates nothing', async () => {
   h.store!.reset([conference('a'), judgement('gone')])
   h.store!.failWrites()
-  await expect(sweep()).rejects.toThrow('write refused')
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  expect(await sweep()).toMatchObject({ deleted: 0, failed: 1 })
   expect(storedIds()).toEqual(['gone'])
   expect(h.revalidateTag).toHaveBeenCalledTimes(0)
   for (const [, , options] of h.fetch.mock.calls) {
