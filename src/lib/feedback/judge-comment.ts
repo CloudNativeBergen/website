@@ -25,7 +25,12 @@
  *    wording.
  *
  * An EMPTIED comment deletes the Judgement, the summary and the Keep mark,
- * with no call and whatever the setting says: the content is gone (§12).
+ * with no call and whatever the setting says: the content is gone (§12). So
+ * does a reworded comment while the setting is OFF: nothing is sent, but a
+ * Judgement about text that is no longer stored must not outlive it (§7.1)
+ * and come back as advice about the new text when the setting is turned on
+ * again. Both forgets are guarded like the write: only while the stored
+ * comment is still the one the task was started for.
  */
 import 'server-only'
 import {
@@ -73,7 +78,7 @@ interface ResponseDoc {
 /** The whole task; never throws. */
 export async function judgeComment(input: CommentJudgingInput): Promise<void> {
   try {
-    if (input.comment === null) await forgetJudgement(input.responseId)
+    if (input.comment === null) await forgetJudgement(input.responseId, null)
     else await judgeStoredComment(input, input.comment)
   } catch (error) {
     // Never the comment: the error may quote the request.
@@ -89,17 +94,23 @@ async function judgeStoredComment(
   comment: string,
 ): Promise<void> {
   const judge = await judgeForOrganization(input.orgId)
-  if (!judge) return
   const request = buildCommentRequest(comment)
   const hash = contentHash(request)
   const recordId = judgementId(input.responseId)
   const [response, existing] = await clientWrite.getDocuments<
-    ResponseDoc & { contentHash?: unknown }
+    ResponseDoc & { contentHash?: unknown; judgement?: unknown }
   >([input.responseId, recordId])
   // A newer comment (or none) is stored: not this task's to judge.
   if (!response || response.comment !== comment) return
   // Unchanged since it was judged: nothing to do.
   if (existing?.contentHash === hash) return
+  if (!judge) {
+    // Off: nothing is sent, but a Judgement or summary about the old
+    // wording is forgotten (§7.1).
+    if (existing || response.judgement !== undefined)
+      await forgetJudgement(input.responseId, comment)
+    return
+  }
 
   const outcome = await judge.judge(request)
   await writeJudgement(input, comment, request, outcome)
@@ -159,17 +170,38 @@ async function writeJudgement(
   }
 }
 
-/** An emptied comment: no content, so no Judgement, summary or Keep mark. */
-async function forgetJudgement(responseId: string): Promise<void> {
-  try {
-    await clientWrite
-      .transaction()
-      .delete(judgementId(responseId))
-      .patch(responseId, (p) => p.unset(['judgement', 'keptAt', 'keptBy']))
-      .commit()
-  } catch (error) {
-    // The response itself went (the device's Delete my answer) and rolled
-    // the delete back with it: the daily orphan sweep takes the record.
-    if (sanityStatus(error) !== 404) throw error
+/**
+ * Forget a Judgement: no record, summary or Keep mark. Only while the stored
+ * comment is still `expected` (`null`: emptied), under `ifRevisionId`, so a
+ * delayed task never wipes what a later comment's task wrote; a response
+ * that is gone keeps nothing to patch, and its record goes alone.
+ */
+async function forgetJudgement(
+  responseId: string,
+  expected: string | null,
+): Promise<void> {
+  const recordId = judgementId(responseId)
+  for (let attempt = 1; attempt <= WRITE_ATTEMPTS; attempt++) {
+    const current = await clientWrite.getDocument<ResponseDoc>(responseId)
+    if (!current?._rev) {
+      // Deleted by its device: the record is an orphan already.
+      await clientWrite.delete(recordId)
+      return
+    }
+    if ((current.comment ?? null) !== expected) return
+    try {
+      await clientWrite
+        .transaction()
+        .delete(recordId)
+        .patch(responseId, (p) =>
+          p
+            .ifRevisionId(current._rev!)
+            .unset(['judgement', 'keptAt', 'keptBy']),
+        )
+        .commit()
+      return
+    } catch (error) {
+      if (sanityStatus(error) !== 409 || attempt === WRITE_ATTEMPTS) throw error
+    }
   }
 }

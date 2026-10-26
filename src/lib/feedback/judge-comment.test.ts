@@ -295,6 +295,37 @@ describe('what triggers a judging (§6)', () => {
     expect(responses()[0].judgement).toBeUndefined()
   })
 
+  it('while off, a reworded comment loses the Judgement about its old text, with no call', async () => {
+    await tap('red', 'first wording')
+    await runTasks()
+    const [{ _id }] = responses()
+    store().put({
+      ...store().doc(_id)!,
+      keptAt: '2026-10-26T09:00:00.000Z',
+      keptBy: { _type: 'reference', _ref: 'sp-org', _weak: true },
+    })
+    store().put(organization(false))
+
+    await tap('red', 'second wording')
+    await runTasks()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(judgements()).toHaveLength(0)
+    const response = store().doc(_id)!
+    expect(response.judgement).toBeUndefined()
+    expect(response.keptAt).toBeUndefined()
+    // Unchanged text keeps its Judgement while off.
+    store().put(organization(true))
+    await tap('red', 'third wording')
+    await runTasks()
+    expect(judgements()).toHaveLength(1)
+    store().put(organization(false))
+    await tap('red', 'third wording')
+    await runTasks()
+    expect(judgements()).toHaveLength(1)
+    expect(store().doc(_id)!.judgement).toMatchObject({ state: 'judged' })
+  })
+
   it('sends nothing for a conference without an organization', async () => {
     await submitFeedback({
       conference: { ...CONF, organization: undefined },
@@ -438,6 +469,21 @@ describe('the stale-task guard: two quick edits', () => {
       reasons: [{ question: 'abusive', probability: 0.9 }],
     })
     expect(judgements()).toHaveLength(1)
+  })
+
+  it('a delayed emptied-comment task never wipes a newer comment’s Judgement', async () => {
+    await tap('red', 'first wording')
+    await runTasks()
+    await tap('red', '')
+    await tap('red', 'refilled')
+    const [emptyTask, refilledTask] = h.tasks.splice(0)
+    await refilledTask()
+    expect(judgements()).toHaveLength(1)
+    await emptyTask()
+    expect(judgements()).toHaveLength(1)
+    const [response] = responses()
+    expect(response.comment).toBe('refilled')
+    expect(response.judgement).toMatchObject({ state: 'judged' })
   })
 
   it('an unrelated change under the write (an organizer’s flag) is retried, not dropped', async () => {

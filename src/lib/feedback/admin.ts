@@ -467,9 +467,10 @@ export async function hideResponses({
 
 /**
  * Where a response stands NOW, read through the doc endpoint after a Keep
- * was refused: still flagged (changed: a new flag, new wording), no longer
- * flagged (another organizer kept it), hidden, or gone (removed, deleted by
- * its device, or its comment emptied).
+ * was refused: still flagged (changed: a new flag, new wording, or Jev's
+ * advice still open on it), no longer flagged (another organizer kept it,
+ * or nothing is left to look at), hidden, or gone (removed, deleted by its
+ * device, or its comment emptied).
  */
 export type KeepNow = 'flagged' | 'unflagged' | 'hidden' | 'gone'
 
@@ -507,7 +508,12 @@ async function keepNow(responseId: string): Promise<KeepNow> {
   )
     return 'gone'
   if (stored.hiddenAt) return 'hidden'
-  return stored.flaggedAt ? 'flagged' : 'unflagged'
+  if (stored.flaggedAt) return 'flagged'
+  // Another organizer's Keep ended the advice; open advice (Content
+  // judgement spec §8.2) still needs a look, as a flag does: never "already
+  // handled".
+  if (stored.keptAt) return 'unflagged'
+  return tallyable(stored.judgement) ? 'flagged' : 'unflagged'
 }
 
 /**

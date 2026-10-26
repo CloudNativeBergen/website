@@ -351,9 +351,39 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
       now: NOW,
       tally: true,
     })
-    expect(result).toEqual({ status: 'changed', now: 'unflagged' })
+    // Jev's advice is still open: "look at it again", never "already handled".
+    expect(result).toEqual({ status: 'changed', now: 'flagged' })
     expect(store().commits).toHaveLength(0)
     expect(tallies()).toEqual([])
+  })
+
+  it('a refused Keep on a comment another organizer kept since says it is handled', async () => {
+    const result = await keepResponse({
+      conferenceId: 'conf-A',
+      responseId: rid(R_KEPT),
+      seenRev: 'rev-stale',
+      keptBy: 'sp-org',
+      now: NOW,
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'changed', now: 'unflagged' })
+  })
+
+  it('a refused Keep on a comment Jev found nothing in, unflagged since, says it is handled', async () => {
+    store().put({
+      ...store().doc(rid(R_SPEAKER))!,
+      _rev: 'rev-reworded',
+      flaggedAt: undefined,
+    })
+    const result = await keepResponse({
+      conferenceId: 'conf-A',
+      responseId: rid(R_SPEAKER),
+      seenRev: `rev-${R_SPEAKER}`,
+      keptBy: 'sp-org',
+      now: NOW,
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'changed', now: 'unflagged' })
   })
 
   it('with the organization’s judgement off, Keep records the mark but counts nothing', async () => {
