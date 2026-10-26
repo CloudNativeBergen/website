@@ -35,6 +35,7 @@ vi.mock('@/server/runAfterResponse', () => ({
 
 import { JEV_ENDPOINT } from '@/lib/content-judgement/client'
 import { judgementId } from '@/lib/content-judgement/store'
+import { hideResponses } from './admin'
 import { submitFeedback } from './submit'
 
 const store = () => h.store!
@@ -260,6 +261,45 @@ describe('what triggers a judging (§6)', () => {
     })
     expect(response.keptAt).toBeUndefined()
     expect(response.keptBy).toBeUndefined()
+  })
+
+  it('a reword after a tallied Keep starts the tally over for the new Judgement', async () => {
+    await tap('red', 'first wording')
+    await runTasks()
+    const [{ _id }] = responses()
+    const first = store().doc(_id)!
+    store().put({
+      ...first,
+      judgement: {
+        ...(first.judgement as object),
+        talliedAt: '2026-10-26T09:00:00.000Z',
+      },
+      keptAt: '2026-10-26T09:00:00.000Z',
+      keptBy: { _type: 'reference', _ref: 'sp-org', _weak: true },
+    })
+    fetchMock.mockImplementation(async () => jevOk(answers(0.9)))
+    await tap('red', 'second wording')
+    await runTasks()
+    expect(
+      (store().doc(_id)!.judgement as { talliedAt?: string }).talliedAt,
+    ).toBeUndefined()
+
+    await hideResponses({
+      conferenceId: 'conf-A',
+      responseIds: [_id],
+      now: new Date(),
+      tally: true,
+    })
+    const tallies = store()
+      .all()
+      .filter((d) => d._type === 'judgementTally')
+    expect(tallies).toHaveLength(1)
+    expect(tallies[0]).toMatchObject({
+      question: 'abusive',
+      band: '0.9-1',
+      agreed: 1,
+      disagreed: 0,
+    })
   })
 
   it('an emptied comment deletes the Judgement and the summary, with no call', async () => {
