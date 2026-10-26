@@ -95,6 +95,8 @@ async function judgeStoredComment(
   input: CommentJudgingInput,
   comment: string,
 ): Promise<void> {
+  // No organization, no setting, nothing ever judged: not a read's worth.
+  if (!input.orgId) return
   const judge = await judgeForOrganization(input.orgId)
   const request = buildCommentRequest(comment)
   const hash = contentHash(request)
