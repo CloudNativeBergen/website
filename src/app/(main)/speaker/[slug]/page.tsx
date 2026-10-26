@@ -8,6 +8,7 @@ import { Topic } from '@/lib/topic/types'
 import * as social from '@/components/SocialIcons'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { BackLink } from '@/components/BackButton'
+import { BookmarkButton } from '@/components/BookmarkButton'
 import { ShowMore } from '@/components/ShowMore'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { speakerImageUrl } from '@/lib/sanity/client'
@@ -296,9 +297,32 @@ async function CachedSpeakerContent({
                       >
                         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
                           <div className="flex-1">
-                            <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-brand-slate-gray dark:text-white">
-                              {talk.title}
-                            </h3>
+                            <div className="mb-2 flex items-start justify-between gap-2">
+                              <h3 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
+                                {talk.title}
+                              </h3>
+                              {talk.scheduleInfo?.date &&
+                                talk.scheduleInfo?.timeSlot && (
+                                  <BookmarkButton
+                                    talk={{
+                                      talkId: talk._id,
+                                      title: talk.title,
+                                      startTime:
+                                        talk.scheduleInfo.timeSlot.startTime,
+                                      endTime:
+                                        talk.scheduleInfo.timeSlot.endTime,
+                                      scheduleDate: talk.scheduleInfo.date,
+                                      trackTitle:
+                                        talk.scheduleInfo.trackTitle || '',
+                                      speakers: talk.speakers
+                                        ?.map((s) =>
+                                          'name' in s ? s.name : '',
+                                        )
+                                        .filter(Boolean),
+                                    }}
+                                  />
+                                )}
+                            </div>
 
                             {talk.scheduleInfo?.date &&
                               talk.scheduleInfo?.timeSlot && (
