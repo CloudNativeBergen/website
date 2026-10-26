@@ -386,18 +386,22 @@ async function ownedResponses(
 /**
  * THE AGREEMENT TALLY (Content judgement spec §7.3), added to an action's
  * own transaction: a decision on a comment Jev flagged counts once, at the
- * first decision, for every flagged question in its band. `tally` is whether
- * the organization has judgement on: the advice was shown, so the decision
- * is an agreement or a disagreement with it; off, nothing counts. Returns
- * whether anything was added, so the caller marks the Judgement tallied.
+ * first decision, for every flagged question in its band. It counts ONLY
+ * WHERE THE ADVICE WAS SHOWN (§2: a decision that matches the flag): `tally`
+ * says the organization has judgement on, and `talkId` names the talk whose
+ * panel the action came from (the one list that shows the advice), which
+ * the row must belong to; `/admin/feedback` names no talk and counts
+ * nothing. Returns whether anything was added, so the caller marks the
+ * Judgement tallied.
  */
 function tallyDecision(
   tx: ReturnType<typeof clientWrite.transaction>,
   tally: boolean,
-  row: Pick<OwnedRow, 'judgement' | 'keptAt'>,
+  talkId: string | undefined,
+  row: Pick<OwnedRow, 'judgement' | 'keptAt' | 'talk'>,
   decision: 'agreed' | 'disagreed',
 ): boolean {
-  if (!tally) return false
+  if (!tally || !talkId || row.talk !== talkId) return false
   // A Keep ended the advice (§8.2), whether or not it was counted (one made
   // while the setting was off is not): no later decision is about it.
   if (row.keptAt) return false
@@ -481,11 +485,14 @@ export async function hideResponses({
   conferenceId,
   responseIds,
   now,
+  talkId,
   tally = false,
 }: {
   conferenceId: string
   responseIds: readonly string[]
   now: Date
+  /** The talk whose panel the Hide came from: where the advice is shown. */
+  talkId?: string
   /** Count agreements (§7.3): the organization has judgement on. */
   tally?: boolean
 }): Promise<ModerationResult> {
@@ -500,7 +507,7 @@ export async function hideResponses({
     const tx = clientWrite.transaction()
     let guarded = false
     for (const [id, row] of rows) {
-      const counted = tallyDecision(tx, tally, row, 'agreed')
+      const counted = tallyDecision(tx, tally, talkId, row, 'agreed')
       guarded ||= counted
       tx.patch(id, (p) => {
         const patch = counted ? p.ifRevisionId(row.rev) : p
@@ -603,6 +610,7 @@ export async function keepResponse({
   seenRev,
   keptBy,
   now,
+  talkId,
   tally = false,
 }: {
   conferenceId: string
@@ -611,7 +619,13 @@ export async function keepResponse({
   /** The organizer's speaker id: the Keep mark (Content judgement spec §8.2). */
   keptBy: string
   now: Date
-  /** Count a disagreement (§7.3): the organization has judgement on. */
+  /** The talk whose panel the Keep came from: where the advice is shown. */
+  talkId?: string
+  /**
+   * Count a disagreement (§7.3): the organization has judgement on AND the
+   * Keep came from the talk's panel. Also whether a refused Keep's answer
+   * may cite open advice: never on a page that shows none.
+   */
   tally?: boolean
 }): Promise<KeepResult> {
   const owned = await ownedResponses(conferenceId, [responseId])
@@ -624,7 +638,7 @@ export async function keepResponse({
   if (!row) return { status: 'changed', now: await keepNow(responseId, tally) }
   const at = now.toISOString()
   const tx = clientWrite.transaction()
-  const counted = tallyDecision(tx, tally, row, 'disagreed')
+  const counted = tallyDecision(tx, tally, talkId, row, 'disagreed')
   tx.patch(responseId, (p) =>
     p
       .ifRevisionId(seenRev)
@@ -822,8 +836,7 @@ export async function removeResponses({
           p.ifRevisionId(rev).unset(['_revision_lock_pseudo_field_']),
         )
         // The deleted response cannot be decided on again: no marker needed.
-        if (counting && entry.talk === talkId)
-          tallyDecision(tx, tally, entry, 'agreed')
+        if (counting) tallyDecision(tx, tally, talkId, entry, 'agreed')
         tx.delete(id)
       }
       try {

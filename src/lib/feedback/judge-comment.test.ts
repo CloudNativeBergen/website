@@ -318,6 +318,7 @@ describe('what triggers a judging (§6)', () => {
       conferenceId: 'conf-A',
       responseIds: [_id],
       now: new Date(),
+      talkId: 'talk-open',
       tally: true,
     })
     const tallies = store()

@@ -170,15 +170,18 @@ export function TalkFeedbackAdminPanel({
             rev: typeof talk?._rev === 'string' ? talk._rev : null,
           }
         }}
-        onHide={(id) => hide.mutateAsync({ responseIds: [id] })}
+        // Named as this talk's panel: the one list that shows Jev's advice,
+        // so Hide, Keep and a per-comment Remove here count a decision
+        // (Content judgement spec §7.3); /admin/feedback names no talk.
+        onHide={(id) => hide.mutateAsync({ responseIds: [id], talkId })}
         onUnhide={(id) => unhide.mutateAsync({ responseIds: [id] })}
-        onKeep={(c) => keep.mutateAsync({ responseId: c.id, rev: c.rev })}
+        onKeep={(c) =>
+          keep.mutateAsync({ responseId: c.id, rev: c.rev, talkId })
+        }
         headingRef={heading}
         onCardsExpired={readAgain}
         filter={filter}
         onFilterChange={setFilter}
-        // Named as this talk's panel: where Jev's advice is shown, so a
-        // per-comment Remove here counts an agreement (never a range).
         onRemove={(request) =>
           removeInRequests(request, (chunk) =>
             remove.mutateAsync({ ...chunk, talkId }),

@@ -314,6 +314,7 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
       seenRev: `rev-${R_UNSAFE}`,
       keptBy: 'sp-org',
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'kept' })
@@ -352,6 +353,7 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
       seenRev: `rev-${R_UNSAFE}`,
       keptBy: 'sp-org',
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'kept' })
@@ -372,6 +374,7 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
       seenRev: `rev-${R_SPEAKER}`,
       keptBy: 'sp-org',
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     const doc = store().doc(rid(R_SPEAKER))!
@@ -387,6 +390,7 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
       seenRev: 'rev-stale',
       keptBy: 'sp-org',
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     // Jev's advice is still open: "look at it again", never "already handled".
@@ -400,6 +404,7 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
       conferenceId: 'conf-A',
       responseIds: [rid(R_UNSAFE)],
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     await unhideResponses({
@@ -412,6 +417,7 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
       seenRev: 'rev-stale',
       keptBy: 'sp-org',
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'changed', now: 'flagged' })
@@ -436,6 +442,7 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
       seenRev: 'rev-stale',
       keptBy: 'sp-org',
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'changed', now: 'unflagged' })
@@ -453,10 +460,36 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
       seenRev: `rev-${R_SPEAKER}`,
       keptBy: 'sp-org',
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'changed', now: 'unflagged' })
   })
+
+  it.each([
+    ['without a talk (the overview page)', undefined],
+    ['naming another talk', 'talk-other'],
+  ])(
+    'a Keep %s records the mark and counts nothing: the advice was not shown there',
+    async (_name, talkId) => {
+      const result = await keepResponse({
+        conferenceId: 'conf-A',
+        responseId: rid(R_UNSAFE),
+        seenRev: `rev-${R_UNSAFE}`,
+        keptBy: 'sp-org',
+        now: NOW,
+        talkId,
+        tally: true,
+      })
+      expect(result).toEqual({ status: 'kept' })
+      expect(store().doc(rid(R_UNSAFE))!.keptAt).toBe(NOW.toISOString())
+      expect(
+        (store().doc(rid(R_UNSAFE))!.judgement as { talliedAt?: string })
+          .talliedAt,
+      ).toBeUndefined()
+      expect(tallies()).toEqual([])
+    },
+  )
 
   it('with the organization’s judgement off, Keep records the mark but counts nothing', async () => {
     await keepResponse({
@@ -478,6 +511,7 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
       conferenceId: 'conf-A',
       responseIds: [rid(R_UNSAFE), rid(R_SPEAKER), rid(R_UNCHECKED)],
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'ok', count: 3 })
@@ -501,12 +535,14 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
       seenRev: `rev-${R_UNSAFE}`,
       keptBy: 'sp-org',
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     await hideResponses({
       conferenceId: 'conf-A',
       responseIds: [rid(R_UNSAFE)],
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     await unhideResponses({
@@ -517,6 +553,7 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
       conferenceId: 'conf-A',
       responseIds: [rid(R_UNSAFE)],
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     await removeResponses({
@@ -539,6 +576,7 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
         conferenceId: 'conf-A',
         responseIds: [rid(R_UNSAFE)],
         now: NOW,
+        talkId: 'talk-1',
         tally: true,
       })
       await unhideResponses({
@@ -558,6 +596,7 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
       conferenceId: 'conf-A',
       responseIds: [rid(R_UNSAFE)],
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'ok', count: 1 })
@@ -583,6 +622,7 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
       conferenceId: 'conf-A',
       responseIds: [rid(R_UNSAFE)],
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'ok', count: 1 })
@@ -613,6 +653,7 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
       conferenceId: 'conf-A',
       responseIds: [rid(R_UNSAFE), rid(R_UNCHECKED)],
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'ok', count: 2 })
@@ -631,10 +672,34 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
       conferenceId: 'conf-A',
       responseIds: [rid(R_KEPT)],
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     expect(tallies()).toEqual([])
   })
+
+  it.each([
+    ['without a talk (the overview page)', undefined],
+    ['naming another talk', 'talk-other'],
+  ])(
+    'a Hide %s hides and counts nothing: the advice was not shown there',
+    async (_name, talkId) => {
+      const result = await hideResponses({
+        conferenceId: 'conf-A',
+        responseIds: [rid(R_UNSAFE)],
+        now: NOW,
+        talkId,
+        tally: true,
+      })
+      expect(result).toEqual({ status: 'ok', count: 1 })
+      expect(store().doc(rid(R_UNSAFE))!.hiddenAt).toBe(NOW.toISOString())
+      expect(
+        (store().doc(rid(R_UNSAFE))!.judgement as { talliedAt?: string })
+          .talliedAt,
+      ).toBeUndefined()
+      expect(tallies()).toEqual([])
+    },
+  )
 
   it('with the organization’s judgement off, Hide hides and counts nothing', async () => {
     await hideResponses({
@@ -661,6 +726,7 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
         from: '2026-10-27T08:00:00.000Z',
         to: '2026-10-27T09:00:00.000Z',
       },
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'ok', removed: 3, gone: 1, changed: 0 })
@@ -736,10 +802,10 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
     store().readsLagFor(rid(R_UNSAFE), beforeJudgement(R_UNSAFE))
     const result = await removeResponses({
       conferenceId: 'conf-A',
-      talkId: 'talk-1',
       responses: [
         { id: rid(R_UNSAFE), submittedAt: `2026-10-27T08:01:00.000Z` },
       ],
+      talkId: 'talk-1',
       tally: true,
     })
     expect(result).toEqual({ status: 'ok', removed: 1, gone: 0, changed: 0 })
@@ -781,12 +847,14 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
       seenRev: `rev-${R_UNSAFE}`,
       keptBy: 'sp-org',
       now: NOW,
+      talkId: 'talk-1',
       tally: true,
     })
     await hideResponses({
       conferenceId: 'conf-B',
       responseIds: [rid(R_FOREIGN)],
       now: NOW,
+      talkId: 'talk-B',
       tally: true,
     })
     expect(tallies()).toEqual([

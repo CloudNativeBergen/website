@@ -64,11 +64,20 @@ const rotateInput = talkInput.extend({
  */
 const RESPONSE_ID = /^feedbackResponse-[a-f0-9]{32}$/
 
+/**
+ * The talk whose panel an action came from (Content judgement spec §7.3):
+ * only there is Jev's advice shown, so only such an action, on that talk's
+ * own comments, counts an agreement or a disagreement. The overview page
+ * (`/admin/feedback`) sends none.
+ */
+const fromTalk = z.string().max(200).regex(TALK_ID).optional()
+
 const responsesInput = z.object({
   responseIds: z
     .array(z.string().regex(RESPONSE_ID))
     .min(1)
     .max(MAX_RESPONSES_PER_REQUEST),
+  talkId: fromTalk,
 })
 
 /**
@@ -88,13 +97,8 @@ const removeInput = z.object({
     .min(1)
     .max(MAX_RESPONSES_PER_REQUEST),
   range: z.object({ from: z.iso.datetime(), to: z.iso.datetime() }).optional(),
-  /**
-   * The talk whose panel the Remove came from (Content judgement spec §7.3):
-   * only there is Jev's advice shown, so only such a Remove, of that talk's
-   * own comments and not by range, counts an agreement. The overview page
-   * sends none.
-   */
-  talkId: z.string().max(200).regex(TALK_ID).optional(),
+  /** See {@link fromTalk}; a range never counts (the chart shows no advice). */
+  talkId: fromTalk,
 })
 
 /**
@@ -264,7 +268,8 @@ export const sessionFeedbackRouter = router({
         conferenceId: await resolveConferenceId(),
         responseIds: input.responseIds,
         now: new Date(),
-        tally: await judgementOn(ctx.orgId),
+        talkId: input.talkId,
+        tally: !!input.talkId && (await judgementOn(ctx.orgId)),
       })
       if (result.status === 'refused') throw responseNotFound()
       return { count: result.count }
@@ -300,7 +305,7 @@ export const sessionFeedbackRouter = router({
         responses: input.responses,
         range: input.range,
         talkId: input.talkId,
-        tally: await judgementOn(ctx.orgId),
+        tally: !!input.talkId && (await judgementOn(ctx.orgId)),
       })
       if (result.status === 'failed')
         throw new TRPCError({
@@ -419,6 +424,7 @@ export const sessionFeedbackRouter = router({
       z.object({
         responseId: z.string().regex(RESPONSE_ID),
         rev: z.string().min(1).max(64),
+        talkId: fromTalk,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -428,7 +434,8 @@ export const sessionFeedbackRouter = router({
         seenRev: input.rev,
         keptBy: ctx.speaker._id,
         now: new Date(),
-        tally: await judgementOn(ctx.orgId),
+        talkId: input.talkId,
+        tally: !!input.talkId && (await judgementOn(ctx.orgId)),
       })
       if (result.status === 'refused') throw responseNotFound()
       const answer: KeepAnswer =
