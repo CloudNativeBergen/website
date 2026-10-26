@@ -94,7 +94,7 @@ export const KEEP_REFUSED: Record<KeepNow, Note> = {
   },
   unflagged: {
     ok: true,
-    text: 'Already handled by another organizer: no longer flagged.',
+    text: 'Already handled: no longer flagged.',
   },
   hidden: {
     ok: true,

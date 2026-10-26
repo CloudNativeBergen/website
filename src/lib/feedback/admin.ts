@@ -38,6 +38,7 @@ import {
   type TalkCounts,
 } from './totals'
 import {
+  likelyUnsafe,
   matchesTriage,
   triageCounts,
   type CommentJudgement,
@@ -400,11 +401,14 @@ async function ownedResponses(
 function tallyDecision(
   tx: ReturnType<typeof clientWrite.transaction>,
   tally: boolean,
-  judgement: unknown,
+  row: Pick<OwnedRow, 'judgement' | 'keptAt'>,
   decision: 'agreed' | 'disagreed',
 ): boolean {
   if (!tally) return false
-  const flagged = tallyable(judgement)
+  // A Keep ended the advice (§8.2), whether or not it was counted (one made
+  // while the setting was off is not): no later decision is about it.
+  if (row.keptAt) return false
+  const flagged = tallyable(row.judgement)
   if (!flagged) return false
   addTally(tx, 'feedbackComment', flagged, decision)
   return true
@@ -452,7 +456,7 @@ export async function hideResponses({
   const at = now.toISOString()
   const tx = clientWrite.transaction()
   for (const [id, row] of rows) {
-    const counted = tallyDecision(tx, tally, row.judgement, 'agreed')
+    const counted = tallyDecision(tx, tally, row, 'agreed')
     tx.patch(id, (p) =>
       p
         .set({
@@ -487,8 +491,15 @@ export type KeepResult =
 /** What the organizers' page learns from a Keep (`sessionFeedback.adminKeep`). */
 export type KeepAnswer = { kept: true } | { kept: false; now: KeepNow }
 
-/** A response's state through the doc endpoint (no GROQ lag), as {@link KeepNow}. */
-async function keepNow(responseId: string): Promise<KeepNow> {
+/**
+ * A response's state through the doc endpoint (no GROQ lag), as
+ * {@link KeepNow}. `judgementOn`: Jev's open advice counts as "still
+ * flagged" only while the page shows it (§5).
+ */
+async function keepNow(
+  responseId: string,
+  judgementOn: boolean,
+): Promise<KeepNow> {
   let stored: (ResponseRow & { _type?: string }) | undefined
   try {
     stored = await clientReadUncached.getDocument<
@@ -509,11 +520,13 @@ async function keepNow(responseId: string): Promise<KeepNow> {
     return 'gone'
   if (stored.hiddenAt) return 'hidden'
   if (stored.flaggedAt) return 'flagged'
-  // Another organizer's Keep ended the advice; open advice (Content
-  // judgement spec §8.2) still needs a look, as a flag does: never "already
-  // handled".
+  // Another organizer's Keep ended the advice; open advice, by the rule the
+  // page collapses a comment under (Content judgement spec §8.2), still
+  // needs a look, as a flag does: never "already handled".
   if (stored.keptAt) return 'unflagged'
-  return tallyable(stored.judgement) ? 'flagged' : 'unflagged'
+  return judgementOn && likelyUnsafe(commentJudgement(stored.judgement))
+    ? 'flagged'
+    : 'unflagged'
 }
 
 /**
@@ -547,12 +560,7 @@ export async function keepResponse({
   if (!rows) return { status: 'refused' }
   const at = now.toISOString()
   const tx = clientWrite.transaction()
-  const counted = tallyDecision(
-    tx,
-    tally,
-    rows.get(responseId)?.judgement,
-    'disagreed',
-  )
+  const counted = tallyDecision(tx, tally, rows.get(responseId)!, 'disagreed')
   tx.patch(responseId, (p) =>
     p
       .ifRevisionId(seenRev)
@@ -569,7 +577,7 @@ export async function keepResponse({
   } catch (error) {
     const status = sanityStatus(error)
     if (status === 409 || status === 404)
-      return { status: 'changed', now: await keepNow(responseId) }
+      return { status: 'changed', now: await keepNow(responseId, tally) }
     throw error
   }
 }
@@ -598,8 +606,9 @@ export async function unhideResponses({
 interface OwnedRow {
   rev: string
   submittedAt: unknown
-  /** The summary (§7.2), for the tally. */
+  /** The summary (§7.2) and the Keep mark, for the tally. */
   judgement: unknown
+  keptAt: unknown
 }
 
 async function ownedResponseRows(
@@ -613,19 +622,25 @@ async function ownedResponseRows(
         _rev: string
         submittedAt?: unknown
         judgement?: unknown
+        keptAt?: unknown
       }[]
     | null
   >(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "feedbackResponse" && _id in $ids && ${PUBLISHED_ONLY} && talk->conference._ref == $conferenceId && !(talk._ref in path("drafts.**")) && !(talk._ref in path("versions.**"))]{ _id, _rev, submittedAt, judgement }`,
+    `*[_type == "feedbackResponse" && _id in $ids && ${PUBLISHED_ONLY} && talk->conference._ref == $conferenceId && !(talk._ref in path("drafts.**")) && !(talk._ref in path("versions.**"))]{ _id, _rev, submittedAt, judgement, keptAt }`,
     { ids },
     { cache: 'no-store' },
   )
   return new Map(
     (rows ?? []).map((r) => [
       r._id,
-      { rev: r._rev, submittedAt: r.submittedAt, judgement: r.judgement },
+      {
+        rev: r._rev,
+        submittedAt: r.submittedAt,
+        judgement: r.judgement,
+        keptAt: r.keptAt,
+      },
     ]),
   )
 }
@@ -695,25 +710,37 @@ export async function removeResponses({
   }
   const found = await ownedResponseRows(conferenceId, [...seen.keys()])
   const out: RemoveResult = { status: 'ok', removed: 0, gone: 0, changed: 0 }
-  const plan: { id: string; rev: string; judgement: unknown }[] = []
+  const plan: {
+    id: string
+    rev: string
+    judgement: unknown
+    keptAt: unknown
+  }[] = []
   for (const [id, saw] of seen) {
     const now = found.get(id)
     if (!now) out.gone++
     else if ((now.submittedAt ?? null) !== saw || !inRange(now.submittedAt))
       out.changed++
-    else plan.push({ id, rev: now.rev, judgement: now.judgement })
+    else
+      plan.push({
+        id,
+        rev: now.rev,
+        judgement: now.judgement,
+        keptAt: now.keptAt,
+      })
   }
 
   for (let i = 0; i < plan.length; i += REMOVE_CHUNK_SIZE) {
     let chunk = plan.slice(i, i + REMOVE_CHUNK_SIZE)
     for (let replans = 0; chunk.length > 0; replans++) {
       const tx = clientWrite.transaction()
-      for (const { id, rev, judgement } of chunk) {
+      for (const entry of chunk) {
+        const { id, rev } = entry
         tx.patch(id, (p) =>
           p.ifRevisionId(rev).unset(['_revision_lock_pseudo_field_']),
         )
         // The deleted response cannot be decided on again: no marker needed.
-        tallyDecision(tx, tally, judgement, 'agreed')
+        tallyDecision(tx, tally, entry, 'agreed')
         tx.delete(id)
       }
       try {
@@ -734,15 +761,24 @@ export async function removeResponses({
       }
       // Re-read the chunk by id: drop what went or changed, keep the rest.
       // The ids travel in the URL: at most DOC_READ_CHUNK a request.
-      const revOf = new Map<string, { rev: string; judgement: unknown }>()
+      const revOf = new Map<
+        string,
+        { rev: string; judgement: unknown; keptAt: unknown }
+      >()
       try {
         for (let k = 0; k < chunk.length; k += DOC_READ_CHUNK) {
           const docs = await clientWrite.getDocuments<{
             _rev: string
             judgement?: unknown
+            keptAt?: unknown
           }>(chunk.slice(k, k + DOC_READ_CHUNK).map((c) => c.id))
           for (const d of docs)
-            if (d) revOf.set(d._id, { rev: d._rev, judgement: d.judgement })
+            if (d)
+              revOf.set(d._id, {
+                rev: d._rev,
+                judgement: d.judgement,
+                keptAt: d.keptAt,
+              })
         }
       } catch (error) {
         // What went before this chunk is still reported; nothing of this
@@ -755,7 +791,7 @@ export async function removeResponses({
         if (current === undefined) out.gone++
         else if (current.rev !== entry.rev) out.changed++
         return current?.rev === entry.rev
-          ? [{ ...entry, judgement: current.judgement }]
+          ? [{ ...entry, judgement: current.judgement, keptAt: current.keptAt }]
           : []
       })
     }

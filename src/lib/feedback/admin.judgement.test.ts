@@ -87,7 +87,7 @@ const R_SPEAKER = 2
 const R_UNCHECKED = 3
 /** Hidden by an organizer; Jev had flagged it. */
 const R_HIDDEN = 4
-/** Kept by Kari after Jev flagged personal details. */
+/** Kept by Kari after Jev flagged personal details (while the setting was off: never tallied). */
 const R_KEPT = 5
 /** Jev could not judge it: spend cap. */
 const R_FAILED = 6
@@ -144,9 +144,7 @@ beforeEach(() => {
       judgement: judged([['abusive', 0.91]]),
     }),
     response(R_KEPT, 'talk-1', 'conf-A', {
-      judgement: judged([['personal_info', 0.61]], {
-        talliedAt: '2026-10-27T09:50:00.000Z',
-      }),
+      judgement: judged([['personal_info', 0.61]]),
       keptAt: '2026-10-27T09:50:00.000Z',
       keptBy: { ...ref('sp-org'), _weak: true },
     }),
@@ -355,6 +353,40 @@ describe('Keep records who and when, and tallies a disagreement (§7.3, §8.2)',
     expect(result).toEqual({ status: 'changed', now: 'flagged' })
     expect(store().commits).toHaveLength(0)
     expect(tallies()).toEqual([])
+  })
+
+  it('a refused Keep on advice a Hide tallied and an Unhide reopened still says look again', async () => {
+    await hideResponses({
+      conferenceId: 'conf-A',
+      responseIds: [rid(R_UNSAFE)],
+      now: NOW,
+      tally: true,
+    })
+    await unhideResponses({
+      conferenceId: 'conf-A',
+      responseIds: [rid(R_UNSAFE)],
+    })
+    const result = await keepResponse({
+      conferenceId: 'conf-A',
+      responseId: rid(R_UNSAFE),
+      seenRev: 'rev-stale',
+      keptBy: 'sp-org',
+      now: NOW,
+      tally: true,
+    })
+    expect(result).toEqual({ status: 'changed', now: 'flagged' })
+  })
+
+  it('a refused Keep while the organization has judgement off never cites advice it does not show', async () => {
+    const result = await keepResponse({
+      conferenceId: 'conf-A',
+      responseId: rid(R_UNSAFE),
+      seenRev: 'rev-stale',
+      keptBy: 'sp-org',
+      now: NOW,
+      tally: false,
+    })
+    expect(result).toEqual({ status: 'changed', now: 'unflagged' })
   })
 
   it('a refused Keep on a comment another organizer kept since says it is handled', async () => {

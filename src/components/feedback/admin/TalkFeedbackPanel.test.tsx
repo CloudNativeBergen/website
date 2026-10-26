@@ -550,7 +550,7 @@ describe('TalkFeedbackPanel comments', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Keep' }))
     expect(
       await screen.findByText(
-        'Already handled by another organizer: no longer flagged.',
+        'Already handled: no longer flagged.',
         { selector: 'p:not([role])' },
       ),
     ).toBeTruthy()

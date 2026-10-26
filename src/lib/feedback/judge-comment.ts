@@ -9,7 +9,8 @@
  * What runs, for a new or changed non-empty comment:
  *
  * 1. `judgeForOrganization` reads the organization's setting LIVE; off, or no
- *    organization, means nothing is sent and nothing is written.
+ *    organization, means nothing is sent (only a stale Judgement or Keep
+ *    mark about old text is forgotten, below).
  * 2. One doc-endpoint read of the response and its Judgement. A response that
  *    already holds a NEWER comment (two quick edits: the later Submit's task
  *    will judge it) or none is left alone; a Judgement whose `contentHash`
@@ -73,6 +74,7 @@ interface ResponseDoc {
   _id: string
   _rev?: string
   comment?: unknown
+  keptAt?: unknown
 }
 
 /** The whole task; never throws. */
@@ -107,7 +109,11 @@ async function judgeStoredComment(
   if (!judge) {
     // Off: nothing is sent, but a Judgement or summary about the old
     // wording is forgotten (§7.1).
-    if (existing || response.judgement !== undefined)
+    if (
+      existing ||
+      response.judgement !== undefined ||
+      response.keptAt !== undefined
+    )
       await forgetJudgement(input.responseId, comment)
     return
   }
@@ -173,8 +179,9 @@ async function writeJudgement(
 /**
  * Forget a Judgement: no record, summary or Keep mark. Only while the stored
  * comment is still `expected` (`null`: emptied), under `ifRevisionId`, so a
- * delayed task never wipes what a later comment's task wrote; a response
- * that is gone keeps nothing to patch, and its record goes alone.
+ * delayed task never wipes what a later comment's task wrote. A response
+ * that is gone (its device's Delete my answer) is left alone: its record is
+ * an orphan for the daily sweep (§12, J2).
  */
 async function forgetJudgement(
   responseId: string,
@@ -183,12 +190,7 @@ async function forgetJudgement(
   const recordId = judgementId(responseId)
   for (let attempt = 1; attempt <= WRITE_ATTEMPTS; attempt++) {
     const current = await clientWrite.getDocument<ResponseDoc>(responseId)
-    if (!current?._rev) {
-      // Deleted by its device: the record is an orphan already.
-      await clientWrite.delete(recordId)
-      return
-    }
-    if ((current.comment ?? null) !== expected) return
+    if (!current?._rev || (current.comment ?? null) !== expected) return
     try {
       await clientWrite
         .transaction()

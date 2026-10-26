@@ -326,6 +326,25 @@ describe('what triggers a judging (§6)', () => {
     expect(store().doc(_id)!.judgement).toMatchObject({ state: 'judged' })
   })
 
+  it('while off, a reworded comment with a Keep mark and no Judgement loses the mark', async () => {
+    store().put(organization(false))
+    await tap('red', 'first wording')
+    await runTasks()
+    const [{ _id }] = responses()
+    store().put({
+      ...store().doc(_id)!,
+      keptAt: '2026-10-26T09:00:00.000Z',
+      keptBy: { _type: 'reference', _ref: 'sp-org', _weak: true },
+    })
+    await tap('red', 'second wording')
+    await runTasks()
+    expect(fetchMock).not.toHaveBeenCalled()
+    const response = store().doc(_id)!
+    expect(response.comment).toBe('second wording')
+    expect(response.keptAt).toBeUndefined()
+    expect(response.keptBy).toBeUndefined()
+  })
+
   it('sends nothing for a conference without an organization', async () => {
     await submitFeedback({
       conference: { ...CONF, organization: undefined },

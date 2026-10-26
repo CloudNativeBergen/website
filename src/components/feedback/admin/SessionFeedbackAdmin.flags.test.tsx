@@ -132,7 +132,7 @@ describe('Keep refused because the comment changed: said as the SERVER found it'
       'another organizer kept it',
       'unflagged',
       overview({ ...X, flagged: false, rev: 'r2' }),
-      'Already handled by another organizer: no longer flagged.',
+      'Already handled: no longer flagged.',
     ],
     [
       'another organizer hid it',
@@ -221,7 +221,7 @@ describe('Keep in a session row', () => {
     await waitFor(() =>
       expect(
         within(item).getByText(
-          'Already handled by another organizer: no longer flagged.',
+          'Already handled: no longer flagged.',
         ),
       ).toBeTruthy(),
     )
@@ -281,7 +281,7 @@ describe('the server’s word, when the re-read still shows the old flag', () =>
   // The overview read after the refused Keep lags: X still flagged, at r1.
   const stale = overview(X)
   for (const [now, said] of [
-    ['unflagged', 'Already handled by another organizer: no longer flagged.'],
+    ['unflagged', 'Already handled: no longer flagged.'],
     [
       'hidden',
       'Already handled by another organizer: now hidden from speakers.',

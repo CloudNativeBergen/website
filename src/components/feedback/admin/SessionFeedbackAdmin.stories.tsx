@@ -604,7 +604,7 @@ export const KeepAlreadyHandled: Story = {
     await waitFor(() =>
       expect(
         within(box).getByText(
-          'Already handled by another organizer: no longer flagged.',
+          'Already handled: no longer flagged.',
         ),
       ).toBeVisible(),
     )
