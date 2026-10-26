@@ -430,6 +430,25 @@ describe('Hide and Remove tally an agreement, once per comment (§7.3)', () => {
     ])
   })
 
+  it('Hide, Unhide, Hide counts once', async () => {
+    for (let i = 0; i < 2; i++) {
+      await hideResponses({
+        conferenceId: 'conf-A',
+        responseIds: [rid(R_UNSAFE)],
+        now: NOW,
+        tally: true,
+      })
+      await unhideResponses({
+        conferenceId: 'conf-A',
+        responseIds: [rid(R_UNSAFE)],
+      })
+    }
+    expect(tallies()).toEqual([
+      { question: 'abusive', band: '0.5-0.9', agreed: 1, disagreed: 0 },
+      { question: 'personal_info', band: '0.5-0.9', agreed: 1, disagreed: 0 },
+    ])
+  })
+
   it('an already-kept comment counts nothing when hidden', async () => {
     await hideResponses({
       conferenceId: 'conf-A',
