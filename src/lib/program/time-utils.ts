@@ -123,6 +123,19 @@ export function isScheduleInPast(
   )
 }
 
+// Collapse a finished day only while the event is still running; once every
+// day is over, show them all.
+export function isDayCollapsedByDefault(
+  scheduleDate: string,
+  allScheduleDates: string[],
+  currentTime: Date = getCurrentConferenceTime(),
+): boolean {
+  return (
+    isScheduleInPast(scheduleDate, currentTime) &&
+    allScheduleDates.some((date) => !isScheduleInPast(date, currentTime))
+  )
+}
+
 export function findCurrentTalkPosition(
   schedules: ConferenceSchedule[],
   currentTime: Date = getCurrentConferenceTime(),
