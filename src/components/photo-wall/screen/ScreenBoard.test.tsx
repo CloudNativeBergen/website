@@ -556,6 +556,50 @@ describe('sponsor strip, empty and closed (§9.2, §9.4)', () => {
     expect(screen.getByRole('img', { name: /QR code for/ })).toBeInTheDocument()
   })
 
+  describe("a sponsored room's track sponsor (room screen rotation)", () => {
+    const SOPRA: ConferenceSponsor = {
+      ...SPONSOR,
+      _sfcId: 'sfc-3',
+      sponsor: { ...SPONSOR.sponsor, _id: 'sponsor-3', name: 'Sopra Steria' },
+    }
+    const mountSponsored = (initial: ScreenView, look?: WallLook) => {
+      h.queryFn.mockResolvedValue(initial)
+      render(
+        <TRPCProvider>
+          <ScreenMode
+            initial={initial}
+            conference={{
+              ...conference([SPONSOR, SOPRA]),
+              trackSponsor: SOPRA,
+            }}
+            look={look}
+          />
+        </TRPCProvider>,
+      )
+    }
+
+    it.each([['pinboard'], ['mosaic'], ['spotlight']] as const)(
+      'the strip thanks the track sponsor alone, in %s',
+      async (look) => {
+        mountSponsored(view(posts(3), { sponsorStrip: true }), look)
+        await advance(0)
+        const strip = screen.getByRole('region', {
+          name: 'Track sponsored by',
+        })
+        expect(within(strip).getByText('Sopra Steria')).toBeInTheDocument()
+        expect(within(strip).queryByLabelText('Visit Acme website')).toBeNull()
+        expect(screen.queryByRole('marquee')).toBeNull()
+      },
+    )
+
+    it('still follows the Sponsor strip switch', async () => {
+      mountSponsored(view(posts(3), { sponsorStrip: false }))
+      await advance(0)
+      expect(screen.queryByTestId('screen-strip')).toBeNull()
+      expect(screen.queryByText('Sopra Steria')).toBeNull()
+    })
+  })
+
   it('a closed wall shows only that it closed', async () => {
     // A public sponsor and the switch on: only the closed state keeps the strip off.
     mount(view(posts(3), { sponsorStrip: true }), [SPONSOR])

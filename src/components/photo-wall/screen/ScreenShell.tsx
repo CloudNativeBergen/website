@@ -3,6 +3,7 @@
 import clsx from 'clsx'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
+import { SponsorLogo } from '@/components/SponsorLogo'
 import { SponsorBanner } from '@/components/stream/SponsorBanner'
 import { useFeedbackQrPng } from '@/components/feedback/useFeedbackQrPng'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
@@ -49,6 +50,11 @@ export interface ScreenConference {
   postUrl: string
   /** Loaded when the page rendered (§9.4); shown while the switch is on. */
   sponsors: ConferenceSponsor[]
+  /**
+   * On a sponsored room's stream screen, the track's sponsor: the strip
+   * thanks them alone, as the room view does.
+   */
+  trackSponsor?: ConferenceSponsor | null
 }
 
 /** An image the screen wants fetched before it shows it. */
@@ -273,6 +279,46 @@ function PreloadImage({
   )
 }
 
+/**
+ * The strip of a sponsored room: "Track sponsored by", the sponsor's logo
+ * and name, still. A sponsor with no bright logo gets its dark one on a
+ * white tile, as in the loop.
+ */
+function TrackSponsorStrip({
+  sponsor: { sponsor },
+}: {
+  sponsor: ConferenceSponsor
+}) {
+  return (
+    <section
+      aria-label="Track sponsored by"
+      className="flex size-full items-center justify-center gap-10 rounded-lg border-2 border-brand-cloud-blue/20 bg-gray-900/95 px-10 shadow-xl"
+    >
+      <p className="shrink-0 text-xl font-semibold tracking-widest text-gray-400 uppercase">
+        Track sponsored by
+      </p>
+      <div
+        className={clsx(
+          'shrink-0',
+          sponsor.logo &&
+            !sponsor.logoBright &&
+            'rounded-md bg-white px-3 py-2',
+        )}
+      >
+        <SponsorLogo
+          logo={sponsor.logo}
+          logoBright={sponsor.logoBright}
+          name={sponsor.name}
+          className="h-14 w-auto max-w-[420px] object-contain"
+        />
+      </div>
+      <p className="min-w-0 truncate text-3xl font-semibold text-white">
+        {sponsor.name}
+      </p>
+    </section>
+  )
+}
+
 /** Keeps the display awake where the browser allows it (§9.2). */
 function useWakeLock() {
   useEffect(() => {
@@ -332,7 +378,7 @@ function useHiddenCursor(): boolean {
  * pending images fetched off screen.
  */
 export function ScreenShell({
-  conference: { logo, postUrl, sponsors },
+  conference: { logo, postUrl, sponsors, trackSponsor },
   closed,
   offline,
   invitation,
@@ -429,7 +475,11 @@ export function ScreenShell({
               className="absolute inset-x-0 bottom-0 z-40 px-10 pb-6"
               style={{ height: STRIP_HEIGHT }}
             >
-              <SponsorBanner sponsors={sponsors} variant="strip" />
+              {trackSponsor ? (
+                <TrackSponsorStrip sponsor={trackSponsor} />
+              ) : (
+                <SponsorBanner sponsors={sponsors} variant="strip" />
+              )}
             </div>
           )}
 

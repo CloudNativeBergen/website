@@ -70,10 +70,13 @@ function Scripted({
   sponsors = [],
   look,
   logo = { title: 'Cloud Native Days Norway' },
+  trackSponsor,
 }: {
   initial: ScreenView
   script?: Step[]
   sponsors?: ConferenceSponsor[]
+  /** A sponsored room's track sponsor, on a room screen showing the wall. */
+  trackSponsor?: string
   /** The screen link's `?look=`. */
   look?: WallLook
   logo?: ConferenceLogoData
@@ -104,6 +107,9 @@ function Scripted({
         logo,
         postUrl: 'https://2026.cloudnativedays.no/wall/post',
         sponsors,
+        trackSponsor: trackSponsor
+          ? sponsors.find((s) => s.sponsor.name === trackSponsor)
+          : null,
       }}
       look={look}
     />
@@ -449,6 +455,51 @@ export const SpotlightSponsorStrip: Story = {
       () => expect(canvas.getByTestId('spotlight-hero')).toBeVisible(),
       { timeout: 5_000 },
     )
+  },
+}
+
+/**
+ * On a sponsored room's stream screen (`/stream/<room>?wall=1`), the wall's
+ * turn thanks the track sponsor alone: "Track sponsored by", the logo and
+ * the name, still, in place of the loop.
+ */
+export const TrackSponsorStrip: Story = {
+  args: { initial: view(posts(24), { sponsorStrip: true }) },
+  loaders: SponsorStrip.loaders,
+  render: (args, { loaded }) => (
+    <Scripted
+      {...args}
+      sponsors={loaded.sponsors as ConferenceSponsor[]}
+      trackSponsor="Sopra Steria"
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const strip = canvas.getByRole('region', { name: 'Track sponsored by' })
+    await expect(strip).toBeVisible()
+    await expect(within(strip).getByText('Sopra Steria')).toBeVisible()
+    await expect(canvas.queryByRole('marquee')).toBeNull()
+  },
+}
+
+/** A track sponsor with no bright logo: its dark logo on a white tile. */
+export const SpotlightTrackSponsorNoBrightLogo: Story = {
+  args: {
+    initial: view(posts(24), { look: 'spotlight', sponsorStrip: true }),
+  },
+  loaders: SponsorStrip.loaders,
+  render: (args, { loaded }) => (
+    <Scripted
+      {...args}
+      sponsors={loaded.sponsors as ConferenceSponsor[]}
+      trackSponsor="Bekk"
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('region', { name: 'Track sponsored by' }),
+    ).toBeVisible()
   },
 }
 

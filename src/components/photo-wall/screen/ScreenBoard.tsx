@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useReducer, useState } from 'react'
+import { TRPCClientError } from '@trpc/client'
 import { markScreenMode } from '@/components/pwa/screen-update'
 import type { ScreenView } from '@/lib/photo-wall/screen'
 import type { WallLook } from '@/lib/photo-wall/types'
@@ -115,6 +116,27 @@ export function ScreenBoard({
 }
 
 /**
+ * Screen Mode's poll, starting from the server's answer, every 5 s for as
+ * long as it is mounted (§8). Also the room screen's, which shows the wall
+ * in turns: `gone` while the last poll answered that the conference has no
+ * wall (the last answer it had stays in `data`), so a deleted wall stops
+ * taking turns.
+ */
+export function useLiveScreenPoll(
+  initial: ScreenView,
+): ScreenPoll & { gone: boolean } {
+  const { data, dataUpdatedAt, errorUpdatedAt, error } = useScreenPoll(initial)
+  // Latched until a real answer: a later poll the Wi-Fi swallows must not
+  // bring a deleted wall's last photos back.
+  const [goneAt, setGoneAt] = useState(0)
+  const notFound =
+    error instanceof TRPCClientError && error.data?.code === 'NOT_FOUND'
+  if (notFound && goneAt !== errorUpdatedAt) setGoneAt(errorUpdatedAt)
+  const gone = (notFound ? errorUpdatedAt : goneAt) > dataUpdatedAt
+  return { data, dataUpdatedAt, errorUpdatedAt, gone }
+}
+
+/**
  * `/wall/screen` (Photo Wall spec §9.2): starts from the server's answer and
  * polls `photoWallPublic.screen` every 5 s for as long as it is open (§8).
  */
@@ -128,18 +150,14 @@ export function ScreenMode({
   /** The screen link's `?look=`, overriding the wall's look. */
   look?: WallLook
 }) {
-  const { data, dataUpdatedAt, errorUpdatedAt } = useScreenPoll(initial)
+  const poll = useLiveScreenPoll(initial)
   // Tells the service worker registrar this is a venue screen, also when it
-  // was reached (or left) by a client-side navigation.
+  // was reached (or left) by a client-side navigation. Not the room screen
+  // showing the wall in turns: its page has none of this one's safety nets
+  // for a reload that lands on an error.
   useEffect(() => {
     markScreenMode(true)
     return () => markScreenMode(false)
   }, [])
-  return (
-    <ScreenBoard
-      poll={{ data, dataUpdatedAt, errorUpdatedAt }}
-      conference={conference}
-      look={look}
-    />
-  )
+  return <ScreenBoard poll={poll} conference={conference} look={look} />
 }
