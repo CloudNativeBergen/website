@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
+import type { ConferenceSchedule } from '@/lib/conference/types'
 import { objectPosition, type Crop } from '@/lib/photo-wall/crop'
 import {
   WallPostRefused,
@@ -47,6 +48,8 @@ export interface WallPosterProps extends MyPostsActions {
   deletesOn: string
   /** The `/wall/post` Server Action that sets the device cookie (§6.1). */
   ensureDevice: () => Promise<boolean>
+  /** The published schedule, for the Talk row (Talk photos spec §6.1). */
+  schedules?: ConferenceSchedule[]
   /** The submit; `postToWall` unless a story stands in for the server. */
   post?: (
     request: WallPostRequest,
@@ -82,7 +85,8 @@ const sameDraft = (a: WallPostDraft, b: WallPostDraft) =>
   a.name === b.name &&
   a.crop.x === b.crop.x &&
   a.crop.y === b.crop.y &&
-  a.marketingConsent === b.marketingConsent
+  a.marketingConsent === b.marketingConsent &&
+  a.talkId === b.talkId
 
 /**
  * `/wall/post` while posting is open (Photo Wall spec §6.5): the composer,
@@ -110,6 +114,7 @@ export function WallPoster({
   deleteMyPost,
   setMyPostMarketing,
   post = postToWall,
+  schedules,
 }: WallPosterProps) {
   const [device, setDevice] = useState<'pending' | 'ready' | 'failed'>(
     'pending',
@@ -255,6 +260,7 @@ export function WallPoster({
         onSubmit={submit}
         canPost={device !== 'pending'}
         uploadProgress={progress}
+        schedules={schedules}
         below={
           myPosts.length > 0 && (
             <MyPostsSection
