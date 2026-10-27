@@ -73,6 +73,13 @@ Decided by the user while this spec was written (2026-10-27):
   co-speaker opted out, marked as hidden from public pages (§7.3).
 - **Opt-out scope:** the opt-out hides talk galleries only (talk card, speaker
   pages). `/wall` and Screen Mode are unchanged (§7.4).
+- **Merge:** a speaker merge carries `talkPhotosOptOut` and its timestamp
+  (the earliest) to the survivor, like `socialTagOptOut`: an opt-out on either
+  record wins, and the merge expires the talk photo cache tags (§8).
+- **Erasure:** erasing a speaker keeps the opt-out. It is a protective
+  preference with no personal data, so erasure leaves it in place.
+- **Dashboard switch:** sits below **Photos of your talks**, so it appears
+  only when the speaker has tagged photos; the profile always shows it (§7.4).
 - **Closed wall:** closing the wall does not hide talk galleries. Tagged
   photos stay on talk and speaker pages until the 30-day deletion removes
   them.

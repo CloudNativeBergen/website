@@ -38,6 +38,10 @@ vi.mock('@/lib/trpc/client', () => ({
       update: {
         useMutation: () => ({ isPending: false, mutate: vi.fn() }),
       },
+      // The talk photos switch on the profile (talk photos spec §7.4).
+      setTalkPhotosOptOut: {
+        useMutation: () => ({ isPending: false, mutateAsync: vi.fn() }),
+      },
       setMessagingEmailDefault: {
         useMutation: () => ({
           isPending: false,

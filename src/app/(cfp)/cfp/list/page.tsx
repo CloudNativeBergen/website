@@ -71,6 +71,7 @@ export default async function SpeakerDashboard() {
     providers?: string[] | null
     image?: string | null
     title?: string | null
+    talkPhotosOptOut?: boolean | null
   } | null>(
     // groq-global-scoped: session-derived self-read — `$id` is the signed-in
     // speaker's OWN id from the session token, never client input; speakers are
@@ -78,6 +79,7 @@ export default async function SpeakerDashboard() {
     `*[_type == "speaker" && _id == $id][0]{
       providers,
       title,
+      talkPhotosOptOut,
       "image": coalesce(image.asset->url, imageURL)
     }`,
     { id: speakerId },
@@ -428,7 +430,10 @@ export default async function SpeakerDashboard() {
             <CompactConferenceCard
               key={conferenceData.conference._id}
               data={conferenceData}
-              speaker={speaker}
+              speaker={{
+                ...speaker,
+                talkPhotosOptOut: currentSpeaker?.talkPhotosOptOut === true,
+              }}
               defaultExpanded={true}
             />
           ))}

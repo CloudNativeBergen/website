@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { SpeakerDetailsForm } from '@/components/cfp/SpeakerDetailsForm'
+import { TalkPhotosOptOutSwitch } from '@/components/photo-wall/talk/TalkPhotosOptOutSwitch'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { Input, ErrorText } from '@/components/Form'
 import { SpeakerInput, Speaker } from '@/lib/speaker/types'
@@ -249,6 +250,22 @@ export function SpeakerManagementModal({
             // Only an explicit toggle puts the key into the payload.
             storedSocialTagOptOut={editingSpeaker?.socialTagOptOut}
           />
+
+          {/* Talk photos opt-out (talk photos spec §7.4): an organizer may set
+              it, never clear it. Untouched, the key stays out of the save. */}
+          {editingSpeaker && (
+            <div className="mt-6 border-t border-brand-frosted-steel pt-6 dark:border-gray-600">
+              <TalkPhotosOptOutSwitch
+                stored={editingSpeaker.talkPhotosOptOut}
+                onChange={(next) =>
+                  setSpeakerData((prev) => ({
+                    ...prev,
+                    talkPhotosOptOut: next,
+                  }))
+                }
+              />
+            </div>
+          )}
 
           {validationErrors.dataProcessing && (
             <ErrorText>{validationErrors.dataProcessing}</ErrorText>

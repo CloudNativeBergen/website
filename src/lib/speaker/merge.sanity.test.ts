@@ -80,6 +80,11 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
+const expireTalkPhotosMock = vi.fn()
+vi.mock('@/lib/photo-wall/cache', () => ({
+  expireSpeakerTalkPhotos: (id: string) => expireTalkPhotosMock(id),
+}))
+
 import {
   mergeSpeakers,
   MergeValidationError,
@@ -235,6 +240,36 @@ describe('mergeSpeakers (transaction wrapper)', () => {
     expect(deleteMock).toHaveBeenCalledWith(LOSER)
     expect(txOrder[txOrder.length - 1]).toBe('delete')
     expect(txOrder.slice(0, -1).every((op) => op === 'patch')).toBe(true)
+  })
+
+  it('carries a talk photos opt-out up and expires the talk photo tags', async () => {
+    fetchMock.mockImplementation((query: string, params = {}) =>
+      (params as { id?: string }).id === LOSER && query.includes('_id == $id')
+        ? Promise.resolve({ ...loserDoc, talkPhotosOptOut: true })
+        : routeFetch(query, params as Record<string, unknown>),
+    )
+    const { committed, err } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1', name: 'Admin' },
+      dryRun: false,
+    })
+    expect(err).toBeNull()
+    expect(committed).toBe(true)
+    expect(patchOps.find((p) => p.id === SURVIVOR)?.set).toMatchObject({
+      talkPhotosOptOut: true,
+    })
+    expect(expireTalkPhotosMock).toHaveBeenCalledWith(SURVIVOR)
+  })
+
+  it('expires no talk photo tags when neither side opted out', async () => {
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1', name: 'Admin' },
+      dryRun: false,
+    })
+    expect(expireTalkPhotosMock).not.toHaveBeenCalled()
   })
 
   it('REVISION-GUARDS the loser, so a concurrent opt-out cannot be deleted unread', async () => {

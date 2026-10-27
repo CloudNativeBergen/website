@@ -197,6 +197,16 @@ organizers.
   have it). It only unticks: organizers can't give consent on a contributor's
   behalf. The post leaves the marketing export and the contributor's switch
   shows it on its next poll. Copies already downloaded are not recalled.
+- **Speaker opt-out from talk photos:** a speaker can tick **Hide photos of
+  my talks from public pages** on their dashboard or profile; an organizer
+  can set it for them in the speaker editor, but never clear it. It hides
+  the photos tagged with the speaker's talks from the talk cards on the
+  program and from the pages of every speaker of those talks. It deletes
+  nothing: the photos stay on the wall and in Screen Mode, and for a photo a
+  speaker wants gone, use **Delete now** as above. Merging duplicate speaker
+  records keeps the opt-out if either record had it, and erasing a speaker
+  keeps it too: it holds no personal data and keeps their talks' photos
+  hidden.
 
 ---
 

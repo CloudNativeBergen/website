@@ -211,6 +211,7 @@ export const ERASURE_UNSET_FIELDS = [
   'messagingEmailDefault',
   'socialTagOptOut',
   'socialTagOptOutAt',
+  // `talkPhotosOptOut(At)` deliberately stays: a protective preference with no personal data.
   'mergedWith',
   'consent.dataProcessing.ipAddress',
 ] as const

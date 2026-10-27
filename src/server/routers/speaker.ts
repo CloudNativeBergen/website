@@ -50,6 +50,7 @@ import {
 } from '@/lib/profile/server'
 import { updateProfileEmail } from '@/lib/profile/sanity'
 import { SocialTagOptOutClearForbiddenError } from '@/lib/speaker/socialTag'
+import { expireSpeakerTalkPhotos } from '@/lib/photo-wall/cache'
 import { encode } from 'next-auth/jwt'
 
 const CLI_TOKEN_MAX_AGE = 30 * 24 * 60 * 60 // 30 days
@@ -536,6 +537,35 @@ export const speakerRouter = router({
     }),
 
   /**
+   * NARROW autosave for the talk photos opt-out (talk photos spec §7.4), the
+   * same shape and rules as `setSocialTagOptOut` above: SELF ONLY, one boolean
+   * on the caller's own document. Then expires the photos of every talk of
+   * theirs and the speaker pages (§8).
+   */
+  setTalkPhotosOptOut: protectedProcedure
+    .input(z.object({ talkPhotosOptOut: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const { speaker, err, committed } = await updateSpeaker(
+        ctx.speaker._id,
+        { talkPhotosOptOut: input.talkPhotosOptOut },
+        { actor: 'self' },
+      )
+      // As `setSocialTagOptOut`: only a failed write is a failure.
+      if (!committed) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update talk photos preference',
+          cause: err ?? undefined,
+        })
+      }
+      await expireSpeakerTalkPhotos(ctx.speaker._id)
+      return {
+        talkPhotosOptOut: input.talkPhotosOptOut,
+        talkPhotosOptOutAt: err ? null : (speaker?.talkPhotosOptOutAt ?? null),
+      }
+    }),
+
+  /**
    * How the caller gets to the speaker dinner (#1592). SELF ONLY, for the
    * current domain's conference, and only with a confirmed talk there. The
    * choice must be one the conference offers right now.
@@ -935,6 +965,12 @@ export const speakerRouter = router({
           const { speaker, err } = await updateSpeaker(input.id, input.data, {
             actor: 'organizer',
           })
+
+          // The organizer may only SET the talk photos opt-out (§7.4); a
+          // set that changed nothing expires harmlessly.
+          if (input.data.talkPhotosOptOut === true) {
+            await expireSpeakerTalkPhotos(input.id)
+          }
 
           if (err) {
             throw new TRPCError({
