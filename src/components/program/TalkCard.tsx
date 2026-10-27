@@ -29,6 +29,7 @@ import clsx from 'clsx'
 import { FEEDBACK_EMBED_PARAM } from '@/lib/feedback/url'
 import { FeedbackSheet, useFeedbackSheet } from './FeedbackSheet'
 import { speakerPath } from '@/lib/speaker/path'
+import { TalkPhotos } from '@/components/photo-wall/talk/TalkPhotos'
 
 interface PortableTextChild {
   _type: string
@@ -525,6 +526,9 @@ export function TalkCard({
                     </>
                   )}
                 </button>
+              )}
+              {isDescriptionExpanded && talkData._id && (
+                <TalkPhotos talkId={talkData._id} />
               )}
             </div>
           )}

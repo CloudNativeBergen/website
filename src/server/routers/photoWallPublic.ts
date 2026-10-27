@@ -1,8 +1,15 @@
 import { TRPCError } from '@trpc/server'
+import { z } from 'zod'
 import { publicProcedure, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { readScreenPage } from '@/lib/photo-wall/screen-page'
-import { readWallPage } from '@/lib/photo-wall/wall-page'
+import { getTalkPhotos } from '@/lib/photo-wall/cache'
+import {
+  TALK_CARD_PHOTO_LIMIT,
+  WALL_PAGE_WHOLE_PX,
+  type TalkPhotosView,
+} from '@/lib/photo-wall/wall'
+import { publicPost, readWallPage } from '@/lib/photo-wall/wall-page'
 
 /**
  * The public Photo Wall (spec §8, §9): what `/wall` polls every 10 s and
@@ -34,4 +41,23 @@ export const photoWallPublicRouter = router({
     if (!view) throw noWall()
     return view
   }),
+  /**
+   * A talk's photos for its program card (talk photos spec §7.1): the first
+   * {@link TALK_CARD_PHOTO_LIMIT} and the count, only through the cached
+   * `getTalkPhotos` (approved, no speaker opted out). A closed wall still
+   * answers (§3); no conference answers none.
+   */
+  talkPhotos: publicProcedure
+    .input(z.object({ talkId: z.string().min(1).max(128) }))
+    .query(async ({ input }): Promise<TalkPhotosView> => {
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (error || !conference?._id) return { posts: [], count: 0 }
+      const posts = await getTalkPhotos(conference._id, input.talkId)
+      return {
+        posts: posts
+          .slice(0, TALK_CARD_PHOTO_LIMIT)
+          .map((p) => publicPost(p, WALL_PAGE_WHOLE_PX)),
+        count: posts.length,
+      }
+    }),
 })
