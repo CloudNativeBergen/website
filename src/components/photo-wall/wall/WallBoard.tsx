@@ -228,6 +228,19 @@ export function WallBoardView({
   const { posts } = view
   const canAdd = view.postingOpen && !view.closed
   const colours = LOOK_PAGE[view.look]
+  // Posting paused, ended or closed: My posts (Delete, Marketing) stays on
+  // /wall/post (§12), so the way there stays too, quieter. After the purge
+  // (§11.1) My posts is simply empty; the page has no purge state to key on.
+  const myPostsLink = (
+    <p className="mt-10 text-center text-sm">
+      <a
+        href="/wall/post#my-posts"
+        className="rounded-sm font-medium text-gray-900 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:text-gray-100 dark:focus-visible:outline-indigo-400"
+      >
+        My posts
+      </a>
+    </p>
+  )
   return (
     <div
       data-shell-fit="viewport"
@@ -254,6 +267,7 @@ export function WallBoardView({
       {view.closed ? (
         <main className="px-4 pt-16 pb-16 text-center">
           <p className="font-caveat text-3xl">This wall has closed.</p>
+          {myPostsLink}
         </main>
       ) : (
         <>
@@ -293,18 +307,7 @@ export function WallBoardView({
                 )}
               </>
             )}
-            {!canAdd && (
-              // Posting paused or ended: My posts (Delete, Marketing) stays
-              // on /wall/post (§12), so the way there stays too, quieter.
-              <p className="mt-10 text-center text-sm">
-                <a
-                  href="/wall/post#my-posts"
-                  className="rounded-sm font-medium text-gray-900 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:text-gray-100 dark:focus-visible:outline-indigo-400"
-                >
-                  My posts
-                </a>
-              </p>
-            )}
+            {!canAdd && myPostsLink}
             <footer className="mx-auto mt-10 max-w-md text-center text-sm text-gray-600 dark:text-gray-400">
               In a photo and want it removed? Contact the organizers
               {contactEmail ? (

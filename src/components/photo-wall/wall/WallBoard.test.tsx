@@ -276,10 +276,14 @@ describe('WallBoardView (§9.1)', () => {
     expect(addLink()).toBeNull()
   })
 
-  it('a closed wall shows only that it closed (§9.1, §11.1)', () => {
+  it('a closed wall shows that it closed and the way to My posts (§9.1, §11.1)', () => {
     renderView(view({ closed: true, postingOpen: true }))
     expect(screen.getByText('This wall has closed.')).toBeInTheDocument()
     expect(addLink()).toBeNull()
+    expect(screen.getByRole('link', { name: 'My posts' })).toHaveAttribute(
+      'href',
+      '/wall/post#my-posts',
+    )
     expect(screen.queryByText('No photos yet.')).toBeNull()
     expect(screen.queryByRole('contentinfo')).toBeNull()
   })

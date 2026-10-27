@@ -444,7 +444,13 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
 - Footer: "In a photo and want it removed? Contact the organizers at
   <contactEmail>." (`conference.contactEmail`, #1480).
 - Empty wall: "No photos yet." and **Add your photo** when open.
-- After the wall closes (§11.1): only "This wall has closed."
+- After the wall closes (§11.1): "This wall has closed." and the same quiet
+  **My posts** link, so a contributor can still delete a post or change the
+  marketing switch (§12). After the purge My posts is empty; the page keys on
+  `closedAt` only and keeps the link.
+- Site navigation: the signed-in user menu shows **Add your photo**
+  (`/wall/post`) while posting is open, and **My posts**
+  (`/wall/post#my-posts`) whenever a wall exists otherwise.
 
 ### 9.2 Screen Mode (`/wall/screen`)
 
