@@ -36,6 +36,7 @@ const h = vi.hoisted(() => ({
   deletePost: vi.fn(),
   withdrawMarketing: vi.fn(),
   approveAllPending: vi.fn(),
+  setTalkTag: vi.fn(),
 }))
 vi.mock('@/lib/trpc/client', () => {
   const mutation = (mutateAsync: unknown) => ({
@@ -59,6 +60,15 @@ vi.mock('@/lib/trpc/client', () => {
         deletePost: mutation(h.deletePost),
         withdrawMarketing: mutation(h.withdrawMarketing),
         approveAllPending: mutation(h.approveAllPending),
+        talks: {
+          useQuery: () => ({
+            data: [
+              { _id: 'talk-1', title: 'Keynote', speakers: ['Ada'] },
+              { _id: 'talk-2', title: 'Kubernetes at scale', speakers: ['Bo'] },
+            ],
+          }),
+        },
+        setTalkTag: mutation(h.setTalkTag),
       },
     },
   }
@@ -790,14 +800,20 @@ describe('the actions (§10)', () => {
       'Reject',
       'Delete now',
       'Withdraw marketing OK',
+      'Add talk',
     ])
     fireEvent.click(tab(/^On the wall/))
     expect(buttons(screen.getByRole('article'))).toEqual([
       'Remove',
       'Delete now',
+      'Add talk',
     ])
     fireEvent.click(tab(/^Not shown/))
-    expect(buttons(card('Blurry'))).toEqual(['Approve', 'Delete now'])
+    expect(buttons(card('Blurry'))).toEqual([
+      'Approve',
+      'Delete now',
+      'Add talk',
+    ])
     expect(buttons(card('Gone soon'))).toEqual(['Try again'])
   })
 
@@ -971,6 +987,61 @@ describe('the actions (§10)', () => {
   it('a card without onAction has no actions (read only)', () => {
     render(<ModerationQueueView queue={QUEUE} />)
     expect(buttons(card('Keynote crowd'))).toEqual([])
+  })
+
+  it('the talk tag (Talk photos spec §6.3): Add talk searches and sets it, Clear tag clears it', async () => {
+    h.setTalkTag.mockResolvedValue({ status: 'done' })
+    render(<ModerationQueue />)
+    const keynote = card('Keynote crowd')
+    expect(within(keynote).getByText('No talk tagged.')).toBeTruthy()
+    fireEvent.click(within(keynote).getByRole('button', { name: 'Add talk' }))
+    fireEvent.change(within(keynote).getByRole('searchbox'), {
+      target: { value: 'bo' },
+    })
+    expect(within(keynote).queryByRole('button', { name: /^Keynote/ })).toBe(
+      null,
+    )
+    fireEvent.click(
+      within(keynote).getByRole('button', { name: /Kubernetes at scale/ }),
+    )
+    await vi.waitFor(() =>
+      expect(h.setTalkTag).toHaveBeenCalledWith({
+        id: 'wallPost-1',
+        shown: NO_PHOTO_ID,
+        talkId: 'talk-2',
+      }),
+    )
+    expect(h.invalidate).toHaveBeenCalled()
+  })
+
+  it('a tagged card shows the talk and Clear tag sends null; a deleting card has no tag actions', async () => {
+    h.setTalkTag.mockResolvedValue({ status: 'done' })
+    h.useQuery.mockReturnValue({
+      data: {
+        posts: [
+          post({
+            _id: 'wallPost-1',
+            caption: 'Tagged',
+            talk: { _id: 'talk-1', title: 'Keynote', speakers: ['Ada'] },
+          }),
+        ],
+      },
+      isPending: false,
+      isError: false,
+    })
+    render(<ModerationQueue />)
+    const tagged = card('Tagged')
+    expect(within(tagged).getByTestId('talk-tag').textContent).toContain(
+      'Talk: Keynote · Ada',
+    )
+    fireEvent.click(within(tagged).getByRole('button', { name: 'Clear tag' }))
+    await vi.waitFor(() =>
+      expect(h.setTalkTag).toHaveBeenCalledWith({
+        id: 'wallPost-1',
+        shown: NO_PHOTO_ID,
+        talkId: null,
+      }),
+    )
   })
 
   it('Approve sends the status the card showed, says so, and reads the queue again', async () => {

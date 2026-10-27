@@ -26,6 +26,12 @@ import {
 } from '@/lib/photo-wall/moderate'
 import { withdrawWallPostMarketing } from '@/lib/photo-wall/marketing'
 import { pendingOf } from '@/lib/photo-wall/moderation'
+import { PUBLISHED_ID } from '@/lib/photo-wall/fields'
+import {
+  isConferenceTalk,
+  readTaggableTalks,
+  setWallPostTalk,
+} from '@/lib/photo-wall/talk-tag'
 import { liveConferenceInOrg } from '@/lib/photo-wall/tenant'
 import { isWallPostId } from '@/lib/photo-wall/wall-post'
 import {
@@ -190,6 +196,11 @@ export const photoWallRouter = router({
     getModerationQueue(await polledConferenceId(ctx.orgId)),
   ),
 
+  /** The talks the card's tag picker lists (Talk photos spec §6.3). */
+  talks: adminProcedure.query(async ({ ctx }) =>
+    readTaggableTalks((await requestConference(ctx.orgId))._id),
+  ),
+
   setUp: adminProcedure.mutation(async ({ ctx }) => {
     const conference = await requestConference(ctx.orgId)
     const wall = await setUpPhotoWall(conference._id)
@@ -318,6 +329,45 @@ export const photoWallRouter = router({
         if (written) {
           expireWallPost(conference._id, device ?? '', { wall: false })
         }
+      }
+    }),
+
+  /**
+   * Set, change or clear a post's talk tag (Talk photos spec §6.3): the one
+   * named exception to "organizers never edit a Wall Post". A talk not of
+   * this conference is BAD_REQUEST, checked before the post is read. Only
+   * `talk` is written. Expires as the decisions do; the talk tags of §8
+   * come with T5. Answers `done`, `changed` or `gone`.
+   */
+  setTalkTag: adminProcedure
+    .input(
+      z
+        .object({
+          id: postId,
+          shown,
+          talkId: z.string().regex(PUBLISHED_ID).nullable(),
+        })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const conference = await requestConference(ctx.orgId)
+      if (
+        input.talkId &&
+        !(await isConferenceTalk(input.talkId, conference._id))
+      ) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unknown talk' })
+      }
+      const devices: (string | null)[] = []
+      try {
+        return await setWallPostTalk({
+          conferenceId: conference._id,
+          postId: input.id,
+          shown: input.shown,
+          talkId: input.talkId,
+          onRead: (deviceKey) => devices.push(deviceKey),
+        })
+      } finally {
+        expirePosts(conference._id, devices)
       }
     }),
 

@@ -9,6 +9,7 @@ import {
   type ModerationPhoto,
   type ModerationPost,
   type WallPostCrop,
+  type WallPostTalk,
 } from '@/lib/photo-wall'
 import { formatConferenceDayTime } from '@/lib/time'
 import { focusIsWith } from '../focus'
@@ -41,6 +42,13 @@ export interface WallPostCardProps {
   busy?: PostAction | null
   /** The last action that failed on it, held by the queue likewise. */
   failed?: PostAction | null
+  /** This conference's talks, for the tag picker (Talk photos spec §6.3). */
+  talks?: WallPostTalk[]
+  /** Sets (or, with null, clears) the talk tag; without it, no tag actions. */
+  onSetTalk?: (
+    post: ModerationPost,
+    talkId: string | null,
+  ) => Promise<PostActionOutcome>
 }
 
 /**
@@ -54,6 +62,8 @@ export function WallPostCard({
   onAction,
   busy = null,
   failed = null,
+  talks = [],
+  onSetTalk,
 }: WallPostCardProps) {
   return (
     // Named by its caption; without one the photo's "Photo by …" says who,
@@ -110,6 +120,11 @@ export function WallPostCard({
             failed={failed}
           />
         )}
+        <TalkTag
+          post={post}
+          talks={talks}
+          onSetTalk={post.status === 'deleting' ? undefined : onSetTalk}
+        />
       </div>
     </article>
   )
@@ -356,6 +371,138 @@ function Actions({
             ? LABELS.withdrawMarketing.busy
             : LABELS.withdrawMarketing.idle}
         </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The post's talk tag (Talk photos spec §6.3): the talk and its speakers, or
+ * that there is none; with `onSetTalk`, Add talk or Change (a searchable
+ * list of this conference's talks) and Clear tag. Only the tag changes.
+ */
+function TalkTag({
+  post,
+  talks,
+  onSetTalk,
+}: {
+  post: ModerationPost
+  talks: WallPostTalk[]
+  onSetTalk?: WallPostCardProps['onSetTalk']
+}) {
+  const [picking, setPicking] = useState(false)
+  const [search, setSearch] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const listId = useId()
+  const tag = post.talk ?? null
+
+  const set = async (talkId: string | null) => {
+    if (!onSetTalk || busy) return
+    setBusy(true)
+    setFailed(false)
+    const outcome = await onSetTalk(post, talkId).catch(
+      (): PostActionOutcome => 'failed',
+    )
+    setBusy(false)
+    setFailed(outcome === 'failed')
+    if (outcome !== 'failed') setPicking(false)
+  }
+
+  const needle = search.trim().toLowerCase()
+  const found = talks.filter((talk) =>
+    [talk.title, ...talk.speakers].some((text) =>
+      text.toLowerCase().includes(needle),
+    ),
+  )
+
+  return (
+    <div className="space-y-1.5 pt-1" data-testid="talk-tag">
+      <p className="text-xs text-gray-600 dark:text-gray-400">
+        {tag ? (
+          <>
+            Talk:{' '}
+            <span className="font-medium text-gray-900 dark:text-gray-200">
+              {tag.title}
+            </span>
+            {tag.speakers.length > 0 && ` · ${tag.speakers.join(', ')}`}
+          </>
+        ) : (
+          'No talk tagged.'
+        )}
+      </p>
+      {failed && (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+          Couldn’t change the tag. Try again.
+        </p>
+      )}
+      {onSetTalk && !picking && (
+        <div className="flex flex-wrap gap-x-4">
+          <button
+            type="button"
+            aria-disabled={busy || undefined}
+            onClick={() => !busy && setPicking(true)}
+            className={QUIET}
+          >
+            {tag ? 'Change' : 'Add talk'}
+          </button>
+          {tag && (
+            <button
+              type="button"
+              aria-disabled={busy || undefined}
+              onClick={() => set(null)}
+              className={QUIET}
+            >
+              {busy ? 'Clearing…' : 'Clear tag'}
+            </button>
+          )}
+        </div>
+      )}
+      {onSetTalk && picking && (
+        <div className="space-y-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-900/40">
+          <input
+            type="search"
+            aria-label="Find a talk"
+            aria-controls={listId}
+            placeholder="Find a talk or speaker"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            autoFocus
+            className="block min-h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-brand-cloud-blue focus:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          />
+          <ul id={listId} className="max-h-60 space-y-1 overflow-y-auto">
+            {found.map((talk) => (
+              <li key={talk._id}>
+                <button
+                  type="button"
+                  aria-disabled={busy || undefined}
+                  aria-current={talk._id === tag?._id || undefined}
+                  onClick={() => set(talk._id)}
+                  className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-gray-900 hover:bg-white focus-visible:outline-2 focus-visible:outline-brand-cloud-blue aria-[current]:font-semibold dark:text-white dark:hover:bg-gray-800 dark:focus-visible:outline-indigo-400"
+                >
+                  {talk.title}
+                  {talk.speakers.length > 0 && (
+                    <span className="block text-xs text-gray-600 dark:text-gray-400">
+                      {talk.speakers.join(', ')}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+            {found.length === 0 && (
+              <li className="px-2 py-1.5 text-sm text-gray-600 dark:text-gray-400">
+                No talk matches.
+              </li>
+            )}
+          </ul>
+          <button
+            type="button"
+            onClick={() => setPicking(false)}
+            className={SECONDARY}
+          >
+            Cancel
+          </button>
+        </div>
       )}
     </div>
   )

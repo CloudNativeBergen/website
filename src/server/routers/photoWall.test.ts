@@ -663,6 +663,7 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
         createdAt: '2026-10-26T07:30:01Z',
         assetId: 'image-shaa1-1600x1000-jpg',
       },
+      talk: null,
     })
     const a2 = queue.posts.find((p) => p._id === 'wallPost-a2')
     expect(a2).toMatchObject({
@@ -1169,6 +1170,134 @@ describe('the moderation actions (§8, §10, §12)', () => {
     expect(store().docReads).toEqual([])
   })
 
+  describe('setTalkTag (Talk photos spec §6.3): only the tag changes', () => {
+    const talk = (id: string, conference = 'conf-A', fields = {}) =>
+      ({
+        _id: id,
+        _type: 'talk',
+        title: `Talk ${id}`,
+        status: 'confirmed',
+        conference: ref(conference),
+        speakers: [ref('sp-1')],
+        ...fields,
+      }) as Doc
+    const onTheWall = (fields: Record<string, unknown> = {}) => [
+      wallOf('conf-A'),
+      talk('talk-1'),
+      talk('talk-2'),
+      talk('talk-b', 'conf-B'),
+      { _id: 'sp-1', _type: 'speaker', name: 'Ada' } as Doc,
+      ...withPhoto(
+        postOf('conf-A', 'p1', {
+          status: 'approved',
+          approvedAt: '2026-10-26T07:40:00Z',
+          decidedAt: '2026-10-26T07:40:00Z',
+          ...fields,
+        }),
+      ),
+    ]
+    const weak = (id: string) => ({ _type: 'reference', _ref: id, _weak: true })
+
+    it('sets, changes and clears the tag, leaving the post on the wall and everything else alone', async () => {
+      store().reset(onTheWall())
+      const before = { ...store().doc(P) }
+      const tag = (talkId: string | null) =>
+        organizer().setTalkTag({ id: P, shown: SHOWN, talkId })
+
+      await expect(tag('talk-1')).resolves.toEqual({ status: 'done' })
+      expect(store().doc(P)?.talk).toEqual(weak('talk-1'))
+      expect(expired()).toEqual(tags())
+      expect((await organizer().moderationQueue()).posts[0].talk).toEqual({
+        _id: 'talk-1',
+        title: 'Talk talk-1',
+        speakers: ['Ada'],
+      })
+
+      await expect(tag('talk-2')).resolves.toEqual({ status: 'done' })
+      expect(store().doc(P)?.talk).toEqual(weak('talk-2'))
+
+      await expect(tag(null)).resolves.toEqual({ status: 'done' })
+      expect({ ...store().doc(P), _rev: null }).toEqual({
+        ...before,
+        _rev: null,
+      })
+    })
+
+    it.each([
+      ['another conference’s talk', 'talk-b'],
+      ['an unknown id', 'talk-404'],
+      ['a post id', 'wallPost-p1'],
+    ])('refuses %s, writing and expiring nothing', async (_what, talkId) => {
+      store().reset(onTheWall())
+      await expect(
+        organizer().setTalkTag({ id: P, shown: SHOWN, talkId }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      expect(store().commits).toEqual([])
+      expect(expired()).toEqual([])
+    })
+
+    it('refuses a malformed talk id before reading anything', async () => {
+      store().reset(onTheWall())
+      for (const talkId of ['drafts.talk-1', 'talk-1,talk-2', '']) {
+        await expect(
+          organizer().setTalkTag({ id: P, shown: SHOWN, talkId }),
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      }
+      expect(store().docReads).toEqual([])
+    })
+
+    it('answers gone for a deleting post and a replacement the card did not show', async () => {
+      store().reset(onTheWall({ status: 'deleting' }))
+      await expect(
+        organizer().setTalkTag({ id: P, shown: SHOWN, talkId: 'talk-1' }),
+      ).resolves.toEqual({ status: 'gone' })
+      store().reset(onTheWall({ _createdAt: '2026-10-26T08:59:00Z' }))
+      await expect(
+        organizer().setTalkTag({ id: P, shown: SHOWN, talkId: 'talk-1' }),
+      ).resolves.toEqual({ status: 'gone' })
+      expect(store().commits).toEqual([])
+    })
+
+    it('one conflict: re-reads and writes the tag on the changed post', async () => {
+      store().reset(onTheWall())
+      store().beforeNextCommit(() =>
+        store().put({ ...store().doc(P)!, _rev: 'rev-2', caption: 'Hi' }),
+      )
+      await expect(
+        organizer().setTalkTag({ id: P, shown: SHOWN, talkId: 'talk-1' }),
+      ).resolves.toEqual({ status: 'done' })
+      expect(store().doc(P)).toMatchObject({
+        caption: 'Hi',
+        talk: weak('talk-1'),
+      })
+    })
+
+    it('two conflicts: changed, nothing written', async () => {
+      store().reset(onTheWall())
+      for (const rev of ['rev-2', 'rev-3']) {
+        store().beforeNextCommit(() =>
+          store().put({ ...store().doc(P)!, _rev: rev }),
+        )
+      }
+      await expect(
+        organizer().setTalkTag({ id: P, shown: SHOWN, talkId: 'talk-1' }),
+      ).resolves.toEqual({ status: 'changed' })
+      expect(store().commits).toEqual([])
+      expect(store().doc(P)?.talk).toBeUndefined()
+    })
+
+    it('talks lists this conference’s confirmed talks only', async () => {
+      store().reset([
+        ...onTheWall(),
+        talk('talk-0', 'conf-A', { status: 'submitted' }),
+      ])
+      expect(await organizer().talks()).toEqual([
+        { _id: 'talk-1', title: 'Talk talk-1', speakers: ['Ada'] },
+        { _id: 'talk-2', title: 'Talk talk-2', speakers: ['Ada'] },
+      ])
+    })
+  })
+
   describe('approveAllPending', () => {
     it('approves the pending posts, says how many, and expires each device once', async () => {
       store().reset([
@@ -1275,6 +1404,8 @@ describe('the moderation actions (§8, §10, §12)', () => {
       () => as().deletePost({ id: P, shown: SHOWN }),
       () => as().withdrawMarketing({ id: P, shown: SHOWN }),
       () => as().approveAllPending({ shown: shownAll([P]) }),
+      () => as().setTalkTag({ id: P, shown: SHOWN, talkId: null }),
+      () => as().talks(),
     ]
 
     it.each([
@@ -1353,6 +1484,7 @@ describe('the moderation actions (§8, §10, §12)', () => {
         "deletePost",
         "reject",
         "remove",
+        "setTalkTag",
         "setUp",
         "updateSettings",
         "withdrawMarketing",

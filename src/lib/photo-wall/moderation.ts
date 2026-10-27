@@ -84,6 +84,15 @@ export interface ModerationPost {
   approvedAt: string | null
   decidedAt: string | null
   incarnation: ShownIncarnation
+  /** The tagged talk (Talk photos spec §6.3); null when untagged or gone. */
+  talk?: WallPostTalk | null
+}
+
+/** A talk as the admin card and its picker show it. */
+export interface WallPostTalk {
+  _id: string
+  title: string
+  speakers: string[]
 }
 
 /** What `photoWall.moderationQueue` answers: every post of the conference. */
