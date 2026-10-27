@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { Button } from '@/components/Button'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import { ModalShell } from '@/components/ModalShell'
 import { TAP_GUARD_MS, useOpenedLongEnough } from '@/hooks/useOpenedLongEnough'
 import type {
@@ -358,7 +359,10 @@ export default function WorkshopCard({
                     >
                       {workshop.speakers[0]?.image ? (
                         <img
-                          src={workshop.speakers[0].image}
+                          src={speakerImageUrl(workshop.speakers[0].image, {
+                            width: 96,
+                            height: 96,
+                          })}
                           alt={workshop.speakers[0].name}
                           className="h-10 w-10 rounded-full object-cover transition-all hover:ring-2 hover:ring-brand-cloud-blue"
                         />
@@ -394,7 +398,10 @@ export default function WorkshopCard({
                           >
                             {speaker.image ? (
                               <img
-                                src={speaker.image}
+                                src={speakerImageUrl(speaker.image, {
+                                  width: 64,
+                                  height: 64,
+                                })}
                                 alt={speaker.name}
                                 className="h-8 w-8 rounded-full object-cover ring-2 ring-white transition-all hover:ring-brand-cloud-blue dark:ring-gray-800"
                               />
