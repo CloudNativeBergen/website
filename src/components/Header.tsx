@@ -20,7 +20,13 @@ import { PublicHeaderBell } from '@/components/PublicHeaderBell'
 
 // `HeaderConference`, not `Conference`: these props serialize into the public
 // RSC flight payload, so the server side hands over `pickHeaderConference(c)`.
-export function Header({ c }: { c: HeaderConference }) {
+export function Header({
+  c,
+  photoWallOpen,
+}: {
+  c: HeaderConference
+  photoWallOpen?: boolean
+}) {
   const { data: session } = useSession()
   const isPast = isConferenceOver(c)
 
@@ -73,6 +79,7 @@ export function Header({ c }: { c: HeaderConference }) {
                   picture={session.user.picture}
                   speaker={session.speaker}
                   account={session.account}
+                  photoWallOpen={photoWallOpen}
                 />
               ) : (
                 <Link href="/cfp/list" className="flex items-center">
