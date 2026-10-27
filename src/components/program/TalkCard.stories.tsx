@@ -5,7 +5,9 @@ import { Format, Language, Level, Audience, Status } from '@/lib/proposal/types'
 import { Flags, Speaker } from '@/lib/speaker/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import type { TrackTalk } from '@/lib/conference/types'
-import { expect, within } from 'storybook/test'
+import { expect, userEvent, within } from 'storybook/test'
+import { http, HttpResponse } from 'msw'
+import { STORY_PHOTOS, storyPhoto } from '@/components/photo-wall/story-photos'
 
 const mockSpeakers: Speaker[] = [
   {
@@ -620,4 +622,65 @@ export const ProgramGrid: Story = {
       },
     },
   },
+}
+
+const FIXTURES = Object.values(STORY_PHOTOS)
+/** `photoWallPublic.talkPhotos` answering `count` photos, the first six of them. */
+const talkPhotos = (count: number) => [
+  http.get('/api/trpc/photoWallPublic.talkPhotos', () =>
+    HttpResponse.json({
+      result: {
+        data: {
+          count,
+          posts: Array.from({ length: Math.min(count, 6) }, (_, i) => ({
+            _id: `post-${i}`,
+            ...storyPhoto(FIXTURES[i % FIXTURES.length]),
+            caption: i === 0 ? 'Live demo on the main stage' : null,
+            name: i === 0 ? 'Kari' : null,
+            approvedAt: '2026-10-26T10:00:00Z',
+          })),
+        },
+      },
+    }),
+  ),
+]
+
+/** A card expanded, so it loads its photos (talk photos spec §7.1). */
+const photosStory = (count: number): Story => ({
+  args: { talk: createMockTalk() },
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    msw: { handlers: talkPhotos(count) },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: /Show more/ }))
+    if (count === 0) {
+      await new Promise((r) => setTimeout(r, 300))
+      await expect(canvas.queryByText(/Photos from this talk/)).toBeNull()
+      return
+    }
+    await expect(
+      await canvas.findByText(`Photos from this talk (${count})`),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByRole('link', { name: 'See all on the Photo Wall' }),
+    ).toHaveAttribute('href', '/wall')
+  },
+})
+
+export const PhotosNone = photosStory(0)
+export const PhotosFew = photosStory(3)
+export const PhotosMany = photosStory(11)
+export const PhotosManyDark: Story = {
+  ...PhotosMany,
+  globals: { theme: 'dark' },
+}
+export const PhotosManyDesktop: Story = {
+  ...PhotosMany,
+  parameters: { ...PhotosMany.parameters, viewport: undefined },
+}
+export const PhotosManyDesktopDark: Story = {
+  ...PhotosManyDesktop,
+  globals: { theme: 'dark' },
 }
