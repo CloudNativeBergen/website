@@ -54,6 +54,19 @@ export interface WallPagePost {
 /** The most photos a program talk card shows (talk photos spec §3, §7.1). */
 export const TALK_CARD_PHOTO_LIMIT = 6
 
+/**
+ * One of the signed-in speaker's talks with its photos, for Photos of your
+ * talks on the dashboard (talk photos spec §7.3). `hidden`: a speaker of the
+ * talk opted out, so the public pages don't show them.
+ */
+export interface SpeakerTalkPhotos {
+  talkId: string
+  title: string
+  hidden: boolean
+  /** Newest approval first; `whole` is the stored photo, never scaled up. */
+  posts: WallPagePost[]
+}
+
 /** What `photoWallPublic.talkPhotos` answers: the first photos and how many there are. */
 export interface TalkPhotosView {
   posts: WallPagePost[]

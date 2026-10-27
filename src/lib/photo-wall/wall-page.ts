@@ -4,10 +4,13 @@ import { squareSrc, wholeSrc } from './square'
 import {
   WALL_PAGE_PHOTO_PX,
   WALL_PAGE_WHOLE_PX,
+  type SpeakerTalkPhotos,
   type WallPagePost,
   type WallPageView,
   type WallPost,
 } from './wall'
+import { readSpeakerTalkPosts } from './wall-read'
+import { MAX_LONG_EDGE } from './resize'
 import { isPostingOpen } from './window'
 
 /**
@@ -53,4 +56,21 @@ export async function readWallPage(
     look: wall.look,
     posts: closed ? [] : posts.map((p) => publicPost(p, WALL_PAGE_WHOLE_PX)),
   }
+}
+
+/**
+ * Photos of your talks on the dashboard (talk photos spec §7.3): the
+ * signed-in speaker's own talks only, opted-out ones included and marked.
+ * The whole photo links at its stored size (the phone's re-encode, at most
+ * {@link MAX_LONG_EDGE} px), so Sanity never scales it down.
+ */
+export async function readSpeakerTalkPhotos(
+  conferenceId: string,
+  speakerId: string,
+): Promise<SpeakerTalkPhotos[]> {
+  const talks = await readSpeakerTalkPosts(conferenceId, speakerId)
+  return talks.map((talk) => ({
+    ...talk,
+    posts: talk.posts.map((p) => publicPost(p, MAX_LONG_EDGE)),
+  }))
 }

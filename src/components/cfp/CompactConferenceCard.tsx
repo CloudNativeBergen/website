@@ -8,6 +8,7 @@ import type { Speaker } from '@/lib/speaker/types'
 import { CompactConferenceHeader } from './CompactConferenceHeader'
 import { CompactProposalList } from './CompactProposalList'
 import { CompactPhotoStrip } from './CompactPhotoStrip'
+import { SpeakerTalkPhotoList } from '@/components/photo-wall/talk/SpeakerTalkPhotos'
 import { CompactWorkshopStats } from './CompactWorkshopStats'
 import { CompactTravelSupport } from './CompactTravelSupport'
 import { CompactBadges } from './CompactBadges'
@@ -99,6 +100,10 @@ export function CompactConferenceCard({
 
           {travelSupport && (
             <CompactTravelSupport travelSupport={travelSupport} />
+          )}
+
+          {data.talkPhotos && data.talkPhotos.length > 0 && (
+            <SpeakerTalkPhotoList talks={data.talkPhotos} />
           )}
 
           {galleryImages.length > 0 && (

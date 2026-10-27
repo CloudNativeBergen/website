@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { getGalleryImages } from '@/lib/gallery/sanity'
+import { readSpeakerTalkPhotos } from '@/lib/photo-wall/wall-page'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
 import { getTravelSupport } from '@/lib/travel-support/sanity'
 import { clientReadCached, clientReadUncached } from '@/lib/sanity/client'
@@ -147,6 +148,7 @@ export default async function SpeakerDashboard() {
         workshopStats,
         { travelSupport },
         badges,
+        talkPhotos,
       ] = await Promise.all([
         getProposals({
           speakerId,
@@ -183,6 +185,14 @@ export default async function SpeakerDashboard() {
           { speakerId, conferenceId: conference._id },
           { next: { revalidate: 300 } },
         ),
+        // The session's own speaker id: the read answers only their talks.
+        readSpeakerTalkPhotos(conference._id, speakerId).catch((error) => {
+          console.error(
+            `Could not read talk photos for ${conference._id}`,
+            error,
+          )
+          return []
+        }),
       ])
 
       const isOver = isConferenceOver(conference)
@@ -246,6 +256,7 @@ export default async function SpeakerDashboard() {
         workshopStats,
         travelSupport,
         badges: badges || [],
+        talkPhotos,
         isOver,
         canEditProposals,
         ...briefing,

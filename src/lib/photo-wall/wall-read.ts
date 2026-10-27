@@ -56,6 +56,10 @@ export async function readWallPosts(
     }`,
     talkId ? { talkId } : {},
   )
+  return toWallPosts(rows)
+}
+
+function toWallPosts(rows: WallPostRow[]): WallPost[] {
   const posts: WallPost[] = []
   for (const row of rows) {
     const { photo } = row
@@ -74,4 +78,63 @@ export async function readWallPosts(
     })
   }
   return posts
+}
+
+/** One of {@link readSpeakerTalkPosts}'s talks, its posts newest first. */
+export interface SpeakerTalkPosts {
+  talkId: string
+  title: string
+  hidden: boolean
+  posts: WallPost[]
+}
+
+/**
+ * The approved posts tagged with the talks `speakerId` speaks at in this
+ * conference, for their dashboard (Talk photos spec §7.3). It SKIPS the
+ * opt-out condition and answers `hidden` instead, so the speaker sees what
+ * the opt-out keeps off the public pages. Never another speaker's talk: the
+ * filter itself requires `speakerId` among the talk's speakers. Uncached;
+ * the dashboard is per user.
+ */
+export async function readSpeakerTalkPosts(
+  conferenceId: string,
+  speakerId: string,
+): Promise<SpeakerTalkPosts[]> {
+  const rows = await scopedFetch<
+    (WallPostRow & { talkId: string; title: string | null; hidden: boolean })[]
+  >(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "wallPost" && status == "approved" && defined(photo.asset) && !(_id in path("drafts.**")) && $speakerId in talk->speakers[]._ref]
+      | order(approvedAt desc, _id asc) [0...${WALL_POST_LIMIT}] {
+      _id,
+      "photo": photo.asset->{
+        url,
+        "width": metadata.dimensions.width,
+        "height": metadata.dimensions.height
+      },
+      crop{ x, y },
+      caption,
+      name,
+      approvedAt,
+      "talkId": talk._ref,
+      "title": talk->title,
+      "hidden": count(talk->speakers[@->talkPhotosOptOut == true]) > 0
+    }`,
+    { speakerId },
+  )
+  const talks = new Map<string, SpeakerTalkPosts>()
+  for (const row of rows) {
+    const [post] = toWallPosts([row])
+    if (!post) continue
+    const talk = talks.get(row.talkId) ?? {
+      talkId: row.talkId,
+      title: row.title ?? 'Untitled talk',
+      hidden: row.hidden,
+      posts: [],
+    }
+    talk.posts.push(post)
+    talks.set(row.talkId, talk)
+  }
+  return [...talks.values()]
 }
