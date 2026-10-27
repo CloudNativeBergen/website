@@ -49,15 +49,17 @@ async function fetchBlueskyPosts(
           `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(handle)}&limit=30`,
           fetchOptions,
         ),
+        // searchPosts answers 403 on public.api.bsky.app without a login;
+        // api.bsky.app serves it.
         // 2. Posts mentioning the account
         fetch(
-          `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(`@${handle}`)}&limit=30&sort=latest`,
+          `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(`@${handle}`)}&limit=30&sort=latest`,
           fetchOptions,
         ),
         // 3. Posts with the event hashtag, when one is configured
         tag
           ? fetch(
-              `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(tag)}&limit=30&sort=latest`,
+              `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(tag)}&limit=30&sort=latest`,
               fetchOptions,
             )
           : Promise.resolve(null),
