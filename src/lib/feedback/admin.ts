@@ -12,6 +12,8 @@
  * refused exactly like one that does not exist.
  */
 import 'server-only'
+import { parseJudgementSummary } from '@/lib/content-judgement/summary'
+import { addTally, tallyable } from '@/lib/content-judgement/tally'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { formats, type Format } from '@/lib/proposal/types'
@@ -36,6 +38,15 @@ import {
   type FeedbackTotals,
   type TalkCounts,
 } from './totals'
+import {
+  matchesTriage,
+  triageCounts,
+  unsafe,
+  type CommentJudgement,
+  type CommentKeep,
+  type TriageCounts,
+  type TriageFilter,
+} from './triage'
 import { feedbackWindow, type FeedbackWindow } from './window'
 
 /** A comment as organizers see it: hidden and flagged ones too. */
@@ -51,6 +62,14 @@ export interface AdminFeedbackComment {
    * a flag only on the comment exactly as the organizer saw it (§10.3).
    */
   rev: string
+  /**
+   * Jev's advice (Content judgement spec §7.2, §8.2): `null` for no
+   * Judgement, and ALWAYS null while the organization has judgement off
+   * (§5) or on `/admin/feedback`, which shows speaker flags only.
+   */
+  judgement: CommentJudgement | null
+  /** An organizer's Keep (§8.2); shown with the advice it ended, so null when that is. */
+  kept: CommentKeep | null
 }
 
 export interface AdminFeedbackSession {
@@ -84,6 +103,11 @@ interface TalkResponseRow {
   submittedAt?: unknown
   hiddenAt?: unknown
   flaggedAt?: unknown
+  /** The summary (§7.2), when the read asked for it. */
+  judgement?: unknown
+  keptAt?: unknown
+  /** The organizer's name, dereferenced by the read. */
+  keptBy?: unknown
 }
 
 /** A response as the conference-wide read projects it, with its talk. */
@@ -178,6 +202,8 @@ export async function readAdminFeedback({
  */
 function adminComments(
   rows: readonly TalkResponseRow[],
+  /** Carry Jev's advice and the Keep mark: only while judgement is on (§5). */
+  withAdvice = false,
 ): AdminFeedbackComment[] {
   const comments: AdminFeedbackComment[] = []
   for (const r of rows) {
@@ -191,9 +217,27 @@ function adminComments(
       hidden,
       flagged: !!r.flaggedAt && !hidden,
       rev: r._rev ?? '',
+      judgement: withAdvice ? commentJudgement(r.judgement) : null,
+      kept:
+        withAdvice && typeof r.keptAt === 'string'
+          ? { by: typeof r.keptBy === 'string' ? r.keptBy : null, at: r.keptAt }
+          : null,
     })
   }
   return comments
+}
+
+/**
+ * The stored summary (§7.2) as the page sees it: the state and the reasons,
+ * nothing else (not the build, not the tally marker). A shape this code does
+ * not recognise reads as no Judgement.
+ */
+function commentJudgement(summary: unknown): CommentJudgement | null {
+  const parsed = parseJudgementSummary(summary)
+  if (!parsed) return null
+  return parsed.state === 'judged'
+    ? { state: 'judged', reasons: parsed.reasons }
+    : parsed
 }
 
 /** One talk's Session Feedback as its admin panel shows it (§10.2). */
@@ -212,6 +256,12 @@ export interface AdminTalkFeedback {
   /** The talk's revision as read: exactly which write the read shows. */
   rev: string | null
   window: FeedbackWindow
+  /**
+   * The triage strip's counts over EVERY comment (Content judgement spec
+   * §8.2), whatever `filter` left in `comments`; `null` while the
+   * organization has judgement off, when there is no strip.
+   */
+  triage: TriageCounts | null
 }
 
 /**
@@ -226,10 +276,16 @@ export async function readTalkFeedback({
   conference,
   talkId,
   now,
+  judgementOn = false,
+  filter,
 }: {
   conference: { _id: string; endDate?: string | null }
   talkId: string
   now: Date
+  /** The organization has content judgement on: carry the advice (§5). */
+  judgementOn?: boolean
+  /** The tile the organizer pressed: only those comments come back. */
+  filter?: TriageFilter
 }): Promise<AdminTalkFeedback | null> {
   const scope = { conferenceId: conference._id }
   const talk = await scopedFetch<
@@ -250,7 +306,8 @@ export async function readTalkFeedback({
       clientReadUncached,
       scope,
       `*[_type == "feedbackResponse" && talk._ref == $talkId && ${PUBLISHED_ONLY}] | order(submittedAt asc, _id asc){
-        _id, _rev, colour, comment, submittedAt, hiddenAt, flaggedAt
+        _id, _rev, colour, comment, submittedAt, hiddenAt, flaggedAt,
+        judgement, keptAt, "keptBy": keptBy->name
       }`,
       { talkId },
       { cache: 'no-store' },
@@ -258,9 +315,16 @@ export async function readTalkFeedback({
     getFeedbackSlots(conference._id, talkId),
   ])
   const responses = rows ?? []
+  const comments = adminComments(responses, judgementOn)
   return {
     totals: talkTotals(talk, responses),
-    comments: adminComments(responses),
+    // A tile pressed before the setting went off would otherwise leave an
+    // empty list with no strip to clear it.
+    comments:
+      filter && judgementOn
+        ? comments.filter((c) => matchesTriage(c, filter))
+        : comments,
+    triage: judgementOn ? triageCounts(comments) : null,
     responses: responses.flatMap((r) =>
       isFeedbackColour(r.colour) && typeof r.submittedAt === 'string'
         ? [{ id: r._id, colour: r.colour, submittedAt: r.submittedAt }]
@@ -306,17 +370,45 @@ export type ModerationResult =
   { status: 'refused' } | { status: 'ok'; count: number }
 
 /**
- * THE GUARD, before any write: the ids, deduplicated, if EVERY one passes
- * {@link ownedResponseRows}; otherwise null.
+ * THE GUARD, before any write: the ids, deduplicated, with what the guard
+ * read of each, if EVERY one passes {@link ownedResponseRows}; otherwise null.
  */
 async function ownedResponses(
   conferenceId: string,
   responseIds: readonly string[],
-): Promise<string[] | null> {
+): Promise<Map<string, OwnedRow> | null> {
   const ids = [...new Set(responseIds)]
   if (ids.length === 0) return null
   const found = await ownedResponseRows(conferenceId, ids)
-  return ids.every((id) => found.has(id)) ? ids : null
+  return ids.every((id) => found.has(id)) ? found : null
+}
+
+/**
+ * THE AGREEMENT TALLY (Content judgement spec §7.3), added to an action's
+ * own transaction: a decision on a comment Jev flagged counts once, at the
+ * first decision, for every flagged question in its band. It counts ONLY
+ * WHERE THE ADVICE WAS SHOWN (§2: a decision that matches the flag): `tally`
+ * says the organization has judgement on, and `talkId` names the talk whose
+ * panel the action came from (the one list that shows the advice), which
+ * the row must belong to; `/admin/feedback` names no talk and counts
+ * nothing. Returns whether anything was added, so the caller marks the
+ * Judgement tallied.
+ */
+function tallyDecision(
+  tx: ReturnType<typeof clientWrite.transaction>,
+  tally: boolean,
+  talkId: string | undefined,
+  row: Pick<OwnedRow, 'judgement' | 'keptAt' | 'talk'>,
+  decision: 'agreed' | 'disagreed',
+): boolean {
+  if (!tally || !talkId || row.talk !== talkId) return false
+  // A Keep ended the advice (§8.2), whether or not it was counted (one made
+  // while the setting was off is not): no later decision is about it.
+  if (row.keptAt) return false
+  const flagged = tallyable(row.judgement)
+  if (!flagged) return false
+  addTally(tx, 'feedbackComment', flagged, decision)
+  return true
 }
 
 const isNotFound = (error: unknown) => sanityStatus(error) === 404
@@ -343,31 +435,107 @@ async function commitPatches(
   return { status: 'ok', count }
 }
 
-/** Hide (§10.3): sets `hiddenAt`, clears `flaggedAt`; the colour still counts. */
+/** Ids per doc-endpoint read: they travel in the URL (as in `code.ts`). */
+const DOC_READ_CHUNK = 50
+
+/** How often a write whose revision guard failed is planned again. */
+const MAX_REPLANS = 3
+
+/**
+ * The rows a decision is counted from, read THROUGH THE DOC ENDPOINT (past
+ * GROQ's lag, as `judge-comment.ts` writes): the summary, the Keep mark and
+ * the revision as they are now. A Judgement indexed after the ownership
+ * guard's GROQ read is seen here, so no decision on it is lost. Only after
+ * the ownership guard has passed: these are ids the guard proved.
+ */
+async function currentRows(
+  ids: readonly string[],
+): Promise<Map<string, OwnedRow>> {
+  const rows = new Map<string, OwnedRow>()
+  for (let k = 0; k < ids.length; k += DOC_READ_CHUNK) {
+    const docs = await clientWrite.getDocuments<{
+      _rev: string
+      talk?: { _ref?: unknown }
+      submittedAt?: unknown
+      judgement?: unknown
+      keptAt?: unknown
+    }>(ids.slice(k, k + DOC_READ_CHUNK))
+    for (const d of docs)
+      if (d)
+        rows.set(d._id, {
+          rev: d._rev,
+          talk: typeof d.talk?._ref === 'string' ? d.talk._ref : null,
+          submittedAt: d.submittedAt,
+          judgement: d.judgement,
+          keptAt: d.keptAt,
+        })
+  }
+  return rows
+}
+
+/**
+ * Hide (§10.3): sets `hiddenAt`, clears `flaggedAt`; the colour still counts.
+ * With judgement on, the tally is decided on the doc endpoint's rows, and a
+ * response it counts is patched under that row's revision: a Keep or another
+ * Hide landing in between fails the commit with 409, and the Hide is planned
+ * again from a fresh doc-endpoint read, which sees the mark and counts
+ * nothing. An untallied Hide carries no guard, as before.
+ */
 export async function hideResponses({
   conferenceId,
   responseIds,
   now,
+  talkId,
+  tally = false,
 }: {
   conferenceId: string
   responseIds: readonly string[]
   now: Date
+  /** The talk whose panel the Hide came from: where the advice is shown. */
+  talkId?: string
+  /** Count agreements (§7.3): the organization has judgement on. */
+  tally?: boolean
 }): Promise<ModerationResult> {
-  const ids = await ownedResponses(conferenceId, responseIds)
-  if (!ids) return { status: 'refused' }
-  const tx = clientWrite.transaction()
-  for (const id of ids)
-    tx.patch(id, (p) =>
-      p.set({ hiddenAt: now.toISOString() }).unset(['flaggedAt']),
-    )
-  return commitPatches(tx, ids.length)
+  const owned = await ownedResponses(conferenceId, responseIds)
+  if (!owned) return { status: 'refused' }
+  const ids = [...owned.keys()]
+  const at = now.toISOString()
+  for (let replans = 0; ; replans++) {
+    const rows = tally ? await currentRows(ids) : owned
+    // Deleted since the guard: the same refusal a 404 on the patch would be.
+    if (rows.size !== ids.length) return { status: 'refused' }
+    const tx = clientWrite.transaction()
+    let guarded = false
+    for (const [id, row] of rows) {
+      const counted = tallyDecision(tx, tally, talkId, row, 'agreed')
+      guarded ||= counted
+      tx.patch(id, (p) => {
+        const patch = counted ? p.ifRevisionId(row.rev) : p
+        return patch
+          .set({
+            hiddenAt: at,
+            ...(counted ? { 'judgement.talliedAt': at } : {}),
+          })
+          .unset(['flaggedAt'])
+      })
+    }
+    try {
+      await tx.commit()
+    } catch (error) {
+      if (isNotFound(error)) return { status: 'refused' }
+      if (guarded && isConflict(error) && replans < MAX_REPLANS) continue
+      throw error
+    }
+    return { status: 'ok', count: rows.size }
+  }
 }
 
 /**
  * Where a response stands NOW, read through the doc endpoint after a Keep
- * was refused: still flagged (changed: a new flag, new wording), no longer
- * flagged (another organizer kept it), hidden, or gone (removed, deleted by
- * its device, or its comment emptied).
+ * was refused: still flagged (changed: a new flag, new wording, or Jev's
+ * advice still open on it), no longer flagged (another organizer kept it,
+ * or nothing is left to look at), hidden, or gone (removed, deleted by its
+ * device, or its comment emptied).
  */
 export type KeepNow = 'flagged' | 'unflagged' | 'hidden' | 'gone'
 
@@ -384,8 +552,15 @@ export type KeepResult =
 /** What the organizers' page learns from a Keep (`sessionFeedback.adminKeep`). */
 export type KeepAnswer = { kept: true } | { kept: false; now: KeepNow }
 
-/** A response's state through the doc endpoint (no GROQ lag), as {@link KeepNow}. */
-async function keepNow(responseId: string): Promise<KeepNow> {
+/**
+ * A response's state through the doc endpoint (no GROQ lag), as
+ * {@link KeepNow}. `judgementOn`: Jev's open advice counts as "still
+ * flagged" only while the page shows it (§5).
+ */
+async function keepNow(
+  responseId: string,
+  judgementOn: boolean,
+): Promise<KeepNow> {
   let stored: (ResponseRow & { _type?: string }) | undefined
   try {
     stored = await clientReadUncached.getDocument<
@@ -405,7 +580,18 @@ async function keepNow(responseId: string): Promise<KeepNow> {
   )
     return 'gone'
   if (stored.hiddenAt) return 'hidden'
-  return stored.flaggedAt ? 'flagged' : 'unflagged'
+  if (stored.flaggedAt) return 'flagged'
+  // Another organizer's Keep ended the advice; open advice, by the page's
+  // own rule for the Likely unsafe tile (Content judgement spec §8.2), still
+  // needs a look, as a flag does: never "already handled".
+  if (stored.keptAt) return 'unflagged'
+  const open = unsafe({
+    hidden: false,
+    flagged: false,
+    judgement: judgementOn ? commentJudgement(stored.judgement) : null,
+    kept: null,
+  })
+  return open ? 'flagged' : 'unflagged'
 }
 
 /**
@@ -422,24 +608,54 @@ export async function keepResponse({
   conferenceId,
   responseId,
   seenRev,
+  keptBy,
+  now,
+  talkId,
+  tally = false,
 }: {
   conferenceId: string
   responseId: string
   seenRev: string
+  /** The organizer's speaker id: the Keep mark (Content judgement spec §8.2). */
+  keptBy: string
+  now: Date
+  /** The talk whose panel the Keep came from: where the advice is shown. */
+  talkId?: string
+  /**
+   * Count a disagreement (§7.3): the organization has judgement on AND the
+   * Keep came from the talk's panel. Also whether a refused Keep's answer
+   * may cite open advice: never on a page that shows none.
+   */
+  tally?: boolean
 }): Promise<KeepResult> {
-  if (!(await ownedResponses(conferenceId, [responseId])))
-    return { status: 'refused' }
-  try {
-    await clientWrite
-      .patch(responseId)
+  const owned = await ownedResponses(conferenceId, [responseId])
+  if (!owned) return { status: 'refused' }
+  // The tally from the doc endpoint (past GROQ's lag), under the page's
+  // revision: a row newer than `seenRev` fails the commit, never miscounts.
+  const row = tally
+    ? (await currentRows([responseId])).get(responseId)
+    : owned.get(responseId)
+  if (!row) return { status: 'changed', now: await keepNow(responseId, tally) }
+  const at = now.toISOString()
+  const tx = clientWrite.transaction()
+  const counted = tallyDecision(tx, tally, talkId, row, 'disagreed')
+  tx.patch(responseId, (p) =>
+    p
       .ifRevisionId(seenRev)
-      .unset(['flaggedAt'])
-      .commit()
+      .set({
+        keptAt: at,
+        keptBy: { _type: 'reference', _ref: keptBy, _weak: true },
+        ...(counted ? { 'judgement.talliedAt': at } : {}),
+      })
+      .unset(['flaggedAt']),
+  )
+  try {
+    await tx.commit()
     return { status: 'kept' }
   } catch (error) {
     const status = sanityStatus(error)
     if (status === 409 || status === 404)
-      return { status: 'changed', now: await keepNow(responseId) }
+      return { status: 'changed', now: await keepNow(responseId, tally) }
     throw error
   }
 }
@@ -452,11 +668,11 @@ export async function unhideResponses({
   conferenceId: string
   responseIds: readonly string[]
 }): Promise<ModerationResult> {
-  const ids = await ownedResponses(conferenceId, responseIds)
-  if (!ids) return { status: 'refused' }
+  const rows = await ownedResponses(conferenceId, responseIds)
+  if (!rows) return { status: 'refused' }
   const tx = clientWrite.transaction()
-  for (const id of ids) tx.patch(id, (p) => p.unset(['hiddenAt']))
-  return commitPatches(tx, ids.length)
+  for (const id of rows.keys()) tx.patch(id, (p) => p.unset(['hiddenAt']))
+  return commitPatches(tx, rows.size)
 }
 
 /**
@@ -465,24 +681,48 @@ export async function unhideResponses({
  * the conference, with the revision and time it has now. A missing, draft,
  * release-version or foreign id is left out the same way.
  */
+interface OwnedRow {
+  rev: string
+  /** The response's talk: a panel Remove tallies only its own talk's. */
+  talk: string | null
+  submittedAt: unknown
+  /** The summary (§7.2) and the Keep mark, for the tally. */
+  judgement: unknown
+  keptAt: unknown
+}
+
 async function ownedResponseRows(
   conferenceId: string,
   ids: readonly string[],
-): Promise<Map<string, { rev: string; submittedAt: unknown }>> {
+): Promise<Map<string, OwnedRow>> {
   if (ids.length === 0) return new Map()
   const rows = await scopedFetch<
-    { _id: string; _rev: string; submittedAt?: unknown }[] | null
+    | {
+        _id: string
+        _rev: string
+        talk?: string | null
+        submittedAt?: unknown
+        judgement?: unknown
+        keptAt?: unknown
+      }[]
+    | null
   >(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "feedbackResponse" && _id in $ids && ${PUBLISHED_ONLY} && talk->conference._ref == $conferenceId && !(talk._ref in path("drafts.**")) && !(talk._ref in path("versions.**"))]{ _id, _rev, submittedAt }`,
+    `*[_type == "feedbackResponse" && _id in $ids && ${PUBLISHED_ONLY} && talk->conference._ref == $conferenceId && !(talk._ref in path("drafts.**")) && !(talk._ref in path("versions.**"))]{ _id, _rev, "talk": talk._ref, submittedAt, judgement, keptAt }`,
     { ids },
     { cache: 'no-store' },
   )
   return new Map(
     (rows ?? []).map((r) => [
       r._id,
-      { rev: r._rev, submittedAt: r.submittedAt },
+      {
+        rev: r._rev,
+        talk: r.talk ?? null,
+        submittedAt: r.submittedAt,
+        judgement: r.judgement,
+        keptAt: r.keptAt,
+      },
     ]),
   )
 }
@@ -497,12 +737,6 @@ export interface RemoveResult {
   /** Answered again since the organizer saw it, or outside the range: kept. */
   changed: number
 }
-
-/** Ids per doc-endpoint read: they travel in the URL (as in `code.ts`). */
-const DOC_READ_CHUNK = 50
-
-/** How often a chunk whose revision guard failed is re-planned. */
-const MAX_REPLANS = 3
 
 /**
  * REMOVE (§10.2, §10.3), one path for a comment's Remove and a range from
@@ -535,11 +769,22 @@ export async function removeResponses({
   conferenceId,
   responses,
   range,
+  talkId,
+  tally = false,
 }: {
   conferenceId: string
   responses: readonly SeenResponse[]
   /** A range from the chart: start inclusive, end exclusive, ISO instants. */
   range?: { from: string; to: string }
+  /**
+   * The talk whose panel the organizer removed from. Its comment list is
+   * where Jev's advice is shown, so only a Remove naming it, of that talk's
+   * own responses and not by range (the chart shows no advice), counts an
+   * agreement (§2, §7.3): `/admin/feedback` names no talk and counts nothing.
+   */
+  talkId?: string
+  /** Count agreements (§7.3): the organization has judgement on. */
+  tally?: boolean
 }): Promise<RemoveResult> {
   const seen = new Map(responses.map((r) => [r.id, r.submittedAt]))
   const inRange = (submittedAt: unknown) => {
@@ -549,23 +794,49 @@ export async function removeResponses({
   }
   const found = await ownedResponseRows(conferenceId, [...seen.keys()])
   const out: RemoveResult = { status: 'ok', removed: 0, gone: 0, changed: 0 }
-  const plan: { id: string; rev: string }[] = []
+  let plan: (OwnedRow & { id: string })[] = []
   for (const [id, saw] of seen) {
     const now = found.get(id)
     if (!now) out.gone++
     else if ((now.submittedAt ?? null) !== saw || !inRange(now.submittedAt))
       out.changed++
-    else plan.push({ id, rev: now.rev })
+    else plan.push({ id, ...now })
+  }
+  // Where the advice was shown (see `talkId`): the plan's rows, their
+  // revisions and the tally come from the doc endpoint, past GROQ's lag,
+  // like Hide's and Keep's, so the tally and the guard describe one read.
+  // The answers are checked again against what the organizer saw.
+  const counting = tally && !!talkId && !range
+  if (counting && plan.length > 0) {
+    const fresh = await currentRows(plan.map((p) => p.id))
+    plan = plan.flatMap((entry) => {
+      const now = fresh.get(entry.id)
+      if (!now) {
+        out.gone++
+        return []
+      }
+      if (
+        (now.submittedAt ?? null) !== seen.get(entry.id) ||
+        !inRange(now.submittedAt)
+      ) {
+        out.changed++
+        return []
+      }
+      return [{ id: entry.id, ...now }]
+    })
   }
 
   for (let i = 0; i < plan.length; i += REMOVE_CHUNK_SIZE) {
     let chunk = plan.slice(i, i + REMOVE_CHUNK_SIZE)
     for (let replans = 0; chunk.length > 0; replans++) {
       const tx = clientWrite.transaction()
-      for (const { id, rev } of chunk) {
+      for (const entry of chunk) {
+        const { id, rev } = entry
         tx.patch(id, (p) =>
           p.ifRevisionId(rev).unset(['_revision_lock_pseudo_field_']),
         )
+        // The deleted response cannot be decided on again: no marker needed.
+        if (counting) tallyDecision(tx, tally, talkId, entry, 'agreed')
         tx.delete(id)
       }
       try {
@@ -586,25 +857,20 @@ export async function removeResponses({
       }
       // Re-read the chunk by id: drop what went or changed, keep the rest.
       // The ids travel in the URL: at most DOC_READ_CHUNK a request.
-      const revOf = new Map<string, string>()
+      let revOf: Map<string, OwnedRow>
       try {
-        for (let k = 0; k < chunk.length; k += DOC_READ_CHUNK) {
-          const docs = await clientWrite.getDocuments<{ _rev: string }>(
-            chunk.slice(k, k + DOC_READ_CHUNK).map((c) => c.id),
-          )
-          for (const d of docs) if (d) revOf.set(d._id, d._rev)
-        }
+        revOf = await currentRows(chunk.map((c) => c.id))
       } catch (error) {
         // What went before this chunk is still reported; nothing of this
         // chunk was written (its commit lost a guard, which rolls it back).
         console.error('Could not re-read Feedback Responses to remove', error)
         return { ...out, status: 'failed' }
       }
-      chunk = chunk.filter(({ id, rev }) => {
-        const current = revOf.get(id)
+      chunk = chunk.flatMap((entry) => {
+        const current = revOf.get(entry.id)
         if (current === undefined) out.gone++
-        else if (current !== rev) out.changed++
-        return current === rev
+        else if (current.rev !== entry.rev) out.changed++
+        return current?.rev === entry.rev ? [{ ...current, id: entry.id }] : []
       })
     }
   }

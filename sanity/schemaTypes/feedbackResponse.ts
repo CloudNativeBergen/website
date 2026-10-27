@@ -68,6 +68,67 @@ export default defineType({
       description: 'Set when an organizer hides the comment.',
       type: 'datetime',
     }),
+    // Content judgement (spec §7.2, §8.2): the summary a judging task writes
+    // beside the comment, and the Keep mark. Never a copy of the text.
+    defineField({
+      name: 'judgement',
+      title: 'Judgement',
+      description:
+        'Jev’s summary of the comment (Content judgement spec §7.2); the record is a contentJudgement document.',
+      type: 'object',
+      fields: [
+        defineField({
+          name: 'state',
+          type: 'string',
+          options: { list: ['judged', 'notJudged'] },
+        }),
+        defineField({
+          name: 'reasons',
+          description: 'Every question at or above 0.5, strongest first.',
+          type: 'array',
+          of: [
+            {
+              type: 'object',
+              name: 'judgementReason',
+              fields: [
+                defineField({ name: 'part', type: 'string' }),
+                defineField({ name: 'question', type: 'string' }),
+                defineField({ name: 'probability', type: 'number' }),
+              ],
+            },
+          ],
+        }),
+        defineField({
+          name: 'notJudgedWhy',
+          type: 'string',
+          options: { list: ['failed', 'spendCap'] },
+        }),
+        defineField({ name: 'model', title: 'Model build', type: 'string' }),
+        defineField({ name: 'questionSet', type: 'string' }),
+        defineField({ name: 'judgedAt', type: 'datetime' }),
+        defineField({
+          name: 'talliedAt',
+          description:
+            'When an organizer’s first decision on this Judgement was counted in the agreement tally (§7.3): once per comment.',
+          type: 'datetime',
+        }),
+      ],
+    }),
+    defineField({
+      name: 'keptAt',
+      title: 'Kept at',
+      description: 'Set when an organizer keeps the comment (§8.2).',
+      type: 'datetime',
+    }),
+    defineField({
+      name: 'keptBy',
+      title: 'Kept by',
+      description:
+        'The organizer who kept it; weak, so it never blocks a delete.',
+      type: 'reference',
+      to: [{ type: 'speaker' }],
+      weak: true,
+    }),
   ],
   preview: {
     select: { title: 'talk.title', colour: 'colour' },

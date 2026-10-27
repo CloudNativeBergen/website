@@ -18,6 +18,7 @@ import type {
 import type { RemovedCounts, RemoveRequest } from '@/lib/feedback/bulk-remove'
 import type { FeedbackColour } from '@/lib/feedback/colour'
 import { feedbackTotals, type ColourCounts } from '@/lib/feedback/totals'
+import type { TriageCounts, TriageFilter } from '@/lib/feedback/triage'
 import { plural } from '@/lib/text/display'
 import { ANSWERS } from '../answers'
 import { ColourBar, FEEDBACK_TONE } from '../tone'
@@ -111,6 +112,12 @@ export interface TalkFeedbackPanelProps {
   onCardsExpired?: () => Promise<boolean>
   /** How long saved counts stand in for a lagging read. */
   cardsOverlayMs?: number
+  /**
+   * The triage tile the comments are filtered by (Content judgement spec
+   * §8.2); the filtering itself is the server's (`adminTalk`'s `filter`).
+   */
+  filter?: TriageFilter | null
+  onFilterChange?: (filter: TriageFilter | null) => void
 }
 
 /**
@@ -132,6 +139,8 @@ export function TalkFeedbackPanel({
   headingRef,
   onCardsExpired,
   cardsOverlayMs = CARDS_OVERLAY_MS,
+  filter = null,
+  onFilterChange,
 }: TalkFeedbackPanelProps) {
   const { comments } = feedback
   const formId = useId()
@@ -343,6 +352,9 @@ export function TalkFeedbackPanel({
 
       <TalkComments
         comments={comments}
+        triage={feedback.triage}
+        filter={filter}
+        onFilterChange={onFilterChange}
         onHide={onHide}
         onUnhide={onUnhide}
         onKeep={onKeep}
@@ -371,18 +383,108 @@ const saysGone = (note: CommentNote) =>
   note.kind === 'remove' ||
   (note.kind === 'keep' && (!note.ok || note.text === KEEP_REFUSED.gone.text))
 
+/** The three tiles (Content judgement spec §8.2), in order. */
+const TILES: { filter: TriageFilter; label: string; tone: string }[] = [
+  {
+    filter: 'speaker',
+    label: 'Flagged by speaker',
+    tone: 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-200',
+  },
+  {
+    filter: 'unsafe',
+    label: 'Likely unsafe',
+    tone: 'bg-amber-50 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200',
+  },
+  {
+    filter: 'unchecked',
+    label: 'Not checked',
+    tone: 'bg-gray-100 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200',
+  },
+]
+
+/**
+ * The triage strip (Content judgement spec §8.2): three count tiles above a
+ * talk's comments, each a filter the organizer toggles. Speaker flags and
+ * Jev's advice are counted apart, so Jev's mistakes never read as
+ * complaints. Rendered only while the organization has judgement on.
+ */
+function TriageStrip({
+  counts,
+  shown,
+  filter,
+  onFilterChange,
+}: {
+  counts: TriageCounts
+  /** How many comments the current filter left. */
+  shown: number
+  filter: TriageFilter | null
+  onFilterChange?: (filter: TriageFilter | null) => void
+}) {
+  return (
+    <>
+      <div
+        role="group"
+        aria-label="Needs a look"
+        className="mt-2 grid grid-cols-3 gap-1.5"
+      >
+        {TILES.map(({ filter: value, label, tone }) => {
+          const on = filter === value
+          return (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={on}
+              onClick={() => onFilterChange?.(on ? null : value)}
+              className={`min-w-0 rounded-md border px-2 py-1.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue ${
+                on
+                  ? 'border-gray-900 ring-1 ring-gray-900 dark:border-white dark:ring-white'
+                  : 'border-transparent'
+              } ${tone}`}
+            >
+              <span className="block text-lg leading-tight font-bold tabular-nums">
+                {counts[value]}
+              </span>
+              <span className="block text-xs leading-tight font-medium wrap-break-word">
+                {label}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {filter && (
+        <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+          Showing {shown} of {counts.all}.{' '}
+          <button
+            type="button"
+            onClick={() => onFilterChange?.(null)}
+            className="font-medium text-brand-cloud-blue underline-offset-2 hover:underline dark:text-indigo-300"
+          >
+            Show all
+          </button>
+        </p>
+      )}
+    </>
+  )
+}
+
 /** The talk's comments with Keep, Hide, Unhide and Remove (§10.3). */
 function TalkComments({
   comments,
+  triage,
+  filter,
+  onFilterChange,
   onHide,
   onUnhide,
   onKeep,
   onRemove,
 }: Pick<
   TalkFeedbackPanelProps,
-  'onHide' | 'onUnhide' | 'onKeep' | 'onRemove'
+  'onHide' | 'onUnhide' | 'onKeep' | 'onRemove' | 'onFilterChange'
 > & {
   comments: AdminFeedbackComment[]
+  /** The strip's counts; null while the organization has judgement off. */
+  triage: TriageCounts | null
+  filter: TriageFilter | null
 }) {
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
   // What the last action on each comment did, by response id.
@@ -429,21 +531,31 @@ function TalkComments({
     .filter(([id, note]) => !listed.has(id) && saysGone(note))
     .map(([, note]) => note)
   const removePending = removing ? pending.has(removing.id) : false
+  // Every comment of the talk, whatever the filter left in the list.
+  const total = triage?.all ?? comments.length
 
   return (
     <section aria-label="Comments" className="p-4">
       <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-        Comments{comments.length > 0 && ` (${comments.length})`}
+        Comments{total > 0 && ` (${total})`}
       </h4>
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
+      {triage && (
+        <TriageStrip
+          counts={triage}
+          shown={comments.length}
+          filter={filter}
+          onFilterChange={onFilterChange}
+        />
+      )}
       {gone.length > 0 && (
         <OutcomeNote outcome={gone[gone.length - 1]} className="mt-2" named />
       )}
       {comments.length === 0 ? (
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          No comments yet.
+          {filter ? 'Nothing here.' : 'No comments yet.'}
         </p>
       ) : (
         <ul className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -457,6 +569,7 @@ function TalkComments({
                 place="session"
                 // The panel lives in the page's narrow sidebar.
                 stacked
+                triage={triage !== null}
                 pending={pending.has(c.id)}
                 focusRequest={focusRequest}
                 note={

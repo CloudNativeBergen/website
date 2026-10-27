@@ -43,6 +43,7 @@ import { MAX_COMMENT_LENGTH } from './comment'
 import { attendeeState, type AttendeeFeedbackState } from './page'
 import { requestCap } from './talk-versions'
 import { SUBMIT_COMMIT_BUDGET_MS, SUBMIT_REQUEST_TIMEOUT_MS } from './bounds'
+import { scheduleCommentJudgement } from './judge-comment'
 
 const INVALID_COMMENT = Symbol('invalid comment')
 
@@ -186,6 +187,17 @@ export async function submitFeedback({
   // would then show is the stale answer, not a wrong one; the expiry rides on
   // the confirmed write only.
   expireFeedbackResponse(id)
+  // A new or changed comment is judged after the response has gone out, an
+  // emptied one forgets its Judgement; a colour-only tap sends nothing
+  // (Content judgement spec §6). Never fails this write.
+  if (comment !== undefined) {
+    scheduleCommentJudgement({
+      responseId: id,
+      conferenceId: conference._id,
+      orgId: conference.organization?._ref,
+      comment,
+    })
+  }
   return {
     outcome: {
       state: 'answered',

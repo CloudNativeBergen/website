@@ -19,6 +19,7 @@ import dashboardConfig from './schemaTypes/dashboardConfig'
 import domainVerification from './schemaTypes/domainVerification'
 import feedbackResponse from './schemaTypes/feedbackResponse'
 import contentJudgement from './schemaTypes/contentJudgement'
+import judgementTally from './schemaTypes/judgementTally'
 import message from './schemaTypes/message'
 import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
 import emailSignInToken from './schemaTypes/emailSignInToken'
@@ -103,6 +104,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     talk,
     feedbackResponse,
     contentJudgement,
+    judgementTally,
     topic,
     review,
     workshopSignup,

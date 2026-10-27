@@ -10,6 +10,14 @@ export {
   QUESTION_SET_VERSIONS,
 } from './questions'
 export { hasStoredJudgements } from './records'
+export {
+  ADVICE_THRESHOLD,
+  judgedSummary,
+  notJudgedSummary,
+  type JudgementReason,
+  type JudgementSummary,
+  type NotJudgedWhy,
+} from './summary'
 export { isContentJudgementEnabled } from './settings'
 export { sweepOrphanJudgements, type SweepReport } from './sweep'
 export {

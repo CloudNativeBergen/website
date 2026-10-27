@@ -27,6 +27,8 @@ const comment = (
   hidden: false,
   flagged: false,
   rev: `rev-${n}`,
+  judgement: null,
+  kept: null,
   ...fields,
 })
 
@@ -601,9 +603,7 @@ export const KeepAlreadyHandled: Story = {
     await userEvent.click(within(box).getByRole('button', { name: 'Keep' }))
     await waitFor(() =>
       expect(
-        within(box).getByText(
-          'Already handled by another organizer: no longer flagged.',
-        ),
+        within(box).getByText('Already handled: no longer flagged.'),
       ).toBeVisible(),
     )
     await expect(

@@ -35,6 +35,12 @@ describe('Session Feedback on /privacy', () => {
     )
   })
 
+  it('discloses the Keep mark: which organizer kept a flagged comment, and when', () => {
+    expect(text(SessionFeedbackPrivacy)).toContain(
+      'When an organizer keeps a flagged comment, we record on the answer which organizer did so and when',
+    )
+  })
+
   it('gives the cookie’s real lifetime and scope', () => {
     expect(text(SessionFeedbackPrivacy)).toContain(
       'kept for 30 days after your last answer',

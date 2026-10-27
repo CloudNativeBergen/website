@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test'
@@ -11,8 +11,16 @@ import type { ChartResponse } from '@/lib/feedback/buckets'
 import type { RemovedCounts, RemoveRequest } from '@/lib/feedback/bulk-remove'
 import type { FeedbackColour } from '@/lib/feedback/colour'
 import { feedbackTotals } from '@/lib/feedback/totals'
+import {
+  matchesTriage,
+  triageCounts,
+  type TriageFilter,
+} from '@/lib/feedback/triage'
 import { AdminFeedbackCodePanel } from '../AdminFeedbackCodePanel'
-import { TalkFeedbackPanel } from './TalkFeedbackPanel'
+import {
+  TalkFeedbackPanel,
+  type TalkFeedbackPanelProps,
+} from './TalkFeedbackPanel'
 
 const id = (n: number) => `feedbackResponse-${String(n).padStart(32, '0')}`
 const at = (hhmm: string) => `2026-10-27T${hhmm}:00.000Z`
@@ -66,6 +74,8 @@ const comment = (
   hidden: false,
   flagged: false,
   rev: `rev-${n}`,
+  judgement: null,
+  kept: null,
   ...fields,
 })
 
@@ -97,6 +107,7 @@ const FEEDBACK: AdminTalkFeedback = {
     closesAt: '2026-10-28T08:40:00.000Z',
     feedbackVisible: true,
   },
+  triage: null,
 }
 
 /** After the window closed: the chart spans all 24 h 40 min of it. */
@@ -289,6 +300,7 @@ export const CardCountsOnly: Story = {
       comments: [],
       responses: [],
       window: { state: 'closed', feedbackVisible: true },
+      triage: null,
     },
   },
 }
@@ -490,6 +502,216 @@ export const HidesAComment: Story = {
       await comments.findByText('Comment hidden from speakers.', {
         selector: 'p:not([role])',
       }),
+    ).toBeVisible()
+  },
+}
+
+/* ───────────── Content judgement: the triage strip (spec §8.2) ───────────── */
+
+const judged = (
+  ...reasons: [string, number][]
+): NonNullable<AdminFeedbackComment['judgement']> => ({
+  state: 'judged',
+  reasons: reasons.map(([question, probability]) => ({
+    question,
+    probability,
+  })),
+})
+
+/**
+ * Every state the strip knows, oldest first: harsh-but-fair (unmarked),
+ * flagged by the speaker and by Jev, Jev alone (personal details), not
+ * judged, flagged by the speaker with nothing found, kept by Kari, two
+ * reasons at once, spam, hidden after Jev flagged it, not judged (spend
+ * cap), and a plain compliment.
+ */
+const TRIAGE_COMMENTS: AdminFeedbackComment[] = [
+  comment(
+    3,
+    'The demo failed and the talk ran 15 min over. Cut the second half next time.',
+    {
+      judgement: judged(),
+    },
+  ),
+  comment(4, 'Speakeren er en idiot, og det er alle som likte dette også.', {
+    colour: 'red',
+    flagged: true,
+    judgement: judged(['abusive', 0.88]),
+  }),
+  comment(5, 'Ring meg på 041 23 456 så skal jeg forklare hva som var galt.', {
+    colour: 'red',
+    judgement: judged(['personal_info', 0.93]),
+  }),
+  comment(6, 'Kjempebra! Elsker når noen tør å vise feil live.'),
+  comment(7, 'Litt mye salg av eget produkt, men greit innhold.', {
+    flagged: true,
+    judgement: judged(),
+  }),
+  comment(
+    8,
+    'Send gjerne slides til hele teamet, vi sitter i 3. etasje ved kantina.',
+    {
+      judgement: judged(['personal_info', 0.61]),
+      kept: { by: 'Kari', at: '2026-10-27T10:14:00.000Z' },
+    },
+  ),
+  comment(9, 'Hot speaker, would love to see more of her after the party 😏', {
+    colour: 'red',
+    judgement: judged(['sexual', 0.82], ['abusive', 0.71]),
+  }),
+  comment(10, 'Buy 10k followers now → followz.example, cheap cheap cheap', {
+    colour: 'red',
+    judgement: judged(['spam', 0.97]),
+  }),
+  comment(11, 'Hun burde holde seg til kjøkkenet.', {
+    hidden: true,
+    judgement: judged(['abusive', 0.91]),
+  }),
+  comment(12, 'Great energy, but the sound was bad in the back.', {
+    judgement: { state: 'notJudged', why: 'spendCap' },
+  }),
+  comment(13, 'Best talk of the day. The live demo actually worked!', {
+    judgement: judged(),
+  }),
+]
+
+const TRIAGED: AdminTalkFeedback = {
+  ...FEEDBACK,
+  comments: TRIAGE_COMMENTS,
+  triage: triageCounts(TRIAGE_COMMENTS),
+}
+
+/**
+ * The panel under a filter: in the app the server filters (`adminTalk`'s
+ * `filter` input) and the container holds the tile pressed; here both are
+ * stood in for, with the same `matchesTriage` the server uses.
+ */
+function Triaged(props: TalkFeedbackPanelProps) {
+  const [filter, setFilter] = useState<TriageFilter | null>(null)
+  const comments = filter
+    ? props.feedback.comments.filter((c) => matchesTriage(c, filter))
+    : props.feedback.comments
+  return (
+    <TalkFeedbackPanel
+      {...props}
+      feedback={{ ...props.feedback, comments }}
+      filter={filter}
+      onFilterChange={setFilter}
+    />
+  )
+}
+
+/**
+ * The strip with all three tiles non-zero: flagged comments collapsed behind
+ * their reason line, a kept comment, hidden and not-checked ones. Nothing of
+ * this shows while the organization has judgement off (`Default`).
+ */
+export const TriageStrip: Story = {
+  // No Feedback Code section: these stories are about the comments.
+  args: { feedback: { ...TRIAGED, responses: [] }, code: undefined },
+  render: (args) => <Triaged {...args} />,
+}
+export const TriageStripDark: Story = {
+  ...TriageStrip,
+  globals: { theme: 'dark' },
+}
+export const TriageStripPhone: Story = {
+  ...TriageStrip,
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const strip = canvas.getByRole('group', { name: 'Needs a look' })
+    await expect(
+      within(strip).getByRole('button', { name: /Flagged by speaker/ }),
+    ).toBeVisible()
+    // Three abreast, even on a phone.
+    const tiles = within(strip).getAllByRole('button')
+    expect(tiles).toHaveLength(3)
+    expect(tiles[0].getBoundingClientRect().top).toBe(
+      tiles[2].getBoundingClientRect().top,
+    )
+  },
+}
+export const TriageStripPhoneDark: Story = {
+  ...TriageStripPhone,
+  globals: { theme: 'dark' },
+}
+
+/** A flagged comment's text waits behind **Show comment** (§8.2). */
+export const TriageShowsAComment: Story = {
+  ...TriageStrip,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const comments = within(canvas.getByRole('region', { name: 'Comments' }))
+    const reason = comments.getByText(
+      'Likely unsafe: may contain personal details (93%)',
+    )
+    expect(comments.queryByText(/Ring meg på/)).toBeNull()
+    const row = reason.closest('li')!
+    await userEvent.click(
+      within(row).getByRole('button', { name: 'Show comment' }),
+    )
+    await expect(within(row).getByText(/Ring meg på/)).toBeVisible()
+    expect(
+      within(row).queryByRole('button', { name: 'Show comment' }),
+    ).toBeNull()
+    // The copy never says what kind of personal details (§8.2).
+    expect(comments.queryByText(/phone number/)).toBeNull()
+  },
+}
+
+/** A tile filters the list; pressing it again, or Show all, lifts the filter. */
+export const TriageFiltersByTile: Story = {
+  ...TriageStrip,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const comments = within(canvas.getByRole('region', { name: 'Comments' }))
+    const strip = within(canvas.getByRole('group', { name: 'Needs a look' }))
+    const unsafe = strip.getByRole('button', { name: /Likely unsafe/ })
+    expect(unsafe).toHaveTextContent('4')
+    expect(
+      strip.getByRole('button', { name: /Flagged by speaker/ }),
+    ).toHaveTextContent('2')
+    expect(
+      strip.getByRole('button', { name: /Not checked/ }),
+    ).toHaveTextContent('2')
+    expect(comments.getAllByRole('listitem')).toHaveLength(11)
+
+    await userEvent.click(unsafe)
+    await expect(unsafe).toHaveAttribute('aria-pressed', 'true')
+    expect(comments.getAllByRole('listitem')).toHaveLength(4)
+    await expect(comments.getByText('Showing 4 of 11.')).toBeVisible()
+    // The kept and the hidden comments have left the Likely unsafe count.
+    expect(comments.queryByText(/Kept by Kari/)).toBeNull()
+
+    await userEvent.click(comments.getByRole('button', { name: 'Show all' }))
+    expect(comments.getAllByRole('listitem')).toHaveLength(11)
+    await expect(comments.getByText(/Kept by Kari/)).toBeVisible()
+    expect(comments.getByText(/Kept by Kari/)).toHaveTextContent(
+      'was: may contain personal details (61%)',
+    )
+  },
+}
+
+/** Keep is offered on a comment only Jev flagged, and sends it as shown. */
+export const TriageKeepsALikelyUnsafeComment: Story = {
+  ...TriageStrip,
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const comments = within(canvas.getByRole('region', { name: 'Comments' }))
+    const row = comments
+      .getByText('Likely unsafe: looks like spam (97%)')
+      .closest('li')!
+    await userEvent.click(within(row).getByRole('button', { name: 'Keep' }))
+    await waitFor(() =>
+      expect(args.onKeep).toHaveBeenCalledWith(
+        expect.objectContaining({ id: id(10), rev: 'rev-10' }),
+      ),
+    )
+    await expect(
+      within(row).getByText(
+        'Kept: the flag is cleared, speakers still see the comment.',
+      ),
     ).toBeVisible()
   },
 }

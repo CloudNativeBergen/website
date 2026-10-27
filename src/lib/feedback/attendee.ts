@@ -178,6 +178,8 @@ export type FeedbackConference = {
   _id: string
   endDate?: string | null
   programDate?: string | null
+  /** The owning organization: whose content-judgement setting Submit reads. */
+  organization?: { _ref?: string } | null
 }
 
 /**
