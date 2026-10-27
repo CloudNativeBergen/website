@@ -154,7 +154,7 @@ export const PhotoWallOpen: Story = {
       '/wall/post',
     )
     await expect(
-      screen.getByText('Photo Wall', { selector: 'span' }).closest('a'),
+      screen.getByText('View the wall', { selector: 'span' }).closest('a'),
     ).toHaveAttribute('href', '/wall')
   },
 }

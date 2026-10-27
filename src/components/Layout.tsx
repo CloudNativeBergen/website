@@ -19,7 +19,8 @@ export async function Layout({
 }) {
   // Per request: `now` is fresh, the wall read is tag-cached and every
   // settings change expires it, so the menu flips at Oslo midnight unaided.
-  const wall = await getPhotoWall(conference._id)
+  // A failed read hides the menu entries rather than failing the page.
+  const wall = await getPhotoWall(conference._id).catch(() => null)
   const photoWallOpen = !!wall && isPostingOpen(wall, conference, new Date())
   return (
     <BackgroundPatternProvider

@@ -221,7 +221,7 @@ export function UserMenu({
               label="Post a photo"
               icon={CameraIcon}
             />
-            <LinkItem href="/wall" label="Photo Wall" icon={PhotoIcon} />
+            <LinkItem href="/wall" label="View the wall" icon={PhotoIcon} />
           </Fragment>
         )}
 

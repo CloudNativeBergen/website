@@ -26,13 +26,13 @@ describe('UserMenu Photo Wall entries', () => {
       screen.getByRole('menuitem', { name: 'Post a photo' }),
     ).toHaveAttribute('href', '/wall/post')
     expect(
-      screen.getByRole('menuitem', { name: 'Photo Wall' }),
+      screen.getByRole('menuitem', { name: 'View the wall' }),
     ).toHaveAttribute('href', '/wall')
   })
 
   it('hides them while posting is closed', async () => {
     await open(false)
     expect(screen.queryByRole('menuitem', { name: 'Post a photo' })).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: 'Photo Wall' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'View the wall' })).toBeNull()
   })
 })
