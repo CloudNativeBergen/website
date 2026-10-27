@@ -19,7 +19,7 @@ const UPLOAD_ID =
  * A published Sanity document id: no `.`, so never a `drafts.` or
  * `versions.` id, and at most Sanity's 128 characters.
  */
-const PUBLISHED_ID = /^[A-Za-z0-9_-]{1,128}$/
+export const PUBLISHED_ID = /^[A-Za-z0-9_-]{1,128}$/
 
 /**
  * A decimal number: digits with at most one point; no sign, exponent or

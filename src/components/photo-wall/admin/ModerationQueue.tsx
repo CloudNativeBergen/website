@@ -19,6 +19,7 @@ import {
   WallPostCard,
   type PostAction,
   type PostActionOutcome,
+  type WallPostCardProps,
 } from './WallPostCard'
 
 /**
@@ -40,6 +41,8 @@ export function ModerationQueue() {
   const deletePost = api.photoWall.deletePost.useMutation()
   const withdrawMarketing = api.photoWall.withdrawMarketing.useMutation()
   const approveAll = api.photoWall.approveAllPending.useMutation()
+  const talks = api.photoWall.talks.useQuery()
+  const setTalkTag = api.photoWall.setTalkTag.useMutation()
 
   const refresh = () => void utils.photoWall.moderationQueue.invalidate()
 
@@ -77,6 +80,25 @@ export function ModerationQueue() {
     }
   }
 
+  const onSetTalk = async (
+    post: ModerationPost,
+    talkId: string | null,
+  ): Promise<PostActionOutcome> => {
+    try {
+      return (
+        await setTalkTag.mutateAsync({
+          id: post._id,
+          shown: post.incarnation,
+          talkId,
+        })
+      ).status
+    } catch {
+      return 'failed'
+    } finally {
+      refresh()
+    }
+  }
+
   const onApproveAll = async (posts: ModerationPost[]) => {
     try {
       return await approveAll.mutateAsync({
@@ -94,6 +116,8 @@ export function ModerationQueue() {
       failed={queue.isError}
       onAction={onAction}
       onApproveAll={onApproveAll}
+      talks={talks.data}
+      onSetTalk={onSetTalk}
     />
   )
 }
@@ -169,6 +193,9 @@ export interface ModerationQueueViewProps {
    * the Pending tab has no such button.
    */
   onApproveAll?: (posts: ModerationPost[]) => Promise<{ approved: number }>
+  /** The cards' tag picker and its write (Talk photos spec §6.3). */
+  talks?: WallPostCardProps['talks']
+  onSetTalk?: WallPostCardProps['onSetTalk']
 }
 
 /** What the queue says after an action, for every outcome but a failure. */
@@ -198,6 +225,8 @@ export function ModerationQueueView({
   failed = false,
   onAction,
   onApproveAll,
+  talks,
+  onSetTalk,
 }: ModerationQueueViewProps) {
   const [tab, setTab] = useState<ModerationTab>('pending')
   // The page's one polite word on what an action did: the card it was on
@@ -466,6 +495,8 @@ export function ModerationQueueView({
                 onAction={act}
                 busy={inFlight[cardKey(post)] ?? null}
                 failed={failureOn(failures[cardKey(post)], post)}
+                talks={talks}
+                onSetTalk={onSetTalk}
               />
             ))}
           </div>

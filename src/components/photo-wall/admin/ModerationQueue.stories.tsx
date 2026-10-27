@@ -109,6 +109,37 @@ const POSTS: ModerationPost[] = [
   }),
 ]
 const QUEUE: ModerationQueueData = { posts: POSTS }
+
+/** This conference's talks, for the tag picker (Talk photos spec §6.3). */
+const TALKS = [
+  {
+    _id: 'talk-1',
+    title: 'Opening keynote: ten years of cloud native',
+    speakers: ['Ada Lovelace'],
+  },
+  {
+    _id: 'talk-2',
+    title: 'Kubernetes at scale',
+    speakers: ['Bo Ek', 'Cy Dahl'],
+  },
+  { _id: 'talk-3', title: 'Platform engineering in practice', speakers: [] },
+]
+/** One tagged and one untagged card (Talk photos spec §6.3). */
+const TAGGED: ModerationQueueData = {
+  posts: [
+    post({
+      caption: 'Keynote crowd, first morning',
+      name: 'Ada',
+      talk: TALKS[0],
+      submittedAt: '2026-10-26T07:31:00Z',
+    }),
+    post({
+      photo: PORTRAIT,
+      caption: 'Hallway track',
+      submittedAt: '2026-10-26T07:34:00Z',
+    }),
+  ],
+}
 const EMPTY: ModerationQueueData = { posts: [] }
 
 const meta = {
@@ -455,6 +486,12 @@ export const Polled: StoryObj<typeof ModerationQueue> = {
         http.post('/api/trpc/photoWall.approveAllPending', () =>
           HttpResponse.json({ result: { data: { approved: 3, pending: 3 } } }),
         ),
+        http.get('/api/trpc/photoWall.talks', () =>
+          HttpResponse.json({ result: { data: TALKS } }),
+        ),
+        http.post('/api/trpc/photoWall.setTalkTag', () =>
+          HttpResponse.json({ result: { data: { status: 'done' } } }),
+        ),
       ],
     },
   },
@@ -709,5 +746,56 @@ export const ApproveAllInFlight: Story = {
 }
 export const ApproveAllInFlightDark: Story = {
   ...ApproveAllInFlight,
+  globals: { theme: 'dark' },
+}
+
+/**
+ * The talk tag (Talk photos spec §6.3): the tagged talk and its speakers, or
+ * "No talk tagged.", with **Change** / **Clear tag** or **Add talk**.
+ */
+export const TalkTag: Story = {
+  args: {
+    queue: TAGGED,
+    talks: TALKS,
+    onSetTalk: fn(async (): Promise<PostActionOutcome> => 'done'),
+  },
+  play: async ({ canvasElement }) => {
+    const [tagged, untagged] = within(canvasElement).getAllByRole('article')
+    await expect(within(tagged).getByTestId('talk-tag')).toHaveTextContent(
+      'Talk: Opening keynote: ten years of cloud native · Ada Lovelace',
+    )
+    await expect(
+      within(tagged).getByRole('button', { name: 'Clear tag' }),
+    ).toBeVisible()
+    await expect(
+      within(untagged).getByRole('button', { name: 'Add talk' }),
+    ).toBeVisible()
+  },
+}
+export const TalkTagDark: Story = { ...TalkTag, globals: { theme: 'dark' } }
+
+/** Change opens a searchable list of this conference's talks. */
+export const TalkTagPicker: Story = {
+  args: TalkTag.args,
+  play: async ({ canvasElement, args }) => {
+    const second = within(canvasElement).getAllByRole('article')[1]
+    await userEvent.click(
+      within(second).getByRole('button', { name: 'Add talk' }),
+    )
+    await userEvent.type(within(second).getByRole('searchbox'), 'k')
+    await userEvent.click(
+      within(second).getByRole('button', { name: /Kubernetes at scale/ }),
+    )
+    await expect(args.onSetTalk).toHaveBeenCalledWith(
+      expect.objectContaining({ caption: 'Hallway track' }),
+      'talk-2',
+    )
+    await userEvent.click(
+      within(second).getByRole('button', { name: 'Add talk' }),
+    )
+  },
+}
+export const TalkTagPickerDark: Story = {
+  ...TalkTagPicker,
   globals: { theme: 'dark' },
 }

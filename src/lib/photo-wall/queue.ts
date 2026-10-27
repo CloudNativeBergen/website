@@ -35,6 +35,11 @@ interface PostRow {
   submittedAt: string | null
   approvedAt: string | null
   decidedAt: string | null
+  talk: {
+    _id: string | null
+    title: string | null
+    speakers: (string | null)[] | null
+  } | null
 }
 
 const isStatus = (value: unknown): value is WallPostStatus =>
@@ -86,7 +91,8 @@ export async function readModerationQueue(
       marketingConsent,
       submittedAt,
       approvedAt,
-      decidedAt
+      decidedAt,
+      "talk": talk->{ _id, title, "speakers": speakers[]->name }
     }`,
   )
   const posts: ModerationPost[] = []
@@ -112,6 +118,16 @@ export async function readModerationQueue(
         // A `deleting` post shows no photo, and its asset id stays hidden.
         assetId: row.status === 'deleting' ? null : (row.assetId ?? null),
       },
+      // A dangling weak reference reads as untagged (Talk photos spec §4.1).
+      talk: row.talk?._id
+        ? {
+            _id: row.talk._id,
+            title: row.talk.title ?? '',
+            speakers: (row.talk.speakers ?? []).filter(
+              (name): name is string => typeof name === 'string',
+            ),
+          }
+        : null,
     })
   }
   return { posts }

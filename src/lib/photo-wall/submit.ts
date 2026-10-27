@@ -26,6 +26,7 @@ import { MAX_PHOTO_BYTES, checkWallPhoto } from './jpeg-check'
 import { postingLimitHit, readPostingCounts } from './limits'
 import type { WallSubmitRefusal } from './post'
 import { readPhotoWall } from './sanity'
+import { isConferenceTalk } from './talk-tag'
 import { isPostingOpen } from './window'
 
 /**
@@ -77,15 +78,6 @@ const readPost = (uploadId: string) =>
   clientReadUncached.getDocument<StoredPost & { _id: string }>(
     wallPostId(uploadId),
   )
-
-/** A published talk of this conference. The id is checked: no `.`, no list. */
-async function isConferenceTalk(talkId: string, conferenceId: string) {
-  const talk = await clientReadUncached.getDocument<{
-    _type?: string
-    conference?: { _ref?: string }
-  }>(talkId)
-  return talk?._type === 'talk' && talk.conference?._ref === conferenceId
-}
 
 const refuse = (refusal: WallSubmitRefusal, why: string): WallSubmitOutcome => {
   // The reason only, never the content: the organizer never sees refusals
