@@ -12,11 +12,13 @@ import {
   BanknotesIcon,
   BuildingOfficeIcon,
   CalendarDaysIcon,
+  CameraIcon,
   ChatBubbleLeftRightIcon,
   DocumentPlusIcon,
   DocumentTextIcon,
   HomeIcon,
   PencilSquareIcon,
+  PhotoIcon,
   Squares2X2Icon,
   TicketIcon,
   UsersIcon,
@@ -149,6 +151,8 @@ export interface UserMenuProps {
   speaker?: Speaker
   /** The account the user authenticated with (`session.account`). */
   account?: Account
+  /** Photo Wall posting is open right now (computed server-side). */
+  photoWallOpen?: boolean
 }
 
 /**
@@ -158,7 +162,13 @@ export interface UserMenuProps {
  * provider, sign out). Built on Headless UI `Menu` so it is fully keyboard
  * accessible and focus-visible; dark-mode and mobile aware.
  */
-export function UserMenu({ name, picture, speaker, account }: UserMenuProps) {
+export function UserMenu({
+  name,
+  picture,
+  speaker,
+  account,
+  photoWallOpen,
+}: UserMenuProps) {
   const { canInstall } = usePwaInstall()
 
   const isOrganizer = Boolean(speaker?.isOrganizer)
@@ -200,6 +210,19 @@ export function UserMenu({ name, picture, speaker, account }: UserMenuProps) {
             icon={ArrowTopRightOnSquareIcon}
             external
           />
+        )}
+
+        {photoWallOpen && (
+          <Fragment>
+            <Divider />
+            <SectionLabel>Photo Wall</SectionLabel>
+            <LinkItem
+              href="/wall/post"
+              label="Post a photo"
+              icon={CameraIcon}
+            />
+            <LinkItem href="/wall" label="Photo Wall" icon={PhotoIcon} />
+          </Fragment>
         )}
 
         {isOrganizer && (
