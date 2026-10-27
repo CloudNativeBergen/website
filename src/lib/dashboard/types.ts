@@ -4,6 +4,7 @@ import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import type { WorkshopStats } from '@/components/cfp/WorkshopStatistics'
 import type { TravelSupportWithExpenses } from '@/lib/travel-support/types'
 import type { BadgeRecord } from '@/lib/badge/types'
+import type { SpeakerTalkPhotos } from '@/lib/photo-wall/wall'
 import type { FeedbackChips } from '@/lib/feedback/chips'
 import type { WidgetMetadata } from './widget-metadata'
 import type { ConferencePhase } from '@/lib/conference/phase'
@@ -31,6 +32,8 @@ export interface ConferenceWithSpeakerData {
   badges: BadgeRecord[]
   isOver: boolean
   canEditProposals: boolean
+  /** Photos of your talks (talk photos spec §7.3): own talks, with photos only. */
+  talkPhotos?: SpeakerTalkPhotos[]
   /** Session Feedback chip per confirmed talk (speaker feedback spec §9.4). */
   feedbackChips?: FeedbackChips
   /**

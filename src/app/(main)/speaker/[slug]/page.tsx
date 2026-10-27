@@ -28,6 +28,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { formatConferenceDateLong } from '@/lib/time'
 import { PhotoGallerySection } from '@/components/PhotoGallerySection'
+import { TalkPhotos } from '@/components/photo-wall/talk/TalkPhotos'
 import { AttachmentDisplay } from '@/components/proposal/AttachmentDisplay'
 import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
@@ -434,6 +435,8 @@ async function CachedSpeakerContent({
                             })}
                           </div>
                         )}
+                        {/* Client-side, so the cached page needs no Photo Wall tags (talk photos spec §7.2, §8). */}
+                        <TalkPhotos talkId={talk._id} />
                       </div>
                     ))}
                   </div>

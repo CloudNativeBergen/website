@@ -32,6 +32,7 @@ describe('Photo Wall photos are never next/image (§5.1, §14)', () => {
     'src/components/photo-wall/admin/WallPostCard.tsx',
     'src/components/photo-wall/composer/MyPosts.tsx',
     'src/components/photo-wall/screen/Pinboard.tsx',
+    'src/components/photo-wall/talk/SpeakerTalkPhotos.tsx',
     'src/components/photo-wall/talk/TalkPhotos.tsx',
     'src/app/(public)/wall/page.tsx',
     'src/app/(public)/wall/screen/page.tsx',
