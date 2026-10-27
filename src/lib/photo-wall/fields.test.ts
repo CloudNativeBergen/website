@@ -38,6 +38,35 @@ function body(overrides: Record<string, string | Blob | null> = {}) {
 }
 
 describe('checkWallFields', () => {
+  it('reads an absent or empty talkId as untagged, and keeps a document id', () => {
+    expect(checkWallFields(body())).toMatchObject({ fields: { talkId: null } })
+    expect(checkWallFields(body({ talkId: '' }))).toMatchObject({
+      fields: { talkId: null },
+    })
+    expect(checkWallFields(body({ talkId: 'abc-DEF_123' }))).toMatchObject({
+      fields: { talkId: 'abc-DEF_123' },
+    })
+  })
+
+  it.each([
+    ['a drafts. id', 'drafts.abc'],
+    ['an id list', 'a,b'],
+    ['a GROQ fragment', '*[_type=="talk"]'],
+    ['an id over 128 characters', 'a'.repeat(129)],
+  ])('refuses %s as talkId', (_, talkId) => {
+    expect(checkWallFields(body({ talkId }))).toEqual({
+      ok: false,
+      field: 'talkId',
+    })
+  })
+
+  it('refuses a file part as talkId', () => {
+    expect(checkWallFields(body({ talkId: photo() }))).toEqual({
+      ok: false,
+      field: 'talkId',
+    })
+  })
+
   it('reads every field of a well-formed body', () => {
     const result = checkWallFields(body())
     expect(result).toMatchObject({

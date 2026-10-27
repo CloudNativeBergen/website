@@ -69,6 +69,14 @@ export default defineType({
       validation: (Rule) => Rule.max(40),
     }),
     defineField({
+      name: 'talk',
+      title: 'Talk',
+      description: 'The talk this photo shows, if the contributor tagged one.',
+      type: 'reference',
+      to: [{ type: 'talk' }],
+      weak: true,
+    }),
+    defineField({
       name: 'marketingConsent',
       title: 'Marketing OK',
       type: 'boolean',

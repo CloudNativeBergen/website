@@ -78,6 +78,15 @@ const readPost = (uploadId: string) =>
     wallPostId(uploadId),
   )
 
+/** A published talk of this conference. The id is checked: no `.`, no list. */
+async function isConferenceTalk(talkId: string, conferenceId: string) {
+  const talk = await clientReadUncached.getDocument<{
+    _type?: string
+    conference?: { _ref?: string }
+  }>(talkId)
+  return talk?._type === 'talk' && talk.conference?._ref === conferenceId
+}
+
 const refuse = (refusal: WallSubmitRefusal, why: string): WallSubmitOutcome => {
   // The reason only, never the content: the organizer never sees refusals
   // (§6.3), the logs are where a pattern of them shows up.
@@ -135,6 +144,9 @@ export async function submitWallPost({
   const bytes = new Uint8Array(await fields.photo.arrayBuffer())
   const photo = checkWallPhoto(bytes)
   if (!photo.ok) return refuse('failed', `photo ${photo.reason}`)
+  if (fields.talkId && !(await isConferenceTalk(fields.talkId, conferenceId))) {
+    return refuse('failed', 'talk')
+  }
 
   // 5. Upload, then create; not under another's id.
   if (taken) return refuse('failed', 'uploadId taken')
@@ -190,6 +202,9 @@ async function createPost({
         crop: fields.crop,
         ...(fields.caption ? { caption: fields.caption } : {}),
         ...(fields.name ? { name: fields.name } : {}),
+        ...(fields.talkId
+          ? { talk: { _type: 'reference', _ref: fields.talkId, _weak: true } }
+          : {}),
         marketingConsent: fields.marketingConsent,
         deviceKey,
         submittedAt: now.toISOString(),

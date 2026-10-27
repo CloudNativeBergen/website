@@ -109,6 +109,7 @@ interface FormFields {
   cropX?: string
   cropY?: string
   marketingConsent?: string
+  talkId?: string
 }
 
 function form(fields: FormFields = {}): FormData {
@@ -136,6 +137,7 @@ function form(fields: FormFields = {}): FormData {
   body.set('cropX', values.cropX)
   body.set('cropY', values.cropY)
   body.set('marketingConsent', values.marketingConsent)
+  if (values.talkId !== undefined) body.set('talkId', values.talkId)
   return body
 }
 
@@ -233,6 +235,33 @@ describe('submitWallPost: a post goes in', () => {
   })
 })
 
+const talk = (id: string, conferenceRef: string): Doc => ({
+  _id: id,
+  _type: 'talk',
+  conference: { _type: 'reference', _ref: conferenceRef },
+})
+
+describe('submitWallPost: the talk tag', () => {
+  it('stores no talk on an untagged post', async () => {
+    await expect(submit({ form: form({ talkId: '' }) })).resolves.toEqual({
+      ok: true,
+    })
+    expect(store().doc(`wallPost-${UPLOAD_ID}`)).not.toHaveProperty('talk')
+  })
+
+  it('stores a talk of this conference as a weak reference', async () => {
+    store().put(talk('talk-A', 'conf-A'))
+    await expect(submit({ form: form({ talkId: 'talk-A' }) })).resolves.toEqual(
+      { ok: true },
+    )
+    expect(store().doc(`wallPost-${UPLOAD_ID}`)!.talk).toEqual({
+      _type: 'reference',
+      _ref: 'talk-A',
+      _weak: true,
+    })
+  })
+})
+
 describe('submitWallPost: guard before upload', () => {
   const fourMiBAndOne = Buffer.concat([PHOTO, Buffer.alloc(4_194_305)])
 
@@ -284,6 +313,30 @@ describe('submitWallPost: guard before upload', () => {
       'failed',
     ],
     ['no wall', () => store().reset([]), () => ({}), 'failed'],
+    [
+      "another conference's talk",
+      () => store().put(talk('talk-B', 'conf-B')),
+      () => ({ form: form({ talkId: 'talk-B' }) }),
+      'failed',
+    ],
+    [
+      'an unknown talk id',
+      () => {},
+      () => ({ form: form({ talkId: 'talk-nope' }) }),
+      'failed',
+    ],
+    [
+      'a draft talk of this conference',
+      () => store().put(talk('drafts.talk-A', 'conf-A')),
+      () => ({ form: form({ talkId: 'drafts.talk-A' }) }),
+      'failed',
+    ],
+    [
+      'a talk id naming a document of another type',
+      () => store().put({ ...talk('talk-A', 'conf-A'), _type: 'speaker' }),
+      () => ({ form: form({ talkId: 'talk-A' }) }),
+      'failed',
+    ],
     [
       "only another conference's wall, under this conference's wall id",
       () =>
