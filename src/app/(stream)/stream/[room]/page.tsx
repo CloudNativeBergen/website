@@ -1,3 +1,4 @@
+import clsx from 'clsx'
 import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -115,7 +116,12 @@ export default async function StreamRoomPage({ params, searchParams }: Props) {
             />
           )}
 
-          <div className={STREAM_CONFIG.layout.contentSpacing}>
+          <div
+            className={clsx(
+              STREAM_CONFIG.layout.contentSpacing,
+              blueskyHandle && STREAM_CONFIG.layout.splitColumns,
+            )}
+          >
             <NextTalkDisplay
               schedules={conference.schedules}
               roomTrackTitle={matchedTrack.trackTitle}
