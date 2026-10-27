@@ -53,13 +53,20 @@ beforeEach(() => {
 
 describe('photoWallPublic.talkPhotos', () => {
   it('answers the first six of getTalkPhotos and the full count', async () => {
-    h.getTalkPhotos.mockResolvedValue(Array.from({ length: 9 }, (_, i) => post(i)))
+    h.getTalkPhotos.mockResolvedValue(
+      Array.from({ length: 9 }, (_, i) => post(i)),
+    )
     const view = await visitor().talkPhotos({ talkId: 'talk-1' })
     expect(h.getTalkPhotos).toHaveBeenCalledWith('conf-A', 'talk-1')
     expect(view.count).toBe(9)
-    expect(view.posts.map((p) => p._id)).toEqual(
-      ['post-0', 'post-1', 'post-2', 'post-3', 'post-4', 'post-5'],
-    )
+    expect(view.posts.map((p) => p._id)).toEqual([
+      'post-0',
+      'post-1',
+      'post-2',
+      'post-3',
+      'post-4',
+      'post-5',
+    ])
     expect(view.posts[0]).toMatchObject({
       src: 'https://cdn/p0.jpg?square',
       whole: { src: 'https://cdn/p0.jpg?whole', width: 800, height: 600 },

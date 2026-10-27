@@ -15,7 +15,9 @@ const post = (i: number): WallPagePost => ({
 
 describe('TalkPhotoRow (talk photos spec §7.1)', () => {
   it('renders nothing without photos', () => {
-    const { container } = render(<TalkPhotoRow view={{ posts: [], count: 0 }} />)
+    const { container } = render(
+      <TalkPhotoRow view={{ posts: [], count: 0 }} />,
+    )
     expect(container).toBeEmptyDOMElement()
   })
 
@@ -43,7 +45,10 @@ describe('TalkPhotoRow (talk photos spec §7.1)', () => {
     render(<TalkPhotoRow view={{ posts: [post(0)], count: 1 }} />)
     fireEvent.click(screen.getByRole('button'))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByRole('img')).toHaveAttribute('src', '/whole0.jpg')
+    expect(within(dialog).getByRole('img')).toHaveAttribute(
+      'src',
+      '/whole0.jpg',
+    )
     expect(within(dialog).getByText('Kari')).toBeInTheDocument()
   })
 })
