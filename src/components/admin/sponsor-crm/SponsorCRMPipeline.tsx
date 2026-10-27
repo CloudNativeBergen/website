@@ -188,7 +188,7 @@ export function SponsorCRMPipeline({
       view: currentView,
     },
     {
-      refetchInterval: isUserBusy ? false : 30_000,
+      refetchInterval: isUserBusy ? false : 120_000,
       refetchOnWindowFocus: !isUserBusy,
     },
   )
