@@ -21,7 +21,9 @@ post untagged. An organizer can set, change or clear the tag on
 - in **Photos of your talks** on the speaker dashboard (`/cfp/list`).
 
 A speaker can opt out. If **any** speaker of a talk has opted out, that
-talk's photos show nowhere outside the Photo Wall itself (§7.4).
+talk's photos leave the program and every speaker page (§7.4). They stay on
+the Photo Wall, and the talk's speakers still see them on their own dashboard,
+marked as hidden (§7.3).
 
 ### Out of scope
 
@@ -51,7 +53,7 @@ Builds on `CONTEXT.md` ("Photo Wall") and the Photo Wall spec §2.
   or `happening-soon` (`getTalkStatus`, `src/lib/program/time-utils.ts`).
 - **Recent talk**: a talk in the chosen room that ended at most 30 minutes ago.
 - **Talk photo opt-out**: a speaker's choice that attendee photos of their
-  talks are not shown on the program, speaker pages or dashboard.
+  talks are not shown on the program or on speaker pages.
 
 ## 3. Decision index
 
@@ -72,7 +74,7 @@ Decided by the user while this spec was written (2026-10-27):
 - **Opt-out scope:** the opt-out hides talk galleries only (talk card, speaker
   pages). `/wall` and Screen Mode are unchanged (§7.4).
 
-Refinements (spec), each settled here:
+Settled in this spec without asking:
 
 | Topic         | Rule                                                            |
 | ------------- | --------------------------------------------------------------- |
@@ -139,9 +141,10 @@ strip and above the consent note.
    names, room, start, end). It is public program data.
 2. **Room:** chips of the current day's tracks. With one track there is no
    choice. The last room chosen is kept in `sessionStorage` for the next post.
-3. **Suggestion:** for the chosen room and `getCurrentConferenceTime()` (which
-   follows the dev time simulation, `src/lib/program/dev-time.ts`), the
-   running talk; else the recent talk; else none. Shown as "Tag: _title_
+3. **Suggestion:** for the chosen room and `getCurrentConferenceTime()`
+   (`src/lib/program/time-utils.ts`, which follows the dev time simulation in
+   `src/lib/program/dev-time.ts`), the running talk; else the recent talk;
+   else none. Shown as "Tag: _title_
    (now in _room_)", preselected.
 4. **Change talk:** a list with today's talks in the chosen room first, then
    the other rooms, then earlier days, newest first. Any talk of this
@@ -171,7 +174,7 @@ tag (talk title, speakers) or **Add talk** on every tab, and **Change** /
 
 A new `photoWall.setTalkTag` mutation (`adminProcedure`,
 `src/server/routers/photoWall.ts`) takes the post id, the `shown` incarnation
-like `approve` and `remove`, and `talkId` or `null`. It checks the talk's
+(as `approve` and `remove` do), and `talkId` or `null`. It checks the talk's
 conference as Submit does (`BAD_REQUEST` otherwise), patches with
 `ifRevisionId` against the read (re-read and retry once on a conflict, as
 `moderateWallPost` in `src/lib/photo-wall/moderate.ts`), and expires the tags
@@ -180,8 +183,9 @@ tag of a post on the wall doesn't take it off.
 
 ## 7. Where tagged photos show
 
-Only **approved** posts, of a conference with a Photo Wall, of a talk where no
-speaker has opted out. Newest approval first.
+Only **approved** posts, newest approval first. The public surfaces (§7.1,
+§7.2) also require that no speaker of the talk has opted out; the dashboard
+(§7.3) does not.
 
 ### 7.1 Program talk card
 
@@ -208,14 +212,16 @@ talks (N)** for the speaker's talks at that conference, each photo with a
 link to the whole image. Below it, the opt-out switch (§7.4). The speaker
 sees their talks' photos here even when a co-speaker opted out, with a line
 saying they are hidden from public pages, so they can see what the opt-out
-hides.
+hides. This read therefore skips the opt-out condition of §8; whether that is
+a flag on `getTalkPhotos` or a second function is an _implementation detail_.
 
 ### 7.4 Opt-out
 
 A speaker sets or clears it on the dashboard and in the profile
-(`CFPProfilePage`, where `socialTagOptOut` already sits), through
-`updateSpeaker` (`src/server/routers/speaker.ts`) as that field is. An
-organizer can set it in `SpeakerManagementModal`, never clear it.
+(`CFPProfilePage`, where `socialTagOptOut` already sits), through a self-only
+mutation that writes just that field, as `setSocialTagOptOut` does
+(`src/server/routers/speaker.ts`). An organizer can set it in
+`SpeakerManagementModal`, never clear it.
 
 A talk's photos are hidden on the talk card and on **every** speaker page for
 that talk when any of its speakers (`talk.speakers`) has opted out. The rule
@@ -228,13 +234,13 @@ wants a specific photo gone asks the organizers, who use Delete now (§9).
 
 ## 8. Caching
 
-One read, `getTalkPhotos(conferenceId, talkId)` in
+The public surfaces share one read, `getTalkPhotos(conferenceId, talkId)` in
 `src/lib/photo-wall/cache.ts`, `'use cache: remote'` over the uncached client,
 `default` life, tagged `photo-wall-talk:<talkId>` (`photoWallTalkTag` in
 `src/lib/cache/tags.ts`) and `photo-wall:<conferenceId>`.
 
 Expired with `revalidateTag(tag, { expire: 0 })` as the rest of the Photo Wall
-(§8 there). `expireWallPost` and `updateWallPostTags` gain an optional talk id
+(Photo Wall spec §8). `expireWallPost` and `updateWallPostTags` gain an optional talk id
 (both the old and new one on a tag change):
 
 | Write                                     | Also expires                                      |
@@ -298,8 +304,8 @@ T5; T8 last.
   dashboard, profile and admin modal, its expiry (§8), the
   `PRIVACY_OPERATIONS.md` and `/privacy` lines (§9).
 
-T8 can ship before T6 and T7 if the user wants the opt-out in place before
-any photo is public; otherwise T5's condition reads an absent field as "not
+T8 can ship before T6 and T7 to have the opt-out in place before any photo is
+public; otherwise T5's condition reads an absent field as "not
 opted out" and is already correct.
 
 ## 11. Verification
@@ -313,7 +319,8 @@ As the Photo Wall spec §14, plus:
   today.
 - **Opt-out:** a talk with two speakers, one opted out, returns no photos from
   `getTalkPhotos`. Sabotage-prove it by dropping the condition.
-- **Status:** a pending, rejected or removed tagged post is never returned.
+- **Status:** a tagged post that is Pending, Not shown or Deleting is never
+  returned.
 - **Concurrency:** `setTalkTag` against a changed revision, using
   `__tests__/helpers/versionedSanityStore.ts`.
 - **Tags:** each write in §8 expires the listed tags, including both on a tag
