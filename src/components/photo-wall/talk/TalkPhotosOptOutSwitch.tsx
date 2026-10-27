@@ -58,10 +58,10 @@ export function TalkPhotosOptOutSwitch({
     >
       <HelpText>
         Attendees can tag a Photo Wall photo with the talk it shows. Tick this
-        and those photos are not shown with your talks on the program or on
-        speaker pages. If you share a talk with other speakers, it is hidden for
-        them too. The photos stay on the Photo Wall; to have one removed, ask
-        the organizers.
+        box and photos of your talks are not shown on the program or on speaker
+        pages. Photos of a talk you share with other speakers are hidden from
+        their pages too. The photos stay on the Photo Wall; to have one removed,
+        ask the organizers.
       </HelpText>
       {locked && (
         <HelpText>
@@ -76,7 +76,8 @@ export function TalkPhotosOptOutSwitch({
           {state === 'error' && (
             <HelpText>
               <span className="text-red-600 dark:text-red-400">
-                Could not save that just now. Nothing changed. Please try again.
+                Could not save that just now &mdash; nothing changed. Please try
+                again.
               </span>
             </HelpText>
           )}

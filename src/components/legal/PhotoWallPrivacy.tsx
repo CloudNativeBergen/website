@@ -32,7 +32,7 @@ export function PhotoWallPrivacy() {
           <strong>Who sees it:</strong> your post appears on the wall at the
           venue and on the conference website only after an organizer approves
           it. A photo tagged with a talk is also shown with that talk on the
-          program and its speakers&apos; pages, unless a speaker of that talk
+          program and on its speakers&apos; pages, unless one of those speakers
           chose to hide photos of their talks. The photo file itself is stored
           with an unlisted web address from the moment you post it, so anyone
           who has that address can open it, even before approval or after it is
