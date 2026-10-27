@@ -8,7 +8,7 @@
  * together, and matching intervals are what keeps them collapsing into a single
  * in-flight fetch instead of two staggered ones.
  *
- * 60s (was 30s) is well inside expectations for a badge: the count is also
+ * 180s (was 60s, before that 30s) is still fine for a badge: the count is also
  * invalidated eagerly on every action that changes it (opening a thread,
  * marking read, a push click), so the poll is only the backstop for events that
  * arrive while the page sits idle.
@@ -17,4 +17,4 @@
  * 20s): that one runs only while someone is actively reading a conversation,
  * where latency is felt.
  */
-export const NOTIFICATION_POLL_MS = 60_000
+export const NOTIFICATION_POLL_MS = 180_000
