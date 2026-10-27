@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Speaker, SpeakerInput } from '@/lib/speaker/types'
 import { api } from '@/lib/trpc/client'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
-import { TalkPhotosOptOutSwitch } from '@/components/photo-wall/talk/TalkPhotosOptOutSwitch'
+import { SelfTalkPhotosOptOutSwitch } from '@/components/photo-wall/talk/TalkPhotosOptOutSwitch'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import {
   CheckCircleIcon,
@@ -361,7 +361,7 @@ export function CFPProfilePage({
             </h2>
             <div className="mt-3">
               {/* Keyed on the stored value so a refetch resets the box. */}
-              <TalkPhotosOptOutSwitch
+              <SelfTalkPhotosOptOutSwitch
                 key={String(speaker?.talkPhotosOptOut === true)}
                 stored={speaker?.talkPhotosOptOut}
               />

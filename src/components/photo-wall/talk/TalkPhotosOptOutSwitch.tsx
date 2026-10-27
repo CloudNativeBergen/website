@@ -6,26 +6,65 @@ import { Checkbox, HelpText } from '@/components/Form'
 import { api } from '@/lib/trpc/client'
 
 /**
- * "Hide photos of my talks" (talk photos spec §7.4). Self: autosaves through
- * `speaker.setTalkPhotosOptOut`, which writes just that field, then refreshes
- * the page so the dashboard's hidden lines follow. Organizer (`onChange`):
- * reports `true` or `undefined` into the admin save, and once the opt-out is
- * stored it is locked, because only the speaker may clear it.
+ * The speaker's own switch: autosaves through `speaker.setTalkPhotosOptOut`,
+ * which writes just that field. `onSaved` runs after a committed save.
+ */
+export function SelfTalkPhotosOptOutSwitch({
+  stored,
+  onSaved,
+}: {
+  stored?: boolean
+  onSaved?: () => void
+}) {
+  const mutation = api.speaker.setTalkPhotosOptOut.useMutation()
+  return (
+    <TalkPhotosOptOutSwitch
+      stored={stored}
+      save={async (next) => {
+        await mutation.mutateAsync({ talkPhotosOptOut: next })
+        onSaved?.()
+      }}
+    />
+  )
+}
+
+/** On the dashboard: refresh after a save so the hidden lines follow. */
+export function DashboardTalkPhotosOptOutSwitch({
+  stored,
+}: {
+  stored?: boolean
+}) {
+  const router = useRouter()
+  return (
+    <SelfTalkPhotosOptOutSwitch
+      stored={stored}
+      onSaved={() => router.refresh()}
+    />
+  )
+}
+
+/**
+ * "Hide photos of my talks" (talk photos spec §7.4). Self (`save`): autosaves.
+ * Organizer (`onChange`): reports `true` or `undefined` into the admin save,
+ * and once the opt-out is stored it is locked, because only the speaker may
+ * clear it. No hooks of its own beyond state, so the admin modal pulls in no
+ * mutation.
  */
 export function TalkPhotosOptOutSwitch({
   stored,
   onChange,
+  save,
 }: {
   stored?: boolean
   /** Organizer mode: the value for the admin save, `undefined` for no change. */
   onChange?: (next: true | undefined) => void
+  /** Self mode: persist the value; throws when nothing was saved. */
+  save?: (next: boolean) => Promise<void>
 }) {
-  const router = useRouter()
   const [value, setValue] = useState(stored === true)
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>(
     'idle',
   )
-  const mutation = api.speaker.setTalkPhotosOptOut.useMutation()
   const organizer = onChange !== undefined
   const locked = organizer && stored === true
 
@@ -37,7 +76,7 @@ export function TalkPhotosOptOutSwitch({
     }
     setState('saving')
     try {
-      await mutation.mutateAsync({ talkPhotosOptOut: next })
+      await save?.(next)
     } catch {
       // The stored value did not change, so neither does the box.
       setValue(!next)
@@ -45,7 +84,6 @@ export function TalkPhotosOptOutSwitch({
       return
     }
     setState('saved')
-    router.refresh()
   }
 
   return (

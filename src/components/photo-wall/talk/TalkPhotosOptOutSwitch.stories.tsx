@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { expect, fn, userEvent, within } from 'storybook/test'
-import { TalkPhotosOptOutSwitch } from './TalkPhotosOptOutSwitch'
+import {
+  SelfTalkPhotosOptOutSwitch,
+  TalkPhotosOptOutSwitch,
+} from './TalkPhotosOptOutSwitch'
 
 // The global Session/TRPC decorators provide the providers; MSW answers the
 // `speaker.setTalkPhotosOptOut` mutation.
@@ -32,6 +35,7 @@ type Story = StoryObj<typeof meta>
 /** The speaker's switch on the dashboard and profile (talk photos spec §7.4). */
 export const Self: Story = {
   args: { stored: undefined },
+  render: (args) => <SelfTalkPhotosOptOutSwitch stored={args.stored} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const box = canvas.getByRole('checkbox', {

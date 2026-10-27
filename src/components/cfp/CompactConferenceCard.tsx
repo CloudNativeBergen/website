@@ -9,7 +9,7 @@ import { CompactConferenceHeader } from './CompactConferenceHeader'
 import { CompactProposalList } from './CompactProposalList'
 import { CompactPhotoStrip } from './CompactPhotoStrip'
 import { SpeakerTalkPhotoList } from '@/components/photo-wall/talk/SpeakerTalkPhotos'
-import { TalkPhotosOptOutSwitch } from '@/components/photo-wall/talk/TalkPhotosOptOutSwitch'
+import { DashboardTalkPhotosOptOutSwitch } from '@/components/photo-wall/talk/TalkPhotosOptOutSwitch'
 import { CompactWorkshopStats } from './CompactWorkshopStats'
 import { CompactTravelSupport } from './CompactTravelSupport'
 import { CompactBadges } from './CompactBadges'
@@ -107,7 +107,9 @@ export function CompactConferenceCard({
           {data.talkPhotos && data.talkPhotos.length > 0 && (
             <div className="space-y-3">
               <SpeakerTalkPhotoList talks={data.talkPhotos} />
-              <TalkPhotosOptOutSwitch stored={speaker.talkPhotosOptOut} />
+              <DashboardTalkPhotosOptOutSwitch
+                stored={speaker.talkPhotosOptOut}
+              />
             </div>
           )}
 
