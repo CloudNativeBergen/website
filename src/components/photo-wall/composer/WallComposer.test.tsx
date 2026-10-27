@@ -566,9 +566,7 @@ describe('WallComposer Talk row (Talk photos spec §6.1)', () => {
     const onSubmit = await composeTagged('untagged')
     expect(tag()).toHaveTextContent(/Pick your room/)
     fireEvent.click(room('Main stage'))
-    expect(tag()).toHaveTextContent(
-      'Tag: Running Kubernetes on a fjord ferry (now in Main stage)',
-    )
+    expect(tag()).toHaveTextContent('Tag: Running Kubernetes on a fjord ferry')
     expect(sessionStorage.getItem(ROOM_KEY)).toBe('Main stage')
     expect(await postedTalkId(onSubmit)).toBe('talk-a1')
   })
@@ -588,7 +586,6 @@ describe('WallComposer Talk row (Talk photos spec §6.1)', () => {
       target: { value: 'talk-d1' },
     })
     expect(tag()).toHaveTextContent('Tag: Opening keynote')
-    expect(tag()).not.toHaveTextContent('now in')
     expect(await postedTalkId(onSubmit)).toBe('talk-d1')
   })
 

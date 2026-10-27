@@ -37,7 +37,7 @@ export const Suggested: Story = {
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getByRole('radio', { name: 'Main stage' }))
     await expect(canvas.getByTestId('talk-tag')).toHaveTextContent(
-      'now in Main stage',
+      'Tag: Running Kubernetes on a fjord ferry',
     )
     await expect(args.onChange).toHaveBeenLastCalledWith('talk-a1')
   },

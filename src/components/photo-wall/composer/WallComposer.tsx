@@ -314,8 +314,8 @@ export function WallComposer({
             </time>
             ; the square you choose is only how the polaroids frame it. A photo
             tagged with a talk is also shown with that talk on the program and
-            on its speakers&apos; pages. Only post photos the people in them are
-            happy with.{' '}
+            its speakers’ pages. Only post photos the people in them are happy
+            with.{' '}
             <a
               className="underline underline-offset-2 hover:text-gray-900 dark:hover:text-white"
               href="/privacy#photo-wall"

@@ -122,10 +122,9 @@ export function TalkPicker({
         {tagged ? (
           <>
             Tag: <span className="font-semibold">{titleOf(tagged)}</span>
-            {tagged === suggested && <> (now in {tagged.room})</>}
           </>
         ) : rooms.length > 1 && !room ? (
-          'Pick your room to tag the talk, or post without one.'
+          'Pick your room to tag its talk, or post without one.'
         ) : (
           'No talk tagged.'
         )}
