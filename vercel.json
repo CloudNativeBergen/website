@@ -42,7 +42,7 @@
     },
     {
       "path": "/api/cron/social-publish",
-      "schedule": "* * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/marketing-snapshots",
