@@ -45,10 +45,14 @@ conference.
   **automatic safety check** (from
   [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeBergen/website/issues/1479)).
 - **Editing a Wall Post**, by its contributor or by an organizer. A post is
-  approved or rejected exactly as sent.
+  approved or rejected exactly as sent. One exception: an organizer may set,
+  change or clear its talk tag, which is metadata, not content
+  ([photos of my talk](PHOTO_WALL_TALK_PHOTOS_SPEC.md)).
 - **Sign-in for contributors.** Anyone with the link can post.
 - **Push delivery** (SSE, WebSockets, Sanity Live). Screens and phones poll a
   cached list (§8).
+- **Photos of a talk** (tagging a Wall Post with a talk, shown on the program
+  and speaker pages): [its own spec](PHOTO_WALL_TALK_PHOTOS_SPEC.md).
 
 ## 2. Vocabulary
 

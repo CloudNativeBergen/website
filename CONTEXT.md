@@ -141,7 +141,7 @@ A conference's shared wall of attendee photos. Anyone with its QR link can contr
 _Avoid_: gallery (an organizer's official photos), social wall, photo booth
 
 **Wall Post**:
-One attendee contribution to a Photo Wall: a photo with an optional filter, text and name. It is pending until an organizer approves it, which puts it on the wall, or rejects or removes it, which leaves it not shown; before approval only its contributor and the organizers see it. Organizers never edit it.
+One attendee contribution to a Photo Wall: a photo with an optional filter, text and name. It is pending until an organizer approves it, which puts it on the wall, or rejects or removes it, which leaves it not shown; before approval only its contributor and the organizers see it. Organizers never edit it, except its talk tag, which is metadata, not content ([Photo Wall: photos of my talk](docs/PHOTO_WALL_TALK_PHOTOS_SPEC.md)).
 _Avoid_: post (what a marketing publishing Task produces), upload, submission, photo
 
 **Screen Mode**:
