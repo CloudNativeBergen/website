@@ -151,8 +151,11 @@ export interface UserMenuProps {
   speaker?: Speaker
   /** The account the user authenticated with (`session.account`). */
   account?: Account
-  /** Photo Wall posting is open right now (computed server-side). */
-  photoWallOpen?: boolean
+  /**
+   * Photo Wall state (computed server-side): `open` while posting is open,
+   * `closed` when a wall exists but posting is not; undefined hides the group.
+   */
+  photoWall?: 'open' | 'closed'
 }
 
 /**
@@ -167,7 +170,7 @@ export function UserMenu({
   picture,
   speaker,
   account,
-  photoWallOpen,
+  photoWall,
 }: UserMenuProps) {
   const { canInstall } = usePwaInstall()
 
@@ -212,15 +215,23 @@ export function UserMenu({
           />
         )}
 
-        {photoWallOpen && (
+        {photoWall && (
           <Fragment>
             <Divider />
             <SectionLabel>Photo Wall</SectionLabel>
-            <LinkItem
-              href="/wall/post"
-              label="Post a photo"
-              icon={CameraIcon}
-            />
+            {photoWall === 'open' ? (
+              <LinkItem
+                href="/wall/post"
+                label="Post a photo"
+                icon={CameraIcon}
+              />
+            ) : (
+              <LinkItem
+                href="/wall/post#my-posts"
+                label="My posts"
+                icon={CameraIcon}
+              />
+            )}
             <LinkItem href="/wall" label="View the wall" icon={PhotoIcon} />
           </Fragment>
         )}

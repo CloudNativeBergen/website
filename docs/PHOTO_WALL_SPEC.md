@@ -454,6 +454,9 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
   **My posts** link, so a contributor can still delete a post or change the
   marketing switch (§12). After the purge My posts is empty; the page keys on
   `closedAt` only and keeps the link.
+- User menu: while a wall exists, a Photo Wall group links **Post a photo**
+  (while posting is open) or **My posts** (`/wall/post#my-posts`, otherwise),
+  and **View the wall**.
 
 ### 9.2 Screen Mode (`/wall/screen`)
 

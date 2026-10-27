@@ -22,10 +22,10 @@ import { PublicHeaderBell } from '@/components/PublicHeaderBell'
 // RSC flight payload, so the server side hands over `pickHeaderConference(c)`.
 export function Header({
   c,
-  photoWallOpen,
+  photoWall,
 }: {
   c: HeaderConference
-  photoWallOpen?: boolean
+  photoWall?: 'open' | 'closed'
 }) {
   const { data: session } = useSession()
   const isPast = isConferenceOver(c)
@@ -79,7 +79,7 @@ export function Header({
                   picture={session.user.picture}
                   speaker={session.speaker}
                   account={session.account}
-                  photoWallOpen={photoWallOpen}
+                  photoWall={photoWall}
                 />
               ) : (
                 <Link href="/cfp/list" className="flex items-center">
