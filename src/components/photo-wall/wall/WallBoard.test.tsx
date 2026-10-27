@@ -224,12 +224,17 @@ describe('WallBoardView (§9.1)', () => {
   it('offers Add your photo, to the composer, while posting is open', () => {
     renderView(view({ posts: [post('wallPost-1')] }))
     expect(addLink()).toHaveAttribute('href', '/wall/post')
+    expect(screen.queryByRole('link', { name: 'My posts' })).toBeNull()
   })
 
-  it('offers no Add your photo while posting is not open', () => {
+  it('offers My posts instead of Add your photo while posting is not open', () => {
     renderView(view({ postingOpen: false, posts: [post('wallPost-1')] }))
     expect(addLink()).toBeNull()
     expect(screen.getAllByRole('figure')).toHaveLength(1)
+    expect(screen.getByRole('link', { name: 'My posts' })).toHaveAttribute(
+      'href',
+      '/wall/post#my-posts',
+    )
   })
 
   it('names the organizers’ address for a removal request (§9.1)', () => {
@@ -271,10 +276,14 @@ describe('WallBoardView (§9.1)', () => {
     expect(addLink()).toBeNull()
   })
 
-  it('a closed wall shows only that it closed (§9.1, §11.1)', () => {
+  it('a closed wall shows that it closed and the way to My posts (§9.1, §11.1)', () => {
     renderView(view({ closed: true, postingOpen: true }))
     expect(screen.getByText('This wall has closed.')).toBeInTheDocument()
     expect(addLink()).toBeNull()
+    expect(screen.getByRole('link', { name: 'My posts' })).toHaveAttribute(
+      'href',
+      '/wall/post#my-posts',
+    )
     expect(screen.queryByText('No photos yet.')).toBeNull()
     expect(screen.queryByRole('contentinfo')).toBeNull()
   })
