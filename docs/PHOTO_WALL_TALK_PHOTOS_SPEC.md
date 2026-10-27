@@ -73,6 +73,9 @@ Decided by the user while this spec was written (2026-10-27):
   co-speaker opted out, marked as hidden from public pages (§7.3).
 - **Opt-out scope:** the opt-out hides talk galleries only (talk card, speaker
   pages). `/wall` and Screen Mode are unchanged (§7.4).
+- **Closed wall:** closing the wall does not hide talk galleries. Tagged
+  photos stay on talk and speaker pages until the 30-day deletion removes
+  them.
 
 Settled in this spec without asking:
 
