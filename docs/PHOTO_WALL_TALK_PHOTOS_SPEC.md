@@ -170,7 +170,7 @@ The multipart body of `POST /wall/post/submit` gains an optional `talkId`.
 
 `WallPostCard` (`src/components/photo-wall/admin/WallPostCard.tsx`) shows the
 tag (talk title, speakers) or **Add talk** on every tab, and **Change** /
-**Remove tag**. Change opens a searchable list of this conference's talks.
+**Clear tag**. Change opens a searchable list of this conference's talks.
 
 A new `photoWall.setTalkTag` mutation (`adminProcedure`,
 `src/server/routers/photoWall.ts`) takes the post id, the `shown` incarnation
