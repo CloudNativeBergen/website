@@ -49,6 +49,8 @@ conference.
 - **Sign-in for contributors.** Anyone with the link can post.
 - **Push delivery** (SSE, WebSockets, Sanity Live). Screens and phones poll a
   cached list (§8).
+- **Photos of a talk** (tagging a Wall Post with a talk, shown on the program
+  and speaker pages): [its own spec](PHOTO_WALL_TALK_PHOTOS_SPEC.md).
 
 ## 2. Vocabulary
 
