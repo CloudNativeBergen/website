@@ -50,6 +50,8 @@ export interface WallPostRequest {
   name: string
   crop: Crop
   marketingConsent: boolean
+  /** The tagged talk (Talk photos spec §6.2), or null for none. */
+  talkId: string | null
 }
 
 export type WallPostAttempt =
@@ -77,6 +79,7 @@ function submitBody(post: WallPostRequest): FormData {
   body.set('cropX', String(post.crop.x))
   body.set('cropY', String(post.crop.y))
   body.set('marketingConsent', String(post.marketingConsent))
+  if (post.talkId) body.set('talkId', post.talkId)
   return body
 }
 

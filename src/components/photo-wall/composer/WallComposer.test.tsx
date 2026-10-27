@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PhotoDecodeError } from '@/lib/photo-wall/photo'
 import { DECODE_FAILED_MESSAGE } from './ComposerLanding'
 import type { PolaroidEditorProps } from './PolaroidEditor'
+import { ROOM_KEY } from './TalkPicker'
+import { STORY_NOW, STORY_SCHEDULES } from './story-schedule'
 import { GENERIC_FAILURE_MESSAGE, WallComposer } from './WallComposer'
 
 const bakes = vi.hoisted(
@@ -527,5 +529,80 @@ describe('WallComposer', () => {
       undecodable: DECODE_FAILED_MESSAGE,
       other: GENERIC_FAILURE_MESSAGE,
     })
+  })
+})
+
+describe('WallComposer Talk row (Talk photos spec §6.1)', () => {
+  beforeEach(() => sessionStorage.clear())
+
+  async function composeTagged(photo: string) {
+    const onSubmit = vi.fn()
+    render(
+      <WallComposer
+        logo={null}
+        deletesOn="2026-11-26"
+        onSubmit={onSubmit}
+        schedules={STORY_SCHEDULES}
+        now={STORY_NOW}
+      />,
+    )
+    await pickAgain(photo)
+    return onSubmit
+  }
+
+  async function postedTalkId(onSubmit: ReturnType<typeof vi.fn>) {
+    fireEvent.click(screen.getByRole('button', { name: 'Post to the wall' }))
+    await waitFor(() => expect(bakes).toHaveLength(1))
+    await act(async () =>
+      bakes[0].resolve(new Blob(['x'], { type: 'image/jpeg' })),
+    )
+    return onSubmit.mock.calls[0][0].talkId
+  }
+
+  const tag = () => screen.getByTestId('talk-tag')
+  const room = (name: string) => screen.getByRole('radio', { name })
+
+  it('tags nothing until a room is chosen, then suggests its running talk', async () => {
+    const onSubmit = await composeTagged('untagged')
+    expect(tag()).toHaveTextContent(/Pick your room/)
+    fireEvent.click(room('Main stage'))
+    expect(tag()).toHaveTextContent(
+      'Tag: Running Kubernetes on a fjord ferry (now in Main stage)',
+    )
+    expect(sessionStorage.getItem(ROOM_KEY)).toBe('Main stage')
+    expect(await postedTalkId(onSubmit)).toBe('talk-a1')
+  })
+
+  it('keeps the last room for the next post', async () => {
+    sessionStorage.setItem(ROOM_KEY, 'Workshop room')
+    const onSubmit = await composeTagged('kept')
+    expect(room('Workshop room')).toBeChecked()
+    expect(tag()).toHaveTextContent('Tag: GitOps from scratch')
+    expect(await postedTalkId(onSubmit)).toBe('talk-b1')
+  })
+
+  it('changes the talk to one of an earlier day', async () => {
+    sessionStorage.setItem(ROOM_KEY, 'Main stage')
+    const onSubmit = await composeTagged('changed')
+    fireEvent.change(screen.getByLabelText('Change talk'), {
+      target: { value: 'talk-d1' },
+    })
+    expect(tag()).toHaveTextContent('Tag: Opening keynote')
+    expect(tag()).not.toHaveTextContent('now in')
+    expect(await postedTalkId(onSubmit)).toBe('talk-d1')
+  })
+
+  it('No talk clears the tag', async () => {
+    sessionStorage.setItem(ROOM_KEY, 'Main stage')
+    const onSubmit = await composeTagged('cleared')
+    fireEvent.click(screen.getByRole('button', { name: 'No talk' }))
+    expect(tag()).toHaveTextContent('No talk tagged.')
+    expect(await postedTalkId(onSubmit)).toBeNull()
+  })
+
+  it('shows no Talk row without a schedule, and posts untagged', async () => {
+    const onSubmit = await compose('none')
+    expect(screen.queryByTestId('talk-tag')).toBeNull()
+    expect(await postedTalkId(onSubmit)).toBeNull()
   })
 })

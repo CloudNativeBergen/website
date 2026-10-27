@@ -32,6 +32,7 @@ const request: WallPostRequest = {
   name: '',
   crop: { x: 0.25, y: 0 },
   marketingConsent: true,
+  talkId: null,
 }
 
 const json = (status: number, body: unknown) =>
@@ -96,6 +97,12 @@ describe('postToWall', () => {
     expect(new Uint8Array(await (photo[0] as Blob).arrayBuffer())).toEqual(
       new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
     )
+  })
+
+  it('sends talkId only when a talk is tagged', async () => {
+    const { send, calls } = sendAnswering(json(200, { ok: true }))
+    await postToWall({ ...request, talkId: 'talk-1' }, { send, wait })
+    expect((calls[0].init.body as FormData).get('talkId')).toBe('talk-1')
   })
 
   it.each([

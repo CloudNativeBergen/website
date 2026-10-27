@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import type { ConferenceLogoData } from '@/lib/conference/logo'
+import type { ConferenceSchedule } from '@/lib/conference/types'
 import { CENTER_CROP, postedCrop, type Crop } from '@/lib/photo-wall/crop'
 import { REFUSAL_MESSAGES, WallPostRefused } from '@/lib/photo-wall/post'
 import type { WallFilterKey } from '@/lib/photo-wall/filters'
@@ -27,6 +28,7 @@ import {
 } from './ComposerLanding'
 import { FilterStrip } from './FilterStrip'
 import { PolaroidEditor } from './PolaroidEditor'
+import { TalkPicker } from './TalkPicker'
 
 /** What Post to the wall hands on: the photo part and the fields of §6.2. */
 export interface WallPostDraft {
@@ -37,6 +39,8 @@ export interface WallPostDraft {
   name: string
   crop: Crop
   marketingConsent: boolean
+  /** The tagged talk (Talk photos spec §6.1), or null for none. */
+  talkId: string | null
 }
 
 /** The generic failure line (§6.3). */
@@ -66,6 +70,10 @@ export interface WallComposerProps {
   uploadProgress?: number | null
   /** Under the landing: My posts, if this phone has any (§6.5). */
   below?: React.ReactNode
+  /** The published schedule, for the Talk row (Talk photos spec §6.1). */
+  schedules?: ConferenceSchedule[]
+  /** Conference time for the Talk row; the clock when absent. */
+  now?: Date
 }
 
 /**
@@ -100,6 +108,8 @@ export function WallComposer({
   canPost = true,
   uploadProgress = null,
   below,
+  schedules = [],
+  now,
 }: WallComposerProps) {
   const [stage, setStage] = useState<Stage>({ kind: 'landing', error: null })
   const [filter, setFilter] = useState<WallFilterKey>('original')
@@ -107,6 +117,7 @@ export function WallComposer({
   const [caption, setCaption] = useState('')
   const [name, setName] = useState('')
   const [marketingConsent, setMarketingConsent] = useState(false)
+  const [talkId, setTalkId] = useState<string | null>(null)
   const [posting, setPosting] = useState<'idle' | 'baking' | 'sending'>('idle')
   const [failure, setFailure] = useState<Error | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
@@ -208,6 +219,7 @@ export function WallComposer({
         name: normalizeWallText(name),
         crop: postedCrop(crop),
         marketingConsent,
+        talkId,
       })
     } catch (error) {
       setFailure(
@@ -292,14 +304,18 @@ export function WallComposer({
             />
           </div>
 
+          <TalkPicker schedules={schedules} now={now} onChange={setTalkId} />
+
           <p className="mt-5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
             Your whole photo, caption and name are shown on the screens at the
             venue and on the public wall on this website until{' '}
             <time dateTime={deletesOn}>
               {formatDateLocalized(deletesOn, 'en-GB')}
             </time>
-            ; the square you choose is only how the polaroids frame it. Only
-            post photos the people in them are happy with.{' '}
+            ; the square you choose is only how the polaroids frame it. A photo
+            tagged with a talk is also shown with that talk on the program and
+            on its speakers&apos; pages. Only post photos the people in them are
+            happy with.{' '}
             <a
               className="underline underline-offset-2 hover:text-gray-900 dark:hover:text-white"
               href="/privacy#photo-wall"
