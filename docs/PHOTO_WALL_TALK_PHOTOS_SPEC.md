@@ -63,9 +63,14 @@ Decided by the user while this spec was written (2026-10-27):
   suggestion defaults to the running (or recent) talk in the chosen room; the
   picker also offers earlier days.
 - **Talk card:** at most 6 photos, plus a link to the full wall.
-- **Organizer tag changes:** the only organizer edit of a Wall Post (§6).
-  `CONTEXT.md` ("Organizers never edit it") and the Photo Wall spec §1 ("Editing
-  a Wall Post") get one sentence each naming this exception.
+- **Organizer tag changes:** an organizer may set, change or clear a post's
+  talk tag (§6.3). It is the one named exception to "organizers never edit a
+  Wall Post": the tag is metadata, not content, and nothing else on the post
+  changes. `CONTEXT.md` and the Photo Wall spec §1 record the exception.
+- **Dashboard:** a speaker still sees their own talk's photos when a
+  co-speaker opted out, marked as hidden from public pages (§7.3).
+- **Opt-out scope:** the opt-out hides talk galleries only (talk card, speaker
+  pages). `/wall` and Screen Mode are unchanged (§7.4).
 
 Refinements (spec), each settled here:
 
