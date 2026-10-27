@@ -85,13 +85,13 @@ export async function moderateWallPost({
   from?: WallPostStatus
   /** The post the card showed: a replacement under the id is `changed`. */
   shown?: ShownIncarnation
-  /** Told the device of every post read, before anything is written. */
-  onRead?: (deviceKey: string | null) => void
+  /** Told the device and talk of every post read, before any write. */
+  onRead?: (deviceKey: string | null, talkId: string | null) => void
   now?: Date
 }): Promise<ModerationResult> {
   const read = async () => {
     const post = await readWallPost(conferenceId, postId)
-    if (post) onRead?.(post.deviceKey)
+    if (post) onRead?.(post.deviceKey, post.talkId)
     return post
   }
   const first = await read()
@@ -156,6 +156,8 @@ export interface ApproveAllResult {
    * still throw, its answer lost.
    */
   deviceKeys: string[]
+  /** The talks those posts are tagged with, each once (Talk photos §8). */
+  talkIds: string[]
 }
 
 interface PendingRow {
@@ -164,6 +166,7 @@ interface PendingRow {
   _createdAt: string | null
   assetId: string | null
   deviceKey: string | null
+  talkId: string | null
 }
 
 /** A Pending card as the organizer saw it. */
@@ -204,7 +207,7 @@ export async function approveAllPending({
     ? await scopedFetch<PendingRow[]>(
         clientReadUncached,
         { conferenceId },
-        `*[_type == "wallPost" && status == "pending" && _id in $ids && !(_id in path("drafts.**"))] | order(submittedAt asc) { _id, _rev, _createdAt, "assetId": photo.asset._ref, deviceKey }`,
+        `*[_type == "wallPost" && status == "pending" && _id in $ids && !(_id in path("drafts.**"))] | order(submittedAt asc) { _id, _rev, _createdAt, "assetId": photo.asset._ref, deviceKey, "talkId": talk._ref }`,
         { ids: [...byId.keys()] },
       )
     : []
@@ -218,10 +221,11 @@ export async function approveAllPending({
     )
   })
   if (rows.length && (await isWallClosed(conferenceId))) {
-    return { approved: 0, pending: rows.length, deviceKeys: [] }
+    return { approved: 0, pending: rows.length, deviceKeys: [], talkIds: [] }
   }
   const set = patchFor('approve', now.toISOString())
   const deviceKeys = new Set<string>()
+  const talkIds = new Set<string>()
   let approved = 0
   let next = 0
 
@@ -229,6 +233,7 @@ export async function approveAllPending({
     while (next < rows.length && clock() - started < APPROVE_ALL_BUDGET_MS) {
       const row = rows[next++]
       if (row.deviceKey) deviceKeys.add(row.deviceKey)
+      if (row.talkId) talkIds.add(row.talkId)
       try {
         await clientWrite
           .patch(row._id)
@@ -248,5 +253,10 @@ export async function approveAllPending({
   await Promise.all(
     Array.from({ length: APPROVE_ALL_CONCURRENCY }, () => worker()),
   )
-  return { approved, pending: rows.length, deviceKeys: [...deviceKeys] }
+  return {
+    approved,
+    pending: rows.length,
+    deviceKeys: [...deviceKeys],
+    talkIds: [...talkIds],
+  }
 }

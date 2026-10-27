@@ -185,6 +185,7 @@ export async function sweepPhotoWall({
       continue
     }
     let deviceKey: string | null = null
+    let talkId: string | null = null
     try {
       const result = await within(
         deleteWallPost({
@@ -196,8 +197,9 @@ export async function sweepPhotoWall({
             createdAt: post.createdAt,
             assetId: post.deletingAssetId,
           },
-          onRead: (key) => {
+          onRead: (key, talk) => {
             deviceKey = key
+            talkId = talk
           },
         }),
         STUCK_FINISH_MS,
@@ -213,8 +215,12 @@ export async function sweepPhotoWall({
       console.error(`Photo Wall sweep: could not finish ${post._id}`, error)
       report.finishFailed += 1
     } finally {
-      // The queue and My posts (§8); the post left the wall when marked.
-      expireWallPost(post.conferenceId, deviceKey ?? '', { wall: false })
+      // The queue, My posts and the talk's photos (§8); the post left the
+      // wall when marked.
+      expireWallPost(post.conferenceId, deviceKey ?? '', {
+        wall: false,
+        talks: [talkId],
+      })
     }
   }
 

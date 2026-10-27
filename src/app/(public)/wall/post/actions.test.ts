@@ -224,6 +224,14 @@ describe('getMyPosts', () => {
 })
 
 describe('deleteMyPost', () => {
+  it("also expires a tagged post's talk (Talk photos spec §8)", async () => {
+    await phoneWithPost({ talk: ref('talk-1') })
+    await expect(deleteMyPost(DEVICE_POST)).resolves.toEqual({
+      status: 'deleted',
+    })
+    expect(expired()).toContain('photo-wall-talk:talk-1')
+  })
+
   it('throws, never gone, when the conference read failed: reading, writing and expiring nothing, so the card stays to press again', async () => {
     await phoneWithPost()
     h.resolution = { conference: {}, status: 'unavailable' }

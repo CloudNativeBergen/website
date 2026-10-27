@@ -26,6 +26,8 @@ export interface StoredWallPost {
   photoAssetId: string | null
   /** The asset a Delete still has to remove, while `deleting`. */
   deletingAssetId: string | null
+  /** The tagged talk's id (Talk photos spec §8): its cache tag to expire. */
+  talkId: string | null
 }
 
 /** `wallPost-<uploadId>` (§4.2): no comma, dot or path, so one document. */
@@ -46,6 +48,7 @@ interface Row {
   deviceKey?: unknown
   photo?: { asset?: { _ref?: unknown } }
   deletingAssetId?: unknown
+  talk?: { _ref?: unknown }
 }
 
 const text = (value: unknown) =>
@@ -82,6 +85,7 @@ export async function readWallPost(
     deviceKey: text(doc.deviceKey),
     photoAssetId: text(doc.photo?.asset?._ref),
     deletingAssetId: text(doc.deletingAssetId),
+    talkId: text(doc.talk?._ref),
   }
 }
 

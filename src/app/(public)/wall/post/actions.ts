@@ -103,11 +103,13 @@ export async function deleteMyPost(postId: string): Promise<MyPostDeletion> {
   const { conferenceId, deviceKey } = device
   // True while a write is out or landed: a throw then may have written.
   let written = false
+  let talkId: string | null = null
   try {
     const result = await deleteWallPost({
       conferenceId,
       postId,
       deviceKey,
+      onRead: (_, talk) => (talkId = talk),
       onWrite: (pending) => (written = pending),
     })
     written =
@@ -115,7 +117,12 @@ export async function deleteMyPost(postId: string): Promise<MyPostDeletion> {
       (result.status === 'failed' && result.marked)
     return { status: result.status }
   } finally {
-    if (written) updateWallPostTags(conferenceId, deviceKey, { wall: true })
+    if (written) {
+      updateWallPostTags(conferenceId, deviceKey, {
+        wall: true,
+        talks: [talkId],
+      })
+    }
   }
 }
 
