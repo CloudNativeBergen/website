@@ -39,6 +39,7 @@ import { groq } from 'next-sanity'
 import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
 import { ensureUniqueArrayKeys, fitsDocumentId } from '@/lib/sanity/helpers'
 import type { TicketEmailGrant } from './types'
+import { expireSpeakerTalkPhotos } from '@/lib/photo-wall/cache'
 
 /** The raw `ticketEmailGrants` of an unprojected speaker document. */
 function ticketEmailGrants(doc: MergeSpeakerDoc): TicketEmailGrant[] {
@@ -76,6 +77,9 @@ export interface MergeSpeakerDoc {
   /** #1148 — carried up to the survivor, never dropped. */
   socialTagOptOut?: boolean
   socialTagOptOutAt?: string
+  /** Talk photos spec §4.2 — carried up like `socialTagOptOut`. */
+  talkPhotosOptOut?: boolean
+  talkPhotosOptOutAt?: string
   [key: string]: unknown
 }
 
@@ -905,21 +909,24 @@ export function computeSurvivorFieldMerge(
   // The union is therefore one-directional — a loser's opt-out is carried up, a
   // survivor's is never dropped. The loser's timestamp comes with it when there
   // is one, because that is when the person actually asked.
-  if (loser.socialTagOptOut === true || survivor.socialTagOptOut === true) {
-    if (survivor.socialTagOptOut !== true) {
-      set.socialTagOptOut = true
-      filledFromLoser.push('socialTagOptOut')
+  // The talk photos opt-out (talk photos spec §4.2) follows the same rule.
+  for (const field of ['socialTagOptOut', 'talkPhotosOptOut'] as const) {
+    const at = `${field}At` as const
+    if (loser[field] !== true && survivor[field] !== true) continue
+    if (survivor[field] !== true) {
+      set[field] = true
+      filledFromLoser.push(field)
     }
     // THE EARLIEST of the two stamps, not the survivor's. Survivor selection
     // is about which record is canonical and has nothing to do with when the
     // person objected; keeping the later one would date a still-active
     // objection to after it was actually made. Only moves the value BACKWARDS,
     // so it can never invent a refusal that had not happened yet.
-    const earliest = [survivor.socialTagOptOutAt, loser.socialTagOptOutAt]
-      .filter((at): at is string => typeof at === 'string' && at !== '')
+    const earliest = [survivor[at], loser[at]]
+      .filter((v): v is string => typeof v === 'string' && v !== '')
       .sort()[0]
-    if (earliest !== undefined && earliest !== survivor.socialTagOptOutAt) {
-      set.socialTagOptOutAt = earliest
+    if (earliest !== undefined && earliest !== survivor[at]) {
+      set[at] = earliest
     }
   }
 
@@ -1928,6 +1935,15 @@ export async function mergeSpeakers(
     // Delete the loser LAST so all inbound references are already repointed.
     transaction.delete(loserId)
     await transaction.commit()
+
+    // Either side opted out of talk photos: the merged person's talks now
+    // include talks whose visibility just changed (talk photos spec §8).
+    if (
+      survivor?.talkPhotosOptOut === true ||
+      loser?.talkPhotosOptOut === true
+    ) {
+      await expireSpeakerTalkPhotos(survivorId)
+    }
 
     // Audit log: who merged what, and the shape of the change.
     console.info('[speaker-merge] merged duplicate speaker', {

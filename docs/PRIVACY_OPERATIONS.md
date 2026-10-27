@@ -203,7 +203,9 @@ organizers.
   hides tagged photos from the talk on the program and from the pages of
   every speaker of that talk. It doesn't delete them: they stay on the wall
   and Screen Mode, and a speaker who wants a photo gone asks for **Delete
-  now** as above.
+  now** as above. A merge of duplicate speaker records keeps the opt-out if
+  either record had it, and erasing a speaker keeps it, since it holds no
+  personal data and keeps their talks' photos hidden.
 
 ---
 

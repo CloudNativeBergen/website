@@ -177,6 +177,27 @@ describe('computeSurvivorFieldMerge', () => {
     expect(filledFromLoser).toContain('socialTagOptOut')
   })
 
+  it('carries the talk photos opt-out up the same way (talk photos spec §4.2)', () => {
+    const fromLoser = computeSurvivorFieldMerge(
+      speaker({}),
+      speaker({
+        _id: LOSER,
+        talkPhotosOptOut: true,
+        talkPhotosOptOutAt: '2026-10-01T09:00:00.000Z',
+      }),
+    )
+    expect(fromLoser.set.talkPhotosOptOut).toBe(true)
+    expect(fromLoser.set.talkPhotosOptOutAt).toBe('2026-10-01T09:00:00.000Z')
+    expect(fromLoser.filledFromLoser).toContain('talkPhotosOptOut')
+    // The survivor's own opt-out is never dropped by a loser without one.
+    const kept = computeSurvivorFieldMerge(
+      speaker({ talkPhotosOptOut: true }),
+      speaker({ _id: LOSER }),
+    )
+    expect(kept.set.talkPhotosOptOut).toBeUndefined()
+    expect(kept.set).not.toHaveProperty('talkPhotosOptOut')
+  })
+
   it('keeps the EARLIEST stamp when BOTH duplicates opted out', () => {
     // Which record survives is about canonicality and says nothing about when
     // the person objected. Keeping the survivor's later stamp would date a
