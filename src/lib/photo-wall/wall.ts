@@ -51,6 +51,15 @@ export interface WallPagePost {
   approvedAt: string
 }
 
+/** The most photos a program talk card shows (talk photos spec §3, §7.1). */
+export const TALK_CARD_PHOTO_LIMIT = 6
+
+/** What `photoWallPublic.talkPhotos` answers: the first photos and how many there are. */
+export interface TalkPhotosView {
+  posts: WallPagePost[]
+  count: number
+}
+
 /** What the public `photoWallPublic.get` query answers and the Wall page polls. */
 export interface WallPageView {
   /** Closed by the retention cron: the page says so and shows nothing (§11.1). */
