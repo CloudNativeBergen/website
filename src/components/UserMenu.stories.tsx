@@ -94,7 +94,7 @@ export const SignedInSpeaker: Story = {
     await expect(screen.getByText('Sign Out')).toBeVisible()
     // Admin section is hidden for non-organizers.
     await expect(screen.queryByText('Admin')).not.toBeInTheDocument()
-    // Photo Wall posting is closed here, so its group is hidden.
+    // No Photo Wall here, so its group is hidden.
     await expect(screen.queryByText('Post a photo')).not.toBeInTheDocument()
   },
 }
@@ -137,7 +137,7 @@ export const PhotoWallOpen: Story = {
     picture: 'https://placehold.co/40x40/4f46e5/fff/png?text=JD',
     speaker: baseSpeaker,
     account: githubAccount,
-    photoWallOpen: true,
+    photoWall: 'open',
   },
   parameters: {
     docs: {
@@ -156,5 +156,31 @@ export const PhotoWallOpen: Story = {
     await expect(
       screen.getByText('View the wall', { selector: 'span' }).closest('a'),
     ).toHaveAttribute('href', '/wall')
+  },
+}
+
+export const PhotoWallClosed: Story = {
+  args: {
+    name: 'Jane Doe',
+    picture: 'https://placehold.co/40x40/4f46e5/fff/png?text=JD',
+    speaker: baseSpeaker,
+    account: githubAccount,
+    photoWall: 'closed',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Once posting has closed, the Photo Wall group links to My posts (delete a post, change marketing consent) and to the wall.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await openMenu(canvasElement)
+    await expect(screen.getByText('My posts').closest('a')).toHaveAttribute(
+      'href',
+      '/wall/post#my-posts',
+    )
+    await expect(screen.queryByText('Post a photo')).not.toBeInTheDocument()
   },
 }
