@@ -38,13 +38,14 @@ export function TalkPhotosOptOutSwitch({
     setState('saving')
     try {
       await mutation.mutateAsync({ talkPhotosOptOut: next })
-      setState('saved')
-      router.refresh()
     } catch {
       // The stored value did not change, so neither does the box.
       setValue(!next)
       setState('error')
+      return
     }
+    setState('saved')
+    router.refresh()
   }
 
   return (

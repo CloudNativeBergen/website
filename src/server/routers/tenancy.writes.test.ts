@@ -1405,6 +1405,8 @@ describe('the guarded mutation surface is pinned (#730)', () => {
       // the opt-out for somebody else goes through `admin.update`, which is
       // guarded — and which refuses to CLEAR it.
       'setSocialTagOptOut',
+      // Same construction for the talk photos opt-out (talk photos spec §7.4).
+      'setTalkPhotosOptOut',
       'update',
       'updateEmail',
     ])
