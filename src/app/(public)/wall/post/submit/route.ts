@@ -67,7 +67,7 @@ async function readCapped(
 /**
  * `POST /wall/post/submit` (Photo Wall spec §6.2): one Wall Post, multipart
  * (`photo`, `uploadId`, `caption`, `name`, `cropX`, `cropY`,
- * `marketingConsent`). A Route Handler, not a Server Action: those take 1 MB
+ * `marketingConsent`, optional `talkId`). A Route Handler, not a Server Action: those take 1 MB
  * by default. Under `/wall`, so the `Path=/wall` device cookie arrives. The
  * conference comes from the Host, never from the body.
  *

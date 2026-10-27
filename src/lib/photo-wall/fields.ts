@@ -16,6 +16,12 @@ const UPLOAD_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 /**
+ * A published Sanity document id: no `.`, so never a `drafts.` or
+ * `versions.` id, and at most Sanity's 128 characters.
+ */
+const PUBLISHED_ID = /^[A-Za-z0-9_-]{1,128}$/
+
+/**
  * A decimal number: digits with at most one point; no sign, exponent or
  * space. Each string has one way to match, so a long malformed value fails
  * in linear time instead of backtracking.
@@ -29,10 +35,18 @@ export interface WallPostFields {
   name: string | null
   crop: { x: number; y: number }
   marketingConsent: boolean
+  /** The tagged talk's id, unchecked against Sanity, or null. */
+  talkId: string | null
 }
 
 export type WallField =
-  'uploadId' | 'photo' | 'caption' | 'name' | 'crop' | 'marketingConsent'
+  | 'uploadId'
+  | 'photo'
+  | 'caption'
+  | 'name'
+  | 'crop'
+  | 'marketingConsent'
+  | 'talkId'
 
 export type WallFieldsCheck =
   { ok: true; fields: WallPostFields } | { ok: false; field: WallField }
@@ -87,6 +101,15 @@ export function checkWallFields(form: FormData): WallFieldsCheck {
     return { ok: false, field: 'marketingConsent' }
   }
 
+  // Absent or empty: untagged.
+  const talkId = form.get('talkId') || null
+  if (
+    talkId !== null &&
+    (typeof talkId !== 'string' || !PUBLISHED_ID.test(talkId))
+  ) {
+    return { ok: false, field: 'talkId' }
+  }
+
   return {
     ok: true,
     fields: {
@@ -96,6 +119,7 @@ export function checkWallFields(form: FormData): WallFieldsCheck {
       name: name.value,
       crop: { x, y },
       marketingConsent: marketing === 'true',
+      talkId,
     },
   }
 }
