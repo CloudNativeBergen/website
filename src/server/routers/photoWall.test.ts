@@ -865,12 +865,35 @@ describe('the moderation actions (§8, §10, §12)', () => {
   const P = 'wallPost-p1'
   const ASSET = 'image-shap1-1600x1000-jpg'
   const expired = () => h.revalidateTag.mock.calls
-  const tags = (deviceKey = 'device-hash', wall = true) =>
+  const tags = (deviceKey = 'device-hash', wall = true, talks: string[] = []) =>
     [
       ['photo-wall-admin:conf-A', { expire: 0 }],
       [`photo-wall-device:${deviceKey}`, { expire: 0 }],
       ...(wall ? [['photo-wall:conf-A', { expire: 0 }]] : []),
+      ...talks.map((t) => [`photo-wall-talk:${t}`, { expire: 0 }]),
     ] as const
+
+  // Talk photos spec §8: every write to a tagged post expires its talk.
+  it.each([
+    [
+      'approve',
+      () => organizer().approve({ id: P, from: 'pending', shown: SHOWN }),
+    ],
+    ['reject', () => organizer().reject({ id: P, shown: SHOWN })],
+    ['remove', () => organizer().remove({ id: P, shown: SHOWN })],
+    ['deletePost', () => organizer().deletePost({ id: P, shown: SHOWN })],
+    [
+      'approveAllPending',
+      () => organizer().approveAllPending({ shown: [{ id: P, ...SHOWN }] }),
+    ],
+  ])('%s of a tagged post also expires its talk', async (_, call) => {
+    store().reset([
+      wallOf('conf-A'),
+      ...withPhoto(postOf('conf-A', 'p1', { talk: ref('talk-1') })),
+    ])
+    await call()
+    expect(expired()).toContainEqual(['photo-wall-talk:talk-1', { expire: 0 }])
+  })
 
   beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => {}))
 
@@ -1206,17 +1229,22 @@ describe('the moderation actions (§8, §10, §12)', () => {
 
       await expect(tag('talk-1')).resolves.toEqual({ status: 'done' })
       expect(store().doc(P)?.talk).toEqual(weak('talk-1'))
-      expect(expired()).toEqual(tags())
+      expect(expired()).toEqual(tags(undefined, true, ['talk-1']))
       expect((await organizer().moderationQueue()).posts[0].talk).toEqual({
         _id: 'talk-1',
         title: 'Talk talk-1',
         speakers: ['Ada'],
       })
 
+      h.revalidateTag.mockClear()
       await expect(tag('talk-2')).resolves.toEqual({ status: 'done' })
       expect(store().doc(P)?.talk).toEqual(weak('talk-2'))
+      // The new talk and the old one (§8).
+      expect(expired()).toEqual(tags(undefined, true, ['talk-2', 'talk-1']))
 
+      h.revalidateTag.mockClear()
       await expect(tag(null)).resolves.toEqual({ status: 'done' })
+      expect(expired()).toEqual(tags(undefined, true, ['talk-2']))
       expect({ ...store().doc(P), _rev: null }).toEqual({
         ...before,
         _rev: null,

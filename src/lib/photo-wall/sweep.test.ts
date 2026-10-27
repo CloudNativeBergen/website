@@ -155,6 +155,7 @@ const fixture = (): Doc[] => [
     status: 'deleting',
     deletingAssetId: assetId('x1'),
     _updatedAt: ago(HOUR + 1000),
+    talk: { _type: 'reference', _ref: 'talk-1', _weak: true },
   }),
   asset('x1', ago(HOUR - 1000)),
   post('d2', 'conf-A', {
@@ -296,6 +297,8 @@ describe('stuck deletes (§11.2, §12)', () => {
       expect.arrayContaining([
         'photo-wall-admin:conf-A',
         'photo-wall-device:device-d1',
+        // Its talk's photos (Talk photos spec §8).
+        'photo-wall-talk:talk-1',
         'photo-wall-admin:conf-B',
         'photo-wall-device:device-d3',
       ]),

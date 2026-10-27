@@ -4,6 +4,7 @@ import {
   photoWallAdminTag,
   photoWallDeviceTag,
   photoWallTag,
+  photoWallTalkTag,
 } from '@/lib/cache/tags'
 import type { ModerationQueueData } from './moderation'
 import type { MyPost } from './my-posts'
@@ -11,7 +12,7 @@ import { readMyPosts } from './my-posts-read'
 import { readModerationQueue } from './queue'
 import { readPhotoWall } from './sanity'
 import type { PhotoWall } from './types'
-import type { WallData } from './wall'
+import type { WallData, WallPost } from './wall'
 import { readWallPosts } from './wall-read'
 
 /**
@@ -48,6 +49,24 @@ export async function getWall(conferenceId: string): Promise<WallData | null> {
 }
 
 /**
+ * One talk's photos as its public surfaces read them (Talk photos spec §8):
+ * its approved posts, newest approval first, none while any of its speakers
+ * opted out (§7.4). Cached under {@link photoWallTalkTag}, which every
+ * moderation, Delete and tag change of a post tagged with it expires, and
+ * {@link photoWallTag}, which the retention cron expires. Callers show the
+ * first few and the length as the count.
+ */
+export async function getTalkPhotos(
+  conferenceId: string,
+  talkId: string,
+): Promise<WallPost[]> {
+  'use cache: remote'
+  cacheLife('default')
+  cacheTag(photoWallTalkTag(talkId), photoWallTag(conferenceId))
+  return readWallPosts(conferenceId, talkId)
+}
+
+/**
  * The moderation queue as `/admin/photo-wall` polls it (§8), cached per
  * conference under {@link photoWallAdminTag}. Default life: freshness comes
  * from the tag, which every write to a post expires ({@link expireWallPost}).
@@ -75,17 +94,30 @@ export function expirePhotoWall(conferenceId: string): void {
   }
 }
 
+/** What a Wall Post write changes besides the queue and the device. */
+export interface WallPostExpiry {
+  /** The public wall. */
+  wall: boolean
+  /**
+   * The talks the post is or was tagged with (Talk photos spec §8): both
+   * the old and the new one on a tag change. Null entries are skipped.
+   */
+  talks?: (string | null)[]
+}
+
 /**
  * The tags a Wall Post write changes (§8): the moderation queue, the
- * contributor's My posts and, with `wall`, the public wall.
+ * contributor's My posts, with `wall` the public wall, and each talk's
+ * photos.
  */
 function wallPostTags(
   conferenceId: string,
   deviceKey: string,
-  { wall }: { wall: boolean },
+  { wall, talks = [] }: WallPostExpiry,
 ): string[] {
   const tags = [photoWallAdminTag(conferenceId), photoWallDeviceTag(deviceKey)]
   if (wall) tags.push(photoWallTag(conferenceId))
+  for (const talk of new Set(talks)) if (talk) tags.push(photoWallTalkTag(talk))
   return tags
 }
 
@@ -107,7 +139,7 @@ function expireEach(tags: string[], expire: (tag: string) => void): void {
 export function expireWallPost(
   conferenceId: string,
   deviceKey: string,
-  options: { wall: boolean },
+  options: WallPostExpiry,
 ): void {
   expireEach(wallPostTags(conferenceId, deviceKey, options), (tag) =>
     revalidateTag(tag, { expire: 0 }),
@@ -141,7 +173,7 @@ export async function getMyPosts(
 export function updateWallPostTags(
   conferenceId: string,
   deviceKey: string,
-  options: { wall: boolean },
+  options: WallPostExpiry,
 ): void {
   expireEach(wallPostTags(conferenceId, deviceKey, options), updateTag)
 }

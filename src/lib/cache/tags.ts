@@ -136,3 +136,12 @@ export function photoWallAdminTag(conferenceId: string): string {
 export function photoWallDeviceTag(deviceKey: string): string {
   return `photo-wall-device:${deviceKey}`
 }
+
+/**
+ * One talk's photos as its public surfaces read them (Talk photos spec §8).
+ * Expire it with `{ expire: 0 }` on every moderation and Delete of a post
+ * tagged with the talk, and on a tag change (the old and the new talk).
+ */
+export function photoWallTalkTag(talkId: string): string {
+  return `photo-wall-talk:${talkId}`
+}

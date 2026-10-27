@@ -22,15 +22,26 @@ interface WallPostRow {
   approvedAt: string | null
 }
 
-/** The newest {@link WALL_POST_LIMIT} approvals of the conference, newest first. */
-export async function readWallPosts(conferenceId: string): Promise<WallPost[]> {
+/**
+ * The newest {@link WALL_POST_LIMIT} approvals of the conference, newest
+ * first; with `talkId`, only those tagged with that talk, and none while any
+ * of its speakers opted out (Talk photos spec §7.4, §8). An absent
+ * `talkPhotosOptOut` reads as not opted out.
+ */
+export async function readWallPosts(
+  conferenceId: string,
+  talkId?: string,
+): Promise<WallPost[]> {
+  const talk = talkId
+    ? ` && talk._ref == $talkId && count(talk->speakers[@->talkPhotosOptOut == true]) == 0`
+    : ''
   const rows = await scopedFetch<WallPostRow[]>(
     clientReadUncached,
     { conferenceId },
     // The projection names what the public gets: never `deviceKey`,
     // `marketingConsent` or the submission time. A post without a photo
     // can't be shown, so it doesn't take one of the 200. Published only.
-    `*[_type == "wallPost" && status == "approved" && defined(photo.asset) && !(_id in path("drafts.**"))]
+    `*[_type == "wallPost" && status == "approved" && defined(photo.asset) && !(_id in path("drafts.**"))${talk}]
       | order(approvedAt desc, _id asc) [0...${WALL_POST_LIMIT}] {
       _id,
       "photo": photo.asset->{
@@ -43,6 +54,7 @@ export async function readWallPosts(conferenceId: string): Promise<WallPost[]> {
       name,
       approvedAt
     }`,
+    talkId ? { talkId } : {},
   )
   const posts: WallPost[] = []
   for (const row of rows) {

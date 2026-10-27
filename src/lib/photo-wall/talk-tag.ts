@@ -73,14 +73,14 @@ export async function setWallPostTalk({
   shown: ShownIncarnation
   /** The talk to tag, or null to clear the tag. */
   talkId: string | null
-  /** Told the device of every post read, before anything is written. */
-  onRead?: (deviceKey: string | null) => void
+  /** Told the device and talk of every post read, before any write. */
+  onRead?: (deviceKey: string | null, talkId: string | null) => void
 }): Promise<TalkTagResult> {
   const read = async (): Promise<StoredWallPost | null> => {
     const post = await readWallPost(conferenceId, postId)
     // A Delete in progress has no tag to change.
     if (!post || post.status === 'deleting') return null
-    onRead?.(post.deviceKey)
+    onRead?.(post.deviceKey, post.talkId)
     return post
   }
   const first = await read()

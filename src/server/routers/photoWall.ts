@@ -114,12 +114,17 @@ async function adminView(
  * (its answer lost), so "nothing was written" is never known for sure, and
  * over-expiring is cheap. A post whose device is not known (no post, or the
  * read failed) expires the wall and the queue only: the empty key's tag
- * holds nothing.
+ * holds nothing. With them, the photos of every talk those posts are (or,
+ * on a tag change, were and are) tagged with (Talk photos spec §8).
  */
-function expirePosts(conferenceId: string, deviceKeys: (string | null)[]) {
+function expirePosts(
+  conferenceId: string,
+  deviceKeys: (string | null)[],
+  talks: (string | null)[] = [],
+) {
   const keys = deviceKeys.length ? deviceKeys : [null]
   for (const key of new Set(keys)) {
-    expireWallPost(conferenceId, key ?? '', { wall: true })
+    expireWallPost(conferenceId, key ?? '', { wall: true, talks })
   }
 }
 
@@ -136,15 +141,19 @@ async function moderate(
 ): Promise<{ status: ModerationResult['status'] }> {
   const conference = await requestConference(orgId)
   const devices: (string | null)[] = []
+  const talks: (string | null)[] = []
   try {
     const result = await moderateWallPost({
       conferenceId: conference._id,
       ...args,
-      onRead: (deviceKey) => devices.push(deviceKey),
+      onRead: (deviceKey, talkId) => {
+        devices.push(deviceKey)
+        talks.push(talkId)
+      },
     })
     return { status: result.status }
   } finally {
-    expirePosts(conference._id, devices)
+    expirePosts(conference._id, devices, talks)
   }
 }
 
@@ -288,15 +297,17 @@ export const photoWallRouter = router({
       // Every post it tried, acknowledged or not (a patch can commit and
       // still throw); none known if the run itself failed.
       let attempted: string[] = []
+      let talks: string[] = []
       try {
         const result = await approveAllPending({
           conferenceId: conference._id,
           shown: input.shown,
         })
         attempted = result.deviceKeys
+        talks = result.talkIds
         return { approved: result.approved, pending: result.pending }
       } finally {
-        expirePosts(conference._id, attempted)
+        expirePosts(conference._id, attempted, talks)
       }
     }),
 
@@ -336,8 +347,8 @@ export const photoWallRouter = router({
    * Set, change or clear a post's talk tag (Talk photos spec §6.3): the one
    * named exception to "organizers never edit a Wall Post". A talk not of
    * this conference is BAD_REQUEST, checked before the post is read. Only
-   * `talk` is written. Expires as the decisions do; the talk tags of §8
-   * come with T5. Answers `done`, `changed` or `gone`.
+   * `talk` is written. Expires as the decisions do, plus the old and the
+   * new talk's photos (§8). Answers `done`, `changed` or `gone`.
    */
   setTalkTag: adminProcedure
     .input(
@@ -358,16 +369,21 @@ export const photoWallRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unknown talk' })
       }
       const devices: (string | null)[] = []
+      // The new talk and every old one read: both lists change (§8).
+      const talks: (string | null)[] = [input.talkId]
       try {
         return await setWallPostTalk({
           conferenceId: conference._id,
           postId: input.id,
           shown: input.shown,
           talkId: input.talkId,
-          onRead: (deviceKey) => devices.push(deviceKey),
+          onRead: (deviceKey, talkId) => {
+            devices.push(deviceKey)
+            talks.push(talkId)
+          },
         })
       } finally {
-        expirePosts(conference._id, devices)
+        expirePosts(conference._id, devices, talks)
       }
     }),
 
@@ -382,16 +398,20 @@ export const photoWallRouter = router({
       const conference = await requestConference(ctx.orgId)
       // The device of every post the Delete read, as for the decisions.
       const devices: (string | null)[] = []
+      const talks: (string | null)[] = []
       try {
         const result = await deleteWallPost({
           conferenceId: conference._id,
           postId: input.id,
           shown: input.shown,
-          onRead: (deviceKey) => devices.push(deviceKey),
+          onRead: (deviceKey, talkId) => {
+            devices.push(deviceKey)
+            talks.push(talkId)
+          },
         })
         return { status: result.status }
       } finally {
-        expirePosts(conference._id, devices)
+        expirePosts(conference._id, devices, talks)
       }
     }),
 })

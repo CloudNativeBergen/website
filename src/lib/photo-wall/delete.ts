@@ -67,8 +67,8 @@ export async function deleteWallPost({
   deviceKey?: string
   /** The post the card showed: a replacement under the id is `gone`. */
   shown?: ShownIncarnation
-  /** Told the device of every post read, before anything is written. */
-  onRead?: (deviceKey: string | null) => void
+  /** Told the device and talk of every post read, before any write. */
+  onRead?: (deviceKey: string | null, talkId: string | null) => void
   /** See {@link OnWrite}. */
   onWrite?: OnWrite
 }): Promise<WallPostDeletion> {
@@ -77,7 +77,7 @@ export async function deleteWallPost({
     if (!post || (deviceKey !== undefined && post.deviceKey !== deviceKey)) {
       return null
     }
-    onRead?.(post.deviceKey)
+    onRead?.(post.deviceKey, post.talkId)
     return post
   }
 

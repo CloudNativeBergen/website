@@ -456,7 +456,10 @@ describe('approveAllPending (§10)', () => {
   it("approves every pending post of this wall, and no other conference's, draft or status", async () => {
     store().reset([
       WALL,
-      ...pendingPosts(3, () => 'device-1'),
+      // The first tagged with a talk: its photos are expired (Talk photos §8).
+      ...pendingPosts(3, () => 'device-1').map((p, i) =>
+        i ? p : { ...p, talk: ref('talk-1') },
+      ),
       post(id(4), { status: 'approved' }),
       post(id(5), { status: 'notShown' }),
       post(id(6), { status: 'deleting', photo: undefined }),
@@ -475,6 +478,7 @@ describe('approveAllPending (§10)', () => {
       approved: 3,
       pending: 3,
       deviceKeys: ['device-1'],
+      talkIds: ['talk-1'],
     })
     for (const n of [1, 2, 3]) {
       expect(store().doc(id(n))).toMatchObject({
@@ -592,6 +596,7 @@ describe('approveAllPending (§10)', () => {
       approved: 0,
       pending: 0,
       deviceKeys: [],
+      talkIds: [],
     })
     expect(store().reads).toEqual([])
     expect(store().commits).toEqual([])
@@ -647,6 +652,7 @@ describe('approveAllPending (§10)', () => {
       approved: 0,
       pending: 0,
       deviceKeys: [],
+      talkIds: [],
     })
     expect(store().commits).toEqual([])
   })
@@ -727,7 +733,12 @@ describe('a wall closed by the retention cron (§11.1)', () => {
       })),
       now: NOW,
     })
-    expect(result).toEqual({ approved: 0, pending: 2, deviceKeys: [] })
+    expect(result).toEqual({
+      approved: 0,
+      pending: 2,
+      deviceKeys: [],
+      talkIds: [],
+    })
     expect(store().commits).toEqual([])
     expect(store().doc(P1)).toMatchObject({ status: 'pending' })
   })
