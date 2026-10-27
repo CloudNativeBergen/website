@@ -440,7 +440,9 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
 - At most the **200** newest approvals (§8); when a 201st is approved, the
   oldest leaves the Wall page and Screen Mode but stays On the wall in the
   admin queue.
-- **Add your photo** (to `/wall/post`) while posting is open; while it is paused or ended, a quieter **My posts** link (to `/wall/post#my-posts`, §12).
+- **Add your photo** (to `/wall/post`) while posting is open; while it is
+  paused or ended, a quieter **My posts** link (to `/wall/post#my-posts`,
+  §12).
 - Footer: "In a photo and want it removed? Contact the organizers at
   <contactEmail>." (`conference.contactEmail`, #1480).
 - Empty wall: "No photos yet." and **Add your photo** when open.
@@ -448,9 +450,6 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
   **My posts** link, so a contributor can still delete a post or change the
   marketing switch (§12). After the purge My posts is empty; the page keys on
   `closedAt` only and keeps the link.
-- Site navigation: the signed-in user menu shows **Add your photo**
-  (`/wall/post`) while posting is open, and **My posts**
-  (`/wall/post#my-posts`) whenever a wall exists otherwise.
 
 ### 9.2 Screen Mode (`/wall/screen`)
 
