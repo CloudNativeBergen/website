@@ -243,6 +243,13 @@ function MyPostCard({
         {Icon && <Icon className="size-4 shrink-0" aria-hidden="true" />}
         {MY_POST_STATUS_LABELS[status]}
       </p>
+      {status === 'notShown' && (
+        <p className="mt-1 font-sans text-xs text-gray-500">
+          An organizer chose not to show this photo on the wall. You can still
+          delete it; if you don’t, it’s deleted with every other post 30 days
+          after the conference.
+        </p>
+      )}
 
       {confirming ? (
         <div
@@ -333,28 +340,34 @@ function MarketingSwitch({
 }) {
   const id = useId()
   return (
-    <span className="flex items-center gap-2">
-      <button
-        type="button"
-        role="switch"
-        id={id}
-        aria-checked={checked}
-        aria-disabled={disabled || undefined}
-        aria-describedby={`${id}-help`}
-        onClick={() => !disabled && onToggle()}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:opacity-60 ${checked ? 'bg-brand-cloud-blue' : 'bg-gray-300'}`}
+    <span className="flex flex-col gap-1">
+      <span className="flex items-center gap-2">
+        <button
+          type="button"
+          role="switch"
+          id={id}
+          aria-checked={checked}
+          aria-disabled={disabled || undefined}
+          aria-describedby={`${id}-help`}
+          onClick={() => !disabled && onToggle()}
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:opacity-60 ${checked ? 'bg-brand-cloud-blue' : 'bg-gray-300'}`}
+        >
+          <span className="sr-only">Marketing</span>
+          <span
+            aria-hidden="true"
+            className={`inline-block size-5 rounded-full bg-white shadow-xs transition-transform ${checked ? 'translate-x-5.5' : 'translate-x-0.5'}`}
+          />
+        </button>
+        <label htmlFor={id} className="font-sans text-sm text-gray-700">
+          {busy ? 'Saving…' : 'Marketing'}
+        </label>
+      </span>
+      <span
+        id={`${id}-help`}
+        className="max-w-48 font-sans text-xs text-gray-500"
       >
-        <span className="sr-only">Marketing</span>
-        <span
-          aria-hidden="true"
-          className={`inline-block size-5 rounded-full bg-white shadow-xs transition-transform ${checked ? 'translate-x-5.5' : 'translate-x-0.5'}`}
-        />
-      </button>
-      <label htmlFor={id} className="font-sans text-sm text-gray-700">
-        {busy ? 'Saving…' : 'Marketing'}
-      </label>
-      <span id={`${id}-help`} className="sr-only">
-        The organizers may also use my photo in their own marketing.
+        On: the organizers may also use this photo in their own marketing. Turn
+        it off at any time.
       </span>
     </span>
   )

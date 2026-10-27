@@ -215,7 +215,7 @@ export interface WallConference {
  * conference on top, the approved posts in the wall's look, newest approval
  * first — tilted polaroids on a board (Pinboard), a masonry of whole photos
  * (Mosaic) or a feed (Spotlight) — **Add your photo** while posting is
- * open, and who to ask to have a photo removed. Follows the visitor's light
+ * open, a quiet **My posts** link while it is not, and who to ask to have a photo removed. Follows the visitor's light
  * or dark setting; the polaroids stay white photo paper in both.
  */
 export function WallBoardView({
@@ -292,6 +292,18 @@ export function WallBoardView({
                   </p>
                 )}
               </>
+            )}
+            {!canAdd && (
+              // Posting paused or ended: My posts (Delete, Marketing) stays
+              // on /wall/post (§12), so the way there stays too, quieter.
+              <p className="mt-10 text-center text-sm">
+                <a
+                  href="/wall/post#my-posts"
+                  className="rounded-sm font-medium text-gray-900 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:text-gray-100 dark:focus-visible:outline-indigo-400"
+                >
+                  My posts
+                </a>
+              </p>
             )}
             <footer className="mx-auto mt-10 max-w-md text-center text-sm text-gray-600 dark:text-gray-400">
               In a photo and want it removed? Contact the organizers

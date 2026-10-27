@@ -58,6 +58,10 @@ describe('MyPosts', () => {
     expect(card('Waiting').getByText('Waiting for approval')).toBeVisible()
     expect(card('Up').getByText('On the wall')).toBeVisible()
     expect(card('Down').getByText('Not shown')).toBeVisible()
+    expect(
+      card('Down').getByText(/An organizer chose not to show this photo/),
+    ).toBeVisible()
+    expect(card('Up').queryByText(/chose not to show/)).toBeNull()
     const img = card('Waiting').getByRole('img', {
       name: 'Your photo: Waiting',
     })
@@ -205,6 +209,9 @@ describe('MyPosts', () => {
     const no = card('No').getByRole('switch', { name: 'Marketing' })
     expect(yes).toHaveAttribute('aria-checked', 'true')
     expect(no).toHaveAttribute('aria-checked', 'false')
+    expect(yes).toHaveAccessibleDescription(
+      'On: the organizers may also use this photo in their own marketing. Turn it off at any time.',
+    )
     await act(async () => {
       fireEvent.click(yes)
     })

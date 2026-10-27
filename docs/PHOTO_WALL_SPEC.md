@@ -440,7 +440,7 @@ and its prototype (`Prototypes/PhotoWall/WallLook` on branch
 - At most the **200** newest approvals (§8); when a 201st is approved, the
   oldest leaves the Wall page and Screen Mode but stays On the wall in the
   admin queue.
-- **Add your photo** (to `/wall/post`) while posting is open.
+- **Add your photo** (to `/wall/post`) while posting is open; while it is paused or ended, a quieter **My posts** link (to `/wall/post#my-posts`, §12).
 - Footer: "In a photo and want it removed? Contact the organizers at
   <contactEmail>." (`conference.contactEmail`, #1480).
 - Empty wall: "No photos yet." and **Add your photo** when open.
