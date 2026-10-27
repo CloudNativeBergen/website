@@ -9,6 +9,7 @@ import { CompactConferenceHeader } from './CompactConferenceHeader'
 import { CompactProposalList } from './CompactProposalList'
 import { CompactPhotoStrip } from './CompactPhotoStrip'
 import { SpeakerTalkPhotoList } from '@/components/photo-wall/talk/SpeakerTalkPhotos'
+import { TalkPhotosOptOutSwitch } from '@/components/photo-wall/talk/TalkPhotosOptOutSwitch'
 import { CompactWorkshopStats } from './CompactWorkshopStats'
 import { CompactTravelSupport } from './CompactTravelSupport'
 import { CompactBadges } from './CompactBadges'
@@ -22,6 +23,7 @@ interface CompactConferenceCardProps {
 
 export function CompactConferenceCard({
   data,
+  speaker,
   defaultExpanded = false,
 }: CompactConferenceCardProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
@@ -103,7 +105,10 @@ export function CompactConferenceCard({
           )}
 
           {data.talkPhotos && data.talkPhotos.length > 0 && (
-            <SpeakerTalkPhotoList talks={data.talkPhotos} />
+            <div className="space-y-3">
+              <SpeakerTalkPhotoList talks={data.talkPhotos} />
+              <TalkPhotosOptOutSwitch stored={speaker.talkPhotosOptOut} />
+            </div>
           )}
 
           {galleryImages.length > 0 && (

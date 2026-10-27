@@ -14,6 +14,7 @@ import { readPhotoWall } from './sanity'
 import type { PhotoWall } from './types'
 import type { WallData, WallPost } from './wall'
 import { readWallPosts } from './wall-read'
+import { clientReadUncached } from '@/lib/sanity/client'
 
 /**
  * The conference's wall as the public `/wall` routes read it (Photo Wall spec
@@ -176,4 +177,30 @@ export function updateWallPostTags(
   options: WallPostExpiry,
 ): void {
   expireEach(wallPostTags(conferenceId, deviceKey, options), updateTag)
+}
+
+/**
+ * Expire what a speaker's talk photos opt-out changes (Talk photos spec §8):
+ * the photos of every talk they speak at, in any conference, since the
+ * opt-out is on the global speaker, and the speaker pages. Never fails the
+ * write it rides on.
+ */
+export async function expireSpeakerTalkPhotos(
+  speakerId: string,
+): Promise<void> {
+  let talkIds: string[] = []
+  try {
+    talkIds = await clientReadUncached.fetch<string[]>(
+      // groq-global: the opt-out is on the global speaker, so every talk of
+      // theirs changes. Only ids leave this read, and only as cache tags.
+      `*[_type == "talk" && $speakerId in speakers[]._ref]._id`,
+      { speakerId },
+    )
+  } catch (error) {
+    console.error(`Could not list the talks of speaker ${speakerId}`, error)
+  }
+  expireEach(
+    [...talkIds.map(photoWallTalkTag), 'content:speaker-detail'],
+    (tag) => revalidateTag(tag, { expire: 0 }),
+  )
 }

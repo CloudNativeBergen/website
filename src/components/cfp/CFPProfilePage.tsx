@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Speaker, SpeakerInput } from '@/lib/speaker/types'
 import { api } from '@/lib/trpc/client'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
+import { TalkPhotosOptOutSwitch } from '@/components/photo-wall/talk/TalkPhotosOptOutSwitch'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import {
   CheckCircleIcon,
@@ -347,6 +348,25 @@ export function CFPProfilePage({
             // back on the next "Update Profile".
             storedSocialTagOptOut={speaker?.socialTagOptOut}
           />
+
+          <section
+            aria-labelledby="talk-photos-heading"
+            className="border-t border-gray-200 pt-6 dark:border-gray-600"
+          >
+            <h2
+              id="talk-photos-heading"
+              className="font-space-grotesk text-lg font-semibold text-gray-900 dark:text-white"
+            >
+              Photos of your talks
+            </h2>
+            <div className="mt-3">
+              {/* Keyed on the stored value so a refetch resets the box. */}
+              <TalkPhotosOptOutSwitch
+                key={String(speaker?.talkPhotosOptOut === true)}
+                stored={speaker?.talkPhotosOptOut}
+              />
+            </div>
+          </section>
 
           {/* Anchor target for the notification panel's settings gear
               (#notification-settings): the message-email default and the push

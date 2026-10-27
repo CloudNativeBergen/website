@@ -82,6 +82,15 @@ export default async function SpeakerDashboard() {
     }`,
     { id: speakerId },
   )
+  // Talk photos opt-out (talk photos spec §7.4) for the dashboard switch.
+  // Uncached, so the box matches what the speaker just saved.
+  const talkPhotosOptOut = await clientReadUncached
+    .fetch<boolean | null>(
+      // groq-global-scoped: session-derived self-read, as above.
+      `*[_type == "speaker" && _id == $id][0].talkPhotosOptOut`,
+      { id: speakerId },
+    )
+    .catch(() => null)
   const speakerProviders = currentSpeaker?.providers ?? speaker.providers ?? []
   const currentProvider = session.account?.provider
   const organizerContactEmail =
@@ -428,7 +437,10 @@ export default async function SpeakerDashboard() {
             <CompactConferenceCard
               key={conferenceData.conference._id}
               data={conferenceData}
-              speaker={speaker}
+              speaker={{
+                ...speaker,
+                talkPhotosOptOut: talkPhotosOptOut === true,
+              }}
               defaultExpanded={true}
             />
           ))}

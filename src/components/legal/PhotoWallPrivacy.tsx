@@ -31,10 +31,13 @@ export function PhotoWallPrivacy() {
         <li>
           <strong>Who sees it:</strong> your post appears on the wall at the
           venue and on the conference website only after an organizer approves
-          it. The photo file itself is stored with an unlisted web address from
-          the moment you post it, so anyone who has that address can open it,
-          even before approval or after it is taken off the wall, until it is
-          deleted; the platform&apos;s administrators can also see it.
+          it. A photo tagged with a talk is also shown with that talk on the
+          program and its speakers&apos; pages, unless a speaker of that talk
+          chose to hide photos of their talks. The photo file itself is stored
+          with an unlisted web address from the moment you post it, so anyone
+          who has that address can open it, even before approval or after it is
+          taken off the wall, until it is deleted; the platform&apos;s
+          administrators can also see it.
         </li>
         <li>
           <strong>Purpose and legal basis:</strong> we show your photo because

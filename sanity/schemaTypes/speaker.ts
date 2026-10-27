@@ -625,6 +625,26 @@ export default defineType({
       description:
         'When the opt-out above was set, stamped by the server. Cleared together with the opt-out.',
     }),
+    // Talk photos opt-out (talk photos spec §4.2): the same rules as the
+    // social-tag pair above. While any speaker of a talk has it, the talk's
+    // tagged Photo Wall posts are not shown on the program or speaker pages.
+    defineField({
+      name: 'talkPhotosOptOut',
+      title: 'Opted out of talk photos',
+      type: 'boolean',
+      readOnly: true,
+      // NO `initialValue`, for the reason given on `socialTagOptOut`.
+      description:
+        'The speaker asked that attendee photos of their talks are not shown on the program or speaker pages. Absent means not opted out. Managed by the app; only the speaker can clear it.',
+    }),
+    defineField({
+      name: 'talkPhotosOptOutAt',
+      title: 'Opted out of talk photos at',
+      type: 'datetime',
+      readOnly: true,
+      description:
+        'When the opt-out above was set, stamped by the server. Cleared together with the opt-out.',
+    }),
     // Right to erasure, Phase 1 (RunKonf/platform#52). Set by
     // `eraseSpeakerInPlace` with `setIfMissing`, so a repeated erasure PRESERVES
     // the original timestamp — the date a request was answered is itself a

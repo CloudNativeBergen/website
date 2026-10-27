@@ -28,6 +28,7 @@ import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
 import {
   resolveSocialTagOptOut,
   type SocialTagOptOutPatch,
+  type SpeakerOptOutField,
   type SpeakerUpdateActor,
 } from './socialTag'
 
@@ -1108,6 +1109,7 @@ export async function getSpeakerAdminDetail(
       country,
       consent,
       socialTagOptOut,
+      talkPhotosOptOut,
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL)
     }`,
@@ -1210,24 +1212,32 @@ async function resolveSocialTagOptOutFor(
   speaker: Partial<SpeakerInput>,
   options: { actor: SpeakerUpdateActor },
 ): Promise<SocialTagOptOutPatch> {
-  const requested = speaker.socialTagOptOut
-  if (typeof requested !== 'boolean') {
-    return { set: {}, setIfMissing: {}, unset: [] }
-  }
+  const patch: SocialTagOptOutPatch = { set: {}, setIfMissing: {}, unset: [] }
+  // Talk photos (talk photos spec §4.2) follow the same rule as social tags.
+  const fields: SpeakerOptOutField[] = ['socialTagOptOut', 'talkPhotosOptOut']
+  for (const field of fields) {
+    const requested = speaker[field]
+    if (typeof requested !== 'boolean') continue
 
-  let stored = false
-  if (options.actor === 'organizer' && requested === false) {
-    const { speaker: current, err } = await getSpeaker(speakerId)
-    if (err) throw err
-    stored = current?.socialTagOptOut === true
-  }
+    let stored = false
+    if (options.actor === 'organizer' && requested === false) {
+      const { speaker: current, err } = await getSpeaker(speakerId)
+      if (err) throw err
+      stored = current?.[field] === true
+    }
 
-  return resolveSocialTagOptOut({
-    actor: options.actor,
-    requested,
-    stored,
-    now: new Date().toISOString(),
-  })
+    const one = resolveSocialTagOptOut({
+      actor: options.actor,
+      requested,
+      stored,
+      now: new Date().toISOString(),
+      field,
+    })
+    Object.assign(patch.set, one.set)
+    Object.assign(patch.setIfMissing, one.setIfMissing)
+    patch.unset.push(...one.unset)
+  }
+  return patch
 }
 
 /**
@@ -1263,9 +1273,11 @@ export async function updateSpeaker(
       slug,
       // Handled by `optOut` above; never patched through the generic spread.
       socialTagOptOut: _socialTagOptOut,
+      talkPhotosOptOut: _talkPhotosOptOut,
       ...speakerWithoutImage
     } = speaker
     void _socialTagOptOut
+    void _talkPhotosOptOut
 
     const patchData: Record<string, unknown> = { ...speakerWithoutImage }
     // A client may not choose the time at which it claims to have opted out.
@@ -1273,6 +1285,7 @@ export async function updateSpeaker(
     // but this writer is the boundary that has to be true regardless of who
     // calls it — including a future caller that does not go through Zod.
     delete patchData.socialTagOptOutAt
+    delete patchData.talkPhotosOptOutAt
     Object.assign(patchData, optOut.set)
 
     if (slug) {
