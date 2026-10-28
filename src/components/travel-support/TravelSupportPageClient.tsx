@@ -24,11 +24,14 @@ import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 interface TravelSupportPageClientProps {
   initialTravelSupport: TravelSupportWithExpenses | null
   speakerId: string
+  /** Set when the request belongs to another conference than this domain's. */
+  conferenceId?: string
 }
 
 export function TravelSupportPageClient({
   initialTravelSupport,
   speakerId,
+  conferenceId,
 }: TravelSupportPageClientProps) {
   const [showBankingForm, setShowBankingForm] = useState(false)
   const [showExpenseForm, setShowExpenseForm] = useState(false)
@@ -47,9 +50,12 @@ export function TravelSupportPageClient({
     isLoading,
     error: queryError,
     refetch,
-  } = api.travelSupport.getMine.useQuery(undefined, {
-    initialData: initialTravelSupport || undefined,
-  })
+  } = api.travelSupport.getMine.useQuery(
+    conferenceId ? { conferenceId } : undefined,
+    {
+      initialData: initialTravelSupport || undefined,
+    },
+  )
 
   const canEdit = travelSupport?.status === 'draft'
 
@@ -103,6 +109,7 @@ export function TravelSupportPageClient({
   const createTravelSupport = async (): Promise<void> => {
     await createMutation.mutateAsync({
       speaker: { _ref: speakerId, _type: 'reference' },
+      conferenceId,
       bankingDetails: {
         beneficiaryName: '',
         bankName: '',

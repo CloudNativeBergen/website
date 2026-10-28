@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { formatDatesSafe } from '@/lib/time'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
 import {
@@ -18,7 +17,6 @@ export function CompactConferenceHeader({
   data,
 }: CompactConferenceHeaderProps) {
   const { conference, proposals, galleryImages, workshopStats, isOver } = data
-  const domain = conference.domains?.[0]
 
   return (
     <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -68,17 +66,6 @@ export function CompactConferenceHeader({
             <PhotoIcon className="h-4 w-4" />
             <span className="font-medium">{galleryImages.length}</span>
           </div>
-        )}
-        {domain && (
-          <Link
-            href={`https://${domain}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-medium text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 dark:text-blue-400 dark:hover:text-blue-300"
-            onClick={(e) => e.stopPropagation()}
-          >
-            View →
-          </Link>
         )}
       </div>
     </div>

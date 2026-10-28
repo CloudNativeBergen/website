@@ -1,12 +1,15 @@
 import { connection } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { TravelSupportPageClient } from '@/components/travel-support/TravelSupportPageClient'
 import { Flags } from '@/lib/speaker/types'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
-import { getTravelSupport } from '@/lib/travel-support/sanity'
+import {
+  getTravelSupport,
+  resolveTravelSupportConferenceId,
+} from '@/lib/travel-support/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 function NotEligibleDisplay() {
@@ -39,7 +42,11 @@ function NotEligibleDisplay() {
   )
 }
 
-export default async function TravelExpensePage() {
+export default async function TravelExpensePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ conferenceId?: string | string[] }>
+}) {
   await connection()
 
   const headersList = await headers()
@@ -64,15 +71,28 @@ export default async function TravelExpensePage() {
     throw new Error('Conference not found')
   }
 
+  // The dashboard links here per conference card. Honour that conference only
+  // when it is in this domain's org and the speaker has a talk there.
+  const { conferenceId: requested } = await searchParams
+  const conferenceId = await resolveTravelSupportConferenceId(
+    session.speaker._id,
+    conference,
+    typeof requested === 'string' ? requested : undefined,
+  )
+  if (!conferenceId) {
+    return notFound()
+  }
+
   const { travelSupport } = await getTravelSupport(
     session.speaker._id,
-    conference._id,
+    conferenceId,
   )
 
   return (
     <TravelSupportPageClient
       initialTravelSupport={travelSupport}
       speakerId={session.speaker._id}
+      conferenceId={conferenceId === conference._id ? undefined : conferenceId}
     />
   )
 }

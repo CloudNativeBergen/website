@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, adminProcedure, protectedProcedure } from '../trpc'
 import {
@@ -28,6 +29,7 @@ import {
   deleteReceipt,
   getSpeakersRequiringTravelSupport,
   getTravelExpenseRef,
+  resolveTravelSupportConferenceId,
 } from '@/lib/travel-support/sanity'
 
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -93,57 +95,86 @@ async function emailDecision(
   })
 }
 
+/**
+ * The conference a speaker's own travel-support read or create targets: the
+ * requested one when it is in the current org and the speaker has a talk
+ * there, else the current domain's. A rejected id is NOT_FOUND.
+ */
+async function requireTravelSupportConferenceId(
+  speakerId: string,
+  requestedId: string | undefined,
+): Promise<string> {
+  const { conference, error: confError } = await getConferenceForCurrentDomain()
+  if (confError || !conference?._id) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to get current conference',
+      cause: confError,
+    })
+  }
+  const conferenceId = await resolveTravelSupportConferenceId(
+    speakerId,
+    conference,
+    requestedId,
+  )
+  if (!conferenceId) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Conference not found' })
+  }
+  return conferenceId
+}
+
 export const travelSupportRouter = router({
-  getMine: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      const { conference, error: confError } =
-        await getConferenceForCurrentDomain()
-      if (confError || !conference?._id) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: confError,
-        })
-      }
+  getMine: protectedProcedure
+    .input(z.object({ conferenceId: z.string().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      try {
+        const conferenceId = await requireTravelSupportConferenceId(
+          ctx.speaker._id,
+          input?.conferenceId,
+        )
 
-      const { isEligible, error: eligibilityError } =
-        await checkSpeakerEligibility(ctx.speaker._id)
+        const { isEligible, error: eligibilityError } =
+          await checkSpeakerEligibility(ctx.speaker._id)
 
-      if (!isEligible) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'You are not eligible for travel funding',
-          cause: eligibilityError,
-        })
-      }
+        if (!isEligible) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You are not eligible for travel funding',
+            cause: eligibilityError,
+          })
+        }
 
-      const { travelSupport, error } = await getTravelSupport(
-        ctx.speaker._id,
-        conference._id,
-      )
+        const { travelSupport, error } = await getTravelSupport(
+          ctx.speaker._id,
+          conferenceId,
+        )
 
-      if (error) {
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch travel support',
+            cause: error,
+          })
+        }
+
+        return travelSupport
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch travel support',
           cause: error,
         })
       }
-
-      return travelSupport
-    } catch (error) {
-      if (error instanceof TRPCError) throw error
-
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch travel support',
-        cause: error,
-      })
-    }
-  }),
+    }),
 
   create: protectedProcedure
-    .input(TravelSupportClientInputSchema)
+    .input(
+      TravelSupportClientInputSchema.extend({
+        conferenceId: z.string().optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       try {
         if (input.speaker._ref !== ctx.speaker._id) {
@@ -153,15 +184,11 @@ export const travelSupportRouter = router({
           })
         }
 
-        const { conference, error: confError } =
-          await getConferenceForCurrentDomain()
-        if (confError || !conference?._id) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to get current conference',
-            cause: confError,
-          })
-        }
+        const { conferenceId: requestedConferenceId, ...rest } = input
+        const conferenceId = await requireTravelSupportConferenceId(
+          ctx.speaker._id,
+          requestedConferenceId,
+        )
 
         const { isEligible, error: eligibilityError } =
           await checkSpeakerEligibility(ctx.speaker._id)
@@ -175,8 +202,8 @@ export const travelSupportRouter = router({
         }
 
         const fullInput = {
-          ...input,
-          conference: { _ref: conference._id, _type: 'reference' as const },
+          ...rest,
+          conference: { _ref: conferenceId, _type: 'reference' as const },
         }
 
         const { travelSupport, error } = await createTravelSupport(fullInput)
