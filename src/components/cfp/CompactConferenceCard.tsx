@@ -14,6 +14,7 @@ import { CompactWorkshopStats } from './CompactWorkshopStats'
 import { CompactTravelSupport } from './CompactTravelSupport'
 import { CompactBadges } from './CompactBadges'
 import { SpeakerBriefingPanel } from './SpeakerBriefingPanel'
+import { deriveBlueskyHandle } from '@/lib/stream/config'
 
 interface CompactConferenceCardProps {
   data: ConferenceWithSpeakerData
@@ -81,6 +82,13 @@ export function CompactConferenceCard({
               changesEmail={
                 data.conference.cfpEmail || data.conference.contactEmail
               }
+              social={{
+                hashtag:
+                  data.conference.socialHashtag?.trim().replace(/^#*/, '') ||
+                  undefined,
+                bluesky:
+                  deriveBlueskyHandle(data.conference.socialLinks) ?? undefined,
+              }}
             />
           )}
 
