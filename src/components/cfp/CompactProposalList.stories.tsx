@@ -718,3 +718,141 @@ export const DraftProposals: Story = {
     },
   },
 }
+
+export const AcceptedNeedsConfirmation: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Accepted Talk', Status.accepted),
+      createMockProposal('talk-2', 'Confirmed Talk', Status.confirmed),
+    ],
+    canEdit: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'An accepted talk asks the speaker to confirm. Accepted and confirmed talks offer "Can\'t make it", which opens the withdraw flow with a reason.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByRole('button', { name: 'Confirm participation' }),
+    ).toBeInTheDocument()
+    expect(
+      canvas.getAllByRole('button', { name: "Can't make it" }),
+    ).toHaveLength(2)
+  },
+}
+
+export const CoSpeakerInvites: Story = {
+  args: {
+    proposals: [
+      createMockProposal(
+        'talk-1',
+        'Talk With Invites',
+        Status.submitted,
+        Format.presentation_45,
+        {
+          coSpeakerInvitations: [
+            {
+              _id: 'inv-1',
+              invitedEmail: 'carol@example.com',
+              invitedName: 'Carol Lee',
+              status: 'pending',
+              expiresAt: '2025-02-01T00:00:00Z',
+            },
+            {
+              _id: 'inv-2',
+              invitedEmail: 'dan@example.com',
+              status: 'expired',
+              expiresAt: '2025-01-01T00:00:00Z',
+            },
+            {
+              _id: 'inv-3',
+              invitedEmail: 'erin@example.com',
+              status: 'accepted',
+              expiresAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ),
+    ],
+    canEdit: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Pending and expired co-speaker invites show on the row.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.getByText(/invite pending: Carol Lee/)).toBeInTheDocument()
+    expect(
+      canvas.getByText(/invite expired: dan@example.com/),
+    ).toBeInTheDocument()
+    expect(canvas.queryByText(/erin@example.com/)).toBeNull()
+  },
+}
+
+export const MissingSlidesBeforeEvent: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Talk Without Slides', Status.confirmed),
+    ],
+    canEdit: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByRole('link', { name: /no slides uploaded yet/i }),
+    ).toHaveAttribute('href', '/cfp/proposal/talk-1#slides')
+  },
+}
+
+export const MissingSlidesAfterEvent: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Talk Without Slides', Status.confirmed),
+    ],
+    canEdit: false,
+    isOver: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'After the event, missing slides become a gentle request.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByRole('link', { name: 'Upload your slides' }),
+    ).toHaveAttribute('href', '/cfp/proposal/talk-1#slides')
+  },
+}
+
+export const WithdrawnLinksToMessages: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Withdrawn Talk', Status.withdrawn),
+      createMockProposal('talk-2', 'Canceled Talk', Status.canceled),
+    ],
+    canEdit: true,
+    unreadByProposalId: { 'talk-2': 1 },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const links = canvas.getAllByRole('link', {
+      name: 'See messages about this talk',
+    })
+    expect(links[0]).toHaveAttribute('href', '/cfp/proposal/talk-1#messages')
+    expect(
+      canvas.getByRole('link', { name: /unread message/ }),
+    ).toHaveAttribute('href', '/cfp/proposal/talk-2#messages')
+  },
+}

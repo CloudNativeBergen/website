@@ -122,6 +122,7 @@ export function CompactConferenceCard({
               unreadByProposalId={unreadByProposalId}
               feedbackChips={data.feedbackChips}
               feedbackLinkOrigin={data.feedbackLinkOrigin}
+              isOver={data.isOver}
             />
           )}
 
