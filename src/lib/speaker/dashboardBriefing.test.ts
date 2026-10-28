@@ -201,11 +201,20 @@ describe('loadDashboardBriefing dinner choice', () => {
   it('pins the talks and the dinner the day before', async () => {
     const result = await loadDashboardBriefing({
       ...base,
-      fetchFields: dinner('2026-10-28T17:00:00Z'),
+      fetchFields: dinner('2026-10-27T17:00:00Z'),
       now: new Date('2026-10-26T10:00:00Z'),
     })
     expect(result).toMatchObject({ dayBefore: true, pinDinner: true })
     expect(result).toMatchObject({ conferenceDay: undefined })
+  })
+
+  it('does not pin a day-2 dinner the day before', async () => {
+    const result = await loadDashboardBriefing({
+      ...base,
+      fetchFields: dinner('2026-10-28T17:00:00Z'),
+      now: new Date('2026-10-26T10:00:00Z'),
+    })
+    expect(result).toMatchObject({ dayBefore: true, pinDinner: false })
   })
 
   it('shows when the speaker ticket was sent, not to whom', async () => {

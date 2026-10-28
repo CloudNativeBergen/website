@@ -143,13 +143,15 @@ export async function loadDashboardBriefing({
   const dayBefore =
     !!conference.startDate && today === addDays(conference.startDate, -1)
   // Pin the dinner for its whole Oslo day (a late arrival still needs the
-  // address); without a valid start time, on the conference days.
+  // address); without a valid start time, on the conference days. The day
+  // before, also a dinner on the first day.
   const dinnerAt = Date.parse(briefing.dinner?.startsAt ?? '')
-  const pinDinner =
-    dayBefore ||
-    (Number.isNaN(dinnerAt)
-      ? isConferenceDay
-      : today === osloTodayDateString(new Date(dinnerAt)))
+  const dinnerDay = Number.isNaN(dinnerAt)
+    ? undefined
+    : osloTodayDateString(new Date(dinnerAt))
+  const pinDinner = dinnerDay
+    ? today === dinnerDay || (dayBefore && dinnerDay === conference.startDate)
+    : isConferenceDay
   // The latest ticket email to this speaker, from any of their talks.
   const ticketSentAt = asOrganizer
     ? undefined
