@@ -195,6 +195,8 @@ async function resolveEventPrepFacts(
 export async function resolveActivationChecklist(
   conference: ConferenceForActivationResolution,
   checks?: SystemCheck[],
+  /** Opt in to the event-stage facts; only the settings page renders them. */
+  { eventFacts: wantEventFacts = false }: { eventFacts?: boolean } = {},
 ): Promise<ActivationChecklist> {
   const orgId = conferenceOrgId(conference)
   const [
@@ -206,9 +208,9 @@ export async function resolveActivationChecklist(
     isTicketingEnabledForOrg(orgId),
     isEmailDeliveryPlatformManaged(orgId),
     resolveHasOrganizerInvitations(conference),
-    // Only while the event stage is shown; never for an unlisted site, so the
-    // admin layout's banner check pays nothing.
-    conference._id && isEventStageRelevant(conference)
+    // Opt-in, and only while the event stage is shown, so the dashboard and
+    // the layout's banner check pay nothing.
+    wantEventFacts && conference._id && isEventStageRelevant(conference)
       ? resolveEventPrepFacts(conference as Conference)
       : undefined,
   ])

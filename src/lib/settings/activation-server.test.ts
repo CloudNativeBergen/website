@@ -205,8 +205,18 @@ describe('resolveActivationChecklist — the co-organizers row', () => {
 describe('resolveActivationChecklist — event-stage facts', () => {
   const live = { ...conference(), _id: 'conf-1', endDate: '2999-01-01' }
 
-  it('resolves them for a live conference before it ends', async () => {
+  const opt = { eventFacts: true }
+
+  it('does not fetch them without the opt-in (dashboard, layout)', async () => {
     const checklist = await resolveActivationChecklist(live)
+    expect(loadBriefingSpeakers).not.toHaveBeenCalled()
+    expect(checklist.event!.rows.map((r) => r.id)).not.toContain(
+      'speaker-todos',
+    )
+  })
+
+  it('resolves them for a live conference before it ends', async () => {
+    const checklist = await resolveActivationChecklist(live, undefined, opt)
     expect(loadBriefingSpeakers).toHaveBeenCalledOnce()
     const ids = checklist.event!.rows.map((r) => r.id)
     expect(ids).toContain('speaker-info-email')
@@ -218,15 +228,23 @@ describe('resolveActivationChecklist — event-stage facts', () => {
   })
 
   it('skips them for an unlisted or ended conference', async () => {
-    await resolveActivationChecklist({ ...live, visibility: 'unlisted' })
-    await resolveActivationChecklist({ ...live, endDate: '2000-01-01' })
+    await resolveActivationChecklist(
+      { ...live, visibility: 'unlisted' },
+      undefined,
+      opt,
+    )
+    await resolveActivationChecklist(
+      { ...live, endDate: '2000-01-01' },
+      undefined,
+      opt,
+    )
     expect(loadBriefingSpeakers).not.toHaveBeenCalled()
   })
 
   it('leaves the rows out when a read fails', async () => {
     loadBriefingSpeakers.mockRejectedValueOnce(new Error('down'))
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    const checklist = await resolveActivationChecklist(live)
+    const checklist = await resolveActivationChecklist(live, undefined, opt)
     expect(checklist.event!.rows.map((r) => r.id)).not.toContain(
       'speaker-todos',
     )
