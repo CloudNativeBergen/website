@@ -51,3 +51,22 @@ export const SuggestedDark: Story = {
 export const ChooseRoomDark: Story = {
   globals: { theme: 'dark' },
 }
+
+/** Opened from a room's QR, `?room=workshop room` (§6.4): any case matches. */
+export const FromRoomQr: Story = {
+  args: { initialRoom: 'workshop room' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('radio', { name: 'Workshop room' }),
+    ).toBeChecked()
+    await expect(canvas.getByTestId('talk-tag')).toHaveTextContent(
+      'Tag: GitOps from scratch',
+    )
+  },
+}
+
+export const FromRoomQrDark: Story = {
+  ...FromRoomQr,
+  globals: { theme: 'dark' },
+}

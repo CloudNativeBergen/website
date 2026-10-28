@@ -72,6 +72,8 @@ export interface WallComposerProps {
   below?: React.ReactNode
   /** The published schedule, for the Talk row (Talk photos spec §6.1). */
   schedules?: ConferenceSchedule[]
+  /** `?room=` from a room's QR (Talk photos spec §6.4). */
+  room?: string
   /** Conference time for the Talk row; the clock when absent. */
   now?: Date
 }
@@ -109,6 +111,7 @@ export function WallComposer({
   uploadProgress = null,
   below,
   schedules = [],
+  room,
   now,
 }: WallComposerProps) {
   const [stage, setStage] = useState<Stage>({ kind: 'landing', error: null })
@@ -304,7 +307,12 @@ export function WallComposer({
             />
           </div>
 
-          <TalkPicker schedules={schedules} now={now} onChange={setTalkId} />
+          <TalkPicker
+            schedules={schedules}
+            now={now}
+            initialRoom={room}
+            onChange={setTalkId}
+          />
 
           <p className="mt-5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
             Your whole photo, caption and name are shown on the screens at the

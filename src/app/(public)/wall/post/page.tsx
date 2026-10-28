@@ -51,13 +51,18 @@ function taggableSchedules(
  * Photo Wall. Whether posting is open is decided per request; the submit
  * route decides again at Submit.
  */
-export default async function ComposerPage() {
+export default async function ComposerPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ room?: string | string[] }>
+} = {}) {
   // The program's read (`schedule: true`), cached per tier, not a new one.
   const { conference, wall } = await requirePhotoWall({
     schedule: true,
     confirmedTalksOnly: false,
   })
   await connection()
+  const { room } = (await searchParams) ?? {}
   const logo = pickConferenceLogoProps(conference)
   const deletesOn = deletionDate(conference.endDate)
   const actions = { getMyPosts, deleteMyPost, setMyPostMarketing }
@@ -74,6 +79,7 @@ export default async function ComposerPage() {
       deletesOn={deletesOn}
       ensureDevice={ensureDevice}
       schedules={taggableSchedules(conference)}
+      room={typeof room === 'string' ? room : undefined}
       {...actions}
     />
   )

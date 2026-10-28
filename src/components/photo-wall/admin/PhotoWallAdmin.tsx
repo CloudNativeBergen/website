@@ -30,6 +30,8 @@ export const BUTTON =
 export interface PhotoWallAdminProps {
   view: PhotoWallAdminView
   conferenceTitle?: string
+  /** The schedule's rooms, one QR each (Talk photos spec §6.4). */
+  rooms?: string[]
   onSetUp: () => void
   onChange: (change: PhotoWallSettingsChange) => void
   /** A Set up or a settings change is on its way. */
@@ -54,6 +56,7 @@ export interface PhotoWallAdminProps {
 export function PhotoWallAdmin({
   view,
   conferenceTitle,
+  rooms = [],
   onSetUp,
   onChange,
   saving = false,
@@ -114,7 +117,7 @@ export function PhotoWallAdmin({
               />
             </div>
           </section>
-          <WallLinks links={view.links} />
+          <WallLinks links={view.links} rooms={rooms} />
         </div>
       ) : (
         <SetUp onSetUp={onSetUp} saving={saving} failed={failed} />
@@ -456,7 +459,13 @@ function saveFile(name: string, href: string) {
   link.remove()
 }
 
-function WallLinks({ links }: { links: PhotoWallLinks }) {
+function WallLinks({
+  links,
+  rooms,
+}: {
+  links: PhotoWallLinks
+  rooms: string[]
+}) {
   return (
     <section aria-labelledby="photo-wall-links" className={`${CARD} space-y-5`}>
       <h2
@@ -476,8 +485,111 @@ function WallLinks({ links }: { links: PhotoWallLinks }) {
         note="Open on the venue screen, fullscreen."
         url={links.screen}
       />
+      {rooms.length > 0 && <RoomQrs post={links.post} rooms={rooms} />}
     </section>
   )
+}
+
+/** One QR per room, preselecting it in the composer (Talk photos spec §6.4). */
+function RoomQrs({ post, rooms }: { post: string; rooms: string[] }) {
+  return (
+    <div className="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-700">
+      <p className="text-sm font-medium text-gray-900 dark:text-white">
+        Room signs
+      </p>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Print one for each room. Scanning it picks that room, so the photo is
+        tagged with the talk running there.
+      </p>
+      <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        {rooms.map((room) => (
+          <RoomQr
+            key={room}
+            room={room}
+            url={`${post}?room=${encodeURIComponent(room)}`}
+          />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function RoomQr({ room, url }: { room: string; url: string }) {
+  const { src, failed: drawFailed } = useFeedbackQrPng(url, 256)
+  const [downloadFailed, setDownloadFailed] = useState(false)
+  const nameId = useId()
+  const download = () => {
+    setDownloadFailed(false)
+    renderRoomSign(url, room)
+      .then((dataUrl) => saveFile(`photo-wall-qr-${slug(room)}.png`, dataUrl))
+      .catch(() => setDownloadFailed(true))
+  }
+  return (
+    <li className="min-w-0 space-y-2">
+      <div className="aspect-square w-full rounded-md bg-white ring-1 ring-gray-200 dark:ring-gray-700">
+        {src ? (
+          <img
+            src={src}
+            alt={`QR code for posting from ${room}`}
+            className="size-full [image-rendering:pixelated]"
+          />
+        ) : drawFailed ? (
+          <p className="flex size-full items-center p-2 text-center text-xs text-gray-600">
+            The QR code could not be drawn.
+          </p>
+        ) : (
+          <div className="size-full animate-pulse rounded bg-gray-100" />
+        )}
+      </div>
+      <p
+        id={nameId}
+        className="text-sm font-semibold [overflow-wrap:anywhere] text-gray-900 dark:text-white"
+      >
+        {room}
+      </p>
+      <button
+        type="button"
+        onClick={download}
+        aria-describedby={nameId}
+        className={BUTTON}
+      >
+        <ArrowDownTrayIcon className="size-4" aria-hidden="true" />
+        PNG
+      </button>
+      {downloadFailed && (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+          The QR code could not be drawn.
+        </p>
+      )}
+    </li>
+  )
+}
+
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'room'
+
+/** The room's QR with its name printed below, as a PNG data URL. */
+async function renderRoomSign(url: string, room: string): Promise<string> {
+  const size = 1024
+  const qr = new Image()
+  qr.src = await renderFeedbackQrPng(url, size)
+  await qr.decode()
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size + 160
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('no canvas')
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(qr, 0, 0)
+  ctx.fillStyle = '#000000'
+  ctx.font = 'bold 72px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(room, size / 2, size + 90, size - 64)
+  return canvas.toDataURL('image/png')
 }
 
 function PostingLink({ url }: { url: string }) {

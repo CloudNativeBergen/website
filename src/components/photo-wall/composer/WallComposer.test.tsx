@@ -535,7 +535,7 @@ describe('WallComposer', () => {
 describe('WallComposer Talk row (Talk photos spec §6.1)', () => {
   beforeEach(() => sessionStorage.clear())
 
-  async function composeTagged(photo: string) {
+  async function composeTagged(photo: string, urlRoom?: string) {
     const onSubmit = vi.fn()
     render(
       <WallComposer
@@ -544,6 +544,7 @@ describe('WallComposer Talk row (Talk photos spec §6.1)', () => {
         onSubmit={onSubmit}
         schedules={STORY_SCHEDULES}
         now={STORY_NOW}
+        room={urlRoom}
       />,
     )
     await pickAgain(photo)
@@ -595,6 +596,26 @@ describe('WallComposer Talk row (Talk photos spec §6.1)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'No talk' }))
     expect(tag()).toHaveTextContent('No talk tagged.')
     expect(await postedTalkId(onSubmit)).toBeNull()
+  })
+
+  it('a URL room, any case, preselects its room and suggests its talk (§6.4)', async () => {
+    const onSubmit = await composeTagged('url', 'main STAGE')
+    expect(room('Main stage')).toBeChecked()
+    expect(tag()).toHaveTextContent('Tag: Running Kubernetes on a fjord ferry')
+    expect(await postedTalkId(onSubmit)).toBe('talk-a1')
+  })
+
+  it('ignores an unknown URL room', async () => {
+    await composeTagged('unknown', 'Broom closet')
+    expect(tag()).toHaveTextContent(/Pick your room/)
+    expect(sessionStorage.getItem(ROOM_KEY)).toBeNull()
+  })
+
+  it('a URL room beats the stored room, and is then stored', async () => {
+    sessionStorage.setItem(ROOM_KEY, 'Workshop room')
+    await composeTagged('precedence', 'Main stage')
+    expect(room('Main stage')).toBeChecked()
+    expect(sessionStorage.getItem(ROOM_KEY)).toBe('Main stage')
   })
 
   it('shows no Talk row without a schedule, and posts untagged', async () => {
