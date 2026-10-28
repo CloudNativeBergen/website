@@ -66,6 +66,7 @@ import { APPEARANCE_SECTION } from '@/lib/settings/appearance'
 import { STARTER_SESSION_FORMATS } from '@/lib/onboarding/create'
 import { formats as FORMAT_TITLES } from '@/lib/proposal/types'
 import { deriveBlueskyHandle } from '@/lib/stream/config'
+import { osloTodayDateString } from '@/lib/time'
 
 /**
  * Which half of activation a row belongs to. `cfp` is the critical path to a
@@ -616,11 +617,11 @@ export function buildActivationChecklist(
   )
 
   // STAGE 3 — the event itself. Only once the site is live and until the last
-  // day is over; `endDate` is a calendar date, so it compares as a string.
+  // day is over in Oslo; `endDate` is a calendar date, so it compares as a string.
   const now = options.now ?? new Date()
   const ended =
     present(conference.endDate) &&
-    now.toISOString().slice(0, 10) > conference.endDate!
+    osloTodayDateString(now) > conference.endDate!
   const schedules = conference.schedules ?? []
   const eventRows: ActivationRow[] = [
     {
