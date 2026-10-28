@@ -8,6 +8,16 @@ import {
 } from '@heroicons/react/24/solid'
 import type { TravelSupportWithExpenses } from '@/lib/travel-support/types'
 import { useImpersonateQueryString } from '@/lib/impersonation'
+import { formatCurrency } from '@/lib/format'
+import { formatConferenceDayDate, osloTodayDateString } from '@/lib/time'
+
+// A YYYY-MM-DD date or an instant, shown as its Oslo calendar day.
+const day = (value?: string) =>
+  !value || Number.isNaN(Date.parse(value))
+    ? undefined
+    : formatConferenceDayDate(
+        value.length === 10 ? value : osloTodayDateString(new Date(value)),
+      )
 
 interface CompactTravelSupportProps {
   travelSupport: TravelSupportWithExpenses
@@ -75,6 +85,29 @@ export function CompactTravelSupport({
   // Show edit icon only for draft status
   const canEdit = travelSupport.status === 'draft'
 
+  // The approved amount is in NOK (set by organizers in the admin review).
+  const { approvedAmount, expectedPaymentDate, paidAt } = travelSupport
+  const isApproved = travelSupport.status === 'approved'
+  const isPaid = travelSupport.status === 'paid'
+  const payout = isPaid
+    ? day(paidAt)
+      ? `Paid out ${day(paidAt)}`
+      : 'Paid out'
+    : isApproved
+      ? day(expectedPaymentDate)
+        ? `Payout expected ${day(expectedPaymentDate)}`
+        : 'Payout pending'
+      : undefined
+  const details =
+    (isApproved || isPaid) &&
+    [
+      approvedAmount != null &&
+        `${formatCurrency(approvedAmount, 'NOK')} approved`,
+      payout,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+
   return (
     <div>
       <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -108,6 +141,11 @@ export function CompactTravelSupport({
           )}
         </div>
       </div>
+      {details && (
+        <p className="mt-1 px-3 text-xs text-gray-600 dark:text-gray-400">
+          {details}
+        </p>
+      )}
     </div>
   )
 }

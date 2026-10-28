@@ -15,6 +15,8 @@ import { CompactWorkshopStats } from './CompactWorkshopStats'
 import { CompactTravelSupport } from './CompactTravelSupport'
 import { CompactBadges } from './CompactBadges'
 import { SpeakerBriefingPanel } from './SpeakerBriefingPanel'
+import { SpeakerThankYou } from './SpeakerThankYou'
+import { shareTags } from '@/lib/share/social'
 import { deriveBlueskyHandle } from '@/lib/stream/config'
 
 interface CompactConferenceCardProps {
@@ -97,6 +99,8 @@ export function CompactConferenceCard({
             <SpeakerBriefingPanel
               briefing={data.briefing}
               conferenceDay={data.conferenceDay}
+              dayBefore={data.dayBefore}
+              ticketSentAt={data.ticketSentAt}
               pinDinner={data.pinDinner}
               dinnerChoice={data.dinnerChoice}
               asOrganizer={data.asOrganizer}
@@ -110,6 +114,15 @@ export function CompactConferenceCard({
                 bluesky:
                   deriveBlueskyHandle(data.conference.socialLinks) ?? undefined,
               }}
+            />
+          )}
+
+          {data.thankYou && data.thankYou.length > 0 && (
+            <SpeakerThankYou
+              talks={data.thankYou}
+              eventName={data.conference.title}
+              tags={shareTags(data.conference)}
+              url={domain && `https://${domain}`}
             />
           )}
 

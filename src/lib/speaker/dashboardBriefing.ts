@@ -25,6 +25,23 @@ export type BriefingFields = Partial<
   >
 >
 
+/** Days after the last conference day that the thank-you block stays. */
+export const THANK_YOU_DAYS = 60
+
+/** One of the speaker's confirmed talks, for the after-event thank-you. */
+export interface ThankYouTalk {
+  proposalId: string
+  title: string
+  video?: string
+  hasSlides: boolean
+}
+
+/** A YYYY-MM-DD calendar date moved by whole days. */
+const addDays = (date: string, days: number) =>
+  new Date(Date.parse(`${date}T12:00:00Z`) + days * 86_400_000)
+    .toISOString()
+    .slice(0, 10)
+
 export async function loadDashboardBriefing({
   conference,
   currentConferenceId,
@@ -52,8 +69,19 @@ export async function loadDashboardBriefing({
   now?: Date
 }): Promise<
   | {
+      thankYou: ThankYouTalk[]
+      briefing?: never
+      pinDinner?: never
+      dinnerChoice?: never
+      asOrganizer?: never
+    }
+  | {
       briefing: SpeakerBriefing
       conferenceDay?: string
+      /** Today is the day before the conference: pin the talks and dinner. */
+      dayBefore?: boolean
+      /** When the speaker ticket was emailed (no address: personal data). */
+      ticketSentAt?: string
       pinDinner: boolean
       dinnerChoice?: string | null
       /** Shown because the speaker organizes the edition, not for a talk. */
@@ -63,7 +91,26 @@ export async function loadDashboardBriefing({
 > {
   // This host's edition only, for a speaker with a confirmed talk or an
   // organizer of its org, until the conference is over.
-  const hasTalk = proposals.some((p) => p.status === 'confirmed')
+  const confirmed = proposals.filter((p) => p.status === 'confirmed')
+  const hasTalk = confirmed.length > 0
+  const today = osloTodayDateString(now)
+  // After the event: a short thank-you instead, for THANK_YOU_DAYS.
+  if (
+    isOver &&
+    hasTalk &&
+    conference._id === currentConferenceId &&
+    !!conference.endDate &&
+    today <= addDays(conference.endDate, THANK_YOU_DAYS)
+  ) {
+    return {
+      thankYou: confirmed.map((p) => ({
+        proposalId: p._id,
+        title: p.title,
+        ...(p.video && { video: p.video }),
+        hasSlides: !!p.attachments?.some((a) => a.attachmentType === 'slides'),
+      })),
+    }
+  }
   const asOrganizer =
     !hasTalk &&
     isOrganizerForOrg(organizer, conference.organization?._ref ?? null)
@@ -91,15 +138,27 @@ export async function loadDashboardBriefing({
           travelSupport: travelSupport ?? undefined,
         },
   )
-  const today = osloTodayDateString(now)
   const isConferenceDay =
     today >= conference.startDate && today <= conference.endDate
+  const dayBefore =
+    !!conference.startDate && today === addDays(conference.startDate, -1)
   // Pin the dinner for its whole Oslo day (a late arrival still needs the
   // address); without a valid start time, on the conference days.
   const dinnerAt = Date.parse(briefing.dinner?.startsAt ?? '')
-  const pinDinner = Number.isNaN(dinnerAt)
-    ? isConferenceDay
-    : today === osloTodayDateString(new Date(dinnerAt))
+  const pinDinner =
+    dayBefore ||
+    (Number.isNaN(dinnerAt)
+      ? isConferenceDay
+      : today === osloTodayDateString(new Date(dinnerAt)))
+  // The latest ticket email to this speaker, from any of their talks.
+  const ticketSentAt = asOrganizer
+    ? undefined
+    : confirmed
+        .flatMap((p) => p.issuedSpeakerTickets ?? [])
+        .filter((t) => t.speakerId === speakerId && t.emailedAt)
+        .map((t) => t.emailedAt)
+        .sort()
+        .at(-1)
   // Only with routes to choose from, and never for an organizer without a
   // talk: setDinnerChoice requires a confirmed talk. A failed read hides the picker rather
   // than showing an unanswered one that would overwrite a stored choice.
@@ -122,6 +181,8 @@ export async function loadDashboardBriefing({
     dinnerChoice,
     conferenceDay: isConferenceDay ? today : undefined,
     pinDinner,
+    ...(dayBefore && { dayBefore }),
+    ...(ticketSentAt && { ticketSentAt }),
     ...(asOrganizer && { asOrganizer }),
   }
 }
