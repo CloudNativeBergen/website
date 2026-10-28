@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { ConferenceSchedule } from '@/lib/conference/types'
-import {
-  FEEDBACK_PROMPT,
-  feedbackCodeDisplayUrl,
-} from '@/lib/feedback/code-assets'
+import { feedbackCodeDisplayUrl } from '@/lib/feedback/code-assets'
 import { onSimulatedTimeChange } from '@/lib/program/dev-time'
 import { getCurrentConferenceTime } from '@/lib/program/time-utils'
 import {
@@ -13,6 +10,8 @@ import {
   type RoomFeedbackCode,
 } from '@/lib/stream/room-feedback'
 import { useFeedbackQrPng } from '@/components/feedback/useFeedbackQrPng'
+
+export const ROOM_FEEDBACK_HEADING = 'Rate the talks'
 
 function FeedbackCodeCard({ code }: { code: RoomFeedbackCode }) {
   const { src, failed } = useFeedbackQrPng(code.url, 768)
@@ -50,16 +49,16 @@ export function RoomFeedbackCodeCards({
     <section aria-labelledby="room-feedback-heading" className="mt-12">
       <h2
         id="room-feedback-heading"
-        className="font-space-grotesk text-4xl font-bold text-brand-slate-gray dark:text-white"
+        className="font-space-grotesk text-center text-4xl font-bold text-brand-slate-gray dark:text-white"
       >
-        {FEEDBACK_PROMPT}
+        {ROOM_FEEDBACK_HEADING}
       </h2>
       <ul
-        className={`mt-6 grid gap-8 ${
+        className={`mx-auto mt-6 grid gap-8 ${
           codes.length === 1
             ? 'max-w-md'
             : codes.length === 2
-              ? 'grid-cols-2 lg:max-w-4xl'
+              ? 'max-w-4xl grid-cols-2'
               : 'grid-cols-3'
         }`}
       >

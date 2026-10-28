@@ -21,6 +21,9 @@ const meta = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
+      canvas.getByRole('heading', { name: 'Rate the talks' }),
+    ).toBeVisible()
+    await expect(
       await canvas.findAllByRole('img', { name: /QR code for feedback/ }),
     ).toHaveLength(PAIR.length)
     await expect(canvas.getByText('cloudnativedays.no/f/k7m2qx')).toBeVisible()

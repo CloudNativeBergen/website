@@ -583,7 +583,7 @@ can scan while they stand up for the break.
 - **Layout:** a full-width row under the next-talk card and the social feed:
   one card per talk with a large QR (black on white whatever the theme), the
   title, and the short URL without the scheme (`feedbackCodeDisplayUrl`), under
-  the heading "How was this session?". With `?wall=1` the row rides on the room
+  the heading "Rate the talks", centred so one or two cards sit in the middle. With `?wall=1` the row rides on the room
   view, so it shows in the room's turns and not on the Photo Wall's.
 - **Read:** the page reads the cached Feedback Code index (§5.1) on the server
   and hands the client the URLs of this room's public talks with a code, keyed
