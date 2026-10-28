@@ -37,7 +37,7 @@ export function ActivationChecklist({
 }: {
   checklist: ActivationChecklistData
 }) {
-  const { stages, done, required, allDone } = checklist
+  const { stages, event, done, required, allDone } = checklist
   const pct = required === 0 ? 100 : Math.round((done / required) * 100)
 
   return (
@@ -46,7 +46,7 @@ export function ActivationChecklist({
         headingLevel={3}
         title="Get started"
         icon={<RocketLaunchIcon />}
-        defaultOpen={!allDone}
+        defaultOpen={!allDone || (event !== null && !event.allDone)}
         action={
           // Compact so the "Get started" title is never squeezed to an ellipsis
           // on a narrow (393px) viewport, where the disclosure's Hide/Show label
@@ -85,8 +85,10 @@ export function ActivationChecklist({
 
           {/* Two stages, not one flat list: the CFP critical path first, the
               rest of the launch prep after it. Same grouping the /admin hero
-              titles itself with, so the two surfaces tell one story. */}
-          {stages.map((stage) => (
+              titles itself with, so the two surfaces tell one story.
+              The event stage follows once the site is live; it has its own
+              count and never feeds the launch readiness bar above. */}
+          {[...stages, ...(event ? [event] : [])].map((stage) => (
             <section key={stage.id} className="space-y-1">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
