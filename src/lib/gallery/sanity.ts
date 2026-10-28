@@ -150,6 +150,7 @@ export async function updateGalleryImage(
   id: string,
   patch: UpdateGalleryImageInput,
   conferenceId: string,
+  _rev: string,
 ): Promise<GalleryImageResponse> {
   try {
     let originalSpeakerIds: string[] = []
@@ -242,8 +243,11 @@ export async function updateGalleryImage(
         updatePatch['image.crop'] = patch.crop
       }
     }
-
-    const updated = await clientWrite.patch(id).set(updatePatch).commit()
+    const updated = await clientWrite
+      .patch(id)
+      .ifRevisionId(_rev)
+      .set(updatePatch)
+      .commit()
 
     const image = await getGalleryImage(updated._id, conferenceId)
 
@@ -282,14 +286,19 @@ export async function updateGalleryImage(
  */
 export async function getGalleryImageTenant(
   id: string,
-): Promise<{ conferenceId: string | null; orgId: string | null } | null> {
+): Promise<{
+  conferenceId: string | null
+  orgId: string | null
+  _rev: string
+} | null> {
   try {
     // groq-global: resolves the tenant OF a client-supplied image id so the
     // caller can compare it with the request's tenant (an ownership check, not
     // a listing).
     const query = groq`*[_type == "imageGallery" && _id == $id][0]{
       "conferenceId": conference._ref,
-      "orgId": conference->organization._ref
+      "orgId": conference->organization._ref,
+      _rev
     }`
     return await clientReadUncached.fetch(query, { id }, { cache: 'no-store' })
   } catch (error) {
@@ -610,9 +619,19 @@ export async function deleteGalleryImage(
       return false
     }
 
-    const transaction = clientWrite.transaction()
-    transaction.delete(id)
-    await transaction.commit()
+    const deleteResult = await clientWrite.delete({
+      query: groq`*[_type=="imageGallery" && conference._ref == $conferenceId && _id==$id]`,
+      params: { id, conferenceId },
+    })
+
+    // If query matched nothing, the document was moved or deleted concurrently.
+    if (
+      !deleteResult ||
+      !deleteResult.documentIds ||
+      deleteResult.documentIds.length === 0
+    ) {
+      return false
+    }
 
     if (data?.assetId) {
       const stillUsed = await clientReadUncached.fetch(
@@ -652,6 +671,7 @@ export async function untagSpeakerFromImage(
   imageId: string,
   speakerId: string,
   orgId: string,
+  _rev: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const image = await clientReadUncached.fetch<{
@@ -678,6 +698,7 @@ export async function untagSpeakerFromImage(
 
     const patch = clientWrite
       .patch(imageId)
+      .ifRevisionId(_rev)
       .unset([`speakers[_key=="${speakerToRemove._key}"]`])
 
     if (!isAlreadyUntagged) {
