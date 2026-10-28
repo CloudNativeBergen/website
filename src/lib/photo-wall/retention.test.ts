@@ -798,7 +798,11 @@ describe('the deadline', () => {
     const deadline = new Date(now.getTime() + 60_000)
     let holderReads = 0
     store().beforeEachRead((read) => {
-      if (read.query.includes('references($assetId)')) {
+      // The first holder query of each check, not its recheck.
+      if (
+        read.query.includes('references($assetId)') &&
+        !read.query.includes('photo.asset._ref')
+      ) {
         holderReads += 1
         vi.setSystemTime(new Date(deadline.getTime() + 1))
       }

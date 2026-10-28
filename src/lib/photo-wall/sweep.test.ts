@@ -282,6 +282,47 @@ describe('orphan assets (§11.2)', () => {
     const report = await run()
     expect(report).toMatchObject({ assets: 3, assetsFailed: 1 })
     expect(store().doc(assetId('o1'))).toBeDefined()
+    // The refusal is logged with what the check saw (#1646).
+    expect(console.error).toHaveBeenCalledWith(
+      `Could not delete Wall Post asset ${assetId('o1')}`,
+      expect.anything(),
+      { status: 409, holdersSeen: [], references: 0 },
+    )
+  })
+
+  // #1646: the candidate read and the first holder query both miss a post
+  // that holds the asset; the second query finds it.
+  const missedUntilRecheck = (holder: Doc) =>
+    store().beforeEachRead((read) => {
+      if (
+        read.query.includes('photo.asset._ref') &&
+        read.params.assetId === assetId('o1')
+      ) {
+        store().put(holder)
+      }
+    })
+
+  it('a holder the first reads miss and the recheck finds keeps the asset, untried', async () => {
+    missedUntilRecheck(holding('missed', 'o1'))
+    const report = await run()
+    expect(report).toMatchObject({ orphans: 4, assets: 3, assetsKept: 1 })
+    expect(deletedIds()).not.toContain(assetId('o1'))
+  })
+
+  it('a WEAK holder the first reads miss keeps the asset too: Sanity would not refuse its delete', async () => {
+    missedUntilRecheck(
+      post('weak', 'conf-A', {
+        status: 'approved',
+        photo: {
+          _type: 'image',
+          asset: { ...ref(assetId('o1')), _weak: true },
+        },
+      }),
+    )
+    const report = await run()
+    expect(report).toMatchObject({ orphans: 4, assets: 3, assetsKept: 1 })
+    expect(store().doc(assetId('o1'))).toBeDefined()
+    expect(deletedIds()).not.toContain(assetId('o1'))
   })
 })
 

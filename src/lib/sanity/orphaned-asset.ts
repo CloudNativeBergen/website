@@ -71,38 +71,63 @@ export async function isAssetHeld(
   {
     except,
     signal,
+    seen,
   }: {
     except?: string
     /** Ends every request: the client's `timeout` does not bound a read. */
     signal?: AbortSignal
+    /** Collects every id the holder queries named, for a caller's log. */
+    seen?: string[]
   } = {},
 ): Promise<boolean | null> {
   const client = clientReadUncached.withConfig({
     apiVersion: COUNT_API_VERSION,
   })
-  let holders: string[]
-  try {
-    holders = await client.fetch<string[]>(
-      except === undefined
-        ? // groq-global: an asset can be held by a document of any tenant.
-          groq`*[references($assetId)]._id`
-        : // groq-global: an asset can be held by a document of any tenant.
+  const queries =
+    except === undefined
+      ? [
+          // groq-global: an asset can be held by a document of any tenant.
+          groq`*[references($assetId)]._id`,
+          // groq-global: the recheck, as wide.
+          groq`*[references($assetId) || photo.asset._ref == $assetId]._id`,
+        ]
+      : [
+          // groq-global: an asset can be held by a document of any tenant.
           groq`*[references($assetId) && !(_id in [$except, "drafts." + $except]) && !(_id in path("versions.*." + $except))]._id`,
-      except === undefined ? { assetId } : { assetId, except },
-      { cache: 'no-store', perspective: 'raw', ...(signal ? { signal } : {}) },
-    )
-  } catch {
-    return null
-  }
-  for (const id of holders ?? []) {
-    let doc: Record<string, unknown> | null | undefined
+          // groq-global: the recheck, as wide.
+          groq`*[(references($assetId) || photo.asset._ref == $assetId) && !(_id in [$except, "drafts." + $except]) && !(_id in path("versions.*." + $except))]._id`,
+        ]
+  // The view can also MISS a holder (#1646: an approved post's photo read
+  // as free). "Not held" is only answered once a second query, by
+  // `references()` and the Wall Post's `photo.asset._ref` path, finds no
+  // holder either. A weak reference does not stop Sanity's delete: this
+  // read is all that protects it.
+  for (const query of queries) {
+    let holders: string[]
     try {
-      doc = await client.getDocument(id, signal ? { signal } : undefined)
+      holders = await client.fetch<string[]>(
+        query,
+        except === undefined ? { assetId } : { assetId, except },
+        {
+          cache: 'no-store',
+          perspective: 'raw',
+          ...(signal ? { signal } : {}),
+        },
+      )
     } catch {
       return null
     }
-    // `getDocument('a,b')` reads a list: checked on what came back.
-    if (doc && doc._id === id && refersTo(doc, assetId)) return true
+    for (const id of holders ?? []) {
+      seen?.push(id)
+      let doc: Record<string, unknown> | null | undefined
+      try {
+        doc = await client.getDocument(id, signal ? { signal } : undefined)
+      } catch {
+        return null
+      }
+      // `getDocument('a,b')` reads a list: checked on what came back.
+      if (doc && doc._id === id && refersTo(doc, assetId)) return true
+    }
   }
   return false
 }
