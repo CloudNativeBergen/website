@@ -20,7 +20,6 @@ function FeedbackCodeCard({ code }: { code: RoomFeedbackCode }) {
     <li className="flex flex-col items-center gap-4 rounded-2xl bg-white p-6 text-center text-black shadow-xl">
       <div className="aspect-square w-full max-w-[22rem]">
         {src ? (
-           
           <img
             src={src}
             alt={`QR code for feedback on ${code.title}`}
