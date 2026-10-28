@@ -23,6 +23,7 @@ const patchMock = vi.fn()
 patchMock.mockImplementation(() => {
   const chain = {
     set: vi.fn(() => chain),
+    ifRevisionId: vi.fn(() => chain),
     unset: vi.fn(() => chain),
     setIfMissing: vi.fn(() => chain),
     append: vi.fn(() => chain),
@@ -31,6 +32,9 @@ patchMock.mockImplementation(() => {
   return chain
 })
 const transactionCommitMock = vi.fn(async () => ({}))
+const deleteMock = vi.fn<
+  (...args: unknown[]) => Promise<{ documentIds: string[] }>
+>(async () => ({ documentIds: ['img-1'] }))
 const transactionMock = vi.fn()
 transactionMock.mockImplementation(() => ({
   delete: vi.fn(),
@@ -43,7 +47,7 @@ vi.mock('@/lib/sanity/client', () => ({
     fetch: (...args: unknown[]) => fetchMock(...args),
     patch: (...args: unknown[]) => patchMock(...args),
     transaction: (...args: unknown[]) => transactionMock(...args),
-    delete: vi.fn(),
+    delete: (...args: unknown[]) => deleteMock(...args),
   },
 }))
 
@@ -210,6 +214,7 @@ describe('by-id gallery reads carry the tenant predicate (#616)', () => {
       'img-foreign',
       { speakers: ['sp-1'] },
       'conf-1',
+      'test-rev',
     )
 
     const [query, params] = fetchMock.mock.calls[0]
@@ -238,13 +243,18 @@ describe('by-id gallery reads carry the tenant predicate (#616)', () => {
       .mockResolvedValueOnce(1) // asset still referenced elsewhere
 
     await expect(deleteGalleryImage('img-1', 'conf-1')).resolves.toBe(true)
-    expect(transactionCommitMock).toHaveBeenCalledTimes(1)
+    expect(deleteMock).toHaveBeenCalledTimes(1)
   })
 
   it('untagSpeakerFromImage scopes by the ORG and refuses a foreign image without patching', async () => {
     fetchMock.mockResolvedValue(null)
 
-    const res = await untagSpeakerFromImage('img-foreign', 'sp-1', 'org-A')
+    const res = await untagSpeakerFromImage(
+      'img-foreign',
+      'sp-1',
+      'org-A',
+      'test-rev',
+    )
 
     const [query, params] = fetchMock.mock.calls[0]
     expect(String(query)).toContain('conference->organization._ref == $orgId')
@@ -259,7 +269,12 @@ describe('by-id gallery reads carry the tenant predicate (#616)', () => {
       untaggedSpeakers: [],
     })
 
-    const res = await untagSpeakerFromImage('img-1', 'sp-1', 'org-A')
+    const res = await untagSpeakerFromImage(
+      'img-1',
+      'sp-1',
+      'org-A',
+      'test-rev',
+    )
     expect(res).toEqual({ success: true })
     expect(patchMock).toHaveBeenCalledWith('img-1')
   })
