@@ -636,7 +636,11 @@ The same cron deletes:
 
 - image assets with `source.name == 'photo-wall'`, older than an hour, that
   no document references (a crash between upload and create, §6.2), rechecked
-  on the uncached client just before deleting;
+  on the uncached client just before deleting. Asset ids are content hashes,
+  so a retried submit can reuse an asset older than an hour, and the query
+  view may not yet show the new post's reference: the sweep also keeps any
+  candidate that a `wallPost` written in the last hour holds, reading those
+  posts through the document endpoint (#1646);
 - `deleting` posts older than an hour: finish their Delete (§12).
 
 **Monday risk:** P1 is not in the Monday cut. If it hasn't shipped by 26 November 2026, the deletion is a manual job that day: first set the wall's `postingMode` to Paused and `closedAt` (posting has already closed at the end of the conference, §7), then delete every `wallPost` of the conference (with history, §12) and the wall's assets (step 3 above), then set `purgedAt`.
