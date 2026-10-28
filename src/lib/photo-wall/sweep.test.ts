@@ -324,6 +324,30 @@ describe('orphan assets (§11.2)', () => {
     expect(store().doc(assetId('o1'))).toBeDefined()
     expect(deletedIds()).not.toContain(assetId('o1'))
   })
+
+  it('keeps an old asset a retried submit reused, held by a post written minutes ago that the query view shows without its photo (#1646)', async () => {
+    const times = { _createdAt: ago(5 * 60_000), _updatedAt: ago(5 * 60_000) }
+    const fresh = { ...holding('fresh', 'o1'), ...times }
+    store().put(fresh)
+    // The query view has the post, but not yet its photo.
+    store().readsLagFor(fresh._id, { ...post('fresh', 'conf-A'), ...times })
+    const mutate = vi.spyOn(clientWrite as unknown as Mutator, 'mutate')
+    const report = await run()
+    expect(report).toMatchObject({ orphans: 4, assets: 3, assetsKept: 1 })
+    expect(store().doc(assetId('o1'))).toBeDefined()
+    expect(
+      mutate.mock.calls.flatMap(([m]) =>
+        m.flatMap((x) => (x.delete ? [x.delete.id] : [])),
+      ),
+    ).not.toContain(assetId('o1'))
+    expect(store().docReads).toContain(fresh._id)
+  })
+
+  it('still deletes an old orphan when no post was written in the last hour', async () => {
+    const report = await run()
+    expect(report).toMatchObject({ orphans: 4, assets: 4, assetsKept: 0 })
+    expect(store().doc(assetId('o1'))).toBeUndefined()
+  })
 })
 
 describe('stuck deletes (§11.2, §12)', () => {

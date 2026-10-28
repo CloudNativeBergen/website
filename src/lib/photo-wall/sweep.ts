@@ -119,6 +119,37 @@ async function readOrphanCandidates(
   return ids ?? []
 }
 
+/**
+ * Assets a wallPost written in the last hour holds: what the query view may
+ * not show yet (its sync lags). A retried submit of the same bytes reuses an
+ * asset older than the hour (asset ids are content hashes), so the asset's
+ * age alone does not protect it. Only the post ids come from a query; the
+ * posts themselves are read through the doc endpoint, past the lag.
+ * ponytail: a post the query view does not list at all an hour on is still
+ * missed; Sanity then refuses the delete (strong reference, 409).
+ */
+async function readRecentlyHeld(
+  before: string,
+  signal: AbortSignal,
+): Promise<Set<string>> {
+  const ids = await clientReadUncached
+    .withConfig({ apiVersion: COUNT_API_VERSION })
+    .fetch<string[]>(
+      // groq-global: a reused asset may be held by any tenant's post; only
+      // ids are returned.
+      `*[_type == "wallPost" && dateTime(_updatedAt) >= dateTime($before)]._id`,
+      { before },
+      { cache: 'no-store', perspective: 'raw', signal },
+    )
+  if (!ids?.length) return new Set()
+  const posts = await clientReadUncached.getDocuments<{
+    photo?: { asset?: { _ref?: string } }
+  }>(ids, { signal })
+  return new Set(
+    posts.flatMap((p) => (p?.photo?.asset?._ref ? [p.photo.asset._ref] : [])),
+  )
+}
+
 interface StuckRow {
   _id: string
   conferenceId: string | null
@@ -230,10 +261,20 @@ export async function sweepPhotoWall({
   }
   const orphans = await readOrphanCandidates(before, budget.signal())
   report.orphans = orphans.length
+  const recentlyHeld = orphans.length
+    ? await readRecentlyHeld(before, budget.signal())
+    : new Set<string>()
   for (const assetId of orphans) {
     if (!budget.within()) {
       report.cutShort = true
       return report
+    }
+    if (recentlyHeld.has(assetId)) {
+      console.warn(
+        `Photo Wall sweep: kept ${assetId}, held by a post written in the last hour`,
+      )
+      report.assetsKept += 1
+      continue
     }
     const outcome = await deleteWallAsset(assetId, {
       signal: budget.signal(),
