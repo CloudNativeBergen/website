@@ -567,7 +567,7 @@ can scan while they stand up for the break.
 
 - **Which talks:** the ended talks in this room since its last break, on
   today's schedule only. A **break** is a placeholder slot (no talk, e.g.
-  "Lunch Break", "Coffee Break") in this room's own track. Walking back from
+  "Lunch Break", "Coffee Break") in this room's own track, or a placeholder in another track of the day that overlaps no talk in this room, so a shared break entered in one track counts for every room that is between talks. Walking back from
   now, the screen collects ended talks and stops at the first break before
   them; a break that is running now, or that just ended with no talk after
   it, is not the boundary. No break yet today: every ended talk of today in

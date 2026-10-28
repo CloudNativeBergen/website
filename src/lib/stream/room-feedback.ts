@@ -30,9 +30,23 @@ export function roomFeedbackCodes(
   const track = schedule?.tracks?.find((t) => t.trackTitle === roomTrackTitle)
   if (!schedule || !track?.talks) return []
 
-  const slots = sortTalksByStartTime(
-    track.talks.filter((s) => s.startTime && s.endTime),
-  )
+  const own = track.talks.filter((s) => s.startTime && s.endTime)
+  // Another track's placeholder is a break here too, when no talk of this
+  // room overlaps it: a shared "Lunch" is often entered in one track only.
+  const shared = schedule.tracks
+    .filter((t) => t !== track)
+    .flatMap((t) => t.talks ?? [])
+    .filter(
+      (p) =>
+        !p.talk &&
+        p.placeholder &&
+        p.startTime &&
+        p.endTime &&
+        !own.some(
+          (s) => s.talk && p.startTime < s.endTime && p.endTime > s.startTime,
+        ),
+    )
+  const slots = sortTalksByStartTime([...own, ...shared])
   const status = (s: (typeof slots)[number]) =>
     getTalkStatus(s, schedule.date, now)
   if (slots.some((s) => s.talk && status(s) === 'happening-now')) return []

@@ -26,11 +26,17 @@ const pause = (startTime: string, endTime: string): TrackTalk => ({
   placeholder: 'Coffee Break',
 })
 
-const schedules = (talks: TrackTalk[]): ConferenceSchedule[] => [
+const schedules = (
+  talks: TrackTalk[],
+  otherTrack: TrackTalk[] = [],
+): ConferenceSchedule[] => [
   {
     _id: 's',
     date: DATE,
-    tracks: [{ trackTitle: ROOM, trackDescription: '', talks }],
+    tracks: [
+      { trackTitle: 'Track A', trackDescription: '', talks: otherTrack },
+      { trackTitle: ROOM, trackDescription: '', talks },
+    ],
   } as ConferenceSchedule,
 ]
 
@@ -83,6 +89,30 @@ describe('roomFeedbackCodes', () => {
       talk('b', '09:45', '10:20'),
     ])
     expect(ids('10:30', URLS, day)).toEqual(['a', 'b'])
+  })
+
+  it('ends the run at a break entered only in another track', () => {
+    const day = schedules(
+      [
+        talk('a', '09:00', '09:40'),
+        talk('b', '10:00', '10:40'),
+        talk('c', '10:45', '11:25'),
+      ],
+      [pause('09:40', '10:00')],
+    )
+    expect(ids('11:30', URLS, day)).toEqual(['b', 'c'])
+  })
+
+  it("ignores another track's placeholder that overlaps one of this room's talks", () => {
+    const day = schedules(
+      [
+        talk('a', '09:00', '09:40'),
+        talk('b', '09:45', '10:20'),
+        talk('c', '10:25', '11:00'),
+      ],
+      [pause('09:50', '10:10')],
+    )
+    expect(ids('11:10', URLS, day)).toEqual(['a', 'b', 'c'])
   })
 
   it('skips a talk with no code', () => {
