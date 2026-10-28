@@ -272,3 +272,24 @@ export async function feedbackCodeForTalk(
   }
   return null
 }
+
+/**
+ * The CURRENT Feedback Codes of the given talks, for a room screen (spec
+ * §7.6): talk id → code, under the same rule as {@link feedbackCodeForTalk}
+ * (program published, the talk has a slot). From the cached index, no read
+ * of its own; talks without a code are absent.
+ */
+export async function feedbackCodesForTalks(
+  conference: FeedbackConference,
+  talkIds: ReadonlySet<string>,
+  now: Date,
+): Promise<Map<string, string>> {
+  const codes = new Map<string, string>()
+  if (!isProgramPublished(conference, now)) return codes
+  for (const [code, talk] of await feedbackCodeIndex(conference._id)) {
+    if (talkIds.has(talk.talkId) && talk.slots.length > 0) {
+      codes.set(talk.talkId, code)
+    }
+  }
+  return codes
+}
