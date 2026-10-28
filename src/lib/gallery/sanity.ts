@@ -284,9 +284,7 @@ export async function updateGalleryImage(
  * gallery mutation takes an image id from client input, so without this check an
  * organizer of tenant A could edit or delete tenant B's photos.
  */
-export async function getGalleryImageTenant(
-  id: string,
-): Promise<{
+export async function getGalleryImageTenant(id: string): Promise<{
   conferenceId: string | null
   orgId: string | null
   _rev: string
