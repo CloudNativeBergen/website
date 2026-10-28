@@ -286,7 +286,9 @@ export default async function ProposalViewPage({
           View Proposal
         </h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Read-only view of your proposal
+          {editingClosed
+            ? 'The conference is over, so the proposal can no longer be edited. You can still upload slides.'
+            : 'Read-only view of your proposal'}
         </p>
         {unreadMessagesLink}
       </div>
