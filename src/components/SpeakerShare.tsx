@@ -116,6 +116,8 @@ export interface SpeakerShareClientProps {
   speakerUrl: string
   talkTitle: string
   eventName: string
+  /** Hashtag and account to end a post with. */
+  tags?: string | null
   speakerName: string
   qrCodeUrl: string
   speaker: SpeakerWithTalks
