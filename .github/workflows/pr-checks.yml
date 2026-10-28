@@ -321,9 +321,9 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Install Playwright system dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      # On a cache hit we skip `playwright install-deps`: it goes through apt
+      # and the slow Azure Ubuntu mirror (#1668). ubuntu-latest is expected to
+      # ship the shared libraries headless chromium needs.
 
       - name: Initialize MSW
         run: pnpm msw init public --save=false
