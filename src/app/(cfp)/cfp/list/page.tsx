@@ -311,11 +311,7 @@ export default async function SpeakerDashboard() {
 
   // Get confirmed talks for speaker share
   const confirmedTalks = activeConferences
-    .flatMap((c) =>
-      c.proposals.filter(
-        (p) => p.status === 'confirmed' || p.status === 'accepted',
-      ),
-    )
+    .flatMap((c) => c.proposals.filter((p) => p.status === 'confirmed'))
     .slice(0, 1) // Show only the first confirmed talk
 
   // Get all badges sorted by issue date (newest first), prioritizing the current conference

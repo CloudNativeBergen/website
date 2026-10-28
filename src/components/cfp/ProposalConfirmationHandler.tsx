@@ -109,7 +109,7 @@ export function ProposalConfirmationHandler({
       type: 'success',
       title: 'Participation Confirmed',
       message:
-        'Thank you for confirming your participation! You will shortly receive an email from Checkin with your speaker ticket.',
+        "Thank you for confirming your participation! You'll get your speaker ticket by email shortly.",
     })
     router.refresh()
     cleanupUrl()

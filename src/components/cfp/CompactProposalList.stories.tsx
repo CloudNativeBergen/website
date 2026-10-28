@@ -216,9 +216,16 @@ export const WithApprovedAndRejected: Story = {
     docs: {
       description: {
         story:
-          'When speaker has an approved talk, rejected ones show "Not selected" with muted styling.',
+          'When speaker has an approved talk, rejected ones show "Not selected" with muted styling. Submitted talks are still under review, so they are not dimmed.',
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const row = (title: string) =>
+      canvas.getByRole('link', { name: title }).closest('.rounded-lg')
+    await expect(row('Another Proposal')).toHaveClass('opacity-60')
+    await expect(row('Third Proposal')).not.toHaveClass('opacity-60')
   },
 }
 
