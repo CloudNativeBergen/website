@@ -83,6 +83,10 @@ Decided by the user while this spec was written (2026-10-27):
 - **Closed wall:** closing the wall does not hide talk galleries. Tagged
   photos stay on talk and speaker pages until the 30-day deletion removes
   them.
+- **Room QR codes (2026-10-28):** a sign in each room links to
+  `/wall/post?room=<name>`, which preselects that room. The room name is the
+  key, matched without regard to case; renaming a track means reprinting its
+  sign (§6.4).
 
 Settled in this spec without asking:
 
@@ -190,6 +194,21 @@ conference as Submit does (`BAD_REQUEST` otherwise), patches with
 `moderateWallPost` in `src/lib/photo-wall/moderate.ts`), and expires the tags
 in §8. It leaves `status`, `approvedAt` and `decidedAt` alone, so fixing the
 tag of a post on the wall doesn't take it off.
+
+### 6.4 Room QR codes
+
+- **URL:** `/wall/post?room=<name>`. `ComposerPage` reads `room` from the
+  search params and passes it to `TalkPicker` as the initial room. It matches
+  today's schedule rooms case-insensitively and takes the schedule's
+  spelling.
+- **Unknown or missing room:** ignored; the picker behaves as in §6.1.
+- **Precedence:** a matching URL room beats the `sessionStorage` room for
+  that visit and is then stored, so the next post keeps it.
+- **Admin:** the Links card on `/admin/photo-wall` lists one QR per room in
+  the conference's schedule, each with its room name, and a PNG download with
+  the name printed under the code.
+- **Privacy:** nothing new is stored on the server. The room lives in the
+  URL and in `sessionStorage`, as before.
 
 ## 7. Where tagged photos show
 
@@ -339,12 +358,9 @@ As the Photo Wall spec §14, plus:
 
 ## 12. Open questions
 
-1. **Room QR codes.** Should signs in each room carry a link like
-   `/wall/post?room=<track>` that preselects the room? Needs a stable room key
-   (track titles can change) and the same param on the talk card's link.
-2. **Dashboard download.** Is a link to the whole image enough, or does a
+1. **Dashboard download.** Is a link to the whole image enough, or does a
    speaker want the stored original? Wall Posts are re-encoded on the phone,
    so the original is at most 2048 px.
-3. **After the conference.** All Wall Posts are deleted 30 days after the
+2. **After the conference.** All Wall Posts are deleted 30 days after the
    conference, so the talk photos vanish from the program and speaker pages
    then. Is that what speakers should be told on the dashboard?
