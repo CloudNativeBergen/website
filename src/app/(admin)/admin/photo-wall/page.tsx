@@ -5,13 +5,15 @@ import { PhotoWallAdminPage } from '@/components/photo-wall/admin'
 
 /**
  * The Photo Wall for organizers (Photo Wall spec §10). The page reads
- * nothing of the wall itself: the data comes from `photoWall.settings`, an
+ * nothing of the wall itself but the schedule's rooms: the data comes from `photoWall.settings`, an
  * `adminProcedure`.
  */
 export default async function AdminPhotoWallPage() {
   const denied = await denyNonOrganizer()
   if (denied) return denied
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    schedule: true,
+  })
   if (error || !conference) {
     return (
       <ErrorDisplay
@@ -20,5 +22,13 @@ export default async function AdminPhotoWallPage() {
       />
     )
   }
-  return <PhotoWallAdminPage conferenceTitle={conference.title} />
+  // Each room once, for its QR sign (Talk photos spec §6.4).
+  const rooms = [
+    ...new Set(
+      (conference.schedules ?? []).flatMap((day) =>
+        day.tracks.map((t) => t.trackTitle),
+      ),
+    ),
+  ]
+  return <PhotoWallAdminPage conferenceTitle={conference.title} rooms={rooms} />
 }

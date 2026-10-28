@@ -15,8 +15,10 @@ import { PhotoWallAdmin } from './PhotoWallAdmin'
  */
 export function PhotoWallAdminPage({
   conferenceTitle,
+  rooms,
 }: {
   conferenceTitle?: string
+  rooms?: string[]
 }) {
   const utils = api.useUtils()
   const settings = api.photoWall.settings.useQuery(undefined, {
@@ -52,6 +54,7 @@ export function PhotoWallAdminPage({
       view={settings.data}
       pending={update.isPending ? update.variables : undefined}
       conferenceTitle={conferenceTitle}
+      rooms={rooms}
       onSetUp={() => setUp.mutate()}
       onChange={(change) => update.mutate(change)}
       saving={setUp.isPending || update.isPending}

@@ -50,6 +50,8 @@ export interface WallPosterProps extends MyPostsActions {
   ensureDevice: () => Promise<boolean>
   /** The published schedule, for the Talk row (Talk photos spec §6.1). */
   schedules?: ConferenceSchedule[]
+  /** `?room=` from a room's QR (Talk photos spec §6.4). */
+  room?: string
   /** The submit; `postToWall` unless a story stands in for the server. */
   post?: (
     request: WallPostRequest,
@@ -115,6 +117,7 @@ export function WallPoster({
   setMyPostMarketing,
   post = postToWall,
   schedules,
+  room,
 }: WallPosterProps) {
   const [device, setDevice] = useState<'pending' | 'ready' | 'failed'>(
     'pending',
@@ -261,6 +264,7 @@ export function WallPoster({
         canPost={device !== 'pending'}
         uploadProgress={progress}
         schedules={schedules}
+        room={room}
         below={
           myPosts.length > 0 && (
             <MyPostsSection

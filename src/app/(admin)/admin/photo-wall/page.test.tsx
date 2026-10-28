@@ -50,6 +50,6 @@ describe('/admin/photo-wall', () => {
       props: unknown
     }
     expect(page.type).toBe(PhotoWallAdminPage)
-    expect(page.props).toEqual({ conferenceTitle: 'CND 2026' })
+    expect(page.props).toEqual({ conferenceTitle: 'CND 2026', rooms: [] })
   })
 })

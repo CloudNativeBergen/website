@@ -20,6 +20,14 @@ const storedRoom = () => {
   }
 }
 
+const rememberRoom = (room: string) => {
+  try {
+    sessionStorage.setItem(ROOM_KEY, room)
+  } catch {
+    // Private mode and the like: the room is just not remembered.
+  }
+}
+
 const idOf = (t: TaggableTalk) => t.slot.talk?._id ?? ''
 const titleOf = (t: TaggableTalk) => t.slot.talk?.title ?? ''
 
@@ -32,11 +40,14 @@ const titleOf = (t: TaggableTalk) => t.slot.talk?.title ?? ''
 export function TalkPicker({
   schedules,
   now,
+  initialRoom,
   onChange,
 }: {
   schedules: ConferenceSchedule[]
   /** Conference time; `suggestTalks` reads the clock when absent. */
   now?: Date
+  /** The room from `?room=`, any case; ignored unless it is a room today (§6.4). */
+  initialRoom?: string
   onChange: (talkId: string | null) => void
 }) {
   const rooms = useMemo(
@@ -51,6 +62,12 @@ export function TalkPicker({
   // there today. No room chosen, nothing suggested: untagged by default.
   const [room, setRoom] = useState<string>(() => {
     if (rooms.length === 1) return rooms[0]
+    const wanted = initialRoom?.toLowerCase()
+    const fromUrl = wanted && rooms.find((r) => r.toLowerCase() === wanted)
+    if (fromUrl) {
+      rememberRoom(fromUrl)
+      return fromUrl
+    }
     const kept = storedRoom()
     return kept && rooms.includes(kept) ? kept : ''
   })
@@ -68,11 +85,7 @@ export function TalkPicker({
 
   const chooseRoom = (next: string) => {
     setRoom(next)
-    try {
-      sessionStorage.setItem(ROOM_KEY, next)
-    } catch {
-      // Private mode and the like: the room is just not remembered.
-    }
+    rememberRoom(next)
     const s = suggestTalks(schedules, next, now).suggested
     setTalkId(s ? idOf(s) : null)
   }

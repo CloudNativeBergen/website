@@ -547,3 +547,21 @@ export const ChangeFailed: StoryObj<typeof PhotoWallAdminPage> = {
     await expect(canvas.getByRole('radio', { name: 'Paused' })).toBeChecked()
   },
 }
+
+/** The schedule's rooms, one QR sign each (Talk photos spec §6.4). */
+export const RoomSigns: Story = {
+  args: { rooms: ['Main stage', 'Workshop room', 'Fjord hall'] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByRole('img', {
+        name: 'QR code for posting from Workshop room',
+      }),
+    ).toBeVisible()
+  },
+}
+
+export const RoomSignsDark: Story = {
+  ...RoomSigns,
+  globals: { theme: 'dark' },
+}
