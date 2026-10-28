@@ -164,7 +164,19 @@ export const EventPrep: Story = {
         socialHashtag: '#cnd26',
       },
       emailAndSlackOk,
-      { now: new Date('2026-04-20T12:00:00Z') },
+      {
+        now: new Date('2026-04-20T12:00:00Z'),
+        eventFacts: {
+          unscheduledTalks: 2,
+          hasSpeakerInfo: true,
+          speakerInfoGaps: 0,
+          briefingSent: false,
+          speakersWithTodos: 3,
+          hasPhotoWall: false,
+          sponsors: 4,
+          sponsorsWithoutLogo: 1,
+        },
+      },
     ),
   },
   decorators: [

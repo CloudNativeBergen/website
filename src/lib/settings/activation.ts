@@ -300,6 +300,108 @@ export interface ActivationOptions {
   hasOrganizerInvitations?: boolean
   /** Clock for the event stage (programme date, end date). Defaults to now. */
   now?: Date
+  /**
+   * Server-resolved facts for the event stage (programme, speakers, photo
+   * wall, sponsor logos). Absent, those rows are left out. Resolved only while
+   * the event stage is shown (`@/lib/settings/activation-server`).
+   */
+  eventFacts?: EventPrepFacts
+}
+
+/** The event-stage facts this module cannot read without a server import. */
+export interface EventPrepFacts {
+  /** Confirmed talks not (fully) placed in an official schedule. */
+  unscheduledTalks: number
+  /** Whether speaker info is saved at all. */
+  hasSpeakerInfo: boolean
+  /** `getSpeakerInfoGaps` count for the saved speaker info. */
+  speakerInfoGaps: number
+  /** Every current briefing recipient has the current briefing version. */
+  briefingSent: boolean
+  /** Confirmed speakers with an open briefing to-do. */
+  speakersWithTodos: number
+  hasPhotoWall: boolean
+  /** Public sponsors, and how many of them have no logo. */
+  sponsors: number
+  sponsorsWithoutLogo: number
+}
+
+function eventFactRows(f: EventPrepFacts): ActivationRow[] {
+  const rows: ActivationRow[] = [
+    {
+      id: 'program-unscheduled',
+      stage: 'event',
+      label: f.unscheduledTalks
+        ? `Confirmed talks not scheduled (${f.unscheduledTalks})`
+        : 'All confirmed talks scheduled',
+      done: f.unscheduledTalks === 0,
+      anchor: '/admin/schedule',
+      hint: 'Place every confirmed talk in the schedule.',
+    },
+    {
+      id: 'speaker-info',
+      stage: 'event',
+      label: 'Speaker info',
+      done: f.hasSpeakerInfo && f.speakerInfoGaps === 0,
+      anchor: '/admin/speakers/info',
+      hint: 'Fill in the dinner, routes and on-site contact for speakers.',
+    },
+    {
+      id: 'speaker-info-email',
+      stage: 'event',
+      label: 'Speaker info email sent',
+      done: f.briefingSent,
+      anchor: '/admin/speakers/info',
+      hint: 'Send the latest speaker info to every confirmed speaker.',
+    },
+    {
+      id: 'speaker-todos',
+      stage: 'event',
+      label: f.speakersWithTodos
+        ? `Speakers with open to-dos (${f.speakersWithTodos})`
+        : 'No speakers with open to-dos',
+      done: f.speakersWithTodos === 0,
+      anchor: '/admin/speakers',
+      hint: 'Follow up on unconfirmed talks, slides, tickets and co-speaker invites.',
+    },
+    {
+      id: 'photo-wall',
+      stage: 'event',
+      label: 'Photo wall',
+      done: f.hasPhotoWall,
+      anchor: '/admin/photo-wall',
+      hint: 'Optional: set up a photo wall for attendees to post to.',
+      optional: true,
+    },
+  ]
+  if (f.sponsors > 0) {
+    rows.push({
+      id: 'sponsor-logos',
+      stage: 'event',
+      label: f.sponsorsWithoutLogo
+        ? `Sponsors without a logo (${f.sponsorsWithoutLogo})`
+        : 'Sponsor logos',
+      done: f.sponsorsWithoutLogo === 0,
+      anchor: '/admin/sponsors',
+      hint: 'Upload a logo for every sponsor.',
+    })
+  }
+  return rows
+}
+
+/**
+ * Whether the event stage is shown: the site is live and the event's last day
+ * (Oslo) is not over. The server seam asks this before resolving event facts.
+ */
+export function isEventStageRelevant(
+  conference: ConferenceForActivation,
+  now: Date = new Date(),
+): boolean {
+  if (conference.visibility === 'unlisted') return false
+  return !(
+    present(conference.endDate) &&
+    osloTodayDateString(now) > conference.endDate!
+  )
 }
 
 /** Non-empty string / present number. Trims strings; a 0 id counts as absent. */
@@ -619,9 +721,6 @@ export function buildActivationChecklist(
   // STAGE 3 — the event itself. Only once the site is live and until the last
   // day is over in Oslo; `endDate` is a calendar date, so it compares as a string.
   const now = options.now ?? new Date()
-  const ended =
-    present(conference.endDate) &&
-    osloTodayDateString(now) > conference.endDate!
   const schedules = conference.schedules ?? []
   const eventRows: ActivationRow[] = [
     {
@@ -670,6 +769,7 @@ export function buildActivationChecklist(
       hint: 'Optional: give a sponsor a room, thanked on its screen.',
       optional: true,
     },
+    ...(options.eventFacts ? eventFactRows(options.eventFacts) : []),
   ]
 
   return {
@@ -681,8 +781,9 @@ export function buildActivationChecklist(
     readyToGoLive: requiredRows
       .filter((r) => r.id !== ACTIVATION_LAUNCH_ROW_ID)
       .every((r) => r.done),
-    event:
-      isLive && !ended ? stageGroup(ACTIVATION_EVENT_STAGE, eventRows) : null,
+    event: isEventStageRelevant(conference, now)
+      ? stageGroup(ACTIVATION_EVENT_STAGE, eventRows)
+      : null,
   }
 }
 

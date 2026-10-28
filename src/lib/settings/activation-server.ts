@@ -10,10 +10,25 @@ import {
   conferenceOrgId,
   type ConferenceTenant,
 } from '@/lib/features/platform-default'
+import type { Conference, ConferenceSchedule } from '@/lib/conference/types'
+import { scopedFetch } from '@/lib/sanity/scoped'
+import { clientReadUncached } from '@/lib/sanity/client'
+import { computeUnassigned } from '@/lib/schedule/operations'
+import { getSpeakerInfoGaps } from '@/lib/speaker/briefing-checklist'
+import { getSpeakerBriefing } from '@/lib/speaker/briefing'
+import {
+  briefingVersion,
+  getBriefingSendHistory,
+  loadBriefingSpeakers,
+} from '@/lib/email/speaker-briefing'
+import { readPhotoWall } from '@/lib/photo-wall/sanity'
+import { Status } from '@/lib/proposal/types'
 import {
   buildActivationChecklist,
+  isEventStageRelevant,
   type ActivationChecklist,
   type ConferenceForActivation,
+  type EventPrepFacts,
 } from './activation'
 
 /**
@@ -93,6 +108,77 @@ async function isEmailDeliveryPlatformManaged(
   return !(await isPlatformOrganization(orgId))
 }
 
+interface EventPrepCounts {
+  schedules: ConferenceSchedule[]
+  sponsors: number
+  sponsorsWithoutLogo: number
+}
+
+/**
+ * The event-stage facts. Cost: the briefing speaker load (proposals, one batch
+ * ticket-provider call, travel support), the send log, the photo wall and one
+ * schedule/sponsor read. Any failure leaves the rows out.
+ */
+async function resolveEventPrepFacts(
+  conference: Conference,
+): Promise<EventPrepFacts | undefined> {
+  try {
+    const conferenceId = conference._id
+    const [speakers, counts, wall] = await Promise.all([
+      loadBriefingSpeakers(conference),
+      scopedFetch<EventPrepCounts>(
+        clientReadUncached,
+        { conferenceId },
+        `{
+          "schedules": *[_type == "schedule" && conference._ref == $conferenceId && (status == "official" || !defined(status))]{
+            tracks[]{ talks[]{ startTime, endTime, "talk": select(defined(talk) => { "_id": talk._ref }) } }
+          },
+          "sponsors": count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won" && defined(sponsor->_id)]),
+          "sponsorsWithoutLogo": count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won" && defined(sponsor->_id) && !defined(sponsor->logo) && !defined(sponsor->logoBright)])
+        }`,
+      ),
+      readPhotoWall(conferenceId),
+    ])
+    const history = await getBriefingSendHistory(
+      conferenceId,
+      speakers.map((s) => s._id),
+      briefingVersion(conference),
+    )
+    // ponytail: confirmed talks come from the briefing speakers, so a talk whose
+    // only speakers are erased or have no email is not counted as unscheduled.
+    const confirmed = [
+      ...new Map(
+        speakers
+          .flatMap((s) => s.proposals)
+          .filter((p) => p.status === Status.confirmed)
+          .map((p) => [p._id, p]),
+      ).values(),
+    ]
+    const speakersWithTodos = speakers.filter((s) =>
+      getSpeakerBriefing(conference, {
+        proposals: s.proposals,
+        speakerId: s._id,
+        ticketState: s.ticketState,
+      }).todos?.some((t) => t.kind !== 'travel-support'),
+    ).length
+    return {
+      unscheduledTalks: computeUnassigned(confirmed, counts.schedules ?? [])
+        .length,
+      hasSpeakerInfo: !!conference.speakerInfo,
+      speakerInfoGaps: getSpeakerInfoGaps(conference.speakerInfo).length,
+      briefingSent:
+        speakers.length > 0 && history.currentCount >= speakers.length,
+      speakersWithTodos,
+      hasPhotoWall: wall !== null,
+      sponsors: counts.sponsors ?? 0,
+      sponsorsWithoutLogo: counts.sponsorsWithoutLogo ?? 0,
+    }
+  } catch (error) {
+    console.error('Error resolving event-stage facts:', error)
+    return undefined
+  }
+}
+
 /**
  * Build the activation checklist for a conference with the entitlement and
  * platform answers already resolved.
@@ -111,12 +197,21 @@ export async function resolveActivationChecklist(
   checks?: SystemCheck[],
 ): Promise<ActivationChecklist> {
   const orgId = conferenceOrgId(conference)
-  const [ticketingAvailable, emailDeliveryManagedByPlatform, hasInvitations] =
-    await Promise.all([
-      isTicketingEnabledForOrg(orgId),
-      isEmailDeliveryPlatformManaged(orgId),
-      resolveHasOrganizerInvitations(conference),
-    ])
+  const [
+    ticketingAvailable,
+    emailDeliveryManagedByPlatform,
+    hasInvitations,
+    eventFacts,
+  ] = await Promise.all([
+    isTicketingEnabledForOrg(orgId),
+    isEmailDeliveryPlatformManaged(orgId),
+    resolveHasOrganizerInvitations(conference),
+    // Only while the event stage is shown; never for an unlisted site, so the
+    // admin layout's banner check pays nothing.
+    conference._id && isEventStageRelevant(conference)
+      ? resolveEventPrepFacts(conference as Conference)
+      : undefined,
+  ])
 
   return buildActivationChecklist(
     conference,
@@ -125,6 +220,7 @@ export async function resolveActivationChecklist(
       ticketingAvailable,
       emailDeliveryManagedByPlatform,
       hasOrganizerInvitations: hasInvitations,
+      eventFacts,
     },
   )
 }
