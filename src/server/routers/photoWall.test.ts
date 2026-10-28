@@ -1314,12 +1314,14 @@ describe('the moderation actions (§8, §10, §12)', () => {
       expect(store().doc(P)?.talk).toBeUndefined()
     })
 
-    it('talks lists this conference’s confirmed talks only', async () => {
+    it('talks lists every talk Submit accepts, an unconfirmed one too', async () => {
       store().reset([
         ...onTheWall(),
         talk('talk-0', 'conf-A', { status: 'submitted' }),
       ])
+      // An attendee may tag a submitted talk; the organizer can pick it again.
       expect(await organizer().talks()).toEqual([
+        { _id: 'talk-0', title: 'Talk talk-0', speakers: ['Ada'] },
         { _id: 'talk-1', title: 'Talk talk-1', speakers: ['Ada'] },
         { _id: 'talk-2', title: 'Talk talk-2', speakers: ['Ada'] },
       ])
