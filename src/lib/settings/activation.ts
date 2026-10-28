@@ -27,6 +27,12 @@
  *   `launch` — everything the public site wants before it is published,
  *              terminating in `visibility` ("Go live"), the switch itself.
  *
+ * A third stage, `event`, covers what the event itself needs once the site is
+ * live (programme, hashtag, Bluesky, travel info). It is NOT part of `rows`,
+ * `stages` or any top-level count: it lives on {@link ActivationChecklist.event},
+ * only while the site is live and the event has not ended, so `allDone`,
+ * `readyToGoLive` and the hero's next step mean exactly what they did before.
+ *
  * The split exists because the hero on `/admin` names the organizer's NEXT
  * step, and "next" is only meaningful against a critical path. A flat list in
  * settings-card order would have opened a fresh tenant's onboarding with
@@ -59,13 +65,14 @@ import type { SystemCheck } from '@/lib/system-status/types'
 import { APPEARANCE_SECTION } from '@/lib/settings/appearance'
 import { STARTER_SESSION_FORMATS } from '@/lib/onboarding/create'
 import { formats as FORMAT_TITLES } from '@/lib/proposal/types'
+import { deriveBlueskyHandle } from '@/lib/stream/config'
 
 /**
  * Which half of activation a row belongs to. `cfp` is the critical path to a
  * CFP that can actually receive a proposal; `launch` is everything the public
  * site wants before it goes live. See the module header.
  */
-export type ActivationStage = 'cfp' | 'launch'
+export type ActivationStage = 'cfp' | 'launch' | 'event'
 
 /** Display metadata for one stage — the heading the card and the hero share. */
 export interface ActivationStageMeta {
@@ -91,6 +98,14 @@ export const ACTIVATION_STAGES: readonly ActivationStageMeta[] = [
       'The rest of the setup, ending with the switch that publishes your site.',
   },
 ]
+
+/** The post-launch stage. Kept out of {@link ACTIVATION_STAGES} on purpose. */
+export const ACTIVATION_EVENT_STAGE: ActivationStageMeta = {
+  id: 'event',
+  title: 'Get ready for the event',
+  description:
+    'What attendees, speakers and the screens in the rooms need before the doors open.',
+}
 
 /**
  * The id of the terminal row — the launch switch. Excluded from
@@ -188,6 +203,12 @@ export interface ActivationChecklist {
    * the banner could never graduate from "Finish setup" to "Go live".
    */
   readyToGoLive: boolean
+  /**
+   * The `event` stage, or `null` while it is not relevant (site unlisted, or
+   * the event is over). Never counted in `done`, `required`, `allDone` or
+   * `readyToGoLive`, and never in `rows` or `stages`.
+   */
+  event: ActivationStageGroup | null
 }
 
 /**
@@ -227,6 +248,13 @@ export interface ConferenceForActivation {
   checkinEventId?: number | null
   titoAccountSlug?: string | null
   titoEventSlug?: string | null
+  // Event stage.
+  programDate?: string | null
+  /** Only the count and each track's `sponsor` are read. */
+  schedules?: { tracks?: { sponsor?: unknown }[] }[]
+  socialHashtag?: string
+  socialLinks?: string[]
+  venueTravelInfo?: string
 }
 
 export interface ActivationOptions {
@@ -269,6 +297,8 @@ export interface ActivationOptions {
    * costs one already-optional unticked row, not a wrong instruction.
    */
   hasOrganizerInvitations?: boolean
+  /** Clock for the event stage (programme date, end date). Defaults to now. */
+  now?: Date
 }
 
 /** Non-empty string / present number. Trims strings; a 0 id counts as absent. */
@@ -578,18 +608,68 @@ export function buildActivationChecklist(
   const requiredRows = rows.filter(isRequired)
   const done = requiredRows.filter((r) => r.done).length
 
-  const stages: ActivationStageGroup[] = ACTIVATION_STAGES.map((meta) => {
-    const stageRows = rows.filter((r) => r.stage === meta.id)
-    const stageRequired = stageRows.filter(isRequired)
-    const stageDone = stageRequired.filter((r) => r.done).length
-    return {
-      ...meta,
-      rows: stageRows,
-      done: stageDone,
-      required: stageRequired.length,
-      allDone: stageDone === stageRequired.length,
-    }
-  })
+  const stages = ACTIVATION_STAGES.map((meta) =>
+    stageGroup(
+      meta,
+      rows.filter((r) => r.stage === meta.id),
+    ),
+  )
+
+  // STAGE 3 — the event itself. Only once the site is live and until the last
+  // day is over; `endDate` is a calendar date, so it compares as a string.
+  const now = options.now ?? new Date()
+  const ended =
+    present(conference.endDate) &&
+    now.toISOString().slice(0, 10) > conference.endDate!
+  const schedules = conference.schedules ?? []
+  const eventRows: ActivationRow[] = [
+    {
+      // Mirrors `isProgramPublished` (@/lib/conference/state), restated so
+      // this module stays free of that file's imports.
+      id: 'program',
+      stage: 'event',
+      label: 'Programme published',
+      done:
+        present(conference.programDate) &&
+        now >= new Date(conference.programDate!) &&
+        schedules.length > 0,
+      anchor: '/admin/schedule',
+      hint: 'Build the schedule and set the date the programme goes public.',
+    },
+    {
+      id: 'hashtag',
+      stage: 'event',
+      label: 'Event hashtag',
+      done: present(conference.socialHashtag),
+      anchor: '#local-information',
+      hint: 'Set the hashtag attendees and speakers should post with.',
+    },
+    {
+      id: 'bluesky',
+      stage: 'event',
+      label: 'Bluesky account',
+      done: deriveBlueskyHandle(conference.socialLinks) !== null,
+      anchor: '#domains-social-links',
+      hint: 'Add your Bluesky profile link so the room screens can show the feed.',
+    },
+    {
+      id: 'venue-travel',
+      stage: 'event',
+      label: 'Travel info',
+      done: present(conference.venueTravelInfo),
+      anchor: '#local-information',
+      hint: 'Tell attendees how to get to the venue.',
+    },
+    {
+      id: 'track-sponsors',
+      stage: 'event',
+      label: 'Track sponsors',
+      done: schedules.some((s) => (s.tracks ?? []).some((t) => t.sponsor)),
+      anchor: '/admin/schedule',
+      hint: 'Optional: give a sponsor a room, thanked on its screen.',
+      optional: true,
+    },
+  ]
 
   return {
     rows,
@@ -600,6 +680,24 @@ export function buildActivationChecklist(
     readyToGoLive: requiredRows
       .filter((r) => r.id !== ACTIVATION_LAUNCH_ROW_ID)
       .every((r) => r.done),
+    event:
+      isLive && !ended ? stageGroup(ACTIVATION_EVENT_STAGE, eventRows) : null,
+  }
+}
+
+/** A stage's rows plus its own required/done rollup. */
+function stageGroup(
+  meta: ActivationStageMeta,
+  rows: ActivationRow[],
+): ActivationStageGroup {
+  const required = rows.filter(isRequired)
+  const done = required.filter((r) => r.done).length
+  return {
+    ...meta,
+    rows,
+    done,
+    required: required.length,
+    allDone: done === required.length,
   }
 }
 

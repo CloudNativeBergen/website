@@ -750,3 +750,72 @@ describe('hasCustomDomain', () => {
     ).toBe(true)
   })
 })
+
+describe('event stage', () => {
+  const BEFORE = new Date('2026-04-20T12:00:00Z')
+  const EVENT_READY: ConferenceForActivation = {
+    ...FULLY_LIVE,
+    programDate: '2026-04-01',
+    schedules: [{ tracks: [{ sponsor: { _ref: 's1' } }] }],
+    socialHashtag: '#cnd26',
+    socialLinks: ['https://bsky.app/profile/cnd.example'],
+    venueTravelInfo: 'Take the light rail to Byparken.',
+  }
+  const event = (c: ConferenceForActivation, now = BEFORE) =>
+    buildActivationChecklist(c, CHECKS_OK, { now }).event
+
+  it('marks every row done for a fully prepared event', () => {
+    const group = event(EVENT_READY)!
+    expect(group.rows.map((r) => [r.id, r.done])).toEqual([
+      ['program', true],
+      ['hashtag', true],
+      ['bluesky', true],
+      ['venue-travel', true],
+      ['track-sponsors', true],
+    ])
+    expect(group).toMatchObject({ done: 4, required: 4, allDone: true })
+  })
+
+  it('marks every row outstanding when nothing is set', () => {
+    const group = event({ ...FULLY_LIVE, socialHashtag: '  ' })!
+    expect(group.rows.every((r) => !r.done)).toBe(true)
+    expect(group).toMatchObject({ done: 0, required: 4, allDone: false })
+    expect(group.rows.find((r) => r.id === 'track-sponsors')?.optional).toBe(
+      true,
+    )
+  })
+
+  it('needs both a past programme date and a schedule for the programme row', () => {
+    const program = (c: ConferenceForActivation) =>
+      event(c)!.rows.find((r) => r.id === 'program')!.done
+    expect(program({ ...EVENT_READY, programDate: '2026-04-25' })).toBe(false)
+    expect(program({ ...EVENT_READY, schedules: [] })).toBe(false)
+  })
+
+  it('does not count a non-Bluesky social link', () => {
+    const c = { ...EVENT_READY, socialLinks: ['https://x.com/cnd'] }
+    expect(event(c)!.rows.find((r) => r.id === 'bluesky')!.done).toBe(false)
+  })
+
+  it('is excluded from rows, stages and the top-level rollup', () => {
+    const ready = buildActivationChecklist(FULLY_LIVE, CHECKS_OK, {
+      now: BEFORE,
+    })
+    expect(ready.event?.allDone).toBe(false)
+    expect(ready.allDone).toBe(true)
+    expect(ready.readyToGoLive).toBe(true)
+    expect(ready.rows.some((r) => r.stage === 'event')).toBe(false)
+    expect(ready.stages.map((s) => s.id)).toEqual(['cfp', 'launch'])
+    expect(nextActivationSteps(ready)).toEqual([])
+    expect(currentActivationStage(ready)).toBeNull()
+  })
+
+  it('is hidden while unlisted', () => {
+    expect(event({ ...EVENT_READY, visibility: 'unlisted' })).toBeNull()
+  })
+
+  it('shows through the last day and hides after it', () => {
+    expect(event(EVENT_READY, new Date('2026-05-02T20:00:00Z'))).not.toBeNull()
+    expect(event(EVENT_READY, new Date('2026-05-03T08:00:00Z'))).toBeNull()
+  })
+})
