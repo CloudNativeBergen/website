@@ -12,7 +12,6 @@ import { resolveEditorSpeaker } from '@/lib/proposal/editorSpeaker'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProposalReadOnlyView } from '@/components/cfp/ProposalReadOnlyView'
 import { ProposalForm } from '@/components/cfp/ProposalForm'
-import { CoSpeakerManager } from '@/components/cfp/CoSpeakerManager'
 import { ProposalGuidanceSidebar } from '@/components/cfp/ProposalGuidanceSidebar'
 import { PostConferenceVideoPanel } from '@/components/cfp/PostConferenceVideoPanel'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
@@ -158,12 +157,64 @@ export default async function ProposalViewPage({
     </p>
   )
 
-  // Editable proposals (draft/submitted) render the edit form
+  // Once the talk's conference is over the server rejects edits (FORBIDDEN in
+  // proposal.update), so show the read-only view instead of a form that
+  // cannot save. Mirrors the server check, which only applies when the talk
+  // belongs to this domain's conference.
+  const talkConferenceId =
+    proposal.conference && '_id' in proposal.conference
+      ? proposal.conference._id
+      : proposal.conference?._ref
+  const editingClosed =
+    talkConferenceId === conference._id && isConferenceOver(conference)
+
+  // Slides and the recording stay available after the event: attachments use
+  // their own mutations, which are not locked when the conference is over.
+  // Rendered once, in a column that sits beside the main content on `lg` and
+  // below it on smaller screens, so uploads work on a phone too.
+  const isAcceptedOrConfirmed =
+    proposal.status === 'confirmed' || proposal.status === 'accepted'
+  const speakerMaterials = isAcceptedOrConfirmed ? (
+    <>
+      <ProposalAttachmentsPanel
+        proposalId={proposal._id}
+        initialAttachments={proposal.attachments || []}
+      />
+      {/* Card Counts moved into the Session Feedback section
+          (speaker feedback spec §9.5). */}
+      {isConferenceOver(conference) && (
+        <PostConferenceVideoPanel proposal={proposal} />
+      )}
+    </>
+  ) : null
+
+  // Session Feedback (speaker feedback spec §9.1): confirmed talks only, for
+  // their speakers, and only on the host of the talk's own conference — a
+  // speaker can open any of their proposals from any tenant's host, and the
+  // code always belongs to the talk's conference. The server re-checks all
+  // three. Full width above the content, so it shows on a phone too, and in
+  // both the edit and the read-only view.
+  const showSessionFeedback =
+    ATTENDEE_PAGE_LIVE &&
+    proposal.status === 'confirmed' &&
+    proposal.conference != null &&
+    '_id' in proposal.conference &&
+    proposal.conference._id === conference._id &&
+    (proposal.speakers ?? []).some(
+      (s) => s != null && '_id' in s && s._id === session.speaker._id,
+    )
+  const sessionFeedback = showSessionFeedback ? (
+    <div className="mb-6">
+      <SessionFeedbackSection talkId={proposal._id} title={proposal.title} />
+    </div>
+  ) : null
+
+  // Editable proposals render the edit form
   if (
-    proposal.status === 'draft' ||
-    proposal.status === 'submitted' ||
-    proposal.status === 'accepted' ||
-    proposal.status === 'confirmed'
+    !editingClosed &&
+    (proposal.status === 'draft' ||
+      proposal.status === 'submitted' ||
+      isAcceptedOrConfirmed)
   ) {
     // Extracted (#1148): the proposal payload withholds OTHER speakers' tag
     // opt-out, and this is where the caller's own entry is picked out of it.
@@ -174,22 +225,6 @@ export default async function ProposalViewPage({
       currentUserSpeaker,
       session.speaker._id,
     )
-
-    // Session Feedback (speaker feedback spec §9.1): confirmed talks only, for
-    // their speakers, and only on the host of the talk's own conference — a
-    // speaker can open any of their proposals from any tenant's host, and the
-    // code always belongs to the talk's conference. The server re-checks all
-    // three. Full width above the form, so it shows on a phone too (the
-    // sidebar is `hidden lg:block`).
-    const showSessionFeedback =
-      ATTENDEE_PAGE_LIVE &&
-      proposal.status === 'confirmed' &&
-      proposal.conference != null &&
-      '_id' in proposal.conference &&
-      proposal.conference._id === conference._id &&
-      (proposal.speakers ?? []).some(
-        (s) => s != null && '_id' in s && s._id === session.speaker._id,
-      )
 
     return (
       <div className="mx-auto max-w-7xl">
@@ -205,17 +240,10 @@ export default async function ProposalViewPage({
           {unreadMessagesLink}
         </div>
 
-        {showSessionFeedback && (
-          <div className="mb-6">
-            <SessionFeedbackSection
-              talkId={proposal._id}
-              title={proposal.title}
-            />
-          </div>
-        )}
+        {sessionFeedback}
 
-        <div className="flex gap-6">
-          <div className="flex-1 space-y-6">
+        <div className="flex flex-col gap-6 lg:flex-row">
+          <div className="min-w-0 flex-1 space-y-6">
             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
               <ProposalForm
                 key={id}
@@ -229,32 +257,13 @@ export default async function ProposalViewPage({
                 initialStatus={proposal.status}
               />
             </div>
-
-            {(proposal.status === 'confirmed' ||
-              proposal.status === 'accepted') && (
-              <CoSpeakerManager
-                proposal={proposal}
-                currentUserSpeakerId={currentUserSpeaker._id}
-              />
-            )}
           </div>
 
-          <div className="hidden w-80 shrink-0 space-y-6 lg:block">
-            <ProposalGuidanceSidebar conference={conference} />
-            {(proposal.status === 'confirmed' ||
-              proposal.status === 'accepted') && (
-              <>
-                <ProposalAttachmentsPanel
-                  proposalId={proposal._id}
-                  initialAttachments={proposal.attachments || []}
-                />
-                {/* Card Counts moved into the Session Feedback section
-                    (speaker feedback spec §9.5). */}
-                {isConferenceOver(conference) && (
-                  <PostConferenceVideoPanel proposal={proposal} />
-                )}
-              </>
-            )}
+          <div className="w-full space-y-6 lg:w-80 lg:shrink-0">
+            <div className="hidden lg:block">
+              <ProposalGuidanceSidebar conference={conference} />
+            </div>
+            {speakerMaterials}
           </div>
         </div>
 
@@ -277,17 +286,26 @@ export default async function ProposalViewPage({
           View Proposal
         </h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Read-only view of your proposal
+          {editingClosed
+            ? 'The conference is over, so the proposal can no longer be edited. You can still upload slides.'
+            : 'Read-only view of your proposal'}
         </p>
         {unreadMessagesLink}
       </div>
 
-      <div className="flex gap-6">
-        <div className="flex-1 space-y-6">
+      {sessionFeedback}
+
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="min-w-0 flex-1 space-y-6">
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <ProposalReadOnlyView proposal={proposal} />
           </div>
         </div>
+        {speakerMaterials && (
+          <div className="w-full space-y-6 lg:w-80 lg:shrink-0">
+            {speakerMaterials}
+          </div>
+        )}
       </div>
 
       <div className="mt-6 max-w-4xl">
