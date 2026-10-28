@@ -26,8 +26,9 @@ export async function isConferenceTalk(talkId: string, conferenceId: string) {
 }
 
 /**
- * The picker's list on `/admin/photo-wall` (§6.3): this conference's
- * confirmed talks, by title. Read once per page load, never polled.
+ * The picker's list on `/admin/photo-wall` (§6.3): every talk of this
+ * conference, by title, whatever its status: the same set Submit and
+ * `setTalkTag` accept ({@link isConferenceTalk}). Read once per page load, never polled.
  */
 export async function readTaggableTalks(
   conferenceId: string,
@@ -37,7 +38,7 @@ export async function readTaggableTalks(
   >(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "talk" && status == "confirmed" && !(_id in path("drafts.**"))] | order(title asc) { _id, title, "speakers": speakers[]->name }`,
+    `*[_type == "talk" && !(_id in path("drafts.**"))] | order(title asc) { _id, title, "speakers": speakers[]->name }`,
   )
   return rows.map((row) => ({
     _id: row._id,
