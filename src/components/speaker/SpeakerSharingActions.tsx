@@ -10,6 +10,8 @@ interface SpeakerSharingActionsProps {
   speakerUrl: string
   talkTitle: string
   eventName: string
+  /** Hashtag and account to end the post with. */
+  tags?: string | null
   children: React.ReactNode
 }
 
@@ -18,6 +20,7 @@ export function SpeakerSharingActions({
   speakerUrl,
   talkTitle,
   eventName,
+  tags,
   children,
 }: SpeakerSharingActionsProps) {
   const [isDownloading, setIsDownloading] = useState(false)
@@ -46,7 +49,9 @@ export function SpeakerSharingActions({
   }
 
   const getBlueskyShareUrl = () => {
-    const shareText = `${getRandomShareText()}\n\n${speakerUrl}`
+    const shareText = [getRandomShareText(), tags, speakerUrl]
+      .filter(Boolean)
+      .join('\n\n')
     const params = new URLSearchParams({
       text: shareText,
     })

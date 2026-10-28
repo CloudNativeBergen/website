@@ -15,6 +15,7 @@ import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
 import { getSpeakerFeedbackChips } from '@/lib/feedback/server'
 import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { shareTags } from '@/lib/share/social'
 import { CompactConferenceCard } from '@/components/cfp/CompactConferenceCard'
 import { SpeakerShareSidebar } from '@/components/cfp/SpeakerShareSidebar'
 import { BadgeShare } from '@/components/cfp/BadgeShare'
@@ -129,7 +130,9 @@ export default async function SpeakerDashboard() {
       contactEmail,
       domains,
       formats,
-      features
+      features,
+      socialHashtag,
+      socialLinks
     }
   `
 
@@ -354,19 +357,21 @@ export default async function SpeakerDashboard() {
   // A talk title must never fall back to a brand name — the share card is only
   // rendered when a confirmed talk exists, so this is a defensive placeholder.
   const talkTitle = primaryTalk?.title || 'Untitled Talk'
-  const eventName = primaryTalk
+  const talkConference = primaryTalk
     ? activeConferences.find((c) =>
         c.proposals.some((p) => p._id === primaryTalk._id),
-      )?.conference.title || PLATFORM_NAME
-    : PLATFORM_NAME
+      )?.conference
+    : undefined
+  const eventName = talkConference?.title || PLATFORM_NAME
 
   // Conference name for the latest badge's sidebar card, degrading to the
   // platform label when the badge's conference can't be resolved.
-  const badgeEventName = latestBadge
+  const badgeConference = latestBadge
     ? activeConferences.find((c) =>
         c.badges.some((b) => b._id === latestBadge._id),
-      )?.conference.title || PLATFORM_NAME
-    : PLATFORM_NAME
+      )?.conference
+    : undefined
+  const badgeEventName = badgeConference?.title || PLATFORM_NAME
 
   if (activeConferences.length === 0) {
     return (
@@ -454,6 +459,7 @@ export default async function SpeakerDashboard() {
               <BadgeShare
                 badge={latestBadge}
                 eventName={badgeEventName}
+                tags={shareTags(badgeConference)}
                 domain={domain}
                 className="w-full"
               />
@@ -464,6 +470,7 @@ export default async function SpeakerDashboard() {
                 speaker={speakerWithTalks}
                 talkTitle={talkTitle}
                 eventName={eventName}
+                tags={shareTags(talkConference)}
                 baseDomain={domain}
               />
             )}

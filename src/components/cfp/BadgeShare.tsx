@@ -20,6 +20,8 @@ import Link from 'next/link'
 interface BadgeShareProps {
   badge: BadgeRecord
   eventName: string
+  /** Hashtag and account to end the post with. */
+  tags?: string | null
   domain: string
   className?: string
 }
@@ -27,6 +29,7 @@ interface BadgeShareProps {
 export function BadgeShare({
   badge,
   eventName,
+  tags,
   domain,
   className = '',
 }: BadgeShareProps) {
@@ -39,7 +42,12 @@ export function BadgeShare({
   const fullJsonUrl = buildFullUrl(domain, jsonUrl)
 
   const handleShare = (platform: 'bluesky') => {
-    const text = `🎉 I earned a ${badgeTypeName} Badge at ${eventName}! 🎉`
+    const text = [
+      `🎉 I earned a ${badgeTypeName} Badge at ${eventName}! 🎉`,
+      tags,
+    ]
+      .filter(Boolean)
+      .join('\n\n')
     shareSocial({ platform, text, url: fullBadgeUrl })
   }
 
