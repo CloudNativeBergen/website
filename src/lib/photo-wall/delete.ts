@@ -1,6 +1,6 @@
 import 'server-only'
 import { clientWrite } from '@/lib/sanity/client'
-import { isAssetHeld } from '@/lib/sanity/orphaned-asset'
+import { countAssetReferences, isAssetHeld } from '@/lib/sanity/orphaned-asset'
 import { deleteWithHistory } from '@/lib/sanity/purge'
 import type { ShownIncarnation } from './moderation'
 import { sanityStatus } from '@/lib/sanity/status'
@@ -207,7 +207,11 @@ export async function deleteWallAsset(
   } = {},
 ): Promise<WallAssetOutcome> {
   if (!assetId) return 'deleted'
-  const held = () => isAssetHeld(assetId, { except, signal })
+  let seen: string[] = []
+  const held = () => {
+    seen = []
+    return isAssetHeld(assetId, { except, signal, seen })
+  }
   return atMostTwice<WallAssetOutcome>(
     async () => {
       const holds = await held()
@@ -218,7 +222,13 @@ export async function deleteWallAsset(
           await deleteWithHistory(assetId, { signal })
           return 'deleted'
         } catch (error) {
-          console.error(`Could not delete Wall Post asset ${assetId}`, error)
+          // What the check saw, so a refusal it did not foresee (#1646) can
+          // be diagnosed: the holders the queries named, and the count now.
+          console.error(`Could not delete Wall Post asset ${assetId}`, error, {
+            status: sanityStatus(error),
+            holdersSeen: seen,
+            references: await countAssetReferences(assetId),
+          })
         }
       }
       return AGAIN

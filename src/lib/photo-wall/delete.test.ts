@@ -31,6 +31,11 @@ interface Mutator {
   mutate: (mutations: { delete: { id: string } }[]) => Promise<unknown>
 }
 const store = () => h.store!
+/** A check's first holder query: not its recheck, not a logged count. */
+const isFirstHolderRead = (r: { query: string }) =>
+  r.query.includes('references(') &&
+  !r.query.includes('photo.asset._ref') &&
+  !r.query.includes('count(')
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
 const P1 = 'wallPost-11111111-1111-4111-8111-111111111111'
@@ -217,9 +222,7 @@ describe('deleteWallPost (§12)', () => {
     expect(store().doc(ASSET)).toBeDefined()
     expect(store().doc(P1)).toBeUndefined()
     // Done because the count after the refusal finds the reference.
-    expect(
-      store().reads.filter((r) => r.query.includes('references(')),
-    ).toHaveLength(2)
+    expect(store().reads.filter(isFirstHolderRead)).toHaveLength(2)
   })
 
   describe('a 409 that is not a reference (transaction contention)', () => {
@@ -534,9 +537,7 @@ describe('deleteWallPost (§12)', () => {
         marked: true,
       })
       // Two attempts, and the count that decides the second failure.
-      expect(
-        store().reads.filter((r) => r.query.includes('references(')),
-      ).toHaveLength(3)
+      expect(store().reads.filter(isFirstHolderRead)).toHaveLength(3)
       expect(store().doc(P1)).toMatchObject({
         status: 'deleting',
         deletingAssetId: ASSET,
