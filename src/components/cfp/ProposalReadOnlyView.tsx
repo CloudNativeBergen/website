@@ -1,12 +1,13 @@
 'use client'
 
-import { ProposalExisting } from '@/lib/proposal/types'
+import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { formatConfig } from '@/lib/proposal'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
+import { ProposalStatusBadge } from '@/lib/proposal/ui'
 
 interface ProposalReadOnlyViewProps {
   proposal: ProposalExisting
@@ -26,6 +27,17 @@ export function ProposalReadOnlyView({ proposal }: ProposalReadOnlyViewProps) {
         <h2 className="font-space-grotesk text-3xl font-bold text-gray-900 dark:text-white">
           {proposal.title}
         </h2>
+        {proposal.status && (
+          <div className="mt-2">
+            <ProposalStatusBadge status={proposal.status} />
+          </div>
+        )}
+        {proposal.status === Status.withdrawn && proposal.withdrawnReason && (
+          <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
+            <span className="font-medium">Reason for withdrawal:</span>{' '}
+            {proposal.withdrawnReason}
+          </p>
+        )}
       </div>
 
       {speakers && speakers.length > 0 && (
