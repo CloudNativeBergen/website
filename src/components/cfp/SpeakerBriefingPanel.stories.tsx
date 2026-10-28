@@ -113,7 +113,11 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const PreEvent: Story = {
-  args: { briefing: full, changesEmail: 'cfp@example.com' },
+  args: {
+    briefing: full,
+    changesEmail: 'cfp@example.com',
+    social: { hashtag: 'cndn2026', bluesky: 'cloudnativebergen.dev' },
+  },
 }
 
 export const ConferenceDay: Story = {

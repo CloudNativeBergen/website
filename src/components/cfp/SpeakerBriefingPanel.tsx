@@ -42,6 +42,11 @@ interface SpeakerBriefingPanelProps {
   dinnerChoice?: string | null
   /** Shown to an organizer of the edition, who may have no talk. */
   asOrganizer?: boolean
+  /**
+   * The event hashtag (without `#`) and the conference's Bluesky handle.
+   * Kept out of `briefing`, whose content versions the briefing email.
+   */
+  social?: { hashtag?: string; bluesky?: string }
 }
 
 // Map links open off-site, so http(s) only — no site paths.
@@ -145,6 +150,7 @@ export function SpeakerBriefingPanel({
   changesEmail,
   dinnerChoice,
   asOrganizer,
+  social,
 }: SpeakerBriefingPanelProps) {
   const todayTalks = conferenceDay
     ? (b.talks ?? []).filter((t) => t.date === conferenceDay)
@@ -385,6 +391,36 @@ export function SpeakerBriefingPanel({
     </Section>
   )
 
+  const socialMedia = (social?.hashtag || social?.bluesky) && (
+    <Fold title="Social media">
+      <p>
+        {social.hashtag && (
+          <>
+            Post with <strong>#{social.hashtag}</strong>
+            {social.bluesky ? ' and tag ' : '. '}
+          </>
+        )}
+        {social.bluesky && (
+          <>
+            {social.hashtag ? '' : 'Tag '}
+            <a
+              href={`https://bsky.app/profile/${social.bluesky}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={linkClass}
+            >
+              @{social.bluesky}
+            </a>
+            .{' '}
+          </>
+        )}
+        {social.hashtag
+          ? 'Posts with the tag show on the screens in the rooms.'
+          : 'Posts that tag the account show on the screens in the rooms.'}
+      </p>
+    </Fold>
+  )
+
   const venue = (b.venueName || b.venueAddress || b.venueTravelInfo) && (
     <Fold title="Venue and travel">
       {(b.venueName || b.venueAddress) && (
@@ -426,6 +462,7 @@ export function SpeakerBriefingPanel({
           <Rich value={b.extra} />
         </Fold>
       )}
+      {socialMedia}
       {venue}
     </>
   )
