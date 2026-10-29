@@ -103,6 +103,7 @@ export const registrationRouter = router({
               sfcData.contractValue,
               sfcData.contractCurrency,
               sfcData.conference,
+              { sfcId: sfcData._id, ownerName: sfcData.ownerName },
             )
           }
         } catch (slackError) {

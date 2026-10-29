@@ -56,7 +56,10 @@ describe('SponsorDetailHeader status change', () => {
       />,
     )
 
-    fireEvent.click(screen.getByText('Mark as Won'))
+    expect(screen.queryByText('Mark as Won')).toBeNull()
+    fireEvent.change(screen.getByRole('combobox'), {
+      target: { value: 'closed-won' },
+    })
     expect(h.mutate).toHaveBeenCalledWith({
       id: 'sfc-1',
       newStatus: 'closed-won',
