@@ -54,6 +54,15 @@ export default defineType({
       description: 'What tasks would you like to help with?',
     }),
     defineField({
+      name: 'assignedTasks',
+      title: 'Assigned Tasks',
+      type: 'array',
+      of: [{ type: 'string' }],
+      options: { layout: 'tags' },
+      description:
+        'Tasks organizers have assigned to this volunteer (interim, until shifts land in #1524).',
+    }),
+    defineField({
       name: 'tshirtSize',
       title: 'T-Shirt Size',
       type: 'string',
@@ -100,6 +109,7 @@ export default defineType({
         list: [
           { title: 'Pending', value: 'pending' },
           { title: 'Approved', value: 'approved' },
+          { title: 'Confirmed', value: 'confirmed' },
           { title: 'Rejected', value: 'rejected' },
         ],
       },
@@ -131,6 +141,38 @@ export default defineType({
       title: 'Review Notes',
       type: 'text',
       hidden: ({ document }) => document?.status === 'pending',
+    }),
+    defineField({
+      name: 'approvalEmailSentAt',
+      title: 'Approval Email Sent At',
+      type: 'datetime',
+      readOnly: true,
+      hidden: ({ document }) =>
+        document?.status !== 'approved' && document?.status !== 'confirmed',
+    }),
+    defineField({
+      name: 'approvalEmailSentBy',
+      title: 'Approval Email Sent By',
+      type: 'reference',
+      to: [{ type: 'speaker' }],
+      readOnly: true,
+      hidden: ({ document }) =>
+        document?.status !== 'approved' && document?.status !== 'confirmed',
+    }),
+    defineField({
+      name: 'confirmedAt',
+      title: 'Confirmed At',
+      type: 'datetime',
+      readOnly: true,
+      hidden: ({ document }) => document?.status !== 'confirmed',
+    }),
+    defineField({
+      name: 'ticketReminderSentAt',
+      title: 'Ticket Reminder Sent At',
+      type: 'datetime',
+      readOnly: true,
+      hidden: ({ document }) =>
+        document?.status !== 'approved' && document?.status !== 'confirmed',
     }),
 
     // GDPR Consent

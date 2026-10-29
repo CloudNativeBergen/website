@@ -12,6 +12,13 @@ import { mockSponsor } from '@/__mocks__/sponsor-data'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import type { SponsorCRMFormData } from '@/hooks/useSponsorCRMFormMutations'
 
+let mockTiers: Array<{
+  _id: string
+  title: string
+  tierType: string
+  price?: Array<{ _key: string; amount: number; currency: string }>
+}> = []
+
 // The header CTA is the unit under test; everything below it is a stub so the
 // assertions can't be satisfied by some other part of the form.
 vi.mock('@/lib/trpc/client', () => {
@@ -24,11 +31,14 @@ vi.mock('@/lib/trpc/client', () => {
             list: { invalidate: vi.fn() },
             healthViolations: { invalidate: vi.fn() },
           },
+          contractTemplates: {
+            contractReadiness: { invalidate: vi.fn() },
+          },
         },
       }),
       sponsor: {
         list: { useQuery: emptyQuery },
-        tiers: { listByConference: { useQuery: emptyQuery } },
+        tiers: { listByConference: { useQuery: () => ({ data: mockTiers }) } },
         crm: { listOrganizers: { useQuery: emptyQuery } },
       },
     },
@@ -46,7 +56,17 @@ vi.mock('@/hooks/useSponsorCRMFormMutations', () => ({
 
 vi.mock('@/components/admin/sponsor-crm/SponsorPipelineView', () => ({
   __esModule: true,
-  SponsorPipelineView: () => <div data-testid="pipeline-view" />,
+  SponsorPipelineView: ({
+    onOpenView,
+  }: {
+    onOpenView: (view: 'contract') => void
+  }) => (
+    <div data-testid="pipeline-view">
+      <button type="button" onClick={() => onOpenView('contract')}>
+        Open Contract Card
+      </button>
+    </div>
+  ),
 }))
 
 // Renders the status of the PERSISTED sponsor prop — the value the real
@@ -55,10 +75,15 @@ vi.mock('@/components/admin/sponsor-crm/SponsorContractView', () => ({
   __esModule: true,
   SponsorContractView: ({
     sponsor,
+    sponsorStartSet,
   }: {
     sponsor: SponsorForConferenceExpanded
+    sponsorStartSet?: boolean
   }) => (
-    <div data-testid="contract-view">persisted status: {sponsor.status}</div>
+    <div data-testid="contract-view">
+      persisted status: {sponsor.status} | sponsor start set:{' '}
+      {String(sponsorStartSet)}
+    </div>
   ),
 }))
 
@@ -99,6 +124,7 @@ const renderForm = (sponsor: SponsorForConferenceExpanded | null) =>
 describe('SponsorCRMForm — header primary action', () => {
   beforeEach(() => {
     submitForm = vi.fn().mockResolvedValue(undefined)
+    mockTiers = []
   })
   afterEach(cleanup)
 
@@ -189,6 +215,31 @@ describe('SponsorCRMForm — header primary action', () => {
     )
   })
 
+  it.each([true, false])(
+    'tells the contract view whether the conference has a sponsor start time (%s)',
+    (sponsorStartSet) => {
+      render(
+        <SponsorCRMForm
+          conferenceId="conf-2026"
+          sponsor={mockSponsor({
+            status: 'closed-won',
+            contractStatus: 'none',
+          })}
+          sponsorStartSet={sponsorStartSet}
+          isOpen
+          onClose={vi.fn()}
+          onSuccess={vi.fn()}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Start contract/ }))
+
+      expect(screen.getByTestId('contract-view')).toHaveTextContent(
+        `sponsor start set: ${sponsorStartSet}`,
+      )
+    },
+  )
+
   /** A blocked step must still say what is missing rather than save. */
   it('will not save a transition the state machine blocks', async () => {
     renderForm(mockSponsor({ status: 'negotiating', tier: undefined }))
@@ -216,5 +267,117 @@ describe('SponsorCRMForm — header primary action', () => {
 
     fireEvent.click(cta)
     expect(submitForm).not.toHaveBeenCalled()
+  })
+
+  it('persists auto-filled tier contractValue before opening contract view via primary CTA', async () => {
+    mockTiers = [
+      {
+        _id: 'tier-ingress',
+        title: 'Community Partner',
+        tierType: 'standard',
+        price: [{ _key: 'p1', amount: 25000, currency: 'NOK' }],
+      },
+    ]
+
+    renderForm(
+      mockSponsor({
+        status: 'closed-won',
+        contractStatus: 'registration-sent',
+        contractValue: undefined,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Generate contract/ }))
+
+    await waitFor(() => expect(submitForm).toHaveBeenCalledTimes(1))
+    expect(submitForm.mock.calls[0][0]).toMatchObject({
+      contractValue: '25000',
+      contractCurrency: 'NOK',
+    })
+    await waitFor(() =>
+      expect(screen.getByTestId('contract-view')).toBeInTheDocument(),
+    )
+  })
+
+  it('persists auto-filled tier contractValue before opening contract view via Contract card', async () => {
+    mockTiers = [
+      {
+        _id: 'tier-ingress',
+        title: 'Community Partner',
+        tierType: 'standard',
+        price: [{ _key: 'p1', amount: 25000, currency: 'NOK' }],
+      },
+    ]
+
+    renderForm(
+      mockSponsor({
+        status: 'closed-won',
+        contractStatus: 'registration-sent',
+        contractValue: undefined,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Open Contract Card/ }))
+
+    await waitFor(() => expect(submitForm).toHaveBeenCalledTimes(1))
+    expect(submitForm.mock.calls[0][0]).toMatchObject({
+      contractValue: '25000',
+      contractCurrency: 'NOK',
+    })
+    await waitFor(() =>
+      expect(screen.getByTestId('contract-view')).toBeInTheDocument(),
+    )
+  })
+
+  it('preserves a persisted negotiated contractValue that differs from the tier price on mount', async () => {
+    mockTiers = [
+      {
+        _id: 'tier-ingress',
+        title: 'Community Partner',
+        tierType: 'standard',
+        price: [{ _key: 'p1', amount: 25000, currency: 'NOK' }],
+      },
+    ]
+
+    renderForm(
+      mockSponsor({
+        status: 'closed-won',
+        contractStatus: 'registration-sent',
+        contractValue: 20000,
+        contractCurrency: 'NOK',
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Open Contract Card/ }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('contract-view')).toBeInTheDocument(),
+    )
+    expect(submitForm).not.toHaveBeenCalled()
+  })
+
+  it('ignores subview navigation while a stage advance save is in flight', async () => {
+    let resolveSave: () => void = () => {}
+    submitForm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve
+        }),
+    )
+
+    renderForm(mockSponsor({ status: 'negotiating', contractStatus: 'none' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /Mark as Won/ }))
+    expect(screen.getByRole('button', { name: /Saving/ })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: /Open Contract Card/ }))
+    expect(screen.queryByTestId('contract-view')).not.toBeInTheDocument()
+
+    resolveSave()
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Start contract/ }),
+      ).toBeInTheDocument(),
+    )
   })
 })

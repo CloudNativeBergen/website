@@ -1,33 +1,61 @@
-import { withAuth } from '@workos-inc/authkit-nextjs'
-import Link from 'next/link'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import WorkshopList from '@/components/workshop/WorkshopList'
 import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
-import { Button } from '@/components/Button'
-import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
+import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { resolveConferenceContact } from '@/lib/email/from'
-import { EnvelopeIcon } from '@heroicons/react/24/outline'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { cookies, headers } from 'next/headers'
+import {
+  WORKSHOP_EARLY_ACCESS_INVALID,
+  WORKSHOP_SIGN_IN_INCOMPLETE,
+} from '@/lib/workshop/sign-in-paths'
+import {
+  readWorkshopPortal,
+  sessionCookie,
+} from '@/lib/workshop/central-sign-in'
+import {
+  workshopMainHost,
+  workshopPortalUrl,
+  workshopRequestHost,
+} from '@/lib/workshop/sign-in'
+import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
+import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
+import { WorkshopNoTicket } from '@/components/workshop/WorkshopNoTicket'
+import { WorkshopPortal } from '@/components/workshop/WorkshopPortal'
+import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
+import {
+  earlyAccessTokenOf,
+  registrationWindowFor,
+  resolveEarlyAccess,
+} from '@/lib/workshop/early-access'
+import { earlyAccessTicketTypeOf } from '@/lib/workshop/early-access/ticket'
+import { refreshWorkshopPortal, signOutOfWorkshop } from './actions'
 
-export default async function WorkshopPage() {
+/** Is `url` on `host` (a Host header value), compared as URLs compare hosts? */
+function isSameHost(url: string, host: string | null): boolean {
+  try {
+    return new URL(url).host === new URL(`https://${host}`).host
+  } catch {
+    return false
+  }
+}
+
+export default async function WorkshopPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   const { conference, error } = await getConferenceForCurrentDomain()
 
-  // FEATURE GATE (#689) — BEFORE `withAuth()`: the segment layout gates too,
-  // but ordering it first means a disabled tenant never reads a WorkOS session
-  // at all (`withAuth` also throws when the AuthKit middleware did not run,
-  // which is exactly the foreign-host case `isWorkOSAuthHost` short-circuits in
-  // `src/proxy.ts`). NOTE the middleware still runs FIRST on the accepted
-  // WorkOS host, so a signed-out visitor there is bounced to AuthKit before any
-  // of this executes and only sees the 404 on return — an ordering this gate
-  // cannot change, because the feature decision needs a Sanity read that edge
-  // middleware cannot do. Fail-closed on an unresolvable org.
+  // FEATURE GATE (#689), BEFORE THE SESSION IS READ: the segment layout gates
+  // too, but ordering it first means this page spends no record read on a
+  // tenant without workshops. A signed-out visitor of one with them gets the
+  // signed-out view below, whose two buttons are the only way into a sign-in.
+  // Fail-closed on an unresolvable org.
   if (!(await isWorkshopsEnabledForConference(conference))) {
     notFound()
   }
-
-  const { user } = await withAuth()
 
   if (error || !conference?._id) {
     return (
@@ -44,265 +72,151 @@ export default async function WorkshopPage() {
     )
   }
 
-  if (!user) {
-    const clientId = process.env.WORKOS_CLIENT_ID!
-    const baseUrl = 'https://api.workos.com/user_management/authorize'
-    const redirectUri = `${process.env.NEXT_PUBLIC_URL}/api/auth/callback`
+  // THE ONE READ OF THE SESSION (#1311, spec §6): whether this host can carry
+  // a sign-in at all, and who is signed in, from one live record read. WorkOS
+  // is not called and nothing is written.
+  const requestHeaders = await headers()
+  const portal = await readWorkshopPortal(
+    requestHeaders,
+    (await cookies()).get(sessionCookie().name)?.value,
+  )
 
-    const buildAuthUrl = (screenHint: 'sign-in' | 'sign-up') => {
-      const params = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        response_type: 'code',
-        provider: 'authkit',
-        screen_hint: screenHint,
-        state: Buffer.from(
-          JSON.stringify({ returnPathname: '/workshop' }),
-        ).toString('base64'),
-      })
-      return `${baseUrl}?${params.toString()}`
+  // A HOST THAT CANNOT SIGN IN (#1298). The view says sign-up is not available
+  // and nothing about why.
+  if (!portal.available) {
+    // A SECONDARY host that cannot sign in, while the main host can: send the
+    // attendee to the working portal (the same link the email carries). Never
+    // from the main host to itself: that would loop wherever the two answers
+    // differ (an unusable `WORKSHOP_AUTH_ORIGIN` refuses every host here, and
+    // the link does not ask). Nothing more is read on the main host either.
+    const requestHost = workshopRequestHost(requestHeaders)
+    const mainHost = workshopMainHost(conference)
+    if (mainHost && !isSameHost(`https://${mainHost}`, requestHost)) {
+      const mainPortal = await workshopPortalUrl(conference)
+      if (mainPortal) redirect(mainPortal)
     }
-
-    const signInUrl = buildAuthUrl('sign-in')
-    const signUpUrl = buildAuthUrl('sign-up')
-
     return (
-      <div className="relative py-20 sm:pt-36 sm:pb-24">
-        <BackgroundImage className="-top-36 -bottom-14" />
-        <Container className="relative">
-          <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
-              Workshop Signup
-            </h1>
-            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">
-              <p>Sign in to register for workshops at {conference.title}.</p>
-            </div>
-
-            <div className="mt-10 flex gap-4">
-              <Button href={signInUrl}>Sign In</Button>
-              <Button href={signUpUrl} variant="outline">
-                Create Account
-              </Button>
-            </div>
-
-            <p className="mt-8 text-sm text-gray-600 dark:text-gray-400">
-              By signing in, you agree to our{' '}
-              <Link
-                href="/terms"
-                className="underline hover:text-blue-600 dark:hover:text-blue-400"
-              >
-                Terms of Service
-              </Link>{' '}
-              and{' '}
-              <Link
-                href="/privacy"
-                className="underline hover:text-blue-600 dark:hover:text-blue-400"
-              >
-                Privacy Policy
-              </Link>
-              .
-            </p>
-          </div>
-        </Container>
-      </div>
+      <WorkshopUnavailable
+        conferenceTitle={conference.title}
+        contactEmail={resolveConferenceContact(conference)}
+        registrationClosed={
+          workshopRegistrationWindow(conference, {
+            now: new Date(),
+            earlyAccess: false,
+          }).status === 'closed'
+        }
+      />
     )
   }
 
-  if (conference.checkinCustomerId && conference.checkinEventId) {
-    const eligibility = await checkWorkshopEligibility({
-      userEmail: user.email,
-      conference,
-      contactEmail: conference.contactEmail,
-    })
+  // The session is for the conference that claims this host, read live.
+  // `conference` comes through a cache, so right after a host changes hands
+  // the two can differ: then nobody is signed in to the one shown here.
+  const user =
+    portal.session?.conferenceId === conference._id ? portal.session : null
+  // JUST OPENED AN EARLY-ACCESS LINK THAT IS NOT LIVE (#1346): the route that
+  // opens a link lands here with one fixed marker. The notice is all the
+  // signed-out view and the no-ticket view ever show about early access.
+  const query = await searchParams
+  const earlyAccessInvalid =
+    query[WORKSHOP_EARLY_ACCESS_INVALID.param] ===
+    WORKSHOP_EARLY_ACCESS_INVALID.value
+  if (!user) {
+    // A refused redeem, or a refused return the callback sends back, lands
+    // here with one fixed marker, whatever refused it.
+    const { [WORKSHOP_SIGN_IN_INCOMPLETE.param]: marker } = query
+    return (
+      <WorkshopSignedOut
+        conferenceTitle={conference.title}
+        signInIncomplete={marker === WORKSHOP_SIGN_IN_INCOMPLETE.value}
+        earlyAccessInvalid={earlyAccessInvalid}
+      />
+    )
+  }
+  const userName = user.name || user.email
 
-    if (!eligibility.isEligible) {
+  // THE ONE ACCESS DECISION (#1294) — the same call the attendee procedures
+  // make, so this page can never show a signup form the API would refuse (or
+  // the reverse). It no longer skips the ticket check for a conference without
+  // ticketing ids: no ticketing means nobody can be shown to hold a ticket.
+  const access = await decideWorkshopPortalAccess({ conference, user })
+  {
+    // Unreachable after the gate above, but the decision is the authority.
+    if (!access.allowed && access.denial === 'feature-disabled') {
+      notFound()
+    }
+
+    if (!access.allowed) {
       return (
-        <div className="relative py-20 sm:pt-36 sm:pb-24">
-          <BackgroundImage className="-top-36 -bottom-14" />
-          <Container className="relative">
-            <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-              <div className="flex items-center justify-between">
-                <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
-                  Workshop Access Required
-                </h1>
-                <Link href="/api/auth/signout?callbackUrl=/" prefetch={false}>
-                  <Button variant="outline">Sign Out</Button>
-                </Link>
-              </div>
-
-              <div className="mt-8 rounded-lg bg-yellow-50 p-6 dark:bg-yellow-900/20">
-                <div className="flex">
-                  <div className="shrink-0">
-                    <svg
-                      className="h-5 w-5 text-yellow-400"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      Workshop Ticket Required
-                    </h3>
-                    <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                      <p>{eligibility.reason}</p>
-                      {eligibility.tickets.length > 0 && (
-                        <div className="mt-4">
-                          <p className="font-medium">Your current ticket(s):</p>
-                          <ul className="mt-2 list-inside list-disc">
-                            {eligibility.tickets.map((ticket, i) => (
-                              <li key={i}>{ticket.category}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8">
-                <Button
-                  href={`mailto:${resolveConferenceContact(conference)}`}
-                  variant="outline"
-                >
-                  <EnvelopeIcon className="mr-2 h-5 w-5" />
-                  Contact Support
-                </Button>
-              </div>
-            </div>
-          </Container>
-        </div>
+        <WorkshopNoTicket
+          denial={access.denial}
+          reason={access.reason}
+          tickets={access.tickets}
+          contactEmail={resolveConferenceContact(conference)}
+          signOutAction={signOutOfWorkshop}
+          earlyAccessInvalid={earlyAccessInvalid}
+        />
       )
     }
   }
 
-  const now = new Date()
-  const registrationNotYetOpen =
-    conference.workshopRegistrationStart &&
-    new Date(conference.workshopRegistrationStart) > now
-  const registrationClosed =
-    conference.workshopRegistrationEnd &&
-    new Date(conference.workshopRegistrationEnd) < now
+  // THE ONE WINDOW RULE (#1345), the same one `workshop.signup` and the list
+  // below ask, with this person's early access (#1346).
+  //
+  // RESOLVED ONLY HERE, for a person the portal admits, and only when it can
+  // matter (see `registrationWindowFor`): the cookie is not even read after
+  // the official opening. Through the ONE cached read of the conference's
+  // links, never a live read: it decides what is shown, and the sign-up
+  // checks the link live. A cookie whose link is no longer live is no cookie.
+  const { registration, access: earlyAccess } = await registrationWindowFor(
+    conference,
+    new Date(),
+    async () => {
+      // A LIVE LINK names its sponsor, as `workshop.signup` records it; the
+      // ticket type (from the tickets the decision above already read) is
+      // the fallback when there is no live link.
+      const ticketType = earlyAccessTicketTypeOf(
+        access.allowed ? access.eligibleTickets : [],
+        conference.workshopEarlyAccessTicketTypes,
+      )
+      // The banner reads "early access through …".
+      const byType = ticketType
+        ? { sponsorName: `your “${ticketType}” ticket` }
+        : null
+      const token = earlyAccessTokenOf(await cookies())
+      if (!token) return byType
+      try {
+        return (await resolveEarlyAccess(conference._id, token)) ?? byType
+      } catch (error) {
+        // THE PAGE ONLY DECIDES WHAT IS SHOWN: when the links cannot be read,
+        // the person sees the portal as everyone does (or as their ticket
+        // type admits). For a person who does have early access by link that
+        // is wrong until a later view: they see the banner naming the
+        // official opening and no workshop to sign up for, and nothing tells
+        // them why.
+        console.error('[workshop] early-access links could not be read', error)
+        return byType
+      }
+    },
+  )
 
   return (
-    <div className="relative py-20 sm:pt-36 sm:pb-24">
-      <BackgroundImage className="-top-36 -bottom-14" />
-      <Container className="relative">
-        <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="font-display text-4xl font-bold tracking-tighter text-blue-600 sm:text-5xl lg:text-7xl dark:text-blue-400">
-              Workshop Signup
-            </h1>
-            <Link href="/api/auth/signout?callbackUrl=/" prefetch={false}>
-              <Button variant="outline" className="shrink-0 whitespace-nowrap">
-                Sign Out
-              </Button>
-            </Link>
-          </div>
-
-          <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">
-            <p>
-              Welcome,{' '}
-              {user.firstName && user.lastName
-                ? `${user.firstName} ${user.lastName}`
-                : user.firstName || user.lastName || user.email}
-            </p>
-            <p>Register for workshops at {conference.title}.</p>
-          </div>
-
-          {registrationNotYetOpen && (
-            <div className="mt-8 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
-              <div className="flex">
-                <div className="shrink-0">
-                  <svg
-                    className="h-5 w-5 text-yellow-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                    Workshop registration is not yet open
-                  </h3>
-                  <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                    <p>
-                      Registration will open on{' '}
-                      {new Date(
-                        conference.workshopRegistrationStart!,
-                      ).toLocaleString('en-US', {
-                        dateStyle: 'full',
-                        timeStyle: 'short',
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {registrationClosed && (
-            <div className="mt-8 rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
-              <div className="flex">
-                <div className="shrink-0">
-                  <svg
-                    className="h-5 w-5 text-red-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                    Workshop registration has closed
-                  </h3>
-                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">
-                    <p>
-                      Registration closed on{' '}
-                      {new Date(
-                        conference.workshopRegistrationEnd!,
-                      ).toLocaleString('en-US', {
-                        dateStyle: 'full',
-                        timeStyle: 'short',
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-12">
-            <WorkshopList
-              userWorkOSId={user.id}
-              userEmail={user.email}
-              userName={
-                user.firstName && user.lastName
-                  ? `${user.firstName} ${user.lastName}`
-                  : user.email
-              }
-              workshopRegistrationStart={conference.workshopRegistrationStart}
-              workshopRegistrationEnd={conference.workshopRegistrationEnd}
-            />
-          </div>
-        </div>
-      </Container>
-    </div>
+    <WorkshopPortal
+      conferenceTitle={conference.title}
+      userWorkOSId={user.userId}
+      userEmail={user.email}
+      userName={userName}
+      times={{
+        workshopRegistrationSponsorStart:
+          conference.workshopRegistrationSponsorStart,
+        workshopRegistrationStart: conference.workshopRegistrationStart,
+        workshopRegistrationEnd: conference.workshopRegistrationEnd,
+      }}
+      registration={registration}
+      earlyAccess={earlyAccess}
+      earlyAccessInvalid={earlyAccessInvalid}
+      signOutAction={signOutOfWorkshop}
+      refreshAction={refreshWorkshopPortal}
+    />
   )
 }

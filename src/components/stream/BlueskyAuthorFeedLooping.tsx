@@ -1,5 +1,6 @@
 import BlueskySearchFeedLooping from './BlueskySearchFeedLooping'
 import type { BlueskyPost } from '@/components/BlueskyPostItem'
+import { logger } from '@/lib/logger'
 
 interface BlueskyFeedItem {
   post: BlueskyPost
@@ -49,15 +50,17 @@ async function fetchBlueskyPosts(
           `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(handle)}&limit=30`,
           fetchOptions,
         ),
+        // searchPosts answers 403 on public.api.bsky.app without a login;
+        // api.bsky.app serves it.
         // 2. Posts mentioning the account
         fetch(
-          `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(`@${handle}`)}&limit=30&sort=latest`,
+          `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(`@${handle}`)}&limit=30&sort=latest`,
           fetchOptions,
         ),
         // 3. Posts with the event hashtag, when one is configured
         tag
           ? fetch(
-              `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(tag)}&limit=30&sort=latest`,
+              `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(tag)}&limit=30&sort=latest`,
               fetchOptions,
             )
           : Promise.resolve(null),
@@ -80,12 +83,14 @@ async function fetchBlueskyPosts(
           console.log('✗ No author posts in response')
         }
       } else {
-        console.log(
-          `✗ Author feed request failed: ${authorResponse.value.status}`,
-        )
+        logger.warn('Bluesky author feed request failed', {
+          status: authorResponse.value.status,
+        })
       }
     } else {
-      console.log(`✗ Author feed request rejected:`, authorResponse.reason)
+      logger.warn('Bluesky author feed request rejected', {
+        reason: String(authorResponse.reason),
+      })
     }
 
     // Process mentions
@@ -104,12 +109,14 @@ async function fetchBlueskyPosts(
           console.log('✗ No mentions found')
         }
       } else {
-        console.log(
-          `✗ Mentions request failed: ${mentionsResponse.value.status}`,
-        )
+        logger.warn('Bluesky mentions request failed', {
+          status: mentionsResponse.value.status,
+        })
       }
     } else {
-      console.log(`✗ Mentions request rejected:`, mentionsResponse.reason)
+      logger.warn('Bluesky mentions request rejected', {
+        reason: String(mentionsResponse.reason),
+      })
     }
 
     // Process hashtag posts (absent when no hashtag is configured)
@@ -128,10 +135,14 @@ async function fetchBlueskyPosts(
           console.log('✗ No hashtag posts found')
         }
       } else {
-        console.log(`✗ Hashtag request failed: ${hashtagResponse.value.status}`)
+        logger.warn('Bluesky hashtag request failed', {
+          status: hashtagResponse.value.status,
+        })
       }
     } else if (hashtagResponse.status === 'rejected') {
-      console.log(`✗ Hashtag request rejected:`, hashtagResponse.reason)
+      logger.warn('Bluesky hashtag request rejected', {
+        reason: String(hashtagResponse.reason),
+      })
     }
 
     if (allPosts.length === 0) {

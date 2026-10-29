@@ -18,6 +18,10 @@ import {
   VARIANT_LABELS,
   VARIANT_DESCRIPTIONS,
 } from '../../src/lib/homepage/variants'
+// Same reason again: `registration-window.ts` is dependency-free, so the Studio
+// validates the sponsor start time with THE rule the organizer's save refuses
+// with (`workshop.admin.updateRegistrationTimes`), not a second copy of it.
+import { sponsorStartTimeProblem } from '../../src/lib/workshop/registration-window'
 import { defineField, defineType, type FieldDefinition } from 'sanity'
 import { HEROICON_OPTIONS } from './constants'
 
@@ -590,6 +594,20 @@ export default defineType({
         'Checkin invite link for the speaker ticket category — the one from "Send invitations" containing action=invite, category= and pass=. It is ONE SHARED URL, not per-person: anyone holding it can claim a free speaker ticket, so it belongs only in speaker email, never on the public site. Leave blank and speakers get only Checkin\'s own per-person invitation email.',
     }),
     defineField({
+      name: 'volunteerRegistrationLink',
+      title: 'Volunteer Registration Link',
+      type: 'string',
+      fieldset: 'registration',
+      validation: (Rule) =>
+        Rule.custom((val) =>
+          !val || (typeof val === 'string' && val.startsWith('https://'))
+            ? true
+            : 'Must be an absolute https:// URL',
+        ),
+      description:
+        'Checkin or ticketing invite link for the complimentary volunteer ticket category. Belongs only in volunteer email, never on the public site.',
+    }),
+    defineField({
       name: 'registrationEnabled',
       title: 'Registration Enabled',
       type: 'boolean',
@@ -600,12 +618,36 @@ export default defineType({
         layout: 'checkbox',
       },
     }),
+    // The sponsor start time (#1345, docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md
+    // §3). It counts only when it is earlier than the official opening below;
+    // the rule is the one the admin save applies, and it reads the OTHER field
+    // off the document, so clearing or moving the official opening while this
+    // is set marks this field.
+    defineField({
+      name: 'workshopRegistrationSponsorStart',
+      title: 'Workshop Registration Sponsor Start',
+      type: 'datetime',
+      fieldset: 'registration',
+      description:
+        'Optional. When workshop registration opens for people with a sponsor’s early-access link. Must be earlier than Workshop Registration Start.',
+      validation: (rule) =>
+        rule.custom(
+          (value: string | undefined, context) =>
+            sponsorStartTimeProblem({
+              workshopRegistrationSponsorStart: value,
+              workshopRegistrationStart: (
+                context.document as
+                  { workshopRegistrationStart?: string } | undefined
+              )?.workshopRegistrationStart,
+            }) ?? true,
+        ),
+    }),
     defineField({
       name: 'workshopRegistrationStart',
       title: 'Workshop Registration Start',
       type: 'datetime',
       fieldset: 'registration',
-      description: 'When workshop registration opens',
+      description: 'When workshop registration opens for everyone',
     }),
     defineField({
       name: 'workshopRegistrationEnd',
@@ -613,6 +655,37 @@ export default defineType({
       type: 'datetime',
       fieldset: 'registration',
       description: 'When workshop registration closes',
+    }),
+    // The last workshop reminder (#1334, docs/WORKSHOP_TICKETS_SPEC.md §7):
+    // written by the reminder on /admin/workshops after a send that reached at
+    // least one person, and shown in its dialog. Never edited by hand.
+    defineField({
+      name: 'workshopReminderLastSentAt',
+      title: 'Workshop Reminder Last Sent',
+      type: 'datetime',
+      fieldset: 'registration',
+      readOnly: true,
+      description:
+        'When the last reminder to workshop ticket holders who had not signed up went out. Set by the reminder on the workshops admin page.',
+    }),
+    defineField({
+      name: 'workshopReminderLastSentCount',
+      title: 'Workshop Reminder Last Sent To',
+      type: 'number',
+      fieldset: 'registration',
+      readOnly: true,
+      description:
+        'How many people the last workshop reminder was sent to. Set by the reminder on the workshops admin page.',
+    }),
+    // The reminder's rate limit: one send an hour per conference, held here so
+    // it holds across serverless instances. Never edited by hand.
+    defineField({
+      name: 'workshopReminderReservedAt',
+      title: 'Workshop Reminder Reserved At',
+      type: 'datetime',
+      fieldset: 'registration',
+      readOnly: true,
+      hidden: true,
     }),
 
     // === Ticketing & Integrations ===
@@ -1033,6 +1106,28 @@ export default defineType({
         'Slack channel name where CFP notifications are posted (e.g. #conference-cfp)',
     }),
     defineField({
+      name: 'speakerSlackChannel',
+      title: 'Speakers Slack Channel',
+      type: 'string',
+      fieldset: 'communication',
+      description:
+        'Slack channel where the speaker info is posted (e.g. #conference-speakers)',
+    }),
+    defineField({
+      name: 'volunteerSlackInviteUrl',
+      title: 'Volunteer Slack Invite Link',
+      type: 'string',
+      fieldset: 'communication',
+      validation: (Rule) =>
+        Rule.custom((val) =>
+          !val || (typeof val === 'string' && val.startsWith('https://'))
+            ? true
+            : 'Must be an absolute https:// URL',
+        ),
+      description:
+        'Private invitation link for volunteers to join the conference Slack workspace or channel.',
+    }),
+    defineField({
       name: 'socialLinks',
       title: 'Social Links',
       type: 'array',
@@ -1195,6 +1290,149 @@ export default defineType({
       fieldset: 'content',
       description:
         'Where and when the speaker dinner is held. Shown on /info as “Will there be a speaker dinner?”. Leave blank to omit that question.',
+    }),
+    // Structured speaker briefing (#1592). Optional; when `dinner` is empty the
+    // plain `speakerDinnerInfo` text above stays the fallback. Every section is
+    // omitted when blank, never replaced by default prose.
+    defineField({
+      name: 'speakerInfo',
+      title: 'Speaker Information',
+      type: 'object',
+      fieldset: 'content',
+      description:
+        'Practical information for speakers. Edited under Admin → Speakers → Speaker Info.',
+      fields: [
+        defineField({
+          name: 'dinner',
+          title: 'Speaker Dinner',
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'startsAt',
+              title: 'Starts At',
+              type: 'datetime',
+            }),
+            defineField({
+              name: 'venueName',
+              title: 'Venue Name',
+              type: 'string',
+            }),
+            defineField({ name: 'address', title: 'Address', type: 'string' }),
+            defineField({
+              name: 'mapUrl',
+              title: 'Map URL',
+              type: 'url',
+              validation: (Rule) =>
+                // Absolute http(s) only, not `safeLinkRule`: a map link must work from
+                // an email, so site paths are out.
+                Rule.uri({ scheme: ['http', 'https'] }),
+            }),
+            defineField({
+              name: 'rsvpNote',
+              title: 'RSVP Note',
+              type: 'string',
+              description:
+                'Shown to speakers. RSVPs are collected on the speaker ticket.',
+            }),
+            defineField({
+              name: 'description',
+              title: 'Description',
+              type: 'array',
+              of: [{ type: 'block' }],
+            }),
+            defineField({
+              name: 'routes',
+              title: 'Routes',
+              type: 'array',
+              of: [
+                {
+                  type: 'object',
+                  name: 'route',
+                  fields: [
+                    defineField({
+                      name: 'label',
+                      title: 'Label',
+                      type: 'string',
+                    }),
+                    defineField({
+                      name: 'meetingPoint',
+                      title: 'Meeting Point',
+                      type: 'string',
+                    }),
+                    defineField({
+                      name: 'meetingPointMapUrl',
+                      title: 'Meeting Point Map URL',
+                      type: 'url',
+                      validation: (Rule) =>
+                        // Absolute http(s) only, not `safeLinkRule`: a map link must work from
+                        // an email, so site paths are out.
+                        Rule.uri({ scheme: ['http', 'https'] }),
+                    }),
+                    defineField({
+                      name: 'departsAt',
+                      title: 'Departs At',
+                      type: 'datetime',
+                    }),
+                    defineField({
+                      name: 'departsNote',
+                      title: 'Departure Note',
+                      type: 'string',
+                      description:
+                        'When the departure is not a clock time, e.g. “When the workshops are over”.',
+                    }),
+                    defineField({
+                      name: 'details',
+                      title: 'Details',
+                      type: 'array',
+                      of: [{ type: 'block' }],
+                    }),
+                  ],
+                },
+              ],
+            }),
+          ],
+        }),
+        defineField({
+          name: 'checkIn',
+          title: 'Check-in',
+          type: 'array',
+          of: [{ type: 'block' }],
+        }),
+        defineField({
+          name: 'equipment',
+          title: 'Equipment',
+          type: 'array',
+          of: [{ type: 'block' }],
+        }),
+        defineField({
+          name: 'onsiteContact',
+          title: 'On-site Contact',
+          type: 'object',
+          fields: [
+            defineField({ name: 'name', title: 'Name', type: 'string' }),
+            defineField({ name: 'phone', title: 'Phone', type: 'string' }),
+            defineField({ name: 'email', title: 'Email', type: 'string' }),
+          ],
+        }),
+        defineField({
+          name: 'accommodation',
+          title: 'Accommodation',
+          type: 'array',
+          of: [{ type: 'block' }],
+        }),
+        defineField({
+          name: 'extra',
+          title: 'Good to Know',
+          type: 'array',
+          of: [{ type: 'block' }],
+        }),
+        defineField({
+          name: 'updatedAt',
+          title: 'Updated At',
+          type: 'datetime',
+          readOnly: true,
+        }),
+      ],
     }),
     defineField({
       name: 'localRecommendations',
@@ -1516,26 +1754,17 @@ export default defineType({
         list: [{ title: 'Test Feature', value: 'test_feature' }],
       },
     }),
-    // Per-tenant web analytics. ABSENT means NO analytics script is served on
-    // this conference's pages — deliberately, because the only alternative
-    // default is collecting a tenant's traffic into somebody else's property.
-    // The pattern mirrors PIRSCH_CODE_PATTERN in `src/lib/analytics.ts`; it is
-    // restated rather than imported because schema files stay import-light for
-    // the Vite Studio build.
+    // Retained for the append-only cross-app schema contract; stored values
+    // are ignored now that web analytics is configured on the organization.
     defineField({
       name: 'analyticsPirschCode',
       title: 'Pirsch Identification Code',
       type: 'string',
       fieldset: 'technical',
-      description:
-        'Your own Pirsch (pirsch.io) identification code. Leave blank to serve no analytics script at all — this site will not be tracked.',
-      validation: (Rule) =>
-        Rule.custom((value) => {
-          if (value === undefined || value === null || value === '') return true
-          return /^[A-Za-z0-9]{8,64}$/.test(String(value).trim())
-            ? true
-            : 'Enter the identification code from your Pirsch dashboard (letters and digits only).'
-        }),
+      hidden: true,
+      deprecated: {
+        reason: 'Pirsch is no longer used; this value is ignored.',
+      },
     }),
 
     // === Agent Configuration ===
@@ -1996,6 +2225,17 @@ export default defineType({
       fieldset: 'lifecycle',
       validation: (Rule) => Rule.custom(safeLinkRule),
       description: 'A site path (e.g. /info) or a full http(s) URL.',
+    }),
+    defineField({
+      // Ticket types whose holders may sign up for workshops from the sponsor
+      // start time, with no early-access link. Matched to the provider's type
+      // name as `workshopAccessOf` matches it. Edited on /admin/workshops.
+      name: 'workshopEarlyAccessTicketTypes',
+      title: 'Workshop Early Access Ticket Types',
+      type: 'array',
+      of: [{ type: 'string' }],
+      description:
+        'Holders of these ticket types can sign up for workshops from Sponsor early access opens. No link needed.',
     }),
   ],
 

@@ -7,6 +7,25 @@ dotenv.config({ path: ['.env', '.env.local', '.env.test'] })
 
 process.env.INVITATION_TOKEN_SECRET ??= 'test-invitation-token-secret'
 
+// Per-tenant env credentials (`TENANT_<SLUG>_CHECKIN_*`, RunKonf/platform#57)
+// turn the env-per-org secret store from a no-op into a live slug lookup, and
+// most suites mock `@/lib/organization/sanity` without the slug reads. A
+// developer shell carrying such a variable would flip those suites. Tests that
+// need one stub it explicitly with `vi.stubEnv`.
+//
+// WorkOS configuration never comes from the developer's shell or a `.env`
+// file in tests either. Suites set client credentials and the sealing key
+// through `__tests__/helpers/workosEnv.ts`.
+for (const name of Object.keys(process.env)) {
+  if (
+    name.startsWith('TENANT_') ||
+    name.startsWith('WORKOS_') ||
+    name.startsWith('NEXT_PUBLIC_WORKOS_')
+  ) {
+    delete process.env[name]
+  }
+}
+
 // MSW node server for HTTP interception (GitHub /user/emails, Checkin.no
 // GraphQL, …). `onUnhandledRequest: 'bypass'` so the many existing tests that
 // make no outbound requests are unaffected — only the explicitly-handled hosts

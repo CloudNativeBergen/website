@@ -5,6 +5,7 @@ import {
   DocumentTextIcon,
   PlusIcon,
   ArrowPathIcon,
+  QrCodeIcon,
 } from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import Link from 'next/link'
@@ -24,6 +25,8 @@ interface ProposalsListProps {
   currentUserId?: string
   allowedFormats?: Format[]
   onCreateProposal?: () => void
+  /** Opens the bulk Feedback Code mint (#1459). */
+  onMintFeedbackCodes?: () => void
   conference?: Conference
   initialProposals?: ProposalExisting[]
 }
@@ -37,6 +40,7 @@ export function ProposalsList({
   currentUserId,
   allowedFormats,
   onCreateProposal,
+  onMintFeedbackCodes,
   initialProposals = [],
 }: ProposalsListProps) {
   const initialFilters = useMemo<FilterState>(
@@ -95,12 +99,20 @@ export function ProposalsList({
         title="Proposal Management"
         description={`Review and manage all conference proposals (${displayProposals.length} total)`}
         actionItems={
-          onCreateProposal
+          onCreateProposal || onMintFeedbackCodes
             ? [
+                {
+                  label: 'Mint Feedback Codes',
+                  onClick: onMintFeedbackCodes,
+                  icon: <QrCodeIcon className="size-4" />,
+                  variant: 'secondary',
+                  hidden: !onMintFeedbackCodes,
+                },
                 {
                   label: 'New Proposal',
                   onClick: onCreateProposal,
                   icon: <PlusIcon className="h-4 w-4" />,
+                  hidden: !onCreateProposal,
                 },
               ]
             : undefined

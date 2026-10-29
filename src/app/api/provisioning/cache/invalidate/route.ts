@@ -8,7 +8,7 @@ import {
 } from '@/lib/provisioning'
 import {
   InvalidationRequestSchema,
-  tagsForTargets,
+  revalidationsForTargets,
 } from '@/lib/cache/invalidation'
 
 /**
@@ -146,10 +146,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return rateLimited()
     }
 
-    const tags = tagsForTargets(parsed.data.targets)
-    for (const tag of tags) {
-      revalidateTag(tag, 'default')
+    const revalidations = revalidationsForTargets(parsed.data.targets)
+    for (const { tag, profile } of revalidations) {
+      revalidateTag(tag, profile)
     }
+    const tags = revalidations.map((r) => r.tag)
 
     return NextResponse.json(
       { invalidated: tags.length, tags },

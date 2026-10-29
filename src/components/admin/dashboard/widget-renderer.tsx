@@ -1,3 +1,4 @@
+import { SponsorsWaitingWidget } from '@/components/admin/dashboard/widgets/SponsorsWaitingWidget'
 import { MarketingDueWidget } from '@/components/admin/dashboard/widgets/MarketingDueWidget'
 import { QuickActionsWidget } from '@/components/admin/dashboard/widgets/QuickActionsWidget'
 import { UpcomingDeadlinesWidget } from '@/components/admin/dashboard/widgets/UpcomingDeadlinesWidget'
@@ -63,6 +64,8 @@ export function renderWidgetContent(
       return <WorkshopCapacityWidget conference={conference} />
     case 'schedule-builder':
       return <ScheduleBuilderStatusWidget conference={conference} />
+    case 'sponsors-waiting':
+      return <SponsorsWaitingWidget conference={conference} />
     case 'marketing-due':
       return <MarketingDueWidget conference={conference} />
     case 'my-areas':

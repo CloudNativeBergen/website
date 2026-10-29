@@ -17,6 +17,11 @@ import {
 } from '@/lib/notification/sanity'
 import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import { getViewerTeamKeys } from '@/lib/teams'
+import {
+  judgeConversationOpening,
+  readConversationOpening,
+} from '@/lib/content-judgement/conversation'
+import type { Category } from '@/lib/content-judgement/questions'
 import type {
   AccessSpeaker,
   ConversationListItem,
@@ -24,11 +29,13 @@ import type {
   ConversationParty,
   ConversationPreference,
   ConversationStatus,
+  ConversationType,
   ConversationView,
   ConversationViewCounts,
   ConversationWithContext,
   EmailOverride,
   Message,
+  MessageOrigin,
 } from './types'
 import { DEFAULT_CONVERSATION_PREFERENCE, ORGANIZERS_GROUP } from './types'
 import {
@@ -1300,6 +1307,7 @@ interface RawMessageRow {
   createdAt: string
   authorName?: string | null
   authorSponsorId?: string | null
+  origin?: MessageOrigin | null
 }
 
 /**
@@ -1343,6 +1351,7 @@ export async function listMessages({
     "authorId": coalesce(author._ref, ""),
     body,
     createdAt,
+    origin,
     authorName,
     "authorSponsorId": authorParty.sponsorForConference._ref
   }`
@@ -1358,6 +1367,7 @@ export async function listMessages({
     authorId: row.authorId ?? '',
     body: row.body,
     createdAt: row.createdAt,
+    ...(row.origin ? { origin: row.origin } : {}),
     ...(row.authorName ? { authorName: row.authorName } : {}),
     ...(row.authorSponsorId ? { authorSponsorId: row.authorSponsorId } : {}),
   }))
@@ -1607,7 +1617,13 @@ export async function addMessage({
   body,
   reopen = false,
   marketingTask,
-}: {
+  conversationType,
+  origin,
+  category,
+}: (
+  | { origin?: 'person'; category?: never }
+  | { origin: 'system'; category: Category }
+) & {
   conversationId: string
   /**
    * The SPEAKER/organizer author id. Provide this OR {@link sponsorAuthor},
@@ -1623,6 +1639,8 @@ export async function addMessage({
    */
   sponsorAuthor?: { sponsorForConferenceId: string; authorName: string }
   body: string
+  /** Server-known type; sponsor threads never need an opening lookup. */
+  conversationType?: ConversationType
   reopen?: boolean
   /** Server-authorized outreach Task; completion commits atomically with delivery. */
   marketingTask?: {
@@ -1643,7 +1661,14 @@ export async function addMessage({
   // DENORMALIZED tenant key (CaaS T1-1): a message has no conference key of its
   // own, so copy the organization down from the parent conversation's conference
   // at creation. Best-effort: absent before the 044 backfill.
-  const orgRef = await getOrganizationRefViaParentConference(conversationId)
+  let snapshot =
+    sponsorAuthor || conversationType === 'sponsor'
+      ? null
+      : await readConversationOpening(conversationId)
+  const orgRef = await getOrganizationRefViaParentConference(
+    conversationId,
+    snapshot?.conferenceId,
+  )
 
   // Build the author fields for the two shapes. A speaker author keeps the
   // legacy `author` ref + speaker `authorParty` (unchanged); a sponsor author
@@ -1667,33 +1692,74 @@ export async function addMessage({
         }),
       }
 
-  const transaction = clientWrite
-    .transaction()
-    .create({
-      _id: messageId,
-      _type: 'message',
-      conversation: createReference(conversationId),
-      body,
-      createdAt: now,
-      ...organizationField(orgRef),
-      ...authorFields,
-    })
-    .patch(conversationId, (patch) =>
-      patch.set(
-        reopen
-          ? { lastMessageAt: now, status: 'open' }
-          : { lastMessageAt: now },
-      ),
-    )
+  // Claim at most three times: unrelated parent edits must not starve delivery.
+  // Every delivered message also leaves a marker, even on the plain fallback,
+  // so lagging message queries cannot make a later reply look like an opening.
+  const maxOpeningAttempts = 3
+  for (let attempt = 0; ; attempt++) {
+    const opening = snapshot
+    const first =
+      opening && !opening.hasMessages && attempt < maxOpeningAttempts
 
-  if (marketingTask) {
-    transaction.patch(marketingTask.id, (patch) =>
-      patch
-        .ifRevisionId(marketingTask.rev)
-        .set({ ...marketingTask.fields, messageId }),
-    )
+    const transaction = clientWrite
+      .transaction()
+      .create({
+        _id: messageId,
+        _type: 'message',
+        conversation: createReference(conversationId),
+        body,
+        createdAt: now,
+        ...(origin ? { origin } : {}),
+        ...organizationField(orgRef),
+        ...authorFields,
+      })
+      .patch(conversationId, (patch) => {
+        if (first) patch = patch.ifRevisionId(opening._rev)
+        patch = patch.setIfMissing({
+          openedAt: now,
+          ...(first && origin === 'system'
+            ? {
+                messageCategory: {
+                  value: category,
+                  source: 'system',
+                  setAt: now,
+                },
+              }
+            : {}),
+        })
+        return patch.set(
+          reopen
+            ? { lastMessageAt: now, status: 'open' }
+            : { lastMessageAt: now },
+        )
+      })
+
+    if (marketingTask) {
+      transaction.patch(marketingTask.id, (patch) =>
+        patch
+          .ifRevisionId(marketingTask.rev)
+          .set({ ...marketingTask.fields, messageId }),
+      )
+    }
+    try {
+      await transaction.commit()
+    } catch (error) {
+      if (first && (error as { statusCode?: number })?.statusCode === 409) {
+        const latest = await readConversationOpening(conversationId)
+        // An outreach Task also has a revision precondition. Only retry a
+        // changed PARENT, never a stale Task revision (which must still refuse).
+        if (latest && latest._rev !== opening._rev) {
+          snapshot = latest
+          continue
+        }
+      }
+      throw error
+    }
+    if (first && origin !== 'system' && authorId) {
+      judgeConversationOpening(opening, orgRef, authorId, body)
+    }
+    break
   }
-  await transaction.commit()
 
   return {
     _id: messageId,
@@ -1701,6 +1767,7 @@ export async function addMessage({
     authorId: sponsorAuthor ? '' : (authorId as string),
     body,
     createdAt: now,
+    ...(origin ? { origin } : {}),
     ...(sponsorAuthor
       ? {
           authorName: sponsorAuthor.authorName,

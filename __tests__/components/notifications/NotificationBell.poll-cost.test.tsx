@@ -113,7 +113,7 @@ describe('the bell costs exactly one polled query', () => {
   it('polls it once a minute (NOT the old 30s)', () => {
     render(<NotificationBell />)
     expect(polled()[0].refetchInterval).toBe(NOTIFICATION_POLL_MS)
-    expect(NOTIFICATION_POLL_MS).toBe(60_000)
+    expect(NOTIFICATION_POLL_MS).toBe(180_000)
   })
 
   it('adds no second polled query when the app badge mounts beside it', () => {

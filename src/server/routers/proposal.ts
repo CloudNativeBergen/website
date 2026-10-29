@@ -1,3 +1,7 @@
+import { revalidateTag } from 'next/cache'
+import { notifySpeakerRemoved } from '@/lib/slack/notify'
+import { conferenceTag } from '@/lib/cache/tags'
+import { expireFeedbackCodeIndex } from '@/lib/feedback/server'
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { v4 as uuidv4 } from 'uuid'
@@ -28,6 +32,7 @@ import {
   InvitationResponseSchema,
   InvitationCancelSchema,
   RemoveCoSpeakerSchema,
+  AdminRemoveSpeakerSchema,
   AddCoSpeakerProfileSchema,
   MAX_SPEAKERS_PER_PROPOSAL,
   IdParamSchema,
@@ -54,6 +59,7 @@ import {
   sendInvitationEmail,
   sendResponseNotificationEmail,
   sendCoSpeakerAddedEmail,
+  sendCoSpeakerRemovedEmail,
 } from '@/lib/cospeaker/server'
 import {
   remindCoSpeakerInvitation,
@@ -66,12 +72,19 @@ import {
   isInvitationExpired,
   isInvitationOpen,
 } from '@/lib/cospeaker/constants'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import {
+  getConferenceById,
+  getConferenceForCurrentDomain,
+} from '@/lib/conference/sanity'
+import type { Conference } from '@/lib/conference/types'
 import {
   assertMayBecomeSubmitted,
   topicIdsOf,
 } from '@/server/proposalSubmission'
 import { clientWrite } from '@/lib/sanity/client'
+import { changeCapacity } from '@/lib/workshop/seats'
+import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
+import { deliverPromotionEmails } from '@/lib/workshop/promoted'
 import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
 import {
   createNotifications,
@@ -88,6 +101,7 @@ import {
   extractSpeakersFromProposal,
 } from '@/lib/proposal/utils'
 import { filterProposals } from '@/lib/proposal/utils/filtering'
+import { convertPortableTextToString } from '@/lib/proposal/utils/validation'
 import { Speaker } from '@/lib/speaker/types'
 import {
   buildOrganizerCreatedSpeaker,
@@ -96,6 +110,7 @@ import {
 import { normalizeEmail, canonicalEmail } from '@/lib/speaker/email'
 import { eventBus } from '@/lib/events/bus'
 import { runAfterResponse } from '@/server/runAfterResponse'
+import { notifyNewProposal } from '@/lib/slack/notify'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import {
   updateProposalStatus,
@@ -108,8 +123,10 @@ import { getFeaturedTalks } from '@/lib/featured/sanity'
 import {
   ensureProposalConversation,
   addMessage,
+  getConversationById,
   syncProposalConversationParticipants,
 } from '@/lib/messaging/sanity'
+import { notifyNewMessage } from '@/lib/messaging/notify'
 import '@/lib/events/registry'
 
 /**
@@ -137,6 +154,41 @@ const COMMENT_RELAY_ACTIONS: readonly Action[] = [
   Action.waitlist,
   Action.remind,
 ]
+
+type TicketCancellation =
+  ProposalStatusChangeEvent['metadata']['ticketCancellation']
+
+/**
+ * The speakers whose ticket can be cancelled when this talk goes: anyone with
+ * ANOTHER confirmed talk at the same conference still needs theirs. When the
+ * lookup fails every speaker is returned, so organizers are asked to check by
+ * hand rather than silently told nothing.
+ */
+async function speakersWithoutOtherConfirmedTalk(
+  speakers: Speaker[],
+  proposalId: string,
+  conferenceId: string | undefined,
+): Promise<NonNullable<TicketCancellation>> {
+  const toEntry = (s: Speaker) => ({ name: s.name, email: s.email })
+  const all = (speakers ?? []).filter((s) => s?._id)
+  const unfiltered = { speakers: all.map(toEntry), unfiltered: true }
+  if (!conferenceId) return unfiltered
+  const { proposals, proposalsError } = await getProposals({
+    conferenceId,
+    statuses: [Status.confirmed],
+    returnAll: true,
+  })
+  if (proposalsError) return unfiltered
+  const busy = new Set(
+    proposals
+      .filter((p) => p._id !== proposalId)
+      .flatMap((p) => extractSpeakerIds(p.speakers)),
+  )
+  return {
+    speakers: all.filter((s) => !busy.has(s._id)).map(toEntry),
+    unfiltered: false,
+  }
+}
 
 /**
  * REFERENCE INJECTION, `talk.topics[]` (#730/#731).
@@ -175,6 +227,75 @@ async function requireTopicsReferenceable(
   const added = ids.filter((id) => !existing.has(id))
   if (added.length === 0) return
   await requireDocumentsInCurrentOrg(added, 'topic')
+}
+
+/**
+ * A WORKSHOP'S CAPACITY IS A SEAT DECISION (#1344). It is written through the
+ * same guard as the Workshops page (`changeCapacity`), never by the plain
+ * proposal patch, so a sign-up at the same moment cannot take a seat on the
+ * old count; the sign-ups it confirms into new seats are told so.
+ */
+async function changeTalkCapacity(
+  talkId: string,
+  capacity: number,
+  /** The edit's own status and format, when it changes them too. */
+  edit: { status?: string; format?: string },
+): Promise<{ conferenceId: string; promoted: string[] } | null> {
+  // Through the doc endpoint, where it is current: a read that still shows
+  // the capacity from before a change on the Workshops page would make a
+  // real change look like none. The caller has proved the talk is the org's.
+  const talk = await clientWrite.getDocument<{
+    capacity?: number
+    conference?: { _ref: string }
+  }>(talkId)
+  const stored = talk && {
+    capacity: talk.capacity,
+    conferenceId: talk.conference?._ref,
+  }
+  if (!stored || stored.capacity === capacity) return null
+  // The promotions are emailed in the name of the site's conference: a
+  // previous edition's workshop is changed from its own site.
+  if (
+    stored.conferenceId &&
+    stored.conferenceId !== (await resolveConferenceId())
+  ) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message:
+        'This workshop belongs to another edition. Change its capacity on that edition’s site.',
+    })
+  }
+  const outcome = stored.conferenceId
+    ? await changeCapacity(talkId, stored.conferenceId, capacity, {
+        // Waiting sign-ups are given seats, and told so, only while the
+        // workshop is on: judged with the talk as it is on each try, and
+        // what this edit changes of it (a withdrawn one, or one made another
+        // format, keeps them waiting).
+        edit: { status: edit.status, format: edit.format },
+      })
+    : ({ refused: 'not-found' } as const)
+  if ('refused' in outcome) {
+    switch (outcome.refused) {
+      case 'below-seats-taken':
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `Cannot reduce capacity below current signup count (${outcome.seatsTaken})`,
+        })
+      case 'busy':
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: SEATS_BUSY })
+      case 'not-found':
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Proposal not found',
+        })
+    }
+  }
+  // Who is owed an email is stored by the write (#1357): an early return
+  // above on a retry with the same capacity loses nothing, the cron pays it.
+  // NOT SENT HERE: the sender judges the talk as it is stored, and this
+  // edit's own status and format are patched after this. The caller sends
+  // once that patch has landed; if it does not, the cron pays the debts.
+  return { conferenceId: stored.conferenceId!, promoted: outcome.promoted }
 }
 
 /** The topic ids currently on a talk, for the grandfathering set above. */
@@ -292,6 +413,7 @@ async function createProposalWithNewPrimarySpeaker({
     toEmail: newSpeaker.email,
     toName: newSpeaker.name,
     organizerName: organizerName || 'The organizers',
+    proposalId: proposalDocument._id,
     proposalTitle: proposalDocument.title,
     role: 'speaker',
   }).catch((emailError) => {
@@ -303,6 +425,23 @@ async function createProposalWithNewPrimarySpeaker({
   })
 
   return proposalDocument
+}
+
+/** Name and email of speakers who were just on an org-proved talk. */
+async function speakerContacts(
+  ids: string[],
+): Promise<{ _id: string; name?: string; email?: string }[]> {
+  try {
+    return await clientWrite.fetch(
+      // groq-global-scoped: the ids were read off a talk the caller has
+      // ALREADY been proved to own by `requireDocumentInCurrentOrg`.
+      `*[_type == "speaker" && _id in $ids]{ _id, name, email }`,
+      { ids },
+    )
+  } catch (error) {
+    console.error('Failed to read removed speakers:', error)
+    return []
+  }
 }
 
 async function talkSpeakerIds(talkId: string): Promise<string[]> {
@@ -371,6 +510,102 @@ async function reconcileRemovedCoSpeakers({
     await deleteMessageNotificationsFor({
       proposalIds: [proposalId],
       speakerId,
+    })
+  }
+}
+
+/**
+ * Take one speaker off a proposal: unset the reference and cancel their
+ * accepted invitation(s) in one transaction, clean up message notifications
+ * they can no longer open, and re-derive the thread's participants from the
+ * REMAINING speakers (G2a snapshot sync), so the removed speaker does not
+ * linger as a thread member. `speakers[0]` is the primary speaker; unsetting
+ * it makes the next speaker primary. Callers check access and refuse removing
+ * the last speaker; the write is gated on the revision they checked
+ * (`rev`), so two concurrent removals cannot both pass that guard and leave
+ * the talk with no speakers. A lost race answers CONFLICT.
+ */
+async function dropSpeakerFromProposal(
+  proposalId: string,
+  speakerId: string,
+  speakerIds: string[],
+  rev: string,
+): Promise<void> {
+  const transaction = clientWrite.transaction()
+  transaction.patch(proposalId, (patch) =>
+    patch.ifRevisionId(rev).unset([`speakers[_ref=="${speakerId}"]`]),
+  )
+  try {
+    await reconcileRemovedCoSpeakers({
+      proposalId,
+      removedSpeakerIds: [speakerId],
+      transaction,
+    })
+  } catch (error) {
+    if ((error as { statusCode?: number }).statusCode === 409) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This talk was just updated. Refresh and try again.',
+        cause: error,
+      })
+    }
+    throw error
+  }
+  await syncProposalConversationParticipants(
+    proposalId,
+    speakerIds.filter((id) => id !== speakerId),
+  )
+}
+
+/**
+ * Tell speakers they were taken off a talk: a hub row and an email. Skips the
+ * actor (removing yourself needs no notice). Never throws: the removal is
+ * already committed.
+ */
+async function notifyRemovedSpeakers({
+  removed,
+  proposalTitle,
+  comment,
+  conference,
+  domain,
+  actorId,
+}: {
+  removed: { _id: string; name?: string; email?: string }[]
+  proposalTitle: string
+  comment?: string
+  conference: Conference
+  domain?: string | null
+  actorId: string
+}): Promise<void> {
+  const others = removed.filter((s) => s._id !== actorId)
+  if (others.length === 0) return
+  try {
+    await createNotifications(
+      others.map((s) => ({
+        recipientId: s._id,
+        conferenceId: conference._id,
+        notificationType: 'proposal_status_changed' as const,
+        title: `You are no longer a speaker on "${proposalTitle}"`,
+        message: comment,
+        actorId,
+        link: '/cfp/list',
+      })),
+    )
+  } catch (error) {
+    console.error('Failed to notify removed speakers:', error)
+  }
+  for (const s of others) {
+    const email = s.email
+    if (!email || !domain) continue
+    runAfterResponse(async () => {
+      await sendCoSpeakerRemovedEmail({
+        toEmail: email,
+        toName: s.name || 'Speaker',
+        proposalTitle,
+        comment,
+        conference,
+        domain,
+      })
     })
   }
 }
@@ -804,18 +1039,20 @@ export const proposalRouter = router({
         }
 
         // Notify organizers of a genuinely NEW submission (not a saved draft).
-        // INTENTIONAL ASYMMETRY: this create path does not publish a
-        // `proposal.status.changed` bus event, so the `persistNotification`
-        // bus handler never fires here — we fan out directly instead. We do
-        // NOT publish a bus event on purpose: that would also trigger the
-        // Slack/email handlers and change existing create behaviour (out of
-        // scope for the notification hub).
+        // This create path does not publish a `proposal.status.changed` bus
+        // event, so it fans out the hub rows and the Slack alert directly,
+        // matching what a draft -> submitted `proposal.action` sends.
         if (initialStatus === Status.submitted) {
           // The whole notify block shares createNotifications' never-fail
           // contract: the proposal is already created at this point, so a
           // failure here (e.g. the organizer-id fetch) must not surface as a
           // create error to the submitting speaker.
           try {
+            runAfterResponse(() =>
+              notifyNewProposal(proposal, conference).catch((error) => {
+                console.error('Failed to post new proposal to Slack:', error)
+              }),
+            )
             // TEAMS-2: proposal events route to the `cfp` team (all organizers
             // when it is not configured — the shared fallback contract).
             const organizerIds = await resolveRoutedOrganizerIds({
@@ -988,7 +1225,15 @@ export const proposalRouter = router({
           topicIdsOf(existing.topics),
         )
 
-        const { proposal, err } = await updateProposal(input.id, input.data)
+        // Last before the patch, once nothing else can refuse the edit. An
+        // organizer who speaks at the workshop gets here past the
+        // after-acceptance rule above.
+        const { capacity, ...data } = input.data
+        const promotion =
+          capacity !== undefined
+            ? await changeTalkCapacity(input.id, capacity, data)
+            : null
+        const { proposal, err } = await updateProposal(input.id, data)
 
         if (err) {
           throw new TRPCError({
@@ -1003,6 +1248,15 @@ export const proposalRouter = router({
             code: 'NOT_FOUND',
             message: 'Proposal not found',
           })
+        }
+
+        // After the patch: the talk is stored as this edit leaves it, which
+        // is what the sender judges it by (#1357).
+        if (promotion) {
+          await deliverPromotionEmails(
+            promotion.conferenceId,
+            promotion.promoted,
+          )
         }
 
         return proposal
@@ -1262,6 +1516,7 @@ export const proposalRouter = router({
           toEmail: input.email,
           toName: input.name,
           organizerName: ctx.user?.name || 'The organizers',
+          proposalId: input.proposalId,
           proposalTitle: proposal.title,
         }).catch((emailError) => {
           console.error(
@@ -1367,30 +1622,33 @@ export const proposalRouter = router({
           })
         }
 
-        // Remove the speaker reference and cancel their accepted
-        // invitation(s) in a single atomic transaction, then clean up the
-        // message notifications they can no longer open.
-        const transaction = clientWrite.transaction()
-
-        transaction.patch(input.proposalId, (patch) =>
-          patch.unset([`speakers[_ref=="${input.speakerId}"]`]),
-        )
-
-        await reconcileRemovedCoSpeakers({
-          proposalId: input.proposalId,
-          removedSpeakerIds: [input.speakerId],
-          transaction,
-        })
-
-        // SNAPSHOT SYNC (G2a): the read path now prefers the conversation's
-        // participants[], so re-derive it from the proposal's REMAINING speakers
-        // — otherwise the removed co-speaker would linger as a thread member (and
-        // a stale snapshot could keep granting them access). Never-fail / no-op
-        // when the proposal has no thread yet.
-        await syncProposalConversationParticipants(
+        await dropSpeakerFromProposal(
           input.proposalId,
-          speakerIds.filter((id) => id !== input.speakerId),
+          input.speakerId,
+          speakerIds,
+          proposal._rev,
         )
+
+        // Only for a talk of the host conference: the notice carries its
+        // branding, and the owner arm admits a talk of another tenant.
+        const { conference, domain } = await getConferenceForCurrentDomain()
+        const talkConference = proposal.conference
+        const talkConferenceId =
+          talkConference && '_ref' in talkConference
+            ? talkConference._ref
+            : talkConference?._id
+        const removed = ((proposal.speakers ?? []) as Speaker[]).find(
+          (s) => s?._id === input.speakerId,
+        )
+        if (conference && removed && talkConferenceId === conference._id) {
+          await notifyRemovedSpeakers({
+            removed: [removed],
+            proposalTitle: proposal.title ?? 'Proposal',
+            conference,
+            domain,
+            actorId: ctx.speaker._id,
+          })
+        }
 
         return { success: true }
       } catch (error) {
@@ -1413,7 +1671,15 @@ export const proposalRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const { id, action, notify, comment, reason } = input
+        const {
+          id,
+          action,
+          notify,
+          forceEmail,
+          comment,
+          reason,
+          revokeTicket,
+        } = input
 
         // Get conference context. The confirm action publishes an event whose
         // speaker-ticket handler mails the speaker invite link, so this read
@@ -1551,7 +1817,8 @@ export const proposalRouter = router({
 
         // Handle deletion separately
         if (status === Status.deleted) {
-          const { err: deleteError } = await deleteProposal(id)
+          const { err: deleteError, conferenceId: deletedFrom } =
+            await deleteProposal(id)
           if (deleteError) {
             if (deleteError instanceof ProposalDeletionBlockedError) {
               throw new TRPCError({
@@ -1565,6 +1832,9 @@ export const proposalRouter = router({
               cause: deleteError,
             })
           }
+          // A deleted talk's Feedback Code stops resolving at once (speaker
+          // feedback spec §5.1).
+          if (deletedFrom) expireFeedbackCodeIndex(deletedFrom)
           return { proposalStatus: Status.deleted }
         }
 
@@ -1606,6 +1876,135 @@ export const proposalRouter = router({
           })
         }
 
+        // A talk that stops being confirmed must stop resolving its Feedback
+        // Code at once, and a newly confirmed one must start (speaker feedback
+        // spec §5.1). Only confirmed talks are in the index, so no other
+        // transition flushes it. The TALK's conference: the owner arm admits
+        // a proposal of another tenant.
+        const talkConference = updatedProposal.conference
+        const talkConferenceId =
+          talkConference && '_ref' in talkConference
+            ? talkConference._ref
+            : talkConference?._id
+        const touchesConfirmed =
+          proposal.status === Status.confirmed || status === Status.confirmed
+        if (talkConferenceId && touchesConfirmed) {
+          expireFeedbackCodeIndex(talkConferenceId)
+        }
+        // Cached speaker lists (e.g. /admin/speakers) show talk status.
+        if (talkConferenceId) {
+          revalidateTag(conferenceTag(talkConferenceId), 'default')
+        }
+
+        // An organizer withdrawing their OWN talk is a speaker self-withdraw:
+        // no "the organizers withdrew your talk" email or message to
+        // themselves, no ticket request.
+        const isSelfWithdraw =
+          action === Action.withdraw &&
+          extractSpeakerIds(proposal.speakers).includes(ctx.speaker._id)
+        const actsAsOrganizer = isOrganizerForProposal && !isSelfWithdraw
+
+        // Tickets are only issued on confirm, so only a confirmed talk can
+        // have one to cancel. A speaker withdrawing their own confirmed talk
+        // cannot tick "revoke ticket", so the list always goes along then.
+        const ticketCancellation =
+          proposal.status === Status.confirmed &&
+          (isSelfWithdraw ||
+            (revokeTicket &&
+              actsAsOrganizer &&
+              (action === Action.cancel || action === Action.withdraw)))
+            ? await speakersWithoutOtherConfirmedTalk(
+                proposal.speakers as Speaker[],
+                id,
+                talkConferenceId,
+              )
+            : undefined
+
+        // Messaging M4/S2: a decision comment lands in the proposal's message
+        // thread, so every speaker on the talk keeps it with the rest of the
+        // conversation.
+        //
+        // Accept/reject/waitlist/remind: add the message but SKIP the fan-out
+        // (notifyNewMessage) — the decision status rail (hub notification +
+        // decision email, published below) already carries the comment.
+        //
+        // Cancel/withdraw: the thread message IS the delivery. It is always
+        // posted (with a stock line when there is no comment) and fans out
+        // through notifyNewMessage, so the hub + per-speaker email preference
+        // apply, and for a speaker-authored withdrawal the organizer paths
+        // (hub, org-contact copy, Slack). The one exception is an organizer
+        // ticking "Force email": the formal email then goes out, and fanning
+        // the message out too would email the speaker twice.
+        //
+        // Never-fail: the status change is already committed.
+        const isRemoval = action === Action.cancel || action === Action.withdraw
+        const trimmedComment = comment?.trim()
+        const trimmedReason = reason?.trim()
+        let relayBody: string | undefined
+        if (isRemoval && actsAsOrganizer) {
+          relayBody =
+            trimmedComment ||
+            trimmedReason ||
+            `Your talk "${proposal.title}" has been ${action === Action.cancel ? 'canceled' : 'withdrawn'} by the organizers.`
+        } else if (action === Action.withdraw && trimmedReason) {
+          relayBody = `Withdrawn: ${trimmedReason}`
+        } else if (actsAsOrganizer && COMMENT_RELAY_ACTIONS.includes(action)) {
+          relayBody = trimmedComment
+        }
+        const fanOut = isRemoval && !(actsAsOrganizer && forceEmail)
+        // Set only when the message fanned out, so it can stand in for the
+        // organizer status alert.
+        let postedToThread = false
+        // A cancel/withdraw message belongs in the talk's own conference
+        // thread; the owner arm admits a proposal of another conference.
+        const foreignTalk = isRemoval && talkConferenceId !== conference._id
+        if (relayBody && foreignTalk) {
+          console.warn(
+            `Not posting the ${action} message for proposal ${id}: it belongs to conference ${talkConferenceId}, not ${conference._id}`,
+          )
+        } else if (relayBody) {
+          try {
+            const conversationId = await ensureProposalConversation({
+              conferenceId: conference._id,
+              proposalId: id,
+              proposalTitle: proposal.title ?? 'Proposal',
+              createdById: ctx.speaker._id,
+              // Party model (G1): the proposal's current speakers seed the
+              // dual-written participants[] (see ensureProposalConversation).
+              proposalSpeakerIds: extractSpeakerIds(proposal.speakers),
+            })
+            const message = await addMessage({
+              conversationId,
+              authorId: ctx.speaker._id,
+              body: relayBody,
+              origin: 'system',
+              category: 'proposal_status',
+            })
+            if (fanOut) {
+              const conversation = await getConversationById(conversationId)
+              if (conversation) {
+                // An organizer-authored message skips the organizer paths
+                // (Slack, org-contact copy), so for an organizer who withdraws
+                // their own talk the status alerts must still fire.
+                postedToThread = actsAsOrganizer || !ctx.isOrgOrganizer
+                runAfterResponse(() =>
+                  notifyNewMessage({
+                    conversation,
+                    message,
+                    authorId: ctx.speaker._id,
+                    conference,
+                  }),
+                )
+              }
+            }
+          } catch (error) {
+            console.error(
+              'Failed to mirror decision comment into the proposal thread:',
+              error,
+            )
+          }
+        }
+
         // Publish status change event for notifications
         const statusChangeEvent: ProposalStatusChangeEvent = {
           eventType: 'proposal.status.changed',
@@ -1619,11 +2018,19 @@ export const proposalRouter = router({
           metadata: {
             triggeredBy: {
               speakerId: ctx.speaker._id,
-              isOrganizer: isOrganizerForProposal,
+              isOrganizer: actsAsOrganizer,
             },
-            shouldNotify: notify,
+            // Cancel/withdraw: the formal email goes out only when forced;
+            // the thread message below is the normal channel.
+            shouldNotify: isSelfWithdraw
+              ? false
+              : isRemoval
+                ? forceEmail
+                : notify,
             comment,
             reason: action === Action.withdraw ? reason : undefined,
+            postedToThread,
+            ticketCancellation,
             domain,
           },
         }
@@ -1634,51 +2041,33 @@ export const proposalRouter = router({
         // write); a bare floating promise races the serverless instance being
         // frozen once the response flushes, which dropped speaker-ticket
         // issuance mid-loop in production. The caller still does not wait.
-        runAfterResponse(() =>
-          eventBus.publish(statusChangeEvent).catch((error) => {
-            console.error('Failed to publish status change event:', error)
-          }),
-        )
-
-        // Messaging M4/S2: an organizer decision comment also lands in the
-        // proposal's message thread, so the speaker keeps it with the rest of
-        // the conversation. We add the message (thread content + lastMessageAt
-        // bump) but DELIBERATELY SKIP the message fan-out (notifyNewMessage) —
-        // the DECISION STATUS RAIL is the single delivery for a decision: the
-        // `proposal_status_changed` hub notification and the decision email
-        // (published on `eventBus` above) ALREADY carry this same comment. Firing
-        // notifyNewMessage too would double-notify the speaker (a second hub
-        // item + a second email) for one organizer action. The message still
-        // appears in the thread on next open; it just doesn't generate its own
-        // notification. Guarded never-fail: the status change is already
-        // committed, so a messaging failure must not fail the action.
-        const trimmedComment = comment?.trim()
-        if (
-          isOrganizerForProposal &&
-          trimmedComment &&
-          COMMENT_RELAY_ACTIONS.includes(action)
-        ) {
-          try {
-            const conversationId = await ensureProposalConversation({
-              conferenceId: conference._id,
-              proposalId: id,
-              proposalTitle: proposal.title ?? 'Proposal',
-              createdById: ctx.speaker._id,
-              // Party model (G1): the proposal's current speakers seed the
-              // dual-written participants[] (see ensureProposalConversation).
-              proposalSpeakerIds: extractSpeakerIds(proposal.speakers),
-            })
-            await addMessage({
-              conversationId,
-              authorId: ctx.speaker._id,
-              body: trimmedComment,
-            })
-          } catch (error) {
-            console.error(
-              'Failed to mirror decision comment into the proposal thread:',
-              error,
+        //
+        // The event routes Slack, organizer alerts, email branding and ticket
+        // issuance by its conference, so a talk of another conference (admitted
+        // by the owner arm) publishes with the TALK's own conference. If that
+        // cannot be loaded, publish nothing rather than reach the wrong
+        // organizers.
+        let publish = true
+        if (talkConferenceId && talkConferenceId !== conference._id) {
+          const own = await getConferenceById(talkConferenceId, {
+            includeSpeakerRegistrationLink: true,
+          }).catch(() => null)
+          if (own) {
+            statusChangeEvent.conference = own.conference
+            statusChangeEvent.metadata.domain = own.domain
+          } else {
+            publish = false
+            console.warn(
+              `Not publishing the ${action} event for proposal ${id}: its conference ${talkConferenceId} could not be loaded`,
             )
           }
+        }
+        if (publish) {
+          runAfterResponse(() =>
+            eventBus.publish(statusChangeEvent).catch((error) => {
+              console.error('Failed to publish status change event:', error)
+            }),
+          )
         }
 
         return { proposalStatus: updatedProposal.status }
@@ -1727,6 +2116,158 @@ export const proposalRouter = router({
             cause: error,
           })
         }
+      }),
+
+    // Take one speaker off a multi-speaker talk (they dropped out) without
+    // canceling the talk. Notifies like an organizer cancel: a thread message
+    // for the remaining speakers and organizers, an in-app notice and an email
+    // for the removed speaker (they leave the thread, so the email is always
+    // sent), and a Slack alert with an optional "cancel ticket by hand" list.
+    removeSpeaker: adminProcedure
+      .input(AdminRemoveSpeakerSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { proposalId, speakerId, revokeTicket } = input
+        const comment = input.comment?.trim() || undefined
+        const { conference, domain } = await getConferenceForCurrentDomain()
+        if (!conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to get current conference',
+          })
+        }
+        const { proposal, proposalError } = await getProposal({
+          id: proposalId,
+          speakerId: ctx.speaker._id,
+          isOrganizer: true,
+          organizerOrgId: ctx.orgId,
+        })
+        if (proposalError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch proposal',
+            cause: proposalError,
+          })
+        }
+        // Org arm only, like admin.getById: a foreign-tenant proposal the
+        // caller owns reads as not found here.
+        if (!proposal?._id || proposal._organizationId !== ctx.orgId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Proposal not found',
+          })
+        }
+        const talkConference = proposal.conference
+        const talkConferenceId =
+          talkConference && '_ref' in talkConference
+            ? talkConference._ref
+            : talkConference?._id
+        // The thread and ticket rules are per conference; another edition's
+        // talk is out of scope here.
+        if (talkConferenceId !== conference._id) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This talk belongs to another conference edition.',
+          })
+        }
+        const speakers = ((proposal.speakers ?? []) as Speaker[]).filter(
+          (s) => s?._id,
+        )
+        const speakerIds = speakers.map((s) => s._id)
+        const removed = speakers.find((s) => s._id === speakerId)
+        if (!removed) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This person is not currently a speaker on this talk.',
+          })
+        }
+        if (speakerIds.length <= 1) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Cannot remove the only speaker on this talk. Cancel the talk instead.',
+          })
+        }
+
+        await dropSpeakerFromProposal(
+          proposalId,
+          speakerId,
+          speakerIds,
+          proposal._rev,
+        )
+
+        revalidateTag(conferenceTag(talkConferenceId), 'default')
+        if (proposal.status === Status.confirmed) {
+          expireFeedbackCodeIndex(talkConferenceId)
+        }
+
+        // Never-fail from here: the removal is committed.
+        const isSelf = speakerId === ctx.speaker._id
+        const remaining = speakers.filter((s) => s._id !== speakerId)
+        const removedName = removed.name || 'A speaker'
+        const ticketCancellation =
+          revokeTicket && !isSelf && proposal.status === Status.confirmed
+            ? await speakersWithoutOtherConfirmedTalk(
+                [removed],
+                proposalId,
+                talkConferenceId,
+              )
+            : undefined
+
+        try {
+          const conversationId = await ensureProposalConversation({
+            conferenceId: conference._id,
+            proposalId,
+            proposalTitle: proposal.title ?? 'Proposal',
+            createdById: ctx.speaker._id,
+            proposalSpeakerIds: remaining.map((s) => s._id),
+          })
+          const message = await addMessage({
+            conversationId,
+            authorId: ctx.speaker._id,
+            body: `${removedName} is no longer a speaker on this talk.${comment ? `\n\n${comment}` : ''}`,
+            origin: 'system',
+            category: 'proposal_status',
+          })
+          const conversation = await getConversationById(conversationId)
+          if (conversation) {
+            runAfterResponse(() =>
+              notifyNewMessage({
+                conversation,
+                message,
+                authorId: ctx.speaker._id,
+                conference,
+              }),
+            )
+          }
+        } catch (error) {
+          console.error('Failed to post speaker removal to thread:', error)
+        }
+
+        await notifyRemovedSpeakers({
+          removed: [{ ...removed, name: removedName }],
+          proposalTitle: proposal.title ?? 'Proposal',
+          comment,
+          conference,
+          domain,
+          actorId: ctx.speaker._id,
+        })
+
+        runAfterResponse(async () => {
+          try {
+            await notifySpeakerRemoved(
+              proposal,
+              conference,
+              removedName,
+              remaining.map((s) => s.name).join(', '),
+              comment,
+              ticketCancellation,
+            )
+          } catch (error) {
+            console.error('Failed to send speaker removal to Slack:', error)
+          }
+        })
+
+        return { success: true }
       }),
 
     // Get proposal by ID (admin)
@@ -1864,14 +2405,14 @@ export const proposalRouter = router({
     // Update proposal (admin)
     update: adminProcedure
       .input(IdParamSchema.extend({ data: ProposalAdminUpdateSchema }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         try {
           // OWNERSHIP (#730): `input.id` is client input and `updateProposal` is
           // a bare patch. The speaker-facing `proposal.update` above is gated by
           // the org-scoped `getProposal`; this admin sibling was not gated at
           // all, so it could rewrite any document in the shared dataset.
           await requireDocumentInCurrentOrg(input.id, 'talk')
-          const { speakers, ...proposalData } = input.data
+          const { speakers, capacity, ...proposalData } = input.data
 
           // If speakers are being updated, convert to references
           let updateData = proposalData
@@ -1908,6 +2449,13 @@ export const proposalRouter = router({
             )
           }
 
+          // Last before the patch, once nothing else can refuse the edit: a
+          // capacity change is written at once; its promotions are emailed
+          // once the patch has landed (#1357).
+          const promotion =
+            capacity !== undefined
+              ? await changeTalkCapacity(input.id, capacity, proposalData)
+              : null
           const { proposal, err } = await updateProposal(input.id, updateData)
 
           if (err) {
@@ -1942,7 +2490,32 @@ export const proposalRouter = router({
                 proposalId: input.id,
                 removedSpeakerIds,
               })
+              const { conference, domain } =
+                await getConferenceForCurrentDomain()
+              const talkConference = proposal.conference
+              const talkConferenceId =
+                talkConference && '_ref' in talkConference
+                  ? talkConference._ref
+                  : talkConference?._id
+              if (conference && talkConferenceId === conference._id) {
+                await notifyRemovedSpeakers({
+                  removed: await speakerContacts(removedSpeakerIds),
+                  proposalTitle: proposal.title ?? 'Proposal',
+                  conference,
+                  domain,
+                  actorId: ctx.speaker._id,
+                })
+              }
             }
+          }
+
+          // LAST (#1357): the talk is stored as this edit leaves it, and the
+          // conversation's access is in step, before anyone is told.
+          if (promotion) {
+            await deliverPromotionEmails(
+              promotion.conferenceId,
+              promotion.promoted,
+            )
           }
 
           return proposal
@@ -1962,7 +2535,9 @@ export const proposalRouter = router({
       try {
         // OWNERSHIP (#730): unguarded, this deleted any proposal in the dataset.
         await requireDocumentInCurrentOrg(input.id, 'talk')
-        const { err } = await deleteProposal(input.id)
+        const { err, conferenceId: deletedFrom } = await deleteProposal(
+          input.id,
+        )
 
         if (err) {
           if (err instanceof ProposalDeletionBlockedError) {
@@ -1978,6 +2553,7 @@ export const proposalRouter = router({
           })
         }
 
+        if (deletedFrom) expireFeedbackCodeIndex(deletedFrom)
         return { success: true }
       } catch (error) {
         if (error instanceof TRPCError) throw error
@@ -2002,14 +2578,6 @@ export const proposalRouter = router({
           // TENANT was not checked — any tenant's talk could be given audience
           // feedback.
           await requireDocumentInCurrentOrg(input.id, 'talk')
-          const existing = await clientWrite.getDocument(input.id)
-
-          if (!existing || existing._type !== 'talk') {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'Proposal not found',
-            })
-          }
 
           const result = await clientWrite
             .patch(input.id)
@@ -2308,8 +2876,9 @@ export const proposalRouter = router({
               const titleMatch = proposal.title
                 ?.toLowerCase()
                 .includes(searchTerm)
-              const descriptionMatch = proposal.description
-                ?.toString()
+              const descriptionMatch = convertPortableTextToString(
+                proposal.description,
+              )
                 .toLowerCase()
                 .includes(searchTerm)
               return titleMatch || descriptionMatch
@@ -2906,17 +3475,15 @@ export const proposalRouter = router({
             '_id' in invitation.invitedBy
               ? invitation.invitedBy._id
               : undefined
-          // The invitation projection carries no conference ref (neither does
-          // its nested proposal), so resolve it from the current domain — the
-          // respond endpoint is always hit on the conference's own domain.
-          let notifyConferenceId: string | undefined
-          try {
-            const { conference: currentConference } =
-              await getConferenceForCurrentDomain()
-            notifyConferenceId = currentConference?._id
-          } catch {
-            notifyConferenceId = undefined
-          }
+          // The invitation's own conference (set from the proposal at invite
+          // time), not the request host's: a prior edition on the same domain
+          // must not file the row under the current one.
+          const notifyConferenceId =
+            typeof invitation.conference === 'object' &&
+            invitation.conference !== null &&
+            '_id' in invitation.conference
+              ? invitation.conference._id
+              : undefined
           if (inviterId && notifyConferenceId) {
             const respondentName = ctx.speaker.name || ctx.speaker.email
             const proposalTitle =

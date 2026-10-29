@@ -1,14 +1,8 @@
 'use client'
 
 import { EllipsisVerticalIcon } from '@heroicons/react/20/solid'
-import {
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuItems,
-  Transition,
-} from '@headlessui/react'
-import { Fragment, ReactNode, useEffect, useRef, useState } from 'react'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
+import { ReactNode } from 'react'
 
 interface ActionMenuProps {
   children: ReactNode
@@ -21,120 +15,29 @@ export function ActionMenu({
   position = 'right',
   ariaLabel = 'Actions',
 }: ActionMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null)
-  const [shouldDropUp, setShouldDropUp] = useState(false)
-  const [isClient] = useState(() => typeof window !== 'undefined')
-
-  const checkDropDirection = () => {
-    if (!menuRef.current) {
-      return
-    }
-
-    const rect = menuRef.current.getBoundingClientRect()
-    const viewportHeight = window.innerHeight
-
-    // Check if button is in bottom third of viewport
-    const isInBottomThird = rect.bottom > viewportHeight * 0.67
-
-    if (isInBottomThird !== shouldDropUp) {
-      setShouldDropUp(isInBottomThird)
-    }
-  }
-
-  useEffect(() => {
-    if (!isClient || !menuRef.current) {
-      return
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0]
-        if (entry) {
-          const isNearBottom =
-            entry.intersectionRatio < 0.5 ||
-            entry.boundingClientRect.bottom > window.innerHeight * 0.7
-
-          if (isNearBottom !== shouldDropUp) {
-            setShouldDropUp(isNearBottom)
-          }
-        }
-      },
-      {
-        threshold: [0, 0.25, 0.5, 0.75, 1],
-        rootMargin: '0px 0px -30% 0px',
-      },
-    )
-
-    observer.observe(menuRef.current)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [isClient, shouldDropUp])
-
-  const handleMenuButtonClick = () => {
-    requestAnimationFrame(() => {
-      checkDropDirection()
-    })
-  }
-
-  const getDropdownClasses = () => {
-    const baseClasses =
-      'absolute z-50 w-48 rounded-lg bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800 dark:ring-gray-700/5'
-
-    const classes = shouldDropUp
-      ? `${baseClasses} bottom-full mb-2 ${
-          position === 'right'
-            ? 'right-0 origin-bottom-right'
-            : 'left-0 origin-bottom-left'
-        }`
-      : `${baseClasses} top-full mt-2 ${
-          position === 'right'
-            ? 'right-0 origin-top-right'
-            : 'left-0 origin-top-left'
-        }`
-
-    return classes
-  }
-
+  // `anchor` portals the menu out of the trigger's overflow container (e.g. a
+  // scrolling table) and flips it up when there's no room below.
   return (
-    <Menu as="div" className="relative inline-block text-left" ref={menuRef}>
-      {({ open }) => (
-        <>
-          <MenuButton
-            className="inline-flex items-center justify-center rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-            onClick={handleMenuButtonClick}
-            aria-label={ariaLabel}
-          >
-            <EllipsisVerticalIcon className="h-5 w-5" />
-          </MenuButton>
-          {open && (
-            <Transition
-              as={Fragment}
-              show={open}
-              enter="transition ease-out duration-100"
-              enterFrom="transform opacity-0 scale-95"
-              enterTo="transform opacity-100 scale-100"
-              leave="transition ease-in duration-75"
-              leaveFrom="transform opacity-100 scale-100"
-              leaveTo="transform opacity-0 scale-95"
-              beforeEnter={() => {
-                checkDropDirection()
-              }}
-            >
-              <MenuItems className={getDropdownClasses()}>
-                <div className="py-1">{children}</div>
-              </MenuItems>
-            </Transition>
-          )}
-        </>
-      )}
+    <Menu as="div" className="relative inline-block text-left">
+      <MenuButton
+        className="inline-flex items-center justify-center rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+        aria-label={ariaLabel}
+      >
+        <EllipsisVerticalIcon className="h-5 w-5" />
+      </MenuButton>
+      <MenuItems
+        anchor={position === 'right' ? 'bottom end' : 'bottom start'}
+        transition
+        className="z-50 w-48 rounded-lg bg-white shadow-lg ring-1 ring-black/5 transition duration-100 ease-out [--anchor-gap:0.5rem] focus:outline-none data-closed:scale-95 data-closed:opacity-0 dark:bg-gray-800 dark:ring-gray-700/5"
+      >
+        <div className="py-1">{children}</div>
+      </MenuItems>
     </Menu>
   )
 }
 
 interface ActionMenuItemProps {
-  onClick: () => void
+  onClick?: () => void
   icon?: React.ComponentType<{ className?: string }>
   children: ReactNode
   variant?: 'default' | 'danger'
@@ -176,8 +79,8 @@ export function ActionMenuItem({
           title={title}
           {...extraProps}
         >
-          {Icon && <Icon className="h-4 w-4" />}
-          <span>{children}</span>
+          {Icon && <Icon className="h-4 w-4 shrink-0" />}
+          <span className="min-w-0 truncate">{children}</span>
         </Component>
       )}
     </MenuItem>

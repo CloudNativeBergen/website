@@ -7,9 +7,8 @@ import {
   IBM_Plex_Mono,
   Bricolage_Grotesque,
   Atkinson_Hyperlegible,
+  Caveat,
 } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/react'
-import { SpeedInsights } from '@vercel/speed-insights/next'
 import Script from 'next/script'
 import clsx from 'clsx'
 import { headers } from 'next/headers'
@@ -19,10 +18,15 @@ import '@/styles/tailwind.css'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isConferenceUnlisted } from '@/lib/conference/visibility'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
-import { resolvePirschCode, resolvePosthogToken } from '@/lib/analytics'
+import { resolvePosthogToken } from '@/lib/analytics'
 import { getOrganizationById } from '@/lib/organization/sanity'
 import { ANALYTICS_CONFIG_ELEMENT_ID } from '@/lib/posthog/config'
-import { AnalyticsConsentBar, AnalyticsRouteGate } from '@/components/analytics'
+import {
+  AnalyticsConsentBar,
+  AnalyticsRouteGate,
+  HiddenOnFeedbackPage,
+  VercelInsights,
+} from '@/components/analytics'
 import { canonicalOrigin } from '@/lib/seo/canonical'
 import { DevBanner } from '@/components/DevBanner'
 import {
@@ -87,6 +91,18 @@ const atkinsonHyperlegible = Atkinson_Hyperlegible({
   weight: ['400', '700'],
   display: 'swap',
   variable: '--font-atkinson',
+  preload: false,
+})
+
+// The Photo Wall's handwritten face (Photo Wall spec §6.5), the caption on a
+// Wall Post's polaroid card. Registered here on every route like the other
+// optional faces, with `preload: false` so no page preloads it; only the
+// `/wall` routes render text in it, and only they fetch the file.
+const caveat = Caveat({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['500', '700'],
+  display: 'swap',
+  variable: '--font-caveat',
   preload: false,
 })
 
@@ -173,11 +189,9 @@ export const viewport: Viewport = {
  * fails on `/speaker/[slug]` and `/cfp/admin` if you try). Streaming the gate
  * in after the shell is fine — the client entry waits for it.
  *
- * THE CUTOVER (issue #1008) is decided here, per organization: a PostHog token
- * on the organization ⇒ the PostHog config element (and the consent bar), and
- * NOTHING for Pirsch even if the edition still stores a code; no token ⇒ the
- * legacy Pirsch tag, or nothing at all. There is deliberately no platform-level
- * fallback for either: see `resolvePosthogToken` / `resolvePirschCode`.
+ * A valid PostHog token on the organization enables the config element and
+ * consent bar. Without a token, nothing is rendered. There is deliberately no
+ * platform-level fallback: see `resolvePosthogToken`.
  *
  * The PostHog init itself lives in `instrumentation-client.ts`: it looks for
  * the element rendered below and refuses to start without it, and it does
@@ -210,18 +224,7 @@ async function TenantAnalytics() {
     )
   }
 
-  const pirschCode = resolvePirschCode(conference.analyticsPirschCode)
-  if (!pirschCode) return null
-
-  return (
-    <Script
-      defer
-      src="https://api.pirsch.io/pa.js"
-      id="pianjs"
-      data-code={pirschCode}
-      strategy="afterInteractive"
-    />
-  )
+  return null
 }
 
 export default function RootLayout({
@@ -241,6 +244,7 @@ export default function RootLayout({
         ibmPlexMono.variable,
         bricolageGrotesque.variable,
         atkinsonHyperlegible.variable,
+        caveat.variable,
       )}
       suppressHydrationWarning
     >
@@ -280,20 +284,25 @@ export default function RootLayout({
                 <Suspense>
                   <SessionProviderWrapper>{children}</SessionProviderWrapper>
                 </Suspense>
-                <InstallPrompt />
+                {/* Its own boundary: the gate reads the path, which would
+                    otherwise block every route's prerender. */}
+                <Suspense>
+                  <HiddenOnFeedbackPage>
+                    <InstallPrompt />
+                  </HiddenOnFeedbackPage>
+                </Suspense>
                 <ServiceWorkerRegistrar />
               </div>
             </PwaInstallProvider>
           </TRPCProvider>
         </ThemeProvider>
-        <Analytics />
-        <SpeedInsights />
+        {/* The Feedback Code is redacted from `/f/` URLs (speaker feedback §7.1). */}
+        <VercelInsights />
         {/*
           Web analytics — rendered ONLY when this tenant has configured its
-          own PostHog token (organization) or, until it switches, its own
-          Pirsch code (conference). Neither, no script: a tenant's traffic must
-          never be collected into a property they do not own. CTA clicks are
-          tracked declaratively via `data-ph-capture-attribute-cta` — see the
+          own PostHog token (organization). Without it, no script: a tenant's
+          traffic must never be collected into a property they do not own.
+          CTA clicks are tracked declaratively via `data-ph-capture-attribute-cta` — see the
           event naming scheme in src/lib/analytics.ts.
         */}
         <Suspense>

@@ -87,7 +87,18 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     transaction: () => transactionMock(),
     // The erasure transaction is sent at the release-aware API version (#1162).
-    withConfig: () => ({ transaction: () => transactionMock() }),
+    withConfig: () => ({
+      transaction: () => transactionMock(),
+      // The Session Feedback branch reads the subject's talks by id here
+      // (#1438): a dataset with no release lists none; `routeFetch` answers
+      // the rest with null (no versions, no responses).
+      fetch: (query: string, ...rest: unknown[]) =>
+        query.includes('releases::all()')
+          ? Promise.resolve([])
+          : fetchMock(query, ...rest),
+      getDocuments: async (ids: string[]) =>
+        ids.map((id) => world.referencing.find((d) => d._id === id) ?? null),
+    }),
     delete: (...args: unknown[]) => clientDeleteMock(...args),
   },
 }))
@@ -485,31 +496,90 @@ describe('cache revalidation is reported honestly', () => {
         organizers: [ref(SPEAKER, 'k1'), ref('other', 'k2')],
       },
     ]
-    const seen: string[] = []
+    const seen: unknown[] = []
     const result = await eraseSpeakerInPlace({
       speakerId: SPEAKER,
       actor: 'op',
-      revalidate: (tag) => {
-        seen.push(tag)
+      revalidate: (tag, profile) => {
+        seen.push([tag, profile])
       },
     })
 
     expect(seen).toEqual([
-      'content:speakers',
-      'content:speaker-detail',
-      'sanity:conference-conf-1',
+      ['content:speakers', 'default'],
+      ['content:speaker-detail', 'default'],
+      ['sanity:conference-conf-1', 'default'],
+      // The attendee feedback page shows speaker names from this index, so
+      // it is expired at once (speaker feedback spec §5.1).
+      ['sanity:feedback-code-index-conf-1', { expire: 0 }],
     ])
     expect(result.cache.revalidated).toBe(true)
   })
 
-  it('reports revalidated:false with the tags when no revalidate is supplied', async () => {
+  it('revalidates the conference of every talk the speaker is on, not only conferences that name them', async () => {
+    // An ordinary speaker: referenced by their talk alone. The talk's
+    // conference shows their name on its pages and on the attendee feedback
+    // page (speaker feedback spec §5.1), so both its tags must go.
+    world.referencing = [
+      {
+        _id: 'talk-1',
+        _type: 'talk',
+        _rev: 'r1',
+        conference: ref('conf-of-the-talk', 'c'),
+        speakers: [ref(SPEAKER, 's1')],
+      },
+    ]
+    const seen: unknown[] = []
     const result = await eraseSpeakerInPlace({
       speakerId: SPEAKER,
       actor: 'op',
+      // A sole-speaker talk: the Session Feedback settle wait (#1438).
+      waitForInFlightSubmits: async () => {},
+      revalidate: (tag, profile) => {
+        seen.push([tag, profile])
+      },
+    })
+
+    const tags = [
+      ['content:speakers', 'default'],
+      ['content:speaker-detail', 'default'],
+      ['sanity:conference-conf-of-the-talk', 'default'],
+      ['sanity:feedback-code-index-conf-of-the-talk', { expire: 0 }],
+    ]
+    // Ada is alone on the talk: once before the Session Feedback settle wait
+    // and once after it (#1438).
+    expect(seen).toEqual([...tags, ...tags])
+    expect(result.cache.tags).toContain(
+      'sanity:feedback-code-index-conf-of-the-talk',
+    )
+  })
+
+  it('reports revalidated:false with the tags when no revalidate is supplied', async () => {
+    // The production path: `scripts/erase-speaker.ts` passes no callback and
+    // PRINTS these for the operator, so they must include the talk's
+    // conference and its Feedback Code index.
+    world.referencing = [
+      {
+        _id: 'talk-1',
+        _type: 'talk',
+        _rev: 'r1',
+        conference: ref('conf-of-the-talk', 'c'),
+        speakers: [ref(SPEAKER, 's1')],
+      },
+    ]
+    const result = await eraseSpeakerInPlace({
+      speakerId: SPEAKER,
+      actor: 'op',
+      // A sole-speaker talk: the Session Feedback settle wait (#1438).
+      waitForInFlightSubmits: async () => {},
     })
     expect(result.cache.revalidated).toBe(false)
     expect(result.cache.error).toContain('runbook')
     expect(result.cache.tags).toContain('content:speaker-detail')
+    expect(result.cache.tags).toContain('sanity:conference-conf-of-the-talk')
+    expect(result.cache.tags).toContain(
+      'sanity:feedback-code-index-conf-of-the-talk',
+    )
   })
 
   it('does not claim success when revalidate throws', async () => {

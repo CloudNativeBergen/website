@@ -10,10 +10,12 @@ import {
   getScheduleStatusById,
 } from '@/lib/schedule/sanity'
 import { validateSchedulePayload } from '@/lib/schedule/validation'
+import { HHMM_PATTERN } from '@/lib/schedule/time'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
-import type { ConferenceSchedule } from '@/lib/conference/types'
+import { expireFeedbackCodeIndex } from '@/lib/feedback/server'
+import type { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 import { ScheduleStatus } from '@/lib/schedule/types'
 import { Status as ProposalStatus } from '@/lib/proposal/types'
 import { z } from 'zod'
@@ -29,6 +31,37 @@ function talkReferenceId(talk: {
   talk?: { _id?: string; _ref?: string } | null
 }): string | undefined {
   return talk.talk?._id ?? talk.talk?._ref
+}
+
+/**
+ * Statuses a talk may have in an official (public) schedule. Canceled and
+ * withdrawn talks keep their slot so the public program can show them as
+ * canceled instead of the slot silently vanishing.
+ */
+const PUBLISHABLE_TALK_STATUSES: ReadonlySet<string> = new Set([
+  ProposalStatus.accepted,
+  ProposalStatus.confirmed,
+  ProposalStatus.canceled,
+  ProposalStatus.withdrawn,
+])
+
+/** Strict Block: refuse to publish a day holding a talk that is not publishable. */
+function assertPublishable(
+  tracks: ConferenceSchedule['tracks'] | undefined,
+  statuses: Record<string, string>,
+): void {
+  for (const track of tracks || []) {
+    for (const talk of track.talks || []) {
+      if (talk.placeholder) continue
+      const ref = talkReferenceId(talk)
+      if (ref && !PUBLISHABLE_TALK_STATUSES.has(statuses[ref])) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Strict Block: Cannot publish schedule. Talk ${ref} is not accepted, confirmed, canceled or withdrawn (status: ${statuses[ref]}).`,
+        })
+      }
+    }
+  }
 }
 
 export const scheduleRouter = router({
@@ -85,28 +118,8 @@ export const scheduleRouter = router({
         }
       }
 
-      // STRICT BLOCK:
-      // If publishing an official schedule, every scheduled talk must be approved.
       if (payload.status === ScheduleStatus.Official) {
-        const statuses = await getTalkStatuses(conference._id)
-        for (const track of payload.tracks || []) {
-          for (const talk of track.talks || []) {
-            if (talk.placeholder) continue
-            const ref = talkReferenceId(talk)
-            if (ref) {
-              const status = statuses[ref]
-              if (
-                status !== ProposalStatus.accepted &&
-                status !== ProposalStatus.confirmed
-              ) {
-                throw new TRPCError({
-                  code: 'BAD_REQUEST',
-                  message: `Strict Block: Cannot publish schedule. Talk ${ref} is not accepted/confirmed (status: ${status}).`,
-                })
-              }
-            }
-          }
-        }
+        assertPublishable(payload.tracks, await getTalkStatuses(conference._id))
       }
 
       const validTalkIds = await getValidTalkIds(conference._id)
@@ -145,6 +158,12 @@ export const scheduleRouter = router({
       // `fetchConferenceData`) now carries `sanity:conference-<id>`, so the
       // scoped tag alone fully invalidates this tenant.
       revalidateTag(conferenceTag(conference._id), 'default')
+      // A moved, added or removed slot opens, closes or moves a Feedback Window
+      // (speaker feedback spec §5.1). Not for a draft: drafts never open one,
+      // and the editor autosaves them every few seconds.
+      if (payload.status !== ScheduleStatus.Draft) {
+        expireFeedbackCodeIndex(conference._id)
+      }
 
       return { schedule }
     }),
@@ -321,37 +340,65 @@ export const scheduleRouter = router({
           })
         }
         await clientWrite.delete(input.id)
+        // A legacy day with no status reads as official, so deleting it can
+        // close Feedback Windows (speaker feedback spec §5.1). Official days
+        // are refused above; drafts and archived days never held a window.
+        if (!doc.status) {
+          expireFeedbackCodeIndex(conference._id)
+        }
         return { success: true }
       }),
 
     addTalk: adminProcedure
       .input(
-        z.object({
-          scheduleId: z.string(),
-          trackIndex: z.number().int().min(0),
-          startTime: z.string(),
-          endTime: z.string(),
-          proposalId: z.string().optional(),
-          placeholder: z.string().optional(),
-        }),
+        z
+          .object({
+            scheduleId: z.string(),
+            trackIndex: z.number().int().min(0),
+            startTime: z
+              .string()
+              .regex(HHMM_PATTERN, 'Time must be HH:MM (24h)'),
+            endTime: z.string().regex(HHMM_PATTERN, 'Time must be HH:MM (24h)'),
+            proposalId: z.string().optional(),
+            placeholder: z.string().trim().min(1).max(200).optional(),
+            expectedRevision: z.string().optional(),
+          })
+          .refine(
+            (data) => Boolean(data.proposalId) !== Boolean(data.placeholder),
+            {
+              message:
+                'Must specify either proposalId or placeholder, but not both',
+            },
+          ),
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const { conference, error } = await getConferenceForCurrentDomain()
-        if (error || !conference)
+        if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch conference',
           })
+        }
 
-        const doc = await clientWrite.fetch(
+        const doc = await clientWrite.fetch<ConferenceSchedule | null>(
           `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
           { id: input.scheduleId, conferenceId: conference._id },
         )
-        if (!doc) throw new TRPCError({ code: 'NOT_FOUND' })
-        if (doc.status === ScheduleStatus.Official) {
+        if (!doc) {
           throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Cannot directly mutate an official schedule.',
+            code: 'NOT_FOUND',
+            message: 'Schedule not found',
+          })
+        }
+
+        if (
+          input.expectedRevision &&
+          doc._rev &&
+          doc._rev !== input.expectedRevision
+        ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Schedule was modified by another user.',
           })
         }
 
@@ -362,75 +409,193 @@ export const scheduleRouter = router({
           })
         }
 
-        const trackKey = doc.tracks[input.trackIndex]._key
+        if (input.proposalId) {
+          const proposal = await clientWrite.fetch<{
+            _id: string
+            status?: string | null
+          } | null>(
+            `*[_type == "talk" && _id == $id && conference._ref == $conferenceId][0]{ _id, status }`,
+            { id: input.proposalId, conferenceId: conference._id },
+          )
+          if (!proposal) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Proposal not found or belongs to another conference.',
+            })
+          }
+
+          const isOfficial =
+            !doc.status || doc.status === ScheduleStatus.Official
+          if (isOfficial) {
+            if (
+              proposal.status !== ProposalStatus.accepted &&
+              proposal.status !== ProposalStatus.confirmed
+            ) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: `Cannot add talk to official schedule. Talk status is ${proposal.status}, expected accepted or confirmed.`,
+              })
+            }
+          }
+        }
+
         const newTalk = {
-          _key: crypto.randomUUID().replace(/-/g, '').slice(0, 16),
+          _key: crypto.randomUUID(),
           startTime: input.startTime,
           endTime: input.endTime,
           ...(input.proposalId
             ? { talk: { _ref: input.proposalId, _type: 'reference' } }
             : { placeholder: input.placeholder }),
+        } as unknown as TrackTalk
+
+        const track = doc.tracks[input.trackIndex]
+        track.talks = [...(track.talks || []), newTalk].sort((a, b) =>
+          a.startTime.localeCompare(b.startTime),
+        )
+
+        const validTalkIds = await getValidTalkIds(conference._id)
+        const validationError = validateSchedulePayload(doc, validTalkIds)
+        if (validationError) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: validationError })
         }
 
-        await clientWrite
-          .patch(input.scheduleId)
-          .insert('after', `tracks[_key=="${trackKey}"].talks[-1]`, [newTalk])
-          .commit()
+        const {
+          schedule,
+          error: saveError,
+          conflict,
+        } = await saveScheduleToSanity(doc, conference, {
+          actorId: ctx.speaker?._id,
+        })
+
+        if (conflict) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: saveError || 'This schedule was changed concurrently.',
+          })
+        }
+        if (saveError || !schedule) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: saveError || 'Failed to save schedule',
+          })
+        }
 
         revalidateTag(conferenceTag(conference._id), 'default')
-        return { success: true }
+        if (doc.status !== ScheduleStatus.Draft) {
+          expireFeedbackCodeIndex(conference._id)
+        }
+        return { success: true, schedule }
       }),
 
     removeTalk: adminProcedure
       .input(
-        z.object({
-          scheduleId: z.string(),
-          trackIndex: z.number().int().min(0),
-          talkIndex: z.number().int().min(0),
-        }),
+        z
+          .object({
+            scheduleId: z.string(),
+            trackIndex: z.number().int().min(0),
+            talkIndex: z.number().int().min(0).optional(),
+            talkKey: z.string().optional(),
+            expectedRevision: z.string().optional(),
+          })
+          .refine(
+            (data) =>
+              data.talkIndex !== undefined || data.talkKey !== undefined,
+            {
+              message: 'Either talkIndex or talkKey must be provided',
+            },
+          ),
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const { conference, error } = await getConferenceForCurrentDomain()
-        if (error || !conference)
+        if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch conference',
           })
+        }
 
-        const doc = await clientWrite.fetch(
+        const doc = await clientWrite.fetch<ConferenceSchedule | null>(
           `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
           { id: input.scheduleId, conferenceId: conference._id },
         )
-        if (!doc) throw new TRPCError({ code: 'NOT_FOUND' })
-        if (doc.status === ScheduleStatus.Official) {
+        if (!doc) {
           throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Cannot directly mutate an official schedule.',
+            code: 'NOT_FOUND',
+            message: 'Schedule not found',
           })
         }
 
         if (
-          !doc.tracks ||
-          !doc.tracks[input.trackIndex] ||
-          !doc.tracks[input.trackIndex].talks ||
-          !doc.tracks[input.trackIndex].talks[input.talkIndex]
+          input.expectedRevision &&
+          doc._rev &&
+          doc._rev !== input.expectedRevision
         ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Schedule was modified by another user.',
+          })
+        }
+
+        if (!doc.tracks || !doc.tracks[input.trackIndex]) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Track or talk index out of bounds.',
           })
         }
 
-        const trackKey = doc.tracks[input.trackIndex]._key
-        const talkKey = doc.tracks[input.trackIndex].talks[input.talkIndex]._key
+        const track = doc.tracks[input.trackIndex]
+        const talks = track.talks || []
 
-        await clientWrite
-          .patch(input.scheduleId)
-          .unset([`tracks[_key=="${trackKey}"].talks[_key=="${talkKey}"]`])
-          .commit()
+        let targetIndex: number
+        if (input.talkKey !== undefined) {
+          targetIndex = talks.findIndex(
+            (t) => (t as unknown as { _key?: string })._key === input.talkKey,
+          )
+        } else {
+          targetIndex = input.talkIndex!
+        }
+
+        if (targetIndex < 0 || targetIndex >= talks.length) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Track or talk index out of bounds.',
+          })
+        }
+
+        track.talks.splice(targetIndex, 1)
+
+        const validTalkIds = await getValidTalkIds(conference._id)
+        const validationError = validateSchedulePayload(doc, validTalkIds)
+        if (validationError) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: validationError })
+        }
+
+        const {
+          schedule,
+          error: saveError,
+          conflict,
+        } = await saveScheduleToSanity(doc, conference, {
+          actorId: ctx.speaker?._id,
+        })
+
+        if (conflict) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: saveError || 'This schedule was changed concurrently.',
+          })
+        }
+        if (saveError || !schedule) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: saveError || 'Failed to save schedule',
+          })
+        }
 
         revalidateTag(conferenceTag(conference._id), 'default')
-        return { success: true }
+        if (doc.status !== ScheduleStatus.Draft) {
+          expireFeedbackCodeIndex(conference._id)
+        }
+        return { success: true, schedule }
       }),
   }),
 
@@ -464,26 +629,10 @@ export const scheduleRouter = router({
           })
         }
 
-        // Strict Block for promote!
-        const statuses = await getTalkStatuses(conference._id)
-        for (const track of targetSchedule.tracks || []) {
-          for (const talk of track.talks || []) {
-            if (talk.placeholder) continue
-            const ref = talkReferenceId(talk)
-            if (ref) {
-              const status = statuses[ref]
-              if (
-                status !== ProposalStatus.accepted &&
-                status !== ProposalStatus.confirmed
-              ) {
-                throw new TRPCError({
-                  code: 'BAD_REQUEST',
-                  message: `Strict Block: Cannot publish schedule. Talk ${ref} is not accepted/confirmed (status: ${status}).`,
-                })
-              }
-            }
-          }
-        }
+        assertPublishable(
+          targetSchedule.tracks,
+          await getTalkStatuses(conference._id),
+        )
 
         const date = targetSchedule.date
 
@@ -493,38 +642,54 @@ export const scheduleRouter = router({
         // `conference.schedules` and appended a second official doc for the
         // same date — two "official" days, which makes the speaker-facing
         // lookups tie on `order(date asc)[0]` and go nondeterministic again.
-        const existingOfficial = await clientWrite.fetch<{
-          _id: string
-          tracks?: ConferenceSchedule['tracks']
-        } | null>(
-          `*[_type == "schedule" && conference._ref == $conferenceId && date == $date && (status == 'official' || !defined(status))][0]`,
-          { conferenceId: conference._id, date },
-        )
+        const [existingOfficial, confDoc] = await Promise.all([
+          clientWrite.fetch<{
+            _id: string
+            _rev?: string
+            tracks?: ConferenceSchedule['tracks']
+          } | null>(
+            `*[_type == "schedule" && conference._ref == $conferenceId && date == $date && _id != $id && (status == 'official' || !defined(status))][0]`,
+            { conferenceId: conference._id, date, id: targetSchedule._id },
+          ),
+          clientWrite.fetch<{ _rev?: string } | null>(
+            // groq-global-scoped: by-id read of the conference the request resolved.
+            `*[_type == "conference" && _id == $conferenceId][0]{ _rev }`,
+            { conferenceId: conference._id },
+          ),
+        ])
 
         const tx = clientWrite.transaction()
 
         if (existingOfficial) {
-          tx.patch(existingOfficial._id, (p) =>
-            p.set({ status: ScheduleStatus.Archived }),
-          )
+          tx.patch(existingOfficial._id, (p) => {
+            const rev = existingOfficial._rev
+              ? p.ifRevisionId(existingOfficial._rev)
+              : p
+            return rev.set({ status: ScheduleStatus.Archived })
+          })
           tx.patch(conference._id, (p) =>
             p.unset([`schedules[_ref == "${existingOfficial._id}"]`]),
           )
         }
 
-        tx.patch(targetSchedule._id, (p) =>
-          p.set({ status: ScheduleStatus.Official }),
-        )
-        tx.patch(conference._id, (p) =>
-          p
+        tx.patch(targetSchedule._id, (p) => {
+          const rev = targetSchedule._rev
+            ? p.ifRevisionId(targetSchedule._rev)
+            : p
+          return rev.set({ status: ScheduleStatus.Official })
+        })
+        tx.patch(conference._id, (p) => {
+          const rev = confDoc?._rev ? p.ifRevisionId(confDoc._rev) : p
+          return rev
             .setIfMissing({ schedules: [] })
             .append('schedules', [
               createReferenceWithKey(targetSchedule._id, 'schedule'),
-            ]),
-        )
+            ])
+        })
 
         await tx.commit()
         revalidateTag(conferenceTag(conference._id), 'default')
+        expireFeedbackCodeIndex(conference._id)
 
         // SCHEDULE-CHANGE ALERTS. Publishing is now the ONLY write that changes
         // the public program — draft saves auto-fork and Live mode is read-only

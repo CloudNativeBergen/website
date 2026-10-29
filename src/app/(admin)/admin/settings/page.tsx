@@ -1,8 +1,12 @@
+import Link from 'next/link'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { getSpeakerBriefing } from '@/lib/speaker/briefing'
 import { denyNonOrganizer } from '@/lib/authz/page-guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceVisibility } from '@/lib/conference/visibility'
 import { buildSystemChecks } from '@/lib/system-status/checks'
 import { formatTeamSummary } from '@/lib/teams'
+import { stripHtml } from '@/lib/html/text'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import {
   SystemStatusSection,
@@ -12,9 +16,10 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { getAuthSession } from '@/lib/auth'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
 import { EditOrganizationAnalyticsCard } from '@/components/admin/EditOrganizationAnalyticsCard'
+import { ContentJudgementSettings } from '@/components/admin/content-judgement'
 import { ThemeSwatchRow } from '@/components/admin/ThemeEditor'
 import { DomainVerificationCard } from '@/components/admin/DomainVerificationCard'
-import { listDomainVerificationViews } from '@/lib/domain-verification'
+import { listConferenceDomainViews } from '@/lib/domain-verification'
 import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { OrganizerInvitesEditor } from '@/components/organizer-invite'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
@@ -29,11 +34,12 @@ import {
   getAllOrganizations,
   getOrganizationById,
 } from '@/lib/organization/sanity'
-import { effectivePlan, FEATURES } from '@/lib/features/registry'
+import { effectivePlan } from '@/lib/features/registry'
 import { listEntitledFeatures } from '@/lib/features/entitlements'
 import { isPlatformOrgRequest } from '@/lib/features/platform'
-import { isWorkshopsEnabledForOrg } from '@/lib/features/workshops'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { PlanFeaturesCard } from './PlanFeaturesCard'
+import { applyWorkshopGate } from './planFeatureRows'
 import { PlatformOrgManager } from './PlatformOrgManager'
 import {
   InfoCard,
@@ -43,6 +49,7 @@ import {
   SectionHeading,
   SettingsGroupSection,
 } from './settingsLayout'
+import { SettingsFilter, FilterableCard } from './SettingsFilter'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -64,6 +71,7 @@ import {
   EyeSlashIcon,
   ChartBarIcon,
   ShieldCheckIcon,
+  ScaleIcon,
 } from '@heroicons/react/24/outline'
 
 /** Group id → group metadata, so tier-1 subsections stay single-sourced. */
@@ -113,6 +121,7 @@ export default async function AdminSettings() {
     // This page EDITS the links, so it has to read the stored values back.
     includeSponsorRegistrationLink: true,
     includeSpeakerRegistrationLink: true,
+    includeVolunteerRegistrationLink: true,
   })
 
   if (error) {
@@ -131,14 +140,21 @@ export default async function AdminSettings() {
   }
 
   const editUrl = studioEditUrl(conference._id)
+  // Once the structured dinner has content, the old text is only a fallback.
+  const structuredDinner = !!getSpeakerBriefing({
+    speakerInfo: conference.speakerInfo,
+  }).dinner
   const visibility = resolveConferenceVisibility(conference)
   // Ownership-verification state per claimed domain (#683). Read here so the
-  // card server-renders its real state; the client island refetches on mount.
+  // card server-renders its real state; the client island refetches once its
+  // query goes stale (the provider's staleTime), not on mount.
+  // With workshops, each host also shows whether the portal can sign in on
+  // it, and if not why (#1298).
   const domainVerifications = conference._id
-    ? await listDomainVerificationViews(
-        conference._id,
-        conference.domains ?? [],
-      )
+    ? await listConferenceDomainViews({
+        ...conference,
+        _id: conference._id,
+      })
     : []
   const systemChecks = await buildSystemChecks(conference)
   // "Get started" activation checklist — derived from the conference and the
@@ -148,7 +164,13 @@ export default async function AdminSettings() {
   // SAME resolver backs the /admin hero and the unlisted banner, so all three
   // surfaces agree on what is outstanding and on which rows are not this
   // tenant's to complete (#839).
-  const activation = await resolveActivationChecklist(conference, systemChecks)
+  const activation = await resolveActivationChecklist(
+    conference,
+    systemChecks,
+    {
+      eventFacts: true,
+    },
+  )
   const currentUserId = session?.speaker?._id ?? ''
   const organizerRows = (conference.organizers ?? []).map((org) => ({
     _id: org._id,
@@ -161,7 +183,7 @@ export default async function AdminSettings() {
   // entirely when the conference has no organization ref (pre-backfill data).
   const orgId = conference.organization?._ref ?? null
   const organization = orgId ? await getOrganizationById(orgId) : null
-  const entitledFeatureRows = organization
+  const listedFeatureRows = organization
     ? listEntitledFeatures(
         organization.plan,
         organization.featureOverrides,
@@ -175,25 +197,16 @@ export default async function AdminSettings() {
       }))
     : []
 
-  // The workshop gate (#689) layers a platform-org DEFAULT on top of the
-  // generic override-based resolver, so an org can be entitled to `workshops`
-  // without any override this list can see. Ask the resolver that owns that
-  // decision, or this card would tell the platform org its workshop portal is
-  // off while the portal, the admin page and the ticket-sold email all treat it
-  // as on.
-  if (
-    !entitledFeatureRows.some((row) => row.id === 'workshops') &&
-    (await isWorkshopsEnabledForOrg(orgId))
-  ) {
-    const workshops = FEATURES.workshops
-    entitledFeatureRows.push({
-      id: workshops.id,
-      title: workshops.title,
-      description: workshops.description,
-      readiness: workshops.readiness,
-      viaOverride: false,
-    })
-  }
+  // The workshop gate (#1295) adds a condition the generic list cannot see: a
+  // plan-granted `workshops` is OFF until the org's ticketing is enabled and
+  // connected. Ask the resolver that owns the decision and show the row as
+  // inactive, with the reason — or the card would tell a pro org with no
+  // ticketing account that its portal is on while the portal, the admin page
+  // and the ticket-sold email all treat it as off.
+  const entitledFeatureRows = applyWorkshopGate(
+    listedFeatureRows,
+    await isWorkshopsEnabledForConference(conference),
+  )
 
   // Cross-tenant list, fetched ONLY when this request's org is the platform
   // org (PLATFORM_ORG_ID contract, src/lib/features/platform.ts).
@@ -246,15 +259,19 @@ export default async function AdminSettings() {
 
         {/* "Get started" — the onboarding checklist. Sits above the grouped
             configuration cards and deep-links into them. */}
-        <ActivationChecklist checklist={activation} />
+        <ActivationChecklist
+          checklist={activation}
+          baseUrl={conferenceBaseUrl(conference)}
+        />
 
-        <div className="space-y-10">
+        <SettingsFilter>
           {/* ---- Identity & Brand ---- */}
           <SettingsGroupSection
             group={GROUP['identity-brand']}
             icon={InformationCircleIcon}
           >
             <InfoCard
+              id="basic-information"
               title="Basic Information"
               icon={InformationCircleIcon}
               editUrl={editUrl}
@@ -277,7 +294,18 @@ export default async function AdminSettings() {
               <FieldRow label="City" value={conference.city} />
               <FieldRow label="Country" value={conference.country} />
               <FieldRow label="Tagline" value={conference.tagline} />
-              <FieldRow label="Description" value={conference.description} />
+              {/* Some datasets store HTML in this plain-text field. Strip the
+                  tags (the same helper the ticket pages use) and render the
+                  rest as escaped text, clamped to three lines. */}
+              <FieldRow
+                label="Description"
+                value={
+                  conference.description
+                    ? stripHtml(conference.description)
+                    : null
+                }
+                type="longtext"
+              />
             </InfoCard>
 
             {/* Brand and theming have their own section — this card is a
@@ -324,12 +352,12 @@ export default async function AdminSettings() {
             >
               <div
                 id="visibility"
-                className="flex scroll-mt-24 items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
+                className="flex scroll-mt-44 flex-wrap items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
               >
                 <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
                   Status
                 </dt>
-                <dd className="min-w-0 text-right text-sm">
+                <dd className="min-w-0 text-sm sm:text-right">
                   {visibility === 'unlisted' ? (
                     <StatusBadge label="Unlisted" color="yellow" />
                   ) : (
@@ -359,36 +387,44 @@ export default async function AdminSettings() {
             ) : null}
 
             {/* Set-once — collapsed by default. */}
-            <CollapsibleSection
-              headingLevel={4}
+            {/* Labels listed: the collapsed body is not rendered, so the
+                card cannot read them from the DOM. */}
+            <FilterableCard
               title="Venue Information"
-              icon={<MapPinIcon />}
-              action={
-                <>
-                  <StudioEditLink editUrl={editUrl} />
-                  <EditConferenceCard
-                    fieldset="venue"
-                    initialValues={{
-                      venueName: conference.venueName,
-                      venueAddress: conference.venueAddress,
-                    }}
-                  />
-                </>
-              }
+              labels={['Venue Name', 'Venue Address']}
             >
-              <div className="space-y-3 px-6 py-4">
-                <FieldRow label="Venue Name" value={conference.venueName} />
-                <FieldRow
-                  label="Venue Address"
-                  value={conference.venueAddress}
-                />
-              </div>
-            </CollapsibleSection>
+              <CollapsibleSection
+                headingLevel={4}
+                title="Venue Information"
+                icon={<MapPinIcon />}
+                action={
+                  <>
+                    <StudioEditLink editUrl={editUrl} />
+                    <EditConferenceCard
+                      fieldset="venue"
+                      initialValues={{
+                        venueName: conference.venueName,
+                        venueAddress: conference.venueAddress,
+                      }}
+                    />
+                  </>
+                }
+              >
+                <div className="space-y-3 px-6 py-4">
+                  <FieldRow label="Venue Name" value={conference.venueName} />
+                  <FieldRow
+                    label="Venue Address"
+                    value={conference.venueAddress}
+                  />
+                </div>
+              </CollapsibleSection>
+            </FilterableCard>
           </SettingsGroupSection>
 
           {/* ---- Schedule ---- */}
           <SettingsGroupSection group={GROUP['schedule']} icon={CalendarIcon}>
             <InfoCard
+              id="dates-timeline"
               title="Dates & Timeline"
               icon={CalendarIcon}
               editUrl={editUrl}
@@ -481,6 +517,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="announcement"
               title="Announcement"
               icon={DocumentTextIcon}
               editUrl={editUrl}
@@ -509,6 +546,7 @@ export default async function AdminSettings() {
             icon={DocumentTextIcon}
           >
             <InfoCard
+              id="cfp-goals"
               title="CFP & Revenue Goals"
               icon={CurrencyDollarIcon}
               editUrl={editUrl}
@@ -554,6 +592,7 @@ export default async function AdminSettings() {
             icon={TagIcon}
           >
             <InfoCard
+              id="registration"
               title="Registration"
               icon={DocumentTextIcon}
               editUrl={editUrl}
@@ -563,6 +602,8 @@ export default async function AdminSettings() {
                   initialValues={{
                     registrationEnabled: conference.registrationEnabled,
                     registrationLink: conference.registrationLink,
+                    volunteerRegistrationLink:
+                      conference.volunteerRegistrationLink,
                     sponsorRegistrationLink: conference.sponsorRegistrationLink,
                     speakerRegistrationLink: conference.speakerRegistrationLink,
                   }}
@@ -580,6 +621,11 @@ export default async function AdminSettings() {
                 type="url"
               />
               <FieldRow
+                label="Volunteer Registration Link"
+                value={conference.volunteerRegistrationLink}
+                type="url"
+              />
+              <FieldRow
                 label="Sponsor Registration Link"
                 value={conference.sponsorRegistrationLink}
                 type="url"
@@ -592,6 +638,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="ticketing"
               title="Ticketing"
               icon={LinkIcon}
               editUrl={editUrl}
@@ -638,12 +685,16 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="local-information"
               title="Local Information"
               icon={MapPinIcon}
               editUrl={editUrl}
               action={
                 <EditConferenceCard
                   fieldset="localInfo"
+                  hiddenFields={
+                    structuredDinner ? ['speakerDinnerInfo'] : undefined
+                  }
                   initialValues={{
                     venueTravelInfo: conference.venueTravelInfo,
                     speakerDinnerInfo: conference.speakerDinnerInfo,
@@ -657,10 +708,19 @@ export default async function AdminSettings() {
                 label="Getting to the venue"
                 value={conference.venueTravelInfo}
               />
-              <FieldRow
-                label="Speaker dinner"
-                value={conference.speakerDinnerInfo}
-              />
+              {structuredDinner ? (
+                <Link
+                  href="/admin/speakers/info"
+                  className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Edit the speaker dinner under Speakers → Speaker Info
+                </Link>
+              ) : (
+                <FieldRow
+                  label="Speaker dinner"
+                  value={conference.speakerDinnerInfo}
+                />
+              )}
               <FieldRow
                 label="Local recommendations"
                 value={conference.localRecommendations}
@@ -672,52 +732,32 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="analytics"
               title="Analytics"
               icon={ChartBarIcon}
               editUrl={editUrl}
               action={
-                <>
-                  <EditOrganizationAnalyticsCard
-                    initialToken={organization?.analyticsPosthogToken}
-                  />
-                  <EditConferenceCard
-                    fieldset="analytics"
-                    initialValues={{
-                      analyticsPirschCode: conference.analyticsPirschCode,
-                    }}
-                  />
-                </>
+                <EditOrganizationAnalyticsCard
+                  initialToken={organization?.analyticsPosthogToken}
+                />
               }
             >
-              {/* The organization's PostHog token is the switch: present, and
-                  PostHog serves every edition of this organization while the
-                  conference's Pirsch code below is ignored. */}
               <FieldRow
                 label="PostHog project token (organization)"
                 value={organization?.analyticsPosthogToken}
-              />
-              <FieldRow
-                label="Pirsch identification code (this edition)"
-                value={conference.analyticsPirschCode}
               />
               {organization?.analyticsPosthogToken ? (
                 <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
                   PostHog (EU) serves analytics on every edition run by this
                   organization. Visitors are counted anonymously until they
-                  accept the analytics cookie. The Pirsch code is no longer
-                  loaded.
-                </p>
-              ) : !conference.analyticsPirschCode ? (
-                <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
-                  No analytics script is served on this site. Add your
-                  organization&apos;s PostHog project token to start collecting
-                  visitor statistics into your own project.
+                  accept the analytics cookie.
                 </p>
               ) : (
                 <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Pirsch serves pageviews on this edition. Add a PostHog project
-                  token to switch this organization to PostHog, which also
-                  restores conversion tracking for the marked buttons.
+                  No analytics of your own is served on this site; only the
+                  platform&apos;s cookie-less Vercel Analytics runs. Add your
+                  organization&apos;s PostHog project token to start collecting
+                  visitor statistics into your own project.
                 </p>
               )}
             </InfoCard>
@@ -729,6 +769,7 @@ export default async function AdminSettings() {
             icon={UserGroupIcon}
           >
             <InfoCard
+              id="organizers-teams"
               title="Organizers & Teams"
               icon={UserGroupIcon}
               editUrl={editUrl}
@@ -783,6 +824,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="communication"
               title="Communication"
               icon={EnvelopeIcon}
               editUrl={editUrl}
@@ -796,6 +838,8 @@ export default async function AdminSettings() {
                     salesNotificationChannel:
                       conference.salesNotificationChannel,
                     cfpNotificationChannel: conference.cfpNotificationChannel,
+                    speakerSlackChannel: conference.speakerSlackChannel,
+                    volunteerSlackInviteUrl: conference.volunteerSlackInviteUrl,
                   }}
                 />
               }
@@ -816,6 +860,11 @@ export default async function AdminSettings() {
                 type="email"
               />
               <FieldRow
+                label="Volunteer Slack Invite Link"
+                value={conference.volunteerSlackInviteUrl}
+                type="url"
+              />
+              <FieldRow
                 label="Sales / Weekly Update Channel"
                 value={conference.salesNotificationChannel}
               />
@@ -823,9 +872,14 @@ export default async function AdminSettings() {
                 label="CFP Notification Channel"
                 value={conference.cfpNotificationChannel}
               />
+              <FieldRow
+                label="Speakers Slack Channel"
+                value={conference.speakerSlackChannel}
+              />
             </InfoCard>
 
             <InfoCard
+              id="domains-social-links"
               title="Domains & Social Links"
               icon={GlobeAltIcon}
               editUrl={editUrl}
@@ -856,7 +910,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard title="Domain Verification" icon={ShieldCheckIcon}>
-              <div id="domain-verification" className="scroll-mt-24">
+              <div id="domain-verification" className="scroll-mt-44">
                 <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
                   Claiming a domain is not the same as owning it. Publish the
                   DNS TXT record below to prove control. We re-check it every
@@ -868,6 +922,7 @@ export default async function AdminSettings() {
             </InfoCard>
 
             <InfoCard
+              id="topics-formats"
               title="Topics & Formats"
               icon={TagIcon}
               action={
@@ -894,8 +949,20 @@ export default async function AdminSettings() {
                 type="array"
               />
             </InfoCard>
+
+            {/* Organization-wide, like Analytics: one switch for every
+                edition (Content judgement spec §5). */}
+            {organization ? (
+              <InfoCard title="Content judgement" icon={ScaleIcon}>
+                <ContentJudgementSettings
+                  enabled={organization.contentJudgement?.enabled === true}
+                  changedAt={organization.contentJudgement?.changedAt}
+                  changedByName={organization.contentJudgement?.changedByName}
+                />
+              </InfoCard>
+            ) : null}
           </SettingsGroupSection>
-        </div>
+        </SettingsFilter>
       </section>
 
       {/* ---- Tools ---- */}

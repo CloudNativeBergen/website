@@ -2,6 +2,7 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { formatNumber } from '@/lib/format'
 import { Action } from '@/lib/proposal/types'
+import type { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { Conference } from '@/lib/conference/types'
 import { Volunteer } from '@/lib/volunteer/types'
 import {
@@ -12,6 +13,7 @@ import {
 } from '@/lib/slack/client'
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { resolveTeamSlackChannel } from '@/lib/teams'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 
 /**
  * Post to the CFP Slack channel. An explicit `channel` (resolved from a team,
@@ -152,6 +154,8 @@ function getActionEmoji(action: Action): string {
       return '✅'
     case Action.withdraw:
       return '🚫'
+    case Action.cancel:
+      return '🛑'
     default:
       return '📝'
   }
@@ -163,9 +167,75 @@ function getActionText(action: Action): string {
       return 'Confirmed'
     case Action.withdraw:
       return 'Withdrawn'
+    case Action.cancel:
+      return 'Canceled'
     default:
       return 'Status Changed'
   }
+}
+
+type TicketCancellation =
+  ProposalStatusChangeEvent['metadata']['ticketCancellation']
+
+// No provider API cancels tickets, so organizers do it by hand.
+function pushTicketCancellation(
+  blocks: SlackBlock[],
+  ticketCancellation: TicketCancellation,
+) {
+  if (!ticketCancellation?.speakers.length) return
+  const list = ticketCancellation.speakers
+    .map(
+      (s) =>
+        `• ${escapeMrkdwn(s.name)}${s.email ? ` (${escapeMrkdwn(s.email)})` : ''}`,
+    )
+    .join('\n')
+  const caveat = ticketCancellation.unfiltered
+    ? '\n_Could not check for other confirmed talks: this list is unfiltered. Check by hand that each speaker has no other confirmed talk before cancelling._'
+    : ''
+  blocks.push({
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `*🎟️ Cancel ticket by hand in the ticket provider's dashboard for:*\n${list}${caveat}`,
+    },
+  })
+}
+
+/** An organizer took one speaker off a talk that keeps its other speakers. */
+export async function notifySpeakerRemoved(
+  proposal: ProposalExisting,
+  conference: Conference,
+  removedName: string,
+  remainingNames: string,
+  comment?: string,
+  ticketCancellation?: TicketCancellation,
+) {
+  const domain = getDomainFromConference(conference)
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: '👋 Speaker removed from talk',
+        emoji: true,
+      },
+    },
+    ...createProposalInfoBlocks(proposal, remainingNames),
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Removed:* ${escapeMrkdwn(removedName)}${comment?.trim() ? `\n*Comment:*\n${escapeMrkdwn(comment.trim())}` : ''}`,
+      },
+    },
+  ]
+  pushTicketCancellation(blocks, ticketCancellation)
+  if (domain) {
+    blocks.push(
+      createAdminButton(proposal, domain, 'View in Admin', 'view_proposal'),
+    )
+  }
+  await sendSlackNotification({ blocks }, conference)
 }
 
 export async function notifyProposalStatusChange(
@@ -174,6 +244,7 @@ export async function notifyProposalStatusChange(
   conference: Conference,
   speakerNames?: string,
   reason?: string,
+  ticketCancellation?: TicketCancellation,
 ) {
   const names = speakerNames || (await resolveSpeakerNames(proposal))
   const domain = getDomainFromConference(conference)
@@ -199,6 +270,8 @@ export async function notifyProposalStatusChange(
       },
     })
   }
+
+  pushTicketCancellation(blocks, ticketCancellation)
 
   if (domain) {
     blocks.push(
@@ -487,12 +560,83 @@ export async function notifyNewVolunteer(
   await sendSlackNotification(message, conference)
 }
 
+/** Who the sponsor alert is for, and where it links (#1687 N1). */
+export interface SponsorAlertTarget {
+  sfcId: string
+  ownerName: string | null
+}
+
+function sponsorOwnerField(target: SponsorAlertTarget) {
+  return {
+    type: 'mrkdwn',
+    text: `*Owner:*\n${target.ownerName ? escapeMrkdwn(target.ownerName) : 'No owner assigned'}`,
+  }
+}
+
+function sponsorPipelineButton(
+  conference: Conference,
+  target: SponsorAlertTarget,
+): SlackBlock {
+  return {
+    type: 'actions',
+    elements: [
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Open in pipeline', emoji: true },
+        url: `${conferenceBaseUrl(conference)}/admin/sponsors/${target.sfcId}?view=pipeline`,
+        action_id: 'open_sponsor_pipeline',
+      },
+    ],
+  }
+}
+
+/**
+ * A sponsor event that needs the owner's attention, posted to the sales
+ * channel. Slack has no user mapping for organizers, so the owner is named,
+ * not mentioned; with no owner the message says so.
+ */
+export async function notifySponsorAlert(
+  args: SponsorAlertTarget & {
+    sponsorName: string
+    headline: string
+    detail: string
+  },
+  conference: Conference,
+) {
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: args.headline, emoji: true },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Sponsor:*\n${escapeMrkdwn(args.sponsorName)}`,
+        },
+        sponsorOwnerField(args),
+      ],
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: escapeMrkdwn(args.detail) },
+    },
+    sponsorPipelineButton(conference, args),
+  ]
+  await sendSalesNotification(
+    { blocks, text: `${args.headline}: ${args.sponsorName}` },
+    conference,
+  )
+}
+
 export async function notifySponsorRegistrationComplete(
   sponsorName: string,
   tierTitle: string | null,
   contractValue: number | null,
   contractCurrency: string | null,
   conference: Conference,
+  target?: SponsorAlertTarget,
 ) {
   const domain = getDomainFromConference(conference)
 
@@ -537,7 +681,12 @@ export async function notifySponsorRegistrationComplete(
     })
   }
 
-  if (domain) {
+  if (target) {
+    blocks.push(
+      { type: 'section', fields: [sponsorOwnerField(target)] },
+      sponsorPipelineButton(conference, target),
+    )
+  } else if (domain) {
     blocks.push(
       createAdminLinkButton(
         domain,

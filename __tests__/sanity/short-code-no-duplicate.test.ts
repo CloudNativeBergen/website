@@ -5,7 +5,9 @@
  * coded variant would produce two live documents sharing one code, and the
  * resolver's unordered `[0]` would redirect to whichever came back first.
  *
- * The Duplicate action is therefore removed for the two carrier types.
+ * The Duplicate action is therefore removed for the carrier types. A talk's
+ * Feedback Code (speaker feedback spec §5) is unique within the conference
+ * too, so `talk` loses Duplicate entirely.
  */
 import { describe, expect, it } from 'vitest'
 import type { DocumentActionComponent } from 'sanity'
@@ -46,8 +48,8 @@ describe('Studio cannot duplicate a document that carries a short code', () => {
   })
 
   it('leaves Duplicate alone on a type with no short code', () => {
-    expect(names(shortCodeSafeActions(ALL, 'talk'))).toContain('duplicate')
-    expect(names(shortCodeSafeActions(ALL, 'talk'))).toEqual(names(ALL))
+    expect(names(shortCodeSafeActions(ALL, 'speaker'))).toContain('duplicate')
+    expect(names(shortCodeSafeActions(ALL, 'speaker'))).toEqual(names(ALL))
   })
 
   it('is WIRED INTO the real Studio config, not merely available', () => {
@@ -68,15 +70,19 @@ describe('Studio cannot duplicate a document that carries a short code', () => {
     for (const schemaType of SHORT_CODE_TYPES) {
       expect(resolve(schemaType)).not.toContain('duplicate')
     }
+    // Named literally, not only through the set: dropping `talk` from the set
+    // would otherwise also drop it from the loop above and stay green.
+    expect(resolve('talk')).not.toContain('duplicate')
     // And the config still offers it everywhere else, and still wraps publish.
-    expect(resolve('talk')).toContain('duplicate')
-    expect(resolve('talk')).toHaveLength(ALL.length)
+    expect(resolve('speaker')).toContain('duplicate')
+    expect(resolve('speaker')).toHaveLength(ALL.length)
   })
 
-  it('names exactly the two types that carry a code', () => {
+  it('names exactly the three types that carry a code', () => {
     expect([...SHORT_CODE_TYPES].sort()).toEqual([
       'marketingTask',
       'socialPostVariant',
+      'talk',
     ])
   })
 })

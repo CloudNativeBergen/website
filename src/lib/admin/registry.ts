@@ -21,6 +21,7 @@ import {
   BanknotesIcon,
   BuildingOfficeIcon,
   CalendarDaysIcon,
+  ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
   Cog6ToothIcon,
   CpuChipIcon,
@@ -42,6 +43,7 @@ import {
   UserGroupIcon,
   UsersIcon,
   MegaphoneIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline'
 import type { NavigationItem } from '@/components/common/DashboardLayout'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
@@ -78,8 +80,25 @@ export interface AdminDestination extends AdminDestinationFeature {
   icon?: AdminDestinationIcon
 }
 
+/**
+ * A count an admin nav entry can show, fetched by the admin shell
+ * (`AdminLayout`) and placed by {@link withNavBadges}.
+ */
+export type AdminNavCount = 'flaggedFeedback' | 'pendingWallPosts'
+
+/** The nav counts the shell has; one not given shows no badge. */
+export type AdminNavCounts = Partial<Record<AdminNavCount, number>>
+
+/** What each count counts, for a screen reader and the rail's tooltip. */
+const NAV_COUNT_LABELS: Record<AdminNavCount, string> = {
+  flaggedFeedback: 'flagged',
+  pendingWallPosts: 'pending',
+}
+
 interface AdminNavEntry extends NavigationItem, AdminDestinationFeature {
   keywords: string[]
+  /** The count shown on this entry, when it has one. */
+  count?: AdminNavCount
 }
 
 export interface AdminNavSection {
@@ -103,6 +122,15 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         href: '/admin/proposals',
         icon: DocumentTextIcon,
         keywords: ['cfp', 'submissions', 'talks', 'review'],
+      },
+      {
+        // Next to Proposals and Speakers (speaker feedback spec §10.1), with
+        // the count of comments speakers flagged that wait for an organizer.
+        name: 'Session Feedback',
+        href: '/admin/feedback',
+        icon: ChatBubbleLeftRightIcon,
+        count: 'flaggedFeedback',
+        keywords: ['feedback', 'responses', 'comments', 'qr', 'loved it'],
       },
       {
         name: 'Schedule',
@@ -163,6 +191,15 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         href: '/admin/sponsors',
         icon: BuildingOfficeIcon,
         keywords: ['partners', 'companies', 'sponsorship'],
+      },
+      {
+        // With the count of Wall Posts waiting for approval (Photo Wall
+        // spec §10).
+        name: 'Photo Wall',
+        href: '/admin/photo-wall',
+        icon: PhotoIcon,
+        count: 'pendingWallPosts',
+        keywords: ['photos', 'wall', 'screen', 'attendees', 'qr', 'moderation'],
       },
       {
         name: 'Marketing',
@@ -284,6 +321,14 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     keywords: ['travel', 'funding', 'reimbursement', 'expenses'],
     icon: HeartIcon,
   },
+  {
+    id: 'speakers-info',
+    title: 'Speaker Info',
+    href: '/admin/speakers/info',
+    group: 'People',
+    keywords: ['briefing', 'dinner', 'check-in', 'equipment', 'contact'],
+    icon: InformationCircleIcon,
+  },
   // The provider-backed ticketing sub-pages: every one of them reads live data
   // from Checkin/Tito, so they are gated with the section itself.
   {
@@ -404,6 +449,15 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     group: 'Events & Content',
     keywords: ['templates', 'emails', 'outreach'],
     icon: EnvelopeIcon,
+  },
+  {
+    // Reached from the Photo Wall header; searchable here.
+    id: 'photo-wall-setup',
+    title: 'Photo Wall Setup',
+    href: '/admin/photo-wall/setup',
+    group: 'Events & Content',
+    keywords: ['photo wall', 'qr', 'posting', 'links', 'room signs', 'export'],
+    icon: PhotoIcon,
   },
   {
     // Moved out of the sidebar (#1079); MarketingPlanHome already renders a
@@ -614,6 +668,111 @@ const SETTINGS_CARD_ANCHORS: {
   icon: AdminDestinationIcon
 }[] = [
   {
+    id: 'basic-information',
+    title: 'Basic Information',
+    keywords: [
+      'title',
+      'name',
+      'organizer',
+      'city',
+      'country',
+      'tagline',
+      'description',
+    ],
+    icon: InformationCircleIcon,
+  },
+  {
+    id: 'dates-timeline',
+    title: 'Dates & Timeline',
+    keywords: [
+      'dates',
+      'cfp dates',
+      'early bird',
+      'travel support',
+      'program release',
+      'deadlines',
+    ],
+    icon: CalendarDaysIcon,
+  },
+  {
+    id: 'announcement',
+    title: 'Announcement',
+    keywords: ['banner', 'landing page', 'notice'],
+    icon: MegaphoneIcon,
+  },
+  {
+    id: 'cfp-goals',
+    title: 'CFP & Revenue Goals',
+    keywords: ['submission goal', 'targets', 'revenue', 'sponsor goal'],
+    icon: PresentationChartBarIcon,
+  },
+  {
+    id: 'registration',
+    title: 'Registration',
+    keywords: [
+      'registration link',
+      'volunteer',
+      'sponsor registration',
+      'speaker registration',
+      'signup',
+    ],
+    icon: ClipboardDocumentListIcon,
+  },
+  {
+    id: 'ticketing',
+    title: 'Ticketing',
+    keywords: ['tito', 'checkin', 'check-in', 'provider', 'event id'],
+    icon: TicketIcon,
+  },
+  {
+    id: 'local-information',
+    title: 'Local Information',
+    keywords: [
+      'travel',
+      'getting there',
+      'speaker dinner',
+      'recommendations',
+      'hashtag',
+    ],
+    icon: InformationCircleIcon,
+  },
+  {
+    id: 'analytics',
+    title: 'Analytics',
+    keywords: ['posthog', 'tracking', 'statistics', 'token'],
+    icon: PresentationChartBarIcon,
+  },
+  {
+    id: 'organizers-teams',
+    title: 'Organizers & Teams',
+    keywords: ['organizers', 'teams', 'invite', 'members'],
+    icon: UserGroupIcon,
+  },
+  {
+    id: 'communication',
+    title: 'Communication',
+    keywords: ['email', 'contact', 'slack', 'channel', 'notifications'],
+    icon: EnvelopeIcon,
+  },
+  {
+    id: 'domains-social-links',
+    title: 'Domains & Social Links',
+    keywords: ['domains', 'social', 'links', 'bluesky', 'linkedin'],
+    icon: Cog6ToothIcon,
+  },
+  {
+    id: 'topics-formats',
+    title: 'Topics & Formats',
+    keywords: [
+      'topics',
+      'formats',
+      'talk length',
+      'lightning',
+      'workshop format',
+    ],
+    icon: RectangleStackIcon,
+  },
+  {
     id: 'visibility',
     title: 'Visibility',
     keywords: ['unlisted', 'listed', 'live', 'public', 'indexing', 'robots'],
@@ -738,6 +897,27 @@ export function visibleNavSections(
       ),
     }))
     .filter((section) => section.items.length > 0)
+}
+
+/**
+ * The sections with each entry's count as its badge: copies, the registry is
+ * shared. A count of 0, or one not given (not loaded, or failed), shows no
+ * badge.
+ */
+export function withNavBadges(
+  sections: readonly AdminNavSection[],
+  counts: AdminNavCounts,
+): AdminNavSection[] {
+  return sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => {
+      if (!item.count) return item
+      const count = counts[item.count] ?? 0
+      return count > 0
+        ? { ...item, badge: { count, label: NAV_COUNT_LABELS[item.count] } }
+        : item
+    }),
+  }))
 }
 
 /** The ⌘K destinations an org with `enabledFeatures` may see. */

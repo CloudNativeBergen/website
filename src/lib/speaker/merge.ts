@@ -37,8 +37,9 @@ import {
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
-import { ensureUniqueArrayKeys } from '@/lib/sanity/helpers'
+import { ensureUniqueArrayKeys, fitsDocumentId } from '@/lib/sanity/helpers'
 import type { TicketEmailGrant } from './types'
+import { expireSpeakerTalkPhotos } from '@/lib/photo-wall/cache'
 
 /** The raw `ticketEmailGrants` of an unprojected speaker document. */
 function ticketEmailGrants(doc: MergeSpeakerDoc): TicketEmailGrant[] {
@@ -76,6 +77,9 @@ export interface MergeSpeakerDoc {
   /** #1148 — carried up to the survivor, never dropped. */
   socialTagOptOut?: boolean
   socialTagOptOutAt?: string
+  /** Talk photos spec §4.2 — carried up like `socialTagOptOut`. */
+  talkPhotosOptOut?: boolean
+  talkPhotosOptOutAt?: string
   [key: string]: unknown
 }
 
@@ -905,21 +909,24 @@ export function computeSurvivorFieldMerge(
   // The union is therefore one-directional — a loser's opt-out is carried up, a
   // survivor's is never dropped. The loser's timestamp comes with it when there
   // is one, because that is when the person actually asked.
-  if (loser.socialTagOptOut === true || survivor.socialTagOptOut === true) {
-    if (survivor.socialTagOptOut !== true) {
-      set.socialTagOptOut = true
-      filledFromLoser.push('socialTagOptOut')
+  // The talk photos opt-out (talk photos spec §4.2) follows the same rule.
+  for (const field of ['socialTagOptOut', 'talkPhotosOptOut'] as const) {
+    const at = `${field}At` as const
+    if (loser[field] !== true && survivor[field] !== true) continue
+    if (survivor[field] !== true) {
+      set[field] = true
+      filledFromLoser.push(field)
     }
     // THE EARLIEST of the two stamps, not the survivor's. Survivor selection
     // is about which record is canonical and has nothing to do with when the
     // person objected; keeping the later one would date a still-active
     // objection to after it was actually made. Only moves the value BACKWARDS,
     // so it can never invent a refusal that had not happened yet.
-    const earliest = [survivor.socialTagOptOutAt, loser.socialTagOptOutAt]
-      .filter((at): at is string => typeof at === 'string' && at !== '')
+    const earliest = [survivor[at], loser[at]]
+      .filter((v): v is string => typeof v === 'string' && v !== '')
       .sort()[0]
-    if (earliest !== undefined && earliest !== survivor.socialTagOptOutAt) {
-      set.socialTagOptOutAt = earliest
+    if (earliest !== undefined && earliest !== survivor[at]) {
+      set[at] = earliest
     }
   }
 
@@ -1057,6 +1064,12 @@ export function assertMergeable(
 //   - day-of reminder marker → `reminder.day-of.<conferenceId>.<speakerId>.<date>`
 //     (the ONE id whose speaker segment is not the last one — see
 //     `reminderLogId` / `dayOfLogId` in `src/lib/reminders/marker.ts`)
+//   - once-only not-set notice → `notification.workshop-not-set.<hash>.<recipientId>`
+//     (`@/lib/events/handlers/ticketTypeNotSetNotification`)
+//   - once-only capacity notice → `notification.workshop-capacity.<hash>.<recipientId>`
+//     (`@/lib/events/handlers/workshopCapacityNotification`)
+//   - once-only Session Feedback summary → `notification.feedback-summary.<talkId>.<recipientId>`
+//     (`@/lib/feedback/summary`)
 // A plain reference repoint (the generic path) rewrites the inner ref to the
 // survivor but LEAVES the doc keyed by the loser id. If the survivor already
 // holds the canonical-id sibling for the same conversation, BOTH docs then point
@@ -1068,6 +1081,8 @@ export function assertMergeable(
 //   - the reminder cron's `createIfNotExists` against the SURVIVOR-keyed marker
 //     finds nothing → every recurring reminder the loser already received is
 //     RE-SENT, and a day-of ping goes out twice.
+//   - the not-set notice's `createIfNotExists` against the SURVIVOR-keyed id
+//     finds nothing either → the merged organizer is notified a second time.
 // So these docs must be RECONCILED onto the survivor's canonical id (merged when
 // it exists, recreated otherwise) and the loser-suffixed doc deleted — never left
 // repointed-but-loser-keyed.
@@ -1075,9 +1090,23 @@ export function assertMergeable(
 
 const DETERMINISTIC_ID_PREFIXES = [
   'convpref.',
+  // `dinnerChoice.<conferenceId>.<speakerId>` (#1592).
+  'dinnerChoice.',
   'notification.message.',
+  'notification.workshop-not-set.',
+  'notification.workshop-capacity.',
+  'notification.feedback-summary.',
   'reminder.',
 ] as const
+
+/** Once-only notices: merged by `readAt`, dropped when the id cannot fit. */
+const ONCE_NOTICE_PREFIXES = [
+  'notification.workshop-not-set.',
+  'notification.workshop-capacity.',
+  'notification.feedback-summary.',
+] as const
+const isOnceNotice = (id: string) =>
+  ONCE_NOTICE_PREFIXES.some((p) => id.startsWith(p))
 
 /** The one deterministic id that appends a segment AFTER the speaker id. */
 const DAY_OF_REMINDER_PREFIX = 'reminder.day-of.'
@@ -1156,7 +1185,8 @@ function stripSystemMeta(
  * The reconciliation of ONE loser-suffixed deterministic doc onto the survivor's
  * canonical id. The loser doc is ALWAYS deleted (`deleteId`); the canonical doc
  * is either MERGED (`mergeSet`/`mergeUnset` patched onto an existing survivor
- * doc) or RECREATED (`createDoc`).
+ * doc), RECREATED (`createDoc`), or, with none of the three set, LEFT ALONE:
+ * the loser's doc is dropped and nothing is written under the canonical id.
  */
 export interface DeterministicReconciliation {
   /** The loser-suffixed doc id to delete. */
@@ -1181,6 +1211,8 @@ export interface DeterministicReconciliation {
  *    override is kept.
  *  - message notification: UNREAD if EITHER side is unread; the two unread piles
  *    are SUMMED (clamped) so the survivor's badge reflects both, never doubles.
+ *  - once-only not-set notice: READ if EITHER side is read; the loser's document
+ *    is dropped.
  *  - scheduledReminderLog: the send counts are SUMMED and the LATEST `lastSentAt`
  *    wins — both sides of the gate move in the "do not send again" direction.
  *    The two markers record mails delivered to the SAME person (once per
@@ -1211,6 +1243,17 @@ export function reconcileDeterministicDoc(
   const canonicalId =
     canonicalDeterministicId(deleteId, loserId, survivorId) ?? deleteId
 
+  // DELETE ONLY: a not-set notice whose canonical id would be longer than a
+  // document id may be. The survivor's own id is too long for one, so the
+  // writer never gives them a notice (it asks the same `fitsDocumentId`), and
+  // creating one here would be refused by Sanity and take the whole merge down
+  // with it. Dropping the loser's leaves the survivor exactly as the writer
+  // would: without a notice for that type. Only this family is treated so; the
+  // others keep their behaviour.
+  if (isOnceNotice(deleteId) && !fitsDocumentId(canonicalId)) {
+    return { deleteId, canonicalId }
+  }
+
   // RECREATE: no canonical sibling — carry the loser doc over under the canonical
   // id with every loser ref repointed to the survivor.
   if (!survivorDoc) {
@@ -1237,6 +1280,17 @@ export function reconcileDeterministicDoc(
     return { deleteId, canonicalId, mergeSet, mergeUnset }
   }
 
+  // Once-only not-set notice: the two documents say the same thing to what is
+  // now one person, so having read either is having read it. Nothing else on
+  // the survivor's document changes.
+  if (isOnceNotice(deleteId)) {
+    const mergeSet: Record<string, unknown> = {}
+    if (!survivorDoc.readAt && typeof loserDoc.readAt === 'string') {
+      mergeSet.readAt = loserDoc.readAt
+    }
+    return { deleteId, canonicalId, mergeSet }
+  }
+
   // scheduledReminderLog — the gate is (count < maxSends) AND (spacing elapsed),
   // so summing the counts and keeping the later send time is the answer that
   // cannot re-send a reminder either document already delivered.
@@ -1248,6 +1302,19 @@ export function reconcileDeterministicDoc(
     const lastSentAt = laterIso(survivorDoc.lastSentAt, loserDoc.lastSentAt)
     if (lastSentAt && lastSentAt !== survivorDoc.lastSentAt) {
       mergeSet.lastSentAt = lastSentAt
+    }
+    return { deleteId, canonicalId, mergeSet }
+  }
+
+  // speakerDinnerChoice: the newer answer is what the person wants now.
+  if (deleteId.startsWith('dinnerChoice.')) {
+    const mergeSet: Record<string, unknown> = {}
+    if (
+      laterIso(survivorDoc.updatedAt, loserDoc.updatedAt) !==
+      survivorDoc.updatedAt
+    ) {
+      mergeSet.choice = loserDoc.choice
+      mergeSet.updatedAt = loserDoc.updatedAt
     }
     return { deleteId, canonicalId, mergeSet }
   }
@@ -1868,6 +1935,15 @@ export async function mergeSpeakers(
     // Delete the loser LAST so all inbound references are already repointed.
     transaction.delete(loserId)
     await transaction.commit()
+
+    // Either side opted out of talk photos: the merged person's talks now
+    // include talks whose visibility just changed (talk photos spec §8).
+    if (
+      survivor?.talkPhotosOptOut === true ||
+      loser?.talkPhotosOptOut === true
+    ) {
+      await expireSpeakerTalkPhotos(survivorId)
+    }
 
     // Audit log: who merged what, and the shape of the change.
     console.info('[speaker-merge] merged duplicate speaker', {

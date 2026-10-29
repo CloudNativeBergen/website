@@ -112,6 +112,7 @@ function inputs(overrides: Partial<ErasureInputs> = {}): ErasureInputs {
       sharedHandles: [],
       linkOnlyShared: [],
     },
+    feedback: { talks: [] },
     now: NOW,
     ...overrides,
   }
@@ -426,6 +427,7 @@ describe('idempotency — the whole patch is a fixed point', () => {
         sharedHandles: [],
         linkOnlyShared: [],
       },
+      feedback: { talks: [] },
       now: '2099-12-31T23:59:59.000Z',
     }
   }
@@ -705,7 +707,7 @@ describe('the dependent sweep', () => {
     expect(plan.documentDeletes.map((d) => d.id)).toEqual(['n-mine'])
   })
 
-  it('deletes preferences, dashboard configs and reminder logs owned by the subject', () => {
+  it('deletes preferences, dashboard configs, reminder logs and dinner choices owned by the subject', () => {
     const plan = buildErasurePlan(
       inputs({
         referencingDocs: [
@@ -720,12 +722,22 @@ describe('the dependent sweep', () => {
             _type: 'scheduledReminderLog',
             speaker: ref(SPEAKER),
           },
+          {
+            _id: 'dinnerChoice.c1.' + SPEAKER,
+            _type: 'speakerDinnerChoice',
+            speaker: ref(SPEAKER),
+          },
           { _id: 'dash-2', _type: 'dashboardConfig', speaker: ref('other') },
         ],
       }),
     )
     expect(plan.documentDeletes.map((d) => d.id).sort()).toEqual(
-      ['convpref.c1.' + SPEAKER, 'dash-1', 'reminder.x.c1.' + SPEAKER].sort(),
+      [
+        'convpref.c1.' + SPEAKER,
+        'dash-1',
+        'reminder.x.c1.' + SPEAKER,
+        'dinnerChoice.c1.' + SPEAKER,
+      ].sort(),
     )
   })
 
@@ -1405,5 +1417,153 @@ describe('a sponsor send record naming the subject is redacted, not deleted', ()
     )
     expect(plan.refusals.join(' ')).toContain(ACTIVITY)
     expect(plan.refusals.join(' ')).toContain('cannot be safely selected')
+  })
+})
+
+describe('buildErasurePlan — Session Feedback (speaker feedback spec §12.3)', () => {
+  const talkDoc = (id: string, extra: Record<string, unknown> = {}) => ({
+    _id: id,
+    _type: 'talk',
+    _rev: `rev-${id}`,
+    conference: { _ref: 'conf-1' },
+    speakers: [{ _ref: SPEAKER }],
+    feedbackCode: 'ABC234',
+    ...extra,
+  })
+  const feedbackTalk = (
+    overrides: Partial<ErasureInputs['feedback']['talks'][number]> = {},
+  ): ErasureInputs['feedback']['talks'][number] => ({
+    talk: talkDoc('talk-1'),
+    versions: [talkDoc('drafts.talk-1', { _rev: 'rev-draft' })],
+    locked: [],
+    releasesListed: true,
+    otherLiveSpeakers: 0,
+    responses: 3,
+    responsesAnyConference: overrides.responses ?? 3,
+    ...overrides,
+  })
+  const unsetsOf = (plan: ReturnType<typeof buildErasurePlan>) =>
+    plan.documentPatches
+      .filter((p) => p.unset?.includes('feedbackCode'))
+      .map((p) => [p.id, p.rev])
+
+  it('unsets the code on the talk and every writable version, guarded, and folds the talk after', () => {
+    const plan = buildErasurePlan(
+      inputs({ feedback: { talks: [feedbackTalk()] } }),
+    )
+    expect(unsetsOf(plan)).toEqual([
+      ['talk-1', 'rev-talk-1'],
+      ['drafts.talk-1', 'rev-draft'],
+    ])
+    expect(plan.feedbackFoldTalkIds).toEqual(['talk-1'])
+    expect(plan.feedbackHeld).toEqual([])
+  })
+
+  it('leaves a talk with another live speaker alone', () => {
+    const plan = buildErasurePlan(
+      inputs({
+        feedback: { talks: [feedbackTalk({ otherLiveSpeakers: 1 })] },
+      }),
+    )
+    expect(unsetsOf(plan)).toEqual([])
+    expect(plan.feedbackFoldTalkIds).toEqual([])
+  })
+
+  it('never patches a locked release version: the talk is held, and the reachable versions still lose the code', () => {
+    const plan = buildErasurePlan(
+      inputs({
+        feedback: {
+          talks: [
+            feedbackTalk({
+              locked: [talkDoc('versions.rel-s.talk-1')],
+            }),
+          ],
+        },
+      }),
+    )
+    expect(unsetsOf(plan)).toEqual([
+      ['talk-1', 'rev-talk-1'],
+      ['drafts.talk-1', 'rev-draft'],
+    ])
+    expect(plan.documentPatches.map((p) => p.id)).not.toContain(
+      'versions.rel-s.talk-1',
+    )
+    expect(plan.feedbackFoldTalkIds).toEqual([])
+    expect(plan.feedbackHeld.map((x) => x.talkId)).toEqual(['talk-1'])
+    expect(plan.refusals).toEqual([])
+  })
+
+  it('merges the code unset into the ticket patch of the same talk, keeping one revision guard', () => {
+    const plan = buildErasurePlan(
+      inputs({
+        ticketTalks: [
+          {
+            _id: 'talk-1',
+            _rev: 'rev-talk-1',
+            issuedSpeakerTickets: [{ _key: 't1', speakerId: SPEAKER }],
+          },
+        ],
+        feedback: { talks: [feedbackTalk({ versions: [] })] },
+      }),
+    )
+    const patches = plan.documentPatches.filter((p) => p.id === 'talk-1')
+    expect(patches).toHaveLength(1)
+    expect(patches[0]).toMatchObject({
+      rev: 'rev-talk-1',
+      unset: ['issuedSpeakerTickets[_key=="t1"]', 'feedbackCode'],
+    })
+  })
+
+  // Already erased: everything else about the speaker is at its fixed point.
+  const erasedSpeaker = {
+    _id: SPEAKER,
+    _type: 'speaker',
+    _rev: 'rev-speaker',
+    name: 'Deleted speaker',
+    email: 'deleted-abcd1234@anonymous.invalid',
+    slug: { _type: 'slug', current: 'deleted-abcd1234' },
+    erasedAt: NOW,
+  }
+
+  it('a finished talk (no code, no responses) adds nothing to a later run: the fixed point', () => {
+    const done = talkDoc('talk-1', { feedbackCode: undefined })
+    const plan = buildErasurePlan(
+      inputs({
+        speaker: erasedSpeaker,
+        feedback: {
+          talks: [feedbackTalk({ talk: done, versions: [], responses: 0 })],
+        },
+      }),
+    )
+    expect(plan.documentPatches).toEqual([])
+    expect(plan.feedbackFoldTalkIds).toEqual([])
+    expect(plan.feedbackHeld).toEqual([])
+    expect(plan.noop).toBe(true)
+  })
+
+  it('responses left to fold keep an otherwise finished plan from the fixed point', () => {
+    const done = talkDoc('talk-1', { feedbackCode: undefined })
+    const speaker = erasedSpeaker
+    const noFeedback = buildErasurePlan(
+      inputs({
+        speaker,
+        feedback: {
+          talks: [feedbackTalk({ talk: done, versions: [], responses: 0 })],
+        },
+      }),
+    )
+    const unfolded = buildErasurePlan(
+      inputs({
+        speaker,
+        feedback: {
+          talks: [feedbackTalk({ talk: done, versions: [], responses: 2 })],
+        },
+      }),
+    )
+    expect(noFeedback.noop).toBe(true)
+    // Same writes in the transaction (none); only the fold after it differs.
+    expect(unfolded.documentPatches).toEqual([])
+    expect(unfolded.feedbackFoldTalkIds).toEqual(['talk-1'])
+    expect(unfolded.noop).toBe(false)
   })
 })

@@ -35,6 +35,7 @@ const STATUS_COLOR: Record<Status, BadgeColor> = {
   [Status.confirmed]: 'blue',
   [Status.rejected]: 'red',
   [Status.withdrawn]: 'gray',
+  [Status.canceled]: 'gray',
   [Status.deleted]: 'gray',
 }
 

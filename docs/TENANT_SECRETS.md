@@ -226,7 +226,7 @@ fixed it" while the outage continues. Two independent reasons, either sufficient
    is tagged `content:organizations` and nothing else —
    `sanity:organization-<CNDN>` was never on it. This is the gap that function's
    own comment admits.
-2. **The endpoint cannot reach `content:*` tags at all.** `tagForTarget`
+2. **The endpoint cannot reach `content:*` tags at all.** `revalidationsForTarget`
    (`src/lib/cache/invalidation.ts`) maps an `organization` target to
    `organizationTag(id)` and only that, and the route refuses a `content:` tag
    spelled into an id outright (400) — by design, so a caller cannot flush every

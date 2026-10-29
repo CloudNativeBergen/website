@@ -3,6 +3,8 @@ import { CheckCircleIcon } from '@heroicons/react/24/solid'
 import { RocketLaunchIcon } from '@heroicons/react/24/outline'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { StatusBadge } from '@/components/StatusBadge'
+import { CopyLinkButton } from '@/components/feedback/FeedbackCodePanel'
+import { WALL_ROTATION_PARAM } from '@/lib/stream/wall-rotation'
 import {
   ACTIVATION_CHECKLIST_ANCHOR,
   type ActivationChecklist as ActivationChecklistData,
@@ -34,19 +36,22 @@ import {
  */
 export function ActivationChecklist({
   checklist,
+  baseUrl,
 }: {
   checklist: ActivationChecklistData
+  /** Conference origin (`conferenceBaseUrl`); needed for room screen links. */
+  baseUrl?: string
 }) {
-  const { stages, done, required, allDone } = checklist
+  const { stages, event, done, required, allDone } = checklist
   const pct = required === 0 ? 100 : Math.round((done / required) * 100)
 
   return (
-    <div id={ACTIVATION_CHECKLIST_ANCHOR} className="scroll-mt-24">
+    <div id={ACTIVATION_CHECKLIST_ANCHOR} className="scroll-mt-44">
       <CollapsibleSection
         headingLevel={3}
         title="Get started"
         icon={<RocketLaunchIcon />}
-        defaultOpen={!allDone}
+        defaultOpen={!allDone || (event !== null && !event.allDone)}
         action={
           // Compact so the "Get started" title is never squeezed to an ellipsis
           // on a narrow (393px) viewport, where the disclosure's Hide/Show label
@@ -85,8 +90,10 @@ export function ActivationChecklist({
 
           {/* Two stages, not one flat list: the CFP critical path first, the
               rest of the launch prep after it. Same grouping the /admin hero
-              titles itself with, so the two surfaces tell one story. */}
-          {stages.map((stage) => (
+              titles itself with, so the two surfaces tell one story.
+              The event stage follows once the site is live; it has its own
+              count and never feeds the launch readiness bar above. */}
+          {[...stages, ...(event ? [event] : [])].map((stage) => (
             <section key={stage.id} className="space-y-1">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
@@ -101,7 +108,7 @@ export function ActivationChecklist({
               </p>
               <ul className="space-y-1 pt-1">
                 {stage.rows.map((row) => (
-                  <ActivationRowItem key={row.id} row={row} />
+                  <ActivationRowItem key={row.id} row={row} baseUrl={baseUrl} />
                 ))}
               </ul>
             </section>
@@ -125,7 +132,13 @@ export function ActivationChecklist({
  * hero is a different frame around this identical line, never a second
  * rendering of the steps that could drift from this one.
  */
-export function ActivationRowItem({ row }: { row: ActivationRow }) {
+export function ActivationRowItem({
+  row,
+  baseUrl,
+}: {
+  row: ActivationRow
+  baseUrl?: string
+}) {
   const rowClass =
     'group flex items-start gap-3 rounded-md px-2 py-2 transition-colors'
   const body = (
@@ -205,6 +218,63 @@ export function ActivationRowItem({ row }: { row: ActivationRow }) {
           Configure &rarr;
         </span>
       </RowLink>
+      {baseUrl && row.rooms?.length ? (
+        <RoomScreenLinks baseUrl={baseUrl} rooms={row.rooms} />
+      ) : null}
     </li>
+  )
+}
+
+/** Screen links per room (`/stream/<room>`, and `?wall=1` for the Photo Wall in turns). */
+export function roomScreenUrls(baseUrl: string, room: string) {
+  const screen = `${baseUrl}/stream/${encodeURIComponent(room)}`
+  return { screen, wall: `${screen}?${WALL_ROTATION_PARAM}=1` }
+}
+
+function RoomScreenLinks({
+  baseUrl,
+  rooms,
+}: {
+  baseUrl: string
+  rooms: string[]
+}) {
+  return (
+    <ul className="ml-10 space-y-2 pb-2">
+      {rooms.map((room, i) => {
+        const urls = roomScreenUrls(baseUrl, room)
+        return (
+          <li key={room} className="text-xs">
+            <span className="font-medium text-gray-900 dark:text-white">
+              {room}
+            </span>
+            {(
+              [
+                ['Screen', urls.screen],
+                ['With Photo Wall', urls.wall],
+              ] as const
+            ).map(([label, url], j) => (
+              <span key={label} className="mt-1 flex items-center gap-2">
+                <span className="w-24 shrink-0 text-gray-500 dark:text-gray-400">
+                  {label}
+                </span>
+                <a
+                  id={`room-screen-${i}-${j}`}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-0 truncate text-indigo-600 hover:underline dark:text-indigo-400"
+                >
+                  {url}
+                </a>
+                <CopyLinkButton
+                  url={url}
+                  describedBy={`room-screen-${i}-${j}`}
+                />
+              </span>
+            ))}
+          </li>
+        )
+      })}
+    </ul>
   )
 }

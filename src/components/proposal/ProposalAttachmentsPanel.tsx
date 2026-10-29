@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   DocumentIcon,
   ExclamationTriangleIcon,
@@ -13,17 +14,25 @@ import {
 } from '@/lib/attachment/filters'
 import { api } from '@/lib/trpc/client'
 
+/** The anchor the dashboard's slides link jumps to. */
+export const SLIDES_ANCHOR = 'slides'
+
 interface ProposalAttachmentsPanelProps {
   proposalId: string
   initialAttachments?: Attachment[]
   readonly?: boolean
+  allowDelete?: boolean
+  isAdmin?: boolean
 }
 
 export function ProposalAttachmentsPanel({
   proposalId,
   initialAttachments = [],
   readonly = false,
+  allowDelete = false,
+  isAdmin = false,
 }: ProposalAttachmentsPanelProps) {
+  const router = useRouter()
   const [attachments, setAttachments] =
     useState<Attachment[]>(initialAttachments)
   const [isSaving, setIsSaving] = useState(false)
@@ -36,6 +45,7 @@ export function ProposalAttachmentsPanel({
     onSuccess: () => {
       setError(null)
       utils.proposal.getById.invalidate({ id: proposalId })
+      utils.proposal.admin.getById.invalidate({ id: proposalId })
     },
     onError: (error: { message?: string }) => {
       setError(error.message || 'Failed to update attachments')
@@ -48,11 +58,28 @@ export function ProposalAttachmentsPanel({
       setSuccessMessage('Attachment deleted successfully')
       setTimeout(() => setSuccessMessage(null), 3000)
       utils.proposal.getById.invalidate({ id: proposalId })
+      utils.proposal.admin.getById.invalidate({ id: proposalId })
+      router.refresh()
     },
     onError: (error: { message?: string }) => {
       setError(error.message || 'Failed to delete attachment')
     },
   })
+
+  const adminDeleteAttachmentMutation =
+    api.proposal.admin.deleteAttachment.useMutation({
+      onSuccess: () => {
+        setError(null)
+        setSuccessMessage('Attachment deleted successfully')
+        setTimeout(() => setSuccessMessage(null), 3000)
+        utils.proposal.getById.invalidate({ id: proposalId })
+        utils.proposal.admin.getById.invalidate({ id: proposalId })
+        router.refresh()
+      },
+      onError: (error: { message?: string }) => {
+        setError(error.message || 'Failed to delete attachment')
+      },
+    })
 
   const handleAttachmentsChange = async (newAttachments: Attachment[]) => {
     const recordingAttachments = getRecordingAttachments(attachments)
@@ -88,12 +115,20 @@ export function ProposalAttachmentsPanel({
     setSuccessMessage(null)
 
     try {
-      await deleteAttachmentMutation.mutateAsync({
-        id: proposalId,
-        attachmentKey,
-      })
+      if (isAdmin) {
+        await adminDeleteAttachmentMutation.mutateAsync({
+          id: proposalId,
+          attachmentKey,
+        })
+      } else {
+        await deleteAttachmentMutation.mutateAsync({
+          id: proposalId,
+          attachmentKey,
+        })
+      }
     } catch (err) {
       console.error('Failed to delete attachment:', err)
+      setError('Failed to delete attachment')
       // Revert on error
       setAttachments(previousAttachments)
     } finally {
@@ -104,7 +139,10 @@ export function ProposalAttachmentsPanel({
   const hasAttachments = getSlideAttachments(attachments).length > 0
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <div
+      id={SLIDES_ANCHOR}
+      className="scroll-mt-24 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+    >
       <h3 className="mb-4 flex items-center text-lg font-semibold text-gray-900 dark:text-white">
         <DocumentIcon className="mr-2 h-5 w-5" />
         Slides & Attachments
@@ -154,6 +192,7 @@ export function ProposalAttachmentsPanel({
         onAttachmentsChange={handleAttachmentsChange}
         onDeleteAttachment={handleDeleteAttachment}
         readonly={readonly}
+        allowDelete={allowDelete}
       />
     </div>
   )

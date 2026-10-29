@@ -227,7 +227,7 @@ beforeEach(() => {
  * THE CLIENT GATE. `ProposalCoSpeaker` counts
  * `invitations.filter((inv) => inv.status === 'pending').length` against the
  * format limit and hides the invite form when it is reached, reading this very
- * projection through `CoSpeakerManager` / `ProposalForm` /
+ * projection through `ProposalForm` /
  * `ProposalManagementModal`. Server-side computation alone left that count
  * wrong: a `presentation_25` with one LAPSED invitation still read "limit
  * reached" in the browser even though the server would now accept a new invite.

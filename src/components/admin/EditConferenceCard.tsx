@@ -68,7 +68,6 @@ export type ConferenceFieldsetKey =
   | 'registration'
   | 'communication'
   | 'ticketingIds'
-  | 'analytics'
   | 'localInfo'
   | 'cfpGoals'
   | 'socialLinks'
@@ -417,6 +416,14 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         description:
           'Checkin "Send invitations" link for the speaker ticket category (contains action=invite, category= and pass=). This is ONE SHARED URL, not per-person: anyone holding it can claim a free speaker ticket, so it goes in speaker email only — never on the public site. Leave blank and confirmed speakers get only Checkin\'s own per-person invitation email.',
       },
+      {
+        name: 'volunteerRegistrationLink',
+        label: 'Volunteer Registration Link',
+        type: 'url',
+        nullableWhenEmpty: true,
+        description:
+          'Checkin "Send invitations" link or ticket signup URL for the volunteer ticket category. Included in volunteer approval emails, never on the public site.',
+      },
     ],
   },
   communication: {
@@ -449,6 +456,22 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         type: 'text',
         nullableWhenEmpty: true,
         description: 'Slack channel, e.g. #conference-cfp',
+      },
+      {
+        name: 'speakerSlackChannel',
+        label: 'Speakers Slack Channel',
+        type: 'text',
+        nullableWhenEmpty: true,
+        description:
+          'Slack channel for the speaker info, e.g. #conference-speakers',
+      },
+      {
+        name: 'volunteerSlackInviteUrl',
+        label: 'Volunteer Slack Invite Link',
+        type: 'url',
+        nullableWhenEmpty: true,
+        description:
+          'Private invitation link for volunteers to join the conference Slack workspace/channel.',
       },
     ],
   },
@@ -497,20 +520,6 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         type: 'text',
         nullableWhenEmpty: true,
         description: 'e.g. "2026" in ti.to/ultimateconf/2026',
-      },
-    ],
-  },
-  analytics: {
-    title: 'Analytics',
-    subtitle: 'Your own web-analytics property',
-    fields: [
-      {
-        name: 'analyticsPirschCode',
-        label: 'Pirsch Identification Code',
-        type: 'text',
-        nullableWhenEmpty: true,
-        description:
-          'From your own pirsch.io dashboard (Settings → Identification Code). Leave blank and this site serves no analytics script at all — no visitor data is collected and nothing is sent to a third party.',
       },
     ],
   },
@@ -759,7 +768,6 @@ const MUTATION_BY_FIELDSET: Record<
   registration: 'updateRegistration',
   communication: 'updateCommunication',
   ticketingIds: 'updateTicketingIds',
-  analytics: 'updateAnalytics',
   localInfo: 'updateLocalInfo',
   cfpGoals: 'updateCfpGoals',
   socialLinks: 'updateSocialLinks',
@@ -877,6 +885,8 @@ export interface EditConferenceCardProps {
    * the server settings page from the resolved request domain.
    */
   currentDomain?: string
+  /** Fields of the fieldset to leave out of the form; they are not saved. */
+  hiddenFields?: string[]
 }
 
 /**
@@ -890,9 +900,12 @@ export function EditConferenceCard({
   initialValues,
   defaultOpen = false,
   currentDomain,
+  hiddenFields,
 }: EditConferenceCardProps) {
   const def = FIELDSET_DEFS[fieldset]
-  const { fields } = def
+  const fields = hiddenFields
+    ? def.fields.filter((f) => !hiddenFields.includes(f.name))
+    : def.fields
   const router = useRouter()
   const utils = api.useUtils()
   const { showNotification } = useNotification()

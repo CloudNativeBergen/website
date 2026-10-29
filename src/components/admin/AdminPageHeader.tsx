@@ -1,5 +1,6 @@
 import React from 'react'
 import Link from 'next/link'
+import clsx from 'clsx'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 import { AdminHeaderActions, type ActionItem } from './AdminHeaderActions'
 import { StatCard, type StatCardProps } from './stats'
@@ -63,7 +64,7 @@ export function AdminPageHeader({
           {backLink && (
             <Link
               href={backLink.href}
-              className="shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+              className="shrink-0 rounded-md p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
               title={backLink.label || 'Back'}
             >
               <ChevronLeftIcon className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -79,7 +80,9 @@ export function AdminPageHeader({
             <h1 className="font-space-grotesk text-xl leading-6 font-bold text-brand-slate-gray sm:text-2xl sm:leading-7 sm:tracking-tight lg:text-3xl lg:leading-8 dark:text-white">
               {title}
             </h1>
-            <div className="font-inter mt-1 text-sm text-brand-slate-gray/70 dark:text-gray-400">
+            {/* /80, not /70: 5.6:1 on white and gray-50, where /70 was 4.35:1
+                (under WCAG AA 4.5:1 for this 14px text). */}
+            <div className="font-inter mt-1 text-sm text-brand-slate-gray/80 dark:text-gray-400">
               {typeof description === 'string' ? (
                 <p>
                   {description}
@@ -112,17 +115,28 @@ export function AdminPageHeader({
 
       {stats && stats.length > 0 && (
         <div
-          className={`font-inter mt-4 grid sm:mt-6 ${getGridCols(stats.length)} gap-3`}
+          // Phones: one horizontal strip that bleeds to the page edge (the
+          // dashboard shell pads `px-2` below `sm`). From `sm` up: the grid.
+          // Focusable so keyboard users can scroll the strip (Safari does not
+          // focus scroll containers on its own).
+          role="region"
+          aria-label="Statistics"
+          tabIndex={0}
+          className={`font-inter -mx-2 -my-1 mt-3 flex snap-x scroll-px-2 gap-2 overflow-x-auto px-2 py-1 focus-visible:outline-2 focus-visible:outline-brand-cloud-blue sm:mx-0 sm:my-0 sm:mt-6 sm:grid sm:overflow-visible sm:px-0 sm:py-0 ${getGridCols(stats.length)} sm:gap-3`}
         >
-          {stats.map((stat, index) => (
+          {stats.map((stat) => (
             <StatCard
-              key={`${stat.label}-${index}`}
+              key={stat.label}
               value={stat.value}
               label={stat.label}
               subtitle={stat.subtitle}
               color={stat.color}
               onClick={stat.onClick}
               pressed={stat.pressed}
+              className={clsx(
+                'w-auto min-w-[8.5rem] shrink-0 snap-start px-3 py-2 sm:w-full sm:min-w-0 sm:px-4 sm:py-3',
+                stat.className,
+              )}
             />
           ))}
         </div>

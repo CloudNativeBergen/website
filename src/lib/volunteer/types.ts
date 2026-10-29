@@ -1,6 +1,9 @@
+import type { ConferenceTheme } from '@/lib/branding/theme'
+
 export enum VolunteerStatus {
   PENDING = 'pending',
   APPROVED = 'approved',
+  CONFIRMED = 'confirmed',
   REJECTED = 'rejected',
 }
 
@@ -38,6 +41,8 @@ export interface VolunteerInput {
   occupation: Occupation
   availability?: string
   preferredTasks?: string[]
+  /** Organizer-assigned task names (interim until the shift model, #1524). */
+  assignedTasks?: string[]
   tshirtSize?: TShirtSize
   dietaryRestrictions?: string
   otherInfo?: string
@@ -61,11 +66,19 @@ export interface Volunteer extends VolunteerInput {
     _ref: string
   }
   reviewNotes?: string
+  approvalEmailSentAt?: string
+  approvalEmailSentBy?: {
+    _type: 'reference'
+    _ref: string
+  }
+  confirmedAt?: string
+  /** Last "register your ticket" reminder. */
+  ticketReminderSentAt?: string
 }
 
 export interface VolunteerWithConference extends Omit<
   Volunteer,
-  'conference' | 'reviewedBy'
+  'conference' | 'reviewedBy' | 'approvalEmailSentBy'
 > {
   conference: {
     _id: string
@@ -83,8 +96,15 @@ export interface VolunteerWithConference extends Omit<
       platform: string
       url: string
     }>
+    theme?: ConferenceTheme | null
+    volunteerRegistrationLink?: string
+    volunteerSlackInviteUrl?: string
   }
   reviewedBy?: {
+    _id: string
+    name: string
+  }
+  approvalEmailSentBy?: {
     _id: string
     name: string
   }

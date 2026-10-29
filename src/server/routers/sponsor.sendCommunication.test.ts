@@ -41,6 +41,19 @@ const h = vi.hoisted(() => ({
   send: vi.fn(),
   /** What the org-scoped template reader answers for a client-supplied id. */
   getTemplate: vi.fn(),
+  syncSponsorAudience: vi.fn(),
+  sendBroadcastEmail: vi.fn(),
+  listEventDiscounts: vi.fn(),
+}))
+vi.mock('@/lib/email/audience', () => ({
+  syncSponsorAudience: h.syncSponsorAudience,
+}))
+vi.mock('@/lib/email/broadcast', () => ({
+  sendBroadcastEmail: h.sendBroadcastEmail,
+}))
+vi.mock('@/lib/sponsor-crm/discount-codes', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  listEventDiscounts: h.listEventDiscounts,
 }))
 vi.mock('@/lib/sponsor/sanity', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
@@ -65,7 +78,11 @@ vi.mock('@/lib/sanity/client', () => {
     if (query.includes('].contactPersons[]')) {
       return (h.sfc?.contactPersons as unknown[] | undefined) ?? null
     }
-    if (query.includes('_type == "sponsorForConference"')) return h.sfc
+    if (query.includes('_type == "sponsorForConference"')) {
+      if (query.includes('order(status asc, _createdAt desc)'))
+        return h.sfc ? [h.sfc] : []
+      return h.sfc
+    }
     if (query.includes('communicationKind }')) return h.activityProbe
     return h.recordRead
   }
@@ -679,6 +696,10 @@ describe('a failed send', () => {
 })
 
 describe('the audit record is immutable', () => {
+  beforeEach(() => {
+    h.tenant = { _type: 'sponsorActivity', conferenceId: CONF }
+  })
+
   it('refuses activities.update on a sent-communication record', async () => {
     h.activityProbe = {
       activityType: 'email',
@@ -792,5 +813,266 @@ describe('the old per-kind senders are gone', () => {
     expect(crm['crm.sendEmail']).toBeUndefined()
     expect(crm['crm.sendEmailBySfc']).toBeDefined()
     expect(crm['crm.sendCommunication']).toBeDefined()
+  })
+})
+
+describe('unmerged template variable guard — before sponsor read', () => {
+  it('refuses unmerged {{{VARIABLE}}} in subject before reading sponsor data', async () => {
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        subject: 'Sponsorship for {{{CONFERENCE_TITLE}}}',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{{{CONFERENCE_TITLE}}}'),
+    })
+    expect(
+      h.fetches.some((f) =>
+        f.query.includes('_type == "sponsorForConference"'),
+      ),
+    ).toBe(false)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('refuses unmerged {{{VARIABLE}}} in body text before reading sponsor data', async () => {
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        message: JSON.stringify([
+          {
+            _type: 'block',
+            _key: 'b1',
+            style: 'normal',
+            children: [
+              { _type: 'span', _key: 's1', text: 'Tier: {{{TIER_NAME}}}' },
+            ],
+          },
+        ]),
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{{{TIER_NAME}}}'),
+    })
+    expect(
+      h.fetches.some((f) =>
+        f.query.includes('_type == "sponsorForConference"'),
+      ),
+    ).toBe(false)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('refuses unmerged {{{PROSPECTUS_URL}}} in link markDefs[].href before reading sponsor data', async () => {
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        message: JSON.stringify([
+          {
+            _type: 'block',
+            _key: 'b1',
+            style: 'normal',
+            markDefs: [
+              {
+                _type: 'link',
+                _key: 'l1',
+                href: '{{{PROSPECTUS_URL}}}',
+              },
+            ],
+            children: [
+              {
+                _type: 'span',
+                _key: 's1',
+                text: 'Download prospectus',
+                marks: ['l1'],
+              },
+            ],
+          },
+        ]),
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{{{PROSPECTUS_URL}}}'),
+    })
+    expect(
+      h.fetches.some((f) =>
+        f.query.includes('_type == "sponsorForConference"'),
+      ),
+    ).toBe(false)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('refuses discount kind with unmerged {{{VARIABLE}}} before reading or claiming discount codes', async () => {
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        kind: 'discount',
+        discountCodes: ['ACME2026'],
+        subject: 'Codes for {{{sponsor_name}}}',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{{{sponsor_name}}}'),
+    })
+    expect(h.listEventDiscounts).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('refuses sendEmailBySfc with unmerged {{{VARIABLE}}} before reading contacts', async () => {
+    await expect(
+      sponsor().crm.sendEmailBySfc({
+        sponsorForConferenceId: SFC,
+        subject: 'Hello {{{SPONSOR_NAME}}}',
+        body: 'Body text',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{{{SPONSOR_NAME}}}'),
+    })
+    expect(
+      h.fetches.some((f) =>
+        f.query.includes('_type == "sponsorForConference"'),
+      ),
+    ).toBe(false)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('crm.broadcastEmail — auto-sync audience and refuse unmerged variables', () => {
+  it('syncs confirmed (closed-won) sponsor contacts into Resend audience before sending broadcast', async () => {
+    h.sfc = {
+      ...h.sfc,
+      status: 'closed-won',
+    }
+    const callOrder: string[] = []
+    h.syncSponsorAudience.mockImplementation(async () => {
+      callOrder.push('sync')
+      return {
+        success: true,
+        audienceId: 'aud-1',
+        syncedCount: 2,
+        addedCount: 2,
+        removedCount: 0,
+      }
+    })
+    h.sendBroadcastEmail.mockImplementation(async () => {
+      callOrder.push('broadcast')
+      return new Response(JSON.stringify({ id: 'bcast-1' }), { status: 200 })
+    })
+
+    const result = await sponsor().crm.broadcastEmail({
+      subject: 'Important update for sponsors',
+      message: MESSAGE,
+    })
+
+    expect(result).toEqual({ id: 'bcast-1' })
+    expect(callOrder).toEqual(['sync', 'broadcast'])
+    expect(h.syncSponsorAudience).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: CONF }),
+      expect.arrayContaining([
+        expect.objectContaining({ email: 'kari@acme.test' }),
+        expect.objectContaining({ email: 'ola@acme.test' }),
+      ]),
+    )
+    expect(h.sendBroadcastEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows Resend broadcast merge variables ({{{FIRST_NAME|there}}}) and forwards them intact to sendBroadcastEmail', async () => {
+    h.sfc = {
+      ...h.sfc,
+      status: 'closed-won',
+    }
+    h.syncSponsorAudience.mockResolvedValue({
+      success: true,
+      audienceId: 'aud-1',
+      syncedCount: 2,
+      addedCount: 0,
+      removedCount: 0,
+    })
+    h.sendBroadcastEmail.mockResolvedValue(
+      new Response(JSON.stringify({ id: 'bcast-merge' }), { status: 200 }),
+    )
+
+    const broadcastMessage = JSON.stringify([
+      {
+        _type: 'block',
+        _key: 'b1',
+        style: 'normal',
+        children: [
+          {
+            _type: 'span',
+            _key: 's1',
+            text: 'Hi {{{FIRST_NAME|there}}}, welcome to the conference!',
+          },
+        ],
+      },
+    ])
+
+    const result = await sponsor().crm.broadcastEmail({
+      subject: 'Hello {{{FIRST_NAME|there}}}',
+      message: broadcastMessage,
+    })
+
+    expect(result).toEqual({ id: 'bcast-merge' })
+    expect(h.sendBroadcastEmail).toHaveBeenCalledTimes(1)
+    expect(h.sendBroadcastEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'Hello {{{FIRST_NAME|there}}}',
+        messagePortableText: [
+          expect.objectContaining({
+            children: [
+              expect.objectContaining({
+                text: 'Hi {{{FIRST_NAME|there}}}, welcome to the conference!',
+              }),
+            ],
+          }),
+        ],
+      }),
+    )
+  })
+
+  it('refuses broadcastEmail containing unmerged {{{VARIABLE}}} before syncing or broadcasting', async () => {
+    await expect(
+      sponsor().crm.broadcastEmail({
+        subject: 'Hi {{{SPONSOR_NAME}}}',
+        message: MESSAGE,
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{{{SPONSOR_NAME}}}'),
+    })
+    expect(h.syncSponsorAudience).not.toHaveBeenCalled()
+    expect(h.sendBroadcastEmail).not.toHaveBeenCalled()
+  })
+})
+
+describe('registration portal placeholder with fallback syntax', () => {
+  it('refuses {{{SPONSOR_PORTAL_URL|fallback}}} on non-registration send and merges it via mergePortalUrl', async () => {
+    const { mergePortalUrl, carriesPortalPlaceholder } =
+      await import('@/lib/sponsor-crm/registration-email')
+
+    expect(
+      carriesPortalPlaceholder('Open {{{SPONSOR_PORTAL_URL|portal}}}', []),
+    ).toBe(true)
+    expect(
+      mergePortalUrl(
+        'Open {{{SPONSOR_PORTAL_URL|portal}}}',
+        'https://conf.example/sponsor/portal/tok',
+      ),
+    ).toBe('Open https://conf.example/sponsor/portal/tok')
+    expect(mergePortalUrl('Open {{{SPONSOR_PORTAL_URL|portal}}}', '')).toBe(
+      'Open portal',
+    )
+
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        kind: 'information',
+        subject: 'Open {{{SPONSOR_PORTAL_URL|portal}}}',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{{{SPONSOR_PORTAL_URL}}}'),
+    })
+    expect(h.send).not.toHaveBeenCalled()
   })
 })

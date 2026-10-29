@@ -83,6 +83,16 @@ Note: The conference does not offer attendee lead‑scanning or attendee list sh
 
 - Data: internal emails, planning docs, task systems. Ensure appropriate access controls and retention policies.
 
+### H) Content judgement
+
+Only for organizations that turn it on in Admin → Settings ([spec](./CONTENT_JUDGEMENT_SPEC.md) §5, §13).
+
+- Data: scores per question, the returned model build, a SHA-256 of the checked content, time, the Keep mark (organizer, time) and the Message Category. Never a copy of the checked text or photo.
+- Purposes: moderation advice and inbox topics for organizers.
+- Legal bases: legitimate interest (keeping the conference's spaces safe).
+- Retention: until the content is deleted, plus at most one day.
+- **Agreement tally**: anonymous counts per model build, question set, question and score band. No personal data, no reference to any content, organization or conference. Kept indefinitely.
+
 ---
 
 ## 3) Conference lifecycle SOPs
@@ -133,6 +143,9 @@ Adjust as needed; document exceptions.
 - Speaker program archive (talk title, abstract, speaker name/bio): indefinitely (archival/public interest)
 - Raw video/photo assets: 12–24 months, then keep only mastered/publication versions needed for archive
 - Safety/incident logs: 3 years unless legal need requires longer
+- Session Feedback (anonymous colour and optional comment per session): 24 months after the conference ends, then folded into per-session totals and deleted (daily `/api/cron/feedback-fold`); earlier when every speaker of the session is erased (speaker erasure, [runbook](./SPEAKER_ERASURE_RUNBOOK.md) step 3d). A session held by a scheduled Content Release keeps its responses until the release is published or archived; answers a session got before it was moved to another conference are deleted only on request (runbook step 3d has the commands).
+- Content judgements: with their content; orphans deleted daily by `/api/cron/content-judgement-sweep`
+- Agreement tally: indefinitely (counts only)
 
 ---
 
@@ -159,6 +172,42 @@ Attendee, workshop-signup and volunteer records are keyed on different
 identities and are **not** covered by that runbook; handle them as separate
 requests under this SOP.
 
+### Photo Wall removal requests
+
+A contributor deletes their own post from **My posts** on `/wall/post`, on
+the phone that posted it (Photo Wall spec §12); the same page has the
+Marketing switch that withdraws marketing consent. A contributor who has lost
+that phone's cookie, or someone in another person's photo, asks the
+organizers.
+
+- **Verify** as for other channels (§5 above): a post has no email or
+  account, only an optional name the contributor typed, which is a display
+  name, not proof of identity. A contributor describes the photo, the
+  caption, the name and roughly when they posted. Someone in a photo needs no
+  proof beyond pointing out the photo they are in. When in doubt, delete:
+  display rests on the contributor's consent, and the person in it objects.
+- **Erase:** find the post on `/admin/photo-wall` and press **Delete now**.
+  It removes the post with its history, and the photo file unless another
+  post still uses it: Sanity stores byte-identical files once, so the same
+  photo posted twice shares one file. Before confirming erasure, look through
+  every tab for the same photo and Delete now each copy; the file goes with
+  the last one. Every post is deleted 30 days after the conference anyway.
+- **Withdraw marketing consent without deleting:** press **Withdraw
+  marketing OK** on the post's card (only cards with the Marketing OK mark
+  have it). It only unticks: organizers can't give consent on a contributor's
+  behalf. The post leaves the marketing export and the contributor's switch
+  shows it on its next poll. Copies already downloaded are not recalled.
+- **Speaker opt-out from talk photos:** a speaker can tick **Hide photos of
+  my talks from public pages** on their dashboard or profile; an organizer
+  can set it for them in the speaker editor, but never clear it. It hides
+  the photos tagged with the speaker's talks from the talk cards on the
+  program and from the pages of every speaker of those talks. It deletes
+  nothing: the photos stay on the wall and in Screen Mode, and for a photo a
+  speaker wants gone, use **Delete now** as above. Merging duplicate speaker
+  records keeps the opt-out if either record had it, and erasing a speaker
+  keeps it too: it holds no personal data and keeps their talks' photos
+  hidden.
+
 ---
 
 ## 6) Subprocessor register (examples)
@@ -171,6 +220,7 @@ Maintain a live register with purpose, data types, location, DPA link, SCC/TIA s
 - Cloud storage: [provider]
 - Analytics: [provider]
 - Video platform: [provider] — may act as an independent controller for published content; ensure appropriate SCCs/TIA for any related processing; link to provider's privacy notice.
+- Content judgement: OpenRouter (model provider TypeSafe), United States, SCCs, zero data retention. Listed for organizations that have content judgement on or still store a Judgement.
 
 ---
 

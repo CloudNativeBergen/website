@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { HEX_COLOR_RE } from '@/lib/branding/theme'
 import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
-import { PIRSCH_CODE_MESSAGE, PIRSCH_CODE_PATTERN } from '@/lib/analytics'
 import { Format } from '@/lib/proposal/types'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
@@ -196,6 +195,12 @@ export const UpdateRegistrationSchema = z.object({
     .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
     .nullable()
     .optional(),
+  volunteerRegistrationLink: z
+    .string()
+    .trim()
+    .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
+    .nullable()
+    .optional(),
   registrationEnabled: z.boolean(),
 })
 
@@ -221,6 +226,31 @@ export const UpdateCommunicationSchema = z.object({
     .email('Enter a valid email address'),
   salesNotificationChannel: z.string().trim().nullable().optional(),
   cfpNotificationChannel: z.string().trim().nullable().optional(),
+  speakerSlackChannel: z.string().trim().nullable().optional(),
+  volunteerSlackInviteUrl: z
+    .string()
+    .trim()
+    .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
+    .nullable()
+    .optional(),
+})
+
+const optionalClearableHttpsUrl = z
+  .string()
+  .trim()
+  .transform((val) => (val === '' ? null : val))
+  .pipe(
+    z
+      .string()
+      .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
+      .nullable(),
+  )
+  .nullable()
+  .optional()
+
+export const UpdateVolunteerLinksSchema = z.object({
+  volunteerRegistrationLink: optionalClearableHttpsUrl,
+  volunteerSlackInviteUrl: optionalClearableHttpsUrl,
 })
 
 // === Ticketing IDs ===
@@ -299,20 +329,6 @@ export const UpdateLocalInfoSchema = z.object({
   speakerDinnerInfo: z.string().trim().nullable().optional(),
   localRecommendations: z.string().trim().nullable().optional(),
   socialHashtag: z.string().trim().max(100).nullable().optional(),
-})
-
-// === Analytics ===
-// The tenant's OWN Pirsch identification code. `null` UNSETS it, which is the
-// documented "no analytics at all" state — there is no platform-level fallback
-// to inherit, by design (see `resolvePirschCode`). The shape is validated on the
-// write path because the value is interpolated into a `<script>` attribute.
-export const UpdateAnalyticsSchema = z.object({
-  analyticsPirschCode: z
-    .string()
-    .trim()
-    .regex(PIRSCH_CODE_PATTERN, PIRSCH_CODE_MESSAGE)
-    .nullable()
-    .optional(),
 })
 
 // === CFP & Revenue Goals ===
@@ -557,6 +573,59 @@ export const UpdateTeamsSchema = z.object({
 const PortableTextBlockSchema = z
   .object({ _type: z.string().min(1) })
   .catchall(z.unknown())
+
+/**
+ * Speaker briefing (#1592) — a full replace of `speakerInfo`. The form omits
+ * blank fields so an absent section stays absent; `updatedAt` is set
+ * server-side and never accepted from the client.
+ */
+// `optionalText` is the sponsorship one above: trimmed, `null`-able.
+// Not `safeLinkHref`: that also admits site paths (`/tickets`), and a map link
+// opened from an email or another site must be an absolute http(s) URL.
+const optionalHttpUrl = z
+  .string()
+  .trim()
+  .url()
+  .refine((u) => /^https?:\/\//i.test(u), 'Must be an http(s) URL')
+  .optional()
+const optionalBlocks = z.array(PortableTextBlockSchema).optional()
+
+export const UpdateSpeakerInfoSchema = z.object({
+  dinner: z
+    .object({
+      startsAt: z.string().datetime({ offset: true }).optional(),
+      venueName: optionalText,
+      address: optionalText,
+      mapUrl: optionalHttpUrl,
+      rsvpNote: optionalText,
+      description: optionalBlocks,
+      routes: z
+        .array(
+          z.object({
+            _key: z.string().optional(),
+            label: optionalText,
+            meetingPoint: optionalText,
+            meetingPointMapUrl: optionalHttpUrl,
+            departsNote: optionalText,
+            departsAt: z.string().datetime({ offset: true }).optional(),
+            details: optionalBlocks,
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
+  checkIn: optionalBlocks,
+  equipment: optionalBlocks,
+  onsiteContact: z
+    .object({
+      name: optionalText,
+      phone: optionalText,
+      email: z.string().trim().email().optional(),
+    })
+    .optional(),
+  accommodation: optionalBlocks,
+  extra: optionalBlocks,
+})
 
 export const UpdateAnnouncementSchema = z.object({
   announcement: z.array(PortableTextBlockSchema).nullable(),

@@ -10,6 +10,7 @@ export function countActiveProposals(
       p.status !== Status.deleted &&
       p.status !== Status.draft &&
       p.status !== Status.withdrawn &&
+      p.status !== Status.canceled &&
       p.status !== Status.rejected,
   ).length
 }

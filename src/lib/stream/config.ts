@@ -25,7 +25,9 @@ export const STREAM_CONFIG = {
 
   layout: {
     containerPadding: 'py-12',
-    contentSpacing: 'space-y-8',
+    contentSpacing: 'grid items-start gap-8',
+    // Venue screens are landscape: session left, social feed right.
+    splitColumns: 'lg:grid-cols-2',
   },
 } as const
 

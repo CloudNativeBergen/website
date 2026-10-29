@@ -16,6 +16,7 @@ import {
   EyeIcon,
   ArrowUturnLeftIcon,
   ChevronDownIcon,
+  NoSymbolIcon,
 } from '@heroicons/react/20/solid'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import clsx from 'clsx'
@@ -25,17 +26,21 @@ import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { getSpeakerIndicators } from '@/lib/speaker/utils'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalManagementModal } from './ProposalManagementModal'
+import { ProposalActionModal } from './ProposalActionModal'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
 import { useRouter } from 'next/navigation'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ProposalMessagePanel } from '@/components/messaging/ProposalMessagePanel'
 import { proposalConversationId } from '@/lib/messaging/links'
+import { api } from '@/lib/trpc/client'
 
 import { Conference } from '@/lib/conference/types'
 
 interface AdminActionBarProps {
   proposal: ProposalExisting
   conference: Conference
+  /** Only used for the localhost warning in the action modal. */
+  domain?: string
 }
 
 type ActionColor =
@@ -128,8 +133,18 @@ function ActionsMenu({
   )
 }
 
-export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
+export function AdminActionBar({
+  proposal,
+  conference,
+  domain,
+}: AdminActionBarProps) {
   const router = useRouter()
+  const utils = api.useUtils()
+  // The proposals list renders tRPC data that router.refresh() doesn't touch.
+  const refreshProposal = () => {
+    router.refresh()
+    void utils.proposal.admin.list.invalidate()
+  }
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   // LOCAL state, never a query param: the panel's open-ness is a property of
@@ -140,12 +155,10 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
   const speakers = extractSpeakersFromProposal(proposal)
   const indicators = getSpeakerIndicators(speakers)
 
-  const handleAction = (action: Action) => {
-    const event = new CustomEvent('proposalAction', {
-      detail: { action, proposal },
-    })
-    window.dispatchEvent(event)
-  }
+  // The bar owns its action modal so it works wherever it is mounted (detail
+  // page and the proposals list preview pane alike).
+  const [pendingAction, setPendingAction] = useState<Action | null>(null)
+  const handleAction = (action: Action) => setPendingAction(action)
 
   // Two doors to the same thread, and which one a given entry point uses is a
   // decision, not an accident:
@@ -173,7 +186,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
   }, [speakers])
 
   const handleProposalUpdated = () => {
-    router.refresh()
+    refreshProposal()
     setShowEditModal(false)
   }
 
@@ -190,7 +203,11 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
     proposal.status === 'accepted' || proposal.status === 'confirmed'
 
   // Keyboard shortcuts
-  const anyModalOpen = showEditModal || showPreviewModal || showMessagePanel
+  const anyModalOpen =
+    showEditModal ||
+    showPreviewModal ||
+    showMessagePanel ||
+    pendingAction !== null
   useEffect(() => {
     // Suppress the bar's global shortcuts while any of its modals is open, so
     // ⌘E/⌘P/⌘M can't stack a second focus-trapped modal on top of the first.
@@ -340,6 +357,14 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
             icon: ArrowUturnLeftIcon,
             color: 'red' as const,
             onClick: () => handleAction(Action.withdraw),
+            group: 'status' as const,
+          },
+          {
+            key: 'cancel',
+            label: 'Cancel talk',
+            icon: NoSymbolIcon,
+            color: 'red' as const,
+            onClick: () => handleAction(Action.cancel),
             group: 'status' as const,
           },
         ]
@@ -501,6 +526,21 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
           editingProposal={proposal}
           conference={conference}
           onProposalUpdated={handleProposalUpdated}
+        />
+      )}
+
+      {pendingAction && (
+        <ProposalActionModal
+          open={!!pendingAction}
+          close={() => setPendingAction(null)}
+          proposal={proposal}
+          action={pendingAction}
+          adminUI={true}
+          onAction={() => {
+            setPendingAction(null)
+            refreshProposal()
+          }}
+          domain={domain}
         />
       )}
 

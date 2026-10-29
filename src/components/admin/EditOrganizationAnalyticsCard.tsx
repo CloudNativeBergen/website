@@ -134,8 +134,7 @@ export function EditOrganizationAnalyticsCard({
               The public project token from PostHog → Project settings (EU
               cloud, one project per organization). Visitors on every edition
               are counted anonymously until they accept the analytics cookie.
-              Leave blank to serve no PostHog. Once set, the per-conference
-              Pirsch code is no longer loaded.
+              Leave blank to serve no PostHog.
             </p>
             {error ? (
               <p className="mt-2 text-sm text-red-600 dark:text-red-400">

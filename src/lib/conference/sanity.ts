@@ -119,6 +119,7 @@ export async function getConferenceForCurrentDomain({
   gallery = false,
   includeSponsorRegistrationLink = false,
   includeSpeakerRegistrationLink = false,
+  includeVolunteerRegistrationLink = false,
   uncached = false,
 }: {
   organizers?: boolean
@@ -140,6 +141,8 @@ export async function getConferenceForCurrentDomain({
   includeSponsorRegistrationLink?: boolean
   /** See {@link getConferenceForDomain}. Admin/server surfaces only. */
   includeSpeakerRegistrationLink?: boolean
+  /** See {@link getConferenceForDomain}. Admin/server surfaces only. */
+  includeVolunteerRegistrationLink?: boolean
   /** Fetch directly from the origin API instead of the CDN. Admin surfaces only. */
   uncached?: boolean
 } = {}): Promise<{
@@ -163,6 +166,7 @@ export async function getConferenceForCurrentDomain({
       gallery,
       includeSponsorRegistrationLink,
       includeSpeakerRegistrationLink,
+      includeVolunteerRegistrationLink,
       uncached,
     })
   } catch (err) {
@@ -172,6 +176,32 @@ export async function getConferenceForCurrentDomain({
     // NOT `not-found` — see ./guard.ts.
     return { conference, domain, error, status: 'unavailable' }
   }
+}
+
+/**
+ * Load a conference by id, resolved through its own primary domain so it reads
+ * exactly as the domain read would. For server-side work on a document whose
+ * conference differs from the request host's (e.g. a speaker acting on their
+ * own talk at another tenant). Returns null when the conference or its domain
+ * cannot be found.
+ */
+export async function getConferenceById(
+  conferenceId: string,
+  options: Parameters<typeof getConferenceForDomain>[1] = {},
+): Promise<{ conference: Conference; domain: string } | null> {
+  const domain = await clientReadUncached.fetch<string | null>(
+    // groq-global-scoped: callers pass the id of a document they have already
+    // been proved to own; this reads back that one conference's domain.
+    `*[_type == "conference" && _id == $conferenceId][0].domains[0]`,
+    { conferenceId },
+  )
+  if (!domain) return null
+  const { conference, error } = await getConferenceForDomain(domain, {
+    ...options,
+    uncached: true,
+  })
+  if (error || conference?._id !== conferenceId) return null
+  return { conference, domain }
 }
 
 export async function getConferenceForDomain(
@@ -189,6 +219,7 @@ export async function getConferenceForDomain(
     uncached = false,
     includeSponsorRegistrationLink = false,
     includeSpeakerRegistrationLink = false,
+    includeVolunteerRegistrationLink = false,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -209,8 +240,9 @@ export async function getConferenceForDomain(
      * Skip BOTH cache layers for this read: Next's `'use cache'` wrapper
      * ({@link CONFERENCE_CACHE_LIFE}) and the Sanity CDN. Reserved for admin surfaces
      * that must reflect a write the organizer just made — the homepage
-     * composer preview is the only caller. Public pages must never pass this:
-     * every request would hit the origin dataset.
+     * composer preview and `/admin/workshops` (whose registration card is the
+     * baseline its saves are diffed against) are among the callers. Public
+     * pages must never pass this: every request would hit the origin dataset.
      */
     uncached?: boolean
     /**
@@ -243,6 +275,11 @@ export async function getConferenceForDomain(
      * the link). Nothing that renders a public page may pass it.
      */
     includeSpeakerRegistrationLink?: boolean
+    /**
+     * Include `volunteerRegistrationLink` and `volunteerSlackInviteUrl` in the result.
+     * OFF by default. Private volunteer onboarding links; admin/email surfaces only.
+     */
+    includeVolunteerRegistrationLink?: boolean
   } = {},
 ): Promise<{
   conference: Conference
@@ -318,8 +355,8 @@ export async function getConferenceForDomain(
       if (sponsors && conference._id) {
         // `{ useCache: !uncached }` exactly as the gallery reads below do: the
         // public path takes the CDN, and the homepage composer preview — the
-        // only `uncached: true` caller repo-wide — keeps its read-your-writes
-        // guarantee on the live API.
+        // only `uncached: true` caller that asks for sponsors — keeps its
+        // read-your-writes guarantee on the live API.
         conference.sponsors = await getPublicSponsorsForConference(
           conference._id,
           { useCache: !uncached },
@@ -415,6 +452,18 @@ export async function getConferenceForDomain(
   }
   if (!includeSpeakerRegistrationLink && conference?.speakerRegistrationLink) {
     delete conference.speakerRegistrationLink
+  }
+  if (
+    !includeVolunteerRegistrationLink &&
+    conference?.volunteerRegistrationLink
+  ) {
+    delete conference.volunteerRegistrationLink
+  }
+  if (
+    !includeVolunteerRegistrationLink &&
+    conference?.volunteerSlackInviteUrl
+  ) {
+    delete conference.volunteerSlackInviteUrl
   }
 
   return { conference: normalizeConference(conference), domain, error, status }

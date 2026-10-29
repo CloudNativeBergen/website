@@ -14,6 +14,7 @@ export function SpeakerShareWrapper({
   speakerUrl,
   talkTitle,
   eventName,
+  tags,
   speakerName,
   qrCodeUrl,
   speaker,
@@ -62,6 +63,7 @@ export function SpeakerShareWrapper({
       speakerUrl={speakerUrl}
       talkTitle={talkTitle}
       eventName={eventName}
+      tags={tags}
     >
       <div
         className={`group @container relative aspect-square w-full overflow-hidden rounded-2xl bg-linear-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}

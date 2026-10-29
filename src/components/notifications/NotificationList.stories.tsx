@@ -64,8 +64,8 @@ const makeItems = (): NotificationItem[] => [
   },
   {
     id: '2',
-    type: 'proposal_comment',
-    title: 'New comment on your proposal',
+    type: 'message_received',
+    title: 'New message about your proposal',
     message: 'Could you clarify the target audience for this session?',
     link: '/cfp/proposal/2',
     readAt: null,

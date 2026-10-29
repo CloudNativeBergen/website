@@ -218,6 +218,15 @@ export default defineType({
       hidden: true,
     }),
     defineField({
+      name: 'followUpAlertedFor',
+      title: 'Follow-up Alerted For',
+      type: 'string',
+      description:
+        'The follow-up date the overdue Slack alert was last sent for; set by the sponsor-follow-ups cron so each date alerts once.',
+      readOnly: true,
+      hidden: true,
+    }),
+    defineField({
       name: 'contractTemplate',
       title: 'Contract Template',
       type: 'reference',
@@ -268,6 +277,20 @@ export default defineType({
       title: 'Contact Initiated Date',
       type: 'datetime',
       description: 'When first contact was made with this sponsor',
+    }),
+    defineField({
+      name: 'nextFollowUpAt',
+      title: 'Next Follow-up',
+      type: 'datetime',
+      description: 'When the owner plans to follow up with this sponsor next',
+    }),
+    defineField({
+      name: 'outreachCount',
+      title: 'Emails Sent',
+      type: 'number',
+      description: 'Number of emails sent to this sponsor',
+      readOnly: true,
+      validation: (Rule) => Rule.min(0),
     }),
     defineField({
       name: 'contractSignedAt',
@@ -358,6 +381,13 @@ export default defineType({
       type: 'datetime',
       description: 'When the invoice was sent (auto-populated)',
       readOnly: true,
+    }),
+    defineField({
+      name: 'invoiceDueAt',
+      title: 'Invoice Due Date',
+      type: 'date',
+      description:
+        'When payment is due. Set to 30 days after sending unless already set.',
     }),
     defineField({
       name: 'invoicePaidAt',
@@ -512,6 +542,18 @@ export default defineType({
       title: 'Registration Token',
       type: 'string',
       description: 'Unique token for sponsor self-service registration portal',
+      readOnly: true,
+    }),
+    defineField({
+      // The workshop early-access link (#1346). Separate from
+      // `registrationToken`, which opens the sponsor's own portal. Created and
+      // revoked on the sponsor's record in the admin, which also keeps drafts
+      // and release copies in step.
+      name: 'workshopEarlyAccessToken',
+      title: 'Workshop Early-Access Token',
+      type: 'string',
+      description:
+        'Token of the link that lets people this sponsor sends sign up for workshops early',
       readOnly: true,
     }),
     defineField({

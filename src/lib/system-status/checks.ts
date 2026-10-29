@@ -15,6 +15,11 @@ import {
 } from '@/lib/tickets/provider'
 import { providerMap } from '@/lib/auth'
 import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
+import { listDomainVerificationViews } from '@/lib/domain-verification'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import { workshopSignInLabel } from '@/lib/domain-verification/sign-in-labels'
+import { domainServesHost } from '@/lib/conference/domains'
+import { authOrigin } from '@/lib/workshop/central-sign-in/decision'
 import { conferenceSenders } from '@/lib/email/from'
 import { describeSenderPolicy } from '@/lib/email/sender-policy'
 import type {
@@ -52,6 +57,7 @@ const VERCEL_CRONS: ReadonlyArray<{ path: string; schedule: string }> = [
   { path: '/api/cron/cleanup-orphaned-blobs', schedule: '0 3 * * *' },
   { path: '/api/cron/contract-reminders', schedule: '0 9 * * *' },
   { path: '/api/cron/cleanup-notifications', schedule: '0 4 * * *' },
+  { path: '/api/cron/feedback-summary', schedule: '0 8 * * *' },
 ]
 
 /** sha256 fingerprint (first 8 hex) + length. NEVER returns the raw value. */
@@ -110,6 +116,70 @@ function presenceCheck(
         value: 'not set',
         detail: detail?.missing,
       }
+}
+
+/**
+ * The same auth-origin verdict that the sign-in routes enforce.
+ *
+ * UNSET IS A WARNING IN A DEPLOYED BUILD (`NODE_ENV === 'production'`, which
+ * previews are too): every host then signs attendees in on itself, so each one
+ * has to be registered at WorkOS by hand, as redirect URI and as sign-out
+ * redirect. That is right only for a single-domain installation. In
+ * development it is the normal setup and stays `ok`.
+ */
+function workshopAuthOriginCheck(
+  domains: readonly string[] | null | undefined,
+): SystemCheck {
+  const meta: CheckMeta = {
+    id: 'auth.workshopAuthOrigin',
+    group: 'auth',
+    label: 'WORKSHOP_AUTH_ORIGIN',
+  }
+  const configured = authOrigin()
+  if (configured === 'invalid') {
+    return {
+      ...meta,
+      status: 'error',
+      value: 'invalid',
+      detail:
+        'Not a bare https origin such as https://auth.example.com, so workshop sign-in is refused on every host. Correct the value and redeploy.',
+    }
+  }
+  if (configured === 'unset') {
+    return process.env.NODE_ENV === 'production'
+      ? {
+          ...meta,
+          status: 'warn',
+          value: 'not set',
+          detail:
+            'Every host signs attendees in on itself, so each host must be registered at WorkOS by hand: https://<host>/api/auth/callback as a redirect URI and https://<host>/api/auth/workshop/signed-out as a sign-out redirect. Right only for a single-domain installation. Otherwise set it to the origin of the platform’s sign-in host and register that host’s two addresses instead.',
+        }
+      : {
+          ...meta,
+          status: 'ok',
+          value: 'not set',
+          detail:
+            'Each host signs attendees in on itself, which is the normal local development setup.',
+        }
+  }
+  // The sign-in decision refuses the auth host as a tenant host
+  // (`resolveTenantHost`): a conference served on it has no portal there.
+  // Served as the routing serves: by name, or by a wildcard that covers it.
+  if ((domains ?? []).some((d) => domainServesHost(d, configured.host))) {
+    return {
+      ...meta,
+      status: 'error',
+      value: configured.origin,
+      detail:
+        'This conference’s own domains serve this host. The sign-in host serves no conference, so the workshop portal is not available on it. Use a host no conference claims, by name or by wildcard.',
+    }
+  }
+  return {
+    ...meta,
+    status: 'ok',
+    value: configured.origin,
+    detail: 'Attendees of every host sign in to workshops through this host.',
+  }
 }
 
 /** Plain (non-secret) env value. Absent → `missingStatus`. */
@@ -482,6 +552,8 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
       ? redirectProxy
       : 'Optional central OAuth origin (#619) for serving multiple domains from one OAuth app',
   })
+
+  checks.push(workshopAuthOriginCheck(conference.domains))
 
   // ---- EMAIL ----------------------------------------------------------------
   checks.push(
@@ -924,6 +996,52 @@ async function badgesOutdatedProbe(
 }
 
 /**
+ * Where each claimed host stands for the workshop portal's sign-in
+ * (#1298), for a conference with workshops: attendees on a host that cannot
+ * sign in only see "not available yet", so this is where the reason shows.
+ * One row per host; none for a conference without workshops.
+ */
+async function workshopSignInChecks(
+  conference: ConferenceForSystemChecks,
+): Promise<SystemCheck[]> {
+  if (!conference._id || !conference.organization?._ref) return []
+  try {
+    // The gate first: a tenant without workshops gets no row and no read.
+    if (!(await isWorkshopsEnabledForConference(conference))) return []
+    const views = await listDomainVerificationViews(
+      conference._id,
+      conference.domains ?? [],
+      { workshops: true },
+    )
+    return views.flatMap(({ hostname, workshopSignIn }) => {
+      if (!workshopSignIn) return []
+      const { status, label, detail } = workshopSignInLabel(workshopSignIn)
+      return [
+        {
+          id: `auth.workshopSignIn.${hostname}`,
+          group: 'auth' as const,
+          label: `Workshop sign-in: ${hostname}`,
+          status,
+          value: label,
+          ...(detail ? { detail } : {}),
+        },
+      ]
+    })
+  } catch (err) {
+    return [
+      {
+        id: 'auth.workshopSignIn',
+        group: 'auth',
+        label: 'Workshop sign-in',
+        status: 'warn',
+        value: 'unknown',
+        detail: errMsg(err),
+      },
+    ]
+  }
+}
+
+/**
  * Full registry: synchronous env/file/conference checks PLUS the live Sanity
  * read probe and the push-subscription count. The live probes are appended into
  * their groups so the UI renders them alongside the static rows.
@@ -932,12 +1050,20 @@ export async function buildSystemChecks(
   conference: ConferenceForSystemChecks,
 ): Promise<SystemCheck[]> {
   const staticChecks = buildChecks(conference)
-  const [readProbe, pushCount, badgesOutdated] = await Promise.all([
-    sanityReadProbe(),
-    pushSubscriptionCount(),
-    badgesOutdatedProbe(conference._id),
-  ])
-  return [...staticChecks, readProbe, pushCount, badgesOutdated]
+  const [readProbe, pushCount, badgesOutdated, workshopSignIn] =
+    await Promise.all([
+      sanityReadProbe(),
+      pushSubscriptionCount(),
+      badgesOutdatedProbe(conference._id),
+      workshopSignInChecks(conference),
+    ])
+  return [
+    ...staticChecks,
+    readProbe,
+    pushCount,
+    badgesOutdated,
+    ...workshopSignIn,
+  ]
 }
 
 /** Exposed for unit tests: the synchronous, side-effect-light checks only. */

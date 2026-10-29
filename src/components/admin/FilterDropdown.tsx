@@ -58,12 +58,17 @@ export function FilterDropdown({
   } as const
 
   return (
-    <Menu as="div" className="relative">
+    <Menu
+      as="div"
+      // Long labels truncate (full text in the tooltip) instead of widening the row.
+      className={clsx('relative', size === 'sm' && 'max-w-56')}
+    >
       {({ open }) => {
         return (
           <>
             <MenuButton
               disabled={disabled}
+              title={label}
               className={clsx(
                 'inline-flex w-full items-center justify-between gap-x-1.5 rounded-lg outline-1 -outline-offset-1 transition-all',
                 size === 'sm'

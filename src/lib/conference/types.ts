@@ -38,6 +38,8 @@ export interface ScheduleTrack {
   trackTitle: string
   trackDescription: string
   talks: Array<TrackTalk>
+  /** The sponsor who bought this track (a weak reference to a `sponsor`). */
+  sponsor?: { _ref: string } | null
 }
 export interface ConferenceSchedule {
   _id: string
@@ -158,14 +160,6 @@ export interface Conference {
     primaryColor?: string
     accentColor?: string
   }
-  /**
-   * This tenant's OWN Pirsch (pirsch.io) identification code. ABSENT means no
-   * analytics script is served on this conference's pages at all — there is no
-   * platform-level fallback, because the only other default would be collecting
-   * this tenant's traffic into a property they do not own. Projected by the main
-   * conference projection's `...` spread. See `resolvePirschCode`.
-   */
-  analyticsPirschCode?: string
   announcement?: TypedObject[]
   /**
    * Place-specific /info FAQ prose. Each is optional and ABSENT means the
@@ -176,6 +170,12 @@ export interface Conference {
   venueTravelInfo?: string
   speakerDinnerInfo?: string
   localRecommendations?: string
+  /**
+   * Structured speaker briefing (#1592), edited at `/admin/speakers/info`.
+   * Projected by the main conference projection's `...` spread. ABSENT/blank
+   * sections are omitted; `speakerDinnerInfo` is the fallback for `dinner`.
+   */
+  speakerInfo?: SpeakerInfo
   /**
    * Event hashtag for the live social wall (`/stream`). ABSENT means no hashtag
    * search is performed at all — the wall never falls back to another event's
@@ -205,8 +205,28 @@ export interface Conference {
    */
   speakerRegistrationLink?: string
   registrationEnabled: boolean
+  /**
+   * The sponsor start time (#1345): when workshop sign-up opens for a caller
+   * with early access. Counts only when it is earlier than
+   * `workshopRegistrationStart`; see `workshopRegistrationWindow`.
+   */
+  workshopRegistrationSponsorStart?: string
+  /**
+   * Ticket types whose holders get early access with no link: they may sign
+   * up from `workshopRegistrationSponsorStart`. Unset is none.
+   */
+  workshopEarlyAccessTicketTypes?: string[] | null
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
+  /**
+   * The last workshop reminder (#1334): when it went out, and to how many
+   * people (`sent`, confirmed by the provider). Written by `sendWorkshopReminder`
+   * after a send that reached at least one person; absent until then.
+   */
+  workshopReminderLastSentAt?: string
+  workshopReminderLastSentCount?: number
+  /** When the reminder's current hour was reserved (its rate limit). */
+  workshopReminderReservedAt?: string
   contactEmail: string
   /**
    * Ticketing vendor selector. ABSENT ⇒ 'checkin' (every legacy conference);
@@ -259,6 +279,10 @@ export interface Conference {
   sponsorRevenueGoal?: number
   salesNotificationChannel?: string
   cfpNotificationChannel?: string
+  /** Where `postBriefingToSlack` posts the shared speaker info (#1592). */
+  speakerSlackChannel?: string
+  volunteerSlackInviteUrl?: string
+  volunteerRegistrationLink?: string
   socialLinks?: string[]
   /**
    * Optional organizer sub-teams — a SOFT routing lens, never access control.
@@ -312,4 +336,34 @@ export interface Conference {
   lifecycleLinkLabel?: string
   /** Destination for the notice link. Same safe-link rules as hero CTAs. */
   lifecycleLinkHref?: string
+}
+
+export interface SpeakerInfoRoute {
+  _key?: string
+  label?: string
+  meetingPoint?: string
+  meetingPointMapUrl?: string
+  departsAt?: string
+  /** Free-text departure when it is not a clock time. */
+  departsNote?: string
+  details?: TypedObject[]
+}
+
+export interface SpeakerInfo {
+  dinner?: {
+    startsAt?: string
+    venueName?: string
+    address?: string
+    mapUrl?: string
+    /** Display text only; the RSVP is collected on the speaker ticket. */
+    rsvpNote?: string
+    description?: TypedObject[]
+    routes?: SpeakerInfoRoute[]
+  }
+  checkIn?: TypedObject[]
+  equipment?: TypedObject[]
+  onsiteContact?: { name?: string; phone?: string; email?: string }
+  accommodation?: TypedObject[]
+  extra?: TypedObject[]
+  updatedAt?: string
 }

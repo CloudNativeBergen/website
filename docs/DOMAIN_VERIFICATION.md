@@ -275,24 +275,94 @@ must be allocated deliberately (or removed). The admin card shows the deadline
 and the record to publish; the daily sweep starts reporting the missing TXT
 immediately.
 
-The redirect allowlist is **not** flag-gated. It is a new surface with no
-existing consumers, so it fails closed from day one.
+The redirect allowlist is **not** flag-gated, and it fails closed. Its rule
+(`isAllowlistEligible` in `policy.ts`) is half of what the workshop portal's
+sign-in requires of a host, described next. (The domain card and the sweep's
+delisting alerts report the allowlist rule.) The list-building helpers in
+`allowlist.ts` (`getVerifiedRedirectHosts`, `isVerifiedRedirectOrigin`) have no
+production caller yet; they wait for the central auth origin (#688).
+
+## Workshop sign-in (which hosts receive a hand-off)
+
+The attendee workshop portal signs in through one WorkOS environment shared by
+every tenant, and WorkOS calls back to one platform host, the auth host
+(`WORKSHOP_AUTH_ORIGIN`). The auth host finishes the sign-in and hands the
+result to the host the attendee is on, which keeps a session of its own
+(#1311; the flow is in [AUTH.md](AUTH.md#workos-authkit-workshops)). A tenant
+host is never a WorkOS callback: the WorkOS environment is shared by every
+tenant, so its registered addresses stay on a host the platform operates. A
+verification record decides whether a host may **receive the hand-off**, and
+nothing is registered at WorkOS per host.
+
+**The rule** lives in one place, `resolveProvenDestination`
+(`src/lib/domain-verification/destination.ts`), and is asked on the tenant host
+by every route that begins or redeems a sign-in and by every read of the
+session, and on the auth host before anything is sent to WorkOS. A host
+qualifies when all of these hold:
+
+- its record is **proven** (`isProven`): it passes `isAllowlistEligible`, and
+  it is either a host the platform allocated (`isPlatformAllocated`) or a
+  record with `method: 'dns-txt'`. The allowlist alone also admits a
+  `grandfathered` record inside its grace period, and a `platform-owned` record
+  whose host is no longer in the platform zone; neither was proven, and neither
+  is enough here;
+- the match is on the **exact hostname**: the record is read by the id of the
+  host asked for and must name it. No wildcard, no suffix, and the routing
+  matcher is not used;
+- the conference holding the record **still claims** the host, by that exact
+  name, in `domains[]`;
+- `localhost` qualifies only with `NODE_ENV=development`, and then without a
+  record.
+
+The record is read live on every decision, never cached, and a read error
+refuses. The same `isProven` rule decides the "Workshop sign-in" line on the
+domain card and the system-status row (`sign-in-standing.ts`,
+`sign-in-labels.ts`): **available**, or **domain not verified**. A host that is
+proven but that the deployment's configuration refuses reads **switched off on
+every host** (`WORKSHOP_AUTH_ORIGIN` cannot be used) or **not available on the
+sign-in host** (the variable names this host), from the same check the sign-in
+makes (`configurationRefuses` in
+`src/lib/workshop/central-sign-in/decision.ts`). The rule says where a sign-in may be handed to; whether the
+conference has workshops is a separate gate (`isWorkshopsEnabledForConference`)
+that the same routes ask next.
+
+A host whose record stops being proven, or that its conference no longer
+claims, is refused from that moment: the next request on it sees no session and
+cannot start one. Nothing has to be undone at WorkOS. A tenant's own domain
+carries the portal once its DNS proof has resolved, like any other proven host.
+
+**The daily sweep only verifies domains.** The cron
+(`/api/cron/domain-verification`, 05:00 UTC) re-resolves every claimed domain's
+TXT proof, writes the outcome back through the delisting policy and alerts
+organizers; it makes no call to WorkOS and nothing else about sign-in follows
+it. How fast a host stops receiving hand-offs therefore follows the allowlist
+alone: a proof that is gone (NXDOMAIN, no TXT) delists at the next sweep or
+**Check now**, nameservers that stop answering delist after
+`SOFT_FAILURE_ESCALATION` consecutive soft failures, and a verified record with
+no successful check for `ALLOWLIST_MAX_STALENESS_DAYS` expires on its own.
+
+What an organizer and an operator do with all this is in
+[WORKSHOP_SIGN_IN_RUNBOOK.md](WORKSHOP_SIGN_IN_RUNBOOK.md).
 
 ## Moving parts
 
-| Path                                              | Role                                                                    |
-| ------------------------------------------------- | ----------------------------------------------------------------------- |
-| `src/lib/domain-verification/challenge.ts`        | record names, tokens, host classification                               |
-| `src/lib/domain-verification/platform.ts`         | the `PLATFORM_DOMAIN_SUFFIX` contract, label-wise matcher, host minting |
-| `src/lib/onboarding/provision.ts`                 | claims + allocates the minted host in the tenant transaction            |
-| `src/lib/domain-verification/dns.ts`              | bounded, uncached TXT resolution + hard/soft classification             |
-| `src/lib/domain-verification/policy.ts`           | the delisting policy (pure)                                             |
-| `src/lib/domain-verification/allowlist.ts`        | exact-host OAuth redirect allowlist (#688 consumes this)                |
-| `src/lib/domain-verification/routing.ts`          | the flag-gated routing gate                                             |
-| `src/lib/domain-verification/sweep.ts`            | continuous re-verification + organizer alerts                           |
-| `src/app/api/cron/domain-verification/route.ts`   | daily cron (05:00 UTC)                                                  |
-| `src/server/routers/domainVerification.ts`        | admin list + re-check                                                   |
-| `src/components/admin/DomainVerificationCard.tsx` | `/admin/settings#domain-verification`                                   |
+| Path                                              | Role                                                                      |
+| ------------------------------------------------- | ------------------------------------------------------------------------- |
+| `src/lib/domain-verification/challenge.ts`        | record names, tokens, host classification                                 |
+| `src/lib/domain-verification/platform.ts`         | the `PLATFORM_DOMAIN_SUFFIX` contract, label-wise matcher, host minting   |
+| `src/lib/onboarding/provision.ts`                 | claims + allocates the minted host in the tenant transaction              |
+| `src/lib/domain-verification/dns.ts`              | bounded, uncached TXT resolution + hard/soft classification               |
+| `src/lib/domain-verification/policy.ts`           | the delisting policy (pure)                                               |
+| `src/lib/domain-verification/allowlist.ts`        | exact-host OAuth redirect allowlist as a list (no caller until #688)      |
+| `src/lib/domain-verification/destination.ts`      | which hosts may receive a workshop sign-in hand-off (one rule)            |
+| `src/lib/domain-verification/sign-in-standing.ts` | where one host stands for the workshop sign-in (the same rule, for a row) |
+| `src/lib/domain-verification/sign-in-labels.ts`   | the outcomes as the organizer reads them                                  |
+| `src/lib/workshop/sign-in.ts`                     | where the portal is for a link that leaves the request (the main host)    |
+| `src/lib/domain-verification/routing.ts`          | the flag-gated routing gate                                               |
+| `src/lib/domain-verification/sweep.ts`            | continuous re-verification + organizer alerts                             |
+| `src/app/api/cron/domain-verification/route.ts`   | daily cron (05:00 UTC)                                                    |
+| `src/server/routers/domainVerification.ts`        | admin list + re-check                                                     |
+| `src/components/admin/DomainVerificationCard.tsx` | `/admin/settings#domain-verification`                                     |
 
 DNS resolution uses a dedicated `node:dns` `Resolver` with an explicit timeout
 and a fixed `tries`, plus an outer wall-clock race. Nothing about verification is

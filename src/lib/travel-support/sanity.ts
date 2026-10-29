@@ -78,6 +78,30 @@ export async function getTravelSupport(
 }
 
 /**
+ * The conference a speaker's travel-support request belongs to. Without a
+ * `requestedId` it is the current domain's conference. With one, the id is
+ * honoured only when that conference is in `orgId` (the current domain's org)
+ * and the speaker has a talk there; anything else yields `null`, so a foreign
+ * or unrelated id looks exactly like a missing one.
+ */
+export async function resolveTravelSupportConferenceId(
+  speakerId: string,
+  currentConference: { _id: string; organization?: { _ref?: string } | null },
+  requestedId?: string | null,
+): Promise<string | null> {
+  if (!requestedId || requestedId === currentConference._id) {
+    return currentConference._id
+  }
+  const orgId = currentConference.organization?._ref
+  if (!orgId) return null
+  return clientRead.fetch<string | null>(
+    `*[_type == "conference" && _id == $conferenceId && organization._ref == $orgId
+      && count(*[_type == "talk" && conference._ref == $conferenceId && $speakerId in speakers[]._ref]) > 0][0]._id`,
+    { conferenceId: requestedId, orgId, speakerId },
+  )
+}
+
+/**
  * One travel-support request by document id.
  *
  * EXPLICITLY PROJECTED (#863). This used to open with a bare `...` spread, which

@@ -36,7 +36,13 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/admin/speakers',
 }))
 
-import { render, screen, cleanup } from '@testing-library/react'
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from '@testing-library/react'
 import { SpeakerTable } from '@/components/admin/SpeakerTable'
 import type { Speaker } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
@@ -94,5 +100,89 @@ describe('SpeakerTable ticket row actions', () => {
     })
 
     expect(buttons.every((b) => !b.hasAttribute('disabled'))).toBe(true)
+  })
+
+  it('copies all filtered speaker emails from the filter bar', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    render(
+      <SpeakerTable
+        speakers={
+          [
+            {
+              _id: 'speaker-1',
+              name: 'Ada Lovelace',
+              email: 'ada@example.com',
+              flags: [],
+              links: [],
+              proposals: [],
+            },
+            {
+              _id: 'speaker-2',
+              name: 'Grace Hopper',
+              email: 'grace@example.com',
+              flags: [],
+              links: [],
+              proposals: [],
+            },
+          ] as unknown as (Speaker & { proposals: ProposalExisting[] })[]
+        }
+        onEditSpeaker={vi.fn()}
+        onPreviewSpeaker={vi.fn()}
+      />,
+    )
+
+    const copyBtns = screen.getAllByRole('button', {
+      name: 'Copy all 2 emails',
+    })
+    expect(copyBtns).toHaveLength(1)
+    fireEvent.click(copyBtns[0])
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        'ada@example.com, grace@example.com',
+      )
+    })
+
+    writeText.mockClear()
+    fireEvent.change(screen.getByPlaceholderText('Search speakers...'), {
+      target: { value: 'Ada' },
+    })
+
+    const [filteredCopyBtn] = screen.getAllByRole('button', {
+      name: 'Copy all 1 email',
+    })
+    fireEvent.click(filteredCopyBtn)
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('ada@example.com')
+    })
+  })
+
+  it('groups every ticket question under one "Ticket answers" filter', async () => {
+    const question = (id: string, label: string) => ({
+      id,
+      source: 'additional' as const,
+      rawKey: id,
+      label,
+      type: 'choice' as const,
+      options: ['Yes', 'No'],
+    })
+    renderTable({
+      ticketQuestions: [
+        question('q1', 'Monday workshops'),
+        question('q2', 'Speaker dinner'),
+      ],
+    })
+
+    expect(
+      screen.queryByRole('button', { name: /^monday workshops/i }),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /ticket answers/i }))
+
+    // Headings inside the menu (the Columns menu is closed).
+    expect(await screen.findAllByTitle('Monday workshops')).not.toHaveLength(0)
+    expect(screen.getAllByTitle('Speaker dinner')).not.toHaveLength(0)
   })
 })

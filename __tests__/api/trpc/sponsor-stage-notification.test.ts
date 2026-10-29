@@ -119,7 +119,7 @@ describe('sponsor.crm.moveStage — organizer notifications', () => {
     for (const item of items) {
       expect(item.notificationType).toBe('sponsor_activity')
       expect(item.title).toBe('Sponsor Acme moved to closed-lost')
-      expect(item.link).toBe('/admin/sponsors/crm?sponsor=sfc-1')
+      expect(item.link).toBe('/admin/sponsors/sfc-1?view=pipeline')
       expect(item.actorId).toBe('actor-1')
       expect(item.conferenceId).toBe('conf-1')
     }

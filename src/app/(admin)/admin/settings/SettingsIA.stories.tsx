@@ -16,6 +16,7 @@ import {
   SwatchIcon,
   EyeIcon,
   PencilSquareIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline'
 import {
   InfoCard,
@@ -44,6 +45,13 @@ import { PlatformOrgManager } from './PlatformOrgManager'
 const GROUP: Record<string, SettingsGroup> = Object.fromEntries(
   SETTINGS_GROUPS.map((g) => [g.id, g]),
 )
+
+/**
+ * Raw, unstripped HTML as some datasets store it: the long unbreakable-token
+ * case for mobile overflow QA. The page itself strips tags before rendering.
+ */
+const RAW_HTML_DESCRIPTION =
+  'Cloud Native Bergen is a community conference in <u><a href="https://en.visitbergen.com/visit-bergen/things-to-do">Bergen</a></u>, Norway. Two days of talks and workshops about Kubernetes, platform engineering and observability.'
 
 const EDIT_URL =
   'https://studio.example.com/intent/edit/id=conf;type=conference'
@@ -99,6 +107,10 @@ function SettingsIADemo() {
               <FieldRow label="City" value="Bergen" />
               <FieldRow label="Country" value="Norway" />
               <FieldRow label="Tagline" value="Cloud on your terms" />
+              <FieldRow
+                label="Description (raw HTML)"
+                value={RAW_HTML_DESCRIPTION}
+              />
             </InfoCard>
 
             {/* Summary + way in to the Appearance section; the editors live
@@ -126,12 +138,12 @@ function SettingsIADemo() {
             <InfoCard title="Visibility" icon={EyeIcon} action={<EditPencil />}>
               <div
                 id="visibility"
-                className="flex scroll-mt-24 items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
+                className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
               >
                 <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
                   Status
                 </dt>
-                <dd className="min-w-0 text-right text-sm">
+                <dd className="min-w-0 text-sm sm:text-right">
                   <StatusBadge label="Live" color="green" />
                 </dd>
               </div>
@@ -260,6 +272,18 @@ function SettingsIADemo() {
               <FieldRow label="Checkin Customer ID" value={12345} />
               <FieldRow label="Checkin Event ID" value={67890} />
             </InfoCard>
+
+            <InfoCard
+              title="Analytics"
+              icon={ChartBarIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow
+                label="PostHog project token (organization)"
+                value="phc_8f3kQ2xZr7LmN4pV9sT1wY6bC0dE5gH2jK8aU3iO"
+              />
+            </InfoCard>
           </SettingsGroupSection>
 
           <SettingsGroupSection
@@ -270,7 +294,13 @@ function SettingsIADemo() {
               title="Organizers & Teams"
               icon={UserGroupIcon}
               editUrl={EDIT_URL}
-              action={<EditPencil />}
+              action={
+                <>
+                  <EditPencil />
+                  <EditPencil />
+                  <EditPencil />
+                </>
+              }
             >
               <FieldRow
                 label="Organizers"
@@ -393,3 +423,8 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Default: Story = {}
+
+/** Phone width: rows stack and nothing scrolls sideways. */
+export const Mobile: Story = {
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}

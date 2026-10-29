@@ -144,7 +144,7 @@ export const AdminWithdraw: Story = {
   args: {
     open: true,
     close: fn(),
-    proposal: mockProposal,
+    proposal: { ...mockProposal, status: Status.confirmed },
     action: Action.withdraw,
     adminUI: true,
     onAction: fn(),
@@ -154,7 +154,27 @@ export const AdminWithdraw: Story = {
     docs: {
       description: {
         story:
-          'Admin withdrawal. The comment field becomes a mandatory "Reason for withdrawal" (#212); the reason is recorded on the proposal and the Withdraw button is disabled until it is provided.',
+          'Admin withdrawal. The comment field becomes a mandatory "Reason for withdrawal" (#212), recorded on the proposal and posted as a message to every speaker on the talk (plus an in-app notice). "Force email" (off) also sends the formal email. "Cancel the speaker\'s ticket" (off) adds a by-hand ticket request to the organizer Slack alert; it is only offered for a confirmed talk.',
+      },
+    },
+  },
+}
+
+export const AdminCancel: Story = {
+  args: {
+    open: true,
+    close: fn(),
+    proposal: { ...mockProposal, status: Status.confirmed },
+    action: Action.cancel,
+    adminUI: true,
+    onAction: fn(),
+    domain: 'cloudnativedays.no',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Organizer cancellation of an accepted or confirmed talk. The optional comment (or a stock line) is posted as a message to every speaker on the talk, plus an in-app notice. "Force email" (off) also sends the formal email. "Cancel the speaker\'s ticket" (off) adds a by-hand ticket request to the organizer Slack alert; it is only offered for a confirmed talk.',
       },
     },
   },

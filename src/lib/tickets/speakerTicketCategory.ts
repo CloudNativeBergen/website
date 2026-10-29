@@ -14,3 +14,4 @@
  * nothing.
  */
 export const SPEAKER_TICKET_CATEGORY = 'Speaker ticket'
+export const VOLUNTEER_TICKET_CATEGORY = 'Volunteer ticket'

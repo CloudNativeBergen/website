@@ -174,14 +174,6 @@ export function InvitationLettersPageClient({
         title="Invitation Letters"
         description="Issue visa invitation letters for participants of"
         contextHighlight={conference.title}
-        stats={[
-          { value: letters.length, label: 'Letters issued', color: 'slate' },
-          {
-            value: letters.filter((letter) => letter.emailedTo).length,
-            label: 'Sent by email',
-            color: 'blue',
-          },
-        ]}
         backLink={{ href: '/admin', label: 'Back to Dashboard' }}
       />
 

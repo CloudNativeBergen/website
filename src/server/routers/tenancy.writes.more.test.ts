@@ -91,31 +91,34 @@ vi.mock('@/lib/sponsor-crm/activity', () => ({
 // --- workshop ---------------------------------------------------------------
 const ws = vi.hoisted(() => ({
   getAllWorkshopSignups: vi.fn(),
-  confirmWorkshopSignup: vi.fn(),
-  cancelWorkshopSignup: vi.fn(),
+  moveWorkshopSignupToWaitlist: vi.fn(),
   deleteWorkshopSignup: vi.fn(),
-  updateWorkshopCapacity: vi.fn(),
-  verifyWorkshopBelongsToConference: vi.fn(),
-  checkWorkshopCapacity: vi.fn(),
   getWorkshopSignupsByWorkshop: vi.fn(),
+  // The seat decisions (#1344). Each reads the workshop WITHIN the conference
+  // it is given (`src/lib/workshop/seats.sanity.test.ts`); here, that it is
+  // given the request's.
+  confirmSignups: vi.fn(),
+  changeCapacity: vi.fn(),
 }))
 // The workshop admin surface is additionally gated on the `workshops` feature
 // (#689). That gate is a FEATURE decision and has its own tests; these cases are
 // about TENANCY, so grant it — otherwise every case below would stop at
 // FORBIDDEN and assert nothing about scoping.
 vi.mock('@/lib/features/workshops', () => ({
-  isWorkshopsEnabledForOrg: vi.fn().mockResolvedValue(true),
+  isWorkshopsEnabledForConference: vi.fn().mockResolvedValue(true),
 }))
 vi.mock('@/lib/workshop/sanity', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   getAllWorkshopSignups: ws.getAllWorkshopSignups,
-  confirmWorkshopSignup: ws.confirmWorkshopSignup,
-  cancelWorkshopSignup: ws.cancelWorkshopSignup,
+  moveWorkshopSignupToWaitlist: ws.moveWorkshopSignupToWaitlist,
   deleteWorkshopSignup: ws.deleteWorkshopSignup,
-  updateWorkshopCapacity: ws.updateWorkshopCapacity,
-  verifyWorkshopBelongsToConference: ws.verifyWorkshopBelongsToConference,
-  checkWorkshopCapacity: ws.checkWorkshopCapacity,
   getWorkshopSignupsByWorkshop: ws.getWorkshopSignupsByWorkshop,
+  getWorkshopById: vi.fn(async () => null),
+}))
+vi.mock('@/lib/workshop/seats', () => ({
+  confirmSignups: ws.confirmSignups,
+  changeCapacity: ws.changeCapacity,
+  signUpForWorkshop: vi.fn(),
 }))
 
 // --- volunteer --------------------------------------------------------------
@@ -125,6 +128,15 @@ const vol = vi.hoisted(() => ({
   updateVolunteerDetails: vi.fn(),
   deleteVolunteer: vi.fn(),
   sendVolunteerApprovalEmail: vi.fn(),
+  recordVolunteerApprovalEmailSent: vi
+    .fn()
+    .mockResolvedValue({ success: true, error: null }),
+  confirmVolunteerAttendance: vi
+    .fn()
+    .mockResolvedValue({ success: true, error: null }),
+  declineVolunteerAttendance: vi
+    .fn()
+    .mockResolvedValue({ success: true, error: null }),
 }))
 vi.mock('@/lib/email/volunteer', () => ({
   sendVolunteerApprovalEmail: vol.sendVolunteerApprovalEmail,
@@ -136,6 +148,12 @@ vi.mock('@/lib/volunteer/sanity', () => ({
   updateVolunteerDetails: vol.updateVolunteerDetails,
   deleteVolunteer: vol.deleteVolunteer,
   createVolunteer: vi.fn(),
+  hasActiveVolunteerByEmail: vi
+    .fn()
+    .mockResolvedValue({ exists: false, error: null }),
+  recordVolunteerApprovalEmailSent: vol.recordVolunteerApprovalEmailSent,
+  confirmVolunteerAttendance: vol.confirmVolunteerAttendance,
+  declineVolunteerAttendance: vol.declineVolunteerAttendance,
 }))
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: vi.fn(),
@@ -148,6 +166,7 @@ import type { Context } from '@/server/trpc'
 import { registrationRouter } from './registration'
 import { workshopRouter } from './workshop'
 import { volunteerRouter } from './volunteer'
+import { mintVolunteerConfirmToken } from '@/lib/volunteer/token'
 
 const t = initTRPC.context<Context>().create()
 const ORG_A = 'org-A'
@@ -215,12 +234,18 @@ beforeEach(() => {
   })
   reg.generateRegistrationToken.mockResolvedValue({ token: 'tok' })
   ws.getAllWorkshopSignups.mockResolvedValue([])
-  ws.confirmWorkshopSignup.mockResolvedValue(undefined)
-  ws.cancelWorkshopSignup.mockResolvedValue(undefined)
+  ws.confirmSignups.mockImplementation(
+    async (_w: string, _c: string, ids: string[]) => ({
+      confirmed: ids,
+      newlyConfirmed: ids,
+      seatsTaken: 0,
+      capacity: 100,
+    }),
+  )
+  ws.moveWorkshopSignupToWaitlist.mockResolvedValue(undefined)
   ws.deleteWorkshopSignup.mockResolvedValue(undefined)
-  ws.updateWorkshopCapacity.mockResolvedValue({ _id: 'w-1' })
-  ws.verifyWorkshopBelongsToConference.mockResolvedValue(false)
-  ws.checkWorkshopCapacity.mockResolvedValue({ capacity: 10, signups: 0 })
+  // A workshop the seats read does not find WITHIN the conference.
+  ws.changeCapacity.mockResolvedValue({ refused: 'not-found' })
   ws.getWorkshopSignupsByWorkshop.mockResolvedValue([])
   vol.getVolunteerById.mockResolvedValue({
     volunteer: { _id: 'vol-B', name: 'X' },
@@ -284,7 +309,7 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     expect(ws.getAllWorkshopSignups).toHaveBeenCalledWith(
       expect.objectContaining({ conferenceId: CONF_A, signupIds: ['sg-B'] }),
     )
-    expect(ws.confirmWorkshopSignup).not.toHaveBeenCalled()
+    expect(ws.confirmSignups).not.toHaveBeenCalled()
   })
 
   /**
@@ -304,13 +329,15 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     expect(ws.getAllWorkshopSignups).toHaveBeenCalledWith(
       expect.objectContaining({ conferenceId: CONF_A }),
     )
-    expect(ws.confirmWorkshopSignup).not.toHaveBeenCalled()
+    expect(ws.confirmSignups).not.toHaveBeenCalled()
   })
 
   it('batchConfirmSignups asks for a page big enough to hold the whole batch', async () => {
     // A batch larger than the default page size must not silently truncate.
     const ids = Array.from({ length: 60 }, (_, i) => `sg-${i}`)
-    ws.getAllWorkshopSignups.mockResolvedValue(ids.map((_id) => ({ _id })))
+    ws.getAllWorkshopSignups.mockResolvedValue(
+      ids.map((_id) => ({ _id, workshop: { _id: 'w-A' } })),
+    )
     await workshop().admin.batchConfirmSignups({
       signupIds: ids,
       sendEmails: false,
@@ -318,19 +345,28 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     expect(ws.getAllWorkshopSignups).toHaveBeenCalledWith(
       expect.objectContaining({ pageSize: 60 }),
     )
-    expect(ws.confirmWorkshopSignup).toHaveBeenCalledTimes(60)
+    expect(ws.confirmSignups).toHaveBeenCalledWith('w-A', CONF_A, ids, {
+      acceptPast: undefined,
+    })
   })
 
   it('batchConfirmSignups confirms when every id is ours', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([
-      { _id: 'sg-A' },
-      { _id: 'sg-B' },
+      { _id: 'sg-A', workshop: { _id: 'w-A' } },
+      { _id: 'sg-B', workshop: { _id: 'w-A' } },
     ])
-    await workshop().admin.batchConfirmSignups({
-      signupIds: ['sg-A', 'sg-B'],
-      sendEmails: false,
-    })
-    expect(ws.confirmWorkshopSignup).toHaveBeenCalledTimes(2)
+    await expect(
+      workshop().admin.batchConfirmSignups({
+        signupIds: ['sg-A', 'sg-B'],
+        sendEmails: false,
+      }),
+    ).resolves.toMatchObject({ results: { succeeded: 2, failed: 0 } })
+    expect(ws.confirmSignups).toHaveBeenCalledWith(
+      'w-A',
+      CONF_A,
+      ['sg-A', 'sg-B'],
+      { acceptPast: undefined },
+    )
   })
 
   it('listSignups scopes the lookup to the request conference', async () => {
@@ -349,16 +385,22 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     await expect(
       workshop().admin.batchCancelSignups({ signupIds: ['sg-A', 'sg-B'] }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
-    expect(ws.cancelWorkshopSignup).not.toHaveBeenCalled()
+    expect(ws.moveWorkshopSignupToWaitlist).not.toHaveBeenCalled()
   })
 
-  it('batchCancelSignups cancels when every id is ours', async () => {
+  // #1331: the name says cancel, the behaviour is "Move to waitlist". It never
+  // deletes; an attendee's own cancel does (`workshop.cancelSignup`).
+  it('batchCancelSignups moves to the waitlist when every id is ours', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([
       { _id: 'sg-A' },
       { _id: 'sg-B' },
     ])
     await workshop().admin.batchCancelSignups({ signupIds: ['sg-A', 'sg-B'] })
-    expect(ws.cancelWorkshopSignup).toHaveBeenCalledTimes(2)
+    expect(ws.moveWorkshopSignupToWaitlist.mock.calls).toEqual([
+      ['sg-A'],
+      ['sg-B'],
+    ])
+    expect(ws.deleteWorkshopSignup).not.toHaveBeenCalled()
   })
 
   it('deleteSignup refuses a foreign signup id', async () => {
@@ -381,13 +423,15 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     await expect(
       workshop().admin.updateCapacity({ workshopId: 'w-B', capacity: 50 }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
-    expect(ws.updateWorkshopCapacity).not.toHaveBeenCalled()
+    expect(ws.changeCapacity).toHaveBeenCalledWith('w-B', CONF_A, 50)
   })
 
   it('updateCapacity still works for a workshop in the conference', async () => {
-    ws.verifyWorkshopBelongsToConference.mockResolvedValue(true)
-    await workshop().admin.updateCapacity({ workshopId: 'w-A', capacity: 50 })
-    expect(ws.updateWorkshopCapacity).toHaveBeenCalledWith('w-A', 50)
+    ws.changeCapacity.mockResolvedValue({ promoted: [] })
+    await expect(
+      workshop().admin.updateCapacity({ workshopId: 'w-A', capacity: 50 }),
+    ).resolves.toMatchObject({ success: true })
+    expect(ws.changeCapacity).toHaveBeenCalledWith('w-A', CONF_A, 50)
   })
 })
 
@@ -458,6 +502,60 @@ describe('volunteer mutations are conference-scoped (#730)', () => {
       volunteer().admin.getById({ id: 'vol-B' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(vol.getVolunteerById).not.toHaveBeenCalled()
+  })
+
+  it('confirmAttendance refuses a token minted for another conference before reading', async () => {
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-B',
+      conferenceId: 'conf-B',
+      email: 'x@example.com',
+    })
+    await expect(
+      volunteer().confirmAttendance({ token }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(vol.getVolunteerById).not.toHaveBeenCalled()
+    expect(vol.confirmVolunteerAttendance).not.toHaveBeenCalled()
+  })
+
+  it('confirmAttendance refuses a foreign volunteer document even if token conference matches', async () => {
+    foreign('volunteer')
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-B',
+      conferenceId: CONF_A,
+      email: 'x@example.com',
+    })
+    await expect(
+      volunteer().confirmAttendance({ token }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(vol.getVolunteerById).not.toHaveBeenCalled()
+    expect(vol.confirmVolunteerAttendance).not.toHaveBeenCalled()
+  })
+
+  it('declineAttendance refuses a token minted for another conference before reading', async () => {
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-B',
+      conferenceId: 'conf-B',
+      email: 'x@example.com',
+    })
+    await expect(
+      volunteer().declineAttendance({ token }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(vol.getVolunteerById).not.toHaveBeenCalled()
+    expect(vol.declineVolunteerAttendance).not.toHaveBeenCalled()
+  })
+
+  it('declineAttendance refuses a foreign volunteer document even if token conference matches', async () => {
+    foreign('volunteer')
+    const token = mintVolunteerConfirmToken({
+      volunteerId: 'vol-B',
+      conferenceId: CONF_A,
+      email: 'x@example.com',
+    })
+    await expect(
+      volunteer().declineAttendance({ token }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(vol.getVolunteerById).not.toHaveBeenCalled()
+    expect(vol.declineVolunteerAttendance).not.toHaveBeenCalled()
   })
 
   it('our own volunteer still updates and deletes', async () => {
@@ -630,13 +728,18 @@ describe('the volunteer procedure surface is pinned (#858)', () => {
       }
     )._def.procedures
     expect(Object.keys(procedures).sort()).toEqual([
+      'admin.bulkUpdateStatus',
       'admin.delete',
       'admin.getById',
       'admin.list',
+      'admin.sendBulkEmail',
       'admin.sendEmail',
+      'admin.sendTicketReminder',
       'admin.update',
       'admin.updateStatus',
+      'confirmAttendance',
       'create',
+      'declineAttendance',
     ])
   })
 })

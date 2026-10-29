@@ -14,12 +14,15 @@ interface SponsorCRMPageClientProps {
   domain: string
   /** Send → Discount codes is offered (#1262); see the page. */
   canSendDiscountCodes?: boolean
+  /** The conference has workshops: sponsors can be given an early-access link (#1346). */
+  workshopsEnabled?: boolean
 }
 
 export function SponsorCRMPageClient({
   conference,
   domain,
   canSendDiscountCodes = false,
+  workshopsEnabled = false,
 }: SponsorCRMPageClientProps) {
   const utils = api.useUtils()
   // Control hook to trigger form from header
@@ -66,6 +69,7 @@ export function SponsorCRMPageClient({
           conference={conference}
           domain={domain}
           canSendDiscountCodes={canSendDiscountCodes}
+          workshopsEnabled={workshopsEnabled}
           externalNewTrigger={triggerNew}
         />
       </div>

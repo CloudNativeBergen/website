@@ -41,6 +41,8 @@ export function actionStateMachine(
         status = Status.withdrawn
       } else if (isOrganizer && action === Action.reject) {
         status = Status.rejected
+      } else if (isOrganizer && action === Action.cancel) {
+        status = Status.canceled
       } else {
         isValidAction = false
       }
@@ -66,6 +68,8 @@ export function actionStateMachine(
     case Status.confirmed:
       if (action === Action.withdraw) {
         status = Status.withdrawn
+      } else if (isOrganizer && action === Action.cancel) {
+        status = Status.canceled
       } else {
         isValidAction = false
       }

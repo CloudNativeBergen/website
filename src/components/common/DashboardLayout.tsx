@@ -31,6 +31,49 @@ export interface NavigationItem {
       titleId?: string | undefined
     } & React.RefAttributes<SVGSVGElement>
   >
+  /**
+   * A count on the entry, e.g. what waits there for the user; shown whenever
+   * present, so leave it out when there is nothing to count (the admin
+   * registry's `withNavBadges` does). `label` says what is counted
+   * ("flagged") to a screen reader and in the rail's tooltip.
+   */
+  badge?: NavigationBadge
+}
+
+export interface NavigationBadge {
+  count: number
+  label: string
+}
+
+/** The entry's name, with its count when it has one (the rail's tooltip). */
+const itemTitle = ({ name, badge }: NavigationItem) =>
+  badge ? `${name} (${badge.count} ${badge.label})` : name
+
+/**
+ * An entry's count: a pill after the name in the drawer, a dot with the
+ * number on the icon in the desktop rail, where there is no name.
+ */
+function NavBadge({
+  item,
+  variant,
+}: {
+  item: NavigationItem
+  variant: 'drawer' | 'rail'
+}) {
+  if (!item.badge) return null
+  const { count, label } = item.badge
+  const shown = count > 99 ? '99+' : String(count)
+  return variant === 'drawer' ? (
+    <span className="ml-auto self-center rounded-full bg-red-600 px-2 py-0.5 text-xs leading-5 font-semibold text-white tabular-nums">
+      {shown}
+      <span className="sr-only"> {label}</span>
+    </span>
+  ) : (
+    <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] leading-none font-semibold text-white tabular-nums">
+      {shown}
+      <span className="sr-only"> {label}</span>
+    </span>
+  )
 }
 
 export interface NavigationSection {
@@ -192,6 +235,15 @@ export function DashboardLayout({
     return `https://placehold.co/192x192/${avatarBackground}/fff/png?text=${initials}`
   }
 
+  // Every entry's count, in words, for the closed drawer's button.
+  const waiting = (
+    isNavigationSections(navigation)
+      ? navigation.flatMap((section) => section.items)
+      : navigation
+  ).flatMap((item) =>
+    item.badge ? [`${item.name}: ${item.badge.count} ${item.badge.label}`] : [],
+  )
+
   const isCurrentPath = (href: string) => {
     const basePath = mode === 'admin' ? '/admin' : '/cfp'
     return pathname === href || (href !== basePath && pathname.startsWith(href))
@@ -285,6 +337,7 @@ export function DashboardLayout({
                                         className="size-6 shrink-0"
                                       />
                                       {item.name}
+                                      <NavBadge item={item} variant="drawer" />
                                     </Link>
                                   </li>
                                 )
@@ -311,6 +364,7 @@ export function DashboardLayout({
                                   className="size-6 shrink-0"
                                 />
                                 {item.name}
+                                <NavBadge item={item} variant="drawer" />
                               </Link>
                             </li>
                           )
@@ -352,12 +406,12 @@ export function DashboardLayout({
                               <li key={item.name}>
                                 <Link
                                   href={item.href}
-                                  title={item.name}
+                                  title={itemTitle(item)}
                                   className={clsx(
                                     isCurrent
                                       ? colors.sidebar.active
                                       : `${colors.sidebar.inactive} ${colors.sidebar.hover}`,
-                                    'group flex justify-center rounded-md p-3 text-sm leading-6 font-semibold',
+                                    'group relative flex justify-center rounded-md p-3 text-sm leading-6 font-semibold',
                                   )}
                                 >
                                   <item.icon
@@ -365,6 +419,7 @@ export function DashboardLayout({
                                     className="size-6 shrink-0"
                                   />
                                   <span className="sr-only">{item.name}</span>
+                                  <NavBadge item={item} variant="rail" />
                                 </Link>
                               </li>
                             )
@@ -378,12 +433,12 @@ export function DashboardLayout({
                         <li key={item.name}>
                           <Link
                             href={item.href}
-                            title={item.name}
+                            title={itemTitle(item)}
                             className={clsx(
                               isCurrent
                                 ? colors.sidebar.active
                                 : `${colors.sidebar.inactive} ${colors.sidebar.hover}`,
-                              'group flex justify-center rounded-md p-3 text-sm leading-6 font-semibold',
+                              'group relative flex justify-center rounded-md p-3 text-sm leading-6 font-semibold',
                             )}
                           >
                             <item.icon
@@ -391,6 +446,7 @@ export function DashboardLayout({
                               className="size-6 shrink-0"
                             />
                             <span className="sr-only">{item.name}</span>
+                            <NavBadge item={item} variant="rail" />
                           </Link>
                         </li>
                       )
@@ -409,10 +465,23 @@ export function DashboardLayout({
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            className={clsx('-m-2.5 p-2.5 lg:hidden', colors.mobile.text)}
+            className={clsx(
+              'relative -m-2.5 p-2.5 lg:hidden',
+              colors.mobile.text,
+            )}
           >
-            <span className="sr-only">Open sidebar</span>
+            <span className="sr-only">
+              Open sidebar
+              {waiting.length > 0 && ` (${waiting.join(', ')})`}
+            </span>
             <Bars3Icon aria-hidden="true" className="size-6" />
+            {/* The drawer's counts, closed: a dot, as the rail's badge. */}
+            {waiting.length > 0 && (
+              <span
+                aria-hidden="true"
+                className="absolute top-1.5 right-1.5 size-2.5 rounded-full bg-red-600"
+              />
+            )}
           </button>
 
           <div className="flex flex-1 items-center justify-center">

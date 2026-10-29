@@ -113,7 +113,6 @@ export async function generateOGImage(
             justifyContent: 'center',
             width: '35%',
             position: 'relative',
-            zIndex: 1,
           }}
         >
           {(conference.logoBright || conference.logomarkBright) && (
@@ -134,7 +133,6 @@ export async function generateOGImage(
             width: '65%',
             paddingLeft: '32px',
             position: 'relative',
-            zIndex: 1,
           }}
         >
           <h1
@@ -211,7 +209,6 @@ export async function generateOGImage(
             display: 'flex',
             justifyContent: 'flex-end',
             alignItems: 'center',
-            zIndex: 1,
           }}
         >
           <div

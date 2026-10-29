@@ -1,0 +1,163 @@
+/**
+ * The shared speaker briefing (#1592) as ONE Slack message for the speakers'
+ * channel. Built from the briefing WITHOUT speaker data, so nothing personal
+ * (talks, to-dos) can reach a channel. Every organizer-written string goes
+ * through `escapeMrkdwn`, so a value cannot become a link or a mention.
+ */
+import type { TypedObject } from 'sanity'
+import type { SpeakerBriefing } from '@/lib/speaker/briefing'
+import { formatConferenceDayTime } from '@/lib/time'
+import { escapeMrkdwn, type SlackBlock, type SlackMessage } from './client'
+
+const e = (s: string) => escapeMrkdwn(s)
+const httpUrl = (url?: string) =>
+  url && /^https?:\/\//i.test(url) ? url : undefined
+/** A Slack link; `|` and the escapes keep the label and url inert. */
+const link = (url: string | undefined, label: string) => {
+  const href = httpUrl(url)
+  return href ? `<${e(href).replace(/\|/g, '%7C')}|${e(label)}>` : ''
+}
+const when = (iso: string) => `${formatConferenceDayTime(iso)} (local time)`
+
+type Span = { _type?: string; text?: string; marks?: string[] }
+type Block = TypedObject & {
+  children?: Span[]
+  listItem?: string
+  markDefs?: { _key: string; _type: string; href?: string }[]
+}
+
+/** Portable text as plain mrkdwn: bold, italics, http(s) links, bullets. */
+export function portableTextToMrkdwn(blocks?: TypedObject[]): string {
+  return (blocks ?? [])
+    .map((raw) => {
+      const block = raw as Block
+      const line = (block.children ?? [])
+        .map((span) => {
+          let text = e(span.text ?? '')
+          if (!text.trim()) return text
+          for (const mark of span.marks ?? []) {
+            const def = block.markDefs?.find((d) => d._key === mark)
+            if (def?._type === 'link') {
+              text = link(def.href, span.text ?? '') || text
+            } else if (mark === 'strong') text = `*${text}*`
+            else if (mark === 'em') text = `_${text}_`
+          }
+          return text
+        })
+        .join('')
+      return block.listItem ? `• ${line}` : line
+    })
+    .filter((line) => line.trim())
+    .join('\n')
+}
+
+/** Slack caps a section's text at 3000 characters. */
+export const SLACK_SECTION_LIMIT = 3000
+
+/**
+ * Split text into chunks within the limit, at whitespace and never inside
+ * a `<url|label>` link or an entity, so no chunk breaks markup.
+ */
+export function splitMrkdwn(
+  text: string,
+  limit = SLACK_SECTION_LIMIT,
+): string[] {
+  const chunks: string[] = []
+  let current = ''
+  for (const token of text.match(/<[^>]*>|&[a-z]+;|[^\s<&]+|\s+|[<&]/g) ?? []) {
+    if (current.length + token.length > limit && current) {
+      chunks.push(current.trimEnd())
+      current = ''
+    }
+    if (!current && !token.trim()) continue
+    // ponytail: a single token over the limit (a giant URL) is cut hard.
+    current += token.slice(0, limit)
+  }
+  if (current.trim()) chunks.push(current.trimEnd())
+  return chunks
+}
+
+const sections = (text: string): SlackBlock[] =>
+  splitMrkdwn(text).map((chunk) => ({
+    type: 'section',
+    text: { type: 'mrkdwn', text: chunk },
+  }))
+
+export function buildBriefingSlackMessage(
+  briefing: SpeakerBriefing,
+  opts: {
+    title: string
+    dashboardUrl: string
+    mentionChannel?: boolean
+    /** Plain text from the organizers for this post, shown first. */
+    note?: string
+  },
+): SlackMessage {
+  const parts: string[] = []
+  if (opts.note?.trim()) {
+    parts.push(`*Note from the organizers*\n${e(opts.note.trim())}`)
+  }
+  const d = briefing.dinner
+  if (d) {
+    const lines = ['*Speaker dinner*']
+    if (d.rsvpNote) lines.push(e(d.rsvpNote))
+    if (d.startsAt) lines.push(when(d.startsAt))
+    const place = [d.venueName, d.address].filter(Boolean).join(', ')
+    if (place) {
+      lines.push(
+        [e(place), link(d.mapUrl, 'Open map')].filter(Boolean).join(' · '),
+      )
+    }
+    if (d.text) lines.push(e(d.text))
+    const description = portableTextToMrkdwn(d.description)
+    if (description) lines.push(description)
+    for (const r of d.routes ?? []) {
+      const meet = r.meetingPoint
+        ? [
+            `Meet at ${e(r.meetingPoint)}`,
+            link(r.meetingPointMapUrl, 'Open map'),
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : ''
+      // "Departs {time}", plus the note; the note alone when there is no time.
+      const departs = r.departsAt
+        ? [`Departs ${when(r.departsAt)}`, r.departsNote && e(r.departsNote)]
+            .filter(Boolean)
+            .join(', ')
+        : r.departsNote && e(r.departsNote)
+      lines.push(
+        `• ${[r.label && `*${e(r.label)}*`, meet, departs]
+          .filter(Boolean)
+          .join(' · ')}`,
+      )
+    }
+    parts.push(lines.join('\n'))
+  }
+  const rich = (title: string, blocks?: TypedObject[]) => {
+    const body = portableTextToMrkdwn(blocks)
+    if (body) parts.push(`*${title}*\n${body}`)
+  }
+  rich('Check-in', briefing.checkIn)
+  rich('Equipment', briefing.equipment)
+  const c = briefing.onsiteContact
+  if (c?.name || c?.email) {
+    parts.push(
+      // No phone number in a channel: name and email only.
+      `*On-site contact*\n${e([c.name, c.email].filter(Boolean).join(' · '))}`,
+    )
+  }
+  rich('Good to know', briefing.extra)
+
+  const heading = `${opts.mentionChannel ? '<!channel> ' : ''}*${e(opts.title)}*`
+  return {
+    text: opts.title,
+    blocks: [
+      ...sections(heading),
+      ...parts.flatMap(sections),
+      ...sections(
+        `Everything is on your speaker dashboard: ${link(opts.dashboardUrl, 'Open your speaker dashboard')}`,
+      ),
+    ],
+  }
+}

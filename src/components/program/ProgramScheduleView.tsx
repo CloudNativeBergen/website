@@ -12,7 +12,11 @@ import {
   TrackTalk,
 } from '@/lib/conference/types'
 import { TalkCard } from './TalkCard'
-import { getTalkStatusKey, isScheduleInPast } from '@/lib/program/time-utils'
+import {
+  getTalkStatusKey,
+  isDayCollapsedByDefault,
+  isScheduleInPast,
+} from '@/lib/program/time-utils'
 import type { TalkStatus, CurrentPosition } from '@/lib/program/time-utils'
 import { formatConferenceDateLong } from '@/lib/time'
 import clsx from 'clsx'
@@ -43,10 +47,6 @@ const getAllTimeSlots = (tracks: ScheduleTrack[]): string[] => {
 // target). Previously this returned only the first match, so a second slot
 // sharing a start time was silently dropped from the desktop grid while it
 // still rendered on mobile.
-// TODO(duration-spanning): the desktop grid keys rows purely off start time and
-// stacks co-starting slots in one cell. A duration-aware, row-spanning layout
-// (talks occupying multiple time rows based on end time) would render overlaps
-// more faithfully but is a larger change tracked separately.
 // A slot whose talk reference no longer resolves (proposal deleted after
 // scheduling) renders nothing — drop it here so neither the desktop grid cell
 // nor the mobile list leaves an empty wrapper/gap. Genuine service sessions
@@ -67,6 +67,48 @@ const sortTalksWithIndex = (track: ScheduleTrack) =>
     .map((talk, index) => ({ talk, index }))
     .filter(({ talk }) => !isDanglingRef(talk))
     .sort((a, b) => a.talk.startTime.localeCompare(b.talk.startTime))
+
+// Grid line (1-based, exclusive) where a cell starting at `cellTalks[0]` ends:
+// the first time row at or after its end, but never past the next start in
+// the same track, so cards in one column never overlap. A real gap (talk ends
+// before the next row starts) stays empty.
+export const spanEndLine = (
+  track: ScheduleTrack,
+  cellTalks: { talk: TrackTalk }[],
+  timeSlots: string[],
+) => {
+  const start = cellTalks[0].talk.startTime
+  const end = cellTalks.reduce(
+    (max, { talk }) => (talk.endTime > max ? talk.endTime : max),
+    start,
+  )
+  const nextStart = track.talks
+    .filter((t) => t.startTime > start && !isDanglingRef(t))
+    .map((t) => t.startTime)
+    .sort()[0]
+  const limit = nextStart && nextStart < end ? nextStart : end
+  const i = timeSlots.findIndex((slot) => slot >= limit)
+  return i === -1 ? timeSlots.length + 1 : i + 1
+}
+
+const toMinutes = (time: string) => {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+// The last row has no next row to span into, so give it a height that grows
+// with the longest slot starting there (1px per minute), clamped to 60–160px.
+const lastRowHeight = (tracks: ScheduleTrack[], slot: string) => {
+  const minutes = Math.max(
+    0,
+    ...tracks.flatMap((track) =>
+      getTalksAtTime(track, slot).map(
+        ({ talk }) => toMinutes(talk.endTime) - toMinutes(slot),
+      ),
+    ),
+  )
+  return Math.min(160, Math.max(60, minutes))
+}
 
 const ScheduleTabbed = React.memo(function ScheduleTabbed({
   tracks,
@@ -335,69 +377,78 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
         ))}
       </div>
 
-      <div className="space-y-2">
-        {timeSlots.map((timeSlot) => {
-          return (
-            <div
-              key={timeSlot}
-              className="grid items-start gap-x-4"
-              style={{
-                gridTemplateColumns: `120px repeat(${tracks.length}, minmax(0, 1fr))`,
-              }}
-            >
-              <div className="sticky left-0 bg-white p-2 text-center dark:bg-gray-900">
-                <div className="font-mono text-sm font-medium text-brand-slate-gray dark:text-gray-300">
-                  {timeSlot}
-                </div>
-              </div>
-
-              {tracks.map((track, trackIndex) => {
-                const cellTalks = getTalksAtTime(track, timeSlot)
-                const isScrollTarget = cellTalks.some(
-                  ({ index }) =>
-                    currentPosition &&
-                    currentPosition.scheduleIndex === scheduleIndex &&
-                    currentPosition.trackIndex === trackIndex &&
-                    currentPosition.talkIndex === index,
-                )
-
-                return (
-                  <div
-                    key={`${timeSlot}-track-${trackIndex}-${track.trackTitle}`}
-                    className="min-h-15 space-y-2"
-                    ref={isScrollTarget ? scrollTargetRef : undefined}
-                  >
-                    {cellTalks.length > 0 ? (
-                      cellTalks.map(({ talk, index: talkIndex }) => (
-                        <TalkCard
-                          key={`talk-${timeSlot}-${trackIndex}-${talkIndex}-${talk.talk?._id || talk.placeholder || 'empty'}`}
-                          talk={{
-                            ...talk,
-                            scheduleDate: date,
-                            trackTitle: track.trackTitle,
-                            trackIndex,
-                          }}
-                          status={talkStatusMap?.get(
-                            getTalkStatusKey(
-                              date,
-                              talk.startTime,
-                              trackIndex,
-                              talk.talk?._id,
-                            ),
-                          )}
-                          compact={true}
-                          fixedHeight={true}
-                        />
-                      ))
-                    ) : (
-                      <div className="h-full min-h-15" />
-                    )}
-                  </div>
-                )
-              })}
+      <div
+        className="grid gap-x-4 gap-y-2"
+        style={{
+          gridTemplateColumns: `120px repeat(${tracks.length}, minmax(0, 1fr))`,
+          gridTemplateRows: timeSlots
+            .map((slot, i) =>
+              i === timeSlots.length - 1
+                ? `minmax(${lastRowHeight(tracks, slot)}px, auto)`
+                : 'minmax(3.75rem, auto)',
+            )
+            .join(' '),
+        }}
+      >
+        {timeSlots.map((timeSlot, slotIndex) => (
+          <div
+            key={timeSlot}
+            className="sticky left-0 bg-white p-2 text-center dark:bg-gray-900"
+            style={{ gridColumn: 1, gridRow: slotIndex + 1 }}
+          >
+            <div className="font-mono text-sm font-medium text-brand-slate-gray dark:text-gray-300">
+              {timeSlot}
             </div>
-          )
-        })}
+          </div>
+        ))}
+
+        {tracks.map((track, trackIndex) =>
+          timeSlots.map((timeSlot, slotIndex) => {
+            const cellTalks = getTalksAtTime(track, timeSlot)
+            if (cellTalks.length === 0) return null
+            const isScrollTarget = cellTalks.some(
+              ({ index }) =>
+                currentPosition &&
+                currentPosition.scheduleIndex === scheduleIndex &&
+                currentPosition.trackIndex === trackIndex &&
+                currentPosition.talkIndex === index,
+            )
+
+            return (
+              <div
+                key={`${timeSlot}-track-${trackIndex}-${track.trackTitle}`}
+                className="flex flex-col gap-2 *:flex-1"
+                style={{
+                  gridColumn: trackIndex + 2,
+                  gridRow: `${slotIndex + 1} / ${spanEndLine(track, cellTalks, timeSlots)}`,
+                }}
+                ref={isScrollTarget ? scrollTargetRef : undefined}
+              >
+                {cellTalks.map(({ talk, index: talkIndex }) => (
+                  <TalkCard
+                    key={`talk-${timeSlot}-${trackIndex}-${talkIndex}-${talk.talk?._id || talk.placeholder || 'empty'}`}
+                    talk={{
+                      ...talk,
+                      scheduleDate: date,
+                      trackTitle: track.trackTitle,
+                      trackIndex,
+                    }}
+                    status={talkStatusMap?.get(
+                      getTalkStatusKey(
+                        date,
+                        talk.startTime,
+                        trackIndex,
+                        talk.talk?._id,
+                      ),
+                    )}
+                    compact={true}
+                    fixedHeight={true}
+                  />
+                ))}
+              </div>
+            )
+          }),
+        )}
       </div>
     </div>
   )
@@ -409,15 +460,19 @@ const DaySchedule = React.memo(function DaySchedule({
   currentPosition,
   scheduleIndex,
   scrollTargetRef,
+  allScheduleDates,
 }: {
   schedule: ConferenceSchedule
+  allScheduleDates: string[]
   talkStatusMap?: Map<string, TalkStatus>
   currentPosition?: CurrentPosition | null
   scheduleIndex: number
   scrollTargetRef: React.RefObject<HTMLDivElement | null>
 }) {
   const isPast = isScheduleInPast(schedule.date)
-  const [isOpen, setIsOpen] = useState(!isPast)
+  const [isOpen, setIsOpen] = useState(
+    !isDayCollapsedByDefault(schedule.date, allScheduleDates),
+  )
 
   if (schedule.tracks.length === 0) {
     return (
@@ -532,6 +587,8 @@ export const ProgramScheduleView = React.memo(function ProgramScheduleView({
     )
   }
 
+  const allScheduleDates = data.schedules.map((s) => s.date)
+
   return (
     <div className="space-y-8">
       {data.schedules.map((schedule, scheduleIndex) => (
@@ -542,6 +599,7 @@ export const ProgramScheduleView = React.memo(function ProgramScheduleView({
             currentPosition={currentPosition}
             scheduleIndex={scheduleIndex}
             scrollTargetRef={scrollTargetRef}
+            allScheduleDates={allScheduleDates}
           />
           {scheduleIndex < data.schedules.length - 1 && (
             <div className="mt-8 border-t border-brand-frosted-steel dark:border-gray-700" />

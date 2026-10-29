@@ -48,6 +48,13 @@ vi.mock('@/lib/sanity/client', () => ({
 
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: vi.fn(),
+  // A foreign talk's own conference: unloadable unless a test says otherwise.
+  getConferenceById: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('next/cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/cache')>()),
+  revalidateTag: vi.fn(),
 }))
 
 vi.mock('@/lib/proposal/data/sanity', () => {
@@ -84,10 +91,15 @@ vi.mock('@/lib/conference/state', () => ({
 vi.mock('@/lib/messaging/sanity', () => ({
   ensureProposalConversation: vi.fn(),
   addMessage: vi.fn(),
+  getConversationById: vi.fn(),
 }))
 
 vi.mock('@/lib/messaging/notify', () => ({
   notifyNewMessage: vi.fn(),
+}))
+
+vi.mock('@/lib/slack/notify', () => ({
+  notifyNewProposal: vi.fn().mockResolvedValue(undefined),
 }))
 
 // The status-change event is handed to `runAfterResponse` (Next `after()` /
@@ -101,6 +113,8 @@ vi.mock('@/server/runAfterResponse', () => ({
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { revalidateTag } from 'next/cache'
+import { feedbackCodeIndexTag } from '@/lib/cache/tags'
 import { TRPCError } from '@trpc/server'
 import {
   createAnonymousCaller,
@@ -109,7 +123,10 @@ import {
   speakers,
   TEST_ORG_ID,
 } from '../../helpers/trpc'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import {
+  getConferenceById,
+  getConferenceForCurrentDomain,
+} from '@/lib/conference/sanity'
 import {
   getProposal,
   getProposals,
@@ -120,12 +137,17 @@ import {
 import { getProposalSanity, updateProposalStatus } from '@/lib/proposal/server'
 import { eventBus } from '@/lib/events/bus'
 import { runAfterResponse } from '@/server/runAfterResponse'
+import { notifyNewProposal } from '@/lib/slack/notify'
 import {
   hasSubmittableFormats,
   isCfpOpen,
   isWithdrawalCutoffActive,
 } from '@/lib/conference/state'
-import { ensureProposalConversation, addMessage } from '@/lib/messaging/sanity'
+import {
+  ensureProposalConversation,
+  addMessage,
+  getConversationById,
+} from '@/lib/messaging/sanity'
 import { notifyNewMessage } from '@/lib/messaging/notify'
 import {
   Status,
@@ -173,7 +195,13 @@ const mockProposal = {
   _createdAt: '2026-01-15T00:00:00Z',
   _updatedAt: '2026-01-15T00:00:00Z',
   status: Status.submitted,
-  speakers: [{ _id: regularSpeaker._id, name: regularSpeaker.name }],
+  speakers: [
+    {
+      _id: regularSpeaker._id,
+      name: regularSpeaker.name,
+      email: 'speaker@example.com',
+    },
+  ],
   conference: { _id: mockConference._id },
   // The real getProposal read projects the talk's org so the router can prove
   // the document belongs to the REQUEST org before granting organizer
@@ -415,12 +443,15 @@ describe('proposal router', () => {
         err: null,
       })
 
+      vi.mocked(notifyNewProposal).mockClear()
+
       const caller = createAuthenticatedCaller(regularSpeaker._id)
       const result = await caller.proposal.create({
         data: { title: 'Draft talk' },
         status: Status.draft,
       })
       expect(result.status).toBe(Status.draft)
+      expect(notifyNewProposal).not.toHaveBeenCalled()
     })
 
     it('should create a submitted proposal with valid data', async () => {
@@ -445,6 +476,11 @@ describe('proposal router', () => {
         regularSpeaker._id,
         mockConference._id,
         Status.submitted,
+      )
+      // A direct submit posts the same Slack alert as draft -> submitted.
+      expect(notifyNewProposal).toHaveBeenCalledWith(
+        mockProposal,
+        expect.objectContaining({ _id: mockConference._id }),
       )
     })
 
@@ -557,6 +593,366 @@ describe('proposal router', () => {
   })
 
   describe('action', () => {
+    describe('organizer cancel / withdraw', () => {
+      const confirmed = { ...mockProposal, status: Status.confirmed }
+      const published = () =>
+        vi.mocked(eventBus.publish).mock.calls.at(-1)![0] as any
+
+      beforeEach(() => {
+        vi.mocked(eventBus.publish).mockClear()
+        vi.mocked(addMessage).mockClear()
+        vi.mocked(notifyNewMessage).mockClear()
+        vi.mocked(ensureProposalConversation).mockResolvedValue('conv-1')
+        vi.mocked(addMessage).mockResolvedValue({ _id: 'msg-1' } as any)
+        vi.mocked(getConversationById).mockResolvedValue({
+          _id: 'conv-1',
+        } as any)
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: confirmed as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...confirmed, status: Status.canceled } as any,
+          err: null,
+        })
+      })
+
+      it('posts the comment to the thread and fans it out, no formal email by default', async () => {
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          comment: 'Program cut',
+        })
+        expect(addMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            body: 'Program cut',
+            origin: 'system',
+            category: 'proposal_status',
+          }),
+        )
+        expect(notifyNewMessage).toHaveBeenCalledTimes(1)
+        expect(published().metadata.shouldNotify).toBe(false)
+        expect(published().metadata.triggeredBy.isOrganizer).toBe(true)
+      })
+
+      it('posts a stock line when the cancel has no comment', async () => {
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+        })
+        expect(addMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            body: 'Your talk "My Talk" has been canceled by the organizers.',
+            origin: 'system',
+            category: 'proposal_status',
+          }),
+        )
+      })
+
+      it('Force email sends the formal email and skips the message fan-out', async () => {
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          comment: 'Program cut',
+          forceEmail: true,
+        })
+        expect(published().metadata.shouldNotify).toBe(true)
+        expect(addMessage).toHaveBeenCalledTimes(1)
+        expect(notifyNewMessage).not.toHaveBeenCalled()
+      })
+
+      it('relays an organizer withdrawal reason', async () => {
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...confirmed, status: Status.withdrawn } as any,
+          err: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'No-show risk',
+          comment: 'No-show risk',
+        })
+        expect(addMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            body: 'No-show risk',
+            origin: 'system',
+            category: 'proposal_status',
+          }),
+        )
+        expect(published().metadata.reason).toBe('No-show risk')
+      })
+
+      it('falls back to the reason when an organizer withdraw has no comment', async () => {
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...confirmed, status: Status.withdrawn } as any,
+          err: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'No-show risk',
+        })
+        expect(addMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ body: 'No-show risk' }),
+        )
+        expect(published().metadata.postedToThread).toBe(true)
+      })
+
+      it('does not post or publish under this conference for a talk of another conference', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: {
+            ...confirmed,
+            status: Status.canceled,
+            conference: { _id: 'conf-other' },
+          } as any,
+          err: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          comment: 'Program cut',
+          forceEmail: true,
+        })
+        expect(addMessage).not.toHaveBeenCalled()
+        expect(eventBus.publish).not.toHaveBeenCalled()
+      })
+
+      it('treats an organizer withdrawing their own talk as a self-withdraw', async () => {
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: {
+            ...confirmed,
+            speakers: [{ _id: adminSpeaker._id, name: adminSpeaker.name }],
+          } as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...confirmed, status: Status.withdrawn } as any,
+          err: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Ill',
+          comment: 'Ill',
+          forceEmail: true,
+        })
+        const { metadata } = published()
+        expect(metadata.shouldNotify).toBe(false)
+        expect(metadata.triggeredBy.isOrganizer).toBe(false)
+        // No "the organizers withdrew your talk" note to themselves.
+        expect(addMessage).not.toHaveBeenCalledWith(
+          expect.objectContaining({
+            body: expect.stringContaining('by the organizers'),
+          }),
+        )
+      })
+    })
+
+    describe('ticket cancellation request', () => {
+      const confirmed = { ...mockProposal, status: Status.confirmed }
+      const published = () =>
+        vi.mocked(eventBus.publish).mock.calls.at(-1)![0] as any
+
+      beforeEach(() => {
+        vi.mocked(eventBus.publish).mockClear()
+        vi.mocked(getProposals).mockClear()
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: confirmed as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...confirmed, status: Status.canceled } as any,
+          err: null,
+        })
+        vi.mocked(getProposals).mockResolvedValue({
+          proposals: [],
+          proposalsError: null,
+        })
+      })
+
+      it('asks for no ticket cancellation by default', async () => {
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+        })
+        expect(published().metadata.ticketCancellation).toBeUndefined()
+        expect(getProposals).not.toHaveBeenCalled()
+      })
+
+      it('lists every speaker for manual ticket cancellation when asked', async () => {
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation).toEqual({
+          speakers: [
+            { name: regularSpeaker.name, email: 'speaker@example.com' },
+          ],
+          unfiltered: false,
+        })
+      })
+
+      it('skips a speaker who has another confirmed talk', async () => {
+        vi.mocked(getProposals).mockResolvedValue({
+          proposals: [
+            { _id: 'other-talk', speakers: [{ _id: regularSpeaker._id }] },
+          ] as any,
+          proposalsError: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation).toEqual({
+          speakers: [],
+          unfiltered: false,
+        })
+      })
+
+      it('marks the list unfiltered when the lookup fails', async () => {
+        vi.mocked(getProposals).mockResolvedValue({
+          proposals: [],
+          proposalsError: new Error('boom'),
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation.unfiltered).toBe(true)
+      })
+
+      it('ignores revokeTicket for a talk that was only accepted (no ticket yet)', async () => {
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: { ...mockProposal, status: Status.accepted } as any,
+          proposalError: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.cancel,
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation).toBeUndefined()
+      })
+
+      it('ignores revokeTicket for reject', async () => {
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: mockProposal as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...mockProposal, status: Status.rejected } as any,
+          err: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.reject,
+          revokeTicket: true,
+        })
+        expect(published().metadata.ticketCancellation).toBeUndefined()
+      })
+
+      it('always lists tickets when a speaker withdraws their confirmed talk', async () => {
+        // The speaker cannot tick "revoke ticket"; the organizers still need
+        // to cancel it by hand.
+        vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...confirmed, status: Status.withdrawn } as any,
+          err: null,
+        })
+        await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Ill',
+        })
+        expect(published().metadata.ticketCancellation).toEqual({
+          speakers: [
+            { name: regularSpeaker.name, email: 'speaker@example.com' },
+          ],
+          unfiltered: false,
+        })
+      })
+    })
+
+    describe('speaker self-withdraw', () => {
+      const confirmed = { ...mockProposal, status: Status.confirmed }
+      const published = () =>
+        vi.mocked(eventBus.publish).mock.calls.at(-1)![0] as any
+
+      beforeEach(() => {
+        vi.mocked(eventBus.publish).mockClear()
+        vi.mocked(addMessage).mockClear()
+        vi.mocked(notifyNewMessage).mockClear()
+        vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
+        vi.mocked(ensureProposalConversation).mockResolvedValue('conv-1')
+        vi.mocked(addMessage).mockResolvedValue({ _id: 'msg-1' } as any)
+        vi.mocked(getConversationById).mockResolvedValue({
+          _id: 'conv-1',
+        } as any)
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: confirmed as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...confirmed, status: Status.withdrawn } as any,
+          err: null,
+        })
+      })
+
+      it('posts the reason as a speaker-authored thread message and fans it out', async () => {
+        await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Ill',
+        })
+        expect(addMessage).toHaveBeenCalledWith({
+          conversationId: 'conv-1',
+          authorId: regularSpeaker._id,
+          body: 'Withdrawn: Ill',
+          origin: 'system',
+          category: 'proposal_status',
+        })
+        expect(notifyNewMessage).toHaveBeenCalledTimes(1)
+        expect(published().metadata.postedToThread).toBe(true)
+        expect(published().metadata.shouldNotify).toBe(false)
+      })
+
+      it('keeps the organizer alerts when an organizer withdraws their own talk', async () => {
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: {
+            ...confirmed,
+            speakers: [{ _id: adminSpeaker._id, name: adminSpeaker.name }],
+          } as any,
+          proposalError: null,
+        })
+        await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Ill',
+        })
+        expect(addMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ body: 'Withdrawn: Ill' }),
+        )
+        // The message is organizer-authored, so it skips Slack and the
+        // org-contact copy; the status alerts must still fire.
+        expect(published().metadata.postedToThread).toBe(false)
+      })
+
+      it('reports postedToThread false when the thread write fails', async () => {
+        vi.mocked(addMessage).mockRejectedValue(new Error('down'))
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Ill',
+        })
+        expect(published().metadata.postedToThread).toBe(false)
+      })
+    })
+
     it('should reject unauthenticated requests', async () => {
       const caller = createAnonymousCaller()
       await expect(
@@ -1355,6 +1751,8 @@ describe('proposal router', () => {
         conversationId,
         authorId: adminSpeaker._id,
         body: 'Congrats — see you in Bergen!',
+        origin: 'system',
+        category: 'proposal_status',
       })
       // S2: the decision status rail (proposal_status_changed notification +
       // decision email, both carrying this comment) is the single delivery — the
@@ -1362,6 +1760,41 @@ describe('proposal router', () => {
       // double-notified for one organizer action.
       expect(notifyNewMessage).not.toHaveBeenCalled()
     })
+
+    it.each([
+      [Action.accept, Status.submitted, Status.accepted],
+      [Action.reject, Status.submitted, Status.rejected],
+      [Action.waitlist, Status.submitted, Status.waitlisted],
+      [Action.remind, Status.accepted, Status.accepted],
+    ])(
+      'marks the %s relay as system Proposal status even with a typed comment',
+      async (action, initialStatus, finalStatus) => {
+        mockAcceptFlow()
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: { ...mockProposal, status: initialStatus } as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...mockProposal, status: finalStatus } as any,
+          err: null,
+        })
+
+        const result = await createAdminCaller().proposal.action({
+          id: 'proposal-1',
+          action,
+          comment: 'Please send your travel details',
+        })
+
+        expect(result.proposalStatus).toBe(finalStatus)
+        expect(addMessage).toHaveBeenCalledExactlyOnceWith({
+          conversationId,
+          authorId: adminSpeaker._id,
+          body: 'Please send your travel details',
+          origin: 'system',
+          category: 'proposal_status',
+        })
+      },
+    )
 
     it('never fails the action when the messaging write throws', async () => {
       mockAcceptFlow()
@@ -1416,6 +1849,239 @@ describe('proposal router', () => {
 
       expect(ensureProposalConversation).not.toHaveBeenCalled()
       expect(addMessage).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('the Feedback Code index follows the talk (speaker feedback §5.1)', () => {
+    // A withdrawn or deleted talk must stop resolving its code at once, and a
+    // newly confirmed one must start. The TALK's conference, never the host's:
+    // a speaker can act on their own proposal from another tenant's host.
+    const expired = () =>
+      vi
+        .mocked(revalidateTag)
+        .mock.calls.filter(([tag]) => tag.startsWith('sanity:feedback-code'))
+    beforeEach(() => vi.mocked(revalidateTag).mockClear())
+
+    it('withdrawing a confirmed talk expires the index of the talk’s conference with expire 0', async () => {
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.confirmed } as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {
+          ...mockProposal,
+          status: Status.withdrawn,
+          conference: { _type: 'reference', _ref: 'conf-of-the-talk' },
+        } as any,
+        err: null,
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.withdraw,
+        reason: 'I can no longer attend the conference.',
+      })
+
+      expect(expired()).toEqual([
+        [feedbackCodeIndexTag('conf-of-the-talk'), { expire: 0 }],
+      ])
+    })
+
+    it('a talk of another conference publishes with the talk’s own conference', async () => {
+      // A speaker confirming via another tenant's host must still get their
+      // ticket, routed and branded by their own conference.
+      vi.mocked(eventBus.publish).mockClear()
+      const own = { _id: 'conf-of-the-talk', title: 'Other Conf' }
+      vi.mocked(getConferenceById).mockResolvedValueOnce({
+        conference: own as any,
+        domain: 'other.example',
+      })
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.accepted } as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {
+          ...mockProposal,
+          status: Status.confirmed,
+          conference: { _type: 'reference', _ref: 'conf-of-the-talk' },
+        } as any,
+        err: null,
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.confirm,
+      })
+
+      expect(getConferenceById).toHaveBeenCalledWith('conf-of-the-talk', {
+        includeSpeakerRegistrationLink: true,
+      })
+      expect(eventBus.publish).toHaveBeenCalledTimes(1)
+      const event = vi.mocked(eventBus.publish).mock.calls[0][0] as any
+      expect(event.conference).toBe(own)
+      expect(event.metadata.domain).toBe('other.example')
+    })
+
+    it('a talk of another conference whose conference cannot be loaded publishes nothing', async () => {
+      // The event routes Slack, organizer alerts and email branding by the
+      // host conference; a foreign talk must not alert the host's organizers.
+      vi.mocked(eventBus.publish).mockClear()
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {
+          ...mockProposal,
+          status: Status.withdrawn,
+          conference: { _type: 'reference', _ref: 'conf-of-the-talk' },
+        } as any,
+        err: null,
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.withdraw,
+        reason: 'I can no longer attend the conference.',
+      })
+
+      expect(updateProposalStatus).toHaveBeenCalled()
+      expect(eventBus.publish).not.toHaveBeenCalled()
+    })
+
+    it('a change that never touches "confirmed" leaves it alone', async () => {
+      // Only confirmed talks are in the index; CFP-time transitions
+      // (submit, unsubmit, accept, reject) must not flush it.
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any, // submitted
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {
+          ...mockProposal,
+          status: Status.withdrawn,
+          conference: { _type: 'reference', _ref: 'conf-of-the-talk' },
+        } as any,
+        err: null,
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.withdraw,
+        reason: 'I can no longer attend the conference.',
+      })
+
+      expect(updateProposalStatus).toHaveBeenCalled()
+      expect(expired()).toEqual([])
+    })
+
+    it('a newly confirmed talk expires it too, so its code starts resolving', async () => {
+      const accepted = {
+        ...mockProposal,
+        _rev: 'rev-accepted',
+        status: Status.accepted,
+      }
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: accepted as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {
+          ...accepted,
+          status: Status.confirmed,
+          conference: { _type: 'reference', _ref: 'conf-of-the-talk' },
+        } as any,
+        err: null,
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.confirm,
+      })
+
+      expect(expired()).toEqual([
+        [feedbackCodeIndexTag('conf-of-the-talk'), { expire: 0 }],
+      ])
+    })
+
+    it('a failed status change expires nothing', async () => {
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: {} as any,
+        err: new Error('patch failed'),
+      })
+
+      await expect(
+        createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'I can no longer attend the conference.',
+        }),
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to update proposal status',
+      })
+      // The write was attempted and failed: the refusal is that failure.
+      expect(updateProposalStatus).toHaveBeenCalledWith(
+        'proposal-1',
+        Status.withdrawn,
+        'I can no longer attend the conference.',
+        undefined,
+      )
+      expect(expired()).toEqual([])
+    })
+
+    it('a speaker’s delete expires the index of the deleted talk’s conference', async () => {
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(deleteProposal).mockResolvedValue({
+        err: null,
+        conferenceId: 'conf-of-the-talk',
+      })
+
+      await createAuthenticatedCaller(regularSpeaker._id).proposal.action({
+        id: 'proposal-1',
+        action: Action.delete,
+      })
+
+      expect(expired()).toEqual([
+        [feedbackCodeIndexTag('conf-of-the-talk'), { expire: 0 }],
+      ])
+    })
+
+    it('an organizer’s delete expires it too', async () => {
+      vi.mocked(deleteProposal).mockResolvedValue({
+        err: null,
+        conferenceId: 'conf-of-the-talk',
+      })
+
+      await createAdminCaller().proposal.admin.delete({ id: 'proposal-1' })
+
+      expect(expired()).toEqual([
+        [feedbackCodeIndexTag('conf-of-the-talk'), { expire: 0 }],
+      ])
+    })
+
+    it('a refused delete expires nothing', async () => {
+      vi.mocked(deleteProposal).mockResolvedValue({
+        err: new Error('network exploded'),
+        conferenceId: null,
+      })
+
+      await expect(
+        createAdminCaller().proposal.admin.delete({ id: 'proposal-1' }),
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to delete proposal',
+      })
+      expect(deleteProposal).toHaveBeenCalledWith('proposal-1')
+      expect(expired()).toEqual([])
     })
   })
 

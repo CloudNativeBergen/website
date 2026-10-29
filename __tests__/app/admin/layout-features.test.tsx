@@ -11,6 +11,10 @@
  * probe that records the feature list it was handed.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import {
+  stubOwnTicketingSecret,
+  stubPlatformTicketingAccount,
+} from '../../helpers/ticketingSecrets'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 const mockGetConference = vi.fn()
@@ -66,6 +70,7 @@ async function enabledFeatures(): Promise<string[]> {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID)
+  stubPlatformTicketingAccount()
   vi.stubEnv('TENANT_SECRETS_JSON', '')
   mockIsOrganizer.mockResolvedValue(true)
   mockGetConference.mockResolvedValue({
@@ -107,7 +112,27 @@ describe('admin layout — enabled features', () => {
       name: 'Platform',
       slug: 'platform-org',
     })
+    // No `workshops` without a plan: since #1295 it is earned by plan.
+    await expect(enabledFeatures()).resolves.toEqual(['ticketing', 'badges'])
+  })
+
+  it('hands the platform org workshops on the pro plan — by plan, like any tenant', async () => {
+    mockGetConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-1',
+        title: 'Platform Conf',
+        organization: { _ref: PLATFORM_ORG_ID, _type: 'reference' },
+      },
+      error: null,
+    })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: PLATFORM_ORG_ID,
+      name: 'Platform',
+      slug: 'platform-org',
+      plan: 'pro',
+    })
     await expect(enabledFeatures()).resolves.toEqual([
+      'dedicated-email',
       'workshops',
       'ticketing',
       'badges',
@@ -115,14 +140,33 @@ describe('admin layout — enabled features', () => {
   })
 
   /** The entry paid tier buys ticketing (owner decision, 2026-08-06). */
-  it('gives a pro tenant the ticketing destination on plan alone', async () => {
+  it('gives a pro tenant the ticketing destination on plan alone — and NOT workshops yet', async () => {
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-A',
       name: 'Tenant A',
       slug: 'tenant-a',
       plan: 'pro',
     })
-    await expect(enabledFeatures()).resolves.toContain('ticketing')
+    await expect(enabledFeatures()).resolves.toEqual([
+      'dedicated-email',
+      'ticketing',
+    ])
+  })
+
+  /** #1295: a NON-PLATFORM pro tenant earns the workshops destination with ticketing. */
+  it('gives a pro tenant workshops once its own ticketing account is connected', async () => {
+    stubOwnTicketingSecret('org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+    await expect(enabledFeatures()).resolves.toEqual([
+      'dedicated-email',
+      'workshops',
+      'ticketing',
+    ])
   })
 
   /** The nav side of the kill switch: a deny beats the plan that sold it. */

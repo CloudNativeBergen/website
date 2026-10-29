@@ -7,8 +7,8 @@ import { flags, Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import * as social from '@/components/SocialIcons'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
-import { Button } from '@/components/Button'
 import { BackLink } from '@/components/BackButton'
+import { BookmarkButton } from '@/components/BookmarkButton'
 import { ShowMore } from '@/components/ShowMore'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { speakerImageUrl } from '@/lib/sanity/client'
@@ -28,8 +28,10 @@ import {
 } from '@heroicons/react/24/outline'
 import { formatConferenceDateLong } from '@/lib/time'
 import { PhotoGallerySection } from '@/components/PhotoGallerySection'
+import { TalkPhotos } from '@/components/photo-wall/talk/TalkPhotos'
 import { AttachmentDisplay } from '@/components/proposal/AttachmentDisplay'
 import { headers } from 'next/headers'
+import { notFound } from 'next/navigation'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { PersonJsonLd } from '@/components/seo/PersonJsonLd'
@@ -138,26 +140,7 @@ async function CachedSpeakerContent({
     console.error('Error loading speaker:', err)
   }
 
-  if (!speaker) {
-    return (
-      <div className="relative py-20 sm:pt-36 sm:pb-24">
-        <BackgroundImage className="-top-36 -bottom-14" />
-        <Container className="relative">
-          <div className="mx-auto max-w-4xl text-center">
-            <h1 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-slate-gray dark:text-white">
-              Speaker Not Found
-            </h1>
-            <p className="font-inter mb-8 text-xl text-gray-600 dark:text-gray-300">
-              Sorry, we couldn&apos;t find the speaker you&apos;re looking for.
-            </p>
-            <Button href="/speaker" variant="primary">
-              View All Speakers
-            </Button>
-          </div>
-        </Container>
-      </div>
-    )
-  }
+  if (!speaker) notFound()
 
   const speakerUrl = canonicalUrl(
     conference,
@@ -315,9 +298,32 @@ async function CachedSpeakerContent({
                       >
                         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
                           <div className="flex-1">
-                            <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-brand-slate-gray dark:text-white">
-                              {talk.title}
-                            </h3>
+                            <div className="mb-2 flex items-start justify-between gap-2">
+                              <h3 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
+                                {talk.title}
+                              </h3>
+                              {talk.scheduleInfo?.date &&
+                                talk.scheduleInfo?.timeSlot && (
+                                  <BookmarkButton
+                                    talk={{
+                                      talkId: talk._id,
+                                      title: talk.title,
+                                      startTime:
+                                        talk.scheduleInfo.timeSlot.startTime,
+                                      endTime:
+                                        talk.scheduleInfo.timeSlot.endTime,
+                                      scheduleDate: talk.scheduleInfo.date,
+                                      trackTitle:
+                                        talk.scheduleInfo.trackTitle || '',
+                                      speakers: talk.speakers
+                                        ?.map((s) =>
+                                          'name' in s ? s.name : '',
+                                        )
+                                        .filter(Boolean),
+                                    }}
+                                  />
+                                )}
+                            </div>
 
                             {talk.scheduleInfo?.date &&
                               talk.scheduleInfo?.timeSlot && (
@@ -429,6 +435,8 @@ async function CachedSpeakerContent({
                             })}
                           </div>
                         )}
+                        {/* Client-side, so the cached page needs no Photo Wall tags (talk photos spec §7.2, §8). */}
+                        <TalkPhotos talkId={talk._id} />
                       </div>
                     ))}
                   </div>

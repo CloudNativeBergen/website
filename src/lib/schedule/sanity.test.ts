@@ -51,7 +51,7 @@ const patchMock = vi.fn((id?: unknown) => {
 // Typed as returning `Promise<unknown>` so per-test implementations can return
 // whichever document shape that query needs. Inferring from the default
 // implementation pins the union to just those shapes and rejects the rest.
-const fetchMock = vi.fn<(query: string) => Promise<unknown>>(
+const fetchMock = vi.fn<(query: string, params?: unknown) => Promise<unknown>>(
   (query: string) => {
     if (query.includes('conferenceRef')) {
       return Promise.resolve({ _type: 'schedule', conferenceRef: 'conf-1' })
@@ -65,7 +65,7 @@ const fetchMock = vi.fn<(query: string) => Promise<unknown>>(
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
-    fetch: (q: string) => fetchMock(q),
+    fetch: (q: string, params?: unknown) => fetchMock(q, params),
     patch: (id: string) => patchMock(id),
   },
 }))
@@ -235,5 +235,84 @@ describe('saveScheduleToSanity — alert gate on the PERSISTED schedule status',
     )
 
     expect(notifyScheduleChangesMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('saveScheduleToSanity — a track sponsor', () => {
+  /** This conference's sponsors, as the sponsor read returns their ids. */
+  const conferenceSponsors = ['proact', 'sopra']
+
+  beforeEach(() => {
+    const base = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((query: string) =>
+      query.includes('sponsorForConference')
+        ? Promise.resolve(conferenceSponsors)
+        : base(query),
+    )
+  })
+
+  const writtenTracks = () =>
+    (setMock.mock.calls.at(-1) as unknown as [{ tracks: unknown[] }])[0].tracks
+
+  const withSponsors = (...refs: (string | undefined)[]) =>
+    makeSchedule({
+      tracks: refs.map((ref, i) => ({
+        trackTitle: `Track ${i}`,
+        trackDescription: '',
+        talks: [],
+        sponsor: ref ? { _ref: ref } : undefined,
+      })),
+    })
+
+  it("writes the track's sponsor as a weak reference", async () => {
+    await saveScheduleToSanity(withSponsors('proact'), CONF)
+    expect(writtenTracks()).toEqual([
+      {
+        _key: 'track-0-key',
+        trackTitle: 'Track 0',
+        trackDescription: '',
+        talks: [],
+        sponsor: { _type: 'reference', _ref: 'proact', _weak: true },
+      },
+    ])
+  })
+
+  it("drops a sponsor that is not one of this conference's, keeping the others", async () => {
+    await saveScheduleToSanity(
+      withSponsors('sponsor-of-another-conference', 'sopra'),
+      CONF,
+    )
+    expect(writtenTracks()).toEqual([
+      {
+        _key: 'track-0-key',
+        trackTitle: 'Track 0',
+        trackDescription: '',
+        talks: [],
+      },
+      {
+        _key: 'track-1-key',
+        trackTitle: 'Track 1',
+        trackDescription: '',
+        talks: [],
+        sponsor: { _type: 'reference', _ref: 'sopra', _weak: true },
+      },
+    ])
+  })
+
+  it('reads the sponsors scoped to the conference being saved', async () => {
+    await saveScheduleToSanity(withSponsors('proact'), CONF)
+    const call = fetchMock.mock.calls.find(([q]) =>
+      q.includes('sponsorForConference'),
+    ) as unknown as [string, Record<string, unknown>]
+    expect(call[0]).toContain('conference._ref == $conferenceId')
+    expect(call[1]).toEqual({ conferenceId: 'conf-1' })
+  })
+
+  it('skips the sponsor read when no track has a sponsor (the editor autosaves)', async () => {
+    await saveScheduleToSanity(withSponsors(undefined), CONF)
+    expect(writtenTracks()).toHaveLength(1)
+    expect(
+      fetchMock.mock.calls.some(([q]) => q.includes('sponsorForConference')),
+    ).toBe(false)
   })
 })

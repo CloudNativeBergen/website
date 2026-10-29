@@ -96,6 +96,12 @@ export interface SpeakerInput extends SpeakerBase {
    * `updateSpeaker`; a client-supplied value is discarded.
    */
   socialTagOptOut?: boolean
+  /**
+   * Hide attendee photos of their talks from the program and speaker pages
+   * (talk photos spec §4.2). Same rules as `socialTagOptOut`; its timestamp is
+   * likewise absent from this type.
+   */
+  talkPhotosOptOut?: boolean
 }
 
 /**
@@ -226,6 +232,14 @@ export interface Speaker extends SpeakerBase {
    * cleared only together with the boolean, and never accepted from a client.
    */
   socialTagOptOutAt?: string
+  /**
+   * The speaker asked that attendee photos of their talks are not shown on
+   * the program or speaker pages (talk photos spec §4.2). Absent means NOT
+   * opted out. Same rules as {@link socialTagOptOut}.
+   */
+  talkPhotosOptOut?: boolean
+  /** When {@link talkPhotosOptOut} was set, stamped SERVER-SIDE. */
+  talkPhotosOptOutAt?: string
 }
 
 /**
@@ -281,6 +295,8 @@ export interface SpeakerAdminDetail {
    * `undefined`, not as an error.
    */
   socialTagOptOut?: boolean
+  /** Same reasoning as `socialTagOptOut` above. */
+  talkPhotosOptOut?: boolean
 }
 
 export interface SpeakerWithTalks extends Speaker {

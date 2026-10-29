@@ -18,6 +18,8 @@ import type {
 } from '@/lib/sponsor/types'
 import {
   buildTemplateVariables,
+  findUnsupportedVariables,
+  formatUnmergedVariablesMessage,
   processPortableTextVariables,
   processTemplateVariables,
   suggestTemplateCategory,
@@ -46,6 +48,11 @@ import {
   PORTAL_URL_WRONG_KIND_MESSAGE,
   registrationCardHtml,
 } from '@/lib/sponsor-crm/registration-email'
+import {
+  earlyAccessCardHtml,
+  earlyAccessCopiesBehindNotice,
+  earlyAccessGreeting,
+} from '@/lib/sponsor-crm/early-access-email'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 import {
   CONTRACT_ACTION_LABELS,
@@ -147,7 +154,7 @@ interface AppliedTemplate {
  * suggested language and category wins. Nothing flagged default ⇒ nothing is
  * preselected; the organizer picks or writes. `information` draws on every
  * non-contract category; the contract kind (slice #1264) on `contract`;
- * `discount` and `registration` preselect nothing.
+ * `discount`, `registration` and `workshop-early-access` preselect nothing.
  */
 export function pickDefaultTemplate(
   templates: readonly SponsorEmailTemplate[] | undefined,
@@ -180,6 +187,9 @@ export function pickDefaultTemplate(
   // Likewise no category is FOR the registration link (#1263): the built-in
   // welcome is the starting point, and the link rides in the appended card.
   if (kind === 'registration') return undefined
+  // Nor for the workshop early-access link (#1347): the built-in text is the
+  // starting point, and the link rides in the appended block.
+  if (kind === 'workshop-early-access') return undefined
   const candidates = templates.filter(
     (t) =>
       t.isDefault &&
@@ -513,28 +523,25 @@ export function SponsorInviteLinkPrompt({
 
 /** What a screen reader hears for a code chip: the code AND its state. */
 function codeChipLabel(option: DiscountCodeOption): string {
-  if (option.linkedTo) return `${option.code} (linked to ${option.linkedTo})`
-  if (option.attributedTo)
-    return `${option.code}, now counted for ${option.attributedTo}; sending moves it to this sponsor`
   if (option.linked) return `${option.code}, already linked to this sponsor`
   return option.code
 }
 
 /**
- * The Codes: line of a discount send (#1262) — the conference's discount
- * codes from the ticket provider as toggles, the sponsor's own preselected.
- * A code stored on another sponsor is shown but cannot be chosen, with the
- * reason, so the organizer is not left wondering where it went.
+ * The Codes: line of a discount send (#1262) — the sponsor's discount codes
+ * from the ticket provider as toggles, with linked codes preselected.
  */
 export function SponsorDiscountCodePicker({
   options,
   selectedCodes,
   onToggle,
+  sponsorName,
   state = 'ready',
 }: {
   options: readonly DiscountCodeOption[]
   selectedCodes: ReadonlySet<string>
   onToggle: (code: string) => void
+  sponsorName?: string
   state?: 'loading' | 'error' | 'ready'
 }) {
   if (state === 'loading') {
@@ -556,9 +563,12 @@ export function SponsorDiscountCodePicker({
   }
   if (options.length === 0) {
     return (
-      <span className="font-inter text-sm text-red-600 dark:text-red-400">
-        This event has no discount codes yet — create one in Discount Codes
-        first.
+      <span
+        role="alert"
+        className="font-inter text-sm text-amber-600 dark:text-amber-400"
+      >
+        No discount code is linked to {sponsorName || 'this sponsor'} yet.
+        Create or assign a code first.
       </span>
     )
   }
@@ -569,36 +579,23 @@ export function SponsorDiscountCodePicker({
       className="flex flex-wrap items-center gap-2"
     >
       {options.map((option) => {
-        const selectable = !option.linkedTo
         const selected = selectedCodes.has(option.code)
-        // The "counted for X" hint wraps onto its own line rather than
-        // truncating the code — the code is what the organizer must read.
-        const hinted = selectable && !!option.attributedTo
         return (
           <label
             key={option.code}
-            title={
-              selectable
-                ? option.code
-                : `${option.code} is linked to ${option.linkedTo}`
-            }
+            title={option.code}
             className={clsx(
-              'font-inter inline-flex min-h-8 max-w-full items-center gap-1.5 border px-2.5 py-1 text-sm transition-colors select-none',
-              hinted ? 'flex-wrap rounded-2xl' : 'rounded-full',
+              'font-inter inline-flex min-h-8 max-w-full cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors select-none',
               'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500 has-[:focus-visible]:ring-offset-1 dark:has-[:focus-visible]:ring-offset-gray-900',
-              selectable && 'cursor-pointer',
               selected
                 ? 'border-brand-cloud-blue bg-brand-sky-mist text-brand-slate-gray dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-100'
-                : selectable
-                  ? 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500'
-                  : 'cursor-not-allowed border-dashed border-gray-300 text-gray-400 dark:border-gray-600 dark:text-gray-500',
+                : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500',
             )}
           >
             <input
               type="checkbox"
               className="sr-only"
               checked={selected}
-              disabled={!selectable}
               onChange={() => onToggle(option.code)}
               aria-label={codeChipLabel(option)}
             />
@@ -621,16 +618,6 @@ export function SponsorDiscountCodePicker({
                 Linked
               </span>
             )}
-            {option.linkedTo && (
-              <span className="min-w-0 truncate text-xs italic">
-                {option.linkedTo}
-              </span>
-            )}
-            {hinted && (
-              <span className="basis-full pl-5.5 text-xs text-amber-700 dark:text-amber-300">
-                counted for {option.attributedTo} · sending moves it
-              </span>
-            )}
           </label>
         )
       })}
@@ -639,11 +626,107 @@ export function SponsorDiscountCodePicker({
 }
 
 /**
+ * WHETHER A WORKSHOP EARLY-ACCESS EMAIL MAY BE SENT (#1347), as the server
+ * answered it. The modal decides none of it: `ready` and `refused` are
+ * `sponsor.crm.earlyAccess.getSendReadiness`'s answer, the decision the Send
+ * action itself refuses with, in its words.
+ */
+type EarlyAccessSend =
+  | { state: 'checking' }
+  /** The server could not be asked: nothing is known, so nothing is sent. */
+  | { state: 'unknown'; message: string }
+  | { state: 'refused'; message: string }
+  | {
+      state: 'ready'
+      /** The link the sponsor already has. Unset: sending creates one. */
+      url?: string
+      /** The sponsor start time and the official opening, as stored. */
+      sponsorStart: string
+      officialOpening: string
+    }
+
+/** Why nothing is sent yet, or `null` when the send may go ahead. */
+function earlyAccessHold(send: EarlyAccessSend): string | null {
+  switch (send.state) {
+    case 'ready':
+      return null
+    case 'checking':
+      return 'Still checking whether early access can be sent. Try again in a moment.'
+    case 'unknown':
+    case 'refused':
+      return send.message
+  }
+}
+
+/**
  * The one Send action for a sponsor (#1261, spec #1260): pick recipients,
  * start from a template, edit, preview, send. The server resolves the chosen
  * contact keys to addresses and records exactly what went out.
  */
-export function SponsorSendModal({
+export function SponsorSendModal(props: SponsorSendModalProps) {
+  return props.kind === 'workshop-early-access' ? (
+    <EarlyAccessSendModal {...props} />
+  ) : (
+    <SponsorSendComposer {...props} />
+  )
+}
+
+/**
+ * The modal on the "Workshop early access" kind (#1347): it ASKS THE SERVER
+ * whether the link may be sent, and hands the answer to the composer.
+ *
+ * A component of its own so that the question is asked on this kind ONLY.
+ * Answering it means finding the portal's working host, a live read, which
+ * neither viewing a sponsor's record nor composing any other kind may make.
+ */
+function EarlyAccessSendModal(props: SponsorSendModalProps) {
+  const readiness = api.sponsor.crm.earlyAccess.getSendReadiness.useQuery(
+    { sponsorForConferenceId: props.sponsorForConference._id },
+    {
+      enabled: props.isOpen,
+      // Asked anew on every open, and an answer that is being asked again is
+      // not shown as the answer: the times, the deal or the link may have
+      // changed since the modal was last open.
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
+  )
+  const answer = readiness.data
+  const earlyAccess: EarlyAccessSend = readiness.isFetching
+    ? { state: 'checking' }
+    : readiness.isError
+      ? {
+          state: 'unknown',
+          message: `Could not check whether early access can be sent: ${readiness.error?.message ?? 'the server did not answer'}`,
+        }
+      : !answer
+        ? { state: 'checking' }
+        : answer.refusal
+          ? { state: 'refused', message: answer.refusal.message }
+          : {
+              state: 'ready',
+              url: answer.url ?? undefined,
+              sponsorStart: answer.sponsorStart,
+              officialOpening: answer.officialOpening,
+            }
+  return (
+    <SponsorSendComposer
+      {...props}
+      earlyAccess={earlyAccess}
+      // ASK AGAIN. After a send that failed: a modal left open can be behind
+      // the server (the official opening passed, the deal moved, the times
+      // were changed), so the hold shown is the server's again. And from
+      // "Check again" on a held send: the question is otherwise asked once
+      // per open, so a refusal the organizer has since fixed, or an answer
+      // that could not be fetched, would hold Send until the modal is
+      // closed and opened again.
+      recheckEarlyAccess={() => void readiness.refetch()}
+    />
+  )
+}
+
+function SponsorSendComposer({
   isOpen,
   onClose,
   onSent,
@@ -654,7 +737,14 @@ export function SponsorSendModal({
   fromEmail,
   senderName,
   conference,
-}: SponsorSendModalProps) {
+  earlyAccess,
+  recheckEarlyAccess,
+}: SponsorSendModalProps & {
+  /** Set on the workshop early-access kind, by {@link EarlyAccessSendModal}. */
+  earlyAccess?: EarlyAccessSend
+  /** Ask the server again whether the send may go ahead. */
+  recheckEarlyAccess?: () => void
+}) {
   const { showNotification } = useNotification()
   const sendMutation = api.sponsor.crm.sendCommunication.useMutation()
   const utils = api.useUtils()
@@ -1038,8 +1128,11 @@ export function SponsorSendModal({
       staleTime: 0,
     },
   )
-  const codeOptions = useMemo(
-    () => codesQuery.data?.codes ?? [],
+  const sponsorCodeOptions = useMemo(
+    () =>
+      (codesQuery.data?.codes ?? []).filter(
+        (c) => !c.linkedTo && !c.attributedTo,
+      ),
     [codesQuery.data],
   )
   const [selectedCodes, setSelectedCodes] = useState<ReadonlySet<string>>(
@@ -1070,11 +1163,7 @@ export function SponsorSendModal({
       return
     setCodesSeededFor(sponsorForConference._id)
     setSelectedCodes(
-      new Set(
-        codesQuery.data.codes
-          .filter((c) => c.selected && !c.linkedTo)
-          .map((c) => c.code),
-      ),
+      new Set(sponsorCodeOptions.filter((c) => c.selected).map((c) => c.code)),
     )
   }, [
     isOpen,
@@ -1083,6 +1172,7 @@ export function SponsorSendModal({
     codesQuery.isError,
     codesSeeded,
     sponsorForConference._id,
+    sponsorCodeOptions,
   ])
   const toggleCode = (code: string) =>
     setSelectedCodes((prev) => {
@@ -1092,7 +1182,7 @@ export function SponsorSendModal({
       return next
     })
   // Option order, not click order: the email lists codes as the picker does.
-  const chosenCodes = codeOptions
+  const chosenCodes = sponsorCodeOptions
     .map((c) => c.code)
     .filter((code) => selectedCodes.has(code))
 
@@ -1128,6 +1218,14 @@ export function SponsorSendModal({
     if (!isRegistration && carriesPortalPlaceholder(subject, message)) {
       throw new Error(PORTAL_URL_WRONG_KIND_MESSAGE)
     }
+    const unmergedVariables = findUnsupportedVariables(
+      isRegistration ? { SPONSOR_PORTAL_URL: '' } : {},
+      subject,
+      message as unknown as TemplateBlock[],
+    )
+    if (unmergedVariables.length > 0) {
+      throw new Error(formatUnmergedVariablesMessage(unmergedVariables))
+    }
     // The preview showed no link, so nothing is sent until it does.
     if (isContract && contractAction === 'send') {
       if (readinessQuery.isError) {
@@ -1145,6 +1243,10 @@ export function SponsorSendModal({
       }
       if (!signerKey) throw new Error('Choose who signs the agreement')
     }
+    // Refused as the server would refuse it, or not known yet: nothing is
+    // posted, so nothing can be created or sent.
+    const hold = earlyAccess ? earlyAccessHold(earlyAccess) : null
+    if (hold) throw new Error(hold)
     if (isRegistration && !portalUrl) {
       throw new Error(
         portalLinkError
@@ -1177,6 +1279,8 @@ export function SponsorSendModal({
     const invalidateRecords = () => {
       utils.sponsor.crm.activities.list.invalidate()
       utils.sponsor.crm.activities.listCommunications.invalidate()
+      utils.sponsor.crm.list?.invalidate?.()
+      utils.sponsor.crm.getById?.invalidate?.()
       if (isDiscount) utils.sponsor.crm.discountCodeOptions.invalidate()
     }
     let result: Awaited<ReturnType<typeof sendMutation.mutateAsync>>
@@ -1196,10 +1300,14 @@ export function SponsorSendModal({
         rememberApplied(null)
         try {
           result = await sendMutation.mutateAsync(base)
+        } catch (retryError) {
+          recheckEarlyAccess?.()
+          throw retryError
         } finally {
           invalidateRecords()
         }
       } else {
+        recheckEarlyAccess?.()
         throw error
       }
     }
@@ -1223,6 +1331,14 @@ export function SponsorSendModal({
         title: 'Deal not updated',
         message:
           'The email went out, but the sponsor record could not be updated. Check the contract status and the signing link on the sponsor.',
+      })
+    }
+    if ('earlyAccessCopiesBehind' in result && result.earlyAccessCopiesBehind) {
+      const behind = result.earlyAccessCopiesBehind
+      showNotification({
+        type: 'warning',
+        title: `Unpublished ${behind === 1 ? 'copy' : 'copies'} without the link`,
+        message: `The email went out and the link works, but ${earlyAccessCopiesBehindNotice(behind)}`,
       })
     }
     if ('linkFailed' in result && result.linkFailed) {
@@ -1291,7 +1407,14 @@ export function SponsorSendModal({
                           url: contractLinkUrl,
                           theme: conference.theme,
                         })}`
-                      : messageHTML,
+                      : earlyAccess?.state === 'ready'
+                        ? `${messageHTML}${earlyAccessCardHtml({
+                            url: earlyAccess.url,
+                            sponsorStart: earlyAccess.sponsorStart,
+                            officialOpening: earlyAccess.officialOpening,
+                            theme: conference.theme,
+                          })}`
+                        : messageHTML,
             }}
           />
         }
@@ -1340,7 +1463,7 @@ export function SponsorSendModal({
       />
     ) : null
   const noCodeHint =
-    isDiscount && codeOptions.length > 0 && chosenCodes.length === 0 ? (
+    isDiscount && sponsorCodeOptions.length > 0 && chosenCodes.length === 0 ? (
       <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
         Choose at least one discount code before sending.
       </p>
@@ -1427,6 +1550,45 @@ export function SponsorSendModal({
             : 'The signed status was set manually; no digitally signed document is stored, so there is no signed copy to send.'}
       </p>
     ) : null
+  // Workshop early access (#1347): the server's answer, in its words. A
+  // refusal here is the refusal a send would get.
+  const earlyAccessHint = !earlyAccess ? null : earlyAccess.state ===
+    'checking' ? (
+    <p
+      role="status"
+      className="font-inter text-sm text-gray-500 dark:text-gray-400"
+    >
+      Checking whether early access can be sent…
+    </p>
+  ) : earlyAccess.state === 'ready' ? (
+    earlyAccess.url ? null : (
+      <p
+        role="status"
+        className="font-inter text-sm text-gray-600 dark:text-gray-300"
+      >
+        This sponsor has no early-access link yet. Sending creates it.
+      </p>
+    )
+  ) : (
+    // Refused, or the server could not be asked. Send is held either way,
+    // so the way out is here: ask again. The button sits beside the alert,
+    // not inside it: it is not part of what is announced.
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-900/20">
+      <p
+        role="alert"
+        className="font-inter min-w-0 flex-1 basis-64 text-sm text-red-800 dark:text-red-200"
+      >
+        {earlyAccess.message}
+      </p>
+      <button
+        type="button"
+        onClick={recheckEarlyAccess}
+        className="font-space-grotesk shrink-0 cursor-pointer rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-800 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:border-red-700 dark:bg-transparent dark:text-red-200 dark:hover:bg-red-900/40"
+      >
+        Check again
+      </button>
+    </div>
+  )
   const portalLinkHint = !isRegistration ? null : portalLinkError ? (
     <p
       role="alert"
@@ -1478,8 +1640,11 @@ export function SponsorSendModal({
       fromAddress={fromEmail}
       // A reminder or signed copy appends its card: a subject-only template
       // (an empty body) is still a complete email.
+      // So is a workshop early-access email: its block carries the link,
+      // the times and who can use it.
       allowEmptyBody={
-        isContract && contractAction !== 'send' && !!contractLinkUrl
+        (isContract && contractAction !== 'send' && !!contractLinkUrl) ||
+        earlyAccess?.state === 'ready'
       }
       warningContent={
         (localhostWarning ||
@@ -1488,6 +1653,7 @@ export function SponsorSendModal({
           noInviteLinkHint ||
           registrationCompleteNotice ||
           portalLinkHint ||
+          earlyAccessHint ||
           contractReadinessHint ||
           contractLinkMissingHint ||
           signingLinkNotice ||
@@ -1502,6 +1668,7 @@ export function SponsorSendModal({
             {noCodeHint}
             {registrationCompleteNotice}
             {portalLinkHint}
+            {earlyAccessHint}
             {contractReadinessHint}
             {contractLinkMissingHint}
             {signingLinkNotice}
@@ -1527,9 +1694,10 @@ export function SponsorSendModal({
                 label: 'Codes:',
                 content: (
                   <SponsorDiscountCodePicker
-                    options={codeOptions}
+                    options={sponsorCodeOptions}
                     selectedCodes={selectedCodes}
                     onToggle={toggleCode}
+                    sponsorName={sponsorForConference.sponsor.name}
                     state={
                       codesQuery.isError
                         ? 'error'
@@ -1584,7 +1752,12 @@ export function SponsorSendModal({
                   conference.title,
                   sponsorForConference.tier?.title,
                 )
-              : []),
+              : earlyAccess
+                ? earlyAccessGreeting(
+                    sponsorForConference.sponsor.name,
+                    conference.title,
+                  )
+                : []),
       }}
       placeholder={{
         subject: 'Enter email subject...',

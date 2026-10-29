@@ -254,4 +254,74 @@ describe('handleEmailNotification', () => {
       ],
     )
   })
+
+  describe('cancel / withdraw', () => {
+    it('emails the speaker when an organizer cancels with notify on', async () => {
+      const event = createEvent([createSpeaker()], { action: Action.cancel })
+      event.metadata.comment = 'Sorry'
+
+      await handleEmailNotification(event)
+
+      expect(mockSend).toHaveBeenCalledTimes(1)
+      expect(mockSend.mock.calls[0][0]).toMatchObject({
+        action: Action.cancel,
+        comment: 'Sorry',
+      })
+    })
+
+    it('does not email the cancelling organizer who is also a speaker', async () => {
+      const event = createEvent(
+        [
+          createSpeaker(),
+          createSpeaker({ _id: 'organizer-1', email: 'org@example.com' }),
+        ],
+        { action: Action.cancel },
+      )
+
+      await handleEmailNotification(event)
+
+      expect(mockSend).toHaveBeenCalledTimes(1)
+      expect(mockSend.mock.calls[0][0].speaker.email).toBe(
+        'primary@example.com',
+      )
+    })
+
+    it('does not email on cancel when notify is off', async () => {
+      const event = createEvent([createSpeaker()], { action: Action.cancel })
+      event.metadata.shouldNotify = false
+
+      await handleEmailNotification(event)
+
+      expect(mockSend).not.toHaveBeenCalled()
+    })
+
+    it('emails the speaker when an organizer withdraws', async () => {
+      const event = createEvent([createSpeaker()], { action: Action.withdraw })
+
+      await handleEmailNotification(event)
+
+      expect(mockSend).toHaveBeenCalledTimes(1)
+    })
+
+    it('falls back to the withdrawal reason when there is no comment', async () => {
+      const event = createEvent([createSpeaker()], { action: Action.withdraw })
+      event.metadata.reason = 'Schedule clash'
+
+      await handleEmailNotification(event)
+
+      expect(mockSend.mock.calls[0][0].comment).toBe('Schedule clash')
+    })
+
+    it('does not email a speaker who withdraws their own talk', async () => {
+      const event = createEvent([createSpeaker()], { action: Action.withdraw })
+      event.metadata.triggeredBy = {
+        speakerId: 'speaker-1',
+        isOrganizer: false,
+      }
+
+      await handleEmailNotification(event)
+
+      expect(mockSend).not.toHaveBeenCalled()
+    })
+  })
 })

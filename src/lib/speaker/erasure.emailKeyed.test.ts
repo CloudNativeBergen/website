@@ -54,7 +54,7 @@ const RECIPIENTS_SOURCE = readFileSync(
 const EMAIL_FIELD = /^(.*[Ee]mail.*|identifier)$/
 /** …minus the ones whose name contains "email" but hold a boolean/date/id. */
 const NOT_AN_ADDRESS =
-  /^(emailedAt|emailSent|emailSentAt|emailId|emailError|messagingEmailDefault|emailOverride|confirmationEmailSent|emailIdentity)$/
+  /^(emailedAt|emailSent|emailSentAt|emailId|emailError|messagingEmailDefault|emailOverride|confirmationEmailSent|emailIdentity|approvalEmailSentAt|approvalEmailSentBy|promotionEmailDue|promotionEmailClaim)$/
 
 type Disposition =
   | { verdict: 'swept'; why: string }
@@ -195,6 +195,10 @@ const DISPOSITIONS: Record<string, Disposition> = {
   'conference.sponsorEmail': {
     verdict: 'no-pii',
     why: 'conference configuration address, not a speaker',
+  },
+  'conference.email': {
+    verdict: 'no-pii',
+    why: '`speakerInfo.onsiteContact.email` — the organizer on call, published on /info',
   },
 }
 

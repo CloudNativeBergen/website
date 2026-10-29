@@ -55,12 +55,9 @@ describe('router-test detector', () => {
 
 describe('router-test baseline', () => {
   it('holds only the pre-existing debt, and signing is not in it', () => {
-    expect(baseline.untested).toEqual([
-      'agents',
-      'domainVerification',
-      'notification',
-      'organization',
-    ])
+    // `organization` gained its test with content judgement (#1581);
+    // `domainVerification` was already covered when the baseline shrank.
+    expect(baseline.untested).toEqual(['agents', 'notification'])
     expect(baseline.count).toBe(baseline.untested.length)
   })
 

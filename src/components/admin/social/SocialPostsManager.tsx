@@ -141,7 +141,7 @@ export function SocialPostsManager({
   // watch a scheduled variant become "post by hand" without reloading.
   const { data: variants, isLoading } = api.social.listVariants.useQuery(
     undefined,
-    { refetchInterval: 30_000 },
+    { refetchInterval: 120_000 },
   )
 
   // Derived from the organization's secrets on the server (#1130). A failed

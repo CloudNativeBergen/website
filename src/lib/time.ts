@@ -212,6 +212,82 @@ export function formatDateRangeLocalized(
   }).formatRange(from, to)
 }
 
+/**
+ * A session's opening or closing instant for the attendee feedback page
+ * (speaker feedback spec §7.2), e.g. "Tuesday 27 October at 10:40": English,
+ * the conference's time zone, a 24-hour clock like the programme, no year.
+ */
+export function formatSessionInstant(value: string): string {
+  return new Date(value).toLocaleString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: CONFERENCE_TIME_ZONE,
+  })
+}
+
+/**
+ * A moment on a conference day, e.g. "Tue 27 Oct, 10:52": the conference's
+ * time zone, a 24-hour clock like the programme, no year. When a feedback
+ * comment arrived (speaker feedback spec §9.3), when a Wall Post was
+ * submitted (Photo Wall spec §10).
+ */
+export function formatConferenceDayTime(value: string): string {
+  return new Date(value).toLocaleString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: CONFERENCE_TIME_ZONE,
+  })
+}
+
+/**
+ * A conference calendar date (YYYY-MM-DD), e.g. "Tue 27 Oct": English, no
+ * year, matching {@link formatConferenceDayTime}.
+ */
+export function formatConferenceDayDate(dateString: string): string {
+  return toOsloAnchoredDate(dateString).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: CONFERENCE_TIME_ZONE,
+  })
+}
+
+/**
+ * A clock time in the conference's time zone, e.g. "10:50": the end of a
+ * range whose start {@link formatConferenceDayTime} gave the day of.
+ */
+export function formatConferenceClock(value: string): string {
+  return new Date(value).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: CONFERENCE_TIME_ZONE,
+  })
+}
+
+/**
+ * A workshop registration opening or closing instant, in English and in the
+ * conference's time zone (e.g. "Thursday, October 1, 2026 at 10:00 AM"). The
+ * /workshop page and the sign-up instructions email both use it, so an
+ * attendee reads the same time in each, and the server's own zone never
+ * leaks in.
+ */
+export function formatRegistrationInstant(value: string): string {
+  return new Date(value).toLocaleString('en-US', {
+    dateStyle: 'full',
+    timeStyle: 'short',
+    timeZone: CONFERENCE_TIME_ZONE,
+  })
+}
+
 /** Formats a timestamp with time, house locale (e.g. "27. oktober 2025, 14:30"). */
 export function formatDateTimeSafe(dateString: string): string {
   if (!dateString) return 'TBD'

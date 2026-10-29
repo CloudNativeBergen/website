@@ -361,7 +361,7 @@ function SponsorCard({
       {!hideSponsorName && (
         <div className="mb-1 flex items-center gap-2">
           <Link
-            href={`/admin/sponsors/crm?sponsor=${sponsorForConferenceId}&view=history`}
+            href={`/admin/sponsors/${sponsorForConferenceId}?view=history`}
             className="text-sm font-semibold text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400"
           >
             {sponsorName}

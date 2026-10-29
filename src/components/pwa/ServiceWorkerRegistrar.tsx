@@ -1,6 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  clearScreenUpdateAttempts,
+  inScreenMode,
+  onScreenModeChange,
+  recordScreenUpdateAttempt,
+  screenIsReachable,
+  waitBeforeScreenUpdate,
+} from './screen-update'
 import { UpdateBanner } from './UpdateBanner'
 
 // How long to wait for `controllerchange` after `SKIP_WAITING` before forcing a
@@ -12,6 +20,10 @@ const RELOAD_FALLBACK_MS = 4000
 // stuck showing a dead spinner. Only ever fires on cancel — a committed reload
 // unloads the page before it can.
 const RELOAD_CANCEL_RECOVERY_MS = 500
+// On the Photo Wall's Screen Mode, how often to ask the browser to re-check
+// `/sw.js`: a venue screen gets no focus or visibility change for days (Photo
+// Wall spec §9.2).
+export const SCREEN_UPDATE_CHECK_MS = 10 * 60 * 1000
 
 /**
  * Registers the service worker and drives the update lifecycle.
@@ -29,6 +41,12 @@ const RELOAD_CANCEL_RECOVERY_MS = 500
  *     `refreshing` flag so the swap can never spiral into a reload loop.
  *  5. Calls `registration.update()` on focus / visibility change so long-lived
  *     tabs pick up a deploy without a manual refresh.
+ *  6. On the Photo Wall's Screen Mode (`/wall/screen`, Photo Wall spec §9.2)
+ *     nobody will click: an update is accepted by itself (SKIP_WAITING, then
+ *     the reload of step 4) once the screen's own URL has just answered, a
+ *     worker still waiting after that reload is retried with a growing wait
+ *     (`./screen-update`), and the check of step 5 also runs every ten
+ *     minutes, since a venue screen never changes focus or visibility.
  *
  * Registration happens only in the browser and only in production builds, so it
  * never fights Turbopack HMR during `next dev`.
@@ -74,11 +92,41 @@ export function ServiceWorkerRegistrar() {
     }, RELOAD_CANCEL_RECOVERY_MS)
   }, [])
 
+  // Accept the update: tell the waiting worker to activate; `controllerchange`
+  // then reloads. What the Reload click does, and what Screen Mode does alone.
+  const acceptUpdate = useCallback(() => {
+    // Ignore repeat calls (e.g. a rapid double-tap before the button's disabled
+    // state renders) so we never post SKIP_WAITING or arm the fallback twice.
+    if (reloadRequestedRef.current) return
+    // Show the in-progress state immediately so the click has visible feedback
+    // even before the worker activates.
+    setUpdating(true)
+    // Mark the reload as user-accepted so the controllerchange handler is
+    // allowed to reload (an unsolicited first-install controllerchange is not).
+    reloadRequestedRef.current = true
+    const worker = waitingWorkerRef.current
+    if (worker) {
+      worker.postMessage({ type: 'SKIP_WAITING' })
+      // Fallback: if `controllerchange` never fires (worker wedged, activation
+      // stalled), force a reload so the spinner always resolves. `doReload`
+      // coordinates with the controllerchange path so we reload exactly once.
+      fallbackTimeoutRef.current = setTimeout(doReload, RELOAD_FALLBACK_MS)
+    } else {
+      // No tracked worker (edge case) — a plain reload still recovers.
+      doReload()
+    }
+  }, [doReload])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!('serviceWorker' in navigator)) return
     // Registering the SW under Turbopack HMR fights dev reloads; prod only.
     if (process.env.NODE_ENV !== 'production') return
+    // Screen Mode is asked at the moment of acting (`inScreenMode()`: what
+    // the screen page reports on mount and unmount, else the browser's path),
+    // never `usePathname()`: the root layout mounts this outside any
+    // `<Suspense>`, where URL data would make every page bail out of
+    // prerendering.
 
     // Reload exactly once when the active worker changes AFTER the user accepted
     // the update. `doReload`'s `refreshingRef` guard prevents an infinite loop
@@ -95,6 +143,82 @@ export function ServiceWorkerRegistrar() {
     )
 
     let registration: ServiceWorkerRegistration | undefined
+    let screenUpdateTimer: ReturnType<typeof setInterval> | null = null
+    let screenAttemptTimer: ReturnType<typeof setTimeout> | null = null
+    let screenAttempting = false
+    // Bumped when an attempt is called off, so a probe still in flight drops it.
+    let screenAttemptRun = 0
+    let disposed = false
+
+    // A venue screen has nobody to click Reload: take the update once it is
+    // safe to reload (the screen's URL answers), backing off attempts in a row.
+    const takeScreenUpdate = async () => {
+      const run = screenAttemptRun
+      screenAttemptTimer = null
+      const wait = waitBeforeScreenUpdate(Date.now())
+      if (wait > 0) {
+        screenAttemptTimer = setTimeout(takeScreenUpdate, wait)
+        return
+      }
+      const reachable = await screenIsReachable()
+      if (disposed || run !== screenAttemptRun) return
+      recordScreenUpdateAttempt(Date.now())
+      if (reachable) acceptUpdate()
+      else {
+        screenAttemptTimer = setTimeout(
+          takeScreenUpdate,
+          waitBeforeScreenUpdate(Date.now()),
+        )
+      }
+    }
+
+    const updateFound = (worker: ServiceWorker) => {
+      waitingWorkerRef.current = worker
+      if (!inScreenMode()) setUpdateAvailable(true)
+      else if (!screenAttempting) {
+        screenAttempting = true
+        setUpdateAvailable(false)
+        void takeScreenUpdate()
+      }
+    }
+
+    // Screen Mode's ways follow the page, also across client-side
+    // navigation: the ten-minute check and the update taken by itself while
+    // it shows; the banner, and no timer, once it has gone.
+    const syncScreenMode = () => {
+      if (!registration) return
+      const waiting =
+        registration.waiting && navigator.serviceWorker.controller
+          ? registration.waiting
+          : null
+      if (inScreenMode()) {
+        if (screenUpdateTimer === null) {
+          screenUpdateTimer = setInterval(() => {
+            registration?.update().catch(() => {})
+          }, SCREEN_UPDATE_CHECK_MS)
+        }
+        // A screen opened while a worker was already waiting (installed by
+        // an earlier page of this browser) takes it too; elsewhere that
+        // worker stays waiting until the next deploy or a manual reload.
+        if (waiting) updateFound(waiting)
+        // Nothing waiting: the last update took. Start the waits afresh.
+        else if (!screenAttempting) clearScreenUpdateAttempts()
+        return
+      }
+      if (screenUpdateTimer !== null) {
+        clearInterval(screenUpdateTimer)
+        screenUpdateTimer = null
+      }
+      if (screenAttempting) {
+        // Left before the screen took it: offer it the ordinary way.
+        screenAttempting = false
+        screenAttemptRun++
+        if (screenAttemptTimer !== null) clearTimeout(screenAttemptTimer)
+        screenAttemptTimer = null
+        if (!reloadRequestedRef.current) setUpdateAvailable(true)
+      }
+    }
+    const stopWatchingScreenMode = onScreenModeChange(syncScreenMode)
 
     const trackInstalling = (worker: ServiceWorker) => {
       worker.addEventListener('statechange', () => {
@@ -104,8 +228,7 @@ export function ServiceWorkerRegistrar() {
           // older worker ⇒ this is an UPDATE, not the first install.
           navigator.serviceWorker.controller
         ) {
-          waitingWorkerRef.current = worker
-          setUpdateAvailable(true)
+          updateFound(worker)
         }
       })
     }
@@ -126,6 +249,7 @@ export function ServiceWorkerRegistrar() {
         if (registration.installing) {
           trackInstalling(registration.installing)
         }
+        syncScreenMode()
 
         registration.addEventListener('updatefound', () => {
           const installing = registration?.installing
@@ -147,6 +271,9 @@ export function ServiceWorkerRegistrar() {
     }
 
     return () => {
+      disposed = true
+      stopWatchingScreenMode()
+      if (screenAttemptTimer !== null) clearTimeout(screenAttemptTimer)
       navigator.serviceWorker.removeEventListener(
         'controllerchange',
         onControllerChange,
@@ -154,6 +281,7 @@ export function ServiceWorkerRegistrar() {
       window.removeEventListener('focus', onFocusOrVisible)
       document.removeEventListener('visibilitychange', onFocusOrVisible)
       window.removeEventListener('load', register)
+      if (screenUpdateTimer !== null) clearInterval(screenUpdateTimer)
       if (fallbackTimeoutRef.current !== null) {
         clearTimeout(fallbackTimeoutRef.current)
         fallbackTimeoutRef.current = null
@@ -163,31 +291,7 @@ export function ServiceWorkerRegistrar() {
         recoveryTimeoutRef.current = null
       }
     }
-  }, [doReload])
-
-  const handleReload = () => {
-    // Ignore repeat clicks (e.g. a rapid double-tap before the button's disabled
-    // state renders) so we never post SKIP_WAITING or arm the fallback twice.
-    if (reloadRequestedRef.current) return
-    // Show the in-progress state immediately so the click has visible feedback
-    // even before the worker activates.
-    setUpdating(true)
-    // Mark the reload as user-accepted so the controllerchange handler is
-    // allowed to reload (an unsolicited first-install controllerchange is not).
-    reloadRequestedRef.current = true
-    const worker = waitingWorkerRef.current
-    if (worker) {
-      // Tell the waiting worker to activate; `controllerchange` then reloads.
-      worker.postMessage({ type: 'SKIP_WAITING' })
-      // Fallback: if `controllerchange` never fires (worker wedged, activation
-      // stalled), force a reload so the spinner always resolves. `doReload`
-      // coordinates with the controllerchange path so we reload exactly once.
-      fallbackTimeoutRef.current = setTimeout(doReload, RELOAD_FALLBACK_MS)
-    } else {
-      // No tracked worker (edge case) — a plain reload still recovers.
-      doReload()
-    }
-  }
+  }, [acceptUpdate, doReload])
 
   const handleDismiss = () => {
     // Keep the current (waiting) version for now. The already-installed worker
@@ -202,7 +306,7 @@ export function ServiceWorkerRegistrar() {
 
   return (
     <UpdateBanner
-      onReload={handleReload}
+      onReload={acceptUpdate}
       onDismiss={handleDismiss}
       pending={updating}
     />

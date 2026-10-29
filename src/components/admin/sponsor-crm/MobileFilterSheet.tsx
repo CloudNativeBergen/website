@@ -95,12 +95,18 @@ export function MobileFilterSheet({
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {group.options.map((option) => (
-                        <FilterChip
-                          key={option.value}
-                          label={option.label}
-                          active={group.selected.includes(option.value)}
-                          onClick={() => group.onChange(option.value)}
-                        />
+                        <Fragment key={option.value}>
+                          {option.heading && (
+                            <p className="basis-full pt-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                              {option.heading}
+                            </p>
+                          )}
+                          <FilterChip
+                            label={option.label}
+                            active={group.selected.includes(option.value)}
+                            onClick={() => group.onChange(option.value)}
+                          />
+                        </Fragment>
                       ))}
                     </div>
                   )}

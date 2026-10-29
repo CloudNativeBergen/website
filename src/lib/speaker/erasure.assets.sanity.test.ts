@@ -113,6 +113,21 @@ vi.mock('@/lib/sanity/client', async () => {
       fetch: fetchAt(OLD),
       withConfig: (c: { apiVersion: string }) => ({
         transaction: () => transactionAt(c.apiVersion),
+        // The Session Feedback branch reads the subject's talks and their
+        // versions here (#1438): a dataset with no release lists none.
+        fetch: (
+          query: string,
+          params?: Record<string, unknown>,
+          opts?: { perspective?: unknown },
+        ) =>
+          query.includes('releases::all()')
+            ? Promise.resolve([])
+            : fetchAt(c.apiVersion)(query, params, opts),
+        getDocuments: async (ids: string[]) =>
+          ids.map(
+            (id) =>
+              structuredClone(h.dataset.find((d) => d._id === id)) ?? null,
+          ),
       }),
       transaction: () => transactionAt(OLD),
       delete: async (id: string) => {

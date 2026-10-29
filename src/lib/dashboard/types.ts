@@ -1,11 +1,15 @@
+import type { ThankYouTalk } from '@/lib/speaker/dashboardBriefing'
 import type { Conference } from '@/lib/conference/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import type { WorkshopStats } from '@/components/cfp/WorkshopStatistics'
 import type { TravelSupportWithExpenses } from '@/lib/travel-support/types'
 import type { BadgeRecord } from '@/lib/badge/types'
+import type { SpeakerTalkPhotos } from '@/lib/photo-wall/wall'
+import type { FeedbackChips } from '@/lib/feedback/chips'
 import type { WidgetMetadata } from './widget-metadata'
 import type { ConferencePhase } from '@/lib/conference/phase'
+import type { SpeakerBriefing } from '@/lib/speaker/briefing'
 import { z } from 'zod'
 
 /**
@@ -29,6 +33,34 @@ export interface ConferenceWithSpeakerData {
   badges: BadgeRecord[]
   isOver: boolean
   canEditProposals: boolean
+  /** Photos of your talks (talk photos spec §7.3): own talks, with photos only. */
+  talkPhotos?: SpeakerTalkPhotos[]
+  /** Session Feedback chip per confirmed talk (speaker feedback spec §9.4). */
+  feedbackChips?: FeedbackChips
+  /**
+   * Where a chip's Session Feedback section opens: `''` for this host's
+   * edition, the edition's own origin otherwise, `null` for none.
+   */
+  feedbackLinkOrigin?: string | null
+  /**
+   * The speaker briefing (#1592), only for the current domain's edition while
+   * the speaker has a confirmed talk and the conference is not over.
+   */
+  briefing?: SpeakerBriefing
+  /** The Oslo date when today is one of the conference's days. */
+  conferenceDay?: string
+  /** Pin the dinner: from the start of its day until it begins. */
+  pinDinner?: boolean
+  /** The dinner route, checked against the current routes; `null` = unanswered. */
+  dinnerChoice?: string | null
+  /** The briefing is shown because the speaker organizes the edition. */
+  asOrganizer?: boolean
+  /** Today is the day before the conference. */
+  dayBefore?: boolean
+  /** When the speaker ticket was emailed. */
+  ticketSentAt?: string
+  /** After the event, for a while: the confirmed talks to thank for. */
+  thankYou?: ThankYouTalk[]
 }
 
 export interface GridPosition {

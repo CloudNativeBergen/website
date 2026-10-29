@@ -1,4 +1,8 @@
-import { generateActionItems } from '@/lib/sponsor-crm/action-items'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import {
+  actionItemsForOrganizer,
+  generateActionItems,
+} from '@/lib/sponsor-crm/action-items'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
 function createSponsor(
@@ -30,9 +34,12 @@ describe('generateActionItems', () => {
   })
 
   it('returns empty array when no conditions match', () => {
-    const sponsor = createSponsor({ status: 'prospect' })
+    const sponsor = createSponsor({
+      status: 'prospect',
+      assignedTo: { _id: 'org-1', name: 'Alice', email: 'a@org.com' },
+    })
     const items = generateActionItems([sponsor])
-    // prospect with no special tags/value generates nothing
+    // assigned prospect with no special tags/value generates nothing
     expect(items).toEqual([])
   })
 
@@ -780,7 +787,7 @@ describe('generateActionItems', () => {
       const sponsor = createSponsor({ invoiceStatus: 'overdue' })
       const items = generateActionItems([sponsor])
 
-      expect(items[0].link).toBe('/admin/sponsors/crm?sponsor=sfc-1')
+      expect(items[0].link).toBe('/admin/sponsors/sfc-1?view=pipeline')
     })
 
     it('includes sponsor name in description', () => {
@@ -808,5 +815,149 @@ describe('generateActionItems', () => {
       expect(types).toContain('needs-contract')
       expect(types).toContain('registration-complete')
     })
+  })
+
+  describe('invoice timing (I2, I3)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      // Midday in Oslo on 29 Oct 2026.
+      vi.setSystemTime(new Date('2026-10-29T11:00:00Z'))
+    })
+    afterEach(() => vi.useRealTimers())
+
+    const signed = {
+      contractStatus: 'contract-signed' as const,
+      status: 'closed-won' as const,
+    }
+
+    it('flags a sent invoice once its due date has passed', () => {
+      const sponsor = createSponsor({
+        ...signed,
+        invoiceStatus: 'sent',
+        invoiceDueAt: '2026-10-28',
+      })
+      const items = generateActionItems([sponsor])
+      const item = items.find((i) => i.type === 'overdue')
+      expect(item).toMatchObject({ priority: 1 })
+      expect(item?.description).toMatch(/^Invoice overdue since .+Mark overdue/)
+      // Suggests the change; never makes it.
+      expect(sponsor.invoiceStatus).toBe('sent')
+    })
+
+    it('does not flag a sent invoice due today or later', () => {
+      for (const invoiceDueAt of ['2026-10-29', '2026-11-30']) {
+        const items = generateActionItems([
+          createSponsor({ ...signed, invoiceStatus: 'sent', invoiceDueAt }),
+        ])
+        expect(items.find((i) => i.type === 'overdue')).toBeUndefined()
+      }
+    })
+
+    it('does not flag a paid invoice past its due date', () => {
+      const items = generateActionItems([
+        createSponsor({
+          ...signed,
+          invoiceStatus: 'paid',
+          invoiceDueAt: '2026-01-01',
+        }),
+      ])
+      expect(items.find((i) => i.type === 'overdue')).toBeUndefined()
+    })
+
+    it('raises an uninvoiced deal signed more than 7 days ago', () => {
+      const items = generateActionItems([
+        createSponsor({
+          contractStatus: 'contract-signed',
+          status: 'negotiating',
+          contractSignedAt: '2026-10-19T10:00:00Z',
+        }),
+      ])
+      expect(items.find((i) => i.type === 'needs-invoice')).toMatchObject({
+        description: 'Signed 10 days ago, no invoice sent',
+        priority: 1.8,
+      })
+    })
+
+    it('does not raise a deal signed exactly 7 days ago', () => {
+      const items = generateActionItems([
+        createSponsor({
+          contractStatus: 'contract-signed',
+          status: 'negotiating',
+          contractSignedAt: '2026-10-22T11:00:00Z',
+        }),
+      ])
+      expect(items.find((i) => i.type === 'needs-invoice')).toBeUndefined()
+    })
+
+    it('ignores stale signatures once the invoice is sent', () => {
+      const items = generateActionItems([
+        createSponsor({
+          ...signed,
+          contractValue: 1000,
+          invoiceStatus: 'sent',
+          contractSignedAt: '2026-09-01T10:00:00Z',
+        }),
+      ])
+      expect(items.find((i) => i.type === 'needs-invoice')).toBeUndefined()
+    })
+  })
+})
+
+describe('assign an owner (priority 3)', () => {
+  it('asks for an owner on an unassigned sponsor', () => {
+    expect(generateActionItems([createSponsor()])).toEqual([
+      expect.objectContaining({
+        id: 'sfc-1-unassigned',
+        type: 'unassigned',
+        title: 'Assign an owner',
+        priority: 3,
+        link: '/admin/sponsors/sfc-1?view=pipeline',
+      }),
+    ])
+  })
+
+  it('skips assigned and closed-lost sponsors', () => {
+    const items = generateActionItems([
+      createSponsor({
+        assignedTo: { _id: 'org-1', name: 'Alice', email: 'a@org.com' },
+      }),
+      createSponsor({ _id: 'sfc-2', status: 'closed-lost' }),
+    ])
+    expect(items.filter((i) => i.type === 'unassigned')).toEqual([])
+  })
+})
+
+describe('actionItemsForOrganizer', () => {
+  const alice = { _id: 'org-1', name: 'Alice', email: 'a@org.com' }
+  const bob = { _id: 'org-2', name: 'Bob', email: 'b@org.com' }
+  const sponsors = [
+    createSponsor({
+      _id: 'mine',
+      assignedTo: alice,
+      tags: ['needs-follow-up'],
+    }),
+    createSponsor({ _id: 'bobs', assignedTo: bob, invoiceStatus: 'overdue' }),
+    createSponsor({ _id: 'nobody' }),
+    createSponsor({ _id: 'mine-overdue', assignedTo: alice }),
+  ]
+  sponsors[3].invoiceStatus = 'overdue'
+
+  it('keeps my sponsors and unassigned ones, sorted by priority', () => {
+    expect(
+      actionItemsForOrganizer(sponsors, 'org-1').map((i) => [
+        i.sponsor.id,
+        i.priority,
+      ]),
+    ).toEqual([
+      ['mine-overdue', 1],
+      ['nobody', 3],
+      ['mine', 4.5],
+    ])
+  })
+
+  it('shows only unassigned sponsors without an organizer id', () => {
+    expect(
+      actionItemsForOrganizer(sponsors, null).map((i) => i.sponsor.id),
+    ).toEqual(['nobody'])
   })
 })

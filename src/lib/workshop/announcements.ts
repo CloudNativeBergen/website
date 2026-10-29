@@ -1,13 +1,13 @@
 import { groq } from 'next-sanity'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadCached, clientWrite } from '@/lib/sanity/client'
+import { scopedFetch } from '@/lib/sanity/scoped'
 import type { Conference } from '@/lib/conference/types'
 import { sendWorkshopAnnouncementEmail } from '@/lib/email/workshop'
+import { LISTED_WORKSHOP_FORMATS } from './listed'
 
-/** Talk formats that qualify as a workshop (mirrors workshopSignup validation). */
-export const WORKSHOP_FORMATS = ['workshop_120', 'workshop_240'] as const
-
+/** A workshop's format, by the one list (`listed.ts`, #1301). */
 export function isWorkshopFormat(format: string | undefined): boolean {
-  return !!format && (WORKSHOP_FORMATS as readonly string[]).includes(format)
+  return !!format && (LISTED_WORKSHOP_FORMATS as string[]).includes(format)
 }
 
 /** Minimal projection of a workshop talk used to authorize + label a broadcast. */
@@ -179,8 +179,64 @@ export async function getWorkshopAnnouncements(
   return announcements ?? []
 }
 
+/**
+ * The announcements of every CONFIRMED workshop of one conference, in ONE
+ * read: what the attendee portal shows under each workshop card. Keyed by
+ * workshop id; each workshop keeps its own newest 50, whatever the others
+ * have. A workshop that is not confirmed has no card on the portal and is
+ * left out, as is one with nothing to say.
+ *
+ * One request for the page instead of one per card, and through the CDN host:
+ * an announcement may reach the portal some seconds after it is posted, which
+ * a broadcast that is also emailed can afford. The organizer's own view reads
+ * {@link getWorkshopAnnouncements}, live, so it shows what was just written.
+ */
+export async function getAnnouncementsByWorkshop(
+  conferenceId: string,
+): Promise<Record<string, WorkshopAnnouncementView[]>> {
+  const workshops = await scopedFetch<
+    Array<{ _id: string; announcements: WorkshopAnnouncementView[] }>
+  >(
+    clientReadCached,
+    { conferenceId },
+    // The root (the conference's confirmed workshops) is scoped by
+    // `scopedFetch`; the announcements under each are held to the same
+    // conference by hand, since only the root is rewritten. The slice is a
+    // literal: nothing is interpolated into this query.
+    `*[_type == "talk" && status == "confirmed" && format in $formats]{
+      _id,
+      "announcements": *[
+        _type == "workshopAnnouncement" &&
+        conference._ref == $conferenceId &&
+        workshop._ref == ^._id
+      ] | order(createdAt desc)[0...50]{
+        _id,
+        body,
+        createdAt,
+        "authorName": author->name
+      }
+    }[count(announcements) > 0]`,
+    { formats: LISTED_WORKSHOP_FORMATS },
+  )
+
+  // `fromEntries` defines each id as the object's OWN key: a workshop id is
+  // data, and must not meet a key every object already has.
+  return Object.fromEntries(
+    (workshops ?? []).map(({ _id, announcements }) => [_id, announcements]),
+  )
+}
+
 /** Upper bound on simultaneous announcement emails in flight. */
 const EMAIL_CONCURRENCY = 3
+
+/**
+ * Minimum time per batch of {@link EMAIL_CONCURRENCY} sends: 5 emails/s, half
+ * of Resend's 10 requests/s, which the account shares with every other send.
+ * ponytail: per-invocation pacing; a shared limiter if parallel fan-outs still hit 429.
+ */
+// ponytail: in-request pacing (~5/s) inside one tRPC call; the 60 s maxDuration
+// caps a fan-out at ~300 recipients. Move to a queue when a list outgrows that.
+const BATCH_MIN_MS = 600
 
 export interface FanOutResult {
   sent: number
@@ -202,23 +258,39 @@ export async function sendAnnouncementToConfirmedParticipants(input: {
   recipients: AnnouncementRecipient[]
 }): Promise<FanOutResult> {
   const { conference, workshopTitle, authorName, body, recipients } = input
+  return fanOutEmails(recipients, (recipient) =>
+    sendWorkshopAnnouncementEmail({
+      userEmail: recipient.userEmail,
+      userName: recipient.userName,
+      conference,
+      workshopTitle,
+      authorName,
+      body,
+    }),
+  )
+}
+
+/**
+ * One email per item, {@link EMAIL_CONCURRENCY} at a time, at most 5 a
+ * second ({@link BATCH_MIN_MS}). A send that throws
+ * or answers an error is counted as failed; the batch goes on.
+ */
+export async function fanOutEmails<T>(
+  items: T[],
+  send: (item: T) => Promise<{ error?: unknown }>,
+): Promise<FanOutResult> {
   let sent = 0
   let failed = 0
 
-  for (let i = 0; i < recipients.length; i += EMAIL_CONCURRENCY) {
-    const chunk = recipients.slice(i, i + EMAIL_CONCURRENCY)
+  for (let i = 0; i < items.length; i += EMAIL_CONCURRENCY) {
+    const started = Date.now()
     const results = await Promise.allSettled(
-      chunk.map((recipient) =>
-        sendWorkshopAnnouncementEmail({
-          userEmail: recipient.userEmail,
-          userName: recipient.userName,
-          conference,
-          workshopTitle,
-          authorName,
-          body,
-        }),
-      ),
+      items.slice(i, i + EMAIL_CONCURRENCY).map(send),
     )
+    const wait = BATCH_MIN_MS - (Date.now() - started)
+    if (i + EMAIL_CONCURRENCY < items.length && wait > 0) {
+      await new Promise((resolve) => setTimeout(resolve, wait))
+    }
 
     for (const result of results) {
       if (result.status === 'fulfilled' && !result.value.error) {

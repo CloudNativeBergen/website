@@ -28,6 +28,12 @@ const SPONSOR_LINK =
 const SPEAKER_LINK =
   'https://event.checkin.no/999999?action=invite&category=222222&pass=FAKE-SPEAKER-TOKEN'
 
+const VOLUNTEER_LINK =
+  'https://event.checkin.no/999999?action=invite&category=333333&pass=FAKE-VOLUNTEER-TOKEN'
+
+const VOLUNTEER_SLACK_LINK =
+  'https://join.slack.com/t/test/shared_invite/vol-token'
+
 vi.mock('next/headers', () => ({
   headers: async () => new Headers({ host: HOST }),
 }))
@@ -49,6 +55,8 @@ const CONFERENCE = {
   registrationLink: 'https://event.checkin.no/999999',
   sponsorRegistrationLink: SPONSOR_LINK,
   speakerRegistrationLink: SPEAKER_LINK,
+  volunteerRegistrationLink: VOLUNTEER_LINK,
+  volunteerSlackInviteUrl: VOLUNTEER_SLACK_LINK,
 }
 
 // A FRESH object per fetch: the redaction deletes the key off the result, so a
@@ -107,5 +115,34 @@ describe('speakerRegistrationLink redaction', () => {
 
     expect(conference.speakerRegistrationLink).toBe(SPEAKER_LINK)
     expect(conference.sponsorRegistrationLink).toBeUndefined()
+    expect(conference.volunteerRegistrationLink).toBeUndefined()
+    expect(conference.volunteerSlackInviteUrl).toBeUndefined()
+  })
+})
+
+describe('volunteerRegistrationLink and volunteerSlackInviteUrl redaction', () => {
+  it('is absent from a default read', async () => {
+    const { getConferenceForCurrentDomain } =
+      await import('@/lib/conference/sanity')
+
+    const { conference } = await getConferenceForCurrentDomain()
+
+    expect(conference.volunteerRegistrationLink).toBeUndefined()
+    expect(conference.volunteerSlackInviteUrl).toBeUndefined()
+    expect(conference.registrationLink).toBe('https://event.checkin.no/999999')
+  })
+
+  it('is present when a server surface asks for it', async () => {
+    const { getConferenceForCurrentDomain } =
+      await import('@/lib/conference/sanity')
+
+    const { conference } = await getConferenceForCurrentDomain({
+      includeVolunteerRegistrationLink: true,
+    })
+
+    expect(conference.volunteerRegistrationLink).toBe(VOLUNTEER_LINK)
+    expect(conference.volunteerSlackInviteUrl).toBe(VOLUNTEER_SLACK_LINK)
+    expect(conference.sponsorRegistrationLink).toBeUndefined()
+    expect(conference.speakerRegistrationLink).toBeUndefined()
   })
 })

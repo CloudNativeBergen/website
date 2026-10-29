@@ -114,14 +114,18 @@ export function scopedQuery(scope: Scope, groqBody: string): string {
 type ScopedFetchClient = Pick<typeof clientReadUncached, 'fetch'>
 
 /**
- * The subset of Sanity query options this repo passes through — currently just
- * the Next.js fetch cache hint (e.g. `{ cache: 'no-store' }` for read-your-writes
- * reads). Kept minimal and structural so `scopedFetch` needn't import Sanity's
+ * The subset of Sanity query options this repo passes through: the Next.js
+ * fetch cache hint (e.g. `{ cache: 'no-store' }` for read-your-writes reads)
+ * and the perspective. Kept minimal and structural so `scopedFetch` needn't import Sanity's
  * overloaded option types; it is assignable to the client's real options type.
  */
 export interface ScopedFetchOptions {
   cache?: RequestCache
   next?: { revalidate?: number | false; tags?: string[] }
+  /** `'raw'` sees drafts and, from API version 2025-02-19, release versions. */
+  perspective?: 'raw' | 'published'
+  /** Ends the request: the client's own `timeout` does not bound a no-store read. */
+  signal?: AbortSignal
 }
 
 /**

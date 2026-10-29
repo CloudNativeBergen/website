@@ -17,6 +17,8 @@ import conversationPreference from './schemaTypes/conversationPreference'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import dashboardConfig from './schemaTypes/dashboardConfig'
 import domainVerification from './schemaTypes/domainVerification'
+import feedbackResponse from './schemaTypes/feedbackResponse'
+import contentJudgement from './schemaTypes/contentJudgement'
 import message from './schemaTypes/message'
 import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
 import emailSignInToken from './schemaTypes/emailSignInToken'
@@ -32,9 +34,11 @@ import schedule from './schemaTypes/schedule'
 import scheduledReminderLog from './schemaTypes/scheduledReminderLog'
 import speaker from './schemaTypes/speaker'
 import speakerBadge from './schemaTypes/speakerBadge'
+import speakerDinnerChoice from './schemaTypes/speakerDinnerChoice'
 import sponsor from './schemaTypes/sponsor'
 import sponsorActivity from './schemaTypes/sponsorActivity'
 import discountCodeClaim from './schemaTypes/discountCodeClaim'
+import workshopSeats from './schemaTypes/workshopSeats'
 import sponsorEmailTemplate from './schemaTypes/sponsorEmailTemplate'
 import sponsorForConference from './schemaTypes/sponsorForConference'
 import sponsorTier from './schemaTypes/sponsorTier'
@@ -59,6 +63,8 @@ import videoProject from './schemaTypes/videoProject'
 import planTemplateName from './schemaTypes/planTemplateName'
 import staff from './schemaTypes/staff'
 import invitationLetter from './schemaTypes/invitationLetter'
+import photoWall from './schemaTypes/photoWall'
+import wallPost from './schemaTypes/wallPost'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
@@ -95,6 +101,8 @@ export const schema: { types: SchemaTypeDefinition[] } = {
 
     // Topics & Talks
     talk,
+    feedbackResponse,
+    contentJudgement,
     topic,
     review,
     workshopSignup,
@@ -103,6 +111,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     // Speakers
     speaker,
     speakerBadge,
+    speakerDinnerChoice,
     coSpeakerInvitation,
     travelSupport,
     travelExpense,
@@ -133,6 +142,10 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     // Saved studio videos (#1181)
     videoProject,
 
+    // Photo Wall (Photo Wall spec §4), read-only: organizers use /admin/photo-wall
+    photoWall,
+    wallPost,
+
     // Platform-internal identity artifacts (hidden from the Studio structure —
     // see STUDIO_HIDDEN_TYPES in sanity.config.ts). Registered only so their
     // shape is typed and documented; nobody edits them by hand.
@@ -152,6 +165,8 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     // A failed gallery upload's file, awaiting the delayed orphan check
     // (#1167). Same rule.
     marketingAssetCleanup,
+    // The seats guard of a workshop (#1344). Same rule.
+    workshopSeats,
   ],
 }
 
@@ -167,4 +182,5 @@ export const STUDIO_HIDDEN_TYPES: readonly string[] = [
   'marketingRateLimit',
   'planTemplateName',
   'marketingAssetCleanup',
+  'workshopSeats',
 ]

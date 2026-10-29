@@ -54,10 +54,6 @@ const CATEGORY_LABELS: Partial<
     description:
       'When an organizer or speaker replies in one of your conversations.',
   },
-  talkConfirmed: {
-    title: 'Talk confirmed',
-    description: 'When your talk is confirmed for the programme.',
-  },
   coSpeakerInvites: {
     title: 'Co-speaker activity',
     description:

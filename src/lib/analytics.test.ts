@@ -4,7 +4,6 @@ import {
   CTA_CAPTURE_ATTR,
   CAPTURE_ATTR_PREFIX,
   POSTHOG_TOKEN_PATTERN,
-  resolvePirschCode,
   resolvePosthogToken,
 } from './analytics'
 
@@ -62,13 +61,5 @@ describe('the analytics event catalogue', () => {
   it('names the CTA capture attribute PostHog autocapture reads', () => {
     expect(CTA_CAPTURE_ATTR).toBe('data-ph-capture-attribute-cta')
     expect(CTA_CAPTURE_ATTR.startsWith(CAPTURE_ATTR_PREFIX)).toBe(true)
-  })
-})
-
-describe('resolvePirschCode (kept until the last organization has switched)', () => {
-  it('still resolves a valid code', () => {
-    expect(resolvePirschCode('Jc72d7tD73Ai9raeYVPeXJ0OhEJrrvaK')).toBe(
-      'Jc72d7tD73Ai9raeYVPeXJ0OhEJrrvaK',
-    )
   })
 })

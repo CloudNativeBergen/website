@@ -5,11 +5,12 @@ import {
   DashboardLayout,
   type NavigationSection,
 } from '@/components/common/DashboardLayout'
-import { visibleNavSections } from '@/lib/admin/registry'
+import { visibleNavSections, withNavBadges } from '@/lib/admin/registry'
 import type { FeatureId } from '@/lib/features/registry'
 import { CommandPalette } from './CommandPalette'
 import { NotificationProvider } from './NotificationProvider'
 import { UnlistedBanner } from './UnlistedBanner'
+import { useAdminNavCounts } from './useAdminNavCounts'
 
 interface ConferenceLogos {
   logoBright?: string
@@ -53,9 +54,10 @@ export function AdminLayout({
   enabledFeatures = NO_FEATURES,
 }: AdminLayoutProps) {
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const counts = useAdminNavCounts()
   const navigation: NavigationSection[] = useMemo(
-    () => visibleNavSections(enabledFeatures),
-    [enabledFeatures],
+    () => withNavBadges(visibleNavSections(enabledFeatures), counts),
+    [enabledFeatures, counts],
   )
 
   return (

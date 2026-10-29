@@ -5,7 +5,9 @@ import Link from 'next/link'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { Button } from '@/components/Button'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import { ModalShell } from '@/components/ModalShell'
+import { TAP_GUARD_MS, useOpenedLongEnough } from '@/hooks/useOpenedLongEnough'
 import type {
   ProposalWithWorkshopData,
   WorkshopSignupExisting,
@@ -33,6 +35,7 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleIconSolid } from '@heroicons/react/24/solid'
+import { speakerPath } from '@/lib/speaker/path'
 
 interface WorkshopCardProps {
   workshop: ProposalWithWorkshopData
@@ -46,6 +49,11 @@ interface WorkshopCardProps {
   isSignedUp?: boolean
   isFull?: boolean
   isLoading?: boolean
+  /**
+   * Registration has closed: a cancelled sign-up cannot be made again. The
+   * question before a cancel says so.
+   */
+  registrationClosed?: boolean
   hasTimeConflict?: boolean
   conflictingWorkshopTitle?: string
   /**
@@ -64,6 +72,7 @@ export default function WorkshopCard({
   isSignedUp = false,
   isFull = false,
   isLoading: externalLoading = false,
+  registrationClosed = false,
   hasTimeConflict = false,
   conflictingWorkshopTitle,
   announcements,
@@ -71,6 +80,14 @@ export default function WorkshopCard({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showSignupModal, setShowSignupModal] = useState(false)
+  const [showCancelQuestion, setShowCancelQuestion] = useState(false)
+  // The question's confirm button carries the label of the button that opened
+  // it, and on a phone can appear under the same thumb: the second tap of a
+  // double tap must not answer it.
+  const cancelQuestionRead = useOpenedLongEnough(
+    showCancelQuestion,
+    TAP_GUARD_MS,
+  )
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>(
     'intermediate' as ExperienceLevel,
   )
@@ -269,9 +286,61 @@ export default function WorkshopCard({
     </ModalShell>
   )
 
+  // A cancel DELETES the sign-up (#1331) and nobody can restore it, so it asks
+  // first: what is given up, and whether there is a way back. While
+  // registration is open it promises nothing about a seat still being there.
+  const cancelQuestion = (
+    <ModalShell
+      isOpen={showCancelQuestion}
+      onClose={() => setShowCancelQuestion(false)}
+      size="md"
+      title={isOnWaitlist ? 'Leave the waitlist?' : 'Cancel your registration?'}
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-gray-700 dark:text-gray-300">
+          {isOnWaitlist
+            ? `You give up your place in line for ${workshop.title}.`
+            : `You give up your seat in ${workshop.title}.`}{' '}
+          {registrationClosed
+            ? `Registration has closed, so you will not be able to ${isOnWaitlist ? 'join' : 'register'} again.`
+            : isOnWaitlist
+              ? 'You can join again while registration is open, but you lose the place you have now.'
+              : 'You can register again while registration is open, but the seat may be taken by then.'}
+        </p>
+        <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+          {/* The choice that cannot be undone is the QUIET one: outlined, and
+              in the secondary place (below on a phone, left on a desktop).
+              The filled button, where this portal's dialogs put the answer
+              they expect, keeps the sign-up. */}
+          <Button
+            type="button"
+            variant="outline"
+            aria-disabled={!cancelQuestionRead || undefined}
+            onClick={() => {
+              if (!cancelQuestionRead) return
+              setShowCancelQuestion(false)
+              void handleCancel()
+            }}
+            className="min-h-11"
+          >
+            {isOnWaitlist ? 'Leave Waitlist' : 'Cancel Registration'}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setShowCancelQuestion(false)}
+            className="min-h-11"
+          >
+            {isOnWaitlist ? 'Stay on Waitlist' : 'Keep My Seat'}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  )
+
   return (
     <>
       {modalContent}
+      {cancelQuestion}
 
       <div className="rounded-xl bg-white p-6 shadow-sm transition-all hover:shadow-md dark:bg-gray-800 dark:hover:shadow-lg">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
@@ -284,13 +353,16 @@ export default function WorkshopCard({
               <div className="mb-3">
                 {workshop.speakers.length === 1 ? (
                   <div className="flex items-center gap-3">
-                    <Link
-                      href={`/speaker/${workshop.speakers[0].slug}`}
+                    <SpeakerLink
+                      slug={workshop.speakers[0].slug}
                       className="shrink-0"
                     >
                       {workshop.speakers[0]?.image ? (
                         <img
-                          src={workshop.speakers[0].image}
+                          src={speakerImageUrl(workshop.speakers[0].image, {
+                            width: 96,
+                            height: 96,
+                          })}
                           alt={workshop.speakers[0].name}
                           className="h-10 w-10 rounded-full object-cover transition-all hover:ring-2 hover:ring-brand-cloud-blue"
                         />
@@ -299,14 +371,14 @@ export default function WorkshopCard({
                           <UserIcon className="h-5 w-5 text-blue-500 dark:text-blue-400" />
                         </div>
                       )}
-                    </Link>
+                    </SpeakerLink>
                     <div>
-                      <Link
-                        href={`/speaker/${workshop.speakers[0].slug}`}
+                      <SpeakerLink
+                        slug={workshop.speakers[0].slug}
                         className="text-sm font-medium text-brand-cloud-blue hover:underline dark:text-blue-400"
                       >
                         {workshop.speakers[0].name}
-                      </Link>
+                      </SpeakerLink>
                       {workshop.speakers[0].title && (
                         <p className="text-xs text-gray-600 dark:text-gray-400">
                           {workshop.speakers[0].title}
@@ -319,14 +391,17 @@ export default function WorkshopCard({
                     <div className="flex items-center gap-2">
                       <div className="flex -space-x-2">
                         {workshop.speakers.slice(0, 3).map((speaker, index) => (
-                          <Link
+                          <SpeakerLink
                             key={speaker._id || index}
-                            href={`/speaker/${speaker.slug}`}
+                            slug={speaker.slug}
                             className="relative hover:z-10"
                           >
                             {speaker.image ? (
                               <img
-                                src={speaker.image}
+                                src={speakerImageUrl(speaker.image, {
+                                  width: 64,
+                                  height: 64,
+                                })}
                                 alt={speaker.name}
                                 className="h-8 w-8 rounded-full object-cover ring-2 ring-white transition-all hover:ring-brand-cloud-blue dark:ring-gray-800"
                               />
@@ -335,7 +410,7 @@ export default function WorkshopCard({
                                 <UserIcon className="h-4 w-4 text-blue-500 dark:text-blue-400" />
                               </div>
                             )}
-                          </Link>
+                          </SpeakerLink>
                         ))}
                         {workshop.speakers.length > 3 && (
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600 ring-2 ring-white dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-800">
@@ -347,12 +422,12 @@ export default function WorkshopCard({
                         <div className="text-sm font-medium text-brand-cloud-blue dark:text-blue-400">
                           {workshop.speakers.map((s, idx) => (
                             <span key={s._id || idx}>
-                              <Link
-                                href={`/speaker/${s.slug}`}
+                              <SpeakerLink
+                                slug={s.slug}
                                 className="hover:underline"
                               >
                                 {s.name}
-                              </Link>
+                              </SpeakerLink>
                               {idx < workshop.speakers.length - 1 && ', '}
                             </span>
                           ))}
@@ -549,7 +624,7 @@ export default function WorkshopCard({
               </div>
               {onCancel && (
                 <Button
-                  onClick={handleCancel}
+                  onClick={() => setShowCancelQuestion(true)}
                   disabled={isLoading || externalLoading}
                   variant="outline"
                   className="w-full"
@@ -590,5 +665,25 @@ export default function WorkshopCard({
         </div>
       </div>
     </>
+  )
+}
+
+/** A link to the speaker's profile, or a plain span when there is no slug. */
+function SpeakerLink({
+  slug,
+  className,
+  children,
+}: {
+  slug?: string | null
+  className?: string
+  children: React.ReactNode
+}) {
+  const href = speakerPath(slug)
+  return href ? (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  ) : (
+    <span className={className}>{children}</span>
   )
 }

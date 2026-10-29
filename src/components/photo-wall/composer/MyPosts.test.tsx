@@ -1,0 +1,312 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * My posts (Photo Wall spec §5.1, §12): each of this phone's posts with its
+ * status, Delete behind an inline confirm, the Marketing switch, and the
+ * "Couldn't delete. Try again." state of a `deleting` post with Delete
+ * still offered. The actions stand in for the Server Actions.
+ */
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MyPost } from '@/lib/photo-wall/my-posts'
+import { MyPosts, type MyPostsProps } from './MyPosts'
+
+let n = 0
+const post = (fields: Partial<MyPost> = {}): MyPost => ({
+  _id: `wallPost-${++n}`,
+  status: 'pending',
+  src: `https://cdn.sanity.io/images/p/d/${n}.jpg?rect=0,0,10,10`,
+  caption: `Caption ${n}`,
+  name: 'Ada',
+  marketingConsent: false,
+  submittedAt: '2026-10-26T09:00:00Z',
+  ...fields,
+})
+
+/** An action's answer, the list having come from read 1 (`listRead`). */
+const answer = <S extends string>(status: S, readsBefore = 1) => ({
+  status,
+  readsBefore,
+})
+
+const onDelete = vi.fn<MyPostsProps['onDelete']>()
+const onMarketing = vi.fn<MyPostsProps['onMarketing']>()
+
+beforeEach(() => {
+  n = 0
+  onDelete.mockReset().mockResolvedValue(answer('deleted'))
+  onMarketing.mockReset().mockResolvedValue(answer('done'))
+})
+
+const card = (caption: string) =>
+  within(screen.getByRole('listitem', { name: caption }))
+
+describe('MyPosts', () => {
+  it('shows each post as a plain <img> of its Sanity URL, with its caption, name and status', () => {
+    render(
+      <MyPosts
+        posts={[
+          post({ caption: 'Waiting', status: 'pending' }),
+          post({ caption: 'Up', status: 'approved', name: null }),
+          post({ caption: 'Down', status: 'notShown' }),
+        ]}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+        listRead={1}
+      />,
+    )
+    expect(card('Waiting').getByText('Waiting for approval')).toBeVisible()
+    expect(card('Up').getByText('On the wall')).toBeVisible()
+    expect(card('Down').getByText('Not shown')).toBeVisible()
+    expect(
+      card('Down').getByText(/An organizer chose not to show this photo/),
+    ).toBeVisible()
+    expect(card('Up').queryByText(/chose not to show/)).toBeNull()
+    const img = card('Waiting').getByRole('img', {
+      name: 'Your photo: Waiting',
+    })
+    expect(img.tagName).toBe('IMG')
+    expect(img).toHaveAttribute(
+      'src',
+      'https://cdn.sanity.io/images/p/d/1.jpg?rect=0,0,10,10',
+    )
+    expect(card('Waiting').getByText('— Ada')).toBeVisible()
+    expect(card('Up').queryByText(/— /)).toBeNull()
+  })
+
+  it('a deleting post says the delete did not finish, shows no photo, offers Delete and no Marketing switch', () => {
+    render(
+      <MyPosts
+        posts={[post({ caption: 'Stuck', status: 'deleting', src: null })]}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+        listRead={1}
+      />,
+    )
+    const stuck = card('Stuck')
+    expect(stuck.getByText('Couldn’t delete. Try again.')).toBeVisible()
+    expect(stuck.queryByRole('img')).toBeNull()
+    expect(stuck.getByRole('button', { name: 'Delete' })).toBeVisible()
+    expect(stuck.queryByRole('switch')).toBeNull()
+  })
+
+  it('Delete asks first, in place; Cancel keeps the post and hands focus back to Delete', async () => {
+    render(
+      <MyPosts
+        posts={[post({ caption: 'Keep' })]}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+        listRead={1}
+      />,
+    )
+    const keep = card('Keep')
+    fireEvent.click(keep.getByRole('button', { name: 'Delete' }))
+    expect(
+      keep.getByText(
+        'Delete this photo? It’s removed from the wall and can’t be undone.',
+      ),
+    ).toBeVisible()
+    expect(onDelete).not.toHaveBeenCalled()
+    const cancel = keep.getByRole('button', { name: 'Cancel' })
+    expect(cancel).toHaveFocus()
+    fireEvent.click(cancel)
+    expect(keep.queryByText(/Delete this photo/)).toBeNull()
+    expect(keep.getByRole('button', { name: 'Delete' })).toHaveFocus()
+    expect(onDelete).not.toHaveBeenCalled()
+  })
+
+  it('confirming deletes that post, saying Deleting… meanwhile', async () => {
+    let finish: (a: {
+      status: 'deleted'
+      readsBefore: number
+    }) => void = () => {}
+    onDelete.mockImplementation(
+      () => new Promise((resolve) => (finish = resolve)),
+    )
+    const posts = [post({ caption: 'Gone' }), post({ caption: 'Stays' })]
+    render(
+      <MyPosts
+        posts={posts}
+        listRead={1}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+      />,
+    )
+    const gone = card('Gone')
+    fireEvent.click(gone.getByRole('button', { name: 'Delete' }))
+    fireEvent.click(gone.getByRole('button', { name: 'Delete this photo' }))
+    expect(onDelete).toHaveBeenCalledWith(posts[0])
+    expect(gone.getByRole('button', { name: 'Deleting…' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    // A second press while it goes out does nothing.
+    fireEvent.click(gone.getByRole('button', { name: 'Deleting…' }))
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    await act(async () => finish(answer('deleted')))
+    expect(card('Stays').getByRole('button', { name: 'Delete' })).toBeVisible()
+  })
+
+  it('a failed delete says so on the card, with Delete offered again; the next press asks again', async () => {
+    onDelete
+      .mockResolvedValueOnce(answer('failed'))
+      .mockResolvedValueOnce(answer('deleted'))
+    render(
+      <MyPosts
+        posts={[post({ caption: 'Flaky' })]}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+        listRead={1}
+      />,
+    )
+    const flaky = card('Flaky')
+    fireEvent.click(flaky.getByRole('button', { name: 'Delete' }))
+    await act(async () => {
+      fireEvent.click(flaky.getByRole('button', { name: 'Delete this photo' }))
+    })
+    expect(flaky.getByText('Couldn’t delete. Try again.')).toBeVisible()
+    expect(flaky.queryByText(/Delete this photo\?/)).toBeNull()
+    fireEvent.click(flaky.getByRole('button', { name: 'Delete' }))
+    await act(async () => {
+      fireEvent.click(flaky.getByRole('button', { name: 'Delete this photo' }))
+    })
+    expect(onDelete).toHaveBeenCalledTimes(2)
+  })
+
+  it('an action that throws reads as a failure, never an unhandled rejection', async () => {
+    onDelete.mockRejectedValueOnce(new Error('offline'))
+    render(
+      <MyPosts
+        posts={[post({ caption: 'Offline' })]}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+        listRead={1}
+      />,
+    )
+    const offline = card('Offline')
+    fireEvent.click(offline.getByRole('button', { name: 'Delete' }))
+    await act(async () => {
+      fireEvent.click(
+        offline.getByRole('button', { name: 'Delete this photo' }),
+      )
+    })
+    expect(offline.getByText('Couldn’t delete. Try again.')).toBeVisible()
+  })
+
+  it('the Marketing switch shows the stored consent and sends the other value', async () => {
+    render(
+      <MyPosts
+        posts={[
+          post({ caption: 'Yes', marketingConsent: true }),
+          post({ caption: 'No', marketingConsent: false }),
+        ]}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+        listRead={1}
+      />,
+    )
+    const yes = card('Yes').getByRole('switch', { name: 'Marketing' })
+    const no = card('No').getByRole('switch', { name: 'Marketing' })
+    expect(yes).toHaveAttribute('aria-checked', 'true')
+    expect(no).toHaveAttribute('aria-checked', 'false')
+    expect(yes).toHaveAccessibleDescription(
+      'On: the organizers may also use this photo in their own marketing. Turn it off at any time.',
+    )
+    await act(async () => {
+      fireEvent.click(yes)
+    })
+    expect(onMarketing).toHaveBeenCalledWith(
+      expect.objectContaining({ caption: 'Yes' }),
+      false,
+    )
+    await act(async () => {
+      fireEvent.click(no)
+    })
+    expect(onMarketing).toHaveBeenLastCalledWith(
+      expect.objectContaining({ caption: 'No' }),
+      true,
+    )
+  })
+
+  it('shows the changed consent until a list read after the change comes in, then the list, whatever its value', async () => {
+    const at = (listRead: number, marketingConsent: boolean) => (
+      <MyPosts
+        posts={[post({ _id: 'wallPost-x', caption: 'Tabs', marketingConsent })]}
+        listRead={listRead}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+      />
+    )
+    // Ticked; this tab unticks it while one read had started.
+    const { rerender } = render(at(1, true))
+    const toggle = () => card('Tabs').getByRole('switch', { name: 'Marketing' })
+    await act(async () => {
+      fireEvent.click(toggle())
+    })
+    expect(toggle()).toHaveAttribute('aria-checked', 'false')
+    // A list from that read (or one older) still says ticked: the change
+    // stays shown.
+    rerender(at(1, true))
+    expect(toggle()).toHaveAttribute('aria-checked', 'false')
+    // The refresh after it failed, and another tab ticked it again: the next
+    // list read after the change says ticked, the very value it had before.
+    // The list wins; never "until the value moves".
+    rerender(at(3, true))
+    expect(toggle()).toHaveAttribute('aria-checked', 'true')
+    rerender(at(4, false))
+    expect(toggle()).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it.each(['deleted', 'gone'] as const)(
+    'a card %s leaves, and comes back if a list read after the answer still lists the post',
+    async (status) => {
+      onDelete.mockResolvedValueOnce(answer(status))
+      // One post, one id, across the lists.
+      const back = post({ caption: 'Back' })
+      const at = (listRead: number) => (
+        <MyPosts
+          posts={[back]}
+          listRead={listRead}
+          onDelete={onDelete}
+          onMarketing={onMarketing}
+        />
+      )
+      const { rerender } = render(at(1))
+      fireEvent.click(card('Back').getByRole('button', { name: 'Delete' }))
+      await act(async () => {
+        fireEvent.click(
+          card('Back').getByRole('button', { name: 'Delete this photo' }),
+        )
+      })
+      expect(screen.queryByRole('listitem', { name: 'Back' })).toBeNull()
+      rerender(at(1))
+      expect(screen.queryByRole('listitem', { name: 'Back' })).toBeNull()
+      // The server still lists it after the answer: it is still there, and
+      // Delete can be pressed again.
+      rerender(at(2))
+      expect(card('Back').getByRole('button', { name: 'Delete' })).toBeVisible()
+      expect(card('Back').queryByText(/Delete this photo\?/)).toBeNull()
+    },
+  )
+
+  it('a Marketing change that did not go through says so and keeps the stored value', async () => {
+    onMarketing.mockResolvedValueOnce(answer('changed'))
+    render(
+      <MyPosts
+        posts={[post({ caption: 'Raced', marketingConsent: true })]}
+        onDelete={onDelete}
+        onMarketing={onMarketing}
+        listRead={1}
+      />,
+    )
+    const raced = card('Raced')
+    await act(async () => {
+      fireEvent.click(raced.getByRole('switch', { name: 'Marketing' }))
+    })
+    expect(raced.getByText('Couldn’t change. Try again.')).toBeVisible()
+    expect(raced.getByRole('switch', { name: 'Marketing' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+  })
+})

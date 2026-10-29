@@ -212,8 +212,7 @@ export default defineType({
     // organization (one PostHog project per organization). ABSENT means no
     // PostHog on any of this organization's conference sites — deliberately,
     // because the only alternative default is collecting a tenant's traffic
-    // into somebody else's project. Present ⇒ PostHog loads and the legacy
-    // per-conference Pirsch code is ignored (hard switch per organization).
+    // into somebody else's project. Present ⇒ PostHog loads for the organization.
     // Edited in Admin → Settings → Analytics. The pattern mirrors
     // POSTHOG_TOKEN_PATTERN in `src/lib/analytics.ts`; restated rather than
     // imported because schema files stay import-light for the Studio build.
@@ -222,7 +221,7 @@ export default defineType({
       title: 'PostHog Project Token',
       type: 'string',
       description:
-        'The public project token (starts with "phc_") from PostHog → Project settings. Leave blank to serve no PostHog on this organization\'s sites. Once set, the per-conference Pirsch code is no longer loaded.',
+        'The public project token (starts with "phc_") from PostHog → Project settings. Leave blank to serve no PostHog on this organization\'s sites.',
       validation: (Rule) =>
         Rule.custom((value) => {
           if (value === undefined || value === null || value === '') return true
@@ -230,6 +229,50 @@ export default defineType({
             ? true
             : 'Enter the public project token from PostHog (starts with "phc_").'
         }),
+    }),
+    // Content judgement (Content judgement spec §5): an organizer's opt-in
+    // to having Jev judge user-written content through OpenRouter. Off by
+    // default; written only by `organization.updateContentJudgement` from
+    // Admin → Settings, which records who changed it and when. The Enforce
+    // switches are read from J7 on. Read-only here so the Studio cannot flip
+    // it without the record of who did.
+    defineField({
+      name: 'contentJudgement',
+      title: 'Content judgement',
+      type: 'object',
+      readOnly: true,
+      description:
+        'Changed by organizers in Admin → Settings → Content judgement.',
+      fields: [
+        defineField({
+          name: 'enabled',
+          title: 'Judge content',
+          type: 'boolean',
+        }),
+        defineField({
+          name: 'enforceFeedbackComments',
+          title: 'Enforce on feedback comments',
+          type: 'boolean',
+        }),
+        defineField({
+          name: 'enforceWallPosts',
+          title: 'Enforce on Wall Posts',
+          type: 'boolean',
+        }),
+        defineField({
+          name: 'changedAt',
+          title: 'Changed at',
+          type: 'datetime',
+        }),
+        defineField({
+          name: 'changedBy',
+          title: 'Changed by',
+          type: 'reference',
+          to: [{ type: 'speaker' }],
+          // Weak: an organizer's erasure must not be blocked by this record.
+          weak: true,
+        }),
+      ],
     }),
     // ── OPERATOR-ONLY, EFFECTIVELY IMMUTABLE ────────────────────────────────
     //

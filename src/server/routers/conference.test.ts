@@ -1382,3 +1382,33 @@ describe('conference router — sanitizeSvgPreview (dry run)', () => {
     expect(result.error).toBeTruthy()
   })
 })
+
+describe('conference router — updateVolunteerLinks', () => {
+  it('saves volunteerRegistrationLink and volunteerSlackInviteUrl on the resolved conference', async () => {
+    const result = await makeCaller({
+      isOrganizer: true,
+    }).updateVolunteerLinks({
+      volunteerRegistrationLink: 'https://tickets.example.com/volunteer',
+      volunteerSlackInviteUrl: 'https://join.slack.com/t/cnd/shared_invite/xyz',
+    })
+    expect(result.success).toBe(true)
+    expect(lastPatchId).toBe(CONFERENCE_ID)
+    expect(lastSet).toEqual({
+      volunteerRegistrationLink: 'https://tickets.example.com/volunteer',
+      volunteerSlackInviteUrl: 'https://join.slack.com/t/cnd/shared_invite/xyz',
+    })
+  })
+
+  it('unsets cleared volunteer links when passed empty strings', async () => {
+    await makeCaller({ isOrganizer: true }).updateVolunteerLinks({
+      volunteerRegistrationLink: '',
+      volunteerSlackInviteUrl: '',
+    })
+    expect(lastUnset).toEqual(
+      expect.arrayContaining([
+        'volunteerRegistrationLink',
+        'volunteerSlackInviteUrl',
+      ]),
+    )
+  })
+})

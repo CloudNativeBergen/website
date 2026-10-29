@@ -303,21 +303,9 @@ export default async function CompaniesAdminPage() {
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
         stats={[
           {
-            label: 'Total Companies',
-            value: companyBreakdown.length.toString(),
-          },
-          {
             label: 'Total Attendees',
             value: totalAttendees.toString(),
-          },
-          {
-            label: 'Avg Per Company',
-            value:
-              companyBreakdown.length > 0
-                ? Math.round(
-                    totalAttendees / companyBreakdown.length,
-                  ).toString()
-                : '0',
+            subtitle: `from ${companyBreakdown.length} ${companyBreakdown.length === 1 ? 'company' : 'companies'}`,
           },
         ]}
       />

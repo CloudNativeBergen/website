@@ -1,6 +1,6 @@
 # Conference Platform
 
-Multi-tenant platform for running community IT conferences: call for papers, programme, speakers, sponsors, tickets, and the marketing that fills the room. This glossary covers the marketing context first; other contexts join as their terms are sharpened.
+Multi-tenant platform for running community IT conferences: call for papers, programme, speakers, sponsors, tickets, and the marketing that fills the room. This glossary covers the marketing, ticketing and session feedback contexts; other contexts join as their terms are sharpened.
 
 ## Language
 
@@ -77,3 +77,111 @@ _Avoid_: deadline, phase, key date
 **Marketing Report**:
 A per-edition view of Campaign Outcomes and engagement for the organizer team. Sponsors appear in it as subjects of sponsor Campaigns; sharing it with sponsors is a later slice.
 _Avoid_: dashboard, analytics page
+
+### Ticketing
+
+**Ticketing Provider**:
+The ticketing vendor a conference sells through: Checkin, Tito or Pretix.
+_Avoid_: ticket system, ticket vendor integration
+
+**Ticketing Connection**:
+An Organization's own account at a Ticketing Provider: for Pretix, the instance address, the Pretix organizer account and the credentials. Set up by a platform operator, never by the organization's admins.
+_Avoid_: integration, credentials (the credentials are only part of it)
+
+**Ticketing Binding**:
+A conference edition's link to exactly one event at its Ticketing Provider. Two editions can never claim the same event.
+_Avoid_: ticketing config, event mapping
+
+**Pretix organizer account**:
+Pretix's top-level account, which owns events, teams and API tokens. Always written out in full, because a bare "organizer" here means a person with admin access to a conference.
+_Avoid_: organizer (alone), Pretix organization
+
+**Sold Ticket**:
+A non-complimentary ticket of a type that admits an attendee, whether paid or awaiting payment. Sold items that don't admit anyone, such as merchandise or add-ons, count toward revenue only.
+_Avoid_: paid ticket, sale
+
+### Session Feedback
+
+**Session Feedback**:
+What attendees think of one speaker-led session (a talk of any format, including workshops and keynotes), collected per talk and shared by all its speakers. It combines Feedback Responses and Card Counts.
+_Avoid_: review (an organizer's score of a proposal), rating, evaluation
+
+**Feedback Response**:
+One anonymous attendee's answer about a session, given by scanning the session's Feedback Code: a Feedback Colour and an optional comment.
+_Avoid_: review, vote, submission
+
+**Feedback Colour**:
+The three-step scale every piece of Session Feedback uses: green, yellow or red.
+_Avoid_: score, stars, rating
+
+**Card Counts**:
+The green, yellow and red totals from physical feedback cards collected in the room, entered by an organizer after the session.
+_Avoid_: audience feedback, paper votes
+
+**Feedback Code**:
+The short code for one session, unique within its conference, that opens the Feedback Response form on the conference's own domain. Its speakers get it as a QR code in the speaker dashboard; only organizers can rotate it, which retires the old code.
+_Avoid_: feedback link, session QR, short link (a marketing redirect)
+
+**Fold**:
+Turning a session's Feedback Responses into Folded Totals and deleting them: 24 months after its conference ends, or as soon as no speaker of the session is left who has not been erased. A folded session keeps its counts but no comments, and its Feedback Code stops working.
+_Avoid_: archive, purge (a fold keeps the counts)
+
+**Folded Totals**:
+The green, yellow and red counts a Fold kept on the session (`feedbackFolded`). They count as scanned answers, so a session's totals are the same before and after its Fold.
+_Avoid_: archived counts, historical feedback
+
+**Feedback Window**:
+The time a session accepts Feedback Responses: from the start of its earliest scheduled slot until 24 hours after its latest slot ends. A session with no slot has no window.
+_Avoid_: feedback period, voting window
+
+### Photo Wall
+
+**Photo Wall**:
+A conference's shared wall of attendee photos. Anyone with its QR link can contribute a Wall Post, and the approved ones are shown on the public Wall page.
+_Avoid_: gallery (an organizer's official photos), social wall, photo booth
+
+**Wall Post**:
+One attendee contribution to a Photo Wall: a photo with an optional filter, text and name. It is pending until an organizer approves it, which puts it on the wall, or rejects or removes it, which leaves it not shown; before approval only its contributor and the organizers see it. When the wall's Trusted posters switch is on, a post from a signed-in organizer or confirmed speaker is approved at Submit. Organizers never edit it, except its talk tag, which is metadata, not content ([Photo Wall: photos of my talk](docs/PHOTO_WALL_TALK_PHOTOS_SPEC.md)).
+_Avoid_: post (what a marketing publishing Task produces), upload, submission, photo
+
+**Screen Mode**:
+The fullscreen presentation of the public Wall page on a venue display.
+_Avoid_: slideshow, kiosk, live wall
+
+**Wall Look**:
+How a Photo Wall is laid out: Pinboard (tilted polaroid cards), Mosaic (photos at their own shape, with a spotlight tile) or Spotlight (one large post at a time). An organizer sets one per Photo Wall; a single screen can show a different one.
+_Avoid_: layout, theme, template (a Plan Template is a marketing term), style
+
+**Posting Window**:
+The time a Photo Wall accepts Wall Posts: the conference days, unless an organizer pauses it or opens it early. Outside it the wall can still be viewed.
+_Avoid_: upload window, open period, Feedback Window (a Session Feedback term)
+
+### Content Judgement
+
+**Judgement**:
+An automatic classifier's typed answer about one piece of user-written content: a Wall Post's caption, a Wall Post's photo, a comment on a Feedback Response, or a Conversation's opening. It is advice to organizers unless enforcement is on for that surface; speakers and attendees never see it.
+_Avoid_: verdict, score, moderation result, AI check
+
+**Message Category**:
+The topic of a speaker↔organizer Conversation, picked from one fixed list for the whole platform. It is set once when the Conversation opens, and an organizer's change always wins.
+_Avoid_: tag, label, folder, topic
+
+**Likely unsafe**:
+A Judgement with any moderation answer at or above 0.5 (abusive, sexual, spam or personal details).
+_Avoid_: flagged (a speaker flags a comment), blocked, rejected
+
+**Not judged**:
+Content that should have a Judgement but has none, because the check was off, failed, timed out, hit the spend cap, or the photo did not arrive. It stays on the usual human path.
+_Avoid_: unchecked, safe, pending
+
+**Enforcement**:
+A Judgement acting without an organizer: hiding a comment from its speaker until an organizer decides, or holding a Wall Post in not shown. An organization switches it on per surface, and it covers only questions that have proven themselves.
+_Avoid_: auto-moderation, auto-reject, blocking
+
+**Shadow mode**:
+Running content judgement as advice only while organizers' decisions on flagged content are counted, before enforcement is allowed.
+_Avoid_: trial, dry run, silent mode
+
+**Agreement**:
+An organizer's decision on flagged content that matches the flag (hide, remove or reject), or a Message Category left unchanged until its Conversation is resolved. Counted anonymously across the platform.
+_Avoid_: accuracy, precision, approval rate

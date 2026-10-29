@@ -2,6 +2,8 @@ import type { SponsorForConferenceExpanded } from './types'
 import { type ActionItemType } from '@/components/admin/sponsor-crm/utils'
 import { calculateSponsorValue } from './value'
 import { formatNumber } from '@/lib/format'
+import { formatDateSafe } from '@/lib/time'
+import { isInvoicePastDue } from './invoice'
 
 export interface ActionItem {
   id: string
@@ -43,18 +45,22 @@ export function generateActionItems(
       ? { name: sponsor.assignedTo.name, image: sponsor.assignedTo.image }
       : undefined
 
-    const link = `/admin/sponsors/crm?sponsor=${sponsor._id}`
+    const link = `/admin/sponsors/${sponsor._id}?view=pipeline`
     const name = sponsor.sponsor.name
 
-    // Priority 1: Overdue invoices
-    if (sponsor.invoiceStatus === 'overdue') {
+    // Priority 1: Overdue invoices, including sent ones past their due date.
+    // A past-due invoice only suggests marking it; the status is left alone.
+    const pastDue = isInvoicePastDue(sponsor, now)
+    if (sponsor.invoiceStatus === 'overdue' || pastDue) {
       actions.push({
         id: `${sponsor._id}-overdue`,
         type: 'overdue',
         title: 'Invoice Overdue',
         sponsor: { id: sponsor._id, name },
         assignedTo,
-        description: `Invoice is overdue for ${name}`,
+        description: pastDue
+          ? `Invoice overdue since ${formatDateSafe(sponsor.invoiceDueAt!)}. Mark overdue.`
+          : `Invoice is overdue for ${name}`,
         priority: 1,
         link,
       })
@@ -109,21 +115,32 @@ export function generateActionItems(
       }
     }
 
-    // Priority 2: Invoice not sent for closed deals with signed contract
+    // Priority 2: Invoice not sent for closed deals with signed contract.
+    // Signed more than 7 days ago without an invoice: flagged on any deal
+    // and raised in priority.
+    const signedAt = sponsor.contractSignedAt
+      ? new Date(sponsor.contractSignedAt)
+      : null
+    const staleSigned = !!signedAt && signedAt < sevenDaysAgo
     if (
-      sponsor.status === 'closed-won' &&
-      sponsor.contractValue &&
       sponsor.contractStatus === 'contract-signed' &&
-      sponsor.invoiceStatus === 'not-sent'
+      sponsor.invoiceStatus === 'not-sent' &&
+      (staleSigned ||
+        (sponsor.status === 'closed-won' && sponsor.contractValue))
     ) {
+      const days = signedAt
+        ? Math.floor((now.getTime() - signedAt.getTime()) / 86_400_000)
+        : 0
       actions.push({
         id: `${sponsor._id}-needs-invoice`,
         type: 'needs-invoice',
         title: 'Invoice Not Sent',
         sponsor: { id: sponsor._id, name },
         assignedTo,
-        description: `Invoice not yet sent to ${name}`,
-        priority: 2,
+        description: staleSigned
+          ? `Signed ${days} days ago, no invoice sent`
+          : `Invoice not yet sent to ${name}`,
+        priority: staleSigned ? 1.8 : 2,
         link,
       })
     }
@@ -201,6 +218,19 @@ export function generateActionItems(
         assignedTo,
         description: `Contract signature expired for ${name}`,
         priority: 3.5,
+        link,
+      })
+    }
+
+    // Priority 3: Nobody owns this deal yet, so nobody will chase it
+    if (!sponsor.assignedTo && sponsor.status !== 'closed-lost') {
+      actions.push({
+        id: `${sponsor._id}-unassigned`,
+        type: 'unassigned',
+        title: 'Assign an owner',
+        sponsor: { id: sponsor._id, name },
+        description: `Nobody owns ${name} yet. Assign an organizer to follow up`,
+        priority: 3,
         link,
       })
     }
@@ -302,3 +332,76 @@ export function generateActionItems(
 
   return actions.sort((a, b) => a.priority - b.priority)
 }
+
+/** A previous-edition sponsor with no deal this year (R2, #1687). */
+export interface RenewalItemInput {
+  /** Null when no domain derives a usable URL; the item then has no link. */
+  edition: { title: string; origin: string | null }
+  candidates: Array<{
+    _id: string
+    name: string
+    assignedTo?: { _id: string; name: string; image?: string }
+  }>
+}
+
+/**
+ * Renewal reminders. The server only returns candidates inside the lead window
+ * (see `renewal.ts`), so this maps them. Each links to the old record on the
+ * previous edition's domain, where "Copy to next year" lives.
+ */
+export function generateRenewalItems(
+  renewals: RenewalItemInput | null | undefined,
+  organizerId?: string,
+): ActionItem[] {
+  if (!renewals) return []
+  const { edition } = renewals
+  return renewals.candidates
+    .filter((c) => !organizerId || c.assignedTo?._id === organizerId)
+    .map((c) => ({
+      id: `${c._id}-renewal`,
+      type: 'follow-up' as const,
+      title: `Renew ${c.name}`,
+      sponsor: { id: c._id, name: c.name },
+      assignedTo: c.assignedTo
+        ? { name: c.assignedTo.name, image: c.assignedTo.image }
+        : undefined,
+      description: `${c.name} sponsored ${edition.title}, not contacted for this year`,
+      priority: 4.5,
+      link: edition.origin ? `${edition.origin}/admin/sponsors/${c._id}` : '',
+    }))
+}
+/** Most urgent priority that counts as "waiting on you" in the event checklist. */
+export const URGENT_ACTION_PRIORITY = 3
+
+/**
+ * Action items for one organizer: sponsors assigned to them plus unassigned
+ * sponsors, which every organizer sees. Sorted by priority.
+ */
+export function actionItemsForOrganizer(
+  sponsors: SponsorForConferenceExpanded[],
+  organizerId: string | null,
+): ActionItem[] {
+  return generateActionItems(
+    sponsors.filter(
+      (s) =>
+        !s.assignedTo || (!!organizerId && s.assignedTo._id === organizerId),
+    ),
+  )
+}
+
+/**
+ * The lean projection `generateActionItems` reads. Shared by the `/admin`
+ * dashboard and the event checklist so both ride reads they already make.
+ */
+// groq-global-scoped: lastActivity is correlated to the projected sponsor (`^._id`); every reader of these fields filters sponsors by conference.
+export const SPONSOR_ACTION_ITEM_FIELDS = `
+  _id, _updatedAt, status, tags, invoiceStatus, contractStatus, contractValue,
+  contractCurrency, signatureStatus, registrationComplete,
+  "registrationToken": select(defined(registrationToken) => "set"),
+  nextFollowUpAt,
+  "contactPersons": contactPersons[]{ _key },
+  sponsor->{ name },
+  tier->{ price[]{ amount, currency } },
+  assignedTo->{ _id, name },
+  "lastActivity": *[_type == "sponsorActivity" && sponsorForConference._ref == ^._id] | order(createdAt desc)[0]{ createdAt }
+`

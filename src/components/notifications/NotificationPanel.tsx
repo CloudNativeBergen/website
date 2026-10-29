@@ -101,6 +101,12 @@ export function NotificationPanel({
     if (!isImpersonating && !item.readAt) {
       markRead.mutate({ ids: [item.id] })
     }
+    // A flag's link is /admin/feedback, often the page already open, where
+    // the link alone reads nothing: read the box and the nav badge again.
+    if (item.type === 'session_feedback_flagged') {
+      void utils.sessionFeedback.adminOverview.invalidate()
+      void utils.sessionFeedback.flaggedCount.invalidate()
+    }
     onClose()
   }
 

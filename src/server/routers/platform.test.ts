@@ -251,9 +251,10 @@ describe('updateEntitlements', () => {
     expect(typeof patched.featureOverrides[1]._key).toBe('string')
     expect(patched.featureOverrides[1]._key).toBeTruthy()
 
-    expect(revalidateTag).toHaveBeenCalledWith(
-      'sanity:organization-org-B',
-      'default',
-    )
+    // Expired at once, not marked stale under a profile: with a profile the
+    // next read is still served the old plan while it revalidates.
+    expect(revalidateTag).toHaveBeenCalledWith('sanity:organization-org-B', {
+      expire: 0,
+    })
   })
 })

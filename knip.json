@@ -10,6 +10,7 @@
     "src/server/routers/**/*.ts",
     "sanity/actions/**/*.js",
     "scripts/**/*.ts",
+    "evals/content-judgement/run.ts",
     "migrations/**/index.ts",
     "src/**/*.stories.{ts,tsx}",
     "src/docs/**/*.{ts,tsx}",

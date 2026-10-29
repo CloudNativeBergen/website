@@ -48,7 +48,7 @@ import {
 import { speakerHasStandingInConference } from '@/lib/messaging/standing'
 import { z } from 'zod'
 import {
-  getOrganizerSpeakerIds,
+  getOrganizerSpeakerIdsForOrg,
   createNotifications,
 } from '@/lib/notification/sanity'
 import {
@@ -473,6 +473,7 @@ export const messageRouter = router({
 
       const message = await addMessage({
         conversationId: conversation._id,
+        conversationType: conversation.conversationType,
         authorId: actorId,
         body: input.body,
         reopen,
@@ -634,7 +635,9 @@ export const messageRouter = router({
         ctx.speaker,
       )
       if (input.assigneeId !== null) {
-        const organizerIds = await getOrganizerSpeakerIds()
+        const organizerIds = await getOrganizerSpeakerIdsForOrg(
+          conversation.conferenceOrgId ?? null,
+        )
         if (!organizerIds.includes(input.assigneeId)) {
           throw new TRPCError({
             code: 'BAD_REQUEST',

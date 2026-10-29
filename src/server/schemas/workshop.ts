@@ -70,19 +70,38 @@ export const workshopSignupsByWorkshopSchema = z.object({
   includeUserDetails: z.boolean().optional().default(false),
 })
 
+/**
+ * The "Early sign-ups" list (#1348). `sponsorId` narrows it to one sponsor's
+ * links: a `sponsorForConference` id, which the read scopes to the request's
+ * conference. Omitted: every early sign-up.
+ */
+export const workshopEarlySignupsSchema = z.object({
+  sponsorId: z.string().min(1).max(200).optional(),
+})
+
 export const cancelWorkshopSignupSchema = z.object({
   signupId: z.string().min(1, 'Signup ID is required'),
   reason: z.string().max(500, 'Reason too long').optional(),
 })
 
+/**
+ * How many seats past capacity an organizer agreed to (#1358): what the
+ * refusal they answered showed. A confirm that would go further is refused
+ * again.
+ */
+const acceptPastSchema = z.number().int().nonnegative()
+
 export const confirmWorkshopSignupSchema = z.object({
   signupId: z.string().min(1, 'Signup ID is required'),
   sendEmail: z.boolean().optional().default(true),
+  acceptPast: acceptPastSchema.optional(),
 })
 
 export const batchConfirmSignupsSchema = z.object({
   signupIds: z.array(z.string()).min(1, 'At least one signup ID is required'),
   sendEmails: z.boolean().optional().default(true),
+  /** By workshop id. */
+  acceptPast: z.record(z.string(), acceptPastSchema).optional(),
 })
 
 export const batchCancelSignupsSchema = z.object({
@@ -115,6 +134,23 @@ export const updateWorkshopCapacitySchema = z.object({
 })
 
 /** Owner/organizer composing a broadcast announcement to confirmed participants. */
+/** "Notify participants" of a canceled workshop: the organizer's message. */
+export const notifyCanceledWorkshopSchema = z.object({
+  workshopId: z.string().min(1, 'Workshop ID is required'),
+  message: z
+    .string()
+    .trim()
+    .max(2000, 'Message must be 2000 characters or fewer'),
+})
+
+/** Move the sign-ups of a canceled workshop to a listed one. */
+export const moveCanceledSignupsSchema = z.object({
+  fromWorkshopId: z.string().min(1, 'Workshop ID is required'),
+  toWorkshopId: z.string().min(1, 'Workshop ID is required'),
+  /** Only these sign-ups of the source; all of them when left out. */
+  signupIds: z.array(z.string().min(1)).max(500).optional(),
+})
+
 export const workshopAnnounceSchema = z.object({
   workshopId: z.string().min(1, 'Workshop ID is required'),
   body: z
@@ -143,6 +179,25 @@ export const workshopDeleteAnnouncementSchema = z.object({
 export const workshopAnnouncementsQuerySchema = z.object({
   workshopId: z.string().min(1, 'Workshop ID is required'),
   limit: z.number().int().min(0).max(50).optional().default(50),
+})
+
+/** The longest note an organizer can add to the workshop reminder (#1334). */
+export const WORKSHOP_REMINDER_NOTE_MAX = 1000
+
+/**
+ * The workshop reminder (#1334): an optional plain-text note shown above the
+ * standard text, escaped. Trimmed first, so the limit counts what is sent and
+ * a blank note is no note.
+ */
+export const workshopReminderSchema = z.object({
+  note: z
+    .string()
+    .trim()
+    .max(
+      WORKSHOP_REMINDER_NOTE_MAX,
+      `The note must be ${WORKSHOP_REMINDER_NOTE_MAX.toLocaleString('en-US')} characters or fewer`,
+    )
+    .optional(),
 })
 
 export type WorkshopSignupInput = z.infer<typeof workshopSignupInputSchema>

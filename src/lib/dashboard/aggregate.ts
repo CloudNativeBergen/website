@@ -28,6 +28,12 @@
 
 import { scopedQuery } from '@/lib/sanity/scoped'
 import { osloTodayDateString, osloLocalInputToIso } from '@/lib/time'
+import { SPONSOR_ACTION_ITEM_FIELDS } from '@/lib/sponsor-crm/action-items'
+import {
+  PREVIOUS_EDITION_RENEWALS_ROOT,
+  type PreviousEditionRenewalsRow,
+} from '@/lib/sponsor-crm/renewal'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { groq } from 'next-sanity'
 import { Status } from '@/lib/proposal/types'
 import type { TravelSupportStatus } from '@/lib/travel-support/types'
@@ -53,6 +59,8 @@ export type DashboardGroqSource =
   | 'proposals'
   | 'reviews'
   | 'sponsors'
+  | 'sponsorActions'
+  | 'renewals'
   | 'activities'
   | 'recentProposals'
   | 'travelSupports'
@@ -141,6 +149,10 @@ export interface DashboardGroqResult {
   proposals?: DashboardProposalRow[] | null
   reviews?: DashboardReviewRow[] | null
   sponsors?: DashboardSponsorRow[] | null
+  /** Lean rows for `generateActionItems` (see SPONSOR_ACTION_ITEM_FIELDS). */
+  sponsorActions?: SponsorForConferenceExpanded[] | null
+  /** Previous-edition sponsors to renew (R2, #1687). */
+  renewals?: PreviousEditionRenewalsRow
   activities?: DashboardActivityRow[] | null
   recentProposals?: DashboardRecentProposalRow[] | null
   travelSupports?: DashboardTravelSupportRow[] | null
@@ -204,6 +216,11 @@ const DASHBOARD_ROOTS: Record<DashboardGroqSource, string> = {
     sponsor->{ name, logo, logoBright }
   }`,
 
+  sponsorActions: groq`*[_type == "sponsorForConference" && conference._ref == $conferenceId]{${SPONSOR_ACTION_ITEM_FIELDS}}`,
+
+  // Org-scoped by `$orgId` on every root (see renewal.ts).
+  renewals: PREVIOUS_EDITION_RENEWALS_ROOT,
+
   activities: groq`*[_type == "sponsorActivity" && sponsorForConference->conference._ref == $conferenceId] | order(createdAt desc)[0...${RECENT_ACTIVITY_LIMIT}]{
     _id, description, createdAt, _createdAt,
     "sponsorName": sponsorForConference->sponsor->name,
@@ -238,6 +255,8 @@ const SOURCE_ORDER: DashboardGroqSource[] = [
   'proposals',
   'reviews',
   'sponsors',
+  'sponsorActions',
+  'renewals',
   'activities',
   'recentProposals',
   'travelSupports',
@@ -267,7 +286,13 @@ export function buildDashboardQuery(
  * Parameters for the composed query. `conferenceId` is the tenant key and is
  * ALWAYS supplied by the caller from a server-side domain resolution.
  */
-export function dashboardQueryParams(conferenceId: string, now = new Date()) {
+export function dashboardQueryParams(
+  conferenceId: string,
+  now = new Date(),
+  // For the `renewals` root. '' matches no organization, so a conference
+  // without one reads nothing.
+  renewal: { orgId?: string; currentStartDate?: string } = {},
+) {
   const today = osloTodayDateString(now)
   const tomorrow = new Date(`${today}T12:00:00Z`)
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
@@ -276,6 +301,8 @@ export function dashboardQueryParams(conferenceId: string, now = new Date()) {
       `${tomorrow.toISOString().slice(0, 10)}T00:00`,
     ),
     conferenceId,
+    orgId: renewal.orgId ?? '',
+    currentStartDate: renewal.currentStartDate ?? '',
     draftStatus: Status.draft,
     pendingVolunteerStatus: VolunteerStatus.PENDING,
   }
@@ -290,12 +317,13 @@ export function dashboardQueryParams(conferenceId: string, now = new Date()) {
 export async function fetchDashboardGroq(
   conferenceId: string,
   sources: Iterable<DashboardGroqSource>,
+  renewal?: { orgId?: string; currentStartDate?: string },
 ): Promise<DashboardGroqResult> {
   const query = buildDashboardQuery(sources)
   if (!query) return {}
   const result = await clientReadUncached.fetch<DashboardGroqResult | null>(
     query,
-    dashboardQueryParams(conferenceId),
+    dashboardQueryParams(conferenceId, new Date(), renewal),
     { cache: 'no-store' },
   )
   return result ?? {}

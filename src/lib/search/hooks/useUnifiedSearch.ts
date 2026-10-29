@@ -9,6 +9,7 @@ import type {
   UnifiedSearchPayload,
 } from '../types'
 import { MIN_SEARCH_QUERY_LENGTH } from '../types'
+import { samePageHash } from '../samePageHash'
 import {
   ProposalsSearchProvider,
   SponsorsSearchProvider,
@@ -116,6 +117,18 @@ export function useUnifiedSearch() {
 
   const navigateTo = useCallback(
     (url: string) => {
+      // Same page + hash: set it directly so `hashchange` fires (router.push
+      // does not), which is what opens a collapsed Settings group. Re-fire
+      // by hand when the hash is already the current one.
+      const hash = samePageHash(url, window.location)
+      if (hash) {
+        if (window.location.hash === hash) {
+          window.dispatchEvent(new HashChangeEvent('hashchange'))
+        } else {
+          window.location.hash = hash
+        }
+        return
+      }
       router.push(url)
     },
     [router],

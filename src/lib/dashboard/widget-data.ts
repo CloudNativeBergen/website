@@ -51,6 +51,16 @@ import { TravelSupportStatus } from '@/lib/travel-support/types'
 import { getWorkshopStatistics } from '@/lib/workshop/sanity'
 import type { WorkshopStatistics } from '@/lib/workshop/types'
 import { getConversationViewCounts } from '@/lib/messaging/sanity'
+import {
+  actionItemsForOrganizer,
+  generateRenewalItems,
+} from '@/lib/sponsor-crm/action-items'
+import {
+  isRenewalWindowOpen,
+  shapeRenewals,
+  type PreviousEditionRenewals,
+} from '@/lib/sponsor-crm/renewal'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import type { OrganizerTeam } from '@/lib/teams/types'
 import {
   osloTodayDateString,
@@ -60,6 +70,7 @@ import {
 } from '@/lib/time'
 import type {
   MarketingDueData,
+  SponsorsWaitingData,
   SponsorPipelineWidgetData,
   DeadlineData,
   ActivityItem,
@@ -100,6 +111,7 @@ import {
  */
 export const DASHBOARD_WIDGET_KEYS = [
   'marketing-due',
+  'sponsors-waiting',
   'quick-actions',
   'review-progress',
   'proposal-pipeline',
@@ -129,6 +141,7 @@ export function isDashboardWidgetKey(
 /** The payload each widget key resolves to. */
 export interface DashboardWidgetDataMap {
   'marketing-due': MarketingDueData
+  'sponsors-waiting': SponsorsWaitingData
   'quick-actions': QuickAction[]
   'review-progress': ReviewProgressData
   'proposal-pipeline': ProposalPipelineData
@@ -179,6 +192,7 @@ const WIDGET_GROQ_SOURCES: Record<
   readonly DashboardGroqSource[]
 > = {
   'marketing-due': ['marketingDueTasks'],
+  'sponsors-waiting': ['sponsorActions', 'renewals'],
   'quick-actions': ['proposals', 'sponsors'],
   'review-progress': ['proposals', 'reviews'],
   'proposal-pipeline': ['proposals'],
@@ -1147,11 +1161,15 @@ export async function loadDashboardWidgetData(
   // than an error state.
   let groqResult: DashboardGroqResult = {}
   let groqError: Error | null = null
+  const sources = sourcesForWidgets(wanted, myTeamKeys)
+  // Renewal reminders only exist inside their lead window: skip the root
+  // entirely outside it.
+  if (!isRenewalWindowOpen(ctx.conference.startDate)) sources.delete('renewals')
   try {
-    groqResult = await fetchDashboardGroq(
-      ctx.conferenceId,
-      sourcesForWidgets(wanted, myTeamKeys),
-    )
+    groqResult = await fetchDashboardGroq(ctx.conferenceId, sources, {
+      orgId: ctx.conference.organization?._ref,
+      currentStartDate: ctx.conference.startDate,
+    })
   } catch (error) {
     groqError = error instanceof Error ? error : new Error(String(error))
   }
@@ -1193,6 +1211,13 @@ export async function loadDashboardWidgetData(
   add('marketing-due', () =>
     shapeMarketingDue(rows(groqResult.marketingDueTasks)),
   )
+  add('sponsors-waiting', () =>
+    shapeSponsorsWaiting(
+      rows(groqResult.sponsorActions),
+      ctx.speakerId,
+      shapeRenewals(groqResult.renewals),
+    ),
+  )
   add('upcoming-deadlines', () => shapeDeadlines(ctx.conference))
   add('cfp-health', () => shapeCFPHealth(ctx.conference, proposals))
   add('proposal-pipeline', () => shapeProposalPipeline(proposals))
@@ -1233,5 +1258,37 @@ export function shapeMarketingDue(
       overdue: osloTodayDateString(new Date(row.dueAt)) < today,
       href: `/admin/marketing/tasks/${row._id}`,
     })),
+  }
+}
+
+/** How many sponsor actions the dashboard card shows; the CRM has the rest. */
+export const SPONSORS_WAITING_LIMIT = 6
+
+export function shapeSponsorsWaiting(
+  sponsors: SponsorForConferenceExpanded[],
+  organizerId: string | null,
+  renewals: PreviousEditionRenewals | null = null,
+): SponsorsWaitingData {
+  // Same rule as actionItemsForOrganizer: mine plus unassigned.
+  const myRenewals = renewals && {
+    ...renewals,
+    candidates: renewals.candidates.filter(
+      (c) => !c.assignedTo || c.assignedTo._id === organizerId,
+    ),
+  }
+  return {
+    items: [
+      ...actionItemsForOrganizer(sponsors, organizerId),
+      ...generateRenewalItems(myRenewals),
+    ]
+      .sort((a, b) => a.priority - b.priority)
+      .slice(0, SPONSORS_WAITING_LIMIT)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        sponsorName: item.sponsor.name,
+        priority: item.priority,
+        href: item.link,
+      })),
   }
 }

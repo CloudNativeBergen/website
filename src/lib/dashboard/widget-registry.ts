@@ -839,6 +839,34 @@ export const MARKETING_DUE_WIDGET = defineWidget({
   },
 })
 
+export const SPONSORS_WAITING_WIDGET = defineWidget({
+  type: 'sponsors-waiting',
+  displayName: 'Sponsors waiting on you',
+  description:
+    'The most urgent sponsor actions assigned to you, plus sponsors nobody owns yet',
+  category: 'operations',
+  icon: 'CurrencyDollarIcon',
+  constraints: { minCols: 3, maxCols: 6, minRows: 2, maxRows: 4 },
+  defaultSize: { name: 'medium', colSpan: 3, rowSpan: 3 },
+  availableSizes: [
+    { name: 'small', colSpan: 3, rowSpan: 2 },
+    { name: 'medium', colSpan: 3, rowSpan: 3 },
+    { name: 'wide', colSpan: 6, rowSpan: 3 },
+    { name: 'tall', colSpan: 3, rowSpan: 4 },
+  ],
+  tags: ['sponsors', 'tasks', 'crm'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: false,
+  },
+})
+
 export const WIDGET_REGISTRY: Record<string, WidgetMetadata> = {
   'quick-actions': QUICK_ACTIONS_WIDGET,
   'review-progress': REVIEW_PROGRESS_WIDGET,
@@ -854,6 +882,7 @@ export const WIDGET_REGISTRY: Record<string, WidgetMetadata> = {
   'recent-activity': RECENT_ACTIVITY_WIDGET,
   'my-areas': MY_AREAS_WIDGET,
   'marketing-due': MARKETING_DUE_WIDGET,
+  'sponsors-waiting': SPONSORS_WAITING_WIDGET,
 }
 
 /**

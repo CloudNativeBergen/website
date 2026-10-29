@@ -207,7 +207,7 @@ export default async function WorkshopDetailsPage({
     return iconMap[os] || null
   }
 
-  const backUrl = buildUrlWithImpersonation('/cfp', session)
+  const backUrl = buildUrlWithImpersonation('/cfp/list', session)
 
   return (
     <div className="mx-auto max-w-7xl">

@@ -260,6 +260,8 @@ describe('marketing outreach delivery', () => {
         fields: { shortCode: expect.stringMatching(/^[a-hjkmnp-z2-9]{6}$/) },
       },
     })
+    // Outreach is organizer-written content, never a proposal-action relay.
+    expect(h.addMessage.mock.calls[0][0].origin ?? 'person').toBe('person')
     await flushNotifications()
     expect(h.notify).toHaveBeenCalledWith({
       conversation,

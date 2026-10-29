@@ -106,6 +106,7 @@ export function EmailModal({
   const [subject, setSubject] = useState('')
   const [richTextValue, setRichTextValue] = useState<PortableTextBlock[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(false)
   const [editorRemountKey, setEditorRemountKey] = useState(0)
@@ -115,6 +116,23 @@ export function EmailModal({
   const lastAutoSaveRef = useRef<{ subject: string; message: string } | null>(
     null,
   )
+  const enableAutoSaveTimerRef =
+    useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  /**
+   * Turn auto-save on once the fields have settled. ONE pending timer at a
+   * time, cleared when the modal unmounts: left running it sets state on a
+   * component that is gone.
+   */
+  const enableAutoSaveAfter = useCallback((ms: number) => {
+    clearTimeout(enableAutoSaveTimerRef.current)
+    enableAutoSaveTimerRef.current = setTimeout(() => {
+      isInitializingRef.current = false
+      setAutoSaveEnabled(true)
+    }, ms)
+  }, [])
+
+  useEffect(() => () => clearTimeout(enableAutoSaveTimerRef.current), [])
 
   const storage = useEmailModalStorage({
     storageKey: storageKey || 'email-modal-default',
@@ -175,12 +193,10 @@ export function EmailModal({
         initializedKeysRef.current.add(currentStorageKey)
       }
 
-      setTimeout(() => {
-        isInitializingRef.current = false
-        setAutoSaveEnabled(true)
-      }, 500)
+      enableAutoSaveAfter(500)
     }
   }, [
+    enableAutoSaveAfter,
     isOpen,
     storage.isLoading,
     storage.hasStoredData,
@@ -194,6 +210,7 @@ export function EmailModal({
     if (!isOpen) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setAutoSaveEnabled(false)
+      setSendError(null)
       isInitializingRef.current = false
     }
   }, [isOpen])
@@ -286,6 +303,7 @@ export function EmailModal({
     }
 
     setIsLoading(true)
+    setSendError(null)
     try {
       await onSend({
         subject,
@@ -303,13 +321,13 @@ export function EmailModal({
 
       onClose()
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'An unexpected error occurred'
+      setSendError(errorMessage)
       showNotification({
         type: 'error',
         title: 'Failed to send email',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'An unexpected error occurred',
+        message: errorMessage,
       })
     } finally {
       setIsLoading(false)
@@ -327,22 +345,27 @@ export function EmailModal({
       setAutoSaveEnabled(false)
       isInitializingRef.current = true
 
-      const currentStorageKey = storageKey
-      initializedKeysRef.current.delete(currentStorageKey)
-
       storage.clearStorage()
-      setSubject('')
-      setRichTextValue([])
+      lastAutoSaveRef.current = null
+      setSubject(initialValues.subject || '')
+
+      const initialMessage = initialValues.message
+      if (Array.isArray(initialMessage)) {
+        setRichTextValue(initialMessage)
+      } else if (initialMessage) {
+        setRichTextValue(convertStringToPortableTextBlocks(initialMessage))
+      } else {
+        setRichTextValue([])
+      }
+      setEditorRemountKey((prev) => prev + 1)
+
       onClearDraft?.()
       showNotification({
         type: 'success',
         title: 'Draft cleared',
         message: 'Saved draft has been removed.',
       })
-      setTimeout(() => {
-        isInitializingRef.current = false
-        setAutoSaveEnabled(true)
-      }, 100)
+      enableAutoSaveAfter(100)
     }
   }
 
@@ -395,6 +418,15 @@ export function EmailModal({
         </button>
       </div>
       <div className="flex-1 overflow-y-auto">
+        {sendError && (
+          <div
+            role="alert"
+            className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+          >
+            <p className="font-semibold">Failed to send email</p>
+            <p className="mt-0.5">{sendError}</p>
+          </div>
+        )}
         {showPreview && previewComponent ? (
           <div className="space-y-4 p-6">
             <div className="flex items-center justify-between">

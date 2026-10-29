@@ -62,6 +62,28 @@ vi.mock('@/components/admin/sponsor-crm/SponsorPortalSection', () => ({
   ),
 }))
 
+vi.mock('@/components/admin/sponsor-crm/SponsorEarlyAccessSection', () => ({
+  __esModule: true,
+  SponsorEarlyAccessSection: (props: {
+    hasLink: boolean
+    createRefusal?: string
+    copyRefusal?: string
+    recordUpdatedAt?: string
+    sponsorStartSet?: boolean
+    earlySignupCount?: number
+    earlySignupsHref?: string
+  }) => (
+    <div data-testid="early-access-section">
+      {props.hasLink ? 'has link' : 'no link'}
+      {props.createRefusal ? ` | ${props.createRefusal}` : ' | can create'}
+      {props.copyRefusal ? ` | no copy: ${props.copyRefusal}` : ''}
+      {props.recordUpdatedAt ? ` | record of ${props.recordUpdatedAt}` : ''}
+      {` | sponsor start set: ${String(props.sponsorStartSet)}`}
+      {` | early sign-ups: ${String(props.earlySignupCount)} at ${String(props.earlySignupsHref)}`}
+    </div>
+  ),
+}))
+
 vi.mock('@/components/admin/sponsor-crm/OrganizerSignatureCapture', () => ({
   __esModule: true,
   OrganizerSignatureCapture: () => (
@@ -112,6 +134,131 @@ describe('SponsorContractView', () => {
 
   beforeEach(() => {
     defaultTrpcMocks()
+  })
+
+  describe('the workshop early-access section (#1346)', () => {
+    const view = (
+      sponsor: Parameters<typeof mockSponsor>[0],
+      workshopsEnabled: boolean,
+    ) =>
+      render(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor(sponsor)}
+          workshopsEnabled={workshopsEnabled}
+        />,
+      )
+
+    it('is offered for a won deal of a conference with workshops', () => {
+      view({ status: 'closed-won' }, true)
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'no link | can create',
+      )
+    })
+
+    it('shows the link the sponsor has', () => {
+      view({ status: 'closed-won', hasWorkshopEarlyAccessLink: true }, true)
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'has link | can create',
+      )
+    })
+
+    it('offers no create for a deal that is not won', () => {
+      view({ status: 'negotiating' }, true)
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'no link | Move the sponsor to Closed Won before creating an early-access link.',
+      )
+    })
+
+    it('is not shown for a conference without workshops', () => {
+      view({ status: 'closed-won' }, false)
+
+      expect(screen.queryByTestId('early-access-section')).toBeNull()
+    })
+
+    it('stays for a link that exists after workshops were turned off, so it can be revoked, and offers no copy', () => {
+      view({ status: 'closed-won', hasWorkshopEarlyAccessLink: true }, false)
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'has link | Workshops are not enabled for this conference. | no copy: Workshops are not enabled for this conference, so this link opens nothing.',
+      )
+    })
+
+    it('with workshops on, a link can be copied', () => {
+      view({ status: 'closed-won', hasWorkshopEarlyAccessLink: true }, true)
+
+      expect(screen.getByTestId('early-access-section')).not.toHaveTextContent(
+        'no copy',
+      )
+    })
+
+    it.each([true, false])(
+      'tells the section whether the conference has a sponsor start time (%s)',
+      (sponsorStartSet) => {
+        render(
+          <SponsorContractView
+            conferenceId="conf-2026"
+            sponsor={mockSponsor({ status: 'closed-won' })}
+            workshopsEnabled
+            sponsorStartSet={sponsorStartSet}
+          />,
+        )
+
+        expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+          `sponsor start set: ${sponsorStartSet}`,
+        )
+      },
+    )
+
+    it('hands the section the record’s count of early sign-ups, and the list narrowed to this sponsor', () => {
+      view(
+        {
+          _id: 'sfc-acme',
+          status: 'closed-won',
+          hasWorkshopEarlyAccessLink: true,
+          workshopEarlySignupCount: 3,
+        },
+        true,
+      )
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'early sign-ups: 3 at /admin/workshops?earlySponsor=sfc-acme#early-sign-ups',
+      )
+    })
+
+    it('hands it no list to open for a conference that has turned workshops off', () => {
+      view(
+        {
+          _id: 'sfc-acme',
+          status: 'closed-won',
+          hasWorkshopEarlyAccessLink: true,
+          workshopEarlySignupCount: 3,
+        },
+        false,
+      )
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'early sign-ups: 3 at undefined',
+      )
+    })
+
+    it('hands the section the record’s own change time', () => {
+      view(
+        {
+          status: 'closed-won',
+          hasWorkshopEarlyAccessLink: true,
+          _updatedAt: '2026-10-13T10:00:05Z',
+        },
+        true,
+      )
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'record of 2026-10-13T10:00:05Z',
+      )
+    })
   })
 
   it('still offers to resend the registration link once registration is complete (#1263)', () => {

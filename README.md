@@ -61,6 +61,20 @@ mise run dev
 
 Finally, open [http://localhost:3000](http://localhost:3000) in your browser to view the website.
 
+### Try Session Feedback locally
+
+A talk's feedback page (`/f/<code>`) only takes answers while its session's window is open. To try the whole attendee flow (scan, tap, comment, Change answer, Delete my answer) at any time, start the dev server with the window forced open:
+
+```bash
+FEEDBACK_DEV_OPEN_WINDOW=1 mise run dev
+```
+
+Then open `http://localhost:3000/f/<code>` with the Feedback Code of one of the conference's talks (shown on the talk's admin page).
+
+- **The answers are real.** Locally the app runs on the production dataset, so they are stored and count in the talk's results. Remove them when done: Delete my answer, or Remove on `/admin/feedback`.
+- **Only the attendee page** is affected. The speaker's results, the admin page, minting and the summary cron still follow the real window.
+- **Local `next dev` only.** The flag does nothing in any build (Vercel, or a local `next start`) or in tests.
+
 ### Available mise tasks
 
 | Task                                  | Description                                          |

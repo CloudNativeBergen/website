@@ -14,6 +14,7 @@
  * So every case below drives BOTH from ONE fixture and asserts they agree. A
  * future edit that changes one path's rule without the other fails here.
  */
+import { stubPlatformTicketingAccount } from '../../helpers/ticketingSecrets'
 import { NextRequest } from 'next/server'
 import crypto from 'crypto'
 
@@ -54,7 +55,15 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: h.fetch },
 }))
 
+// The not-set notice (#1335) has its own tests. Raised from here it would run
+// in the background, past the end of the test that raised it, against this
+// file's Sanity mock.
+vi.mock('@/lib/workshop/not-set-notice', () => ({
+  reportNotSetTicketTypes: vi.fn(),
+}))
+
 import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
+import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 import type { EventTicket } from '@/lib/tickets/types'
 
 const SECRET = 'checkin-webhook-test-secret'
@@ -171,6 +180,9 @@ async function gateAdmits(
   category: string,
   ticketTypeRoles?: Role[],
 ): Promise<boolean> {
+  // Each call is a different vendor state under the same event key, so it must
+  // not be served the previous call's memoized ticket list.
+  __resetRedeemedCache()
   // THE LIVE DOCUMENT — the same state the webhook's uncached read sees.
   h.fetch.mockResolvedValue({ ticketTypeRoles } as never)
   mockResolveTicketingProvider.mockResolvedValue({
@@ -216,12 +228,18 @@ describe('workshop access — the gate and the webhook cannot drift', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // The gate reads tickets through the process-global 30s memo.
+    __resetRedeemedCache()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+    stubPlatformTicketingAccount()
+    // Pro plan: since #1295 the platform org holds workshops by plan (its
+    // ticketing is the env account), not by identity.
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-platform',
       name: 'Platform',
       slug: 'platform-org',
+      plan: 'pro',
     })
   })
 

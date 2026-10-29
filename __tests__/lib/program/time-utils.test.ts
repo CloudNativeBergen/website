@@ -1,4 +1,8 @@
-import { isScheduleInPast, isScheduleToday } from '@/lib/program/time-utils'
+import {
+  isDayCollapsedByDefault,
+  isScheduleInPast,
+  isScheduleToday,
+} from '@/lib/program/time-utils'
 
 describe('program/time-utils.ts', () => {
   describe('isScheduleInPast', () => {
@@ -44,6 +48,30 @@ describe('program/time-utils.ts', () => {
       // Today should still be false regardless of time
       expect(isScheduleInPast('2025-10-28', morningTime)).toBe(false)
       expect(isScheduleInPast('2025-10-28', eveningTime)).toBe(false)
+    })
+  })
+
+  describe('isDayCollapsedByDefault', () => {
+    const days = ['2026-10-26', '2026-10-27']
+
+    it('collapses a past day while the event is running', () => {
+      const currentTime = new Date('2026-10-27T12:00:00')
+      expect(isDayCollapsedByDefault('2026-10-26', days, currentTime)).toBe(
+        true,
+      )
+      expect(isDayCollapsedByDefault('2026-10-27', days, currentTime)).toBe(
+        false,
+      )
+    })
+
+    it('expands every day once the event is over', () => {
+      const currentTime = new Date('2026-10-28T12:00:00')
+      expect(isDayCollapsedByDefault('2026-10-26', days, currentTime)).toBe(
+        false,
+      )
+      expect(isDayCollapsedByDefault('2026-10-27', days, currentTime)).toBe(
+        false,
+      )
     })
   })
 

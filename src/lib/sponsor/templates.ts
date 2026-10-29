@@ -64,7 +64,17 @@ const URL_VARIABLE_KEYS = new Set([
 ])
 
 /**
- * Replace {{{VAR}}} placeholders in a plain string.
+ * Merge variables resolved natively by Resend Broadcasts at delivery time.
+ */
+export const RESEND_BROADCAST_VARIABLES: Record<string, string> = {
+  FIRST_NAME: 'First Name',
+  LAST_NAME: 'Last Name',
+  EMAIL: 'email@example.com',
+  RESEND_UNSUBSCRIBE_URL: 'https://example.com/unsubscribe',
+}
+
+/**
+ * Replace {{{VAR}}} and {{{VAR|fallback}}} placeholders in a plain string.
  */
 export function processTemplateVariables(
   text: string,
@@ -72,8 +82,14 @@ export function processTemplateVariables(
 ): string {
   let result = text
   for (const [key, value] of Object.entries(variables)) {
-    const pattern = new RegExp(`\\{\\{\\{${key}\\}\\}\\}`, 'g')
-    result = result.replace(pattern, value)
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = new RegExp(
+      `\\{\\{\\{${escapedKey}(?:\\|([^{}\\r\\n]*))?\\}\\}\\}`,
+      'g',
+    )
+    result = result.replace(pattern, (_match, fallback?: string) =>
+      value !== '' ? value : (fallback ?? ''),
+    )
   }
   return result
 }
@@ -404,9 +420,13 @@ export function findBestTemplate(
  * Extract all {{{VARIABLE_NAME}}} references from a plain string.
  */
 export function extractVariablesFromText(text: string): string[] {
-  const matches = text.match(/\{\{\{([A-Z_]+)\}\}\}/g)
+  const matches = text.match(/\{\{\{[^{}\r\n]+\}\}\}/g)
   if (!matches) return []
-  return [...new Set(matches.map((m) => m.slice(3, -3)))]
+  return [
+    ...new Set(
+      matches.map((m) => m.slice(3, -3)).filter((s) => s.trim().length > 0),
+    ),
+  ]
 }
 
 /**
@@ -417,11 +437,25 @@ export function extractVariablesFromPortableText(
 ): string[] {
   const vars = new Set<string>()
   for (const block of blocks) {
-    if (block._type === 'block' && Array.isArray(block.children)) {
-      for (const child of block.children) {
-        if (child._type === 'span' && typeof child.text === 'string') {
-          for (const v of extractVariablesFromText(child.text)) {
-            vars.add(v)
+    if (block._type === 'block') {
+      if (Array.isArray(block.children)) {
+        const combinedText = block.children
+          .map((child) =>
+            child._type === 'span' && typeof child.text === 'string'
+              ? child.text
+              : '',
+          )
+          .join('')
+        for (const v of extractVariablesFromText(combinedText)) {
+          vars.add(v)
+        }
+      }
+      if (Array.isArray(block.markDefs)) {
+        for (const markDef of block.markDefs) {
+          if (markDef._type === 'link' && typeof markDef.href === 'string') {
+            for (const v of extractVariablesFromText(markDef.href)) {
+              vars.add(v)
+            }
           }
         }
       }
@@ -432,26 +466,42 @@ export function extractVariablesFromPortableText(
 
 /**
  * Find unsupported variables in text and Portable Text blocks.
- * Returns an array of variable names that are not in the supported set.
+ * Returns an array of variable names that are not in the supported set
+ * or cannot be merged cleanly (e.g. split across rich-text spans).
  */
 export function findUnsupportedVariables(
   supportedVariables: Record<string, string>,
   ...sources: Array<string | PortableTextBlock[]>
 ): string[] {
-  const supported = new Set(Object.keys(supportedVariables))
+  const placeholderVars: Record<string, string> = {}
+  for (const key of Object.keys(supportedVariables)) {
+    placeholderVars[key] = '__MERGED__'
+  }
   const found = new Set<string>()
 
   for (const source of sources) {
     if (typeof source === 'string') {
-      for (const v of extractVariablesFromText(source)) {
-        if (!supported.has(v)) found.add(v)
+      const merged = processTemplateVariables(source, placeholderVars)
+      for (const v of extractVariablesFromText(merged)) {
+        found.add(v)
       }
     } else if (Array.isArray(source)) {
-      for (const v of extractVariablesFromPortableText(source)) {
-        if (!supported.has(v)) found.add(v)
+      const merged = processPortableTextVariables(source, placeholderVars)
+      for (const v of extractVariablesFromPortableText(merged)) {
+        found.add(v)
       }
     }
   }
 
   return [...found]
+}
+
+/**
+ * Human-readable error message when an email still contains unmerged {{{VARIABLE}}} placeholders.
+ */
+export function formatUnmergedVariablesMessage(
+  variables: readonly string[],
+): string {
+  const formatted = variables.map((v) => `{{{${v}}}}`).join(', ')
+  return `Email contains unmerged template variables (${formatted}). Fill in the missing values or remove the placeholders before sending.`
 }

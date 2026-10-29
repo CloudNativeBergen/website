@@ -12,6 +12,7 @@ import type {
 } from '@/lib/sponsor-crm/types'
 import { sortSponsorTiers } from '@/components/admin/sponsor-crm/utils'
 import { getPrimaryAction } from './form/deal-status'
+import { hasPositiveContractValue } from '@/lib/sponsor-crm/contract-readiness'
 import { ChevronLeftIcon, ArrowRightIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
@@ -61,6 +62,12 @@ interface SponsorCRMFormProps {
   onSendRegistration?: () => void
   /** Send → Contract (#1264), raised from the contract view's contract and signing steps. */
   onSendContract?: (options: ContractSendOptions) => void
+  /** The conference has workshops: the contract view offers an early-access link (#1346). */
+  workshopsEnabled?: boolean
+  /** The conference has a "Sponsor early access opens" time, passed on with it. */
+  sponsorStartSet?: boolean
+  /** Send → Workshop early access (#1347), raised from the contract view's early-access section. */
+  onSendEarlyAccess?: () => void
 }
 
 export function SponsorCRMForm({
@@ -76,6 +83,9 @@ export function SponsorCRMForm({
   onSendDiscountCodes,
   onSendRegistration,
   onSendContract,
+  workshopsEnabled = false,
+  sponsorStartSet,
+  onSendEarlyAccess,
 }: SponsorCRMFormProps) {
   const [view, setViewState] = useState<FormView>(initialView)
   const setView = useCallback(
@@ -113,6 +123,7 @@ export function SponsorCRMForm({
     contractStatus: (sponsor?.contractStatus || 'none') as ContractStatus,
     status: (sponsor?.status || 'prospect') as SponsorStatus,
     invoiceStatus: (sponsor?.invoiceStatus || 'not-sent') as InvoiceStatus,
+    invoiceDueAt: sponsor?.invoiceDueAt || '',
     contractValue: sponsor?.contractValue?.toString() || '',
     contractCurrency: (sponsor?.contractCurrency || 'NOK') as
       'NOK' | 'USD' | 'EUR' | 'GBP',
@@ -208,7 +219,18 @@ export function SponsorCRMForm({
       total += getPrice(addon)
     })
 
-    if (total > 0 && !userHasEditedValue) {
+    const persistedAddonIds = sponsor?.addons?.map((a) => a._id) || []
+    const commercialTermsChanged =
+      formData.tierId !== (sponsor?.tier?._id || '') ||
+      formData.contractCurrency !== (sponsor?.contractCurrency || 'NOK') ||
+      formData.addonIds.length !== persistedAddonIds.length ||
+      formData.addonIds.some((id, idx) => id !== persistedAddonIds[idx])
+
+    const shouldPreservePersistedValue =
+      hasPositiveContractValue(sponsor?.contractValue) &&
+      !commercialTermsChanged
+
+    if (total > 0 && !userHasEditedValue && !shouldPreservePersistedValue) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData((prev) => ({
         ...prev,
@@ -224,6 +246,10 @@ export function SponsorCRMForm({
     isOpen,
     sponsorTiers.length,
     userHasEditedValue,
+    sponsor?.contractValue,
+    sponsor?.tier?._id,
+    sponsor?.contractCurrency,
+    sponsor?.addons,
   ])
 
   // CMD+S / CTRL+S keyboard shortcut to save the form
@@ -271,6 +297,38 @@ export function SponsorCRMForm({
 
   const [isAdvancing, setIsAdvancing] = useState(false)
 
+  const openSubView = async (target: FormView) => {
+    if (isAdvancing || isPending) return
+
+    const parsedFormValue = formData.contractValue
+      ? parseFloat(formData.contractValue)
+      : undefined
+    const hasUnpersistedContractValue =
+      Boolean(sponsor) &&
+      !hasPositiveContractValue(sponsor?.contractValue) &&
+      hasPositiveContractValue(parsedFormValue)
+
+    if (
+      target === 'contract' &&
+      sponsor &&
+      (isDirty || hasUnpersistedContractValue)
+    ) {
+      setIsAdvancing(true)
+      try {
+        await submitForm(formData)
+        setIsDirty(false)
+        setView(target)
+      } catch {
+        // Mutation onError already raised a notification.
+      } finally {
+        setIsAdvancing(false)
+      }
+      return
+    }
+
+    setView(target)
+  }
+
   /**
    * Apply the header CTA.
    *
@@ -284,7 +342,7 @@ export function SponsorCRMForm({
   const handlePrimaryAction = async () => {
     if (!primaryAction) return
     if (primaryAction.kind === 'view') {
-      setView(primaryAction.target)
+      await openSubView(primaryAction.target)
       return
     }
     // A brand-new sponsor has no record to advance yet.
@@ -403,6 +461,7 @@ export function SponsorCRMForm({
               onSuccess={() => {
                 utils.sponsor.crm.list.invalidate()
                 utils.sponsor.crm.healthViolations.invalidate()
+                utils.sponsor.contractTemplates?.contractReadiness?.invalidate()
               }}
               onCancel={handleClose}
               onDirtyChange={setIsContactsDirty}
@@ -435,14 +494,35 @@ export function SponsorCRMForm({
               onSuccess={() => {
                 utils.sponsor.crm.list.invalidate()
                 utils.sponsor.crm.healthViolations.invalidate()
+                utils.sponsor.contractTemplates?.contractReadiness?.invalidate()
               }}
               onSendRegistration={onSendRegistration}
               onSendContract={onSendContract}
+              workshopsEnabled={workshopsEnabled}
+              sponsorStartSet={sponsorStartSet}
+              onSendEarlyAccess={onSendEarlyAccess}
             />
           ) : view === 'communications' && sponsor ? (
             <SponsorCommunicationsPanel
               sponsorForConferenceId={sponsor._id}
-              onSend={onSendEmail}
+              // The empty state of a filtered tab sends that kind, not a
+              // generic information email. No sender at all ⇒ no button.
+              onSend={
+                onSendEmail &&
+                ((kind) => {
+                  const send =
+                    kind === 'workshop-early-access'
+                      ? onSendEarlyAccess
+                      : kind === 'registration'
+                        ? onSendRegistration
+                        : kind === 'discount'
+                          ? onSendDiscountCodes
+                          : kind === 'contract' && onSendContract
+                            ? () => onSendContract({})
+                            : undefined
+                  ;(send ?? onSendEmail)()
+                })
+              }
             />
           ) : view === 'messages' && sponsor ? (
             // Sponsor↔organizer thread (messaging G2b): ensured on
@@ -461,7 +541,9 @@ export function SponsorCRMForm({
               isPending={isPending}
               onSubmit={handleSubmit}
               onCancel={handleClose}
-              onOpenView={setView}
+              onOpenView={(target) => {
+                void openSubView(target)
+              }}
               // Only a PERSISTED sponsor can be emailed — the compose modal is
               // keyed off the stored record's contacts.
               onSendEmail={sponsor && onSendEmail ? onSendEmail : undefined}

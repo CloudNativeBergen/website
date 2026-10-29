@@ -209,6 +209,7 @@ describe('proposal.addCoSpeakerProfile', () => {
       expect.objectContaining({
         toEmail: 'nina@example.com',
         toName: 'Nina Co-Speaker',
+        proposalId: 'proposal-1',
         proposalTitle: 'Test Proposal',
       }),
     )

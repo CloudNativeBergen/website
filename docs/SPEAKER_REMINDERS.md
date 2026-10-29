@@ -7,9 +7,9 @@ speakers about the things they still have to do before a conference — confirm 
 accepted talk, upload slides, finish a travel-support request, read a day-of
 agenda — plus an **event-driven** alert when their talk is moved on the schedule.
 It is a thin producer on top of the notification hub: every reminder is emitted
-as a single `notification` document per speaker, so push, the in-app bell and
-email all ride free through `createNotifications` (`src/lib/notification/*`) — the
-reminder engine never talks to a channel directly.
+as a single `notification` document per speaker, so push and the in-app bell
+ride free through `createNotifications` (`src/lib/notification/*`) — the
+reminder engine never talks to a channel directly. Reminders send no email.
 
 The code lives under `src/lib/reminders/*` and is driven by one daily cron route
 (`src/app/api/cron/reminders`). Phase 1 is **config-free**: the reminder
@@ -33,7 +33,7 @@ schedule is a hardcoded registry, tuned in code, with no Studio UI.
 ├──────────────────────────────────────────────────────────────────────┤
 │  Event-driven: notifyScheduleChanges (schedule-alerts.ts) on save     │
 ├──────────────────────────────────────────────────────────────────────┤
-│  Sink: createNotifications → hub + push + email (never re-derived)     │
+│  Sink: createNotifications → hub + push (never re-derived)            │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -56,8 +56,8 @@ reminder is due for that speaker on that date, or `null`.
 Two design notes are load-bearing:
 
 - **The registry REUSES existing notification types** rather than minting a
-  reminder-specific one, so reminders inherit the hub's push categories, email
-  templates and retention with zero new plumbing. `confirm-talk` /
+  reminder-specific one, so reminders inherit the hub's push categories and
+  retention with zero new plumbing. `confirm-talk` /
   `upload-slides` / `logistics` ride `proposal_status_changed`; `travel-reminder`
   rides `travel_support_update`; the day-of agenda rides `proposal_status_changed`;
   and the schedule-change alert activates the reserved `schedule_update` type.
@@ -151,6 +151,5 @@ reminder delivery log in its retention table.
 
 - **`ADMIN_NOTIFICATION_SYSTEM.md`** / **`AGENTS.md` → "In-app notifications"** —
   the hub the reminders emit into (never-fail, per-recipient, retention).
-- **`EMAIL_SYSTEM.md`** — the email channel a reminder rides through.
 - **`EVENT_ARCHITECTURE.md`** — the schedule save path that triggers
   schedule-change alerts.

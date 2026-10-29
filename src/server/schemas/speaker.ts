@@ -135,6 +135,10 @@ const SpeakerInputBaseSchema = z.object({
   // ORGANIZER through `SpeakerUpdateSchema`, who may set it but never clear it
   // — that rule lives in the writer, not here.
   socialTagOptOut: z.boolean().optional(),
+  // Talk photos opt-out (talk photos spec §4.2): the same rules and the same
+  // absence from `SpeakerInputSchema`; the self writer is
+  // `speaker.setTalkPhotosOptOut`.
+  talkPhotosOptOut: z.boolean().optional(),
 })
 
 // Admin-specific speaker creation (includes email)

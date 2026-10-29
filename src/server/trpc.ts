@@ -5,60 +5,123 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import type { FeatureId } from '@/lib/features/registry'
 import { AppEnvironment } from '@/lib/environment/config'
+import {
+  readWorkshopSession,
+  sessionCookie,
+} from '@/lib/workshop/central-sign-in'
 import { structuredErrorData, type StructuredErrorData } from './errors'
 
 /**
- * Identity of an authenticated WorkOS AuthKit user, projected from the sealed
- * `wos-session` cookie. This is a SEPARATE auth system from the NextAuth
+ * Who is signed in to the workshop portal, projected from the portal's own
+ * sealed session (#1311). This is a SEPARATE auth system from the NextAuth
  * (GitHub/LinkedIn) `session` above: NextAuth backs speakers/organizers on
- * `/cfp` and `/admin`, whereas WorkOS backs workshop attendees on `/workshop`.
- * Workshop signup authorization keys on this, never on client-supplied input.
+ * `/cfp` and `/admin`, whereas attendees prove an email address through WorkOS
+ * on `/workshop`. Workshop signup authorization keys on this, never on
+ * client-supplied input.
  */
 export interface WorkshopUserIdentity {
+  /** The WorkOS user ID: what a signup is stored under. */
   id: string
   email: string
-  firstName?: string | null
-  lastName?: string | null
+  /**
+   * Whether WorkOS has verified this address. The email is what a ticket is
+   * matched on, so an unverified one proves nothing about who holds the ticket.
+   */
+  emailVerified: boolean
+  name: string | null
+  /**
+   * The conference the session was issued for, which claimed the host when
+   * this request was read. A procedure compares it with the conference it
+   * resolved for the request, which may come from a cache.
+   */
+  conferenceId: string
 }
 
 /**
- * Resolve the WorkOS attendee identity for a tRPC request from the sealed
- * `wos-session` cookie.
+ * Resolve the attendee identity for a tRPC request from the portal's session
+ * cookie (`readWorkshopSession`): sealed for this host and the conference that
+ * claims it, checked against the host's record read live. WorkOS is not
+ * called, and nothing is written: the session is never renewed.
  *
- * Why not `withAuth()`: `withAuth()` reads the session out of a request header
- * that the AuthKit MIDDLEWARE injects, and the middleware matcher only covers
- * `/workshop*` — it does NOT run for `/api/trpc`, so `withAuth()` throws there.
- * Instead we call `authkit(req)`, a public AuthKit helper that reads and unseals
- * the `wos-session` cookie directly (via `getSessionFromCookie`). That cookie is
- * encrypted+signed server-side with `WORKOS_COOKIE_PASSWORD`, so a client cannot
- * forge it — it is a trustworthy, cookie-based server session, exactly the
- * source authorization should bind to.
+ * THE SAME DECISION AS THE PAGE, so the API cannot be more permissive than
+ * the page. No session resolves to `null`, and a procedure's own guard decides
+ * (UNAUTHORIZED for workshop signup/cancel).
  *
- * We first cheaply check the cookie is present so the vast majority of tRPC
- * calls (NextAuth admin/cfp/sponsor/message traffic, which carries no WorkOS
- * cookie) skip AuthKit entirely. Any failure resolves to `null` (never throws),
- * so a procedure's own guard decides (UNAUTHORIZED for workshop signup/cancel).
+ * ONLY FOR THE ATTENDEE PROCEDURES (see {@link namesAttendeeProcedure}): the
+ * decision is a live Sanity read, and the cookie rides on every tRPC request
+ * this browser makes for a week.
  */
 async function resolveWorkshopUser(
   req: NextRequest,
-): Promise<WorkshopUserIdentity | null> {
+): Promise<WorkshopUserIdentity | null | 'check-failed'> {
   if (AppEnvironment.isTestMode) return null
-  const cookieName = process.env.WORKOS_COOKIE_NAME || 'wos-session'
-  if (!req.cookies.get(cookieName)) return null
+  const sealed = req.cookies.get(sessionCookie().name)?.value
+  if (!sealed) return null
+  if (!namesAttendeeProcedure(req)) return null
+  let session
   try {
-    const { authkit } = await import('@workos-inc/authkit-nextjs')
-    const { session } = await authkit(req)
-    const user = session.user
-    if (!user?.id) return null
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-    }
-  } catch {
-    return null
+    session = await readWorkshopSession(req.headers, sealed)
+  } catch (error) {
+    // NOT NO SESSION (#1303): the host's record could not be read, so whether
+    // this session still holds is unknown. Still no attendee (fail closed),
+    // but the guard says to try again instead of to sign in again.
+    console.error('[workshop] the session could not be checked', error)
+    return 'check-failed'
   }
+  if (!session) return null
+  return {
+    id: session.userId,
+    email: session.email,
+    emailVerified: session.emailVerified,
+    name: session.name,
+    conferenceId: session.conferenceId,
+  }
+}
+
+/**
+ * The procedures that read the attendee identity (`ctx.workosUser`), by the
+ * path tRPC puts in the URL. Everything else under `workshop.*` (the list, the
+ * announcements, availability, the organizer's `admin.*`) answers without it.
+ *
+ * A procedure that starts reading the identity MUST be added here, or it sees
+ * `null` and refuses every attendee: closed, but silently. This is a
+ * convention, not something the types enforce. `trpc.workshopUser.test.ts`
+ * checks it against the router's source (every mention of the identity or of
+ * the two helpers that read it), which catches the ways of forgetting it that
+ * were thought of, not every way.
+ */
+const ATTENDEE_PROCEDURES: ReadonlySet<string> = new Set([
+  'workshop.signup',
+  'workshop.cancelSignup',
+  'workshop.getMySignups',
+])
+
+/**
+ * Whether this HTTP request names one of {@link ATTENDEE_PROCEDURES}, the only
+ * procedures that consume the attendee identity. tRPC puts the procedure path
+ * in the URL (comma-joined for a batch), so this is known before any work.
+ *
+ * WHY IT EXISTS. The session cookie is host-wide and lasts a week, so without
+ * this a browser that once signed in to the portal would spend one live record
+ * read on every tRPC request it makes on that host — an organizer's entire
+ * admin session included, and every view of the portal's own public lists.
+ * Fail closed: a request that names none gets no attendee, and an attendee
+ * procedure would refuse it.
+ */
+function namesAttendeeProcedure(req: NextRequest): boolean {
+  const marker = '/api/trpc/'
+  const { pathname } = req.nextUrl
+  const at = pathname.indexOf(marker)
+  if (at === -1) return false
+  let procedures: string
+  try {
+    procedures = decodeURIComponent(pathname.slice(at + marker.length))
+  } catch {
+    return false
+  }
+  return procedures
+    .split(',')
+    .some((procedure) => ATTENDEE_PROCEDURES.has(procedure))
 }
 
 export async function createTRPCContext(opts: { req: NextRequest }) {
@@ -67,7 +130,8 @@ export async function createTRPCContext(opts: { req: NextRequest }) {
     headers: opts.req.headers,
   })
 
-  const workosUser = await resolveWorkshopUser(opts.req)
+  const workshopUser = await resolveWorkshopUser(opts.req)
+  const workosUser = workshopUser === 'check-failed' ? null : workshopUser
 
   // Extract IP address from headers
   const forwardedFor = opts.req.headers.get('x-forwarded-for')
@@ -86,6 +150,10 @@ export async function createTRPCContext(opts: { req: NextRequest }) {
     speaker: session?.speaker,
     user: session?.user,
     workosUser,
+    // Present only when the attendee's session could not be checked (#1303).
+    ...(workshopUser === 'check-failed' && {
+      workshopSessionCheckFailed: true as const,
+    }),
     ipAddress,
   }
 }

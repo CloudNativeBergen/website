@@ -112,7 +112,7 @@ jobs:
   tests-shard:
     name: Tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       # To add a shard, append here AND in the other matrix below; the fan-in
@@ -266,7 +266,7 @@ jobs:
   storybook-shard:
     name: Storybook Tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       # To add a shard, append here AND in the other matrix below; the fan-in
@@ -304,8 +304,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The browser is cached; on a hit only the system packages are installed.
+      - name: Get Playwright version
+        shell: bash
+        run: |
+          echo "PLAYWRIGHT_VERSION=$(pnpm exec playwright --version | awk '{print $2}')" >> $GITHUB_ENV
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}-chromium
+
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
+
+      # On a cache hit we skip `playwright install-deps`: it goes through apt
+      # and the slow Azure Ubuntu mirror (#1668). ubuntu-latest is expected to
+      # ship the shared libraries headless chromium needs.
 
       - name: Initialize MSW
         run: pnpm msw init public --save=false
@@ -369,8 +387,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # `next build` downloads seven Google Fonts, and one failed download
+      # fails the build. The wrapper builds again for that failure only.
       - name: Build application
-        run: pnpm run build
+        run: pnpm tsx scripts/ci-build.ts
         env:
           # CI environment variables (dummy values for build verification).
           # These MUST match the Auth.js v5 names the code actually reads
@@ -437,8 +457,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # `next build` downloads seven Google Fonts, and one failed download
+      # fails the build. The wrapper builds again for that failure only.
       - name: Build application
-        run: pnpm run build
+        run: pnpm tsx scripts/ci-build.ts
         env:
           # Same placeholder env as the Build job — a `next build` must compile
           # with these dummy Auth.js v5 secrets (no real backend is contacted).

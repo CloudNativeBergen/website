@@ -12,10 +12,12 @@ import {
   type VolunteerWithConference,
 } from '@/lib/volunteer/types'
 
-interface VolunteerEditModalProps {
+export interface VolunteerEditModalProps {
   isOpen: boolean
   onClose: () => void
   volunteer: VolunteerWithConference
+  /** Task names already assigned across this conference's volunteers. */
+  taskSuggestions?: string[]
 }
 
 interface Draft {
@@ -25,9 +27,11 @@ interface Draft {
   occupation: Occupation
   availability: string
   preferredTasks: string
+  assignedTasks: string
   tshirtSize: string
   dietaryRestrictions: string
   otherInfo: string
+  reviewNotes: string
 }
 
 function draftFrom(v: VolunteerWithConference): Draft {
@@ -38,9 +42,11 @@ function draftFrom(v: VolunteerWithConference): Draft {
     occupation: v.occupation ?? Occupation.OTHER,
     availability: v.availability ?? '',
     preferredTasks: (v.preferredTasks ?? []).join(', '),
+    assignedTasks: (v.assignedTasks ?? []).join(', '),
     tshirtSize: v.tshirtSize ?? '',
     dietaryRestrictions: v.dietaryRestrictions ?? '',
     otherInfo: v.otherInfo ?? '',
+    reviewNotes: v.reviewNotes ?? '',
   }
 }
 
@@ -50,14 +56,27 @@ function nullable(value: string): string | null {
   return trimmed === '' ? null : trimmed
 }
 
+/** Split a comma-separated list into trimmed, non-empty, unique entries. */
+export function splitTasks(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0),
+    ),
+  ]
+}
+
 /**
- * SE-4 — organizer edit of a volunteer's own detail fields. Status and review
- * provenance are edited elsewhere and are intentionally absent here.
+ * SE-4 — organizer edit of a volunteer's own detail fields and internal review
+ * notes. Status and review provenance are edited via status transitions.
  */
 export function VolunteerEditModal({
   isOpen,
   onClose,
   volunteer,
+  taskSuggestions = [],
 }: VolunteerEditModalProps) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
@@ -103,6 +122,18 @@ export function VolunteerEditModal({
     onError: (err) => setError(err.message || 'Failed to update volunteer.'),
   })
 
+  const assigned = new Set(
+    splitTasks(draft.assignedTasks).map((t) => t.toLowerCase()),
+  )
+  const assignedSuggestions = [
+    ...new Map(
+      [...splitTasks(draft.preferredTasks), ...taskSuggestions].map((t) => [
+        t.toLowerCase(),
+        t,
+      ]),
+    ).values(),
+  ].filter((t) => !assigned.has(t.toLowerCase()))
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
     setError(null)
@@ -115,10 +146,8 @@ export function VolunteerEditModal({
       return
     }
 
-    const preferredTasks = draft.preferredTasks
-      .split(',')
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0)
+    const preferredTasks = splitTasks(draft.preferredTasks)
+    const assignedTasks = splitTasks(draft.assignedTasks)
 
     updateMutation.mutate({
       volunteerId: volunteer._id,
@@ -128,10 +157,12 @@ export function VolunteerEditModal({
       occupation: draft.occupation,
       availability: nullable(draft.availability),
       preferredTasks: preferredTasks.length > 0 ? preferredTasks : null,
+      assignedTasks: assignedTasks.length > 0 ? assignedTasks : null,
       tshirtSize:
         draft.tshirtSize === '' ? null : (draft.tshirtSize as TShirtSize),
       dietaryRestrictions: nullable(draft.dietaryRestrictions),
       otherInfo: nullable(draft.otherInfo),
+      reviewNotes: nullable(draft.reviewNotes),
     })
   }
 
@@ -244,6 +275,41 @@ export function VolunteerEditModal({
           />
         </Field>
 
+        <Field label="Assigned tasks (comma-separated)" htmlFor="vol-assigned">
+          <input
+            id="vol-assigned"
+            type="text"
+            value={draft.assignedTasks}
+            onChange={(e) =>
+              setDraft((p) => ({ ...p, assignedTasks: e.target.value }))
+            }
+            placeholder="e.g. Info desk, Stage host"
+            className={inputClass}
+          />
+          {assignedSuggestions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {assignedSuggestions.map((task) => (
+                <button
+                  key={task}
+                  type="button"
+                  onClick={() =>
+                    setDraft((p) => ({
+                      ...p,
+                      assignedTasks: [
+                        ...splitTasks(p.assignedTasks),
+                        task,
+                      ].join(', '),
+                    }))
+                  }
+                  className="inline-flex min-h-11 items-center rounded-md bg-gray-100 px-3 text-base text-gray-700 hover:bg-gray-200 sm:min-h-0 sm:py-1 sm:text-sm dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                >
+                  + {task}
+                </button>
+              ))}
+            </div>
+          )}
+        </Field>
+
         <Field label="Dietary restrictions" htmlFor="vol-dietary">
           <textarea
             id="vol-dietary"
@@ -264,6 +330,19 @@ export function VolunteerEditModal({
             onChange={(e) =>
               setDraft((p) => ({ ...p, otherInfo: e.target.value }))
             }
+            className={inputClass}
+          />
+        </Field>
+
+        <Field label="Review notes (internal)" htmlFor="vol-review-notes">
+          <textarea
+            id="vol-review-notes"
+            rows={2}
+            value={draft.reviewNotes}
+            onChange={(e) =>
+              setDraft((p) => ({ ...p, reviewNotes: e.target.value }))
+            }
+            placeholder="Internal notes about this applicant..."
             className={inputClass}
           />
         </Field>

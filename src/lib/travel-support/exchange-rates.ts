@@ -10,7 +10,7 @@ interface ExchangeRateCache {
 const CACHE_KEY = EXCHANGE_RATE_CONFIG.cacheKey
 const CACHE_DURATION = EXCHANGE_RATE_CONFIG.cacheDuration
 
-const FALLBACK_RATES: Record<
+export const FALLBACK_RATES: Record<
   SupportedCurrency,
   Record<SupportedCurrency, number>
 > = {

@@ -15,6 +15,9 @@
  */
 export type ConversationType = 'proposal' | 'general' | 'sponsor'
 
+/** Absent on legacy messages means person. */
+export type MessageOrigin = 'person' | 'system'
+
 /**
  * Ticketing status of a thread for the ORGANIZER audience. `'open'` is the
  * default AND the meaning of an ABSENT `status` field — every read coalesces
@@ -331,6 +334,8 @@ export interface Message {
    */
   authorId: string
   body: string
+  /** Absent means person. System proposal relays bypass Jev. */
+  origin?: MessageOrigin
   createdAt: string
   /**
    * Display-name snapshot for a SPONSOR-authored message (the contact person the

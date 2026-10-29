@@ -9,6 +9,7 @@ import {
   hasConferenceDomain,
 } from '@/lib/conference/baseUrl'
 import { formatConferenceDateLong } from '@/lib/time'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 /** One contact-person recipient of an organizer→sponsor message email. */
 export interface SponsorMessageEmailRecipient {
@@ -44,10 +45,11 @@ async function sendOne(
     const { client } = await resolveEmailSender(conference.organization?._ref)
 
     await retryWithBackoff(async () => {
-      const fromEmail = conference.sponsorEmail || conference.cfpEmail
-      const fromName = conference.organizer || conference.title
       const result = await client.emails.send({
-        from: `${fromName} <${fromEmail}>`,
+        from: resolveConferenceFrom(conference, {
+          field: 'sponsorEmail',
+          localPart: 'sponsors',
+        }),
         to: [recipient.email],
         subject: `New message about "${subject}"`,
         react: React.createElement(SponsorMessageNotificationTemplate, {

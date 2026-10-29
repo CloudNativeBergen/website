@@ -27,24 +27,30 @@ export type SpeakerUpdateActor = 'self' | 'organizer'
  * that must stay a 500.
  */
 export class SocialTagOptOutClearForbiddenError extends Error {
-  constructor() {
-    super(
-      'Only the speaker can withdraw their own opt-out from social-post tags.',
-    )
+  constructor(
+    message = 'Only the speaker can withdraw their own opt-out from social-post tags.',
+  ) {
+    super(message)
     this.name = 'SocialTagOptOutClearForbiddenError'
   }
 }
 
+/**
+ * The speaker opt-outs that follow this rule: social-post tags (#1148) and
+ * talk photos (talk photos spec §4.2). Each has a server-stamped `<field>At`.
+ */
+export type SpeakerOptOutField = 'socialTagOptOut' | 'talkPhotosOptOut'
+
 /** The opt-out half of a speaker patch, in Sanity patch operations. */
 export interface SocialTagOptOutPatch {
-  set: { socialTagOptOut?: boolean }
+  set: Partial<Record<SpeakerOptOutField, boolean>>
   /**
    * `setIfMissing`, not `set`, so re-saving a profile that is ALREADY opted out
    * keeps the original timestamp. The field means "when it was set", and a
    * profile save that changes nothing about the opt-out must not restamp it.
    * Clearing unsets it, so a later re-opt-out stamps afresh.
    */
-  setIfMissing: { socialTagOptOutAt?: string }
+  setIfMissing: Partial<Record<`${SpeakerOptOutField}At`, string>>
   unset: string[]
 }
 
@@ -70,6 +76,7 @@ export function resolveSocialTagOptOut({
   requested,
   stored,
   now,
+  field = 'socialTagOptOut',
 }: {
   actor: SpeakerUpdateActor
   requested: boolean
@@ -77,19 +84,27 @@ export function resolveSocialTagOptOut({
   stored: boolean
   /** Server clock, ISO 8601. Never a client-supplied value. */
   now: string
+  /** Which opt-out. Defaults to the social-post tag one. */
+  field?: SpeakerOptOutField
 }): SocialTagOptOutPatch {
   if (requested) {
     // Both actors may SET it. An organizer doing so on a speaker's behalf is
     // the supported way to honour a request made by email or in person.
     return {
-      set: { socialTagOptOut: true },
-      setIfMissing: { socialTagOptOutAt: now },
+      set: { [field]: true },
+      setIfMissing: { [`${field}At`]: now },
       unset: [],
     }
   }
 
   if (actor === 'organizer') {
-    if (stored) throw new SocialTagOptOutClearForbiddenError()
+    if (stored) {
+      throw new SocialTagOptOutClearForbiddenError(
+        field === 'talkPhotosOptOut'
+          ? 'Only the speaker can withdraw their own opt-out from talk photos.'
+          : undefined,
+      )
+    }
     // Not opted out, and the admin form submits the whole profile on every
     // save — so this is an ordinary save, not an attempt to clear anything.
     return NO_CHANGE
@@ -100,6 +115,6 @@ export function resolveSocialTagOptOut({
   return {
     set: {},
     setIfMissing: {},
-    unset: ['socialTagOptOut', 'socialTagOptOutAt'],
+    unset: [field, `${field}At`],
   }
 }

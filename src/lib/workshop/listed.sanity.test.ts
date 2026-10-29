@@ -1,0 +1,154 @@
+/**
+ * @vitest-environment node
+ *
+ * What an attendee can sign up for (#1301): exactly what the portal lists, a
+ * confirmed workshop of the request's conference. Asserted against stored
+ * documents (`__tests__/helpers/versionedSanityStore.ts`: the real client's
+ * reads served from an in-memory dataset).
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
+
+const h = vi.hoisted(() => ({ store: null as null | VersionedSanityStore }))
+vi.mock('@/lib/sanity/client', async () => {
+  const { createVersionedSanityStore } =
+    await import('../../../__tests__/helpers/versionedSanityStore')
+  h.store ??= createVersionedSanityStore()
+  return h.store.clients
+})
+
+import { isListedWorkshopOf } from './sanity'
+import { getWorkshops } from '@/lib/proposal/data/sanity'
+
+const CONF = 'conf-a'
+
+function talk(_id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    _id,
+    _type: 'talk',
+    _rev: 'r0',
+    conference: { _type: 'reference', _ref: CONF },
+    status: 'confirmed',
+    format: 'workshop_120',
+    ...overrides,
+  }
+}
+
+beforeEach(() => {
+  h.store!.reset([
+    talk('listed-120'),
+    talk('listed-240', { format: 'workshop_240' }),
+    // A published id may hold a dot (the demo seed's `kkdemo.talk.s4`).
+    talk('kkdemo.talk.s4'),
+    talk('a-talk', { format: 'presentation_40' }),
+    talk('a-lightning-talk', { format: 'lightning_10' }),
+    talk('submitted', { status: 'submitted' }),
+    talk('accepted', { status: 'accepted' }),
+    talk('withdrawn', { status: 'withdrawn' }),
+    talk('canceled', { status: 'canceled' }),
+    talk('drafts.canceled', { status: 'canceled' }),
+    talk('no-format', { format: undefined }),
+    talk('elsewhere', { conference: { _type: 'reference', _ref: 'conf-b' } }),
+    // Every other field of a listed workshop: only its type tells.
+    talk('a-sponsor', { _type: 'sponsor' }),
+    talk('drafts.unpublished'),
+    talk('drafts.listed-120'),
+    talk('versions.r1.listed-120'),
+  ])
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('a workshop an attendee can sign up for', () => {
+  it.each(['listed-120', 'listed-240', 'kkdemo.talk.s4'])(
+    'a confirmed workshop of the conference (%s) is one',
+    async (id) => {
+      expect(await isListedWorkshopOf(id, CONF)).toBe(true)
+    },
+  )
+
+  it.each([
+    ['a talk of another format', 'a-talk'],
+    ['a lightning talk', 'a-lightning-talk'],
+    ['a talk with no format', 'no-format'],
+    ['a submitted workshop proposal', 'submitted'],
+    ['an accepted workshop the speaker has not confirmed', 'accepted'],
+    ['a withdrawn workshop', 'withdrawn'],
+    ['a canceled workshop', 'canceled'],
+    ['a workshop of another conference', 'elsewhere'],
+    ['a document that is not a talk', 'a-sponsor'],
+    ['an id that does not exist', 'nothing-here'],
+    ['a draft that was never published', 'drafts.unpublished'],
+    ['the draft of a listed workshop', 'drafts.listed-120'],
+    ['a release version of a listed workshop', 'versions.r1.listed-120'],
+  ])('%s is not', async (_, id) => {
+    expect(await isListedWorkshopOf(id, CONF)).toBe(false)
+  })
+})
+
+describe('an id the document endpoint reads as several', () => {
+  // MODELLED: the Doc endpoint takes comma-separated ids, and the real
+  // client's `getDocument` puts the id in the path unescaped and returns the
+  // first document of the answer (shown against the real client in #1365).
+  // The store looks ids up exactly, so the endpoint is modelled here.
+  it.each(['nothing-here,listed-120', 'listed-120,nothing-here'])(
+    '%s is not the listed workshop it also names',
+    async (id) => {
+      const { clientWrite } = h.store!.clients as unknown as {
+        clientWrite: { getDocument: (id: string) => Promise<unknown> }
+      }
+      const exact = clientWrite.getDocument.bind(clientWrite)
+      vi.spyOn(clientWrite, 'getDocument').mockImplementation(
+        async (asked: string) => {
+          for (const one of asked.split(',')) {
+            const found = await exact(one)
+            if (found) return found
+          }
+          return undefined
+        },
+      )
+
+      expect(await isListedWorkshopOf(id, CONF)).toBe(false)
+    },
+  )
+})
+
+describe('the portal listing', () => {
+  // With the schedule attached too: the portal, the admin list and the
+  // statistics all ask for it.
+  it.each([false, true])(
+    'lists exactly the workshops an attendee can sign up for (schedule info: %s)',
+    async (includeScheduleInfo) => {
+      const { workshops, workshopsError } = await getWorkshops({
+        conferenceId: CONF,
+        includeScheduleInfo,
+      })
+
+      expect(workshopsError).toBeNull()
+      expect(workshops.map((w) => w._id).sort()).toEqual([
+        'kkdemo.talk.s4',
+        'listed-120',
+        'listed-240',
+      ])
+    },
+  )
+})
+
+describe('the admin listing', () => {
+  it('adds the canceled and withdrawn workshops, never their drafts', async () => {
+    const { workshops } = await getWorkshops({
+      conferenceId: CONF,
+      includeCanceled: true,
+    })
+
+    expect(workshops.map((w) => w._id).sort()).toEqual([
+      'canceled',
+      'kkdemo.talk.s4',
+      'listed-120',
+      'listed-240',
+      'withdrawn',
+    ])
+  })
+})

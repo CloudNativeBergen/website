@@ -46,6 +46,15 @@ export default defineType({
       validation: (Rule) => Rule.required().max(5000),
     }),
     defineField({
+      name: 'origin',
+      title: 'Origin',
+      type: 'string',
+      options: { list: ['person', 'system'] },
+      description:
+        'Absent means person. Proposal-action relays are system messages, including relays containing a typed comment.',
+      readOnly: true,
+    }),
+    defineField({
       name: 'createdAt',
       title: 'Created At',
       type: 'datetime',

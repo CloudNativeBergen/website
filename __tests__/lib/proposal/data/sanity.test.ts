@@ -1,5 +1,6 @@
 const {
   mockFetch,
+  mockCdnFetch,
   mockWriteFetch,
   mockTransaction,
   mockTxDelete,
@@ -17,6 +18,7 @@ const {
   mockTxDelete.mockReturnValue(transaction)
   const mockTransaction = vi.fn(() => transaction)
   const mockFetch = vi.fn()
+  const mockCdnFetch = vi.fn()
   const mockWriteFetch = vi.fn()
 
   const mockPatchCommit = vi.fn().mockResolvedValue({ _id: 'proposal-1' })
@@ -39,6 +41,7 @@ const {
 
   return {
     mockFetch,
+    mockCdnFetch,
     mockWriteFetch,
     mockTransaction,
     mockTxDelete,
@@ -64,6 +67,10 @@ vi.mock('next-sanity', () => ({
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
     fetch: mockFetch,
+  },
+  // The CDN host. Its own mock, so a test can tell which host a read billed.
+  clientReadCached: {
+    fetch: mockCdnFetch,
   },
   clientWrite: {
     transaction: mockTransaction,
@@ -125,6 +132,23 @@ describe('deleteProposal', () => {
       'proposal-1',
     ])
     expect(mockTxCommit).toHaveBeenCalledTimes(1)
+  })
+
+  it("deletes a workshop's seats guard with it: it only guards the workshop's seats (#1344)", async () => {
+    mockFetch
+      .mockResolvedValueOnce([
+        { _id: 'workshopSeats-conf-1-proposal-1', _type: 'workshopSeats' },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+
+    const { err } = await deleteProposal('proposal-1')
+
+    expect(err).toBeNull()
+    expect(mockTxDelete.mock.calls.map((call) => call[0])).toEqual([
+      'workshopSeats-conf-1-proposal-1',
+      'proposal-1',
+    ])
   })
 
   it('is blocked by a saved video naming the talk as its subject, named by title (#1181)', async () => {
@@ -511,26 +535,40 @@ describe('schedule resolution — official documents only', () => {
       },
     ]
 
-    mockFetch.mockImplementation((query: string) => {
-      if (query.includes('_type == "schedule"')) {
-        const officialOnly = query.includes('status == "official"')
-        return Promise.resolve(
-          officialOnly
-            ? scheduleDocs.filter(
-                (doc) => !doc.status || doc.status === 'official',
-              )
-            : scheduleDocs,
-        )
-      }
-      return Promise.resolve([
-        { _id: 'workshop-1', title: 'A Workshop', format: 'workshop_120' },
-      ])
+    mockCdnFetch.mockImplementation((query: string) => {
+      const officialOnly = query.includes('status == "official"')
+      return Promise.resolve(
+        officialOnly
+          ? scheduleDocs.filter(
+              (doc) => !doc.status || doc.status === 'official',
+            )
+          : scheduleDocs,
+      )
     })
+    mockFetch.mockResolvedValue([
+      // As the listing's query returns it: confirmed (#1301).
+      {
+        _id: 'workshop-1',
+        title: 'A Workshop',
+        status: 'confirmed',
+        format: 'workshop_120',
+      },
+    ])
 
     const { workshops } = await getWorkshops({
       conferenceId: 'conf-1',
       includeScheduleInfo: true,
     })
+
+    // WHICH HOST EACH READ BILLS: the workshops with their capacity and
+    // signups are read live; the schedule lookup goes through the CDN host.
+    expect(mockFetch).toHaveBeenCalledOnce()
+    expect(mockFetch.mock.calls[0][0]).not.toContain('_type == "schedule"')
+    expect(mockCdnFetch).toHaveBeenCalledOnce()
+    expect(mockCdnFetch.mock.calls[0][0]).toContain('_type == "schedule"')
+    expect(mockCdnFetch.mock.calls[0][1]).toEqual({ conferenceId: 'conf-1' })
+    // The CDN host is the only cache: nothing is kept in Next's as well.
+    expect(mockCdnFetch.mock.calls[0][2]).toEqual({ cache: 'no-store' })
 
     const workshop = workshops[0] as unknown as {
       room?: string
@@ -540,5 +578,85 @@ describe('schedule resolution — official documents only', () => {
     expect(workshop.room).toBe('New Room')
     expect(workshop.startTime).toBe('13:00')
     expect(workshop.scheduleInfo?.timeSlot?.startTime).toBe('13:00')
+  })
+})
+
+describe('deleteProposal reports the deleted talk’s conference (speaker feedback §5.1)', () => {
+  // The routers expire that conference's Feedback Code index with it. Never
+  // the host's: a speaker can delete their own proposal from another
+  // tenant's host.
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // A test whose lookup throws leaves its queued answers unread;
+    // clearAllMocks keeps queued once-values, so reset them.
+    mockFetch.mockReset()
+    mockWriteFetch.mockReset()
+    mockTxCommit.mockResolvedValue({})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  const noReferences = () =>
+    mockFetch
+      .mockResolvedValueOnce([]) // referencing docs
+      .mockResolvedValueOnce([]) // conversationIds
+      .mockResolvedValueOnce([]) // messageNotificationIds
+
+  it('returns the conference read by id before the delete', async () => {
+    noReferences()
+    mockWriteFetch.mockResolvedValueOnce('conf-talk')
+
+    expect(await deleteProposal('proposal-1')).toEqual({
+      err: null,
+      conferenceId: 'conf-talk',
+    })
+    expect(mockWriteFetch).toHaveBeenCalledWith(
+      expect.stringContaining('_id == $proposalId'),
+      { proposalId: 'proposal-1' },
+      { cache: 'no-store' },
+    )
+  })
+
+  it('refuses the delete when the conference lookup fails, before writing anything', async () => {
+    // A proposal WITH a thread, so the cascade has commits of its own that a
+    // late lookup would let through.
+    mockFetch
+      .mockResolvedValueOnce([]) // referencing docs
+      .mockResolvedValueOnce(['conv-1']) // conversationIds
+      .mockResolvedValueOnce(['msg-1']) // messageIds
+      .mockResolvedValueOnce([]) // messageNotificationIds
+      .mockResolvedValueOnce([]) // preferenceIds
+    const failure = new Error('lookup down')
+    mockWriteFetch.mockRejectedValueOnce(failure)
+
+    expect(await deleteProposal('proposal-1')).toEqual({
+      err: failure,
+      conferenceId: null,
+    })
+    // Deleting without knowing what to expire would leave the code resolving,
+    // and a half-done cascade would delete the thread but keep the talk.
+    expect(mockTransaction).not.toHaveBeenCalled()
+    expect(mockTxCommit).not.toHaveBeenCalled()
+  })
+
+  it('reports none when the delete is blocked', async () => {
+    mockFetch.mockResolvedValueOnce([{ _id: 'schedule-1', _type: 'schedule' }])
+    mockWriteFetch.mockResolvedValue('conf-talk')
+
+    const result = await deleteProposal('proposal-1')
+
+    expect(result.err).toBeInstanceOf(ProposalDeletionBlockedError)
+    expect(result.conferenceId ?? null).toBeNull()
+  })
+
+  it('reports none when the commit fails', async () => {
+    noReferences()
+    mockWriteFetch.mockResolvedValueOnce('conf-talk')
+    mockTxCommit.mockRejectedValueOnce(new Error('commit failed'))
+
+    const result = await deleteProposal('proposal-1')
+
+    expect(result.err).toBeTruthy()
+    expect(result.conferenceId).toBeNull()
   })
 })

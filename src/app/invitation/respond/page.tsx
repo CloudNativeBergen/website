@@ -101,7 +101,7 @@ export default async function InvitationResponsePage({
             </h2>
             <p className="text-blue-600">{statusMessage}</p>
             <Link
-              href="/speaker/proposals"
+              href="/cfp/list"
               className="mt-4 inline-block rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
             >
               Go to Speaker Dashboard

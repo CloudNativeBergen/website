@@ -1,6 +1,46 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-import { loadBrandFonts, resetBrandFontCacheForTests } from './helpers'
+import {
+  fetchImageDataUrl,
+  loadBrandFonts,
+  resetBrandFontCacheForTests,
+} from './helpers'
+
+describe('fetchImageDataUrl', () => {
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  it('returns a data URI for an image response', async () => {
+    global.fetch = vi.fn(
+      async () =>
+        new Response(new Uint8Array([1, 2, 3]), {
+          headers: { 'content-type': 'image/jpeg' },
+        }),
+    ) as unknown as typeof fetch
+    expect(await fetchImageDataUrl('https://x/y.jpg')).toBe(
+      'data:image/jpeg;base64,AQID',
+    )
+  })
+
+  it('returns null for an expired signed URL (403 HTML)', async () => {
+    global.fetch = vi.fn(
+      async () =>
+        new Response('<html>', {
+          status: 403,
+          headers: { 'content-type': 'text/html' },
+        }),
+    ) as unknown as typeof fetch
+    expect(await fetchImageDataUrl('https://x/y.jpg')).toBeNull()
+  })
+
+  it('returns null when the fetch throws', async () => {
+    global.fetch = vi.fn(async () => {
+      throw new Error('network')
+    }) as unknown as typeof fetch
+    expect(await fetchImageDataUrl('https://x/y.jpg')).toBeNull()
+  })
+})
 
 const originalFetch = global.fetch
 

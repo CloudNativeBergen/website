@@ -19,12 +19,13 @@ function disclosure(overrides: Partial<TenantProcessingFacts> = {}) {
       explicitlySelected: false,
       registrationLink: null,
     },
-    analyticsCode: 'Jc72d7tD73Ai9raeYVPeXJ0OhEJrrvaK',
     analyticsPosthogToken: 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh',
     slackToken: true,
     workshops: true,
     dedicatedEmailAccount: false,
     bufferPublishing: true,
+    contentJudgementEnabled: true,
+    storedJudgements: true,
     ...overrides,
   })
 }
@@ -52,7 +53,7 @@ export const PlatformTenant: Story = {
   args: { disclosure: disclosure() },
 }
 
-/** A customer on Tito with no Slack, no workshops and no analytics code. */
+/** A customer on Tito with no Slack, no workshops and no analytics token. */
 export const TitoCustomer: Story = {
   args: {
     disclosure: disclosure({
@@ -62,7 +63,6 @@ export const TitoCustomer: Story = {
         explicitlySelected: true,
         registrationLink: null,
       },
-      analyticsCode: null,
       analyticsPosthogToken: null,
       slackToken: false,
       workshops: false,
@@ -85,7 +85,6 @@ export const NoTicketingVendor: Story = {
         explicitlySelected: false,
         registrationLink: null,
       },
-      analyticsCode: null,
       slackToken: false,
       workshops: false,
     }),
@@ -114,7 +113,6 @@ export const NothingKnown: Story = {
     disclosure: disclosure({
       tenantKnown: false,
       ticketing: null,
-      analyticsCode: null,
       slackToken: null,
       workshops: null,
       dedicatedEmailAccount: null,

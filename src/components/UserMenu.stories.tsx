@@ -94,6 +94,8 @@ export const SignedInSpeaker: Story = {
     await expect(screen.getByText('Sign Out')).toBeVisible()
     // Admin section is hidden for non-organizers.
     await expect(screen.queryByText('Admin')).not.toBeInTheDocument()
+    // No Photo Wall here, so its group is hidden.
+    await expect(screen.queryByText('Post a photo')).not.toBeInTheDocument()
   },
 }
 
@@ -126,5 +128,59 @@ export const Organizer: Story = {
       '/admin/messages',
     )
     await expect(screen.getByText('Signed in with LinkedIn')).toBeVisible()
+  },
+}
+
+export const PhotoWallOpen: Story = {
+  args: {
+    name: 'Jane Doe',
+    picture: 'https://placehold.co/40x40/4f46e5/fff/png?text=JD',
+    speaker: baseSpeaker,
+    account: githubAccount,
+    photoWall: 'open',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'While Photo Wall posting is open, a Photo Wall group links to posting a photo and to the wall.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await openMenu(canvasElement)
+    await expect(screen.getByText('Post a photo').closest('a')).toHaveAttribute(
+      'href',
+      '/wall/post',
+    )
+    await expect(
+      screen.getByText('View the wall', { selector: 'span' }).closest('a'),
+    ).toHaveAttribute('href', '/wall')
+  },
+}
+
+export const PhotoWallClosed: Story = {
+  args: {
+    name: 'Jane Doe',
+    picture: 'https://placehold.co/40x40/4f46e5/fff/png?text=JD',
+    speaker: baseSpeaker,
+    account: githubAccount,
+    photoWall: 'closed',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Once posting has closed, the Photo Wall group links to My posts (delete a post, change marketing consent) and to the wall.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await openMenu(canvasElement)
+    await expect(screen.getByText('My posts').closest('a')).toHaveAttribute(
+      'href',
+      '/wall/post#my-posts',
+    )
+    await expect(screen.queryByText('Post a photo')).not.toBeInTheDocument()
   },
 }

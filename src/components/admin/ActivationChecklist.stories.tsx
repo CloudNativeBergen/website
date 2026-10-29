@@ -150,6 +150,65 @@ export const AllDone: Story = {
   ],
 }
 
+/**
+ * Live, before the event: launch is done, and the "Get ready for the event"
+ * stage shows what is still missing. A fixed clock keeps the stage visible.
+ */
+export const EventPrep: Story = {
+  args: {
+    checklist: buildActivationChecklist(
+      {
+        ...ALL_DONE,
+        programDate: '2026-04-01',
+        schedules: [{ tracks: [{}] }],
+        socialHashtag: '#cnd26',
+      },
+      emailAndSlackOk,
+      {
+        now: new Date('2026-04-20T12:00:00Z'),
+        eventFacts: {
+          unscheduledTalks: 2,
+          hasSpeakerInfo: true,
+          speakerInfoGaps: 0,
+          briefingSent: false,
+          speakersWithTodos: 3,
+          hasPhotoWall: false,
+          sponsors: 4,
+          sponsorsWithoutLogo: 1,
+          sponsorsWaiting: 2,
+        },
+      },
+    ),
+  },
+  decorators: [
+    (Story) => (
+      <div className="min-h-screen bg-gray-50">
+        <Frame>
+          <Story />
+        </Frame>
+      </div>
+    ),
+  ],
+}
+
+/** The "Room screens" row lists each room's screen link and its Photo Wall variant. */
+export const RoomScreens: Story = {
+  args: {
+    baseUrl: 'https://cloudnativeday.example',
+    checklist: buildActivationChecklist(
+      {
+        ...ALL_DONE,
+        schedules: [
+          { tracks: [{ trackTitle: 'Main stage' }, { trackTitle: 'Room B' }] },
+        ],
+      },
+      emailAndSlackOk,
+      { now: new Date('2026-04-20T12:00:00Z') },
+    ),
+  },
+  decorators: EventPrep.decorators,
+}
+
 export const FreshDark: Story = {
   args: { checklist: buildActivationChecklist(FRESH, []) },
   decorators: [

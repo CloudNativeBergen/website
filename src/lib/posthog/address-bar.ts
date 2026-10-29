@@ -81,7 +81,10 @@ export function scheduleUtmStrip(
   const cleanUrl = new URL(withoutUtm(win.location.href) ?? win.location.href)
   const cleanLanding = cleanUrl.pathname + cleanUrl.search
   const onLanding = () => {
-    const here = win.location.pathname + win.location.search
+    // A closed window (a torn-down page or test) has no location: off it.
+    const loc = win.location
+    if (!loc) return false
+    const here = loc.pathname + loc.search
     return here === landing || here === cleanLanding
   }
   let done = false

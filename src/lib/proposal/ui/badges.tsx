@@ -27,6 +27,7 @@ const PROPOSAL_STATUS_BADGE_COLOR: Record<Status, BadgeColor> = {
   [Status.confirmed]: 'green',
   [Status.rejected]: 'red',
   [Status.withdrawn]: 'gray',
+  [Status.canceled]: 'gray',
   [Status.deleted]: 'gray',
 }
 
@@ -121,6 +122,14 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
     case Status.withdrawn:
       return {
         text: statuses.get(Status.withdrawn) || 'Withdrawn',
+        bgColor: 'bg-gray-100',
+        textColor: 'text-gray-800',
+        ringColor: 'ring-gray-600/20',
+        borderColor: 'border-l-gray-500',
+      }
+    case Status.canceled:
+      return {
+        text: statuses.get(Status.canceled) || 'Canceled',
         bgColor: 'bg-gray-100',
         textColor: 'text-gray-800',
         ringColor: 'ring-gray-600/20',

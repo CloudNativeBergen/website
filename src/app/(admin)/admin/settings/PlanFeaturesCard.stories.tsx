@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { PlanFeaturesCard } from './PlanFeaturesCard'
+import { WORKSHOPS_INACTIVE_REASON } from './planFeatureRows'
 
 /**
  * Read-only "Plan & Features" settings card: the current org's plan badge plus
@@ -45,6 +46,44 @@ export const ProPlan: Story = {
         title: 'Dedicated email sending',
         description:
           "Outbound email from the organization's own verified sender domain instead of the shared platform sender.",
+        readiness: 'ga',
+        viaOverride: false,
+      },
+    ],
+  },
+}
+
+/**
+ * #1295: a pro org whose ticketing is not connected yet. The plan lists
+ * workshops, the resolver says off, so the row stays — muted, "Inactive", and
+ * with the one sentence that tells the org what unlocks it.
+ */
+export const ProPlanWorkshopsInactive: Story = {
+  args: {
+    plan: 'pro',
+    features: [
+      {
+        id: 'dedicated-email',
+        title: 'Dedicated email sending',
+        description:
+          "Outbound email from the organization's own verified sender domain instead of the shared platform sender.",
+        readiness: 'ga',
+        viaOverride: false,
+      },
+      {
+        id: 'workshops',
+        title: 'Workshop portal',
+        description:
+          'Attendee workshop sign-up portal, organizer workshop management, and the automatic workshop instructions email sent on every workshop ticket sale. Requires the ticketing integration, which decides who holds a workshop ticket.',
+        readiness: 'ga',
+        viaOverride: false,
+        inactiveReason: WORKSHOPS_INACTIVE_REASON,
+      },
+      {
+        id: 'ticketing',
+        title: 'Ticketing integration',
+        description:
+          'Organizer ticket sales, orders, ticket types, discount codes and company breakdown, read live from the conference’s ticketing provider (Checkin.no or Tito).',
         readiness: 'ga',
         viaOverride: false,
       },

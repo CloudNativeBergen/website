@@ -40,7 +40,11 @@ export type ActivityType =
  * shape is shared so the audit view never has to change.
  */
 export type CommunicationKind =
-  'information' | 'contract' | 'registration' | 'discount'
+  | 'information'
+  | 'contract'
+  | 'registration'
+  | 'discount'
+  | 'workshop-early-access'
 
 export type CommunicationDeliveryStatus = 'sent' | 'failed'
 
@@ -133,6 +137,7 @@ export interface SponsorForConference {
   contractCurrency: 'NOK' | 'USD' | 'EUR'
   invoiceStatus: InvoiceStatus
   invoiceSentAt?: string
+  invoiceDueAt?: string
   invoicePaidAt?: string
   tags?: SponsorTag[]
   registrationToken?: string
@@ -242,6 +247,7 @@ export interface SponsorForConferenceExpanded {
   contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoiceStatus: InvoiceStatus
   invoiceSentAt?: string
+  invoiceDueAt?: string
   invoicePaidAt?: string
   tags?: SponsorTag[]
   contactPersons?: ContactPerson[]
@@ -249,6 +255,16 @@ export interface SponsorForConferenceExpanded {
   registrationToken?: string
   registrationComplete?: boolean
   registrationCompletedAt?: string
+  /**
+   * Whether the sponsor has a workshop early-access link (#1346). The token
+   * itself is not read with the record: its address is asked for when needed.
+   */
+  hasWorkshopEarlyAccessLink?: boolean
+  /**
+   * How many early sign-ups were made through this sponsor's early-access
+   * links, confirmed and waitlisted together (#1348). Sign-ups, not people.
+   */
+  workshopEarlySignupCount?: number
   nextFollowUpAt?: string
   outreachCount?: number
   lastActivity?: {
@@ -330,6 +346,7 @@ export interface SponsorForConferenceInput {
   contractCurrency?: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoiceStatus: InvoiceStatus
   invoiceSentAt?: string | null
+  invoiceDueAt?: string | null
   invoicePaidAt?: string | null
   tags?: SponsorTag[]
   nextFollowUpAt?: string | null

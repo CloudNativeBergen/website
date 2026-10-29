@@ -1,4 +1,6 @@
+import { createClient } from '@sanity/client'
 import { describe, it, expect } from 'vitest'
+import { ticketTypeNotSetNotifications } from '@/lib/events/handlers/ticketTypeNotSetNotification'
 import {
   repointReferencesInDocument,
   computeSurvivorFieldMerge,
@@ -173,6 +175,27 @@ describe('computeSurvivorFieldMerge', () => {
     expect(set.socialTagOptOut).toBe(true)
     expect(set.socialTagOptOutAt).toBe('2026-09-22T10:30:00.000Z')
     expect(filledFromLoser).toContain('socialTagOptOut')
+  })
+
+  it('carries the talk photos opt-out up the same way (talk photos spec §4.2)', () => {
+    const fromLoser = computeSurvivorFieldMerge(
+      speaker({}),
+      speaker({
+        _id: LOSER,
+        talkPhotosOptOut: true,
+        talkPhotosOptOutAt: '2026-10-01T09:00:00.000Z',
+      }),
+    )
+    expect(fromLoser.set.talkPhotosOptOut).toBe(true)
+    expect(fromLoser.set.talkPhotosOptOutAt).toBe('2026-10-01T09:00:00.000Z')
+    expect(fromLoser.filledFromLoser).toContain('talkPhotosOptOut')
+    // The survivor's own opt-out is never dropped by a loser without one.
+    const kept = computeSurvivorFieldMerge(
+      speaker({ talkPhotosOptOut: true }),
+      speaker({ _id: LOSER }),
+    )
+    expect(kept.set.talkPhotosOptOut).toBeUndefined()
+    expect(kept.set).not.toHaveProperty('talkPhotosOptOut')
   })
 
   it('keeps the EARLIEST stamp when BOTH duplicates opted out', () => {
@@ -696,6 +719,46 @@ describe('buildMergePlan', () => {
 // --- reconcileDeterministicDoc (M4) ----------------------------------------
 
 describe('reconcileDeterministicDoc', () => {
+  it('keeps the newer speakerDinnerChoice when both speakers have one', () => {
+    const doc = (speaker: string, choice: string, updatedAt: string) => ({
+      _id: `dinnerChoice.conf-1.${speaker}`,
+      _type: 'speakerDinnerChoice',
+      speaker: { _type: 'reference', _ref: speaker },
+      choice,
+      updatedAt,
+    })
+    const loserNewer = reconcileDeterministicDoc(
+      doc(LOSER, 'hike', '2026-10-02T00:00:00Z'),
+      doc(SURVIVOR, 'taxi', '2026-10-01T00:00:00Z'),
+      LOSER,
+      SURVIVOR,
+    )
+    expect(loserNewer.deleteId).toBe(`dinnerChoice.conf-1.${LOSER}`)
+    expect(loserNewer.canonicalId).toBe(`dinnerChoice.conf-1.${SURVIVOR}`)
+    expect(loserNewer.mergeSet).toEqual({
+      choice: 'hike',
+      updatedAt: '2026-10-02T00:00:00Z',
+    })
+    const survivorNewer = reconcileDeterministicDoc(
+      doc(LOSER, 'hike', '2026-10-01T00:00:00Z'),
+      doc(SURVIVOR, 'taxi', '2026-10-02T00:00:00Z'),
+      LOSER,
+      SURVIVOR,
+    )
+    expect(survivorNewer.mergeSet).toEqual({})
+    const onlyLoser = reconcileDeterministicDoc(
+      doc(LOSER, 'own', '2026-10-01T00:00:00Z'),
+      undefined,
+      LOSER,
+      SURVIVOR,
+    )
+    expect(onlyLoser.createDoc).toMatchObject({
+      _id: `dinnerChoice.conf-1.${SURVIVOR}`,
+      speaker: { _ref: SURVIVOR },
+      choice: 'own',
+    })
+  })
+
   it('MERGEs a convpref: more-restrictive mute wins, loser doc deleted', () => {
     const rec = reconcileDeterministicDoc(
       {
@@ -1208,6 +1271,165 @@ describe('buildMergePlan — reminder markers (#1027 item 2)', () => {
     const plan = buildMergePlan(survivor, loser, [otherMarker])
     expect(plan.documentPatches.map((p) => p.id)).toEqual([otherMarker._id])
     expect(plan.deterministicReconciliations).toEqual([])
+  })
+})
+
+describe('buildMergePlan — once-only not-set notices (#1335)', () => {
+  const survivor = speaker({ _id: SURVIVOR })
+  const loser = speaker({ _id: LOSER })
+
+  // Ids come from the writer itself: what it stored for the loser, and what
+  // the next process to meet the type will ask for under the survivor.
+  const noticeFor = (organizerId: string) => {
+    const [item] = ticketTypeNotSetNotifications({
+      conferenceId: 'conf-1',
+      typeName: 'Early Bird',
+      organizerIds: [organizerId],
+    })
+    return {
+      _id: item.id,
+      _type: 'notification',
+      recipient: { ...ref(organizerId), _weak: true },
+      conference: ref('conf-1'),
+      notificationType: item.notificationType,
+      title: item.title,
+      createdAt: '2026-10-12T08:00:00.000Z',
+    }
+  }
+
+  it('moves the loser’s notice to the id the next write will look for', () => {
+    const plan = buildMergePlan(survivor, loser, [
+      { ...noticeFor(LOSER), _rev: 'r1' },
+    ])
+
+    // NOT a generic patch: repointed in place it would stay keyed by the
+    // loser, and the next write for the survivor would create a second one.
+    expect(plan.documentPatches).toEqual([])
+    expect(plan.deterministicReconciliations).toEqual([
+      {
+        deleteId: noticeFor(LOSER)._id,
+        canonicalId: noticeFor(SURVIVOR)._id,
+        createDoc: noticeFor(SURVIVOR),
+      },
+    ])
+  })
+
+  it('drops the loser’s notice when the survivor holds one, keeping it read if either was', () => {
+    const readByLoser = buildMergePlan(
+      survivor,
+      loser,
+      [{ ...noticeFor(LOSER), readAt: '2026-10-12T09:00:00.000Z' }],
+      [noticeFor(SURVIVOR)],
+    )
+    expect(readByLoser.documentPatches).toEqual([])
+    expect(readByLoser.deterministicReconciliations).toEqual([
+      {
+        deleteId: noticeFor(LOSER)._id,
+        canonicalId: noticeFor(SURVIVOR)._id,
+        mergeSet: { readAt: '2026-10-12T09:00:00.000Z' },
+      },
+    ])
+
+    const readBySurvivor = buildMergePlan(
+      survivor,
+      loser,
+      [noticeFor(LOSER)],
+      [{ ...noticeFor(SURVIVOR), readAt: '2026-10-12T10:00:00.000Z' }],
+    )
+    expect(readBySurvivor.deterministicReconciliations).toEqual([
+      {
+        deleteId: noticeFor(LOSER)._id,
+        canonicalId: noticeFor(SURVIVOR)._id,
+        mergeSet: {},
+      },
+    ])
+  })
+
+  describe('when the survivor’s id is too long for a notice of their own', () => {
+    // What Sanity's own client says about a document id, on the operations
+    // where it checks one. (`transaction.create`, which the merge uses, is not
+    // checked by the client: there the refusal would come from the server.)
+    const client = createClient({
+      projectId: 'test',
+      dataset: 'test',
+      apiVersion: '2024-01-01',
+      useCdn: false,
+    })
+    const clientAccepts = (id: string) => {
+      try {
+        client
+          .transaction()
+          .createIfNotExists({ _id: id, _type: 'notification' })
+        return true
+      } catch {
+        return false
+      }
+    }
+    /** 66 characters: the writer leaves such an organizer out. */
+    const LONG = 'speaker-' + 'x'.repeat(58)
+    const FITS = 'speaker-' + 'x'.repeat(57)
+    const canonicalFor = (survivorId: string) =>
+      noticeFor(LOSER)._id.slice(0, -LOSER.length) + survivorId
+
+    it('drops the loser’s notice and creates nothing, so the merge has no id Sanity refuses', () => {
+      // The id the reconciliation would otherwise create under is one the
+      // client refuses.
+      expect(canonicalFor(LONG)).toHaveLength(129)
+      expect(clientAccepts(canonicalFor(LONG))).toBe(false)
+
+      const plan = buildMergePlan(speaker({ _id: LONG }), loser, [
+        { ...noticeFor(LOSER), _rev: 'r1' },
+      ])
+
+      expect(plan.documentPatches).toEqual([])
+      expect(plan.deterministicReconciliations).toEqual([
+        { deleteId: noticeFor(LOSER)._id, canonicalId: canonicalFor(LONG) },
+      ])
+      // The survivor is left as the writer leaves them: with no notice.
+      expect(
+        ticketTypeNotSetNotifications({
+          conferenceId: 'conf-1',
+          typeName: 'Early Bird',
+          organizerIds: [LONG],
+        }),
+      ).toEqual([])
+    })
+
+    it('still moves it for the longest survivor id that fits', () => {
+      expect(canonicalFor(FITS)).toHaveLength(128)
+      expect(clientAccepts(canonicalFor(FITS))).toBe(true)
+
+      const plan = buildMergePlan(speaker({ _id: FITS }), loser, [
+        { ...noticeFor(LOSER), _rev: 'r1' },
+      ])
+
+      expect(plan.deterministicReconciliations).toEqual([
+        {
+          deleteId: noticeFor(LOSER)._id,
+          canonicalId: canonicalFor(FITS),
+          createDoc: {
+            ...noticeFor(LOSER),
+            _id: canonicalFor(FITS),
+            recipient: { ...ref(FITS), _weak: true },
+          },
+        },
+      ])
+    })
+
+    it('drops it too if a document is handed in under the oversized id', () => {
+      // Not reachable through the merge: Sanity cannot hold a document under
+      // that id, so the read of the survivor's own notices finds none.
+      const plan = buildMergePlan(
+        speaker({ _id: LONG }),
+        loser,
+        [{ ...noticeFor(LOSER), readAt: '2026-10-12T09:00:00.000Z' }],
+        [{ ...noticeFor(LOSER), _id: canonicalFor(LONG) }],
+      )
+
+      expect(plan.deterministicReconciliations).toEqual([
+        { deleteId: noticeFor(LOSER)._id, canonicalId: canonicalFor(LONG) },
+      ])
+    })
   })
 })
 

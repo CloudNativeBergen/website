@@ -1,3 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import {
+  SPONSOR_OVERVIEW_FIELDS,
+  SPONSOR_CONTACTS_FIELDS,
+  SPONSOR_CONTRACT_FIELDS,
+} from './queries'
 import {
   clientWrite,
   clientReadCached,
@@ -18,6 +24,29 @@ import type {
   SponsorStatus,
   SponsorTag,
 } from './types'
+
+/**
+ * How many early sign-ups were made through this sponsor's workshop
+ * early-access links (#1348, spec §9), as a field of the sponsor's record.
+ *
+ * WHAT IT COSTS: no request of its own, since it rides the read that already
+ * fetches the record. It does add one sub-query per sponsor to EVERY reader
+ * of these fields: the CRM board (which polls), the budget page, the status
+ * summary and the audience sync, none of which but the board's record show
+ * it.
+ *
+ * Sign-ups, not people, confirmed and waitlisted together: every published
+ * sign-up that records this sponsor, which is what the "Early sign-ups" list
+ * (`listEarlySignups`) shows when narrowed to it. A draft or a release copy
+ * of a sign-up is not a second sign-up, there as here. A sign-up records the
+ * sponsor, not the link, so the ones made through a link revoked since are
+ * counted too.
+ *
+ * ONLY SIGN-UPS OF THE SPONSOR'S OWN CONFERENCE: a sign-up of another
+ * conference that names this sponsor (a bad write) is not this conference's.
+ */
+// groq-global-scoped: correlated to the sponsor it is projected on (`conference._ref == ^.conference._ref`); every read that carries these fields reads sponsors of one conference.
+const EARLY_SIGNUP_COUNT = `count(*[_type == "workshopSignup" && conference._ref == ^.conference._ref && earlyAccessSponsor._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))])`
 
 const SPONSOR_FOR_CONFERENCE_FIELDS = `
   _id,
@@ -115,6 +144,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   contractCurrency,
   invoiceStatus,
   invoiceSentAt,
+  invoiceDueAt,
   invoicePaidAt,
   tags,
   contactPersons[]{
@@ -135,6 +165,8 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   registrationToken,
   registrationComplete,
   registrationCompletedAt,
+  "hasWorkshopEarlyAccessLink": defined(workshopEarlyAccessToken),
+  "workshopEarlySignupCount": ${EARLY_SIGNUP_COUNT},
   nextFollowUpAt,
   outreachCount,
   "lastActivity": *[_type == "sponsorActivity" && sponsorForConference._ref == ^._id] | order(createdAt desc)[0]{
@@ -235,6 +267,7 @@ export async function createSponsorForConference(
       contractCurrency: data.contractCurrency || 'NOK',
       invoiceStatus: data.invoiceStatus,
       invoiceSentAt: data.invoiceSentAt,
+      invoiceDueAt: data.invoiceDueAt,
       invoicePaidAt: data.invoicePaidAt,
       tags: data.tags,
       contactPersons: data.contactPersons
@@ -314,6 +347,8 @@ export async function updateSponsorForConference(
       updates.invoiceStatus = data.invoiceStatus
     if (data.invoiceSentAt !== undefined)
       updates.invoiceSentAt = data.invoiceSentAt
+    if (data.invoiceDueAt !== undefined)
+      updates.invoiceDueAt = data.invoiceDueAt
     if (data.invoicePaidAt !== undefined)
       updates.invoicePaidAt = data.invoicePaidAt
     if (data.tags !== undefined) updates.tags = data.tags
@@ -868,3 +903,29 @@ export async function importAllHistoricSponsors(
     return { error: error as Error }
   }
 }
+
+// Scoped to the conference in GROQ, so an id from another tenant and an id that
+// does not exist both come back as null: the caller cannot tell them apart.
+async function getSponsorProjection(
+  id: string,
+  conferenceId: string,
+  fields: string,
+): Promise<{ data?: any; error?: Error }> {
+  try {
+    const data = await clientRead.fetch(
+      `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{${fields}}`,
+      { id, conferenceId },
+    )
+    return { data: data ?? null }
+  } catch (error) {
+    console.error('Error fetching sponsor projection:', error)
+    return { error: error as Error }
+  }
+}
+
+export const getSponsorOverview = (id: string, conferenceId: string) =>
+  getSponsorProjection(id, conferenceId, SPONSOR_OVERVIEW_FIELDS)
+export const getSponsorContacts = (id: string, conferenceId: string) =>
+  getSponsorProjection(id, conferenceId, SPONSOR_CONTACTS_FIELDS)
+export const getSponsorContractDetails = (id: string, conferenceId: string) =>
+  getSponsorProjection(id, conferenceId, SPONSOR_CONTRACT_FIELDS)

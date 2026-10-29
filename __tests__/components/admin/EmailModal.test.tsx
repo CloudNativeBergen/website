@@ -109,3 +109,68 @@ describe('EmailModal with an empty body', () => {
     expect(button).toBeDisabled()
   })
 })
+
+describe('EmailModal leaves nothing running when it goes away', () => {
+  it('clears the timer that turns auto-save on, if it is still pending at unmount', async () => {
+    // It used to fire half a second later, on a component that was gone; after
+    // the test environment was torn down it failed the whole run.
+    const set = vi.spyOn(globalThis, 'setTimeout')
+    const clear = vi.spyOn(globalThis, 'clearTimeout')
+    renderModal()
+    await screen.findByRole('button', { name: /Send reminder/ })
+    const armed = set.mock.calls.findIndex(([, delay]) => delay === 500)
+    expect(armed, 'the modal armed its 500 ms timer').toBeGreaterThanOrEqual(0)
+    const timer = set.mock.results[armed].value
+
+    cleanup()
+
+    expect(clear).toHaveBeenCalledWith(timer)
+    set.mockRestore()
+    clear.mockRestore()
+  })
+
+  it('renders an inline error alert inside the modal when sending fails', async () => {
+    const onSend = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          'Failed to create broadcast email: Invalid `from` field: domain not verified',
+        ),
+      )
+    renderModal({ allowEmptyBody: true, onSend })
+
+    const button = await screen.findByRole('button', { name: /Send reminder/ })
+    fireEvent.click(button)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'Failed to create broadcast email: Invalid `from` field: domain not verified',
+    )
+  })
+
+  it('restores initialValues when Clear Draft is clicked instead of wiping subject to empty', async () => {
+    localStorage.setItem(
+      'email-draft-test-clear',
+      JSON.stringify({
+        subject: 'Edited draft subject',
+        message: [],
+      }),
+    )
+
+    renderModal({
+      storageKey: 'email-draft-test-clear',
+      initialValues: { subject: 'Default Template Subject', message: [] },
+    })
+
+    const subjectInput =
+      await screen.findByPlaceholderText(/Enter email subject/i)
+    expect(subjectInput).toHaveValue('Edited draft subject')
+
+    const clearButton = await screen.findByRole('button', {
+      name: /Clear Draft/i,
+    })
+    fireEvent.click(clearButton)
+
+    expect(subjectInput).toHaveValue('Default Template Subject')
+  })
+})

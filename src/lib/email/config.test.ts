@@ -28,6 +28,7 @@ describe('resolveEmailSender', () => {
     const sender = await resolveEmailSender('org-a')
     expect(sender.client).toBe(resend)
     expect(sender.from).toBeUndefined()
+    expect(sender.platform).toBe(true)
   })
 
   it('returns a per-org client + From when a per-org email secret exists', async () => {
@@ -42,10 +43,29 @@ describe('resolveEmailSender', () => {
     const sender = await resolveEmailSender('org-a')
     expect(sender.client).not.toBe(resend)
     expect(sender.from).toBe('hello@org-a.no')
+    expect(sender.platform).toBe(false)
 
     // A different org with no per-org secret still gets the platform default.
     const other = await resolveEmailSender('org-b')
     expect(other.client).toBe(resend)
+    expect(other.platform).toBe(true)
+  })
+
+  it('names a per-org secret holding the env key the shared platform sender', async () => {
+    // The platform org's own secret is the env `RESEND_API_KEY` (here
+    // `test_key`): the same cached client, so the same account.
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        'org-platform': {
+          email: { apiKey: 'test_key', fallbackFrom: 'hello@konf.app' },
+        },
+      }),
+    )
+    const sender = await resolveEmailSender('org-platform')
+    expect(sender.client).toBe(resend)
+    expect(sender.from).toBe('hello@konf.app')
+    expect(sender.platform).toBe(true)
   })
 })
 

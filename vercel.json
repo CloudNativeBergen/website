@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/content-judgement-sweep",
+      "schedule": "50 4 * * *"
+    },
+    {
       "path": "/api/cron/weekly-update",
       "schedule": "0 9 * * 1"
     },
@@ -38,7 +42,7 @@
     },
     {
       "path": "/api/cron/social-publish",
-      "schedule": "* * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/marketing-snapshots",
@@ -47,6 +51,26 @@
     {
       "path": "/api/cron/marketing-reminders",
       "schedule": "20 6 * * *"
+    },
+    {
+      "path": "/api/cron/workshop-promotion-emails",
+      "schedule": "40 * * * *"
+    },
+    {
+      "path": "/api/cron/feedback-summary",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/feedback-fold",
+      "schedule": "40 4 * * *"
+    },
+    {
+      "path": "/api/cron/photo-wall-retention",
+      "schedule": "10 3 * * *"
+    },
+    {
+      "path": "/api/cron/sponsor-follow-ups",
+      "schedule": "0 8 * * *"
     }
   ]
 }

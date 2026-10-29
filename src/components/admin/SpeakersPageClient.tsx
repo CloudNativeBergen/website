@@ -16,6 +16,7 @@ import {
   CreditCardIcon,
   ArrowsPointingInIcon,
   TicketIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
@@ -352,11 +353,6 @@ export default function SpeakersPageClient({
           }
           stats={[
             {
-              value: stats.totalSpeakers,
-              label: 'Total speakers',
-              color: 'slate' as const,
-            },
-            {
               value: `${stats.confirmedSpeakers} (${
                 stats.totalSpeakers > 0
                   ? Math.round(
@@ -366,6 +362,7 @@ export default function SpeakersPageClient({
               }%)`,
               label: 'Confirmed',
               color: 'green' as const,
+              subtitle: `of ${stats.totalSpeakers} speakers`,
             },
             {
               value: `${stats.newSpeakers} (${
@@ -428,6 +425,12 @@ export default function SpeakersPageClient({
               variant: 'secondary',
             },
             {
+              label: 'Speaker Info',
+              href: '/admin/speakers/info',
+              icon: <InformationCircleIcon className="h-4 w-4" />,
+              variant: 'secondary',
+            },
+            {
               label: 'Duplicates',
               onClick: () => router.push('/admin/speakers/duplicates'),
               icon: <ArrowsPointingInIcon className="h-4 w-4" />,
@@ -460,6 +463,7 @@ export default function SpeakersPageClient({
             }
             ticketStatuses={ticketStatuses}
             ticketStatusesLoading={ticketStatusQuery.isPending}
+            ticketQuestions={ticketStatusQuery.data?.questions}
             onSendTicketInvitation={handleSendTicketInvitation}
             onFindTicket={setTicketAddressSpeakerId}
             sendingTicketSpeakerIds={sendingTicketSpeakerIds}

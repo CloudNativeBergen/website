@@ -70,9 +70,16 @@ vi.mock('@dnd-kit/core', () => ({
 // single unambiguous DOM question.
 vi.mock('@/components/admin/sponsor-crm/SponsorCRMForm', () => ({
   __esModule: true,
-  SponsorCRMForm: ({ onClose }: { onClose: () => void }) => (
+  SponsorCRMForm: ({
+    onClose,
+    sponsorStartSet,
+  }: {
+    onClose: () => void
+    sponsorStartSet?: boolean
+  }) => (
     <div data-testid="sponsor-form">
       <button onClick={onClose}>close form</button>
+      <span>sponsor start set: {String(sponsorStartSet)}</span>
     </div>
   ),
 }))
@@ -162,7 +169,8 @@ const renderPipeline = () =>
 describe('SponsorCRMPipeline — sponsor form open/close', () => {
   beforeEach(() => {
     replace.mockClear()
-    searchParams = new URLSearchParams('sponsor=sfc-123')
+    push.mockClear()
+    searchParams = new URLSearchParams()
     listData.mockReturnValue({
       data: [mockSponsor({ _id: 'sfc-123' })],
       isLoading: false,
@@ -170,70 +178,45 @@ describe('SponsorCRMPipeline — sponsor form open/close', () => {
   })
   afterEach(cleanup)
 
-  it('restores the sponsor form from ?sponsor=', () => {
-    renderPipeline()
-    expect(screen.getByTestId('sponsor-form')).toBeInTheDocument()
-  })
-
-  /**
-   * Regression: the restore effect had no once-guard, so every re-render that
-   * happened before router.replace() landed — the isFormOpen flip itself, or
-   * the list refetch the close triggers — re-read the stale `?sponsor=<id>`
-   * and re-opened the modal. Users reported closing the card several times.
-   */
-  it('stays closed after Close, while the URL is still catching up', () => {
-    const { rerender } = renderPipeline()
-    expect(screen.getByTestId('sponsor-form')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByText('close form'))
-    expect(screen.queryByTestId('sponsor-form')).not.toBeInTheDocument()
-
-    // The close did ask for the param to go away...
-    expect(replace).toHaveBeenCalled()
-    expect(replace.mock.calls.at(-1)?.[0]).not.toContain('sponsor=sfc-123')
-
-    // ...but until that lands, `searchParams` still says sponsor=sfc-123, and
-    // the list invalidation hands back a new array identity. Neither may
-    // resurrect the modal.
-    listData.mockReturnValue({
-      data: [mockSponsor({ _id: 'sfc-123' })],
-      isLoading: false,
-    })
-    rerender(
+  const renderWithNew = (
+    workshopRegistrationSponsorStart?: string,
+    externalNewTrigger = 1,
+  ) =>
+    render(
       <SponsorCRMPipeline
         conferenceId="conf-2026"
-        conference={conference}
+        conference={{ ...conference, workshopRegistrationSponsorStart }}
         domain="cloudnativebergen.dev"
+        externalNewTrigger={externalNewTrigger}
       />,
     )
 
+  // The section that offers an early-access link (#1346) says when a link
+  // gives no head start. It is told from the conference this page holds.
+  it.each([
+    ['2026-10-10T08:00:00Z', true],
+    [undefined, false],
+  ])(
+    'tells the form whether the conference has a sponsor start time (%s)',
+    (workshopRegistrationSponsorStart, expected) => {
+      renderWithNew(workshopRegistrationSponsorStart)
+      expect(screen.getByTestId('sponsor-form')).toHaveTextContent(
+        `sponsor start set: ${expected}`,
+      )
+    },
+  )
+
+  // An existing sponsor lives on /admin/sponsors/[id] now (#1274), and the CRM
+  // page redirects old `?sponsor=` links there before the board renders.
+  it('does not open the form from ?sponsor= on the board', () => {
+    searchParams = new URLSearchParams('sponsor=sfc-123')
+    renderPipeline()
     expect(screen.queryByTestId('sponsor-form')).not.toBeInTheDocument()
   })
 
   it('does not open anything when the URL names no sponsor', () => {
-    searchParams = new URLSearchParams()
     renderPipeline()
     expect(screen.queryByTestId('sponsor-form')).not.toBeInTheDocument()
-  })
-
-  it('waits for the board data before giving up on an id', () => {
-    listData.mockReturnValue({ data: [], isLoading: true })
-    const { rerender } = renderPipeline()
-    expect(screen.queryByTestId('sponsor-form')).not.toBeInTheDocument()
-
-    listData.mockReturnValue({
-      data: [mockSponsor({ _id: 'sfc-123' })],
-      isLoading: false,
-    })
-    rerender(
-      <SponsorCRMPipeline
-        conferenceId="conf-2026"
-        conference={conference}
-        domain="cloudnativebergen.dev"
-      />,
-    )
-
-    expect(screen.getByTestId('sponsor-form')).toBeInTheDocument()
   })
 })
 

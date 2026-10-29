@@ -3,6 +3,7 @@
  */
 
 import { protocolForDomain } from '@/lib/environment/localhost'
+import { deriveBlueskyHandle } from '@/lib/stream/config'
 
 export type SocialPlatform = 'bluesky'
 
@@ -72,4 +73,19 @@ export function shareToCredly(jsonUrl: string): void {
  */
 export function buildFullUrl(domain: string, path: string): string {
   return `${protocolForDomain(domain)}://${domain}${path}`
+}
+
+/**
+ * The event hashtag and the conference's Bluesky account, as a line to end a
+ * post with, e.g. "#cndn2026 @cloudnativebergen.dev". Either part is left out
+ * when the conference has not set it; null when neither is set.
+ */
+export function shareTags(conference?: {
+  socialHashtag?: string | null
+  socialLinks?: string[] | null
+}): string | null {
+  const tag = conference?.socialHashtag?.trim().replace(/^#*/, '')
+  const handle = deriveBlueskyHandle(conference?.socialLinks)
+  const parts = [tag && `#${tag}`, handle && `@${handle}`].filter(Boolean)
+  return parts.length ? parts.join(' ') : null
 }

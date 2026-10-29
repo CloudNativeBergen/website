@@ -10,6 +10,9 @@ import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { escapeHtml } from '@/lib/html/escape'
 import type { CommunicationAttachment } from './types'
 
+/** Most automatic signing reminders the cron sends per contract. */
+export const MAX_REMINDERS = 2
+
 export type ContractAction = 'send' | 'remind' | 'signed-copy'
 
 /** The state the decision reads — a subset of `SponsorForConferenceExpanded`. */

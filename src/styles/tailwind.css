@@ -324,6 +324,7 @@
     var(--font-ibm-plex-mono), 'IBM Plex Mono', monospace;
   --font-family-atkinson:
     var(--font-atkinson), 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-family-caveat: var(--font-caveat), 'Caveat', cursive;
 
   /* Default font mappings */
   --font-family-sans: var(--font-inter), 'Inter', sans-serif;
@@ -669,6 +670,10 @@
   font-family: var(--font-family-atkinson);
 }
 
+.font-caveat {
+  font-family: var(--font-family-caveat);
+}
+
 /* Hover Utilities */
 .hover\:bg-brand-cloud-blue:hover {
   background-color: var(--color-brand-cloud-blue);
@@ -973,6 +978,20 @@
   .dark\:bg-orange-900\/20,
   .dark\:bg-red-900\/20 {
     background: white !important;
+  }
+
+  /* The Feedback Code print sheet (src/components/feedback/FeedbackPrintSheet.tsx)
+     is mounted into <body> while printing and is all that prints. */
+  body:has([data-feedback-print]) > :not([data-feedback-print]) {
+    display: none !important;
+  }
+  body:has([data-feedback-print]) {
+    background: white !important;
+  }
+  /* The rule further down that left-aligns `.text-center` on paper is for
+     prose; the sheet is a poster and stays centred. */
+  [data-feedback-print] .text-center {
+    text-align: center !important;
   }
 
   /* Program page specific print styles */

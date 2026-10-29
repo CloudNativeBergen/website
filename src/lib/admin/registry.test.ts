@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { PresentationChartBarIcon } from '@heroicons/react/24/outline'
 import {
@@ -7,6 +9,8 @@ import {
   searchDestinations,
   visibleDestinations,
   visibleNavSections,
+  withNavBadges,
+  type AdminNavSection,
 } from './registry'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
 import { APPEARANCE_SECTIONS } from '@/lib/settings/appearance'
@@ -258,6 +262,29 @@ describe('searchDestinations', () => {
     expect(checkin.map((d) => d.id)).toContain('settings-tickets-registration')
   })
 
+  it('finds individual settings cards and links to their anchor', () => {
+    const flat = searchDestinations('posthog').flatMap((g) => g.items)
+    const card = flat.find((d) => d.id === 'settings-analytics')
+    expect(card?.href).toBe('/admin/settings#analytics')
+  })
+
+  it('only links to settings anchors the settings page actually renders', () => {
+    const page = readFileSync(
+      join(process.cwd(), 'src/app/(admin)/admin/settings/page.tsx'),
+      'utf8',
+    )
+    const groupOrTier = new Set(
+      [...SETTINGS_GROUPS, ...SETTINGS_TIERS].map((x) => x.id),
+    )
+    const cardIds = ADMIN_DESTINATIONS.map(
+      (d) => d.href.match(/^\/admin\/settings#([a-z0-9-]+)$/)?.[1],
+    ).filter((id): id is string => !!id && !groupOrTier.has(id))
+    expect(cardIds.length).toBeGreaterThan(10)
+    for (const id of cardIds) {
+      expect(page, `#${id} missing on the page`).toContain(`id="${id}"`)
+    }
+  })
+
   it('matches subsequences for fuzzy queries', () => {
     const flat = searchDestinations('spnsr').flatMap((g) => g.items)
     expect(flat.map((d) => d.id)).toContain('sponsors')
@@ -274,5 +301,92 @@ describe('searchDestinations', () => {
     const loose = scoreDestination(orders, 'tickets')
     expect(loose).toBeGreaterThan(0)
     expect(exact).toBeGreaterThan(loose)
+  })
+})
+
+describe('Session Feedback nav entry (speaker feedback spec §10.1)', () => {
+  it('sits right after Proposals, for every organization, and is ⌘K-searchable', () => {
+    const items = visibleNavSections([]).flatMap((s) => s.items)
+    const at = items.findIndex((i) => i.href === '/admin/feedback')
+    expect(items[at]?.name).toBe('Session Feedback')
+    expect(items[at - 1]?.name).toBe('Proposals')
+    expect(searchDestinations('session feedback')[0]?.items[0]?.href).toBe(
+      '/admin/feedback',
+    )
+  })
+})
+
+/** The nav entry at `href`. */
+const entry = (sections: readonly AdminNavSection[], href: string) =>
+  sections.flatMap((s) => s.items).find((item) => item.href === href)
+
+describe('nav badges (speaker feedback spec §10.1)', () => {
+  it('puts the flagged count on Session Feedback, labelled for a screen reader', () => {
+    const sections = withNavBadges(visibleNavSections([]), {
+      flaggedFeedback: 3,
+    })
+    expect(entry(sections, '/admin/feedback')?.badge).toEqual({
+      count: 3,
+      label: 'flagged',
+    })
+    // On that entry only.
+    expect(
+      sections.flatMap((s) => s.items).filter((item) => item.badge),
+    ).toHaveLength(1)
+  })
+
+  it('shows no badge for 0 or an unknown count', () => {
+    for (const counts of [{ flaggedFeedback: 0 }, {}]) {
+      expect(
+        entry(withNavBadges(visibleNavSections([]), counts), '/admin/feedback')
+          ?.badge,
+      ).toBeUndefined()
+    }
+  })
+
+  it('leaves the registry itself untouched', () => {
+    withNavBadges(ADMIN_NAV_SECTIONS, { flaggedFeedback: 3 })
+    expect(entry(ADMIN_NAV_SECTIONS, '/admin/feedback')?.badge).toBeUndefined()
+  })
+})
+
+describe('Photo Wall nav badge (Photo Wall spec §10, P6)', () => {
+  it('puts the pending count on Photo Wall, labelled for a screen reader', () => {
+    const sections = withNavBadges(visibleNavSections([]), {
+      pendingWallPosts: 4,
+    })
+    expect(entry(sections, '/admin/photo-wall')?.badge).toEqual({
+      count: 4,
+      label: 'pending',
+    })
+    expect(
+      sections.flatMap((s) => s.items).filter((item) => item.badge),
+    ).toHaveLength(1)
+  })
+
+  it('keeps each count on its own entry', () => {
+    const sections = withNavBadges(visibleNavSections([]), {
+      flaggedFeedback: 3,
+      pendingWallPosts: 4,
+    })
+    expect(entry(sections, '/admin/feedback')?.badge).toEqual({
+      count: 3,
+      label: 'flagged',
+    })
+    expect(entry(sections, '/admin/photo-wall')?.badge).toEqual({
+      count: 4,
+      label: 'pending',
+    })
+  })
+
+  it('shows no badge for 0 or a count that did not arrive', () => {
+    for (const counts of [{ pendingWallPosts: 0 }, {}]) {
+      expect(
+        entry(
+          withNavBadges(visibleNavSections([]), counts),
+          '/admin/photo-wall',
+        )?.badge,
+      ).toBeUndefined()
+    }
   })
 })

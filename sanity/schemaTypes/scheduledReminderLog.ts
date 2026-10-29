@@ -9,7 +9,11 @@ import { defineField, defineType } from 'sanity'
  * DETERMINISTIC ID: the document `_id` is derived, not random —
  * `reminder.<key>.<conferenceId>.<speakerId>` for the recurring speaker
  * reminders, and `reminder.day-of.<conferenceId>.<speakerId>.<date>` for the
- * day-of agenda. The cron writes it with `createIfNotExists` + a counter
+ * day-of agenda. The speaker briefing email (#1592) writes
+ * `briefing.<conferenceId>.<speakerId>.<version>` under key `speaker-briefing`,
+ * where `version` is a 16-hex hash of the shared briefing content it sent
+ * (`briefingVersion`), and `briefing-slack.<conferenceId>` for the last Slack
+ * post. The cron writes it with `createIfNotExists` + a counter
  * increment, so concurrent runs converge on ONE marker per (key, conference,
  * speaker) instead of stacking duplicates.
  *
@@ -58,6 +62,20 @@ export default defineType({
       description:
         'How many times this reminder has been delivered to this speaker for this conference.',
       validation: (Rule) => Rule.min(0).integer(),
+    }),
+    defineField({
+      name: 'version',
+      title: 'Version',
+      type: 'string',
+      description:
+        'Speaker briefing only: the 16-hex content hash of the briefing that was sent.',
+    }),
+    defineField({
+      name: 'lastRunId',
+      title: 'Last Run',
+      type: 'string',
+      description:
+        'Speaker briefing only: the forced resend run that last sent it, so a continuation skips it.',
     }),
     defineField({
       name: 'lastSentAt',
