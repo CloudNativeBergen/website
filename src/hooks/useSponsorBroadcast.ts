@@ -14,7 +14,12 @@ export function useSponsorBroadcast() {
     message: string,
     filters?: BroadcastFilters,
   ) => {
-    await broadcastMutation.mutateAsync({ subject, message, filters })
+    const result = await broadcastMutation.mutateAsync({
+      subject,
+      message,
+      filters,
+    })
+    return { recipientCount: result.syncedCount as number | undefined }
   }
 
   const handleSyncContacts = async () => {

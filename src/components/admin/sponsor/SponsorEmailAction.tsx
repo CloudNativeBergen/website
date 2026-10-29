@@ -42,12 +42,11 @@ export function SponsorEmailAction({ conference }: { conference: Conference }) {
     isBroadcastModalOpen,
     setIsBroadcastModalOpen,
     handleBroadcastEmail,
-    handleSyncContacts,
   } = useSponsorBroadcast()
 
   const recipientsQuery = api.sponsor.crm.broadcastRecipients.useQuery(
     filters,
-    { staleTime: 30000 },
+    { enabled: isBroadcastModalOpen, staleTime: 30000 },
   )
   const tiersQuery = api.sponsor.tiers.listByConference.useQuery(undefined, {
     enabled: isBroadcastModalOpen,
@@ -188,7 +187,6 @@ export function SponsorEmailAction({ conference }: { conference: Conference }) {
         onSend={(subject, message) =>
           handleBroadcastEmail(subject, message, filters)
         }
-        onSyncContacts={handleSyncContacts}
         title="Email sponsors"
         recipientInfo={recipientStep}
         recipientCount={contactCount}

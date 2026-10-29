@@ -40,6 +40,8 @@ vi.mock('@/lib/sanity/client', () => ({ clientWrite: store.client }))
 import {
   BROADCAST_LOCK_TTL_MS,
   acquireBroadcastLock,
+  extendBroadcastLock,
+  holdsBroadcastLock,
   releaseBroadcastLock,
 } from './broadcast-lock'
 
@@ -59,8 +61,8 @@ describe('sponsor broadcast lock', () => {
   })
 
   it('is free again once released', async () => {
-    const rev = await acquireBroadcastLock('conf-a', T0)
-    await releaseBroadcastLock('conf-a', rev!)
+    const lock = await acquireBroadcastLock('conf-a', T0)
+    await releaseBroadcastLock(lock!)
     expect(await acquireBroadcastLock('conf-a', T0 + 1000)).toBeTruthy()
   })
 
@@ -77,9 +79,43 @@ describe('sponsor broadcast lock', () => {
   it('a send that outlived its claim cannot release the newer one', async () => {
     const stale = await acquireBroadcastLock('conf-a', T0)
     await acquireBroadcastLock('conf-a', T0 + BROADCAST_LOCK_TTL_MS + 1)
-    await releaseBroadcastLock('conf-a', stale!)
+    await releaseBroadcastLock(stale!)
     expect(
       await acquireBroadcastLock('conf-a', T0 + BROADCAST_LOCK_TTL_MS + 2),
     ).toBeNull()
+  })
+
+  it('A, taken over after expiry, no longer holds it and cannot extend it', async () => {
+    const a = await acquireBroadcastLock('conf-a', T0)
+    expect(await holdsBroadcastLock(a!)).toBe(true)
+    const b = await acquireBroadcastLock(
+      'conf-a',
+      T0 + BROADCAST_LOCK_TTL_MS + 1,
+    )
+    expect(b).toBeTruthy()
+    expect(await holdsBroadcastLock(a!)).toBe(false)
+    expect(await extendBroadcastLock(a!)).toBe(false)
+    expect(await holdsBroadcastLock(b!)).toBe(true)
+  })
+
+  it('an extension keeps the claim alive past the original expiry', async () => {
+    const a = await acquireBroadcastLock('conf-a', T0)
+    expect(await extendBroadcastLock(a!, T0 + BROADCAST_LOCK_TTL_MS - 1)).toBe(
+      true,
+    )
+    expect(
+      await acquireBroadcastLock('conf-a', T0 + BROADCAST_LOCK_TTL_MS + 1),
+    ).toBeNull()
+    expect(await holdsBroadcastLock(a!)).toBe(true)
+  })
+
+  it('rethrows errors that are not a conflict', async () => {
+    const spy = vi
+      .spyOn(store.client, 'create')
+      .mockRejectedValueOnce(new Error('network down'))
+    await expect(acquireBroadcastLock('conf-a', T0)).rejects.toThrow(
+      'network down',
+    )
+    spy.mockRestore()
   })
 })

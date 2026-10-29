@@ -51,6 +51,19 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
+const audience = vi.hoisted(() => ({
+  conferences: [] as Array<{ _id: string; title: string }>,
+  resolve: vi.fn(async (c: { _id: string }) => ({
+    audienceId: `aud-${c._id}`,
+    client: {},
+  })),
+  remove: vi.fn(async () => ({ success: true })),
+}))
+vi.mock('@/lib/email/audience', () => ({
+  getOrCreateConferenceAudienceByType: audience.resolve,
+  removeContactFromAudience: audience.remove,
+}))
+
 import {
   eraseSponsorContactSendRecords,
   sponsorContactMatchSet,
@@ -87,8 +100,12 @@ beforeEach(() => {
   vi.clearAllMocks()
   patchOps.length = 0
   world = []
+  audience.conferences = []
   fetchMock.mockImplementation(
     (query: string, params: Record<string, unknown> = {}) => {
+      if (query.startsWith('*[_type == "conference"')) {
+        return Promise.resolve(audience.conferences)
+      }
       if (!query.includes('_type == "sponsorActivity"')) {
         return Promise.resolve(null)
       }
@@ -273,5 +290,55 @@ describe('a sponsor contact with no speaker document is erased from send records
     })
     expect(result.err?.message).toBe('409 revision mismatch')
     expect(result.committed).toBe(false)
+  })
+})
+
+describe('the address leaves the sponsor audiences on Resend too (#1704)', () => {
+  it('removes every address from each conference sponsor audience', async () => {
+    audience.conferences = [
+      { _id: 'conf-a', title: 'A' },
+      { _id: 'conf-b', title: 'B' },
+    ]
+    const result = await eraseSponsorContactSendRecords({
+      emails: ['Kari@Sponsor.no'],
+      actor: 'op',
+    })
+    expect(result.err).toBeNull()
+    expect(result.audienceFailures).toEqual([])
+    expect(audience.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: 'conf-a' }),
+      'sponsors',
+    )
+    expect(audience.remove.mock.calls).toEqual([
+      [{}, 'aud-conf-a', 'kari@sponsor.no'],
+      [{}, 'aud-conf-b', 'kari@sponsor.no'],
+    ])
+  })
+
+  it('a failed removal is reported and logged, and does not fail the erasure', async () => {
+    audience.conferences = [{ _id: 'conf-a', title: 'A' }]
+    audience.remove.mockResolvedValueOnce({
+      success: false,
+      error: new Error('resend down'),
+    } as never)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const result = await eraseSponsorContactSendRecords({
+      emails: ['kari@sponsor.no'],
+      actor: 'op',
+    })
+    expect(result.err).toBeNull()
+    expect(result.audienceFailures).toEqual(['conf-a: resend down'])
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('a dry run leaves the audiences alone', async () => {
+    audience.conferences = [{ _id: 'conf-a', title: 'A' }]
+    await eraseSponsorContactSendRecords({
+      emails: ['kari@sponsor.no'],
+      actor: 'op',
+      dryRun: true,
+    })
+    expect(audience.remove).not.toHaveBeenCalled()
   })
 })

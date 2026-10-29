@@ -44,12 +44,23 @@ const h = vi.hoisted(() => ({
   syncSponsorAudience: vi.fn(),
   sendBroadcastEmail: vi.fn(),
   listEventDiscounts: vi.fn(),
-  acquireLock: vi.fn(async () => 'lock-rev' as string | null),
+  acquireLock: vi.fn(
+    async (conferenceId: string) =>
+      ({ conferenceId, rev: 'lock-rev' }) as {
+        conferenceId: string
+        rev: string
+      } | null,
+  ),
   releaseLock: vi.fn(async () => {}),
+  holdsLock: vi.fn(async () => true),
+  extendLock: vi.fn(async () => true),
 }))
-vi.mock('@/lib/sponsor-crm/broadcast-lock', () => ({
+vi.mock('@/lib/sponsor-crm/broadcast-lock', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   acquireBroadcastLock: h.acquireLock,
   releaseBroadcastLock: h.releaseLock,
+  holdsBroadcastLock: h.holdsLock,
+  extendBroadcastLock: h.extendLock,
 }))
 vi.mock('@/lib/email/audience', () => ({
   syncSponsorAudience: h.syncSponsorAudience,
@@ -970,7 +981,7 @@ describe('crm.broadcastEmail — auto-sync audience and refuse unmerged variable
       message: MESSAGE,
     })
 
-    expect(result).toEqual({ id: 'bcast-1' })
+    expect(result).toEqual({ id: 'bcast-1', syncedCount: 2 })
     expect(callOrder).toEqual(['sync', 'broadcast'])
     expect(h.syncSponsorAudience).toHaveBeenCalledWith(
       expect.objectContaining({ _id: CONF }),
@@ -978,6 +989,7 @@ describe('crm.broadcastEmail — auto-sync audience and refuse unmerged variable
         expect.objectContaining({ email: 'kari@acme.test' }),
         expect.objectContaining({ email: 'ola@acme.test' }),
       ]),
+      expect.objectContaining({ onProgress: expect.any(Function) }),
     )
     expect(h.sendBroadcastEmail).toHaveBeenCalledTimes(1)
   })
@@ -1018,7 +1030,7 @@ describe('crm.broadcastEmail — auto-sync audience and refuse unmerged variable
       message: broadcastMessage,
     })
 
-    expect(result).toEqual({ id: 'bcast-merge' })
+    expect(result).toEqual({ id: 'bcast-merge', syncedCount: 2 })
     expect(h.sendBroadcastEmail).toHaveBeenCalledTimes(1)
     expect(h.sendBroadcastEmail).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1158,7 +1170,9 @@ describe('Email sponsors: one send at a time per conference', () => {
       new Response(JSON.stringify({ id: 'b' }), { status: 200 }),
     )
     await sponsor().crm.broadcastEmail({ subject: 'Hi', message: MESSAGE })
-    expect(h.releaseLock).toHaveBeenCalledWith(CONF, 'lock-rev')
+    expect(h.releaseLock).toHaveBeenCalledWith(
+      expect.objectContaining({ conferenceId: CONF, rev: 'lock-rev' }),
+    )
   })
 
   it('releases the lock after a failed send', async () => {
@@ -1168,7 +1182,9 @@ describe('Email sponsors: one send at a time per conference', () => {
     await expect(
       sponsor().crm.broadcastEmail({ subject: 'Hi', message: MESSAGE }),
     ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
-    expect(h.releaseLock).toHaveBeenCalledWith(CONF, 'lock-rev')
+    expect(h.releaseLock).toHaveBeenCalledWith(
+      expect.objectContaining({ conferenceId: CONF, rev: 'lock-rev' }),
+    )
   })
 
   it('refuses a Sync while a send holds the lock', async () => {
@@ -1184,7 +1200,81 @@ describe('Email sponsors: one send at a time per conference', () => {
   it('a Sync takes and releases the same lock', async () => {
     await sponsor().crm.syncAudience()
     expect(h.acquireLock).toHaveBeenCalledWith(CONF)
-    expect(h.releaseLock).toHaveBeenCalledWith(CONF, 'lock-rev')
+    expect(h.releaseLock).toHaveBeenCalledWith(
+      expect.objectContaining({ conferenceId: CONF, rev: 'lock-rev' }),
+    )
+  })
+
+  it('a send whose lock was taken over during the sync does not send', async () => {
+    // Holder A synced past its claim's expiry; B took the claim over.
+    h.holdsLock.mockResolvedValueOnce(false)
+    await expect(
+      sponsor().crm.broadcastEmail({ subject: 'Hi', message: MESSAGE }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(h.syncSponsorAudience).toHaveBeenCalled()
+    expect(h.sendBroadcastEmail).not.toHaveBeenCalled()
+  })
+
+  it('a long sync extends the claim, and stops once it has lost it', async () => {
+    h.syncSponsorAudience.mockImplementation(
+      async (
+        _c: unknown,
+        _contacts: unknown,
+        opts: { onProgress: () => Promise<void> },
+      ) => {
+        try {
+          await opts.onProgress()
+          await opts.onProgress()
+        } catch (error) {
+          return { success: false, error }
+        }
+        return {
+          success: true,
+          audienceId: 'a',
+          syncedCount: 2,
+          addedCount: 0,
+          removedCount: 0,
+        }
+      },
+    )
+    h.extendLock.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    await expect(
+      sponsor().crm.broadcastEmail({ subject: 'Hi', message: MESSAGE }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(h.extendLock).toHaveBeenCalledTimes(2)
+    expect(h.sendBroadcastEmail).not.toHaveBeenCalled()
+  })
+
+  it('waits for dispatch, and keeps the lock when Resend has not dispatched in time', async () => {
+    h.sendBroadcastEmail.mockResolvedValue(
+      Response.json({ broadcastId: 'b', dispatched: false }),
+    )
+    const result = await sponsor().crm.broadcastEmail({
+      subject: 'Hi',
+      message: MESSAGE,
+    })
+    expect(h.sendBroadcastEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ waitUntilDispatched: true }),
+    )
+    expect(h.releaseLock).not.toHaveBeenCalled()
+    // The count the success message shows is the server's synced count.
+    expect(result.syncedCount).toBe(2)
+  })
+
+  it('keeps opt-outs only for addresses still in the CRM', async () => {
+    h.sendBroadcastEmail.mockResolvedValue(Response.json({ id: 'b' }))
+    await sponsor().crm.broadcastEmail({
+      subject: 'Hi',
+      message: MESSAGE,
+      filters: { contactRole: 'primary' },
+    })
+    const opts = h.syncSponsorAudience.mock.calls[0][2] as {
+      keepUnsubscribedIn: Set<string>
+    }
+    expect([...opts.keepUnsubscribedIn].sort()).toEqual([
+      'kari@acme.test',
+      'ola@acme.test',
+    ])
   })
 
   it('releases the lock when the audience sync throws', async () => {
@@ -1196,7 +1286,9 @@ describe('Email sponsors: one send at a time per conference', () => {
       sponsor().crm.broadcastEmail({ subject: 'Hi', message: MESSAGE }),
     ).rejects.toBeDefined()
     expect(h.sendBroadcastEmail).not.toHaveBeenCalled()
-    expect(h.releaseLock).toHaveBeenCalledWith(CONF, 'lock-rev')
+    expect(h.releaseLock).toHaveBeenCalledWith(
+      expect.objectContaining({ conferenceId: CONF, rev: 'lock-rev' }),
+    )
   })
 })
 

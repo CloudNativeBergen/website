@@ -1,5 +1,6 @@
 import { retryWithBackoff, delay, EMAIL_CONFIG } from '@/lib/email/config'
 import { Conference } from '@/lib/conference/types'
+import type { Resend } from 'resend'
 import { PortableTextBlock } from '@portabletext/types'
 import {
   getOrCreateConferenceAudience,
@@ -20,6 +21,41 @@ export interface BroadcastEmailRequest {
   audienceType?: AudienceType
   fromEmail?: string
   additionalContent?: string
+  /**
+   * After sending, wait (up to `BROADCAST_DISPATCH_CAP_MS`) until Resend
+   * reports the broadcast past `draft`/`queued`, and say in the response
+   * (`dispatched`) whether it did. A caller that rewrites the audience
+   * afterwards needs this: Resend resolves the recipients when it dispatches.
+   */
+  waitUntilDispatched?: boolean
+}
+
+export const BROADCAST_DISPATCH_CAP_MS = 60_000
+
+/**
+ * Polls `broadcasts.get` with a doubling backoff (1 s, 2 s, 4 s, ...) until
+ * the status leaves `draft`/`queued`. `false` when the cap is reached; a read
+ * error counts as not dispatched yet.
+ */
+export async function waitForBroadcastDispatch(
+  client: Pick<Resend, 'broadcasts'>,
+  broadcastId: string,
+  capMs = BROADCAST_DISPATCH_CAP_MS,
+  wait: (ms: number) => Promise<void> = delay,
+): Promise<boolean> {
+  let waited = 0
+  for (let step = 1000; waited < capMs; step *= 2) {
+    const ms = Math.min(step, capMs - waited)
+    await wait(ms)
+    waited += ms
+    const { data } = await client.broadcasts
+      .get(broadcastId)
+      .catch(() => ({ data: null }))
+    if (data && data.status !== 'draft' && data.status !== 'queued') {
+      return true
+    }
+  }
+  return false
 }
 
 export async function sendBroadcastEmail({
@@ -29,6 +65,7 @@ export async function sendBroadcastEmail({
   audienceType = 'speakers',
   fromEmail,
   additionalContent = '',
+  waitUntilDispatched = false,
 }: BroadcastEmailRequest): Promise<Response> {
   try {
     // The broadcast MUST be created on the account holding `audienceId` — see
@@ -170,6 +207,12 @@ export async function sendBroadcastEmail({
       broadcastId: broadcastResponse.data!.id,
       audienceId,
       sent: true,
+      ...(waitUntilDispatched && {
+        dispatched: await waitForBroadcastDispatch(
+          client,
+          broadcastResponse.data!.id,
+        ),
+      }),
     })
   } catch (error) {
     console.error('[Broadcast] Unexpected error:', {

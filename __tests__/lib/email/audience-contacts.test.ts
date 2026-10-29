@@ -605,6 +605,13 @@ describe('the sponsor audience keeps its opt-outs when a send narrows it (#1704)
     const result = await syncSponsorAudience(
       conference,
       asContacts(['in@a.test']),
+      {
+        keepUnsubscribedIn: new Set([
+          'in@a.test',
+          'out@a.test',
+          'optout@a.test',
+        ]),
+      },
     )
 
     expect(result.success).toBe(true)
@@ -612,5 +619,41 @@ describe('the sponsor audience keeps its opt-outs when a send narrows it (#1704)
       'in@a.test',
       'optout@a.test',
     ])
+  })
+
+  it('drops an unsubscribed contact the CRM no longer holds (erased or removed)', async () => {
+    const created = await account.create({
+      name: `Alpha Sponsors [${CONF_ID}]`,
+    })
+    const audienceId = created.data.id
+    account.fillWith(audienceId, ['in@a.test', 'Gone@a.test'], ['Gone@a.test'])
+
+    await syncSponsorAudience(conference, asContacts(['in@a.test']), {
+      keepUnsubscribedIn: new Set(['in@a.test']),
+    })
+
+    expect(account.contactsIn(audienceId)).toEqual(['in@a.test'])
+  })
+
+  it('calls onProgress every 50 contact writes, and a throw aborts the sync', async () => {
+    const created = await account.create({
+      name: `Alpha Sponsors [${CONF_ID}]`,
+    })
+    const audienceId = created.data.id
+    account.fillWith(audienceId, [])
+    const onProgress = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('lock lost'))
+
+    const result = await syncSponsorAudience(
+      conference,
+      asContacts(emails(120)),
+      { onProgress },
+    )
+
+    expect(onProgress).toHaveBeenCalledTimes(2)
+    expect(result.success).toBe(false)
+    expect(account.contactsIn(audienceId)).toHaveLength(100)
   })
 })

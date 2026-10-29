@@ -18,7 +18,12 @@
  * GLOBAL, like the speaker chain: the right is the person's, and the same
  * address can be a contact for sponsors of two organizations.
  */
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import {
+  getOrCreateConferenceAudienceByType,
+  removeContactFromAudience,
+} from '@/lib/email/audience'
+import type { Conference } from '@/lib/conference/types'
 import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
 import { canonicalEmail } from '@/lib/speaker/email'
 import type { ErasureDocumentPatch } from '@/lib/speaker/erasure'
@@ -54,6 +59,11 @@ export interface EraseSponsorContactResult {
    */
   residual: number | null
   err: Error | null
+  /**
+   * Sponsor audiences (Resend) the address could NOT be removed from, as
+   * `conferenceId: reason`. Best effort: logged, never fails the erasure.
+   */
+  audienceFailures: string[]
 }
 
 /**
@@ -111,6 +121,7 @@ export async function eraseSponsorContactSendRecords(
     committed: false,
     residual: null as number | null,
     err: null as Error | null,
+    audienceFailures: [] as string[],
   }
   // An address without "@" is not an address: `--email --actor "x"` on the
   // CLI would otherwise search for the literal "--actor", find nothing and
@@ -160,16 +171,19 @@ export async function eraseSponsorContactSendRecords(
 
     // The commit is done: a failure from here on must not hide it, or the
     // operator reads "nothing written" over a record that was.
+    const audienceFailures = await removeFromSponsorAudiences(emails)
     try {
       const after = await planAll(emails)
       return {
         ...result,
+        audienceFailures,
         committed: true,
         residual: after.patches.length + after.refusals.length,
       }
     } catch (error) {
       return {
         ...result,
+        audienceFailures,
         committed: true,
         err: new Error(
           `Committed, but the verification read failed: ${
@@ -184,4 +198,54 @@ export async function eraseSponsorContactSendRecords(
       err: error instanceof Error ? error : new Error(String(error)),
     }
   }
+}
+
+/**
+ * Takes the addresses out of every conference's sponsor audience on Resend.
+ * A sponsor sync keeps unsubscribed contacts only while the CRM still holds
+ * them, but an erasure must not wait for the next sync. Every conference with
+ * sponsors, because the right is the person's, like the records above.
+ *
+ * ponytail: resolving an audience creates it when a conference has none yet
+ * (an empty audience, harmless); add a find-only resolver if that matters.
+ */
+async function removeFromSponsorAudiences(emails: string[]): Promise<string[]> {
+  const failures: string[] = []
+  let conferences: Conference[] = []
+  try {
+    conferences =
+      (await clientReadUncached.fetch<Conference[]>(
+        // groq-global: erasure is the person's right across every tenant,
+        // like the send-record read in `erasure-recipients.ts`.
+        `*[_type == "conference" && count(*[_type == "sponsorForConference" && conference._ref == ^._id]) > 0]{ _id, title, organization }`,
+      )) ?? []
+  } catch (error) {
+    console.warn('[contact-erasure] listing conferences failed:', error)
+    return ['*: could not list conferences']
+  }
+  for (const conference of conferences) {
+    try {
+      const { audienceId, client, error } =
+        await getOrCreateConferenceAudienceByType(conference, 'sponsors')
+      if (!audienceId) throw error ?? new Error('no sponsor audience')
+      for (const email of emails) {
+        const removed = await removeContactFromAudience(
+          client,
+          audienceId,
+          email,
+        )
+        if (!removed.success) {
+          throw removed.error ?? new Error(`could not remove ${email}`)
+        }
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      console.warn('[contact-erasure] sponsor audience removal failed:', {
+        conferenceId: conference._id,
+        reason,
+      })
+      failures.push(`${conference._id}: ${reason}`)
+    }
+  }
+  return failures
 }
