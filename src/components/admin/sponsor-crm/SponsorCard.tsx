@@ -21,6 +21,7 @@ import { isInvoicePastDue } from '@/lib/sponsor-crm/invoice'
 import { formatConferenceDate, osloTodayDateString } from '@/lib/time'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import clsx from 'clsx'
+import Link from 'next/link'
 import { BoardView } from './BoardViewSwitcher'
 import { useDraggable } from '@dnd-kit/core'
 
@@ -163,7 +164,13 @@ export function SponsorCard({
   const name = sponsor.sponsor.name
   const owner = sponsor.assignedTo
 
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    isDragging,
+  } = useDraggable({
     id: sponsor._id,
     data: {
       type: 'sponsor',
@@ -193,26 +200,19 @@ export function SponsorCard({
     onKeyDown: (e: React.SyntheticEvent) => e.stopPropagation(),
   }
 
+  // The root is the pointer drag surface. The name button is the card's one
+  // main action: its ::after overlay stretches the click target over the card
+  // (checkbox and menu sit above it), and it carries dnd-kit's keyboard
+  // attributes, so Space starts a keyboard drag and Enter opens the sponsor.
   return (
     <div
       ref={setNodeRef}
-      {...attributes}
       {...listeners}
-      role="button"
-      tabIndex={0}
-      aria-label={`${name}, ${status.text}`}
-      aria-pressed={isSelectionMode ? isSelected : undefined}
-      onClick={open}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' && e.target === e.currentTarget) {
-          e.preventDefault()
-          open()
-          return
-        }
-        listeners?.onKeyDown?.(e)
+        if (e.key !== 'Enter') listeners?.onKeyDown?.(e)
       }}
       className={clsx(
-        'group relative flex cursor-pointer flex-col gap-1 rounded-lg border py-2 pr-2 pl-3 transition-colors hover:shadow-md focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none',
+        'group relative flex cursor-pointer flex-col gap-1 rounded-lg border py-2 pr-2 pl-3 transition-colors focus-within:ring-2 focus-within:ring-indigo-500 hover:shadow-md',
         columnKey && !isSelectionMode && 'active:cursor-grabbing',
         isSelected
           ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500 dark:border-indigo-400 dark:bg-indigo-950/40 dark:ring-indigo-400'
@@ -239,9 +239,16 @@ export function SponsorCard({
             </span>
           )}
         </div>
-        <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          {...attributes}
+          aria-pressed={isSelectionMode ? isSelected : attributes['aria-pressed']}
+          onClick={open}
+          className="truncate text-left text-sm font-semibold text-gray-900 after:absolute after:inset-0 after:rounded-lg focus:outline-none dark:text-white"
+        >
           {name}
-        </p>
+        </button>
       </div>
 
       {/* Line 2: value · tier · owner */}
@@ -298,7 +305,7 @@ export function SponsorCard({
       {/* Selection checkbox */}
       <div
         className={clsx(
-          'absolute top-1 left-1 z-10 leading-none transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 focus-within:opacity-100',
+          'absolute top-1 left-1 z-10 leading-none transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100',
           isSelected || isSelectionMode ? 'opacity-100' : 'opacity-0',
         )}
         {...stop}
@@ -313,7 +320,7 @@ export function SponsorCard({
       </div>
 
       {/* Options menu */}
-      <div className="absolute top-1 right-1" {...stop}>
+      <div className="absolute top-1 right-1 z-10" {...stop}>
         <Menu>
           <MenuButton
             aria-label={`Options for ${name}`}
@@ -338,12 +345,12 @@ export function SponsorCard({
               </button>
             </MenuItem>
             <MenuItem>
-              <a
-                href={`/admin/sponsors/${encodeURIComponent(sponsor._id)}`}
+              <Link
+                href={`/admin/sponsors/${encodeURIComponent(sponsor._id)}${currentView === 'pipeline' ? '' : `?board=${currentView}`}`}
                 className={MENU_ITEM}
               >
                 Open sponsor page
-              </a>
+              </Link>
             </MenuItem>
           </MenuItems>
         </Menu>
