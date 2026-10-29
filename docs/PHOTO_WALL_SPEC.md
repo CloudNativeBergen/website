@@ -664,6 +664,13 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
 - **Reject** and **Remove** patch `status: notShown` and `decidedAt`.
 - **Approve all pending** approves the posts pending when pressed, one guarded patch per post, four at a time, within a 30 s budget (a transaction is all-or-nothing, so one conflicted post would sink a whole batch). A conflicted post is skipped and stays pending. It reports how many it approved; pressing again picks up the rest.
 - **Delete now** runs the same Delete as the contributor's (§12).
+- **Undo:** after Approve, Reject or Remove, a toast at the bottom says what
+  Undo does ("Rejected · Undo puts it on the wall") for about 8 s, held while
+  focused; Escape dismisses it. Only the latest action can be undone. There
+  is no way back to Pending, so Undo of an Approve is a Remove (to Not shown),
+  and Undo of a Reject or Remove is an Approve. Undo sends the status the
+  action left and the same incarnation, so the usual guards answer
+  `changed` if someone else decided in between, and the queue says so.
 - The contributor's My posts says **Not shown**, with no reason.
 
 ## 11. Retention

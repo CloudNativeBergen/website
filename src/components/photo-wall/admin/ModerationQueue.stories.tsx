@@ -201,6 +201,45 @@ export const MoreActionsPhoneDark: Story = {
   globals: { theme: 'dark' },
 }
 
+/**
+ * Undo (§10): after Approve, Reject or Remove a toast says what Undo does,
+ * for 8 s (held while focused). Only the latest action can be undone.
+ */
+export const UndoToast: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const [first] = canvas.getAllByRole('article')
+    await userEvent.click(within(first).getByRole('button', { name: 'Reject' }))
+    await expect(
+      await canvas.findByText('Rejected · Undo puts it on the wall'),
+    ).toBeVisible()
+    await userEvent.click(canvas.getByRole('button', { name: 'Undo' }))
+    await waitFor(() =>
+      expect(args.onAction).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          caption: 'Keynote crowd, first morning',
+          status: 'notShown',
+        }),
+        'approve',
+      ),
+    )
+    await expect(canvas.queryByRole('button', { name: 'Undo' })).toBeNull()
+    // Again, for the picture.
+    await userEvent.click(within(first).getByRole('button', { name: 'Reject' }))
+    await canvas.findByText('Rejected · Undo puts it on the wall')
+  },
+}
+export const UndoToastDark: Story = {
+  ...UndoToast,
+  globals: { theme: 'dark' },
+}
+export const UndoToastPhone: Story = { ...UndoToast, parameters: PHONE }
+export const UndoToastPhoneDark: Story = {
+  ...UndoToast,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+
 /** A thumbnail opens the whole photo, its crop outlined, in a dialog. */
 export const Enlarged: Story = {
   play: async ({ canvasElement }) => {
@@ -592,9 +631,7 @@ export const Polled: StoryObj<typeof ModerationQueue> = {
       within(first).getByRole('button', { name: 'Approve' }),
     )
     await expect(
-      await canvas.findByText(
-        'Approved. It shows on the wall within a few seconds.',
-      ),
+      await canvas.findByText('Approved · Undo takes it off the wall'),
     ).toBeVisible()
   },
 }
