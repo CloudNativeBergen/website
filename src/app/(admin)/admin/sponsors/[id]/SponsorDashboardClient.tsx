@@ -1,18 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
 import type { Conference } from '@/lib/conference/types'
-import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
-import type { ContractSendOptions } from '@/components/admin/sponsor-crm/SponsorContractView'
 import { SponsorSendModal } from '@/components/admin'
 import {
   sponsorFromAddress,
   type SendableKind,
 } from '@/components/admin/sponsor/SponsorSendModal'
+import {
+  SponsorRecordPanel,
+  useRefreshSponsor,
+  useSponsorRecordPanel,
+  type RecordView,
+} from '@/components/admin/sponsor-crm/SponsorRecordPanel'
 import { SponsorDetailHeader } from '@/components/admin/sponsor-crm/widgets/SponsorDetailHeader'
 import { SponsorOverviewWidget } from '@/components/admin/sponsor-crm/widgets/SponsorOverviewWidget'
 import { SponsorPhaseWidget } from '@/components/admin/sponsor-crm/widgets/SponsorPhaseWidget'
@@ -21,10 +24,6 @@ import { SponsorContactsWidget } from '@/components/admin/sponsor-crm/widgets/Sp
 import { SponsorContractWidget } from '@/components/admin/sponsor-crm/widgets/SponsorContractWidget'
 import { SponsorRenewalWidget } from '@/components/admin/sponsor-crm/widgets/SponsorRenewalWidget'
 import { SponsorActivityFeedWidget } from '@/components/admin/sponsor-crm/widgets/SponsorActivityFeedWidget'
-
-type RecordView = NonNullable<
-  React.ComponentProps<typeof SponsorCRMForm>['initialView']
->
 
 // The page section a `?view=` link scrolls to; other views use their own id.
 const SECTION_FOR_VIEW: Partial<Record<RecordView, string>> = {
@@ -60,15 +59,12 @@ export function SponsorDashboardClient({
   initialView,
   backHref,
 }: SponsorDashboardClientProps) {
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const { data: session } = useSession()
-  const utils = api.useUtils()
 
-  // The full record (the former SponsorCRMForm modal) carries every tab:
-  // deal status, tags, owner, contacts, logo, contract steps, early access,
-  // history, communications and messages.
-  const [recordView, setRecordView] = useState<RecordView | null>(null)
+  // The page is read-only; editing happens in the board's side panel,
+  // opened over the page and kept in `?edit=<tab>`.
+  const panel = useSponsorRecordPanel({ viewParam: 'edit', fixedId: sponsorId })
+  const openRecord = (view: RecordView) => panel.open(sponsorId, view)
 
   useEffect(() => {
     if (!initialView) return
@@ -85,38 +81,8 @@ export function SponsorDashboardClient({
   })
 
   const [sendKind, setSendKind] = useState<SendableKind | null>(null)
-  const [contractSend, setContractSend] = useState<ContractSendOptions>({})
-
-  const syncViewParam = useCallback(
-    (view: RecordView | null) => {
-      const params = new URLSearchParams(searchParams.toString())
-      if (view) params.set('view', view)
-      else params.delete('view')
-      const qs = params.toString()
-      router.replace(qs ? `?${qs}` : '?', { scroll: false })
-    },
-    [router, searchParams],
-  )
-
-  const openRecord = useCallback(
-    (view: RecordView) => {
-      setRecordView(view)
-      syncViewParam(view)
-    },
-    [syncViewParam],
-  )
-
-  const refresh = useCallback(() => {
-    utils.sponsor.crm.getById.invalidate({ id: sponsorId })
-    utils.sponsor.crm.getOverview.invalidate({ id: sponsorId })
-    utils.sponsor.crm.getContacts.invalidate({ id: sponsorId })
-    utils.sponsor.crm.getContractDetails.invalidate({ id: sponsorId })
-    utils.sponsor.crm.activities.list.invalidate({
-      sponsorForConferenceId: sponsorId,
-    })
-    utils.sponsor.crm.list.invalidate()
-    utils.sponsor.crm.healthViolations.invalidate()
-  }, [utils, sponsorId])
+  const refreshSponsor = useRefreshSponsor()
+  const refresh = () => refreshSponsor(sponsorId)
 
   return (
     <div className="flex h-full flex-col bg-gray-50 dark:bg-gray-900/50">
@@ -125,7 +91,6 @@ export function SponsorDashboardClient({
         initialData={initialOverview}
         backHref={backHref}
         onOpenRecord={() => openRecord('pipeline')}
-        onChanged={refresh}
         onSendEmail={sponsor ? () => setSendKind('information') : undefined}
       />
 
@@ -189,31 +154,17 @@ export function SponsorDashboardClient({
         </div>
       </main>
 
-      {recordView && sponsor && (
-        <SponsorCRMForm
-          conferenceId={conference._id}
+      {panel.id && (
+        <SponsorRecordPanel
+          sponsorId={sponsorId}
+          view={panel.view}
+          onViewChange={panel.setView}
+          onClose={panel.close}
+          onChanged={refresh}
+          conference={conference}
+          domain={domain}
+          canSendDiscountCodes={canSendDiscountCodes}
           workshopsEnabled={workshopsEnabled}
-          sponsorStartSet={!!conference.workshopRegistrationSponsorStart}
-          sponsor={sponsor}
-          isOpen
-          initialView={recordView}
-          onViewChange={syncViewParam}
-          onClose={() => {
-            setRecordView(null)
-            syncViewParam(null)
-            refresh()
-          }}
-          onSuccess={refresh}
-          onSendEmail={() => setSendKind('information')}
-          onSendDiscountCodes={
-            canSendDiscountCodes ? () => setSendKind('discount') : undefined
-          }
-          onSendRegistration={() => setSendKind('registration')}
-          onSendContract={(options) => {
-            setContractSend(options)
-            setSendKind('contract')
-          }}
-          onSendEarlyAccess={() => setSendKind('workshop-early-access')}
         />
       )}
 
@@ -228,7 +179,6 @@ export function SponsorDashboardClient({
           onSent={refresh}
           sponsorForConference={sponsor}
           kind={sendKind}
-          contractSend={sendKind === 'contract' ? contractSend : undefined}
           domain={domain}
           fromEmail={sponsorFromAddress(conference, domain)}
           senderName={session?.speaker?.name || session?.user?.name || ''}

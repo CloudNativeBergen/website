@@ -1,16 +1,18 @@
 /**
  * @vitest-environment jsdom
  *
- * `?view=<tab>` on the sponsor page scrolls to that section; it must not pop
- * the record modal open. Only "Open record" and "Manage" open it.
+ * `?view=<tab>` on the sponsor page scrolls to that section; it must not open
+ * the record. "Open record", "Manage" and each "Edit" open the board's side
+ * panel over the page, kept in `?edit=<tab>`. There is no centered modal.
  */
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import type { Conference } from '@/lib/conference/types'
 import { SponsorDashboardClient } from './SponsorDashboardClient'
 
+const nav = vi.hoisted(() => ({ push: vi.fn(), query: 'view=contract' }))
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams('view=contract'),
+  useRouter: () => ({ replace: vi.fn(), push: nav.push, back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(nav.query),
 }))
 vi.mock('next-auth/react', () => ({ useSession: () => ({ data: null }) }))
 vi.mock('@/lib/trpc/client', () => ({
@@ -25,7 +27,17 @@ vi.mock('@/lib/trpc/client', () => ({
   },
 }))
 vi.mock('@/components/admin/sponsor-crm/SponsorCRMForm', () => ({
-  SponsorCRMForm: () => <div data-testid="record" />,
+  SponsorCRMForm: ({
+    presentation,
+    initialView,
+  }: {
+    presentation?: string
+    initialView?: string
+  }) => (
+    <div data-testid="record" data-presentation={presentation}>
+      {initialView}
+    </div>
+  ),
 }))
 vi.mock('@/components/admin', () => ({ SponsorSendModal: () => null }))
 vi.mock('@/components/admin/sponsor/SponsorSendModal', () => ({
@@ -37,33 +49,47 @@ vi.mock('@/components/admin/sponsor-crm/widgets/SponsorDetailHeader', () => ({
   ),
 }))
 vi.mock('@/components/admin/sponsor-crm/widgets/SponsorOverviewWidget', () => ({
-  SponsorOverviewWidget: () => null,
+  SponsorOverviewWidget: ({ onEdit }: { onEdit: () => void }) => (
+    <button onClick={onEdit}>Edit pipeline</button>
+  ),
 }))
 vi.mock('@/components/admin/sponsor-crm/widgets/SponsorPhaseWidget', () => ({
-  SponsorPhaseWidget: () => null,
+  SponsorPhaseWidget: ({
+    onOpenRecord,
+  }: {
+    onOpenRecord: (view: string) => void
+  }) => <button onClick={() => onOpenRecord('pipeline')}>Manage</button>,
 }))
 vi.mock('@/components/admin/sponsor-crm/widgets/SponsorFollowUpWidget', () => ({
   SponsorFollowUpWidget: () => null,
 }))
 vi.mock('@/components/admin/sponsor-crm/widgets/SponsorContactsWidget', () => ({
-  SponsorContactsWidget: () => null,
+  SponsorContactsWidget: ({ onEdit }: { onEdit: () => void }) => (
+    <button onClick={onEdit}>Edit contacts</button>
+  ),
 }))
 vi.mock('@/components/admin/sponsor-crm/widgets/SponsorContractWidget', () => ({
-  SponsorContractWidget: () => null,
+  SponsorContractWidget: ({ onEdit }: { onEdit: () => void }) => (
+    <button onClick={onEdit}>Edit contract</button>
+  ),
 }))
 vi.mock('@/components/admin/sponsor-crm/widgets/SponsorRenewalWidget', () => ({
   SponsorRenewalWidget: () => null,
 }))
 vi.mock(
   '@/components/admin/sponsor-crm/widgets/SponsorActivityFeedWidget',
-  () => ({ SponsorActivityFeedWidget: () => null }),
+  () => ({
+    SponsorActivityFeedWidget: ({
+      onNewActivity,
+    }: {
+      onNewActivity: () => void
+    }) => <button onClick={onNewActivity}>New activity</button>,
+  }),
 )
 
 afterEach(cleanup)
 
-it('scrolls to the section for ?view=contract instead of opening the record', () => {
-  const scrollIntoView = vi.fn()
-  Element.prototype.scrollIntoView = scrollIntoView
+const renderPage = () =>
   render(
     <SponsorDashboardClient
       sponsorId="sfc-1"
@@ -72,10 +98,38 @@ it('scrolls to the section for ?view=contract instead of opening the record', ()
       initialView="contract"
     />,
   )
+
+it('scrolls to the section for ?view=contract instead of opening the record', () => {
+  nav.query = 'view=contract'
+  const scrollIntoView = vi.fn()
+  Element.prototype.scrollIntoView = scrollIntoView
+  renderPage()
   expect(screen.queryByTestId('record')).not.toBeInTheDocument()
   expect(scrollIntoView).toHaveBeenCalledTimes(1)
   expect(scrollIntoView.mock.contexts[0]).toHaveProperty('id', 'contract')
+})
 
-  fireEvent.click(screen.getByText('Open record'))
-  expect(screen.getByTestId('record')).toBeInTheDocument()
+it.each([
+  ['Open record', 'pipeline'],
+  ['Manage', 'pipeline'],
+  ['Edit pipeline', 'pipeline'],
+  ['Edit contacts', 'contacts'],
+  ['Edit contract', 'contract'],
+  ['New activity', 'history'],
+])('"%s" opens the side panel on the %s tab', (label, tab) => {
+  nav.query = 'view=contract'
+  nav.push.mockClear()
+  renderPage()
+  fireEvent.click(screen.getByText(label))
+  expect(nav.push).toHaveBeenCalledWith(`?view=contract&edit=${tab}`, {
+    scroll: false,
+  })
+})
+
+it('renders ?edit=<tab> as the side panel, not a centered modal', () => {
+  nav.query = 'edit=contacts'
+  renderPage()
+  const record = screen.getByTestId('record')
+  expect(record).toHaveAttribute('data-presentation', 'panel')
+  expect(record).toHaveTextContent('contacts')
 })

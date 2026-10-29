@@ -5,7 +5,6 @@ import { api } from '@/lib/trpc/client'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { SponsorLogo } from '@/components/SponsorLogo'
-import { useNotification } from '@/components/admin/NotificationProvider'
 import { STATUSES } from '@/components/admin/sponsor-crm/form/constants'
 
 interface SponsorDetailHeaderProps {
@@ -15,8 +14,6 @@ interface SponsorDetailHeaderProps {
   onOpenRecord: () => void
   /** Opens the Send modal. Omitted when there is no sender identity. */
   onSendEmail?: () => void
-  /** Refreshes every sponsor query on the page after a status change. */
-  onChanged: () => void
   /** Back arrow target. Defaults to the pipeline board. */
   backHref?: string
 }
@@ -26,30 +23,14 @@ export function SponsorDetailHeader({
   initialData,
   onOpenRecord,
   onSendEmail,
-  onChanged,
   backHref = '/admin/sponsors/crm',
 }: SponsorDetailHeaderProps) {
-  const { showNotification } = useNotification()
-
   const { data, isLoading } = api.sponsor.crm.getOverview.useQuery(
     {
       id: sponsorId,
     },
     { initialData },
   )
-
-  // Through moveStage, so the pipeline transition rules apply. Every query
-  // the page holds is refreshed after, or the open record would save the old
-  // status back.
-  const updateMutation = api.sponsor.crm.moveStage.useMutation({
-    onSuccess: onChanged,
-    onError: (error) =>
-      showNotification({
-        type: 'error',
-        title: 'Could not change the status',
-        message: error.message,
-      }),
-  })
 
   if (isLoading) {
     return (
@@ -89,23 +70,12 @@ export function SponsorDetailHeader({
             {data.sponsor?.name || 'Unknown Sponsor'}
           </h1>
           <div className="mt-1 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-            <select
-              value={data.status}
-              disabled={updateMutation.isPending}
-              onChange={(e) => {
-                updateMutation.mutate({
-                  id: sponsorId,
-                  newStatus: e.target.value as any,
-                })
-              }}
-              className="inline-flex items-center rounded-md bg-blue-50 py-1 pr-8 pl-2 text-xs font-medium text-blue-700 ring-1 ring-blue-700/10 ring-inset focus:ring-2 focus:ring-blue-500 dark:bg-blue-900/30 dark:text-blue-400 dark:ring-blue-400/20"
-            >
-              {STATUSES.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
-            </select>
+            {/* Read-only: stages change on the board, through the phase
+                card's next action, or in the record panel. */}
+            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-700/10 ring-inset dark:bg-blue-900/30 dark:text-blue-400 dark:ring-blue-400/20">
+              {STATUSES.find((s) => s.value === data.status)?.label ??
+                data.status}
+            </span>
             <span>&bull;</span>
             <span>{data.tier?.title || 'No Tier'}</span>
           </div>
