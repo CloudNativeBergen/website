@@ -18,14 +18,19 @@ const meta = {
   component: RoomFeedbackCodeCards,
   parameters: { layout: 'fullscreen' },
   args: { codes: PAIR },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     await expect(
-      canvas.getByRole('heading', { name: 'How were these sessions?' }),
+      canvas.getByRole('heading', {
+        name:
+          args.codes.length === 1
+            ? 'How was this session?'
+            : 'How were these sessions?',
+      }),
     ).toBeVisible()
     await expect(
       await canvas.findAllByRole('img', { name: /QR code for feedback/ }),
-    ).toHaveLength(PAIR.length)
+    ).toHaveLength(args.codes.length)
     await expect(canvas.getByText('cloudnativedays.no/f/k7m2qx')).toBeVisible()
   },
 } satisfies Meta<typeof RoomFeedbackCodeCards>
