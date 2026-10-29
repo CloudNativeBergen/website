@@ -44,7 +44,9 @@ vi.mock('@/lib/trpc/client', () => ({
       crm: {
         list: { useQuery: () => listData() },
         getById: {
-          useQuery: ({ id }: { id: string }) => ({ data: { _id: id } }),
+          useQuery: ({ id }: { id: string }) => ({
+            data: { _id: id, sponsor: { name: 'Acme' } },
+          }),
         },
         healthViolations: { useQuery: () => ({ data: [], isError: false }) },
         delete: { useMutation: () => ({ mutateAsync: vi.fn() }) },

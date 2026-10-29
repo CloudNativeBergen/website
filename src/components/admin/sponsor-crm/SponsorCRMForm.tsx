@@ -60,6 +60,8 @@ interface SponsorCRMFormProps {
   onSendEmail?: () => void
   /** Send → Discount codes (#1262). Omitted when ticketing is off. */
   onSendDiscountCodes?: () => void
+  /** Delete this sponsor; the panel footer shows a danger action. */
+  onDelete?: () => void
   /** Send → Registration (#1263), raised from the contract view's portal step. */
   onSendRegistration?: () => void
   /** Send → Contract (#1264), raised from the contract view's contract and signing steps. */
@@ -88,6 +90,7 @@ export function SponsorCRMForm({
   onViewChange,
   onSendEmail,
   onSendDiscountCodes,
+  onDelete,
   onSendRegistration,
   onSendContract,
   workshopsEnabled = false,
@@ -561,6 +564,7 @@ export function SponsorCRMForm({
               onSendDiscountCodes={
                 sponsor && onSendDiscountCodes ? onSendDiscountCodes : undefined
               }
+              onDelete={sponsor && onDelete ? onDelete : undefined}
             />
           )}
         </div>
