@@ -103,6 +103,8 @@ export interface DashboardSponsorRow {
   _id: string
   status: string
   contractValue?: number
+  contractCurrency?: string
+  tier?: { price?: { amount?: number; currency?: string }[] | null } | null
   sponsor?: { name?: string; logo?: string; logoBright?: string }
 }
 
@@ -212,7 +214,7 @@ const DASHBOARD_ROOTS: Record<DashboardGroqSource, string> = {
   }`,
 
   sponsors: groq`*[_type == "sponsorForConference" && conference._ref == $conferenceId] | order(status asc, _createdAt desc){
-    _id, status, contractValue,
+    _id, status, contractValue, contractCurrency, tier->{ price[]{ amount, currency } },
     sponsor->{ name, logo, logoBright }
   }`,
 

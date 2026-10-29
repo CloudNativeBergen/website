@@ -1,4 +1,3 @@
-import type { SponsorForConferenceExpanded } from './types'
 import type { SupportedCurrency } from '@/lib/travel-support/types'
 import {
   FALLBACK_RATES,
@@ -18,7 +17,14 @@ import {
  * that need to distinguish "worth nothing" from "nobody has set an amount"
  * should check the inputs, not the result.
  */
-export function calculateSponsorValue(sponsor: SponsorForConferenceExpanded): {
+/** The fields value reads, so lean projections can use it too. */
+export interface SponsorValueFields {
+  contractValue?: number | null
+  contractCurrency?: string | null
+  tier?: { price?: { amount?: number; currency?: string }[] | null } | null
+}
+
+export function calculateSponsorValue(sponsor: SponsorValueFields): {
   value: number
   currency: string
 } {
@@ -44,7 +50,7 @@ export function calculateSponsorValue(sponsor: SponsorForConferenceExpanded): {
 // localStorage), so it converts with FALLBACK_RATES. Pass live rates where a
 // caller has them.
 export function sponsorValueNOK(
-  sponsor: SponsorForConferenceExpanded,
+  sponsor: SponsorValueFields,
   rates: Record<
     SupportedCurrency,
     Record<SupportedCurrency, number>
