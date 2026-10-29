@@ -11,10 +11,11 @@ import type { Conference } from '@/lib/conference/types'
 // so anything re-reading searchParams in between sees the pre-close URL.
 const replace = vi.fn()
 const push = vi.fn()
+const back = vi.fn()
 let searchParams = new URLSearchParams()
 vi.mock('next/navigation', () => ({
   __esModule: true,
-  useRouter: () => ({ replace, push }),
+  useRouter: () => ({ replace, push, back }),
   useSearchParams: () => searchParams,
 }))
 
@@ -31,12 +32,23 @@ vi.mock('@/lib/trpc/client', () => ({
         crm: {
           list: { invalidate: vi.fn(), getData: () => undefined },
           healthViolations: { invalidate: vi.fn() },
+          getById: { invalidate: vi.fn() },
+          getOverview: { invalidate: vi.fn() },
+          getContacts: { invalidate: vi.fn() },
+          getContractDetails: { invalidate: vi.fn() },
+          activities: { list: { invalidate: vi.fn() } },
         },
       },
     }),
     sponsor: {
       crm: {
         list: { useQuery: () => listData() },
+        getById: {
+          useQuery: (
+            { id }: { id: string },
+            { enabled }: { enabled: boolean },
+          ) => ({ data: enabled ? { _id: id } : undefined }),
+        },
         healthViolations: { useQuery: () => ({ data: [], isError: false }) },
         delete: { useMutation: () => ({ mutateAsync: vi.fn() }) },
       },
@@ -73,13 +85,24 @@ vi.mock('@/components/admin/sponsor-crm/SponsorCRMForm', () => ({
   SponsorCRMForm: ({
     onClose,
     sponsorStartSet,
+    presentation,
+    initialView,
+    sponsor,
   }: {
     onClose: () => void
     sponsorStartSet?: boolean
+    presentation?: string
+    initialView?: string
+    sponsor: { _id: string } | null
   }) => (
-    <div data-testid="sponsor-form">
+    <div
+      data-testid={presentation === 'panel' ? 'sponsor-panel' : 'sponsor-form'}
+    >
       <button onClick={onClose}>close form</button>
       <span>sponsor start set: {String(sponsorStartSet)}</span>
+      <span>
+        {sponsor?._id ?? 'new'} on {initialView ?? 'pipeline'}
+      </span>
     </div>
   ),
 }))
@@ -91,7 +114,23 @@ vi.mock('@/components/admin', () => ({
 
 vi.mock('@/components/admin/sponsor-crm/SponsorBoardColumn', () => ({
   __esModule: true,
-  SponsorBoardColumn: () => <div />,
+  SponsorBoardColumn: ({
+    columnKey,
+    sponsors,
+    onSponsorClick,
+  }: {
+    columnKey: string
+    sponsors: { _id: string }[]
+    onSponsorClick: (s: { _id: string }) => void
+  }) => (
+    <div>
+      {sponsors.map((s) => (
+        <button key={s._id} onClick={() => onSponsorClick(s)}>
+          card {s._id} in {columnKey}
+        </button>
+      ))}
+    </div>
+  ),
 }))
 
 vi.mock('@/components/admin/sponsor-crm/SponsorCard', () => ({
@@ -170,6 +209,7 @@ describe('SponsorCRMPipeline — sponsor form open/close', () => {
   beforeEach(() => {
     replace.mockClear()
     push.mockClear()
+    back.mockClear()
     searchParams = new URLSearchParams()
     listData.mockReturnValue({
       data: [mockSponsor({ _id: 'sfc-123' })],
@@ -206,12 +246,66 @@ describe('SponsorCRMPipeline — sponsor form open/close', () => {
     },
   )
 
-  // An existing sponsor lives on /admin/sponsors/[id] now (#1274), and the CRM
-  // page redirects old `?sponsor=` links there before the board renders.
-  it('does not open the form from ?sponsor= on the board', () => {
-    searchParams = new URLSearchParams('sponsor=sfc-123')
+  // The board keeps its place: a card opens the record in a side panel whose
+  // state lives in the URL, so Back closes it.
+  it('opens a card in the side panel without leaving the board', () => {
+    push.mockImplementation((url: string) => {
+      searchParams = new URLSearchParams(url.slice(1))
+    })
+    const view = renderPipeline()
+    fireEvent.click(screen.getByText(/^card sfc-123/))
+    expect(push).toHaveBeenCalledWith('?sponsor=sfc-123&view=pipeline', {
+      scroll: false,
+    })
+    expect(push.mock.calls[0][0]).not.toContain('/admin/sponsors/')
+
+    view.rerender(
+      <SponsorCRMPipeline
+        conferenceId="conf-2026"
+        conference={conference}
+        domain="cloudnativebergen.dev"
+      />,
+    )
+    expect(screen.getByTestId('sponsor-panel')).toHaveTextContent(
+      'sfc-123 on pipeline',
+    )
+    expect(screen.getByText(/^card sfc-123/)).toBeInTheDocument()
+
+    // Closing a panel this visit opened goes back in history.
+    fireEvent.click(screen.getByText('close form'))
+    expect(back).toHaveBeenCalled()
+    push.mockReset()
+  })
+
+  it('closes the panel when Back drops ?sponsor= from the URL', () => {
+    searchParams = new URLSearchParams('sponsor=sfc-123&view=contract')
+    const view = renderPipeline()
+    expect(screen.getByTestId('sponsor-panel')).toBeInTheDocument()
+    searchParams = new URLSearchParams()
+    view.rerender(
+      <SponsorCRMPipeline
+        conferenceId="conf-2026"
+        conference={conference}
+        domain="cloudnativebergen.dev"
+      />,
+    )
+    expect(screen.queryByTestId('sponsor-panel')).not.toBeInTheDocument()
+  })
+
+  // Old `crm?sponsor=` links (notifications, bookmarks) open the panel.
+  it('opens the panel on the tab an old ?sponsor=&view= link names', () => {
+    searchParams = new URLSearchParams('sponsor=sfc-123&view=contract')
     renderPipeline()
-    expect(screen.queryByTestId('sponsor-form')).not.toBeInTheDocument()
+    expect(screen.getByTestId('sponsor-panel')).toHaveTextContent(
+      'sfc-123 on contract',
+    )
+    // Arriving on the link pushed nothing, so close strips the params.
+    fireEvent.click(screen.getByText('close form'))
+    expect(back).not.toHaveBeenCalled()
+    expect(replace).toHaveBeenCalledWith(
+      expect.not.stringContaining('sponsor='),
+      { scroll: false },
+    )
   })
 
   it('does not open anything when the URL names no sponsor', () => {

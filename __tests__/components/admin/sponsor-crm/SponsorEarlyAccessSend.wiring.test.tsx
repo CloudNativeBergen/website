@@ -6,7 +6,7 @@
  * "Workshop early access" kind, for that sponsor.
  *
  * The intent travels through three components (the section, the contract
- * view, the record's form) to the sponsor page, which owns the modal. A prop
+ * view, the record's form) to the board's side panel, which owns the modal. A prop
  * dropped on the way leaves no button and no error, so the REAL four are
  * rendered here together. Stubbed: the board around them, the panels of the
  * record this is not about, and the Send modal itself (its own behaviour is
@@ -194,7 +194,7 @@ vi.mock('@/components/admin/OrganizerSignatureCapture', () => ({
   OrganizerSignatureCapture: nothing,
 }))
 
-import { SponsorDashboardClient } from '@/app/(admin)/admin/sponsors/[id]/SponsorDashboardClient'
+import { SponsorCRMPipeline } from '@/components/admin/sponsor-crm/SponsorCRMPipeline'
 
 const conference = {
   _id: 'conf-2026',
@@ -204,20 +204,21 @@ const conference = {
   workshopRegistrationSponsorStart: '2026-09-24T08:00:00.000Z',
 } as unknown as Conference
 
-/** The sponsor's record, open on its contract view. */
+/** The sponsor's record, open in the board's panel on its contract view. */
 function openRecord(
   sponsor: Parameters<typeof mockSponsor>[0],
   workshopsEnabled = true,
 ) {
   h.sponsors = [mockSponsor({ _id: 'sfc-acme', ...sponsor })]
-  searchParams = new URLSearchParams('view=contract')
+  searchParams = new URLSearchParams(
+    'assignedTo=speaker-1&sponsor=sfc-acme&view=contract',
+  )
   return render(
-    <SponsorDashboardClient
-      sponsorId="sfc-acme"
+    <SponsorCRMPipeline
+      conferenceId="conf-2026"
       conference={conference}
       domain="cloudnativebergen.dev"
       workshopsEnabled={workshopsEnabled}
-      initialView="contract"
     />,
   )
 }
