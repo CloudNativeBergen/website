@@ -167,6 +167,11 @@ const countHandler = http.get('/api/trpc/sponsor.crm.count', () =>
   HttpResponse.json({ result: { data: roster.length } }),
 )
 
+/** Inline status changes: accepted, so the row's buttons can be tried. */
+const updateHandler = http.post('/api/trpc/sponsor.crm.update', () =>
+  HttpResponse.json({ result: { data: {} } }),
+)
+
 const meta = {
   title: 'Systems/Sponsors/Admin/Invoicing/SponsorInvoicesPage',
   component: SponsorInvoicesPageClient,
@@ -180,7 +185,7 @@ const meta = {
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
-    msw: { handlers: [listHandler, countHandler] },
+    msw: { handlers: [listHandler, countHandler, updateHandler] },
     docs: {
       description: {
         component:
@@ -196,6 +201,31 @@ type Story = StoryObj<typeof meta>
 
 /** Default: unfinished invoicing work, mixing ready and blocked rows. */
 export const Default: Story = {}
+
+/** The server refuses every status change; the reason shows on the row. */
+export const UpdateRefused: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        listHandler,
+        countHandler,
+        http.post('/api/trpc/sponsor.crm.update', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message:
+                  'A contract must be signed before the invoice can be marked as sent.',
+                code: -32012,
+                data: { code: 'PRECONDITION_FAILED', httpStatus: 412 },
+              },
+            },
+            { status: 412 },
+          ),
+        ),
+      ],
+    },
+  },
+}
 
 export const Empty: Story = {
   parameters: {
