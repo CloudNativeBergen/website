@@ -77,7 +77,9 @@ export function SponsorContractWidget({
             <dd className="mt-1 text-sm text-gray-900 dark:text-white">
               {data.signatureStatus &&
               data.signatureStatus !== 'not-started' ? (
-                SIGNATURE_LABELS[data.signatureStatus]
+                SIGNATURE_LABELS[
+                  data.signatureStatus as keyof typeof SIGNATURE_LABELS
+                ]
               ) : (
                 <span className="text-gray-400">Not started</span>
               )}
