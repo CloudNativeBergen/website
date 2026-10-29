@@ -4,6 +4,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { sanityStatus } from '@/lib/sanity/status'
 import {
   allowsFrom,
+  UNDO_TO_PENDING_MS,
   type ModerationAction,
   type ShownIncarnation,
   type WallPostStatus,
@@ -27,12 +28,14 @@ import {
  */
 
 export type ModerationResult =
-  /** Written. */
-  | { status: 'done'; deviceKey: string | null }
+  /** Written; `decidedAt` is the decision time it wrote (null back to Pending). */
+  | { status: 'done'; deviceKey: string | null; decidedAt: string | null }
   /** Someone else decided first; nothing written. The card refreshes. */
   | { status: 'changed' }
   /** No such post on this wall any more: "This photo was deleted". */
   | { status: 'gone' }
+  /** Undo to Pending past its window (§10); nothing written. */
+  | { status: 'tooLate' }
 
 /**
  * Whether the wall is closed by the retention cron (§11.1): Approve refuses
@@ -46,10 +49,20 @@ async function isWallClosed(conferenceId: string): Promise<boolean> {
   return !wall || wall.closedAt !== null
 }
 
-function patchFor(action: ModerationAction, now: string) {
+function patchFor(action: 'approve' | 'reject' | 'remove', now: string) {
   return action === 'approve'
     ? { status: 'approved', approvedAt: now, decidedAt: now }
     : { status: 'notShown', decidedAt: now }
+}
+
+/**
+ * Whether an Undo back to Pending may run (§10): it names the decision it
+ * undoes (`decidedAt`, which the post must still carry) and comes within
+ * {@link UNDO_TO_PENDING_MS} of it.
+ */
+function undoInTime(decidedAt: string | undefined, now: Date): boolean {
+  const at = decidedAt ? Date.parse(decidedAt) : NaN
+  return now.getTime() - at <= UNDO_TO_PENDING_MS
 }
 
 /**
@@ -87,9 +100,10 @@ export async function moderateWallPost({
   /** The post the card showed: a replacement under the id is `changed`. */
   shown?: ShownIncarnation
   /**
-   * The decision time the caller expects the post to carry: the Undo of an
-   * Approve all sends its batch's, so a post approved by anyone else (in
-   * parallel, or again since) is `changed`, never removed.
+   * The decision time the caller expects the post to carry: an Undo sends
+   * the one its action wrote, so a post decided by anyone else since (or,
+   * for an Approve all, in parallel) is `changed`, never undone. Required
+   * for `undoToPending`, which is also refused past {@link UNDO_TO_PENDING_MS}.
    */
   decidedAt?: string
   /** Told the device and talk of every post read, before any write. */
@@ -107,12 +121,21 @@ export async function moderateWallPost({
     (shown !== undefined && !isShown(first, shown)) ||
     !allowsFrom(action, first.status) ||
     (from !== undefined && first.status !== from) ||
-    (decidedAt !== undefined && first.decidedAt !== decidedAt)
+    (decidedAt !== undefined && first.decidedAt !== decidedAt) ||
+    (action === 'undoToPending' && decidedAt === undefined)
   ) {
     return { status: 'changed' }
   }
+  if (action === 'undoToPending' && !undoInTime(decidedAt, now)) {
+    return { status: 'tooLate' }
+  }
 
-  const set = patchFor(action, now.toISOString())
+  // Back to Pending restores what a pending post has: no decision times.
+  const set =
+    action === 'undoToPending'
+      ? { status: 'pending' }
+      : patchFor(action, now.toISOString())
+  const unset = action === 'undoToPending' ? ['approvedAt', 'decidedAt'] : []
   return atMostTwice<ModerationResult>(
     async (attempt) => {
       let post = first
@@ -132,12 +155,13 @@ export async function moderateWallPost({
         return { status: 'changed' }
       }
       try {
-        await clientWrite
-          .patch(postId)
-          .ifRevisionId(post._rev)
-          .set(set)
-          .commit()
-        return { status: 'done', deviceKey: post.deviceKey }
+        const patch = clientWrite.patch(postId).ifRevisionId(post._rev).set(set)
+        await (unset.length ? patch.unset(unset) : patch).commit()
+        return {
+          status: 'done',
+          deviceKey: post.deviceKey,
+          decidedAt: 'decidedAt' in set ? set.decidedAt : null,
+        }
       } catch (error) {
         if (sanityStatus(error) === 404) return { status: 'gone' }
         if (sanityStatus(error) === 409) return AGAIN

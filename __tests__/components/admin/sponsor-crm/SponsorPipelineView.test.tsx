@@ -14,6 +14,26 @@ vi.mock('@/components/admin/sponsor/SponsorActivityTimeline', () => ({
   SponsorActivityTimeline: () => <div data-testid="activity-timeline" />,
 }))
 
+vi.mock('@/components/admin/sponsor-crm/SponsorTicketsBlock', async (orig) => ({
+  ...(await orig<object>()),
+  SponsorTicketsBlock: () => <div data-testid="tickets-block" />,
+}))
+
+const codeOptions = vi.hoisted(() => ({
+  codes: [] as Array<{ code: string; selected: boolean; linked: boolean }>,
+}))
+vi.mock('@/lib/trpc/client', () => ({
+  api: {
+    sponsor: {
+      crm: {
+        discountCodeOptions: {
+          useQuery: () => ({ data: { codes: codeOptions.codes } }),
+        },
+      },
+    },
+  },
+}))
+
 const defaultFormData: SponsorPipelineFormData = {
   sponsorId: 'sponsor-1',
   name: 'Sonat AS',
@@ -36,7 +56,10 @@ const defaultFormData: SponsorPipelineFormData = {
   assignedTo: 'user-1',
 }
 
-function renderPipelineView(sponsor: SponsorForConferenceExpanded | null) {
+function renderPipelineView(
+  sponsor: SponsorForConferenceExpanded | null,
+  onSendDiscountCodes?: () => void,
+) {
   return render(
     <SponsorPipelineView
       formData={defaultFormData}
@@ -50,6 +73,7 @@ function renderPipelineView(sponsor: SponsorForConferenceExpanded | null) {
       onSubmit={vi.fn()}
       onCancel={vi.fn()}
       onOpenView={vi.fn()}
+      onSendDiscountCodes={onSendDiscountCodes}
     />,
   )
 }
@@ -151,5 +175,45 @@ describe('SponsorPipelineView — sections', () => {
     ]) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
+  })
+})
+
+describe('SponsorPipelineView — tickets (#1704 T1)', () => {
+  afterEach(cleanup)
+  beforeEach(() => {
+    codeOptions.codes = []
+  })
+
+  it('enables Send codes when the codes are only matched by name', () => {
+    codeOptions.codes = [{ code: 'ACME-2026', selected: true, linked: false }]
+    renderPipelineView(mockSponsor({ status: 'closed-won' }), vi.fn())
+    expect(screen.getByRole('button', { name: /Send codes/ })).toBeEnabled()
+    expect(screen.queryByText('No codes linked yet')).not.toBeInTheDocument()
+  })
+
+  it('hides the Tickets block when discount codes are gated off', () => {
+    renderPipelineView(mockSponsor({ status: 'closed-won' }))
+    expect(screen.queryByTestId('tickets-block')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Send codes/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the block and disables Send codes, with a reason, without codes', () => {
+    renderPipelineView(mockSponsor({ status: 'closed-won' }), vi.fn())
+    expect(screen.getByTestId('tickets-block')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Send codes/ })).toBeDisabled()
+    expect(screen.getByText('No codes linked yet')).toBeInTheDocument()
+  })
+
+  it('enables Send codes once a code is linked', () => {
+    renderPipelineView(
+      mockSponsor({
+        status: 'closed-won',
+        discountCodes: [{ _key: 'k1', code: 'ACME-2026' }],
+      }),
+      vi.fn(),
+    )
+    expect(screen.getByRole('button', { name: /Send codes/ })).toBeEnabled()
   })
 })

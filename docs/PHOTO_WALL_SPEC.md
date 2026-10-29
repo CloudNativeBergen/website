@@ -652,7 +652,8 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
     It only ever unticks `marketingConsent`; organizers never tick it.
   - Pending tab: **Approve all pending (N)** with an inline confirm. It works as described below.
 - **Allowed from-states:** Approve from `pending` or `notShown`; Reject from
-  `pending`; Remove from `approved`; Delete (now) from any status. A
+  `pending`; Remove from `approved`; Delete (now) from any status. Undo to
+  Pending, which only Undo sends, from `approved` or `notShown`. A
   `deleting` card offers only **Try again** (Delete). Any other combination is refused before any write.
 - **Every transition is guarded with `ifRevisionId`** against the non-CDN read
   it was decided from, so two organizers (or an organizer and the contributor)
@@ -662,15 +663,35 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   refreshes with no change; otherwise it retries once, and **only if no moderation decision happened in between**: the status **and** `decidedAt` are what the action read (a marketing untick changes neither). So an Approve begun on Pending doesn't retry after a rejection, and a Remove doesn't retry after someone removed and re-approved the post. A marketing untick is the usual reason to retry.
 - **Approve** patches `status: approved`, `approvedAt` and `decidedAt`.
 - **Reject** and **Remove** patch `status: notShown` and `decidedAt`.
-- **Approve all pending** approves the posts pending when pressed, one guarded patch per post, four at a time, within a 30 s budget (a transaction is all-or-nothing, so one conflicted post would sink a whole batch). A conflicted post is skipped and stays pending. It reports how many it approved; pressing again picks up the rest. Its confirm names the exact count. It also answers the decision time all its patches write, and the Undo toast offers one Undo for the batch: a guarded Remove of every post it sent, four at a time, each requiring that decision time, so a post whose answer was lost is still undone, while one never approved, or approved by another organizer, is left as it is. The queue then says how many came off the wall.
+- **Undo to Pending** patches `status: pending` and unsets `approvedAt` and
+  `decidedAt`, so the post is as a pending post is. It must name the
+  `decidedAt` of the decision it undoes (the post must still carry it) and
+  come within 2 minutes of it. A post decided since is refused as `changed`;
+  a late one as `tooLate`, and the queue says "Too late to undo." The toast
+  drops its Undo button 5 s before that, even while focused. It
+  expires the wall, the queue, the device and the talk like every
+  moderation write.
+- **Approve all pending** approves the posts pending when pressed, one guarded patch per post, four at a time, within a 30 s budget (a transaction is all-or-nothing, so one conflicted post would sink a whole batch). A conflicted post is skipped and stays pending. It reports how many it approved; pressing again picks up the rest. Its confirm names the exact count. It also answers the decision time all its patches write, and the Undo toast offers one Undo for the batch: a guarded Undo to Pending of every post it sent, four at a time, each requiring that decision time, so a post whose answer was lost is still undone, while one never approved, or approved by another organizer, is left as it is. The queue then says how many went back to Pending.
 - **Delete now** runs the same Delete as the contributor's (§12).
 - **Undo:** after Approve, Reject or Remove, a toast at the bottom says what
-  Undo does ("Rejected · Undo puts it on the wall") for about 8 s, held while
-  focused; Escape dismisses it. Only the latest action can be undone. There
-  is no way back to Pending, so Undo of an Approve is a Remove (to Not shown),
-  and Undo of a Reject or Remove is an Approve. Undo sends the status the
-  action left and the same incarnation, so the usual guards answer
-  `changed` if someone else decided in between, and the queue says so.
+  Undo does ("Rejected · Undo moves it back to Pending") for about 8 s, held
+  while focused; Escape dismisses it. Only the latest action can be undone.
+  Undo is a true undo: the post goes back to the status it had before.
+
+  | Action                 | Undo                  | Toast                                               |
+  | ---------------------- | --------------------- | --------------------------------------------------- |
+  | Approve from Pending   | Undo to Pending       | Approved · Undo moves it back to Pending            |
+  | Reject                 | Undo to Pending       | Rejected · Undo moves it back to Pending            |
+  | Remove                 | Approve               | Removed · Undo puts it back on the wall             |
+  | Approve from Not shown | Remove                | Approved · Undo moves it back to Not shown          |
+  | Approve all pending    | Undo to Pending, each | Approved N photos · Undo moves them back to Pending |
+
+  Undo sends the status the action left, the same incarnation and the
+  `decidedAt` the action wrote, so the usual guards answer `changed` if
+  someone else decided in between, and the queue says so. A trusted
+  poster's post approved at Submit (§6.6) had no queue action, so it has
+  no Undo.
+
 - **Keyboard:** in the queue, J/K and the arrow keys move between cards (to
   the card's photo, so Enter opens it large), A approves, R rejects and U
   undoes. Shortcuts never fire in a field, an open menu or a dialog, nor with

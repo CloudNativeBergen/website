@@ -162,7 +162,12 @@ const meta = {
   },
   args: {
     queue: QUEUE,
-    onAction: fn(async (): Promise<PostActionOutcome> => 'done'),
+    // A decision answers the time it wrote, which its Undo sends back.
+    onAction: fn(
+      async (): Promise<
+        PostActionOutcome | { status: 'done'; decidedAt: string | null }
+      > => ({ status: 'done', decidedAt: '2026-10-29T10:00:00.000Z' }),
+    ),
     onApproveAll: fn<ApproveAllFn>(async (posts) => ({
       approved: posts.length,
       decidedAt: '2026-10-29T10:00:00.000Z',
@@ -221,7 +226,7 @@ export const UndoToast: Story = {
     const [first] = canvas.getAllByRole('article')
     await userEvent.click(within(first).getByRole('button', { name: 'Reject' }))
     await expect(
-      await canvas.findByText('Rejected · Undo puts it on the wall'),
+      await canvas.findByText('Rejected · Undo moves it back to Pending'),
     ).toBeVisible()
     await userEvent.click(canvas.getByRole('button', { name: 'Undo' }))
     await waitFor(() =>
@@ -230,14 +235,15 @@ export const UndoToast: Story = {
           caption: 'Keynote crowd, first morning',
           status: 'notShown',
         }),
-        'approve',
+        'undoToPending',
+        '2026-10-29T10:00:00.000Z',
       ),
     )
     await expect(canvas.queryByRole('button', { name: 'Undo' })).toBeNull()
     // Again, for the picture.
     await userEvent.click(within(first).getByRole('button', { name: 'Reject' }))
     const toast = (
-      await canvas.findByText('Rejected · Undo puts it on the wall')
+      await canvas.findByText('Rejected · Undo moves it back to Pending')
     ).parentElement!
     // Scrolled to the end, the last card clears the toast (a phone too).
     window.scrollTo(0, document.documentElement.scrollHeight)
@@ -279,9 +285,10 @@ export const KeyboardShortcuts: Story = {
       expect(args.onAction).toHaveBeenLastCalledWith(
         expect.objectContaining({ status: 'pending' }),
         'reject',
+        undefined,
       ),
     )
-    await canvas.findByText('Rejected · Undo puts it on the wall')
+    await canvas.findByText('Rejected · Undo moves it back to Pending')
     await userEvent.keyboard('k')
     await expect(
       within(cards[0]).getByRole('button', { name: /^Enlarge/ }),
@@ -693,7 +700,7 @@ export const Polled: StoryObj<typeof ModerationQueue> = {
       within(first).getByRole('button', { name: 'Approve' }),
     )
     await expect(
-      await canvas.findByText('Approved · Undo takes it off the wall'),
+      await canvas.findByText('Approved · Undo moves it back to Pending'),
     ).toBeVisible()
   },
 }
@@ -836,8 +843,8 @@ export const ApproveAllPhoneDark: Story = {
 }
 export const ApproveAllPhone: Story = { ...ApproveAll, parameters: PHONE }
 /**
- * Approved: one Undo for the whole batch, which removes exactly the posts it
- * approved.
+ * Approved: one Undo for the whole batch, which moves the posts it approved
+ * back to Pending.
  */
 export const ApproveAllUndo: Story = {
   play: async ({ canvasElement, args }) => {
@@ -848,23 +855,25 @@ export const ApproveAllUndo: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Approve all' }))
     await expect(
       await canvas.findByText(
-        'Approved 3 photos · Undo takes them off the wall',
+        'Approved 3 photos · Undo moves them back to Pending',
       ),
     ).toBeVisible()
     await userEvent.click(canvas.getByRole('button', { name: 'Undo' }))
     await waitFor(() => expect(args.onAction).toHaveBeenCalledTimes(3))
     for (const [post, action] of (args.onAction as ReturnType<typeof fn>).mock
       .calls as [ModerationPost, string][]) {
-      await expect(action).toBe('remove')
+      await expect(action).toBe('undoToPending')
       await expect(post.status).toBe('approved')
     }
-    await canvas.findByText('Took 3 photos off the wall. They’re in Not shown.')
+    await canvas.findByText('Moved 3 photos back to Pending.')
     // Again, for the picture.
     await userEvent.click(
       canvas.getByRole('button', { name: 'Approve all pending (3)' }),
     )
     await userEvent.click(canvas.getByRole('button', { name: 'Approve all' }))
-    await canvas.findByText('Approved 3 photos · Undo takes them off the wall')
+    await canvas.findByText(
+      'Approved 3 photos · Undo moves them back to Pending',
+    )
   },
 }
 export const ApproveAllUndoDark: Story = {

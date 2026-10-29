@@ -33,6 +33,8 @@ export type ActivityType =
   | 'message'
   // Discount codes linked to the sponsor without a send (#1262).
   | 'discount_codes_assigned'
+  // A stored code removed from the sponsor (#1704 T1).
+  | 'discount_code_unlinked'
 
 /** Every activity type with its label (mirrors the sponsorActivity schema). */
 export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
@@ -49,6 +51,7 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   contract_reminder_sent: 'Contract Reminder Sent',
   message: 'Message',
   discount_codes_assigned: 'Discount Codes Assigned',
+  discount_code_unlinked: 'Discount Code Unlinked',
 }
 
 /**
@@ -212,6 +215,7 @@ export interface SponsorForConferenceExpanded {
       amount: number
       currency: string
     }>
+    ticketEntitlement?: number | null
   }
   addons?: Array<{
     _id: string
@@ -272,6 +276,7 @@ export interface SponsorForConferenceExpanded {
   registrationToken?: string
   registrationComplete?: boolean
   registrationCompletedAt?: string
+  discountCodes?: LinkedDiscountCode[]
   /**
    * Whether the sponsor has a workshop early-access link (#1346). The token
    * itself is not read with the record: its address is asked for when needed.

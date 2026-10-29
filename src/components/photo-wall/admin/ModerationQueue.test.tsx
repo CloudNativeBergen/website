@@ -33,6 +33,7 @@ const h = vi.hoisted(() => ({
   approve: vi.fn(),
   reject: vi.fn(),
   remove: vi.fn(),
+  undoToPending: vi.fn(),
   deletePost: vi.fn(),
   withdrawMarketing: vi.fn(),
   approveAllPending: vi.fn(),
@@ -57,6 +58,7 @@ vi.mock('@/lib/trpc/client', () => {
         approve: mutation(h.approve),
         reject: mutation(h.reject),
         remove: mutation(h.remove),
+        undoToPending: mutation(h.undoToPending),
         deletePost: mutation(h.deletePost),
         withdrawMarketing: mutation(h.withdrawMarketing),
         approveAllPending: mutation(h.approveAllPending),
@@ -78,7 +80,11 @@ vi.mock('@/components/feedback/useFeedbackQrPng', () => ({
   useFeedbackQrPng: () => ({ failed: false }),
 }))
 
-import { ModerationQueue, ModerationQueueView } from './ModerationQueue'
+import {
+  ModerationQueue,
+  ModerationQueueView,
+  UNDO_LAPSES_MS,
+} from './ModerationQueue'
 import { PendingSummaryView } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 import { MODERATION_POLL_MS, moderationQueuePolling } from './polling'
@@ -1056,7 +1062,7 @@ describe('the actions (§10)', () => {
     fireEvent.click(
       within(card('Keynote crowd')).getByRole('button', { name: 'Approve' }),
     )
-    await screen.findByText('Approved · Undo takes it off the wall')
+    await screen.findByText('Approved · Undo moves it back to Pending')
     expect(h.approve).toHaveBeenCalledWith({
       id: 'wallPost-1',
       from: 'pending',
@@ -1082,7 +1088,7 @@ describe('the actions (§10)', () => {
       'Reject',
       h.reject,
       'Keynote crowd',
-      'Rejected · Undo puts it on the wall',
+      'Rejected · Undo moves it back to Pending',
     ],
   ] as const)('%s', async (label, fn, name, said) => {
     fn.mockResolvedValue({ status: 'done' })
@@ -1403,7 +1409,7 @@ describe('the queue holds what is in flight, and where focus goes (§10)', () =>
     })
     button.focus()
     fireEvent.click(button)
-    await screen.findByText('Approved · Undo takes it off the wall')
+    await screen.findByText('Approved · Undo moves it back to Pending')
     serve(approved(pendingTwo, 'wallPost-1'))
     rerender(<ModerationQueue />)
     expect(
@@ -1481,7 +1487,7 @@ describe('the queue holds what is in flight, and where focus goes (§10)', () =>
     })
     button.focus()
     fireEvent.click(button)
-    await screen.findByText('Approved · Undo takes it off the wall')
+    await screen.findByText('Approved · Undo moves it back to Pending')
     serve(approved(three, 'wallPost-5'))
     rerender(<ModerationQueue />)
     expect(
@@ -1497,7 +1503,7 @@ describe('the queue holds what is in flight, and where focus goes (§10)', () =>
     })
     button.focus()
     fireEvent.click(button)
-    await screen.findByText('Approved · Undo takes it off the wall')
+    await screen.findByText('Approved · Undo moves it back to Pending')
     fireEvent.pointerDown(document.body)
     serve(approved(pendingTwo, 'wallPost-1'))
     rerender(<ModerationQueue />)
@@ -1524,7 +1530,7 @@ describe('the queue holds what is in flight, and where focus goes (§10)', () =>
     fireEvent.click(
       within(card('First')).getByRole('button', { name: 'Approve' }),
     )
-    await screen.findByText('Approved · Undo takes it off the wall')
+    await screen.findByText('Approved · Undo moves it back to Pending')
     serve(approved(pendingTwo, 'wallPost-1'))
     rerender(<ModerationQueue />)
     expect(document.activeElement).toBe(document.body)
@@ -1539,7 +1545,7 @@ describe('the queue holds what is in flight, and where focus goes (§10)', () =>
     })
     button.focus()
     fireEvent.click(button)
-    await screen.findByText('Approved · Undo takes it off the wall')
+    await screen.findByText('Approved · Undo moves it back to Pending')
     serve(approved({ posts: [pendingTwo.posts[0]] }, 'wallPost-1'))
     rerender(<ModerationQueue />)
     expect(tab(/^Pending/)).toHaveFocus()
@@ -1567,7 +1573,7 @@ describe('the queue holds what is in flight, and where focus goes (§10)', () =>
     fireEvent.click(
       within(card('First')).getByRole('button', { name: 'Approve' }),
     )
-    await screen.findByText('Approved · Undo takes it off the wall')
+    await screen.findByText('Approved · Undo moves it back to Pending')
     tab(/^Not shown/).focus()
     serve(approved(pendingTwo, 'wallPost-1'))
     rerender(<ModerationQueue />)
@@ -1844,6 +1850,7 @@ describe('a post re-created under the same id gets a fresh card (§6.2)', () => 
 describe('Undo (§10): the latest decision, reversed, on the same post', () => {
   const SEEN = { createdAt: '2026-10-26T07:29:00Z', assetId: 'image-abc' }
   const OTHER = { createdAt: '2026-10-26T07:39:00Z', assetId: 'image-def' }
+  const D = '2026-10-26T09:00:00.000Z'
   const queue: ModerationQueueData = {
     posts: [
       post({ _id: 'wallPost-1', caption: 'Pending one', incarnation: SEEN }),
@@ -1868,9 +1875,15 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
     ],
   }
   beforeEach(() => {
-    for (const fn of [h.invalidate, h.approve, h.reject, h.remove]) {
+    for (const fn of [
+      h.invalidate,
+      h.approve,
+      h.reject,
+      h.remove,
+      h.undoToPending,
+    ]) {
       fn.mockReset()
-      fn.mockResolvedValue({ status: 'done' })
+      fn.mockResolvedValue({ status: 'done', decidedAt: D })
     }
     h.useQuery.mockReturnValue({
       data: queue,
@@ -1887,8 +1900,16 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
     )
   const toast = () => screen.findByText(/ · Undo /)
   const writes = () =>
-    [h.approve, h.reject, h.remove].map((fn) => fn.mock.calls.length)
+    [h.approve, h.reject, h.remove, h.undoToPending].map(
+      (fn) => fn.mock.calls.length,
+    )
+  const REVERSE = {
+    approve: [0, h.approve, { from: 'notShown' }],
+    remove: [2, h.remove, { from: 'approved', decidedAt: D }],
+    undoToPending: [3, h.undoToPending, { decidedAt: D }],
+  } as const
 
+  // A true undo (§10): back to the status the post had before.
   it.each([
     [
       'Approve from Pending',
@@ -1896,8 +1917,9 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
       'Pending one',
       'Approve',
       'wallPost-1',
-      'Approved · Undo takes it off the wall',
-      'remove',
+      'Approved · Undo moves it back to Pending',
+      'undoToPending',
+      'approved',
     ],
     [
       'Reject',
@@ -1905,8 +1927,9 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
       'Pending one',
       'Reject',
       'wallPost-1',
-      'Rejected · Undo puts it on the wall',
-      'approve',
+      'Rejected · Undo moves it back to Pending',
+      'undoToPending',
+      'notShown',
     ],
     [
       'Remove',
@@ -1916,6 +1939,7 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
       'wallPost-2',
       'Removed · Undo puts it back on the wall',
       'approve',
+      'notShown',
     ],
     [
       'Approve from Not shown',
@@ -1923,14 +1947,14 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
       'Down',
       'Approve',
       'wallPost-3',
-      'Approved · Undo takes it off the wall',
+      'Approved · Undo moves it back to Not shown',
       'remove',
+      'approved',
     ],
   ] as const)(
-    '%s: the toast says what Undo does, and Undo sends the reverse',
-    async (_, tabName, caption, button, id, says, reverseName) => {
-      const reverse = reverseName === 'remove' ? h.remove : h.approve
-      const from = reverseName === 'remove' ? 'approved' : 'notShown'
+    '%s: the toast says what Undo does, and Undo restores the status before',
+    async (_, tabName, caption, button, id, says, reverseName, from) => {
+      const [index, reverse, extra] = REVERSE[reverseName]
       render(<ModerationQueue />)
       fireEvent.click(tab(new RegExp(`^${tabName}`)))
       press(caption, button)
@@ -1938,20 +1962,35 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
       const before = writes()
       fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
       await vi.waitFor(() =>
-        expect(reverse).toHaveBeenLastCalledWith({ id, from, shown: SEEN }),
+        expect(reverse).toHaveBeenLastCalledWith({
+          id,
+          from,
+          shown: SEEN,
+          ...extra,
+        }),
       )
       // Exactly one more write, and it is the reverse.
-      const index = reverseName === 'remove' ? 2 : 0
       expect(writes()).toEqual(before.map((n, i) => n + (i === index ? 1 : 0)))
       // An Undo is not itself undoable.
       await screen.findByText(
-        reverseName === 'remove'
-          ? 'Removed from the wall. It’s in Not shown.'
-          : 'Approved. It shows on the wall within a few seconds.',
+        {
+          remove: 'Removed from the wall. It’s in Not shown.',
+          approve: 'Approved. It shows on the wall within a few seconds.',
+          undoToPending: 'Moved back to Pending.',
+        }[reverseName],
       )
       expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
     },
   )
+
+  it('a failed Undo to Pending says so', async () => {
+    render(<ModerationQueue />)
+    press('Pending one', 'Reject')
+    await toast()
+    h.undoToPending.mockRejectedValueOnce(new Error('down'))
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await screen.findByText('Undo failed. The photo is as it was before Undo.')
+  })
 
   it('only the latest action: Undo targets the second post, not the first', async () => {
     render(<ModerationQueue />)
@@ -1959,14 +1998,15 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
     await toast()
     press('Pending two', 'Approve')
     expect(await toast()).toHaveTextContent(
-      'Approved · Undo takes it off the wall',
+      'Approved · Undo moves it back to Pending',
     )
     expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-    await vi.waitFor(() => expect(h.remove).toHaveBeenCalledTimes(1))
-    expect(h.remove).toHaveBeenCalledWith({
+    await vi.waitFor(() => expect(h.undoToPending).toHaveBeenCalledTimes(1))
+    expect(h.undoToPending).toHaveBeenCalledWith({
       id: 'wallPost-9',
       from: 'approved',
+      decidedAt: D,
       shown: OTHER,
     })
     expect(h.approve).toHaveBeenCalledTimes(1)
@@ -1976,7 +2016,7 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
     render(<ModerationQueue />)
     press('Pending one', 'Reject')
     await toast()
-    h.approve.mockResolvedValueOnce({ status: 'changed' })
+    h.undoToPending.mockResolvedValueOnce({ status: 'changed' })
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
     await screen.findByText(
       'Another organizer changed this photo first. Showing it as it is now.',
@@ -2013,6 +2053,50 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
     expect(screen.getByText(/ · Undo /)).toBeInTheDocument()
     await act(() => vi.advanceTimersByTimeAsync(200))
     expect(screen.queryByText(/ · Undo /)).toBeNull()
+  })
+
+  it('held open by focus, an Undo to Pending lapses 5 s before the server’s window: Too late to undo', async () => {
+    vi.useFakeTimers()
+    render(<ModerationQueue />)
+    press('Pending one', 'Reject')
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    act(() => screen.getByRole('button', { name: 'Undo' }).focus())
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_LAPSES_MS - 100))
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+    await act(() => vi.advanceTimersByTimeAsync(100))
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+    expect(screen.getByText('Too late to undo.')).toBeInTheDocument()
+    // Focus moved to Dismiss, so the toast stays until dismissed.
+    const dismiss = screen.getByRole('button', { name: 'Dismiss' })
+    expect(dismiss).toHaveFocus()
+    // U no longer undoes.
+    fireEvent.keyDown(document.body, { key: 'u' })
+    expect(h.undoToPending).not.toHaveBeenCalled()
+    fireEvent.click(dismiss)
+    expect(screen.queryByText('Too late to undo.')).toBeNull()
+  })
+
+  it('a Remove’s Undo (an Approve) does not lapse', async () => {
+    vi.useFakeTimers()
+    render(<ModerationQueue />)
+    fireEvent.click(tab(/^On the wall/))
+    press('Up', 'Remove')
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    act(() => screen.getByRole('button', { name: 'Undo' }).focus())
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_LAPSES_MS + 1000))
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+  })
+
+  it('the server says the window passed (clock skew): Too late to undo, not another organizer', async () => {
+    render(<ModerationQueue />)
+    press('Pending one', 'Reject')
+    await toast()
+    h.undoToPending.mockResolvedValueOnce({ status: 'tooLate' })
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await screen.findByText('Too late to undo.')
+    expect(
+      screen.queryByText(/Another organizer changed this photo first/),
+    ).toBeNull()
   })
 })
 
@@ -2131,16 +2215,19 @@ describe('keyboard shortcuts on the queue (§10)', () => {
   })
 
   it('U undoes the latest action', async () => {
+    const at = '2026-10-26T09:00:00.000Z'
+    h.reject.mockResolvedValueOnce({ status: 'done', decidedAt: at })
     render(<ModerationQueue />)
     photoOf('One').focus()
     key('r')
-    await screen.findByText('Rejected · Undo puts it on the wall')
+    await screen.findByText('Rejected · Undo moves it back to Pending')
     photoOf('Two').focus()
     key('u')
     await vi.waitFor(() =>
-      expect(h.approve).toHaveBeenCalledWith({
+      expect(h.undoToPending).toHaveBeenCalledWith({
         id: 'wallPost-1',
         from: 'notShown',
+        decidedAt: at,
         shown: NO_PHOTO_ID,
       }),
     )
@@ -2201,9 +2288,15 @@ describe('Approve all (§10): a confirm with the count, and one Undo for the bat
     ),
   }
   beforeEach(() => {
-    for (const fn of [h.invalidate, h.approve, h.remove, h.approveAllPending])
+    for (const fn of [
+      h.invalidate,
+      h.approve,
+      h.remove,
+      h.undoToPending,
+      h.approveAllPending,
+    ])
       fn.mockReset()
-    h.remove.mockResolvedValue({ status: 'done' })
+    h.undoToPending.mockResolvedValue({ status: 'done', decidedAt: null })
     h.useQuery.mockReturnValue({
       data: queue,
       isPending: false,
@@ -2222,7 +2315,7 @@ describe('Approve all (§10): a confirm with the count, and one Undo for the bat
 
   const AT = '2026-10-29T10:00:00.000Z'
 
-  it('Undo targets every post it sent, a lost answer too, with the batch time', async () => {
+  it('Undo moves every post it sent back to Pending, a lost answer too, with the batch time', async () => {
     // Post 2's write went through but its answer was lost: still undone.
     h.approveAllPending.mockResolvedValue({
       approved: 2,
@@ -2234,14 +2327,14 @@ describe('Approve all (§10): a confirm with the count, and one Undo for the bat
     await approveAll()
     expect(
       await screen.findByText(
-        'Approved 2 photos · Undo takes them off the wall',
+        'Approved 2 photos · Undo moves them back to Pending',
       ),
     ).toBeInTheDocument()
-    expect(h.remove).not.toHaveBeenCalled()
+    expect(h.undoToPending).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-    await screen.findByText('Took 3 photos off the wall. They’re in Not shown.')
-    expect(h.remove).toHaveBeenCalledTimes(3)
-    expect(h.remove.mock.calls.map(([input]) => input)).toEqual(
+    await screen.findByText('Moved 3 photos back to Pending.')
+    expect(h.undoToPending).toHaveBeenCalledTimes(3)
+    expect(h.undoToPending.mock.calls.map(([input]) => input)).toEqual(
       expect.arrayContaining(
         [1, 2, 3].map((n) => ({
           id: `wallPost-${n}`,
@@ -2252,6 +2345,7 @@ describe('Approve all (§10): a confirm with the count, and one Undo for the bat
       ),
     )
     expect(h.approve).not.toHaveBeenCalled()
+    expect(h.remove).not.toHaveBeenCalled()
   })
 
   it('a post the batch never approved is skipped, not an error', async () => {
@@ -2261,29 +2355,33 @@ describe('Approve all (§10): a confirm with the count, and one Undo for the bat
       decidedAt: AT,
       pending: 3,
     })
-    h.remove.mockResolvedValueOnce({ status: 'changed' })
+    h.undoToPending.mockResolvedValueOnce({ status: 'changed' })
     render(<ModerationQueue />)
     await approveAll()
-    await screen.findByText('Approved 2 photos · Undo takes them off the wall')
+    await screen.findByText(
+      'Approved 2 photos · Undo moves them back to Pending',
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-    await screen.findByText('Took 2 photos off the wall. They’re in Not shown.')
-    expect(h.remove).toHaveBeenCalledTimes(3)
+    await screen.findByText('Moved 2 photos back to Pending.')
+    expect(h.undoToPending).toHaveBeenCalledTimes(3)
   })
 
-  it('says how many Undo could not take off when a Remove fails', async () => {
+  it('says how many Undo could not move when one fails', async () => {
     h.approveAllPending.mockResolvedValue({
       approved: 3,
       approvedIds: ['wallPost-1', 'wallPost-2', 'wallPost-3'],
       decidedAt: AT,
       pending: 3,
     })
-    h.remove.mockRejectedValueOnce(new Error('network'))
+    h.undoToPending.mockRejectedValueOnce(new Error('network'))
     render(<ModerationQueue />)
     await approveAll()
-    await screen.findByText('Approved 3 photos · Undo takes them off the wall')
+    await screen.findByText(
+      'Approved 3 photos · Undo moves them back to Pending',
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
     await screen.findByText(
-      'Took 2 photos off the wall. 1 could not be taken off; remove it by hand.',
+      'Moved 2 photos back to Pending. 1 could not be moved; remove it from the wall by hand.',
     )
   })
 

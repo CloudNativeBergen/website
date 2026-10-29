@@ -10,6 +10,7 @@ import {
   ClipboardIcon,
   LinkIcon,
 } from '@heroicons/react/24/outline'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
@@ -1199,6 +1200,15 @@ export function DiscountCodeManager({
                 >
                   <ClipboardIcon className="h-4 w-4" />
                 </button>
+                {sponsor.sponsorForConferenceId && (
+                  <Link
+                    href={`/admin/sponsors/crm?sponsor=${encodeURIComponent(sponsor.sponsorForConferenceId)}&view=pipeline`}
+                    className="shrink-0 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                    aria-label={`Open ${sponsor.name} in the sponsor CRM`}
+                  >
+                    Open sponsor
+                  </Link>
+                )}
               </div>
             ))}
           </div>

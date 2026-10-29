@@ -862,6 +862,8 @@ describe('photoWall.moderationQueue (§8, §10)', () => {
  * `_createdAt` and the card no photo id: the incarnation tests set both.
  */
 const SHOWN = { createdAt: null, assetId: null }
+/** A decision moments ago: within Undo to Pending's two minutes. */
+const RECENT = new Date().toISOString()
 const shownAll = (ids: string[]) => ids.map((id) => ({ id, ...SHOWN }))
 
 describe('the moderation actions (§8, §10, §12)', () => {
@@ -884,18 +886,78 @@ describe('the moderation actions (§8, §10, §12)', () => {
     ],
     ['reject', () => organizer().reject({ id: P, shown: SHOWN })],
     ['remove', () => organizer().remove({ id: P, shown: SHOWN })],
+    [
+      'undoToPending',
+      () =>
+        organizer().undoToPending({
+          id: P,
+          from: 'approved',
+          decidedAt: RECENT,
+          shown: SHOWN,
+        }),
+      { status: 'approved' },
+    ],
     ['deletePost', () => organizer().deletePost({ id: P, shown: SHOWN })],
     [
       'approveAllPending',
       () => organizer().approveAllPending({ shown: [{ id: P, ...SHOWN }] }),
     ],
-  ])('%s of a tagged post also expires its talk', async (_, call) => {
+  ] as [string, () => Promise<unknown>, object?][])(
+    '%s of a tagged post also expires its talk',
+    async (_, call, fields = {}) => {
+      store().reset([
+        wallOf('conf-A'),
+        ...withPhoto(
+          postOf('conf-A', 'p1', {
+            talk: ref('talk-1'),
+            approvedAt: RECENT,
+            decidedAt: RECENT,
+            ...fields,
+          }),
+        ),
+      ])
+      await call()
+      expect(expired()).toContainEqual([
+        'photo-wall-talk:talk-1',
+        { expire: 0 },
+      ])
+    },
+  )
+
+  it('Undo to Pending restores a pending post, decision times cleared, and expires all three', async () => {
     store().reset([
       wallOf('conf-A'),
-      ...withPhoto(postOf('conf-A', 'p1', { talk: ref('talk-1') })),
+      ...withPhoto(
+        postOf('conf-A', 'p1', {
+          status: 'approved',
+          approvedAt: RECENT,
+          decidedAt: RECENT,
+        }),
+      ),
     ])
-    await call()
-    expect(expired()).toContainEqual(['photo-wall-talk:talk-1', { expire: 0 }])
+    await expect(
+      organizer().undoToPending({
+        id: P,
+        from: 'approved',
+        decidedAt: RECENT,
+        shown: SHOWN,
+      }),
+    ).resolves.toEqual({ status: 'done', decidedAt: null })
+    const doc = store().doc(P)
+    expect(doc).toMatchObject({ status: 'pending' })
+    expect(doc).not.toHaveProperty('approvedAt')
+    expect(doc).not.toHaveProperty('decidedAt')
+    expect(expired()).toEqual(tags())
+  })
+
+  it('Undo to Pending needs the decision time it undoes', async () => {
+    await expect(
+      organizer().undoToPending({
+        id: P,
+        from: 'approved',
+        shown: SHOWN,
+      } as never),
+    ).rejects.toThrow()
   })
 
   beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => {}))
@@ -904,7 +966,7 @@ describe('the moderation actions (§8, §10, §12)', () => {
     store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
     await expect(
       organizer().approve({ id: P, from: 'pending', shown: SHOWN }),
-    ).resolves.toEqual({ status: 'done' })
+    ).resolves.toEqual({ status: 'done', decidedAt: expect.any(String) })
     expect(store().doc(P)).toMatchObject({ status: 'approved' })
     expect(expired()).toEqual(tags())
   })
@@ -913,6 +975,7 @@ describe('the moderation actions (§8, §10, §12)', () => {
     store().reset([wallOf('conf-A'), ...withPhoto(postOf('conf-A', 'p1'))])
     await expect(organizer().reject({ id: P, shown: SHOWN })).resolves.toEqual({
       status: 'done',
+      decidedAt: expect.any(String),
     })
     expect(store().doc(P)).toMatchObject({ status: 'notShown' })
     expect(expired()).toEqual(tags())
@@ -925,6 +988,7 @@ describe('the moderation actions (§8, §10, §12)', () => {
     ])
     await expect(organizer().remove({ id: P, shown: SHOWN })).resolves.toEqual({
       status: 'done',
+      decidedAt: expect.any(String),
     })
     expect(store().doc(P)).toMatchObject({ status: 'notShown' })
     expect(expired()).toEqual(tags())
@@ -1433,14 +1497,14 @@ describe('the moderation actions (§8, §10, §12)', () => {
       expect(store().doc('wallPost-p1')?.status).toBe('approved')
       const { id, ...card } = shown[0]
       await expect(
-        organizer().remove({
+        organizer().undoToPending({
           id,
           from: 'approved',
           decidedAt: result.decidedAt,
           shown: card,
         }),
-      ).resolves.toEqual({ status: 'done' })
-      expect(store().doc('wallPost-p1')?.status).toBe('notShown')
+      ).resolves.toEqual({ status: 'done', decidedAt: null })
+      expect(store().doc('wallPost-p1')?.status).toBe('pending')
       expect(new Set(expired().map(([tag]) => tag))).toEqual(
         new Set([
           'photo-wall-admin:conf-A',
@@ -1542,6 +1606,7 @@ describe('the moderation actions (§8, §10, §12)', () => {
         "remove",
         "setTalkTag",
         "setUp",
+        "undoToPending",
         "updateSettings",
         "withdrawMarketing",
       ]
