@@ -16,6 +16,13 @@ import { SponsorContactRoleSelect } from '@/components/admin/sponsor/SponsorCont
 import { SponsorRegistrationLogoUpload } from '@/components/sponsor/SponsorRegistrationLogoUpload'
 import { SponsorPortalMessages } from '@/components/sponsor/SponsorPortalMessages'
 import { formatNumber } from '@/lib/format'
+import {
+  PortalAfterTheEvent,
+  PortalAtTheEvent,
+  PortalWhatHappensNext,
+} from '@/components/sponsor/PortalPhaseBlocks'
+import { portalPhase } from '@/lib/sponsor-crm/portal-phase'
+import type { PortalAfterSigning } from '@/lib/sponsor-crm/registration'
 import { nanoid } from 'nanoid'
 
 interface ContactPersonForm {
@@ -169,6 +176,7 @@ export function SponsorPortal({ token }: { token: string }) {
         signingUrl={sponsor?.signingUrl}
         contractValue={sponsor?.contractValue}
         contractCurrency={sponsor?.contractCurrency}
+        afterSigning={sponsor?.afterSigning}
       />
     )
   }
@@ -686,6 +694,7 @@ function PortalStatusDashboard({
   signingUrl,
   contractValue,
   contractCurrency,
+  afterSigning,
 }: {
   token: string
   sponsorName?: string
@@ -698,7 +707,11 @@ function PortalStatusDashboard({
   signingUrl?: string | null
   contractValue?: number | null
   contractCurrency?: string | null
+  afterSigning?: PortalAfterSigning
 }) {
+  const phase = afterSigning
+    ? portalPhase({ signatureStatus, contractStatus }, afterSigning, new Date())
+    : 'none'
   const isSigned = signatureStatus === 'signed'
   const isPending = signatureStatus === 'pending'
   const hasContract = contractStatus === 'contract-sent' || isSigned
@@ -811,6 +824,16 @@ function PortalStatusDashboard({
             </div>
           </div>
         </div>
+      )}
+
+      {afterSigning && phase === 'signed' && (
+        <PortalWhatHappensNext a={afterSigning} />
+      )}
+      {afterSigning && phase === 'event' && (
+        <PortalAtTheEvent a={afterSigning} />
+      )}
+      {afterSigning && phase === 'after' && (
+        <PortalAfterTheEvent a={afterSigning} conferenceName={conferenceName} />
       )}
 
       {/* Messages: a proper card in the status dashboard (messaging G2b). */}

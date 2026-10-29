@@ -7,6 +7,42 @@ import { getCurrentDateTime } from '@/lib/time'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
 import type { ContactPerson, BillingInfo } from '@/lib/sponsor/types'
 import type { Conference } from '@/lib/conference/types'
+import { WORKSHOP_EARLY_ACCESS_PATH } from '@/lib/workshop/sign-in-paths'
+import { isPortalSigned } from './portal-phase'
+import { scopedFetch } from '@/lib/sanity/scoped'
+
+/**
+ * What the portal shows a sponsor once the contract is signed (#1687, phase
+ * 7). The token holder sees all of it, so it holds only this sponsor's own
+ * invoice state and codes plus public event facts: no prices, notes, owners,
+ * other sponsors or attendee data. Absent before signing.
+ */
+export interface PortalAfterSigning {
+  invoiceStatus: string | null
+  invoiceSentAt: string | null
+  invoicePaidAt: string | null
+  discountCodes: string[]
+  /** Where the codes are redeemed; null means the conference's /tickets. */
+  ticketUrl: string | null
+  /** Site-relative early-access link, only while it still gives a head start. */
+  earlyAccessPath: string | null
+  workshopSponsorStart: string | null
+  workshopOpening: string | null
+  startDate: string | null
+  endDate: string | null
+  venueName: string | null
+  venueAddress: string | null
+  venueTravelInfo: string | null
+  onsiteContact: {
+    name: string | null
+    phone: string | null
+    email: string | null
+  } | null
+  contactEmail: string | null
+  sponsorEmail: string | null
+  /** The public /wall exists and its photos are not purged. */
+  hasPhotoWall: boolean
+}
 
 export interface RegistrationSponsorInfo {
   _id: string
@@ -29,6 +65,7 @@ export interface RegistrationSponsorInfo {
   signingUrl: string | null
   contractValue: number | null
   contractCurrency: string | null
+  afterSigning?: PortalAfterSigning
 }
 
 export interface RegistrationSubmission {
@@ -106,6 +143,65 @@ export async function generateRegistrationToken(
   }
 }
 
+type RawAfterSigning = Omit<
+  PortalAfterSigning,
+  'earlyAccessPath' | 'hasPhotoWall'
+> & {
+  earlyAccessToken?: string | null
+  conferenceId?: string | null
+  hasPhotoWall?: boolean
+}
+
+/**
+ * Drops the after-signing block before the contract is signed, and turns the
+ * early-access token into a link only while it gives a head start (the same
+ * window the early-access email offers). Exported for tests.
+ */
+export function withAfterSigning(
+  raw: Omit<RegistrationSponsorInfo, 'afterSigning'> & {
+    afterSigning?: RawAfterSigning
+  },
+  now: Date = new Date(),
+): RegistrationSponsorInfo {
+  const { afterSigning, ...sponsor } = raw
+  if (!afterSigning || !isPortalSigned(sponsor)) return sponsor
+  const {
+    earlyAccessToken,
+    // The conference id is only for the photo-wall lookup: not sent on.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    conferenceId,
+    ...rest
+  } = afterSigning
+  const { workshopSponsorStart: from, workshopOpening: to } = rest
+  const headStart =
+    !!earlyAccessToken &&
+    !!from &&
+    !!to &&
+    new Date(from) < new Date(to) &&
+    now < new Date(to)
+  return {
+    ...sponsor,
+    afterSigning: {
+      ...rest,
+      hasPhotoWall: rest.hasPhotoWall ?? false,
+      earlyAccessPath: headStart
+        ? `${WORKSHOP_EARLY_ACCESS_PATH}/${encodeURIComponent(earlyAccessToken)}`
+        : null,
+    },
+  }
+}
+
+/** Whether `/wall` exists for the conference and its photos are not purged. */
+async function hasLivePhotoWall(conferenceId: string): Promise<boolean> {
+  const id = await scopedFetch<string | null>(
+    clientRead,
+    { conferenceId },
+    `*[_type == "photoWall" && !defined(purgedAt) && !(_id in path("drafts.**"))][0]._id`,
+    {},
+  )
+  return !!id
+}
+
 export async function validateRegistrationToken(
   token: string,
 ): Promise<{ sponsor?: RegistrationSponsorInfo; error?: Error }> {
@@ -114,7 +210,12 @@ export async function validateRegistrationToken(
   }
 
   try {
-    const result = await clientRead.fetch<RegistrationSponsorInfo | null>(
+    const result = await clientRead.fetch<
+      | (Omit<RegistrationSponsorInfo, 'afterSigning'> & {
+          afterSigning?: RawAfterSigning
+        })
+      | null
+    >(
       `*[_type == "sponsorForConference" && registrationToken == $registrationToken][0]{
         _id,
         "sponsorName": sponsor->name,
@@ -135,7 +236,26 @@ export async function validateRegistrationToken(
         contractStatus,
         signingUrl,
         contractValue,
-        contractCurrency
+        contractCurrency,
+        "afterSigning": {
+          invoiceStatus,
+          invoiceSentAt,
+          invoicePaidAt,
+          "discountCodes": coalesce(discountCodes[].code, []),
+          "ticketUrl": coalesce(conference->sponsorRegistrationLink, conference->registrationLink),
+          "earlyAccessToken": workshopEarlyAccessToken,
+          "workshopSponsorStart": conference->workshopRegistrationSponsorStart,
+          "workshopOpening": conference->workshopRegistrationStart,
+          "startDate": conference->startDate,
+          "endDate": conference->endDate,
+          "venueName": conference->venueName,
+          "venueAddress": conference->venueAddress,
+          "venueTravelInfo": conference->venueTravelInfo,
+          "onsiteContact": conference->speakerInfo.onsiteContact{ name, phone, email },
+          "contactEmail": conference->contactEmail,
+          "sponsorEmail": conference->sponsorEmail,
+          "conferenceId": conference._ref
+        }
       }`,
       { registrationToken: token },
     )
@@ -149,7 +269,11 @@ export async function validateRegistrationToken(
       return { error: new Error('Invalid registration data') }
     }
 
-    return { sponsor: result }
+    const conferenceId = result.afterSigning?.conferenceId
+    if (result.afterSigning && conferenceId && isPortalSigned(result)) {
+      result.afterSigning.hasPhotoWall = await hasLivePhotoWall(conferenceId)
+    }
+    return { sponsor: withAfterSigning(result) }
   } catch (error) {
     console.error('[registration] Token validation failed:', error)
     return { error: error as Error }
