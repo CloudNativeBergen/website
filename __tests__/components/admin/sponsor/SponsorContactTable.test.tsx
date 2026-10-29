@@ -128,6 +128,21 @@ describe('SponsorContactTable contact ordering', () => {
   })
 })
 
+describe('SponsorContactTable sponsor link', () => {
+  it('links the sponsor name to the board panel on the contacts tab, desktop and mobile', () => {
+    const sfc = mockSponsor()
+    renderTable([sfc])
+
+    const href = `/admin/sponsors/crm?sponsor=${encodeURIComponent(sfc._id)}&view=contacts`
+    const links = screen.getAllByRole('link', { name: sfc.sponsor.name })
+    expect(links).toHaveLength(2) // mobile card + desktop row
+    for (const link of links) expect(link).toHaveAttribute('href', href)
+    expect(
+      desktopTable().getByRole('link', { name: sfc.sponsor.name }),
+    ).toHaveAttribute('href', href)
+  })
+})
+
 describe('SponsorContactTable empty state', () => {
   it('uses the caller’s description so filtered views explain themselves', () => {
     render(

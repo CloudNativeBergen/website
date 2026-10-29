@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { ContactPerson } from '@/lib/sponsor/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
@@ -167,6 +168,11 @@ function sortContacts(contacts: ContactPerson[]): ContactPerson[] {
   )
 }
 
+/** Opens the sponsor in the board's side panel, on the contacts tab. */
+export function sponsorPanelHref(id: string) {
+  return `/admin/sponsors/crm?sponsor=${encodeURIComponent(id)}&view=contacts`
+}
+
 export function SponsorContactTable({
   sponsors,
   emptyDescription = 'No sponsors were found for this conference.',
@@ -274,7 +280,12 @@ export function SponsorContactTable({
               <div className="min-w-0">
                 <div className="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
                   <BuildingOffice2Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-                  <span className="truncate">{row.sfc.sponsor.name}</span>
+                  <Link
+                    href={sponsorPanelHref(row.sfc._id)}
+                    className="truncate hover:underline"
+                  >
+                    {row.sfc.sponsor.name}
+                  </Link>
                 </div>
                 {row.sfc.sponsor.orgNumber && (
                   <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
@@ -417,7 +428,12 @@ export function SponsorContactTable({
                             : 'text-sm text-gray-500 dark:text-gray-400'
                         }
                       >
-                        {row.sfc.sponsor.name}
+                        <Link
+                          href={sponsorPanelHref(row.sfc._id)}
+                          className="hover:underline"
+                        >
+                          {row.sfc.sponsor.name}
+                        </Link>
                       </div>
                       {row.isFirstContactForSponsor && (
                         <>

@@ -645,7 +645,7 @@ export function SponsorCRMPipeline({
           }
           headerActions={
             <Link
-              href={`/admin/sponsors/${encodeURIComponent(panelId)}`}
+              href={`/admin/sponsors/${encodeURIComponent(panelId)}${currentView === 'pipeline' ? '' : `?board=${currentView}`}`}
               className="rounded-md px-2 py-1 text-sm font-medium text-brand-cloud-blue hover:bg-gray-100 dark:text-blue-400 dark:hover:bg-gray-800"
             >
               Open sponsor page

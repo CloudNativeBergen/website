@@ -13,6 +13,7 @@ import {
   UserGroupIcon,
   EnvelopeIcon,
   DocumentDuplicateIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline'
 
 export default async function AdminSponsors() {
@@ -140,6 +141,23 @@ export default async function AdminSponsors() {
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Manage contracts
+              </p>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/sponsors/invoices"
+            className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+          >
+            <div className="rounded-full bg-emerald-100 p-3 dark:bg-emerald-900/20">
+              <BanknotesIcon className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">
+                Invoices
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Invoice status and export
               </p>
             </div>
           </Link>
