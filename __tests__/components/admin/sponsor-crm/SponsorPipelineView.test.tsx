@@ -29,6 +29,7 @@ const defaultFormData: SponsorPipelineFormData = {
   contractStatus: 'registration-sent',
   status: 'closed-won',
   invoiceStatus: 'not-sent',
+  invoiceDueAt: '',
   contractValue: '25000',
   contractCurrency: 'NOK',
   tags: [],
